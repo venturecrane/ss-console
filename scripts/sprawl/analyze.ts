@@ -262,9 +262,10 @@ export function literalRatchet(
 /**
  * The strict ratchet shared by both gates: a key may not exceed its baseline (a
  * key absent from the baseline may not exceed `unlisted`), and a key below its
- * baseline also fails until the baseline is lowered to match.
+ * baseline also fails until the baseline is lowered to match. Shared with the
+ * concept census (scripts/sprawl/concepts.ts).
  */
-function countRatchet(
+export function countRatchet(
   now: Map<string, number>,
   baseline: Record<string, number>,
   unlisted: number,

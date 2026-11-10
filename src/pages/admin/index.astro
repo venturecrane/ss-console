@@ -26,7 +26,7 @@ import {
 } from '../../lib/admin/services-list'
 import { oneTimeTotals, operatorRecurring, seatLines } from '../../lib/admin/billing-view'
 import { buildActionQueue } from '../../lib/admin/home-actions'
-import { formatMoney } from '../../lib/admin/client-hub'
+import { formatDollarsHalfUp } from '../../lib/format/money'
 import { env } from 'cloudflare:workers'
 
 const session = Astro.locals.session!
@@ -186,11 +186,11 @@ const motion: MotionCard[] = [
       <div class="flex gap-8">
         <div>
           <span class={`${LAB} mb-1 block`}>Invoiced</span>
-          <span class="font-mono text-xl font-bold">{formatMoney(totals.invoiced)}</span>
+          <span class="font-mono text-xl font-bold">{formatDollarsHalfUp(totals.invoiced)}</span>
         </div>
         <div>
           <span class={`${LAB} mb-1 block`}>Paid</span>
-          <span class="font-mono text-xl font-bold">{formatMoney(totals.paid)}</span>
+          <span class="font-mono text-xl font-bold">{formatDollarsHalfUp(totals.paid)}</span>
         </div>
         <div>
           <span class={`${LAB} mb-1 block`}>Outstanding</span>
@@ -200,7 +200,7 @@ const motion: MotionCard[] = [
               totals.outstanding > 0
                 ? 'text-[color:var(--ss-color-primary)]'
                 : 'text-[color:var(--ss-color-text-muted)]',
-            ]}>{formatMoney(totals.outstanding)}</span
+            ]}>{formatDollarsHalfUp(totals.outstanding)}</span
           >
         </div>
       </div>
@@ -217,7 +217,7 @@ const motion: MotionCard[] = [
         </div>
         <div>
           <span class={`${LAB} mb-1 block`}>MRR</span>
-          <span class="font-mono text-xl font-bold">{formatMoney(recurring.mrr)}</span>
+          <span class="font-mono text-xl font-bold">{formatDollarsHalfUp(recurring.mrr)}</span>
           {
             recurring.unpricedCount > 0 && (
               <div class="mt-1 text-[11px] text-[color:var(--ss-color-primary)]">

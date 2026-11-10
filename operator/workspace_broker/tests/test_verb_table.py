@@ -107,9 +107,22 @@ def test_each_declared_class_opens_the_gate(verb: verbs.Verb) -> None:
             pass
 
 
-def test_the_agent_class_is_fail_closed_when_the_agent_uid_is_unresolvable() -> None:
+#: Above Linux's PID_MAX_LIMIT (2**22), so ``/proc/<pid>`` can never exist.
+NO_SUCH_PID = 2**22 + 1
+
+
+def test_the_agent_class_is_fail_closed_when_the_agent_uid_is_unresolvable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unresolvable means BOTH fallbacks find nothing: no ``SMD_AGENT_UID`` and
+    no ``/proc/<gateway pid>``. GATEWAY_PID (4242) is a real pid on a busy Linux
+    host, and on a GitHub runner it is owned by the runner user, uid 1001, which
+    is AGENT_UID: the broker then resolved the agent uid correctly and the gate
+    passed (CI, wave 0 run 42922157666). So this test names a pid no host can
+    have and clears the env, rather than depending on what the host runs."""
+    monkeypatch.delenv("SMD_AGENT_UID", raising=False)
     broker = _bare_broker()
+    broker.gateway_pid = NO_SUCH_PID
     broker.agent_uid = None
+    assert broker._resolve_agent_uid() is None
     verb = verbs.TABLE["suppressed_wake_append"]
     assert verb.auth == frozenset({verbs.AGENT})
     with pytest.raises(PermissionError):

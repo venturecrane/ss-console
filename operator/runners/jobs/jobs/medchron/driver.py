@@ -269,10 +269,11 @@ class Driver:
         if self.job.cap_usd is not None and self.job.cap_usd > firm_cap:
             self.log("[cap] the envelope asked for a higher cap than the firm's; the firm's cap stands")
         self.slug_dir = self.job.data_root / self.job.slug
-        ledgers = [self.slug_dir / "runs" / u.unit / "usage-ledger.jsonl" for u in self.job.units]
-        ledgers.append(self.job.data_root / "usage-ledger-orphan.jsonl")
         self.budget = budget_mod.Budget(
-            self.pricing, cap, ledgers, float(self.cfg.get("budget", "usd_per_million_chars"))
+            self.pricing,
+            cap,
+            job_mod.usage_ledgers(self.job),
+            float(self.cfg.get("budget", "usd_per_million_chars")),
         )
         self.limits = self._build_limits(cap)
         # The page question is asked once per UNIT, not once per process: the

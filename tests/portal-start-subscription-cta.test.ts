@@ -31,7 +31,6 @@ import { resolve } from 'node:path'
 import type { D1Database } from '@cloudflare/workers-types'
 import {
   canStartOperatorSubscription,
-  formatWholeDollars,
   operatorMonthlyCharge,
   operatorMonthlyPriceCents,
   operatorSubscriptionHref,
@@ -161,11 +160,6 @@ describe('canStartOperatorSubscription: the one start gate', () => {
     expect(operatorMonthlyPriceCents(undefined)).toBeNull()
     expect(operatorMonthlyPriceCents('5000')).toBeNull()
     expect(operatorMonthlyPriceCents(Number.NaN)).toBeNull()
-  })
-
-  it('formatWholeDollars renders whole dollars, like MoneyDisplay', () => {
-    expect(formatWholeDollars(500000)).toBe('$5,000')
-    expect(formatWholeDollars(123456)).toBe('$1,235')
   })
 
   it('operatorSubscriptionHref is the one page every door lands on', () => {

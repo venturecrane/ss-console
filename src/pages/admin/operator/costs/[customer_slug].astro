@@ -18,6 +18,7 @@ import {
   createRuntimeReadAudit,
 } from '../../../../lib/operator/runtime-read-transport'
 import { env } from 'cloudflare:workers'
+import { formatCents } from '../../../../lib/format/money'
 
 /**
  * Captain cost dashboard — per-customer drill-down.
@@ -69,16 +70,6 @@ if (result.error) {
   fetchError = result.error
 } else {
   summary = summarizeCostRows(customer_slug, window.start, window.end, result.rows)
-}
-
-function formatCurrency(cents: number): string {
-  const dollars = cents / 100
-  return dollars.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function formatUnits(units: number, unitType: string | null): string {
@@ -202,7 +193,7 @@ const exportHref = `/api/admin/operator/costs/export?customer_slug=${encodeURICo
           30-day COGS
         </p>
         <p class="text-2xl font-bold text-[color:var(--ss-color-text-primary)] mt-1">
-          {summary ? formatCurrency(total30dCents) : '—'}
+          {summary ? formatCents(total30dCents) : '—'}
         </p>
       </div>
       <div
@@ -212,7 +203,7 @@ const exportHref = `/api/admin/operator/costs/export?customer_slug=${encodeURICo
           7-day avg / day
         </p>
         <p class="text-2xl font-bold text-[color:var(--ss-color-text-primary)] mt-1">
-          {latestRolling === null ? '—' : formatCurrency(latestRolling)}
+          {latestRolling === null ? '—' : formatCents(latestRolling)}
         </p>
         {
           summary && latestRolling === null && (
@@ -232,7 +223,7 @@ const exportHref = `/api/admin/operator/costs/export?customer_slug=${encodeURICo
           {
             customer.monthly_revenue_cents === null
               ? '—'
-              : formatCurrency(customer.monthly_revenue_cents)
+              : formatCents(customer.monthly_revenue_cents)
           }
         </p>
         {
@@ -291,7 +282,7 @@ const exportHref = `/api/admin/operator/costs/export?customer_slug=${encodeURICo
                         style={`width: ${barWidth(summary!.byCategory[cat as DriverCategory], maxCategoryCents)}`}
                       >
                         <span class="text-xs font-medium text-white">
-                          {formatCurrency(summary!.byCategory[cat as DriverCategory])}
+                          {formatCents(summary!.byCategory[cat as DriverCategory])}
                         </span>
                       </div>
                     </div>
@@ -333,7 +324,7 @@ const exportHref = `/api/admin/operator/costs/export?customer_slug=${encodeURICo
                           {formatUnits(d.units, d.unit_type)}
                         </td>
                         <td class="py-2 text-right text-[color:var(--ss-color-text-primary)]">
-                          {formatCurrency(d.total_cents)}
+                          {formatCents(d.total_cents)}
                         </td>
                       </tr>
                     ))}
@@ -379,12 +370,12 @@ const exportHref = `/api/admin/operator/costs/export?customer_slug=${encodeURICo
                         <div
                           class="absolute top-0 h-4 border-r-2 border-[color:var(--ss-color-primary)]"
                           style={`left: ${barWidth(rolling, maxRollingCents)}`}
-                          title={`7-day rolling avg: ${formatCurrency(rolling)}`}
+                          title={`7-day rolling avg: ${formatCents(rolling)}`}
                         />
                       )}
                     </div>
                     <span class="text-[color:var(--ss-color-text-secondary)] w-20 text-right tabular-nums">
-                      {formatCurrency(day.total_cents)}
+                      {formatCents(day.total_cents)}
                     </span>
                   </div>
                 )

@@ -25,7 +25,8 @@ import {
   type AlivenessLevel,
 } from '../../../../lib/portal/operator/aliveness'
 import type { OperatorHeroModel } from '../../../../lib/portal/operator/facets/identity/hero'
-import { formatWholeDollars, type OperatorStartDoor } from '../../../../lib/portal/billing'
+import type { OperatorStartDoor } from '../../../../lib/portal/billing'
+import { formatCentsAsWholeDollars } from '../../../../lib/format/money'
 
 interface Props {
   model: OperatorHeroModel
@@ -91,7 +92,7 @@ const showEscalation = !provisioning && level ? needsEscalationAffordance(level)
           Ready to start
         </h2>
         <p class="mt-2 font-mono text-label uppercase tracking-[0.14em] text-[color:var(--color-text-secondary)]">
-          {formatWholeDollars(start.priceCents)} per month, not yet started.
+          {formatCentsAsWholeDollars(start.priceCents)} per month, not yet started.
         </p>
         {/* A link, not the act: the one primary lives on the subscription
             page (UI-PATTERNS Rule 3), where the terms are stated in full. */}

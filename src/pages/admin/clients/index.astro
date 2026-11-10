@@ -11,7 +11,8 @@ import AdminLayout from '../../../layouts/AdminLayout.astro'
 import { listEntities } from '../../../lib/db/entities'
 import { getInvoiceRollupForEntities } from '../../../lib/db/invoices'
 import { listFleetRoster } from '../../../lib/admin/fleet-roster'
-import { formatMoney, clientStageBadge } from '../../../lib/admin/client-hub'
+import { clientStageBadge } from '../../../lib/admin/client-hub'
+import { formatDollarsHalfUp } from '../../../lib/format/money'
 import { env } from 'cloudflare:workers'
 
 const session = Astro.locals.session!
@@ -124,7 +125,7 @@ const ADD_BTN =
                       : 'text-[color:var(--ss-color-text-muted)]',
                 ]}
               >
-                {formatMoney(outstanding)}
+                {formatDollarsHalfUp(outstanding)}
               </span>
             </a>
           )

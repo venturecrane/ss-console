@@ -11,7 +11,7 @@
 import type { Invoice } from '../../lib/db/invoices'
 import { invoiceTypeLabel } from '../../lib/db/invoices'
 import { formatDate } from '../../lib/admin/entity-detail-page'
-import { formatMoney } from '../../lib/admin/client-hub'
+import { formatDollarsHalfUp } from '../../lib/format/money'
 import { statusBadgeClass } from '../../lib/ui/status-badge'
 import InvoiceRescheduleForm from './InvoiceRescheduleForm.astro'
 
@@ -34,7 +34,7 @@ const { invoices, hubUrl } = Astro.props
       invoices.map((inv) => (
         <li class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <span class={statusBadgeClass(inv.status)}>{inv.status}</span>
-          <span class="font-mono">{formatMoney(inv.amount)}</span>
+          <span class="font-mono">{formatDollarsHalfUp(inv.amount)}</span>
           <span class="text-xs text-[color:var(--ss-color-text-muted)]">
             {invoiceTypeLabel(inv.type) ?? inv.type}
             {inv.due_date && ` · due ${formatDate(inv.due_date)}`}

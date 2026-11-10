@@ -100,7 +100,7 @@ def prepare(job_dir: Path) -> Path:
                 os.symlink(real_slug / name, dst_slug / name, target_is_directory=True)
     else:
         dst_slug.mkdir(parents=True)
-    orphan = job.data_root / "usage-ledger-orphan.jsonl"
+    orphan = job.data_root / job_mod.ORPHAN_LEDGER
     if orphan.is_file():
         shutil.copy2(orphan, copy_root / orphan.name)
     env: dict[str, Any] = yaml.safe_load((job_dir / "job.yaml").read_text(encoding="utf-8")) or {}

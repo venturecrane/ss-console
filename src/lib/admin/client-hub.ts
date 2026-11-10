@@ -18,6 +18,7 @@ import type { Engagement, EngagementStatus } from '../db/engagements'
 import { ENGAGEMENT_STATUSES } from '../db/engagements'
 import type { Quote } from '../db/quotes'
 import type { EntityStage } from '../db/entities'
+import { formatDollarsHalfUp } from '../format/money'
 
 /**
  * Admin-facing stage badge for the Clients surface: an honest label plus
@@ -85,10 +86,6 @@ export function computeBillingRollup(invoices: Invoice[]): BillingRollup {
   return { invoiced, paid, outstanding, hasOverdue }
 }
 
-export function formatMoney(n: number): string {
-  return '$' + Math.round(n).toLocaleString('en-US')
-}
-
 export type ServiceTone = 'good' | 'attention' | 'alert' | 'muted'
 
 /** A consulting service row, composed from an engagement + its quote. */
@@ -135,7 +132,7 @@ export function engagementToServiceRow(eng: Engagement, quotes: Quote[]): Consul
   return {
     id: eng.id,
     title: eng.scope_summary?.trim() || 'Consulting engagement',
-    value: quote ? formatMoney(quote.total_price) : null,
+    value: quote ? formatDollarsHalfUp(quote.total_price) : null,
     statusLabel,
     tone: ENGAGEMENT_TONE[status] ?? 'muted',
     keyDateIso,

@@ -68,6 +68,9 @@ CODES = frozenset(
         # version in that file not accepted (jobs/drafting/layout_into_library);
         # SMD only, the firm is told nothing.
         "layout_rule_unplaced",
+        # 2026-11-10: an ended job whose usage shows spend while its row records
+        # $0 (jobs/spend.py sweep, hourly); SMD only, the firm is told nothing.
+        "spend_unrecorded",
     }
 )
 

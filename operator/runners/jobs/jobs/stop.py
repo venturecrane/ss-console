@@ -37,7 +37,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from . import resume as resume_mod, smd_stop
+from . import resume as resume_mod, smd_stop, spend
 from .daemon import DEFAULT_RUN_DIR, RUN_DIR_ENV, TERMINAL
 from .lane_proof_cli import QUEUES
 
@@ -69,10 +69,10 @@ def _spend(cents: int | None) -> str:
     return "unknown (price table unreadable)" if cents is None else f"${cents / 100:.2f}"
 
 
-def _say(label: str, jd: Path, st: dict) -> None:
+def _say(label: str, lane: str, jd: Path, st: dict) -> None:
     print(
         f"{label}: state={st.get('state') or 'unknown'} attempts={st.get('attempts', 0)} "
-        f"spend={_spend(smd_stop.spend_cents(jd))}"
+        f"spend={_spend(spend.priced_cents(jd, lane))}"
     )
 
 
@@ -108,7 +108,7 @@ def _stop_claimed(args: argparse.Namespace, queue: Path, jd: Path, running: bool
     """The stop of a job with a job dir. An exit code when it is decided here
     (already stopped, failed, delivered); None when the lane must record it."""
     before = _state(jd)
-    _say("before", jd, before)
+    _say("before", args.lane, jd, before)
     if before.get("state") == smd_stop.STATE:
         print(f"already stopped by {before.get('stopped_by')}: {before.get('stopped_why')}")
         return 0
@@ -130,7 +130,7 @@ def _stop_claimed(args: argparse.Namespace, queue: Path, jd: Path, running: bool
     return None
 
 
-def _read_back(jd: Path, wait: float, sleep: Callable[[float], None]) -> int:
+def _read_back(lane: str, jd: Path, wait: float, sleep: Callable[[float], None]) -> int:
     waited = 0.0
     after = _state(jd)
     while after.get("state") != smd_stop.STATE and waited < wait:
@@ -138,7 +138,7 @@ def _read_back(jd: Path, wait: float, sleep: Callable[[float], None]) -> int:
         waited += POLL_SECONDS
         after = _state(jd)
     if after.get("state") != smd_stop.STATE:
-        _say("after", jd, after)
+        _say("after", lane, jd, after)
         print(
             f"not yet recorded after {wait:.0f}s; the request stays and the job will never start again. "
             "Run this again to read it back."
@@ -178,7 +178,7 @@ def main(
         decided = _stop_claimed(args, queue, jd, (run_dir / pid_name).is_file(), clock())
         if decided is not None:
             return decided
-    return _read_back(jd, args.wait, sleep)
+    return _read_back(args.lane, jd, args.wait, sleep)
 
 
 if __name__ == "__main__":

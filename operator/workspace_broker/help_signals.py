@@ -64,6 +64,14 @@ _SQL: dict[str, str] = {
         "SELECT state, reason, request_ref FROM negotiation_jobs WHERE substr(updated_at,1,19) >= ?"
         " AND (state IN ('held','failed') OR reason LIKE 'lane_unproven:%')"
     ),
+    "records": (
+        "SELECT state, reason, request_ref FROM records_jobs WHERE substr(updated_at,1,19) >= ?"
+        " AND (state IN ('held','failed') OR reason LIKE 'lane_unproven:%')"
+    ),
+    "library_setup": (
+        "SELECT state, reason, request_ref FROM library_setup_jobs WHERE substr(updated_at,1,19) >= ?"
+        " AND (state IN ('held','failed') OR reason LIKE 'lane_unproven:%')"
+    ),
 }
 LANES: tuple[str, ...] = tuple(_SQL)
 

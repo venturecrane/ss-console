@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import resume as resume_mod, verdict as verdict_mod
+from . import resume as resume_mod, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
@@ -95,10 +95,12 @@ class CasefileBroker:
             raise BrokerError("casefile_job_status carried no owned_lines; the apply cannot be scoped")
         return {int(n) for n in v if isinstance(n, int)}
 
-    def month_cents(self) -> int:
+    def month_cents(self, exclude_job_id: str) -> int:
         """This Pacific month's case file spend. A missing value raises: the
-        lane defers rather than run unmetered."""
-        v = self.client._request({"action": "casefile_job_status"}).get("month_cents")
+        lane defers rather than run unmetered.
+        The job itself is left out (``exclude_job_id``): its child adds its
+        own spend, so a resumed job is counted once, not twice."""
+        v = self.client._request({"action": "casefile_job_status", "exclude_job_id": exclude_job_id}).get("month_cents")
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
             raise BrokerError("casefile_job_status carried no month_cents; the job cannot be metered")
         return v
@@ -168,7 +170,7 @@ class CasefileLane(DraftingLane):
             "job_id": job_id,
             "kind": "casefile",
             "slug": self.customer_slug,
-            "month_cents_used": self.broker.month_cents(),
+            "month_cents_used": self.broker.month_cents(job_id),
             "per_job_cap_usd": float(firm.data["per_job_cap_usd"]),
             "monthly_budget_usd": float(firm.data["monthly_budget_usd"]),
         }
@@ -248,7 +250,8 @@ class CasefileLane(DraftingLane):
         reason = "config_missing: the case file inputs are not usable on this seat: " + str(exc).split(";")[0][:300]
         try:
             self.broker.record(job_id, "running", {})
-            self.broker.record(job_id, "failed", {"cents": 0, "reason": reason, "stage": "config"})
+            cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, 0)
+            self.broker.record(job_id, "failed", {"cents": cents, "reason": reason, "stage": "config"})
         except BrokerError as err:
             logger.error("could not record config_missing for %s: %s", job_id, err)
             return "deferred"
@@ -283,6 +286,7 @@ class CasefileLane(DraftingLane):
             }
         state = str(v["verdict"])
         fields = self.report_fields(v)
+        fields["cents"] = spend.recorded_cents(self.job_dir(job_id), self.LANE, fields["cents"])
         state, fields = proof_watch.settle(self, job_id, [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)

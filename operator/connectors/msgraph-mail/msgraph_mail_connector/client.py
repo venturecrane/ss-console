@@ -42,6 +42,20 @@ _GRAPH_SCOPE = "https://graph.microsoft.com/.default"
 _TOKEN_SKEW_SECONDS = 60
 _MAX_ATTEMPTS = 4
 _MAX_ERROR_BODY = 600
+#: The longest one 429 wait. Graph names how long to back off in Retry-After,
+#: and a retry before then is throttled again; the cap keeps a tool call bounded.
+_RATE_LIMIT_MAX_SLEEP = 30.0
+
+
+def _rate_limit_sleep(retry_after: str | None, attempt: int) -> float:
+    """Seconds to wait after a 429: Graph's Retry-After when it is a number of
+    seconds, else exponential from 1 s; never above the cap."""
+    try:
+        wanted = float(retry_after) if retry_after is not None else float(2**attempt)
+    except ValueError:
+        wanted = float(2**attempt)
+    return max(0.0, min(wanted, _RATE_LIMIT_MAX_SLEEP))
+
 
 # The bounded field set the delta poll selects — metadata + body, so an inbound
 # message normalizes from the delta payload without a separate full-body fetch,
@@ -227,7 +241,9 @@ class MsGraphClient:
             }
             last = self._http.request(method, url, params=_clean(params), json=json, headers=headers)
             if last.status_code == 429:
-                time.sleep(min(2**attempt, 8))
+                if attempt + 1 >= _MAX_ATTEMPTS:
+                    break
+                time.sleep(_rate_limit_sleep(last.headers.get("retry-after"), attempt))
                 continue
             if last.status_code == 401 and not refreshed:
                 self._token = None  # force a fresh mint, then retry once

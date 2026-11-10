@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   computeBillingRollup,
   engagementToServiceRow,
-  formatMoney,
   clientStageBadge,
 } from '../src/lib/admin/client-hub'
 import type { EntityStage } from '../src/lib/db/entities'
@@ -84,14 +83,6 @@ describe('engagementToServiceRow', () => {
   it('falls back to a generic title when scope_summary is empty', () => {
     const row = engagementToServiceRow({ ...baseEng, scope_summary: null }, [quote])
     expect(row.title).toBe('Consulting engagement')
-  })
-})
-
-describe('formatMoney', () => {
-  it('rounds and groups with a leading $', () => {
-    expect(formatMoney(10500)).toBe('$10,500')
-    expect(formatMoney(0)).toBe('$0')
-    expect(formatMoney(1234.6)).toBe('$1,235')
   })
 })
 

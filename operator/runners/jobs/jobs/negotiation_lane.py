@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import resume as resume_mod, verdict as verdict_mod
+from . import resume as resume_mod, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
@@ -73,8 +73,13 @@ class NegotiationBroker:
             {"action": "negotiation_job_record", "job_id": job_id, "state": state, "fields": fields}
         )
 
-    def month_cents(self) -> int:
-        v = self.client._request({"action": "negotiation_job_status"}).get("month_cents")
+    def month_cents(self, exclude_job_id: str) -> int:
+        """This Pacific month's negotiation spend, the job itself left out
+        (``exclude_job_id``): its child adds its own spend, so a resumed job
+        is counted once, not twice."""
+        v = self.client._request({"action": "negotiation_job_status", "exclude_job_id": exclude_job_id}).get(
+            "month_cents"
+        )
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
             raise BrokerError("negotiation_job_status carried no month_cents; the job cannot be metered")
         return v
@@ -155,7 +160,7 @@ class NegotiationLane(DraftingLane):
             "job_id": job_id,
             "kind": "negotiation",
             "slug": self.customer_slug,
-            "month_cents_used": self.broker.month_cents(),
+            "month_cents_used": self.broker.month_cents(job_id),
         }
         (jd / "data").mkdir(exist_ok=True)
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
@@ -218,7 +223,8 @@ class NegotiationLane(DraftingLane):
                 "reason": f"no_verdict: the runner exited {code} without a verdict",
             }
         state = "delivered" if v["verdict"] == "delivered" else "failed"
-        fields: dict[str, Any] = {"stage": v.get("stage"), "cents": int(v.get("cents") or 0)}
+        cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, int(v.get("cents") or 0))
+        fields: dict[str, Any] = {"stage": v.get("stage"), "cents": cents}
         for k in ("matters_total", "matters_seeded", "docs_read", "docs_failed"):
             fields[k] = int(v.get(k) or 0)
         fields["notices"] = [n for n in v.get("notices") or [] if isinstance(n, dict)] if state == "delivered" else []

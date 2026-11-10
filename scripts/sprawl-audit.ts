@@ -21,6 +21,10 @@
  *       # list every source-text pin outside the allowlisted policy scans, file:line
  *   npx tsx scripts/sprawl-audit.ts --write-text-pin-baseline
  *       # rewrite scripts/sprawl/text-pin-baseline.json from the tree; run after removing pins
+ *   npx tsx scripts/sprawl-audit.ts --concepts
+ *       # the "built N times" census: each concept's count, target, rule and every instance
+ *   npx tsx scripts/sprawl-audit.ts --write-concept-baseline
+ *       # rewrite scripts/sprawl/concept-baseline.json from the tree; run after a count fell
  *
  * Tool versions are pinned so two runs measure with the same instrument.
  */
@@ -52,6 +56,7 @@ import {
   trackedFiles,
 } from './sprawl/sources'
 import { TEXT_PIN_FALSE_POSITIVES, TEXT_PIN_POLICY_SCANS } from './sprawl/text-pin-allowlist'
+import { CONCEPT_BASELINE, conceptBaselineDoc, conceptCensus } from './sprawl/concepts'
 import { sourceTextPinLines } from './sprawl/text-pins'
 
 const JSCPD = 'jscpd@4.3.0'
@@ -66,6 +71,8 @@ type Args = {
   strict: boolean
   textPins: boolean
   writePinBaseline: boolean
+  concepts: boolean
+  writeConceptBaseline: boolean
 }
 
 const FLAGS = new Set([
@@ -73,6 +80,8 @@ const FLAGS = new Set([
   '--strict',
   '--text-pins',
   '--write-text-pin-baseline',
+  '--concepts',
+  '--write-concept-baseline',
 ])
 
 function parseArgs(argv: string[]): Args {
@@ -82,6 +91,8 @@ function parseArgs(argv: string[]): Args {
     strict: false,
     textPins: false,
     writePinBaseline: false,
+    concepts: false,
+    writeConceptBaseline: false,
   }
   for (let i = 0; i < argv.length; i++) {
     const v = argv[i + 1]
@@ -89,6 +100,8 @@ function parseArgs(argv: string[]): Args {
     else if (argv[i] === '--strict') args.strict = true
     else if (argv[i] === '--text-pins') args.textPins = true
     else if (argv[i] === '--write-text-pin-baseline') args.writePinBaseline = true
+    else if (argv[i] === '--concepts') args.concepts = true
+    else if (argv[i] === '--write-concept-baseline') args.writeConceptBaseline = true
     else if (argv[i] === '--out') args.out = v
     else if (argv[i] === '--compare') args.compare = v
     else if (argv[i] === '--since') args.since = v
@@ -315,8 +328,26 @@ function writePinBaseline(): void {
   console.log(`${TEXT_PIN_BASELINE}: ${Object.keys(census).length} files`)
 }
 
+/** Each concept's count against its target, then every instance, one per line. */
+function printConcepts(): void {
+  for (const r of conceptCensus(readSources(trackedFiles()))) {
+    console.log(`${r.id}: ${r.count} (target ${r.target})\n  rule: ${r.rule}`)
+    for (const p of r.instances) console.log(`    ${p}`)
+  }
+}
+
+function writeConceptBaseline(): void {
+  const rows = conceptCensus(readSources(trackedFiles()))
+  writeFileSync(CONCEPT_BASELINE, JSON.stringify(conceptBaselineDoc(rows), null, 2) + '\n')
+  console.log(`${CONCEPT_BASELINE}: ${rows.map((r) => `${r.id}=${r.count}`).join(' ')}`)
+}
+
 const args = parseArgs(process.argv.slice(2))
-if (args.textPins) {
+if (args.concepts) {
+  printConcepts()
+} else if (args.writeConceptBaseline) {
+  writeConceptBaseline()
+} else if (args.textPins) {
   printTextPins()
 } else if (args.writePinBaseline) {
   writePinBaseline()

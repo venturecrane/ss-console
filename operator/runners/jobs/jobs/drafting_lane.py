@@ -52,7 +52,7 @@ from . import (
     library_setup_lane,
     request_additions,
     resume as resume_mod,
-    smd_stop,
+    spend,
     verdict as verdict_mod,
 )
 from .broker_client import BrokerClient, BrokerError
@@ -124,15 +124,6 @@ class DraftingBroker:
             if not isinstance(v, int) or isinstance(v, bool) or v < 0:
                 raise BrokerError(f"drafting_allowance carried no {name}; the job cannot be metered")
         return int(cents), int(remaining)  # type: ignore[arg-type]
-
-
-def spent_cents(job_dir: Path, reported: int) -> int:
-    """What the job's row records: the verdict's figure, or the job's usage
-    ledgers priced by the seat's rate card when they show more. A runner killed
-    mid-job (a release's -15) writes no verdict, and a row of 0 understated the
-    firm's allowance and SMD's cost (two A&P jobs read $0 after $2.22 and $7.07,
-    2026-11-06). An unreadable price table keeps the reported figure."""
-    return max(reported, smd_stop.spend_cents(job_dir) or 0)
 
 
 def drafting_runner_cmd() -> list[str]:
@@ -239,7 +230,7 @@ class DraftingLane(Daemon):
         a job that defers every hour and tells no one."""
         first = str(exc).split(";")[0][:300]
         reason = f"config_missing: the drafting firm inputs are not usable on this seat: {first}"
-        cents = spent_cents(self.job_dir(job_id), 0)
+        cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, 0)
         try:
             self.broker.record(job_id, "running", {})
             self.broker.record(
@@ -286,7 +277,7 @@ class DraftingLane(Daemon):
             state, v = "failed", {"reason": f"no_verdict: the runner exited {code} without a verdict", "stage": None}
         else:
             state = {"delivered": "delivered", "held": "held"}.get(str(v.get("outcome")), "failed")
-        cents = spent_cents(self.job_dir(job_id), int(round(float(v.get("dollars") or 0) * 100)))
+        cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, int(round(float(v.get("dollars") or 0) * 100)))
         fields: dict[str, Any] = {
             "cents": cents,
             "caption_discrepancies": list(v.get("caption_discrepancies") or []),

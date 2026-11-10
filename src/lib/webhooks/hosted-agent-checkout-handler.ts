@@ -295,8 +295,8 @@ async function sendPurchaseEmails(
   }
   try {
     const entity = await db
-      .prepare('SELECT name FROM entities WHERE id = ?')
-      .bind(input.entityId)
+      .prepare('SELECT name FROM entities WHERE id = ? AND org_id = ?')
+      .bind(input.entityId, ORG_ID)
       .first<{ name: string }>()
     await sendEmail(resendApiKey, {
       to: ALERT_EMAIL,

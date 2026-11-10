@@ -5,9 +5,9 @@ import {
   loadMedchronJobsView,
   loadAuthoredPageAllowance,
   loadCycleWindow,
-  formatCents,
   type MedchronJobsReadResult,
 } from '../../../../lib/admin/medchron-jobs-read'
+import { formatCentsUngrouped } from '../../../../lib/format/money'
 import {
   isRuntimeReadConfigured,
   createMachineRuntimeTransport,
@@ -193,7 +193,7 @@ const statePill: Record<string, string> = {
                     : []),
                   {
                     label: 'Runner spend (this period, all jobs)',
-                    value: formatCents(result.month.centsUsed),
+                    value: formatCentsUngrouped(result.month.centsUsed),
                   },
                 ].map((tile) => (
                   <div class="bg-white rounded-[var(--ss-radius-card)] border border-[color:var(--ss-color-border)] p-card">
@@ -240,7 +240,7 @@ const statePill: Record<string, string> = {
                           <td class="py-2 pr-4 text-right tabular-nums">{job.documents}</td>
                           <td class="py-2 pr-4 text-right tabular-nums">{job.pages}</td>
                           <td class="py-2 pr-4 text-right tabular-nums">
-                            {formatCents(job.cents)}
+                            {formatCentsUngrouped(job.cents)}
                           </td>
                           <td class="py-2 text-xs text-[color:var(--ss-color-text-muted)]">
                             {job.state === 'delivered' && job.folderId

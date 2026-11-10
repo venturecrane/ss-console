@@ -122,10 +122,14 @@ jobs:
       # invariants and safety_substrate/tests import that same package, the way
       # bootstrap.sh runs them on a seat (the Hermes venv has the overlay
       # installed). --no-deps: those modules are stdlib-only, and the overlay's
-      # own dependency closure is tested in the overlay job below.
+      # own dependency closure is tested in the overlay job below. Boot
+      # invariants 1-5 load the hermes-smd-trust plugin itself
+      # (safety_substrate/invariants/trust_plugin.py), which imports
+      # records_contract, so the records contract goes in beside the overlay as
+      # it does in the seat's Hermes venv (stdlib only).
       - name: Install the overlay's shared package (the filters the gateway runs)
         if: steps.changes.outputs.relevant == 'true'
-        run: python3 -m pip install --quiet --no-deps -e ./operator/hermes-smd-overlay
+        run: python3 -m pip install --quiet --no-deps -e ./operator/hermes-smd-overlay ./operator/connectors/_contract
 
       - name: Run ruff
         if: steps.changes.outputs.relevant == 'true'

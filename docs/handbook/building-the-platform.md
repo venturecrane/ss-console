@@ -4,7 +4,7 @@ section: engineering
 order: 10
 owner: engineering
 review_every: 90
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-11-10"
 summary: The dev workflow, the verify gate, worktree isolation, and the coding standards every change ships under
 sources:
   - label: CI - verify.yml
@@ -95,6 +95,22 @@ on the committed corpus) now fails rather than skips when its tool or file is
 missing, and the failure names the command that provides it (for ruff, the
 substrate job's pinned `python3 -m pip install ruff==0.15.17`); setting
 `SMD_ALLOW_GUARD_SKIPS=1` skips them on purpose, and no workflow sets it.
+
+Three ratchets hold the Python side to the same ceilings as the TypeScript side,
+and each only tightens: a counted item that grows fails, and one that shrinks
+fails until its baseline is regenerated downward. The module-size ratchet
+(`tests/operator-module-size.test.ts`, run by `npm run verify`, baseline
+`operator/contracts/operator-module-size.json`) holds a file at 500 logical
+lines, and the function-size ratchet (`operator/bin/tests/test_function_size_ratchet.py`,
+baseline `operator/contracts/operator-function-size.json`) holds a function at
+75 logical lines and complexity 15. Since 2026-11-10 both cover the seat
+runtime, `operator/hermes-smd-overlay/`, which until then neither counted. The
+concept census ratchet (`tests/sprawl-ratchet.test.ts`, detectors in
+`scripts/sprawl/concepts.ts`, baseline `scripts/sprawl/concept-baseline.json`)
+counts how many places one idea is built (job lane lists, customer.yaml hand
+parsers, broker socket clients, money formatters and others) and fails a PR that
+adds a place. Each file's header names its regenerate command; never raise a
+number to pass, give the idea one home.
 
 The Operator tree is one Python project (`operator/pyproject.toml`). Its CLIs
 (`operator/bin/*.py`, `operator/rehearsal/run.py`) import `bin.lib.*`,

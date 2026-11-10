@@ -156,15 +156,6 @@ export function subscriptionStamp(
   }
 }
 
-/** Whole-dollar rendering for prose contexts (MoneyDisplay for markup). */
-export function formatWholeDollars(amountCents: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(Math.round(amountCents / 100))
-}
-
 /**
  * Display names for subscription rows on the Billing surface. One product
  * (ADR 0100): the self-serve offering's stored slug `hosted-agent` is an

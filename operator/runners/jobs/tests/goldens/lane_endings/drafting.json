@@ -1,0 +1,71 @@
+{
+  "records": [
+    ["01DRAFTJ0B000000000000000A", "running", {}],
+    [
+      "01DRAFTJ0B000000000000000A",
+      "delivered",
+      {
+        "caption_corrections": [
+          {
+            "field": "plaintiff",
+            "from": "Gamma Exampel",
+            "source_document": "Complaint Gamma Example",
+            "to": "GAMMA EXAMPLE"
+          }
+        ],
+        "caption_discrepancies": [
+          {
+            "document_value": "CV-0001",
+            "field": "case_number",
+            "quote": "Case No. CV-0001",
+            "record_value": "CV-0010",
+            "source": "Complaint Gamma Example.pdf",
+            "why": "differs"
+          }
+        ],
+        "cents": 1250,
+        "delivery": {
+          "cents": 1250,
+          "files": [
+            {
+              "name": "Mediation Brief - 100001 - 10-07-26.docx",
+              "role": "draft",
+              "size": 52000
+            },
+            {
+              "name": "Mediation Brief - 100001 - 10-07-26 - attorney notes.docx",
+              "role": "attorney_notes",
+              "size": 9000
+            }
+          ]
+        },
+        "folder_id": "folder-9",
+        "markers": [
+          {
+            "kind": "ATTORNEY",
+            "text": "settlement authority"
+          }
+        ]
+      }
+    ]
+  ],
+  "state": {
+    "attempts": 1,
+    "claimed": true,
+    "claimed_at": 1000000.0,
+    "deferrals": 0,
+    "finished_at": 1000000.0,
+    "held_paused": false,
+    "reason": null,
+    "resume_redo": [],
+    "resume_release": false,
+    "resume_release_held": false,
+    "retry_after": null,
+    "state": "delivered",
+    "wake": {
+      "attempts": 0,
+      "pending": true,
+      "task": "Run the document-drafter skill's DELIVER mode for drafting job 01DRAFTJ0B000000000000000A.\nLoad it first: your first call is read_file on document-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: drafting.\nDocument class: mediation_brief.\nOutcome: delivered.\nSpend cents: 1250.\nMatter number: 100001.\nFolder id: folder-9.\nFiles: draft (52000 bytes); attorney_notes (9000 bytes).\nRequested by: admin@firm.example.\nCaption discrepancies: 1.\nCaption corrections: 1."
+    }
+  }
+}

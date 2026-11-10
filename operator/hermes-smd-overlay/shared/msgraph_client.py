@@ -87,6 +87,20 @@ _TOKEN_SKEW_SECONDS = 60
 _MAX_ATTEMPTS = 4
 _MAX_ERROR_BODY = 600
 _DEFAULT_TIMEOUT_S = 30.0
+#: The longest one 429 wait. Graph names how long to back off in Retry-After,
+#: and a retry before then is throttled again; the cap keeps a turn bounded.
+_RATE_LIMIT_MAX_SLEEP = 30.0
+
+
+def _rate_limit_sleep(retry_after: str | None, attempt: int) -> float:
+    """Seconds to wait after a 429: Graph's Retry-After when it is a number of
+    seconds, else exponential from 1 s; never above the cap."""
+    try:
+        wanted = float(retry_after) if retry_after is not None else float(2**attempt)
+    except ValueError:
+        wanted = float(2**attempt)
+    return max(0.0, min(wanted, _RATE_LIMIT_MAX_SLEEP))
+
 
 # The bounded field set the delta poll selects (public: the poller fingerprints
 # its stored cursor against it, see msgraph_poller.DeltaState.delta_select) — metadata + body, so an inbound
@@ -522,7 +536,8 @@ class MsGraphClient:
                 except Exception:  # noqa: BLE001 — body read best-effort for the log
                     last_body = ""
                 if exc.code == 429 and attempt < _MAX_ATTEMPTS - 1:
-                    time.sleep(min(2**attempt, 8))
+                    retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                    time.sleep(_rate_limit_sleep(retry_after, attempt))
                     continue
                 if exc.code == 401 and not refreshed:
                     self._token = None  # force a fresh mint, then retry once

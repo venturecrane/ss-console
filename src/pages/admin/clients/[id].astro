@@ -20,10 +20,10 @@ import { listFleetRoster, personaSummary, posturePill } from '../../../lib/admin
 import {
   computeBillingRollup,
   engagementToServiceRow,
-  formatMoney,
   serviceToneDotClass,
   clientStageBadge,
 } from '../../../lib/admin/client-hub'
+import { formatDollarsHalfUp } from '../../../lib/format/money'
 import { resolveClientHubNotices } from '../../../lib/admin/client-hub-notices'
 import { ENTITY_VERTICALS } from '../../../lib/db/entities'
 import { listOperatorSeatCommercials } from '../../../lib/db/services'
@@ -157,14 +157,14 @@ const LINK_ACT =
         class="mb-[5px] block font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--ss-color-text-secondary)]"
         >Lifetime billed</span
       >
-      <span class="font-mono text-lg font-bold">{formatMoney(rollup.invoiced)}</span>
+      <span class="font-mono text-lg font-bold">{formatDollarsHalfUp(rollup.invoiced)}</span>
     </div>
     <div class="flex-1 border-r border-[color:var(--ss-color-border)] px-[18px] py-[14px]">
       <span
         class="mb-[5px] block font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--ss-color-text-secondary)]"
         >Paid</span
       >
-      <span class="font-mono text-lg font-bold">{formatMoney(rollup.paid)}</span>
+      <span class="font-mono text-lg font-bold">{formatDollarsHalfUp(rollup.paid)}</span>
     </div>
     <div class="flex-1 px-[18px] py-[14px]">
       <span
@@ -177,7 +177,7 @@ const LINK_ACT =
           rollup.outstanding > 0
             ? 'text-[color:var(--ss-color-primary)]'
             : 'text-[color:var(--ss-color-text-muted)]',
-        ]}>{formatMoney(rollup.outstanding)}</span
+        ]}>{formatDollarsHalfUp(rollup.outstanding)}</span
       >
     </div>
   </div>
@@ -311,7 +311,7 @@ const LINK_ACT =
                     {quotes.map((q) => (
                       <span class="inline-flex items-center gap-1.5">
                         <span class={statusBadgeClass(q.status)}>{q.status}</span>
-                        {formatMoney(q.total_price)}
+                        {formatDollarsHalfUp(q.total_price)}
                       </span>
                     ))}
                   </span>
@@ -362,13 +362,13 @@ const LINK_ACT =
               {overdueInvoices.map((inv) => (
                 <li class="flex items-center gap-2 border-t border-[color:var(--ss-color-border-subtle)] py-1.5 first:border-t-0 first:pt-0 text-[color:var(--ss-color-text-secondary)]">
                   <span class="h-2 w-2 rounded-full bg-[color:var(--ss-color-error)]" />
-                  Invoice overdue · {formatMoney(inv.amount)}
+                  Invoice overdue · {formatDollarsHalfUp(inv.amount)}
                 </li>
               ))}
               {sentInvoices.map((inv) => (
                 <li class="flex items-center gap-2 border-t border-[color:var(--ss-color-border-subtle)] py-1.5 first:border-t-0 first:pt-0 text-[color:var(--ss-color-text-secondary)]">
                   <span class="h-2 w-2 rounded-full bg-[color:var(--ss-color-primary)]" />
-                  Invoice sent · {formatMoney(inv.amount)}
+                  Invoice sent · {formatDollarsHalfUp(inv.amount)}
                 </li>
               ))}
             </ul>

@@ -21,7 +21,7 @@ import {
   operatorRecurring,
   seatLines,
 } from '../../../lib/admin/billing-view'
-import { formatMoney } from '../../../lib/admin/client-hub'
+import { formatDollarsHalfUp } from '../../../lib/format/money'
 import { formatDate } from '../../../lib/admin/entity-detail-page'
 import { statusBadgeClass } from '../../../lib/ui/status-badge'
 import { env } from 'cloudflare:workers'
@@ -85,11 +85,11 @@ const REC_COLS = 'grid-cols-[1.6fr_1.6fr_0.9fr_1fr]'
       <div class="flex gap-8">
         <div>
           <span class={`${LAB} mb-1 block`}>Invoiced</span>
-          <span class="font-mono text-xl font-bold">{formatMoney(totals.invoiced)}</span>
+          <span class="font-mono text-xl font-bold">{formatDollarsHalfUp(totals.invoiced)}</span>
         </div>
         <div>
           <span class={`${LAB} mb-1 block`}>Paid</span>
-          <span class="font-mono text-xl font-bold">{formatMoney(totals.paid)}</span>
+          <span class="font-mono text-xl font-bold">{formatDollarsHalfUp(totals.paid)}</span>
         </div>
         <div>
           <span class={`${LAB} mb-1 block`}>Outstanding</span>
@@ -99,12 +99,12 @@ const REC_COLS = 'grid-cols-[1.6fr_1.6fr_0.9fr_1fr]'
               totals.outstanding > 0
                 ? 'text-[color:var(--ss-color-primary)]'
                 : 'text-[color:var(--ss-color-text-muted)]',
-            ]}>{formatMoney(totals.outstanding)}</span
+            ]}>{formatDollarsHalfUp(totals.outstanding)}</span
           >
           {
             totals.overdueCount > 0 && (
               <div class="mt-1 text-[11px] text-[color:var(--ss-color-error)]">
-                {totals.overdueCount} overdue · {formatMoney(totals.overdueAmount)}
+                {totals.overdueCount} overdue · {formatDollarsHalfUp(totals.overdueAmount)}
               </div>
             )
           }
@@ -120,7 +120,7 @@ const REC_COLS = 'grid-cols-[1.6fr_1.6fr_0.9fr_1fr]'
         </div>
         <div>
           <span class={`${LAB} mb-1 block`}>MRR</span>
-          <span class="font-mono text-xl font-bold">{formatMoney(recurring.mrr)}</span>
+          <span class="font-mono text-xl font-bold">{formatDollarsHalfUp(recurring.mrr)}</span>
           {
             recurring.unpricedCount > 0 && (
               <div class="mt-1 text-[11px] text-[color:var(--ss-color-primary)]">
@@ -183,7 +183,9 @@ const REC_COLS = 'grid-cols-[1.6fr_1.6fr_0.9fr_1fr]'
               <span class="text-[color:var(--ss-color-text-secondary)]">
                 {inv.description ?? inv.type}
               </span>
-              <span class="text-right font-mono font-medium">{formatMoney(inv.amount)}</span>
+              <span class="text-right font-mono font-medium">
+                {formatDollarsHalfUp(inv.amount)}
+              </span>
               <span>
                 <span class={statusBadgeClass(inv.status)}>{inv.status}</span>
               </span>
@@ -222,7 +224,9 @@ const REC_COLS = 'grid-cols-[1.6fr_1.6fr_0.9fr_1fr]'
                 {clientName(q.entity_id)}
               </span>
               <span class="text-[color:var(--ss-color-text-secondary)]">Quote v{q.version}</span>
-              <span class="text-right font-mono font-medium">{formatMoney(q.total_price)}</span>
+              <span class="text-right font-mono font-medium">
+                {formatDollarsHalfUp(q.total_price)}
+              </span>
               <span>
                 <span class={statusBadgeClass(q.status)}>{q.status}</span>
               </span>
@@ -269,7 +273,7 @@ const REC_COLS = 'grid-cols-[1.6fr_1.6fr_0.9fr_1fr]'
                 </span>
               ) : (
                 <span class="text-right font-mono text-[13px] font-medium">
-                  {formatMoney(operatorPrice(r.customer_slug) ?? 0)}/mo
+                  {formatDollarsHalfUp(operatorPrice(r.customer_slug) ?? 0)}/mo
                 </span>
               )}
             </a>

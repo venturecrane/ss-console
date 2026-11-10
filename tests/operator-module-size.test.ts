@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  statSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve, join, relative } from 'node:path'
 
 /**
@@ -62,19 +71,12 @@ const BASELINE_FILE = join(OPERATOR_DIR, 'contracts', 'operator-module-size.json
 const CEILING = 500
 
 /**
- * Directories never walked: vendored venvs, caches, build output, and the seat
+ * Directories never walked: vendored venvs, caches and build output. The seat
  * runtime (operator/hermes-smd-overlay, in-tree since the 2026-10-22 fold, ADR
- * 0095), which joins the module-size ceiling behind its own baseline rather
- * than by a sweep in the fold PR.
+ * 0095) was skipped here until 2026-11-10; it is walked like the rest, its
+ * over-ceiling files recorded at that day's sizes, so none can grow.
  */
-const SKIP_DIRS = new Set([
-  '.venv',
-  '__pycache__',
-  'node_modules',
-  '.pytest_cache',
-  '.ruff_cache',
-  'hermes-smd-overlay',
-])
+const SKIP_DIRS = new Set(['.venv', '__pycache__', 'node_modules', '.pytest_cache', '.ruff_cache'])
 
 interface Baseline {
   _comment: string
@@ -91,7 +93,8 @@ interface Baseline {
 function isTestFile(relPath: string): boolean {
   const base = relPath.split('/').pop() ?? ''
   if (base.startsWith('test_') || base.endsWith('_test.py')) return true
-  return relPath.split('/').includes('tests')
+  const parts = relPath.split('/')
+  return parts.includes('tests') || parts.includes('tests_e2e')
 }
 
 function walkFiles(dir: string, suffix: string, acc: string[] = []): string[] {
@@ -179,15 +182,87 @@ function loadBaseline(): Baseline {
   return JSON.parse(readFileSync(BASELINE_FILE, 'utf8')) as Baseline
 }
 
-function measureTree(): Record<string, number> {
+function measureTree(operatorDir = OPERATOR_DIR, repoRoot = REPO_ROOT): Record<string, number> {
   const measured: Record<string, number> = {}
-  for (const abs of walkPythonFiles(OPERATOR_DIR)) {
-    const rel = relative(REPO_ROOT, abs)
+  for (const abs of walkPythonFiles(operatorDir)) {
+    const rel = relative(repoRoot, abs)
     if (isTestFile(rel)) continue
     const lines = countLogicalLines(readFileSync(abs, 'utf8'))
     if (lines > CEILING) measured[rel] = lines
   }
   return measured
+}
+
+/**
+ * The Python half's verdict: over the ceiling and unrecorded fails, growth
+ * fails (with the pre_run split advice), and shrinkage fails until the baseline
+ * is regenerated so the recorded number tracks reality downward.
+ */
+function pythonRatchetProblems(
+  measured: Record<string, number>,
+  recorded: Record<string, number>,
+  repoRoot = REPO_ROOT
+): string[] {
+  const problems: string[] = []
+
+  for (const [path, lines] of Object.entries(measured)) {
+    const was = recorded[path]
+    if (was === undefined) {
+      problems.push(
+        `${path}: ${lines} logical lines, over the ${CEILING} ceiling and not in the baseline. ` +
+          `Split it, or if this is a deliberate carry-over, regenerate the baseline and say why in the PR.`
+      )
+    } else if (lines > was) {
+      problems.push(growthProblem(path, was, lines, repoRoot))
+    }
+  }
+
+  for (const [path, was] of Object.entries(recorded)) {
+    const now = measured[path]
+    if (now === undefined) {
+      problems.push(
+        `${path}: no longer over the ceiling (was ${was}). Regenerate the baseline with ` +
+          `UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 so the ratchet keeps its new, tighter position.`
+      )
+    } else if (now < was) {
+      problems.push(
+        `${path}: shrank ${was} -> ${now} logical lines. Regenerate the baseline with ` +
+          `UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 so the ratchet keeps its new, tighter position.`
+      )
+    }
+  }
+  return problems
+}
+
+function growthProblem(path: string, was: number, lines: number, repoRoot: string): string {
+  // A naive split BREAKS THE RUNTIME for a skills/<name>/pre_run.py that
+  // has no sibling loader. The Hermes scheduler stages that one file to
+  // <profile>/scripts/<skill>/pre_run.py and runs it there
+  // (operator/templates/pre_run_gate.py:35); a sibling module extracted
+  // next to it is simply not staged, so a bare import fails on a live
+  // client seat. A skill that carries `_load_sibling_module` (or the
+  // `_load_skill_helpers` bootstrap) resolves siblings from the synced
+  // skill dir and /app/skills, so for it the advice is the opposite:
+  // extract, the way escalation_ledger.py and skill_helpers.py are
+  // vendored. The review of 2026-09-10 found the old unconditional NOTE
+  // steering exactly the skills that should split away from splitting.
+  const isPreRun = /skills\/[^/]+\/pre_run\.py$/.test(path)
+  const hasSiblingLoader =
+    isPreRun &&
+    /_load_sibling_module|_load_skill_helpers/.test(readFileSync(join(repoRoot, path), 'utf8'))
+  return (
+    `${path}: grew ${was} -> ${lines} logical lines. The ratchet only tightens — ` +
+    `split the module rather than raising its baseline.` +
+    (isPreRun && !hasSiblingLoader
+      ? ` NOTE: the scheduler stages this file ALONE (see operator/templates/pre_run_gate.py:35), ` +
+        `so a naive split breaks the runtime — give it a sibling loader first (see ` +
+        `_load_sibling_module in skills/client-verification-tracker/pre_run.py), then extract.`
+      : '') +
+    (isPreRun && hasSiblingLoader
+      ? ` This skill resolves siblings at run time, so extract into a sibling module the way ` +
+        `skill_helpers.py is vendored (operator/tests/test_skill_helpers_sync.py gates the copies).`
+      : '')
+  )
 }
 
 const REGENERATE = process.env.UPDATE_OPERATOR_MODULE_SIZE_BASELINE === '1'
@@ -233,10 +308,13 @@ function loadShellBaseline(): ShellBaseline {
   return JSON.parse(readFileSync(SHELL_BASELINE_FILE, 'utf8')) as ShellBaseline
 }
 
-function measureShellTree(): Record<string, number> {
+function measureShellTree(
+  operatorDir = OPERATOR_DIR,
+  repoRoot = REPO_ROOT
+): Record<string, number> {
   const measured: Record<string, number> = {}
-  for (const abs of walkFiles(OPERATOR_DIR, '.sh')) {
-    const rel = relative(REPO_ROOT, abs)
+  for (const abs of walkFiles(operatorDir, '.sh')) {
+    const rel = relative(repoRoot, abs)
     if (isTestFile(rel)) continue
     const lines = countShellLogicalLines(readFileSync(abs, 'utf8'))
     if (lines > CEILING) measured[rel] = lines
@@ -340,66 +418,43 @@ describe('operator module-size ratchet', () => {
       return
     }
 
-    const baseline = loadBaseline()
-    const problems: string[] = []
-
-    for (const [path, lines] of Object.entries(measured)) {
-      const recorded = baseline.modules[path]
-      if (recorded === undefined) {
-        problems.push(
-          `${path}: ${lines} logical lines, over the ${CEILING} ceiling and not in the baseline. ` +
-            `Split it, or if this is a deliberate carry-over, regenerate the baseline and say why in the PR.`
-        )
-      } else if (lines > recorded) {
-        // A naive split BREAKS THE RUNTIME for a skills/<name>/pre_run.py that
-        // has no sibling loader. The Hermes scheduler stages that one file to
-        // <profile>/scripts/<skill>/pre_run.py and runs it there
-        // (operator/templates/pre_run_gate.py:35); a sibling module extracted
-        // next to it is simply not staged, so a bare import fails on a live
-        // client seat. A skill that carries `_load_sibling_module` (or the
-        // `_load_skill_helpers` bootstrap) resolves siblings from the synced
-        // skill dir and /app/skills, so for it the advice is the opposite:
-        // extract, the way escalation_ledger.py and skill_helpers.py are
-        // vendored. The review of 2026-09-10 found the old unconditional NOTE
-        // steering exactly the skills that should split away from splitting.
-        const isPreRun = /skills\/[^/]+\/pre_run\.py$/.test(path)
-        const hasSiblingLoader =
-          isPreRun &&
-          /_load_sibling_module|_load_skill_helpers/.test(
-            readFileSync(join(REPO_ROOT, path), 'utf8')
-          )
-        problems.push(
-          `${path}: grew ${recorded} -> ${lines} logical lines. The ratchet only tightens — ` +
-            `split the module rather than raising its baseline.` +
-            (isPreRun && !hasSiblingLoader
-              ? ` NOTE: the scheduler stages this file ALONE (see operator/templates/pre_run_gate.py:35), ` +
-                `so a naive split breaks the runtime — give it a sibling loader first (see ` +
-                `_load_sibling_module in skills/client-verification-tracker/pre_run.py), then extract.`
-              : '') +
-            (isPreRun && hasSiblingLoader
-              ? ` This skill resolves siblings at run time, so extract into a sibling module the way ` +
-                `skill_helpers.py is vendored (operator/tests/test_skill_helpers_sync.py gates the copies).`
-              : '')
-        )
-      }
-    }
-
-    for (const [path, recorded] of Object.entries(baseline.modules)) {
-      const now = measured[path]
-      if (now === undefined) {
-        problems.push(
-          `${path}: no longer over the ceiling (was ${recorded}). Regenerate the baseline with ` +
-            `UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 so the ratchet keeps its new, tighter position.`
-        )
-      } else if (now < recorded) {
-        problems.push(
-          `${path}: shrank ${recorded} -> ${now} logical lines. Regenerate the baseline with ` +
-            `UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 so the ratchet keeps its new, tighter position.`
-        )
-      }
-    }
-
+    const problems = pythonRatchetProblems(measured, loadBaseline().modules)
     expect(problems, problems.join('\n')).toEqual([])
+  })
+
+  it('walks the seat runtime: a grown baselined overlay module and a new over-ceiling one both fail', () => {
+    // Law 12: the overlay was skipped by name until 2026-11-10 while the skip's
+    // comment promised a baseline that did not exist. Prove the walk reaches it
+    // and the verdict rejects both kinds of growth there.
+    const root = mkdtempSync(join(tmpdir(), 'module-size-overlay-'))
+    try {
+      const shared = join(root, 'operator', 'hermes-smd-overlay', 'shared')
+      mkdirSync(shared, { recursive: true })
+      const body = (n: number) => Array.from({ length: n }, (_, i) => `x${i} = ${i}`).join('\n')
+      writeFileSync(join(shared, 'grown.py'), body(CEILING + 20))
+      writeFileSync(join(shared, 'fresh.py'), body(CEILING + 1))
+      mkdirSync(join(root, 'operator', 'hermes-smd-overlay', 'tests_e2e'))
+      writeFileSync(join(root, 'operator', 'hermes-smd-overlay', 'tests_e2e', 'big.py'), body(900))
+
+      const measured = measureTree(join(root, 'operator'), root)
+      expect(measured).toEqual({
+        'operator/hermes-smd-overlay/shared/grown.py': CEILING + 20,
+        'operator/hermes-smd-overlay/shared/fresh.py': CEILING + 1,
+      })
+      const problems = pythonRatchetProblems(
+        measured,
+        { 'operator/hermes-smd-overlay/shared/grown.py': CEILING + 10 },
+        root
+      )
+      expect([...problems].sort()).toEqual([
+        'operator/hermes-smd-overlay/shared/fresh.py: 501 logical lines, over the 500 ceiling and not in the baseline. ' +
+          'Split it, or if this is a deliberate carry-over, regenerate the baseline and say why in the PR.',
+        'operator/hermes-smd-overlay/shared/grown.py: grew 510 -> 520 logical lines. The ratchet only tightens — ' +
+          'split the module rather than raising its baseline.',
+      ])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 
@@ -456,5 +511,22 @@ describe('operator shell-script size ratchet', () => {
       'Regenerate the baseline with UPDATE_OPERATOR_MODULE_SIZE_BASELINE=1 so the ratchet keeps its new, tighter position.'
     )
     expect(problems, problems.join('\n')).toEqual([])
+  })
+
+  it('walks the seat runtime: an over-ceiling overlay script is measured and fails unrecorded', () => {
+    const root = mkdtempSync(join(tmpdir(), 'shell-size-overlay-'))
+    try {
+      const dir = join(root, 'operator', 'hermes-smd-overlay', 'bootstrap')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(
+        join(dir, 'long.sh'),
+        Array.from({ length: CEILING + 3 }, () => 'true').join('\n')
+      )
+      const measured = measureShellTree(join(root, 'operator'), root)
+      expect(measured).toEqual({ 'operator/hermes-smd-overlay/bootstrap/long.sh': CEILING + 3 })
+      expect(ratchetProblems(measured, {}, 'regenerate')).toHaveLength(1)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
