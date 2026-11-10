@@ -363,7 +363,6 @@ describe('mechanisms under review are falsifiable', () => {
    * same PR and leaves this list.
    */
   const GRANDFATHERED = [
-    'reflex-primer',
     'reply-contract',
     'plan-premise-gate-rehearsal-row',
     'session-board',

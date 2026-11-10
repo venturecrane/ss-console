@@ -122,11 +122,13 @@ team:
 
 **A model per role.** Name it on every Agent call this skill makes, because an agent spawned without one inherits the session's model:
 
-| Role                                                     | `model`             |
-| -------------------------------------------------------- | ------------------- |
-| Plan and design agents (Step 4 Phase 2), every critic    | `fable`             |
-| Builders (a workstream that writes code or docs)         | `opus`              |
-| Explore/search, and agents that only re-run a named probe | `sonnet` or `haiku` |
+| Role                                                     | `model`             | `effort`                                  |
+| -------------------------------------------------------- | ------------------- | ----------------------------------------- |
+| Plan and design agents (Step 4 Phase 2), every critic    | `fable`             | `high`; `xhigh` only for a multi-wave design |
+| Builders (a workstream that writes code or docs)         | `opus`              | `high`                                    |
+| Explore/search, and agents that only re-run a named probe | `sonnet` or `haiku` | omit (the model's default)                |
+
+**Effort per role.** Pass `effort` on each Agent call as the table says; this skill is the instruction that permits it. Never `max`: it spends more tokens and exists for testing a model's limits (Fable 5.2 release notes, 2026-11-10: High is the default, Xhigh is for the hardest long-running tasks). Fable 5.2 is also cheaper per token than 5.1 ($8 / $40 per million, from $10 / $50) and draws on its own weekly limit, which is why every critic can stay on it.
 
 A number a conclusion rests on (a count, a cost, a rate) is evidence-mining, not search: it stays on `opus` or `fable`. Seven of the nine figures corrected in the 2026-11-09 process review came from Sonnet-authored files (PREV-16).
 
