@@ -426,6 +426,10 @@ top_level:
       through list_staff_messages / read_staff_message. Every other mailbox
       is refused before any Graph call; a missing or malformed block refuses
       all. Read-only: no send, draft, move or delete reaches a staff mailbox.
+      An address on scope.staff_send_as is refused even when listed here
+      (ADR 0089 amendment 5a). The gateway's mail_spool_message runs the same
+      rule (staff_mailbox_rule.py, kept byte-identical in the connector and
+      the overlay's shared/).
       Takes effect only once the firm ALSO adds the mailbox to the READ app's
       Exchange ApplicationAccessPolicy scope group; until then Graph answers
       403 and the read fails closed. Never an address on scope.staff_send_as:
