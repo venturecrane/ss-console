@@ -1,218 +1,106 @@
-import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+/**
+ * Behavioural tests for the assessment extraction client
+ * (src/lib/claude/extract.ts). The Anthropic Messages API is the only fake:
+ * global fetch is stubbed, so these assert the request the client sends and
+ * what it does with each shape of reply.
+ */
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import {
+  ExtractionApiError,
+  ExtractionValidationError,
+  extractAssessment,
+} from '../src/lib/claude/extract'
+import { ANTHROPIC_API_URL, ANTHROPIC_VERSION, QUALITY_MODEL } from '../src/lib/llm/models'
+import {
+  EXTRACTION_SYSTEM_PROMPT,
+  buildExtractionUserPrompt,
+} from '../src/portal/assessments/extraction-prompt'
+import { SAMPLE_EXTRACTION_OUTPUT, SAMPLE_TRANSCRIPT } from './fixtures/sample-transcript'
 
-describe('claude extraction: client module', () => {
-  const source = () => readFileSync(resolve('src/lib/claude/extract.ts'), 'utf-8')
+function reply(text: string, init: ResponseInit = { status: 200 }): Response {
+  return new Response(JSON.stringify({ content: [{ type: 'text', text }] }), init)
+}
 
-  it('extract.ts exists', () => {
-    expect(existsSync(resolve('src/lib/claude/extract.ts'))).toBe(true)
+function stubFetch(response: Response) {
+  const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response)
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+describe('extractAssessment', () => {
+  it('posts the transcript to the Messages API with the key, version, and quality model', async () => {
+    const fetchMock = stubFetch(reply(JSON.stringify(SAMPLE_EXTRACTION_OUTPUT)))
+    await extractAssessment('test-key', SAMPLE_TRANSCRIPT)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(ANTHROPIC_API_URL)
+    expect(init?.method).toBe('POST')
+    expect(init?.headers).toEqual({
+      'x-api-key': 'test-key',
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
+    })
+    const body = JSON.parse(String(init?.body))
+    expect(body.model).toBe(QUALITY_MODEL)
+    expect(body.max_tokens).toBe(4096)
+    expect(body.system).toBe(EXTRACTION_SYSTEM_PROMPT)
+    expect(body.messages).toEqual([
+      { role: 'user', content: buildExtractionUserPrompt(SAMPLE_TRANSCRIPT) },
+    ])
   })
 
-  it('exports extractAssessment function', () => {
-    expect(source()).toContain('export async function extractAssessment')
+  it('returns the validated extraction', async () => {
+    stubFetch(reply(JSON.stringify(SAMPLE_EXTRACTION_OUTPUT)))
+    expect(await extractAssessment('k', SAMPLE_TRANSCRIPT)).toEqual(SAMPLE_EXTRACTION_OUTPUT)
   })
 
-  it('exports ExtractionApiError class', () => {
-    expect(source()).toContain('export class ExtractionApiError')
+  it('strips a code fence around the JSON', async () => {
+    stubFetch(reply('```json\n' + JSON.stringify(SAMPLE_EXTRACTION_OUTPUT) + '\n```'))
+    expect(await extractAssessment('k', SAMPLE_TRANSCRIPT)).toEqual(SAMPLE_EXTRACTION_OUTPUT)
   })
 
-  it('exports ExtractionValidationError class', () => {
-    expect(source()).toContain('export class ExtractionValidationError')
+  it('throws ExtractionApiError with the status on a non-OK response', async () => {
+    stubFetch(new Response('overloaded', { status: 529, statusText: 'Overloaded' }))
+    const error = await extractAssessment('k', SAMPLE_TRANSCRIPT).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ExtractionApiError)
+    expect((error as ExtractionApiError).statusCode).toBe(529)
+    expect((error as ExtractionApiError).responseBody).toBe('overloaded')
   })
 
-  it('uses raw fetch to Anthropic API (no SDK)', () => {
-    const code = source()
-    // The URL literal now lives in llm/models.ts; the call site fetches the import.
-    expect(code).toContain('fetch(ANTHROPIC_API_URL')
-    // Should not import the Anthropic SDK
-    expect(code).not.toContain('@anthropic-ai/sdk')
-    expect(code).not.toContain("from 'anthropic'")
+  it('throws ExtractionApiError when the reply has no text block', async () => {
+    stubFetch(new Response(JSON.stringify({ content: [{ type: 'tool_use' }] }), { status: 200 }))
+    await expect(extractAssessment('k', SAMPLE_TRANSCRIPT)).rejects.toBeInstanceOf(
+      ExtractionApiError
+    )
   })
 
-  it('includes x-api-key header', () => {
-    expect(source()).toContain("'x-api-key': apiKey")
+  it('throws ExtractionApiError when the text is not JSON', async () => {
+    stubFetch(reply('not json'))
+    await expect(extractAssessment('k', SAMPLE_TRANSCRIPT)).rejects.toBeInstanceOf(
+      ExtractionApiError
+    )
   })
 
-  it('includes anthropic-version header', () => {
-    const code = source()
-    expect(code).toContain("'anthropic-version': ANTHROPIC_VERSION")
-  })
-
-  it('sources shared Anthropic constants from central llm/models module', () => {
-    const code = source()
-    expect(code).toContain("from '../llm/models'")
-    expect(code).toContain('ANTHROPIC_API_URL')
-    expect(code).toContain('ANTHROPIC_VERSION')
-  })
-
-  it('includes content-type header', () => {
-    expect(source()).toContain("'content-type': 'application/json'")
-  })
-
-  it('uses the QUALITY model tier from central config (no hardcoded ID)', () => {
-    const code = source()
-    expect(code).toContain('QUALITY_MODEL')
-    expect(code).toContain('const MODEL = QUALITY_MODEL')
-    expect(code).toContain('model: MODEL')
-    // The literal model ID must live only in llm/models.ts, not at the call site.
-    expect(code).not.toContain('claude-sonnet-4-6')
-  })
-
-  it('sets max_tokens to 4096', () => {
-    expect(source()).toContain('4096')
-    expect(source()).toContain('max_tokens: MAX_TOKENS')
-  })
-
-  it('imports and uses EXTRACTION_SYSTEM_PROMPT', () => {
-    const code = source()
-    expect(code).toContain('EXTRACTION_SYSTEM_PROMPT')
-    expect(code).toContain('system: EXTRACTION_SYSTEM_PROMPT')
-  })
-
-  it('imports and uses buildExtractionUserPrompt', () => {
-    const code = source()
-    expect(code).toContain('buildExtractionUserPrompt')
-    expect(code).toContain('buildExtractionUserPrompt(transcript)')
-  })
-
-  it('calls validateExtraction on the response', () => {
-    const code = source()
-    expect(code).toContain('validateExtraction')
-    expect(code).toContain('validateExtraction(parsed)')
-  })
-
-  it('throws ExtractionValidationError on invalid extraction output', () => {
-    const code = source()
-    expect(code).toContain('!validation.valid')
-    expect(code).toContain('new ExtractionValidationError')
-  })
-
-  it('throws ExtractionApiError on non-OK response', () => {
-    const code = source()
-    expect(code).toContain('!response.ok')
-    expect(code).toContain('new ExtractionApiError')
-  })
-
-  it('handles code fences in Claude response', () => {
-    const code = source()
-    expect(code).toContain('startsWith')
-    expect(code).toContain('```')
-  })
-
-  it('parses text content block from Messages API response', () => {
-    const code = source()
-    expect(code).toContain('contentBlocks')
-    expect(code).toContain("block.type === 'text'")
+  it('throws ExtractionValidationError when the JSON fails the schema', async () => {
+    stubFetch(reply(JSON.stringify({ business_name: 'Only a name' })))
+    const error = await extractAssessment('k', SAMPLE_TRANSCRIPT).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ExtractionValidationError)
+    expect((error as ExtractionValidationError).validationErrors.length).toBeGreaterThan(0)
   })
 })
 
-describe('claude extraction: API route integration', () => {
-  const source = () => readFileSync(resolve('src/pages/api/admin/assessments/[id].ts'), 'utf-8')
-
-  it('API route imports extractAssessment', () => {
-    expect(source()).toContain("import { extractAssessment } from '../../../../lib/claude/extract'")
-  })
-
-  it('API route imports getTranscript from R2', () => {
-    expect(source()).toContain('getTranscript')
-  })
-
-  it('API route handles action === extract', () => {
-    const code = source()
-    expect(code).toContain("action === 'extract'")
-  })
-
-  it('API route checks transcript_path exists before extraction', () => {
-    const code = source()
-    // Extraction was extracted to handleExtract helper; transcript_path is passed
-    // as a parameter. Check the guard and the error code rather than the inline form.
-    expect(code).toContain('no_transcript')
-    expect(code).toMatch(/transcript_path|transcriptPath/)
-  })
-
-  it('API route checks ANTHROPIC_API_KEY from env', () => {
-    const code = source()
+describe('claude extraction: API route key handling', () => {
+  it('API route reads ANTHROPIC_API_KEY from env and refuses without it', () => {
+    const code = readFileSync(resolve('src/pages/api/admin/assessments/[id].ts'), 'utf-8')
     expect(code).toContain('env.ANTHROPIC_API_KEY')
     expect(code).toContain('no_api_key')
-  })
-
-  it('API route fetches transcript text from R2', () => {
-    const code = source()
-    // transcript_path is passed to handleExtract as the transcriptPath parameter.
-    expect(code).toMatch(
-      /getTranscript\(env\.STORAGE,\s*(existing\.transcript_path|transcriptPath)/
-    )
-    expect(code).toContain('transcriptObject.text()')
-  })
-
-  it('API route calls extractAssessment with apiKey and transcript', () => {
-    expect(source()).toContain('extractAssessment(apiKey, transcriptText)')
-  })
-
-  it('API route updates assessment with extraction result', () => {
-    const code = source()
-    expect(code).toContain('JSON.stringify(result)')
-    expect(code).toContain('extraction: JSON.stringify(result)')
-  })
-
-  it('API route redirects with extracted=1 on success', () => {
-    expect(source()).toContain('?extracted=1')
-  })
-
-  it('API route redirects with error on extraction failure', () => {
-    expect(source()).toContain('extraction_failed')
-  })
-
-  it('API route logs extraction errors', () => {
-    expect(source()).toContain('Extraction error')
-  })
-})
-
-describe('claude extraction: env type declaration', () => {
-  it('env.d.ts includes ANTHROPIC_API_KEY', () => {
-    const code = readFileSync(resolve('src/env.d.ts'), 'utf-8')
-    expect(code).toContain('ANTHROPIC_API_KEY')
-  })
-
-  it('ANTHROPIC_API_KEY is optional', () => {
-    const code = readFileSync(resolve('src/env.d.ts'), 'utf-8')
-    expect(code).toContain('ANTHROPIC_API_KEY?: string')
-  })
-})
-
-describe('claude extraction: prompt and schema imports', () => {
-  it('extraction-prompt.ts exists', () => {
-    expect(existsSync(resolve('src/portal/assessments/extraction-prompt.ts'))).toBe(true)
-  })
-
-  it('extraction-schema.ts exists', () => {
-    expect(existsSync(resolve('src/portal/assessments/extraction-schema.ts'))).toBe(true)
-  })
-
-  it('extraction-prompt exports validateExtraction', () => {
-    const code = readFileSync(resolve('src/portal/assessments/extraction-prompt.ts'), 'utf-8')
-    expect(code).toContain('export function validateExtraction')
-  })
-
-  it('extraction-schema exports AssessmentExtraction interface', () => {
-    const code = readFileSync(resolve('src/portal/assessments/extraction-schema.ts'), 'utf-8')
-    expect(code).toContain('export interface AssessmentExtraction')
-  })
-
-  it('extract.ts correctly imports from extraction-prompt', () => {
-    const code = readFileSync(resolve('src/lib/claude/extract.ts'), 'utf-8')
-    expect(code).toContain("from '../../portal/assessments/extraction-prompt'")
-  })
-
-  it('extract.ts imports type from extraction-schema', () => {
-    const code = readFileSync(resolve('src/lib/claude/extract.ts'), 'utf-8')
-    expect(code).toContain("from '../../portal/assessments/extraction-schema'")
-  })
-
-  it('extract.ts imports validateExtraction from extraction-prompt', () => {
-    const code = readFileSync(resolve('src/lib/claude/extract.ts'), 'utf-8')
-    expect(code).toContain('validateExtraction')
-    expect(code).toContain("from '../../portal/assessments/extraction-prompt'")
   })
 })

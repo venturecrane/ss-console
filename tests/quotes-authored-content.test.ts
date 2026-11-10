@@ -9,7 +9,6 @@
  *   - portal page: re-introduces "How we'll work" only when schedule is
  *     populated; falls back to line-items deliverables only when authored
  *     deliverables are missing
- *   - admin page: surfaces authoring UI + send-gate banner
  *   - SOW templateProps: requires authored overview and primary contact name
  *
  * Uses @venturecrane/crane-test-harness for the DAL/round-trip tests and
@@ -565,75 +564,6 @@ describe('portal proposal page: render gating', () => {
   })
 })
 
-describe('admin quote builder: authoring UI + send gate', () => {
-  // Authoring UI was extracted to QuoteClientContent.astro and QuoteActions.astro
-  // to keep [quoteId].astro within the 500-line ceiling. Combined source covers all.
-  const pageSource = () =>
-    readFileSync(resolve('src/pages/admin/entities/[id]/quotes/[quoteId].astro'), 'utf-8') +
-    '\n' +
-    readFileSync(resolve('src/components/admin/QuoteClientContent.astro'), 'utf-8') +
-    '\n' +
-    readFileSync(resolve('src/components/admin/QuoteActions.astro'), 'utf-8')
-  const loaderSource = () => readFileSync(resolve('src/lib/admin/quote-builder-page.ts'), 'utf-8')
-  const clientSource = () => readFileSync(resolve('src/lib/admin/quote-builder-client.ts'), 'utf-8')
-
-  it('routes authored-content parsing through the extracted loader', () => {
-    expect(pageSource()).toContain('loadQuoteBuilderPage')
-    const code = loaderSource()
-    expect(code).toContain('parseSchedule')
-    expect(code).toContain('parseDeliverables')
-    expect(code).toContain('getMissingAuthoredContent')
-  })
-
-  it('renders schedule row editor', () => {
-    const code = pageSource()
-    expect(code).toContain('add-schedule-row-btn')
-    expect(code).toContain('schedule-label')
-    expect(code).toContain('schedule-body')
-  })
-
-  it('renders deliverable row editor', () => {
-    const code = pageSource()
-    expect(code).toContain('add-deliverable-row-btn')
-    expect(code).toContain('deliverable-title')
-    expect(code).toContain('deliverable-body')
-  })
-
-  it('renders engagement-overview textarea', () => {
-    const code = pageSource()
-    expect(code).toContain('engagement-overview-input')
-    expect(code).toContain('Engagement overview')
-  })
-
-  it('renders milestone-label input behind isThreeMilestone gate', () => {
-    const code = pageSource()
-    expect(code).toContain('milestone-label-input')
-    expect(code).toContain('isThreeMilestone &&')
-  })
-
-  it('shows missing-authored-content banner when fields are empty', () => {
-    const code = pageSource()
-    expect(code).toContain('missingAuthored')
-    expect(code).toContain('Required to send')
-  })
-
-  it('hidden fields submit schedule, deliverables, overview, milestone_label', () => {
-    const code = pageSource()
-    expect(code).toContain('save-schedule')
-    expect(code).toContain('save-deliverables')
-    expect(code).toContain('save-engagement-overview')
-    expect(code).toContain('save-milestone-label')
-  })
-
-  it('serializes authored rows into hidden inputs in the extracted client module', () => {
-    expect(pageSource()).toContain('initQuoteBuilderPage')
-    const code = clientSource()
-    expect(code).toContain('syncAuthoredContentInputs')
-    expect(code).toContain('getScheduleRows')
-    expect(code).toContain('getDeliverableRows')
-  })
-})
-
 describe('SOW templateProps: blocks fabricated fallbacks (#377)', () => {
   const source = () => readFileSync(resolve('src/pages/api/admin/quotes/[id].ts'), 'utf-8')
 
@@ -701,14 +631,6 @@ describe('migration 0021: authored content columns', () => {
     expect(existsSync(path)).toBe(true)
   })
 
-  it('adds the four required columns to quotes', () => {
-    const sql = readFileSync(path, 'utf-8')
-    expect(sql).toContain('ALTER TABLE quotes ADD COLUMN schedule TEXT')
-    expect(sql).toContain('ALTER TABLE quotes ADD COLUMN deliverables TEXT')
-    expect(sql).toContain('ALTER TABLE quotes ADD COLUMN engagement_overview TEXT')
-    expect(sql).toContain('ALTER TABLE quotes ADD COLUMN milestone_label TEXT')
-  })
-
   it('runs cleanly against the test harness D1', async () => {
     const db = createTestD1()
     await runMigrations(db, { files: discoverNumericMigrations(migrationsDir) })
@@ -730,13 +652,5 @@ describe('backfill decision doc', () => {
   // still exist and carry the three options + recommendation for the audit trail.
   it('exists at the expected path', () => {
     expect(existsSync(resolve('docs/archive/quotes-authored-content-backfill.md'))).toBe(true)
-  })
-
-  it('lists all three options and gives a recommendation', () => {
-    const md = readFileSync(resolve('docs/archive/quotes-authored-content-backfill.md'), 'utf-8')
-    expect(md).toMatch(/Option A/)
-    expect(md).toMatch(/Option B/)
-    expect(md).toMatch(/Option C/)
-    expect(md).toMatch(/Recommendation/)
   })
 })

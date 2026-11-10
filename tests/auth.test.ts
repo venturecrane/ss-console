@@ -19,15 +19,6 @@ import { resolve } from 'path'
  */
 
 describe('auth: session module', () => {
-  it('session.ts exports the core helpers still used by /auth/verify', () => {
-    const source = readFileSync(resolve('src/lib/auth/session.ts'), 'utf-8')
-    expect(source).toContain('export async function createSession')
-    expect(source).toContain('export async function validateSession')
-    expect(source).toContain('export async function renewSession')
-    expect(source).toContain('export function buildSessionCookie')
-    expect(source).toContain('export function parseSessionToken')
-  })
-
   it('admin session duration is 7 days', () => {
     const source = readFileSync(resolve('src/lib/auth/session.ts'), 'utf-8')
     expect(source).toContain('7 * 24 * 60 * 60 * 1000')
@@ -54,11 +45,6 @@ describe('auth: session module', () => {
   it('client session duration is 30 days', () => {
     const source = readFileSync(resolve('src/lib/auth/session.ts'), 'utf-8')
     expect(source).toContain('30 * 24 * 60 * 60 * 1000')
-  })
-
-  it('exports getSessionDurationMs helper', () => {
-    const source = readFileSync(resolve('src/lib/auth/session.ts'), 'utf-8')
-    expect(source).toContain('export function getSessionDurationMs')
   })
 })
 
@@ -100,11 +86,6 @@ describe('auth: buildSessionCookie behavior', () => {
 describe('auth: admin session shim', () => {
   it('shim file exists', () => {
     expect(existsSync(resolve('src/lib/auth/admin-session-shim.ts'))).toBe(true)
-  })
-
-  it('exports resolveAdminSessionFromClerk', () => {
-    const source = readFileSync(resolve('src/lib/auth/admin-session-shim.ts'), 'utf-8')
-    expect(source).toContain('export async function resolveAdminSessionFromClerk')
   })
 
   it('gates resolution to role=admin in the SQL', () => {
@@ -323,11 +304,6 @@ describe('auth: admin dashboard', () => {
     expect(existsSync(resolve('src/pages/admin/index.astro'))).toBe(true)
   })
 
-  it('admin page uses session data', () => {
-    const source = readFileSync(resolve('src/pages/admin/index.astro'), 'utf-8')
-    expect(source).toContain('Astro.locals.session')
-  })
-
   it('admin layout includes Clerk sign-out button', () => {
     const source = readFileSync(resolve('src/layouts/AdminLayout.astro'), 'utf-8')
     expect(source).toContain('SignOutButton')
@@ -355,17 +331,5 @@ describe('auth: migrations (historical)', () => {
 
   it('sessions table migration still exists', () => {
     expect(existsSync(resolve('migrations/0006_create_sessions_table.sql'))).toBe(true)
-  })
-})
-
-describe('auth: env.d.ts types', () => {
-  it('declares AuthSession interface', () => {
-    const source = readFileSync(resolve('src/env.d.ts'), 'utf-8')
-    expect(source).toContain('interface AuthSession')
-  })
-
-  it('adds session to App.Locals', () => {
-    const source = readFileSync(resolve('src/env.d.ts'), 'utf-8')
-    expect(source).toContain('session: AuthSession | null')
   })
 })

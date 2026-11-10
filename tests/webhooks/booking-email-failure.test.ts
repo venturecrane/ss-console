@@ -1,13 +1,23 @@
-import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { describe, it, expect, vi } from 'vitest'
 import { parseBookingEmailFailure } from '../../src/lib/webhooks/booking-email-failure'
 import type { ResendWebhookPayload } from '../../src/lib/webhooks/resend-handler'
+import type { EmailTag } from '../../src/lib/email/resend'
+
+const sentTags: EmailTag[][] = []
+vi.mock('../../src/lib/email/resend', () => ({
+  sendEmail: vi.fn(async (_key: string | undefined, payload: { tags?: EmailTag[] }) => {
+    sentTags.push(payload.tags ?? [])
+    return { success: true, id: 'email-1' }
+  }),
+}))
+
+const { sendBookingCancellation, sendBookingConfirmation, sendBookingReschedule } =
+  await import('../../src/lib/email/booking-emails')
 
 /**
- * Unit coverage for the pure booking-email failure detector + a structural
- * guard that the booking-email wrappers tag their sends (so the webhook can
- * recognize them). The DB-touching orchestration is exercised end-to-end in
+ * Unit coverage for the pure booking-email failure detector, and a round trip
+ * proving the booking-email wrappers tag their sends so the detector
+ * recognizes a failure of each one. The DB-touching orchestration is exercised end-to-end in
  * tests/resend-webhook.test.ts.
  */
 
@@ -79,16 +89,64 @@ describe('parseBookingEmailFailure', () => {
   })
 })
 
-describe('booking-email wrappers tag their sends', () => {
-  const src = readFileSync(resolve('src/lib/email/booking-emails.ts'), 'utf-8')
+describe('booking-email wrappers tag their sends so a failure is recognized', () => {
+  const guest = {
+    guestName: 'Pat Fixture',
+    businessName: 'Fixture Co',
+    guestEmail: 'pat@example.com',
+  }
+  const sends = [
+    [
+      'booking_confirmation',
+      () =>
+        sendBookingConfirmation(undefined, {
+          ...guest,
+          slotLabel: 'Tuesday at 9:00 AM',
+          meetUrl: null,
+          manageUrl: 'https://smd.services/book/manage/x',
+          meetingLabel: 'Assessment call',
+          icsAttachment: null,
+          meetingId: 'mtg-1',
+        }),
+    ],
+    [
+      'booking_reschedule',
+      () =>
+        sendBookingReschedule(undefined, {
+          ...guest,
+          oldSlotLabel: 'Tuesday at 9:00 AM',
+          newSlotLabel: 'Wednesday at 9:00 AM',
+          meetUrl: null,
+          manageUrl: 'https://smd.services/book/manage/x',
+          meetingLabel: 'Assessment call',
+          icsAttachment: null,
+          meetingId: 'mtg-1',
+        }),
+    ],
+    [
+      'booking_cancellation',
+      () =>
+        sendBookingCancellation(undefined, {
+          ...guest,
+          slotLabel: 'Tuesday at 9:00 AM',
+          rebookUrl: 'https://smd.services/book',
+          icsAttachment: null,
+          meetingId: 'mtg-1',
+        }),
+    ],
+  ] as const
 
-  it('tags confirmation, reschedule, and cancellation with a booking category', () => {
-    expect(src).toContain("'booking_confirmation'")
-    expect(src).toContain("'booking_reschedule'")
-    expect(src).toContain("'booking_cancellation'")
-  })
-
-  it('includes a meeting_id tag so the webhook can resolve the entity', () => {
-    expect(src).toContain("name: 'meeting_id'")
-  })
+  for (const [category, send] of sends) {
+    it(`${category}: a bounce of the tagged send parses back to its category and meeting`, async () => {
+      sentTags.length = 0
+      await send()
+      expect(sentTags).toHaveLength(1)
+      const tags = Object.fromEntries((sentTags[0] ?? []).map((t) => [t.name, t.value]))
+      const parsed = parseBookingEmailFailure({
+        type: 'email.bounced',
+        data: { to: ['pat@example.com'], tags, bounce: { message: 'no such mailbox' } },
+      })
+      expect(parsed).toMatchObject({ category, meetingId: 'mtg-1' })
+    })
+  }
 })

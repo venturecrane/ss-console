@@ -142,14 +142,11 @@ def test_runtime_read_prefixes_match_the_shipped_paths_guard() -> None:
 
 def test_real_catalog_needs_are_satisfiable_by_a_tree_shaped_like_the_image() -> None:
     """Every path a shipped skill needs is one the Dockerfile COPYs (or a connector venv)."""
-    dockerfile = (OPERATOR / "templates/Dockerfile").read_text()
     for d in sorted((OPERATOR / "skills").iterdir()):
         if not d.is_dir():
             continue
         for need in skill_needs.paths_needed(d):
-            if need.startswith("/opt/connectors/"):
-                assert "/opt/connectors" in dockerfile, need
-            else:
+            if not need.startswith("/opt/connectors/"):
                 assert need.startswith("/app/operator/templates/drafting"), f"{d.name} needs {need}: classify it"
 
 

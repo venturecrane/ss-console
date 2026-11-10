@@ -30,6 +30,13 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  workflowStep,
+  workflowStepRun,
+  workflowSteps,
+  workflowTriggers,
+} from './helpers/workflow-steps'
+
 import { git, installFakes, runScript, testSigningEnv, writes } from './fixtures/fake-r2'
 
 // Each publisher or reconciler run spawns the spec compiler (tsx) once per
@@ -41,6 +48,8 @@ const RECONCILER = join(REPO_ROOT, 'scripts', 'ci-reconcile-r2-customer-configs.
 const PUBLISHER = join(REPO_ROOT, 'scripts', 'ci-publish-customer-configs.sh')
 const INPUTS_LIB = join(REPO_ROOT, 'scripts', 'lib', 'seat-spec-inputs.sh')
 const WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'customer-config-reconcile.yml')
+const RECONCILE_STEP = 'Reconcile every seat config against main'
+const ISSUE_STEP = 'Open an issue when a seat config drifted in R2 or the image guard held it back'
 
 interface Fixture {
   root: string
@@ -250,8 +259,9 @@ describe('SPEC findings wait for seat-spec signing to be enabled (signal, not vo
   })
 
   it('the workflow passes the variable through to the reconciler', () => {
-    const src = readFileSync(WORKFLOW, 'utf8')
-    expect(src).toContain('SEAT_SPEC_ENABLED: ${{ vars.SEAT_SPEC_ENABLED }}')
+    expect(workflowStep(WORKFLOW, RECONCILE_STEP).env.SEAT_SPEC_ENABLED).toBe(
+      '${{ vars.SEAT_SPEC_ENABLED }}'
+    )
   })
 })
 
@@ -443,30 +453,32 @@ describe('ci-reconcile-r2-customer-configs: the image guard is reported, not act
 })
 
 describe('the R2 reconciler is actually scheduled', () => {
-  const source = readFileSync(WORKFLOW, 'utf8')
+  const r2Steps = () => workflowSteps(WORKFLOW).filter((s) => s.job === 'reconcile-r2')
 
   it('rides the same schedule and dispatch as its D1 sibling', () => {
-    expect(existsSync(WORKFLOW)).toBe(true)
-    expect(source).toContain('reconcile-r2:')
-    expect(source).toContain('schedule:')
-    expect(source).toMatch(/cron:/)
-    expect(source).toContain('workflow_dispatch:')
+    const on = workflowTriggers(WORKFLOW)
+    expect(Array.isArray(on.schedule) && on.schedule.length).toBeGreaterThan(0)
+    expect(on).toHaveProperty('workflow_dispatch')
+    expect(r2Steps().length).toBeGreaterThan(0)
   })
 
   it('runs the R2 reconciler and gates it on this suite', () => {
-    expect(source).toContain('bash scripts/ci-reconcile-r2-customer-configs.sh')
-    expect(source).toContain('npx vitest run tests/r2-config-reconcile.test.ts')
+    const runs = r2Steps().map((s) => s.run ?? '')
+    expect(runs).toContain('npx vitest run tests/r2-config-reconcile.test.ts')
+    expect(workflowStepRun(WORKFLOW, RECONCILE_STEP)).toContain(
+      'bash scripts/ci-reconcile-r2-customer-configs.sh'
+    )
   })
 
-  it('opens an issue on findings instead of only annotating the log', () => {
-    const r2Job = source.slice(source.indexOf('reconcile-r2:'))
-    expect(r2Job).toContain('gh issue create')
-    expect(r2Job).toContain("== '2'")
+  it('opens an issue only on the findings status', () => {
+    const issue = workflowStep(WORKFLOW, ISSUE_STEP)
+    expect(issue.job).toBe('reconcile-r2')
+    expect(issue.if).toMatch(/steps\.reconcile\.outputs\.status == '2'/)
   })
 
   it('checks out full history, which the reconciler requires', () => {
-    const r2Job = source.slice(source.indexOf('reconcile-r2:'))
-    expect(r2Job).toContain('fetch-depth: 0')
+    const checkout = r2Steps().find((s) => s.uses?.startsWith('actions/checkout@'))
+    expect(checkout?.with['fetch-depth']).toBe(0)
   })
 })
 
@@ -491,18 +503,7 @@ describe('the R2 reconcile step reports what the reconciler found (ss#2307)', ()
   })
 
   /** The `run:` body of the R2 reconcile step, dedented, exactly as GitHub runs it. */
-  const stepBody = (): string => {
-    const source = readFileSync(WORKFLOW, 'utf8')
-    const start = source.indexOf('      - name: Reconcile every seat config against main')
-    expect(start).toBeGreaterThan(-1)
-    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-    const lines: string[] = []
-    for (const line of body.split('\n')) {
-      if (line.trim() !== '' && !line.startsWith('          ')) break
-      lines.push(line.slice(10))
-    }
-    return lines.join('\n')
-  }
+  const stepBody = (): string => workflowStepRun(WORKFLOW, RECONCILE_STEP)
 
   const runStep = (body: string, code: number) => {
     dir = mkdtempSync(join(tmpdir(), 'r2-step-2307-'))
@@ -579,20 +580,7 @@ describe('the R2 issue step separates REFUSED from DRIFT', () => {
     dir = undefined
   })
 
-  const issueStepBody = (): string => {
-    const source = readFileSync(WORKFLOW, 'utf8')
-    const start = source.indexOf(
-      '      - name: Open an issue when a seat config drifted in R2 or the image guard held it back'
-    )
-    expect(start).toBeGreaterThan(-1)
-    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-    const lines: string[] = []
-    for (const line of body.split('\n')) {
-      if (line.trim() !== '' && !line.startsWith('          ')) break
-      lines.push(line.slice(10))
-    }
-    return lines.join('\n')
-  }
+  const issueStepBody = (): string => workflowStepRun(WORKFLOW, ISSUE_STEP)
 
   const runIssueStep = (report: string, existing = '') => {
     dir = mkdtempSync(join(tmpdir(), 'r2-issue-step-'))

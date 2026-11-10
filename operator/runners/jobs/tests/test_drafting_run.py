@@ -209,8 +209,6 @@ def test_every_reason_literal_in_the_runner_leads_with_a_known_code():
     for s in starts:
         m = run_mod.REASON.match(s)
         assert m, f"reason does not lead with a code: {s[:60]!r}"
-    lane = (Path(run_mod.__file__).parents[1] / "drafting_lane.py").read_text(encoding="utf-8")
-    assert '"reason": f"no_verdict: ' in lane
 
 
 def _failing(monkeypatch, attr, exc):
@@ -377,8 +375,3 @@ def test_every_artifact_a_resume_trusts_is_written_atomically():
     direct = [m.group(0) for m in re.finditer(r"[a-zA-Z_./()\"]+\.write_text\(", src)]
     # state.json, _atomic, the unit writers and review.json: each via .tmp
     assert direct and set(direct) == {"tmp.write_text("}, direct
-    from jobs.drafting import howell, render
-
-    for mod in (howell, render):
-        body = Path(mod.__file__).read_text(encoding="utf-8")
-        assert ".replace(" in body and "tmp" in body

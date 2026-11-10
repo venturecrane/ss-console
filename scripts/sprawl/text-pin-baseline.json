@@ -1,0 +1,8 @@
+{
+  "$comment": "Written by scripts/sprawl-audit.ts --write-text-pin-baseline; gated by tests/text-pin-ratchet.test.ts. Lower only.",
+  "operator/bin/tests/test_seat_readiness.py": 1,
+  "operator/bin/tests/test_spec_fixed_strings.py": 2,
+  "operator/bin/tests/test_spec_leak_check.py": 1,
+  "tests/customer-yaml-firm-identity.test.ts": 5,
+  "tests/ops-handoff.test.ts": 1
+}

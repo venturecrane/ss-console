@@ -147,11 +147,6 @@ describe('POST /api/admin/entities/[id]/reply-log', () => {
 describe('reply-log dialog options match the endpoint vocabulary (drift guard)', () => {
   const dialog = readFileSync(resolve('src/components/admin/LogReplyDialog.astro'), 'utf-8')
 
-  it('posts to the reply-log route from a native <dialog>', () => {
-    expect(dialog).toMatch(/<dialog[\s>]/)
-    expect(dialog).toContain('/reply-log')
-  })
-
   it('offers every sentiment and every next action, and nothing outside the vocabulary', () => {
     expect(dialog).toContain('name="sentiment"')
     expect(dialog).toContain('name="next_action"')

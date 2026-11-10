@@ -1,136 +1,72 @@
-import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
-
 /**
- * Booking alerts module — structural tests + export verification.
- *
- * Full behavioral verification (D1 queries, email sending) requires
- * integration test infrastructure. These tests verify the module structure,
- * rate-limiting logic shape, and correct wiring.
+ * Booking alerts, run against a migrated D1: every error is recorded, and
+ * the admin is emailed once per error kind per window, not once per error.
  */
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { D1Database } from '@cloudflare/workers-types'
+import { migratedDb, seedOrg } from '../_stubs/behavioural'
+import { ORG_ID, SYSTEM_ENTITY_ID } from '../../src/lib/constants'
 
-const source = () => readFileSync(resolve('src/lib/booking/alerts.ts'), 'utf-8')
+const sent: Array<{ to: string; subject: string; html: string }> = []
+vi.mock('../../src/lib/email/resend', () => ({
+  sendEmail: vi.fn(async (_key: string | undefined, payload: (typeof sent)[number]) => {
+    sent.push(payload)
+    return { success: true, id: 'email-1' }
+  }),
+}))
 
-describe('booking alerts: exports', () => {
-  it('exports recordBookingError as async function', () => {
-    expect(source()).toContain('export async function recordBookingError')
+const { recordBookingError } = await import('../../src/lib/booking/alerts')
+const { BOOKING_CONFIG } = await import('../../src/lib/booking/config')
+
+async function alertRows(db: D1Database): Promise<Array<{ entity_id: string; kind: string }>> {
+  const { results } = await db
+    .prepare(
+      "SELECT entity_id, json_extract(metadata, '$.kind') AS kind FROM context WHERE type = 'alert' AND source = 'booking_system'"
+    )
+    .all<{ entity_id: string; kind: string }>()
+  return results
+}
+
+describe('recordBookingError', () => {
+  let db: D1Database
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedOrg(db, ORG_ID)
+    await db
+      .prepare(
+        "INSERT OR IGNORE INTO entities (id, org_id, name, slug, stage) VALUES (?, ?, '_system', '_system', 'signal')"
+      )
+      .bind(SYSTEM_ENTITY_ID, ORG_ID)
+      .run()
+    sent.length = 0
   })
 
-  it('exports BookingAlertKind type with all error kinds', () => {
-    const code = source()
-    expect(code).toContain("'google_sync_error'")
-    expect(code).toContain("'integration_invalid_grant'")
-    expect(code).toContain("'freebusy_error'")
-    expect(code).toContain("'guest_email_delivery_failed'")
+  it('records the error on the system entity and emails the admin the first time', async () => {
+    await recordBookingError(db, 're_test', 'freebusy_error', { message: 'upstream 503' })
+    expect(await alertRows(db)).toEqual([{ entity_id: SYSTEM_ENTITY_ID, kind: 'freebusy_error' }])
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.to).toBe(BOOKING_CONFIG.consultant.email)
+    expect(sent[0]?.subject).toContain('freebusy_error')
   })
 
-  it('exports BookingAlertDetails interface', () => {
-    expect(source()).toContain('export interface BookingAlertDetails')
-  })
-})
-
-describe('booking alerts: context row', () => {
-  it('writes context row with type alert via appendContextRaw', () => {
-    const code = source()
-    expect(code).toContain('appendContextRaw')
-    expect(code).toContain("type: 'alert'")
+  it('a repeat of the same kind inside the window is recorded but not emailed', async () => {
+    await recordBookingError(db, 're_test', 'google_sync_error', { message: 'first' })
+    await recordBookingError(db, 're_test', 'google_sync_error', { message: 'second' })
+    expect(await alertRows(db)).toHaveLength(2)
+    expect(sent).toHaveLength(1)
   })
 
-  it('includes kind in context metadata for rate-limit queries', () => {
-    const code = source()
-    expect(code).toContain('kind')
-    expect(code).toContain("source: 'booking_system'")
+  it('a different kind is its own window', async () => {
+    await recordBookingError(db, 're_test', 'google_sync_error', { message: 'a' })
+    await recordBookingError(db, 're_test', 'integration_invalid_grant', { message: 'b' })
+    expect(sent.map((s) => s.subject)).toHaveLength(2)
   })
 
-  it('uses SYSTEM_ENTITY_ID as fallback when no entityId provided', () => {
-    expect(source()).toContain('SYSTEM_ENTITY_ID')
-  })
-
-  it('uses ORG_ID constant for the org_id column', () => {
-    expect(source()).toContain('ORG_ID')
-  })
-})
-
-describe('booking alerts: rate limiting', () => {
-  it('queries context table for recent alerts of the same kind', () => {
-    const code = source()
-    expect(code).toContain("type = 'alert'")
-    expect(code).toContain("json_extract(metadata, '$.kind')")
-  })
-
-  it('uses a 30-minute window for rate limiting', () => {
-    expect(source()).toContain('RATE_LIMIT_MINUTES = 30')
-  })
-
-  it('only sends email when count is 1 (first in window)', () => {
-    expect(source()).toContain('count !== 1')
-  })
-
-  it('uses parameterized query for the kind value', () => {
-    const code = source()
-    // The kind should be bound via .bind(), not interpolated
-    expect(code).toContain('.bind(kind)')
-  })
-})
-
-describe('booking alerts: email', () => {
-  it('sends email via the shared sendEmail helper', () => {
-    expect(source()).toContain('sendEmail')
-  })
-
-  it('sends to consultant email from BOOKING_CONFIG', () => {
-    expect(source()).toContain('BOOKING_CONFIG.consultant.email')
-  })
-
-  it('includes kind in subject line', () => {
-    expect(source()).toContain('Booking system alert: ${kind}')
-  })
-
-  it('logs email failures without throwing', () => {
-    const code = source()
-    expect(code).toContain('emailResult.success')
-    expect(code).toContain('console.error')
-  })
-
-  it('includes actionable descriptions for each alert kind', () => {
-    const code = source()
-    expect(code).toContain('google_sync_error')
-    expect(code).toContain('integration_invalid_grant')
-    expect(code).toContain('freebusy_error')
-    // Each kind should have title, meaning, and action
-    expect(code).toContain('What happened')
-    expect(code).toContain('What to do')
-  })
-
-  it('escapes HTML in user-supplied values', () => {
-    expect(source()).toContain('escapeHtml')
-  })
-})
-
-describe('booking alerts: alert descriptions', () => {
-  it('has descriptions for all alert kinds', () => {
-    const code = source()
-    // Verify each kind has a title, meaning, and action entry
-    expect(code).toContain('google_sync_error: {')
-    expect(code).toContain('integration_invalid_grant: {')
-    expect(code).toContain('freebusy_error: {')
-    expect(code).toContain('guest_email_delivery_failed: {')
-  })
-
-  it('google_sync_error mentions calendar out of sync', () => {
-    expect(source()).toContain('calendar is out of sync')
-  })
-
-  it('integration_invalid_grant mentions re-authorize', () => {
-    expect(source()).toContain('re-authorize')
-  })
-
-  it('freebusy_error mentions double-bookings risk', () => {
-    expect(source()).toContain('double-bookings')
-  })
-
-  it('guest_email_delivery_failed tells the team to contact the guest directly', () => {
-    expect(source()).toContain('Contact the guest directly')
+  it('escapes the error text in the email body', async () => {
+    await recordBookingError(db, 're_test', 'guest_email_delivery_failed', {
+      message: '<script>x</script>',
+    })
+    expect(sent[0]?.html).not.toContain('<script>x</script>')
+    expect(sent[0]?.html).toContain('&lt;script&gt;')
   })
 })

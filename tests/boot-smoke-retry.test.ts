@@ -71,10 +71,8 @@ exit 0
 function runWithHelpers(body: string): string {
   const full = readFileSync(SCRIPT, 'utf-8')
   const cut = full.indexOf('# ---------- Step 1')
-  expect(
-    cut,
-    'the Step 1 banner must exist; the helper/steps split is what makes this testable'
-  ).toBeGreaterThan(0)
+  // The helper/steps split is what makes this testable.
+  if (cut <= 0) throw new Error('the Step 1 banner is missing from boot-smoke-test.sh')
   const helpers = full.slice(0, cut)
   const harness = join(dir, 'harness.sh')
   writeFileSync(

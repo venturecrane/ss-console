@@ -32,11 +32,23 @@ import { execFileSync } from 'child_process'
 // pre-push verify) while every assertion was true. The timeout is a property
 // of the instrument, not of the code under test; size it to the instrument.
 vi.setConfig({ testTimeout: 60_000 })
-import { mkdtempSync, writeFileSync, rmSync, chmodSync, readFileSync, existsSync } from 'fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  writeFileSync,
+  rmSync,
+  chmodSync,
+  readFileSync,
+  existsSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
+import { workflowStepRun, workflowTriggers } from './helpers/workflow-steps'
+
 const SCRIPT = resolve(process.cwd(), 'scripts/ci-reconcile-obligations.ts')
+const WORKFLOW = resolve(process.cwd(), '.github/workflows/obligation-reconcile.yml')
+const RECONCILE_STEP = 'Reconcile the register against the world'
 
 // Every case boots the real script in a fresh subprocess through `npx tsx`
 // (the repo's pinned devDependency since 2026-09-25). That is over a second
@@ -183,18 +195,66 @@ describe('the reconciler exists and is wired', () => {
     expect(existsSync(SCRIPT)).toBe(true)
   })
 
-  it('is actually scheduled, with the bash -e guard the house protocol needs', () => {
-    // A reconciler nobody runs is a reconciler that cannot fail. This asserts
-    // the workflow exists, has a cron, and keeps the `|| STATUS=$?` guard whose
-    // removal silently skips the issue-opening step (ss#2307).
-    const workflow = readFileSync(
-      resolve(process.cwd(), '.github/workflows/obligation-reconcile.yml'),
-      'utf8'
+  it('is actually scheduled', () => {
+    // A reconciler nobody runs is a reconciler that cannot fail.
+    const schedule = workflowTriggers(WORKFLOW).schedule
+    expect(Array.isArray(schedule) && schedule.length).toBeGreaterThan(0)
+  })
+
+  /**
+   * The step body, run under the shell GitHub uses with the reconciler stubbed
+   * to exit `code`: a finding (exit 2) must print and reach GITHUB_OUTPUT so the
+   * issue step runs, and a broken control (any other non-zero) must fail the run
+   * (ss#2307: without `|| STATUS=$?` the finding aborted the step mute).
+   */
+  const runReconcileStep = (code: number) => {
+    const step = mkdtempSync(join(tmpdir(), 'obligation-step-'))
+    try {
+      const bin = join(step, 'bin')
+      mkdirSync(bin)
+      writeFileSync(
+        join(bin, 'npx'),
+        `#!/usr/bin/env bash\necho "OVERDUE: one row"\nexit ${code}\n`
+      )
+      chmodSync(join(bin, 'npx'), 0o755)
+      const outputs = join(step, 'github_output')
+      writeFileSync(outputs, '')
+      writeFileSync(join(step, 'step.sh'), workflowStepRun(WORKFLOW, RECONCILE_STEP))
+      let stdout = ''
+      let failed = false
+      try {
+        stdout = execFileSync('bash', ['-e', join(step, 'step.sh')], {
+          cwd: step,
+          encoding: 'utf8',
+          env: { ...process.env, GITHUB_OUTPUT: outputs, PATH: `${bin}:${process.env.PATH ?? ''}` },
+        })
+      } catch (err) {
+        failed = true
+        stdout = String((err as { stdout?: string }).stdout ?? '')
+      }
+      return { stdout, failed, outputs: readFileSync(outputs, 'utf8') }
+    } finally {
+      rmSync(step, { recursive: true, force: true })
+    }
+  }
+
+  it('the issue step finds its rolling issue by the series marker', () => {
+    expect(workflowStepRun(WORKFLOW, 'Update the rolling findings issue')).toContain(
+      'reconcile-series:'
     )
-    expect(workflow).toMatch(/schedule:/)
-    expect(workflow).toMatch(/cron:/)
-    expect(workflow).toMatch(/\|\| STATUS=\$\?/)
-    expect(workflow).toMatch(/reconcile-series:/)
+  })
+
+  it('a finding prints its report and reaches the issue step without failing the run', () => {
+    const run = runReconcileStep(2)
+    expect(run.failed).toBe(false)
+    expect(run.stdout).toContain('OVERDUE: one row')
+    expect(run.outputs).toContain('status=2')
+  })
+
+  it('a control that broke fails the run, still printing what it said', () => {
+    const run = runReconcileStep(1)
+    expect(run.failed).toBe(true)
+    expect(run.stdout).toContain('OVERDUE: one row')
   })
 })
 

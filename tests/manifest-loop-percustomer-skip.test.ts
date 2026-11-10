@@ -40,12 +40,9 @@ const CONNECTORS_DIR = fileURLToPath(new URL('../operator/connectors', import.me
 function loopPython(): string {
   const text = readFileSync(SCRIPT, 'utf8')
   const open = text.indexOf(`python3 - "\${_CONNECTORS_DIR}" <<'PY'`)
-  expect(open, 'manifest-loop heredoc opener missing from provision-customer.sh').toBeGreaterThan(
-    -1
-  )
   const bodyStart = text.indexOf('\n', open) + 1
   const close = text.indexOf('\nPY\n', bodyStart)
-  expect(close, 'manifest-loop heredoc closer missing').toBeGreaterThan(bodyStart)
+  if (open < 0 || close < bodyStart) throw new Error('manifest-loop heredoc not found')
   return text.slice(bodyStart, close)
 }
 

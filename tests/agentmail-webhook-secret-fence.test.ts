@@ -127,6 +127,26 @@ describe('agentmail-webhook-secret-fence', () => {
     ).not.toContain('SMD_WEBHOOK_SIGNING_SECRET AGENTMAIL')
   })
 
+  it('the else branch, sourced as the provisioner sources it, unsets every AgentMail secret', () => {
+    // The behavioural half of the text assertions above: run the lib with the
+    // provisioner's helpers stubbed and no agentmail channel authored.
+    const harness = [
+      'set -euo pipefail',
+      'die() { echo "FATAL: $*"; exit 1; }',
+      'authored_channel() { return 1; }',
+      'unset_stale() { shift; echo "UNSET $*"; }',
+      `source ${JSON.stringify(SCRIPT)}`,
+    ].join('\n')
+    const output = execFileSync('bash', ['-c', harness], {
+      encoding: 'utf8',
+      env: { PATH: process.env['PATH'] ?? '', CUSTOMER_ID: 'acme-law' },
+    })
+    const names = (output.split('\n').find((l) => l.startsWith('UNSET ')) ?? '').split(' ')
+    for (const name of ['WEBHOOK_SECRET_AGENTMAIL', 'AGENTMAIL_API_KEY', 'AGENTMAIL_SEND_API_KEY'])
+      expect(names, name).toContain(name)
+    expect(names).not.toContain('SMD_WEBHOOK_SIGNING_SECRET')
+  })
+
   it('derives the key name from a hyphenated slug the same way the read/send keys do', () => {
     const r = runFence({
       CUSTOMER_ID: 'pilot-smokeball',

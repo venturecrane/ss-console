@@ -141,12 +141,4 @@ describe('operator taint gate', () => {
       expect(gate, `${allowed} must not be withheld on a tainted turn`).not.toContain(allowed)
     }
   })
-
-  it('the parity claim in the source names what is and is not guaranteed', () => {
-    // The comment that started this finding claimed the two cores "must agree"
-    // while nothing checked it. Now something does — but only for the tuple.
-    // Keep the pointer in the source so the next reader learns the scope of
-    // the guarantee from the file itself rather than from a review document.
-    expect(source()).toMatch(/operator-taint-gate\.test\.ts/)
-  })
 })

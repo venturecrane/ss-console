@@ -28,6 +28,7 @@ import {
   resolveEditableConfigFromRow,
 } from '../src/lib/portal/operator/customer-yaml-editor'
 import { reconstructFromProjection } from '../src/lib/portal/operator/customer-config-reconstruct'
+import { settingsLinks } from '../src/lib/portal/operator/settings-page'
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const CUSTOMERS_DIR = join(REPO_ROOT, 'operator', 'customers')
@@ -225,27 +226,12 @@ describe('advanced settings: a portal round trip keeps device_senders', () => {
 })
 
 describe('advanced settings: the surface is reachable (#1966)', () => {
-  const settings = readFileSync(
-    join(REPO_ROOT, 'src/pages/portal/products/operator/[instance]/settings/index.astro'),
-    'utf8'
-  )
-
-  // The link list is authored in settings-page.ts since 2026-09-11; the page
-  // calls settingsLinks(operatorBase) into its SETTINGS_LINKS constant.
-  const linkModule = readFileSync(
-    join(REPO_ROOT, 'src/lib/portal/operator/settings-page.ts'),
-    'utf8'
-  )
-
-  it('Advanced is listed in SETTINGS_LINKS', () => {
-    expect(settings).toContain('const SETTINGS_LINKS = settingsLinks(operatorBase)')
-    const links = linkModule.slice(linkModule.indexOf('export function settingsLinks'))
-    expect(links).toContain('/settings/advanced')
-    expect(links).toContain(`label: 'Advanced'`)
-  })
-
-  it('the stale note calling the editor unlinked is gone', () => {
-    expect(settings).not.toContain('is unlinked pending a resolver fix')
-    expect(settings).not.toContain('Until then it stays unlinked')
+  it('the settings page links lead to Advanced', () => {
+    expect(settingsLinks('/portal/products/operator/firm-a')).toContainEqual(
+      expect.objectContaining({
+        href: '/portal/products/operator/firm-a/settings/advanced',
+        label: 'Advanced',
+      })
+    )
   })
 })

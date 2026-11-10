@@ -2,6 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { resolve, join } from 'path'
 import { INDUSTRIES, PACK_META } from '../src/lib/operator-packs/shared'
+import {
+  POST_REWRITE_REDIRECTS,
+  PRE_REWRITE_REDIRECTS,
+  firstRedirect,
+} from '../src/lib/routing/legacy-redirects'
+
+function marketingRequest(pathname: string) {
+  const url = new URL(`https://smd.services${pathname}`)
+  return { hostname: url.hostname, pathname: url.pathname, url }
+}
 
 const srcDir = resolve('src')
 const componentsDir = resolve('src/components')
@@ -257,7 +267,7 @@ describe('marketing structure: firm-with-flagship (locked)', () => {
       true
     )
     const contact = readFileSync(page, 'utf-8')
-    // Posts to the surviving Resend-backed endpoint.
+    // Posts to the surviving Resend-backed endpoint (positioning-spine 2026-06-30 change control).
     expect(contact, 'contact page must POST to /api/contact').toContain('/api/contact')
     // The backend endpoint itself must be present.
     expect(
@@ -266,10 +276,7 @@ describe('marketing structure: firm-with-flagship (locked)', () => {
     ).toBe(true)
     // Honors the "do not publish the email" intent: no mailto on the page.
     expect(contact, 'contact page must not publish a mailto address').not.toContain('mailto:')
-    // Routes engagement-seekers to the real front door via the shared helper
-    // (bookHref() builds the neutral /book — asserted centrally in
-    // booking-interest-parity). Guards the actual CTA, not an incidental
-    // "/book" mention in a comment.
+    // Routes engagement-seekers to the real front door via the shared helper.
     expect(contact, 'contact page must point to the assessment front door').toContain('bookHref()')
   })
 
@@ -280,14 +287,8 @@ describe('marketing structure: firm-with-flagship (locked)', () => {
   })
 
   it('the contact route is NOT 301-redirected away', () => {
-    // Redirect logic lives in the legacy-redirect table now; assert /contact is
-    // absent from both it and the middleware so the guard is not vacuous.
-    const mw = readFileSync(resolve('src/middleware.ts'), 'utf-8')
-    const redirects = readFileSync(resolve('src/lib/routing/legacy-redirects.ts'), 'utf-8')
-    expect(mw, 'middleware must not redirect /contact').not.toContain("'/contact'")
-    expect(redirects, 'legacy-redirect table must not redirect /contact').not.toContain(
-      "'/contact'"
-    )
+    expect(firstRedirect(PRE_REWRITE_REDIRECTS, marketingRequest('/contact'))).toBeNull()
+    expect(firstRedirect(POST_REWRITE_REDIRECTS, marketingRequest('/contact'))).toBeNull()
   })
 
   it('nav does not link the retired pages', () => {
@@ -296,27 +297,11 @@ describe('marketing structure: firm-with-flagship (locked)', () => {
   })
 
   it('the retired routes 301 via the legacy-redirect table (bookmarks keep working)', () => {
-    // The redirect rules were extracted from middleware.ts into a declarative
-    // table (code review 2026-07-02 §1.3). Retired routes now live there.
-    const redirects = readFileSync(resolve('src/lib/routing/legacy-redirects.ts'), 'utf-8')
-    for (const route of ["'/why'", "'/consulting'", "'/ai'"]) {
-      expect(redirects, `legacy-redirect table should reference retired route ${route}`).toContain(
-        route
-      )
-    }
-    expect(redirects).toContain('/operator#compare')
-  })
-})
-
-describe('JSON-LD schema', () => {
-  it('JsonLd.astro contains LocalBusiness type', () => {
-    const content = readComponent('JsonLd.astro')
-    expect(content).toContain('LocalBusiness')
-  })
-
-  it('JsonLd.astro contains schema.org context', () => {
-    const content = readComponent('JsonLd.astro')
-    expect(content).toContain('https://schema.org')
+    const outcome = (route: string) =>
+      firstRedirect(POST_REWRITE_REDIRECTS, marketingRequest(route))
+    expect(outcome('/why')).toEqual({ location: '/operator#compare', status: 301 })
+    expect(outcome('/consulting')).toEqual({ location: '/', status: 301 })
+    expect(outcome('/ai')).toEqual({ location: '/', status: 301 })
   })
 })
 
@@ -465,9 +450,6 @@ describe('competitor review follow-ups (2026-09-14)', () => {
 
   it('the /book card sets expectations without a free offer or an in-person promise', () => {
     const card = flat(read('src/components/booking/IntakeIntroCard.astro'))
-    expect(card).toContain('you walk away with a clear recommendation either way')
-    expect(card).toContain('based in phoenix')
-    expect(card).toContain('video call')
     expect(mentionsFree(card), 'Decision #13: never publicize a free assessment').toBe(false)
     expect(card, 'the booked call is a video call; do not promise in person').not.toContain(
       'in person'
@@ -510,13 +492,5 @@ describe('competitor review follow-ups (2026-09-14)', () => {
     const security = flat(read('src/pages/security.astro'))
     expect(security).toContain('can read but cannot act on the world')
     expect(security).not.toContain('can read and draft')
-  })
-
-  it('home and /about say where we are', () => {
-    for (const page of ['src/pages/index.astro', 'src/pages/about.astro']) {
-      expect(flat(read(page)), `${page} must say we are based in Phoenix`).toContain(
-        'based in phoenix'
-      )
-    }
   })
 })

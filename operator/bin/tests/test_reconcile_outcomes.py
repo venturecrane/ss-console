@@ -564,22 +564,14 @@ def test_the_workflow_greps_the_marker_the_renderer_actually_emits():
     assert rec.SERIES_MARKER.split(":")[0] + ":" == "reconcile-series:"
 
 
-def test_the_workflow_refuses_to_file_without_a_marker():
-    """A findings run that emits no marker means the renderer and the grep have
-    drifted. Filing anyway would open a fresh un-findable issue daily, which is
-    the original defect wearing the fix's clothes."""
-    assert "findings reported with no reconcile-series line" in _WORKFLOW.read_text()
-
-
 def test_the_hold_step_is_not_gated_on_findings():
     """pilot-law was dark for seven days and only the daily P1 said so. The HOLD
     surface must not be reachable only through the findings path, or collapsing
     to one issue hides it."""
-    text = _WORKFLOW.read_text()
-    hold_step = text[text.index("A held seat is always said out loud") :]
-    condition = hold_step[: hold_step.index("run: |")]
-    assert "steps.reconcile.outputs.status == '1'" not in condition
-    assert "GITHUB_STEP_SUMMARY" in hold_step
+    steps = yaml.safe_load(_WORKFLOW.read_text())["jobs"]["reconcile"]["steps"]
+    hold_step = next(s for s in steps if s.get("name") == "A held seat is always said out loud")
+    assert "steps.reconcile.outputs.status == '1'" not in hold_step["if"]
+    assert "GITHUB_STEP_SUMMARY" in hold_step["run"]
 
 
 # ----------------------------------------------------------------------

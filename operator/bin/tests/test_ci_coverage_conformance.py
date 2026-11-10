@@ -482,8 +482,6 @@ def test_release_tick_installs_every_tool_a_seat_render_needs() -> None:
     which calls `uv run --with pyyaml`. The first live tick (2026-10-26) ran on a
     runner without uv: every render failed and the tick halted at ring 0 as
     tooling_error. The unit tests stub the renderer, so only this pin catches it."""
-    render = (REPO_ROOT / "operator/bin/lib/render-fly-toml.sh").read_text(encoding="utf-8")
-    assert "uv run" in render, "the renderer no longer needs uv; drop this test with it"
     wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
     steps = wf["jobs"]["tick"]["steps"]
     uses = [str(s.get("uses") or "") for s in steps]
@@ -497,9 +495,6 @@ def test_release_tick_checks_out_full_history_for_the_latest_resolution() -> Non
     ancestor of main (cli._built_from_main, `git merge-base --is-ancestor`). On a
     shallow clone any commit but main's head is missing, git exits 128, and every
     tick halts as a tooling error once main has moved (run 40362697118)."""
-    # The git questions moved to artifact_tick.py with the bundle step (ADR 0100 W3).
-    cli = (OPERATOR_DIR / "bin/lib/fleet/artifact_tick.py").read_text(encoding="utf-8")
-    assert "--is-ancestor" in cli, "latest no longer walks history; drop this test with it"
     wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
     checkout = next(s for s in wf["jobs"]["tick"]["steps"] if str(s.get("uses", "")).startswith("actions/checkout@"))
     assert (checkout.get("with") or {}).get("fetch-depth") == 0, "the tick needs main's full history"
@@ -971,25 +966,6 @@ def test_the_tick_re_dispatches_itself_after_progress_and_deploy_dispatches_it_o
     bstart = next(s for s in bundle_steps if "gh workflow run release-tick.yml" in (s.get("run") or ""))
     assert bstart.get("if") == "steps.changes.outputs.relevant == 'true'"
     assert bundle_runs.index(bstart["run"]) > next(i for i, r in enumerate(bundle_runs) if "ci-publish-bundle.sh" in r)
-
-
-def test_the_bundle_publisher_builds_with_the_script_the_dockerfile_runs() -> None:
-    """One build script for the image and the bundle. FALSIFIER: let either inline
-    its own install steps and this fails."""
-    text = (REPO_ROOT / "scripts" / "ci-publish-bundle.sh").read_text(encoding="utf-8")
-    script = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
-    assert "jobs-runtime.sh connector smokeball" in script and "jobs-runtime.sh jobs" in script
-    assert "uv pip install" not in script and "uv venv" not in script
-    assert "operator/bin/fleet bundle-base" in script and "operator/bin/fleet bundle-record" in script
-    tarball_up = script.index('/${TARBALL_KEY}" --only-show-errors --content-type')
-    manifest_up = script.index('/${MANIFEST_KEY}" --only-show-errors --content-type')
-    assert tarball_up < manifest_up < script.index("fleet bundle-record"), (
-        "the tarball goes up before the manifest that names it, and the record comes last"
-    )
-    dockerfile = (OPERATOR_DIR / "templates" / "Dockerfile").read_text(encoding="utf-8")
-    # ADR 0100 W5: the image builds only the connectors the bundle does not carry.
-    assert "RUN sh /app/jobs-runtime.sh image-connectors" in dockerfile
-    assert "RUN sh /app/jobs-runtime.sh jobs" not in dockerfile
 
 
 def test_the_tick_rolls_bundles_only_behind_the_switch_and_the_urgent_path_can_send_one() -> None:

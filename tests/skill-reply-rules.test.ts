@@ -173,8 +173,8 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
       return [...tuple[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1])
     })()
 
-    it('reads seven classes out of the renderer (sanity)', () => {
-      expect(rendererClasses.length).toBe(7)
+    it('reads the classes out of the renderer (the check is not vacuous)', () => {
+      expect(rendererClasses.length).toBeGreaterThan(0)
     })
 
     it('names every class the renderer knows and says how each is covered', () => {

@@ -19,7 +19,10 @@ comes in low.
 from __future__ import annotations
 
 import importlib.util
+import sys
+import types
 import unittest
+from unittest import mock
 from pathlib import Path
 
 _MODULE_PATH = Path(__file__).resolve().parents[1] / "corpus_measure.py"
@@ -145,6 +148,44 @@ class SafetyTest(unittest.TestCase):
         body = code.split('"""', 2)[-1]
         self.assertNotIn("allow_vision=True", body)
         self.assertNotIn("extract_text_ex", body)
+
+    def test_measure_reads_only_through_the_free_extractor(self):
+        # This module's free-ness is structural: it calls extract_text, which
+        # cannot reach vision. If someone swaps in extract_text_ex with
+        # allow_vision, the measurement silently starts billing per page.
+        calls = []
+
+        def extract_text(blob, **kwargs):
+            calls.append(kwargs)
+            return "words"
+
+        def extract_text_ex(*_a, **_k):
+            raise AssertionError("the measurement reached the billable vision path")
+
+        class Client:
+            def get(self, _path):
+                files = [{"id": "f1", "name": "a.pdf", "fileExtension": "pdf", "sizeBytes": 10}]
+                return {"value": [{"folders": [], "files": files}]}
+
+            def download_file(self, _matter_id, _file_id):
+                return {}, b"%PDF"
+
+        client_mod = types.ModuleType("smokeball_connector.client")
+        client_mod.build_client_from_env = Client
+        extract_mod = types.ModuleType("smokeball_connector.extract")
+        extract_mod.UnsupportedDocumentError = type("UnsupportedDocumentError", (Exception,), {})
+        extract_mod.extract_text = extract_text
+        extract_mod.extract_text_ex = extract_text_ex
+        fakes = {
+            "smokeball_connector": types.ModuleType("smokeball_connector"),
+            "smokeball_connector.client": client_mod,
+            "smokeball_connector.extract": extract_mod,
+        }
+        with mock.patch.dict(sys.modules, fakes), mock.patch.object(cm.time, "sleep"):
+            tally = cm.measure("m")
+        self.assertEqual(tally["record_files"], 1)
+        self.assertEqual(cm.coverage(tally), 1.0)
+        self.assertEqual(calls, [{"file_name": "a.pdf", "file_extension": "pdf"}])
 
 
 if __name__ == "__main__":

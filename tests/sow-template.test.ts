@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { renderDocumentWithLayout } from '@formepdf/core'
+import type { ElementInfo } from '@formepdf/core'
+import { EXCLUSIONS } from '../src/lib/pdf/sow-template-base'
+import { SOWTemplate, type SOWTemplateProps } from '../src/lib/pdf/sow-template'
 
 // The template is three modules since 2026-09-11 (review 2026-09-10,
 // Architecture 3): the shared base (props, exclusions, styles, footer), the
@@ -21,72 +25,6 @@ const renderedText = () =>
     .flatMap((code) => code.match(/>([^<]+)</g) || [])
     .join(' ')
     .toLowerCase()
-
-describe('sow-template: template file', () => {
-  it('sow-template.tsx exists', () => {
-    expect(existsSync(resolve('src/lib/pdf/sow-template.tsx'))).toBe(true)
-  })
-
-  it('render.ts exists', () => {
-    expect(existsSync(resolve('src/lib/pdf/render.ts'))).toBe(true)
-  })
-})
-
-describe('sow-template: props interface', () => {
-  const source = () => sowTemplateSource()
-
-  it('exports SOWTemplateProps interface', () => {
-    expect(source()).toContain('export interface SOWTemplateProps')
-  })
-
-  it('includes client props with businessName, contactName, contactTitle', () => {
-    const code = source()
-    expect(code).toContain('businessName: string')
-    expect(code).toContain('contactName: string')
-    expect(code).toContain('contactTitle?: string')
-  })
-
-  it('includes document props with date, expirationDate, sowNumber', () => {
-    const code = source()
-    expect(code).toContain('date: string')
-    expect(code).toContain('expirationDate: string')
-    expect(code).toContain('sowNumber: string')
-  })
-
-  it('includes engagement props with overview, startDate, endDate', () => {
-    const code = source()
-    expect(code).toContain('overview: string')
-    expect(code).toContain('startDate: string')
-    expect(code).toContain('endDate: string')
-  })
-
-  it('includes items array with name and description', () => {
-    const code = source()
-    expect(code).toContain('items: Array<')
-    expect(code).toContain('name: string')
-    expect(code).toContain('description: string')
-  })
-
-  it('includes payment props with schedule, totalPrice, deposit, completion', () => {
-    const code = source()
-    expect(code).toContain("schedule: 'two_part' | 'three_milestone'")
-    expect(code).toContain('totalPrice: string')
-    expect(code).toContain('deposit: string')
-    expect(code).toContain('completion: string')
-  })
-
-  it('includes optional milestone fields for three_milestone schedule', () => {
-    const code = source()
-    expect(code).toContain('milestone?: string')
-    expect(code).toContain('milestoneLabel?: string')
-  })
-
-  it('does not require an smd signer prop block', () => {
-    const code = source()
-    expect(code).not.toContain('signerName: string')
-    expect(code).not.toContain('signerTitle: string')
-  })
-})
 
 describe('sow-template: conditional payment term rendering', () => {
   const source = () => sowTemplateSource()
@@ -212,21 +150,6 @@ describe('sow-template: what is included section', () => {
   })
 })
 
-describe('sow-template: deliverable count validation', () => {
-  const source = () => sowTemplateSource()
-
-  it('enforces maximum 8 deliverable items', () => {
-    const code = source()
-    expect(code).toContain('items.length > 8')
-    expect(code).toContain('maximum of 8 deliverable items')
-  })
-
-  it('reduces row padding for 7-8 items', () => {
-    const code = source()
-    expect(code).toContain('items.length > 6')
-  })
-})
-
 describe('sow-template: terms compliance', () => {
   const source = () => sowTemplateSource()
 
@@ -250,103 +173,52 @@ describe('sow-template: terms compliance', () => {
   })
 })
 
-describe('sow-template: render wrapper', () => {
-  const source = () => readFileSync(resolve('src/lib/pdf/render.ts'), 'utf-8')
+// The same rules, read from the laid-out pages of the real template. Fixture
+// values are fictional and exist only for this test.
+const props: SOWTemplateProps = {
+  client: { businessName: 'Fixture Co', contactName: 'Pat Fixture', contactTitle: 'Owner' },
+  document: { date: 'May 1, 2099', expirationDate: 'May 8, 2099', sowNumber: 'SOW-209905-001' },
+  engagement: {
+    overview: 'We work alongside the team on the areas that matter most to the owner.',
+    startDate: 'May 10, 2099',
+    endDate: 'June 20, 2099',
+  },
+  items: [
+    { name: 'Fixture deliverable 1', description: 'Fixture description 1.' },
+    { name: 'Fixture deliverable 2', description: 'Fixture description 2.' },
+  ],
+  payment: { schedule: 'two_part', totalPrice: '$7,777', deposit: '$3,888', completion: '$3,889' },
+}
 
-  it('exports renderSow function', () => {
-    expect(source()).toContain('export async function renderSow')
+async function renderedPageText(): Promise<string> {
+  const { layout } = await renderDocumentWithLayout(SOWTemplate(props))
+  const lines: string[] = []
+  const walk = (nodes: ElementInfo[]) => {
+    for (const n of nodes) {
+      if (n.nodeType === 'TextLine' && n.textContent) lines.push(n.textContent)
+      walk(n.children ?? [])
+    }
+  }
+  for (const page of layout.pages) walk(page.elements)
+  return lines.join('\n')
+}
+
+describe('sow-template: what the rendered SOW never says', () => {
+  it('shows no hourly rate, only the project total (Decision #16)', async () => {
+    const text = (await renderedPageText()).toLowerCase()
+    expect(text).toContain('project total')
+    for (const word of ['hourly', '/hr', 'per hour']) expect(text).not.toContain(word)
   })
 
-  it('imports SOWTemplate and renderDocument', () => {
-    const code = source()
-    expect(code).toContain('renderDocument')
-    expect(code).toContain('SOWTemplate')
+  it('speaks as the firm, never as "I" or "the consultant" (Decision #20)', async () => {
+    const text = ` ${(await renderedPageText()).toLowerCase().replace(/\s+/g, ' ')} `
+    expect(text).not.toContain(' i ')
+    expect(text).not.toContain('the consultant')
   })
 
-  it('returns Uint8Array', () => {
-    expect(source()).toContain('Promise<Uint8Array>')
-  })
-})
-
-describe('sow-template: signature block', () => {
-  const source = () => sowTemplateSource()
-
-  it('includes client acceptance section', () => {
-    expect(source()).toContain('CLIENT ACCEPTANCE')
-  })
-
-  it('does not include an SMD Services signature section', () => {
-    expect(source()).not.toContain('SMD SERVICES')
-  })
-
-  it('renders contact title conditionally', () => {
-    expect(source()).toContain('client.contactTitle')
-  })
-
-  it('includes agreement text', () => {
-    expect(source()).toContain('By signing below, the client agrees')
-    expect(source()).toContain('{BRAND_NAME} agrees by presenting this Statement of Work')
-  })
-})
-
-describe('sow-template: 3-page structure', () => {
-  const source = () => sowTemplateSource()
-
-  it('has 3 pages (dedicated signing page)', () => {
-    const code = source()
-    const pageMatches = code.match(/<Page/g) || []
-    expect(pageMatches.length).toBe(3)
-  })
-
-  it('page footers are numbered by the engine, not hard-coded', () => {
-    // A hard-coded label mis-numbers any page an overflow adds (2026-09-25);
-    // tests/sow-render.test.ts renders the footer and checks it per page.
-    const code = source()
-    expect(code).toContain('<Fixed position="footer">')
-    expect(code).toContain("Page {'{{pageNumber}}'} of {'{{totalPages}}'}")
-    expect(code).not.toMatch(/Page \d of \d/)
-  })
-
-  it('does not depend on the deleted coordinate-based signing-layout module', () => {
-    const code = source()
-    expect(code).not.toContain("from './signing-layout'")
-    expect(code).not.toContain('SIGNING_PAGE')
-  })
-
-  it('uses a local constant for the single acceptance block width', () => {
-    const code = source()
-    expect(code).toContain('SIGNATURE_BLOCK_WIDTH')
-  })
-
-  it('embeds SignWell text tags for client signature and date fields', () => {
-    const code = source()
-    // Template-embedded tags eliminate hardcoded coordinate math at the
-    // provider boundary. SignWell auto-places fields at the tag locations.
-    expect(code).toContain('{{s:${CLIENT_SIGNER_INDEX}}}')
-    expect(code).toContain('{{d:${CLIENT_SIGNER_INDEX}}}')
-  })
-
-  it('renders text tags invisibly (white on white) so they do not show on the PDF', () => {
-    const code = source()
-    // The signature tag and date tag both render with colors.white.
-    // SignWell does not strip text tags from the document body, so they
-    // must be hidden at render time.
-    const tagBlock = code.substring(code.indexOf('CLIENT ACCEPTANCE'), code.indexOf('assents to'))
-    expect(tagBlock).toContain('color: colors.white')
-  })
-
-  it('drops the legacy "Date: _______________" literal placeholder', () => {
-    const code = source()
-    // Pre-tag template had a printed underscore placeholder next to a
-    // coordinate-placed date field; SignWell would stamp the real date on
-    // top and the two would visibly collide. The tag-based layout removes
-    // the placeholder entirely.
-    expect(code).not.toContain('Date: _______________')
-  })
-
-  it('includes Next Steps section on signing page', () => {
-    const code = source()
-    expect(code).toContain('NEXT STEPS')
-    expect(code).toContain('deposit invoice')
+  it('renders every hard exclusion (Decision #10)', async () => {
+    const text = (await renderedPageText()).replace(/\s+/g, ' ')
+    expect(EXCLUSIONS.length).toBeGreaterThan(0)
+    for (const exclusion of EXCLUSIONS) expect(text).toContain(exclusion)
   })
 })

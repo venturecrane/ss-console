@@ -14,24 +14,6 @@ function lineCount(source: string): number {
 }
 
 describe('admin Astro boundary rules', () => {
-  it('routes heavy admin pages through extracted loader modules', () => {
-    expect(entityPageSrc).toContain('loadEntityDetailPage')
-    expect(quotePageSrc).toContain('loadQuoteBuilderPage')
-    expect(engagementPageSrc).toContain('loadEngagementDetailPage')
-  })
-
-  it('boots client behavior from dedicated admin client modules', () => {
-    expect(entityPageSrc).toContain(
-      "import { initEntityDetailPage } from '../../../lib/admin/entity-detail-client'"
-    )
-    expect(quotePageSrc).toContain(
-      "import { initQuoteBuilderPage } from '../../../../../lib/admin/quote-builder-client'"
-    )
-    expect(engagementPageSrc).toContain(
-      "import { initEngagementDetailPage } from '../../../lib/admin/engagement-detail-client'"
-    )
-  })
-
   it('keeps direct DOM wiring out of the Astro page source', () => {
     for (const pageSrc of [entityPageSrc, quotePageSrc, engagementPageSrc]) {
       expect(pageSrc).not.toContain('document.getElementById')

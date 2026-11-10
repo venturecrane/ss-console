@@ -13,6 +13,13 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
+import {
+  workflowJobs,
+  workflowStep,
+  workflowSteps,
+  workflowTriggers,
+} from './helpers/workflow-steps'
+
 /** Required context -> the workflow that reports it. */
 const REQUIRED: Record<string, string> = {
   'Typecheck, Lint, Format, Test': 'verify.yml',
@@ -24,18 +31,10 @@ const REQUIRED: Record<string, string> = {
   'Runtime ACs carry a verification ID': 'runtime-ac-proof.yml',
 }
 
-function workflow(file: string): string {
-  return readFileSync(resolve(__dirname, '../.github/workflows', file), 'utf8')
-}
+const workflow = (file: string): string => resolve(__dirname, '../.github/workflows', file)
 
 /** Contexts reported by a job with no `name:`, so the context is the job key. */
 const JOB_KEY_CONTEXTS = new Set(['substrate', 'runner', 'overlay', 'overlay-e2e'])
-
-/** The top-level `on:` block, up to the next top-level key. */
-function onBlock(text: string): string {
-  const match = text.match(/^on:\n([\s\S]*?)^\S/m)
-  return match ? match[1] : ''
-}
 
 describe('workflows load at all', () => {
   // A workflow GitHub cannot parse runs on no event, so a required check in it
@@ -53,34 +52,38 @@ describe('workflows load at all', () => {
 describe('merge queue: every required check reports on merge_group', () => {
   for (const [context, file] of Object.entries(REQUIRED)) {
     it(`${context} (${file})`, () => {
-      const text = workflow(file)
-      if (JOB_KEY_CONTEXTS.has(context)) {
-        expect(text).toMatch(new RegExp(`^ {2}${context}:$`, 'm'))
-      } else {
-        expect(text).toContain(`name: ${context}`)
-      }
-      expect(onBlock(text)).toMatch(/^ {2}merge_group:\n {4}types: \[checks_requested\]/m)
+      const jobs = workflowJobs(workflow(file))
+      const reports = JOB_KEY_CONTEXTS.has(context)
+        ? jobs.some((j) => j.key === context && j.name === undefined)
+        : jobs.some((j) => j.name === context)
+      expect(reports, `no job in ${file} reports the context "${context}"`).toBe(true)
+      expect(workflowTriggers(workflow(file)).merge_group).toEqual({
+        types: ['checks_requested'],
+      })
     })
   }
 
   it('every operator-substrate detect step diffs against the queue base (4 jobs)', () => {
     // Without merge_group.base_sha a queue run carries no base, the detect
     // step fails closed, and every suite runs (21 min) on every queued PR.
-    const text = workflow('operator-substrate.yml')
+    const text = readFileSync(workflow('operator-substrate.yml'), 'utf8')
     expect(text.match(/merge_group\.base_sha \|\|/g)?.length).toBe(4)
   })
 
   it('the Semgrep baseline has a merge_group case (no baseline = a full audit that blocks the queue)', () => {
-    const text = workflow('security.yml')
+    const text = readFileSync(workflow('security.yml'), 'utf8')
     expect(text).toContain('QUEUE_BASE_SHA: ${{ github.event.merge_group.base_sha }}')
     expect(text).toMatch(/merge_group\)\n\s+baseline=\$\(git merge-base HEAD "\$QUEUE_BASE_SHA"/)
   })
 
   it('the runtime-AC gate reads the PR body only on pull_request, and passes a queue run', () => {
-    const text = workflow('runtime-ac-proof.yml')
-    expect(text).toMatch(/if: github\.event_name == 'merge_group'/)
-    expect(text).toMatch(
-      /name: Inspect the AC status table[^\n]*\n\s+if: github\.event_name == 'pull_request'/
-    )
+    const steps = workflowSteps(workflow('runtime-ac-proof.yml'))
+    expect(steps.some((s) => s.if === "github.event_name == 'merge_group'")).toBe(true)
+    expect(
+      workflowStep(
+        workflow('runtime-ac-proof.yml'),
+        'Inspect the AC status table and resolve its IDs'
+      ).if
+    ).toBe("github.event_name == 'pull_request'")
   })
 })

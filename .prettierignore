@@ -81,10 +81,12 @@ docs/enablement/how-the-operator-works.html
 docs/enablement/designer-brief/figures-brief.html
 docs/enablement/figures-src/gen3.body.html
 
-# Written by scripts/sprawl-audit.ts (--out / --write-literal-baseline). Reformatting
-# would make the committed snapshot disagree with what the audit writes.
+# Written by scripts/sprawl-audit.ts (--out / --write-literal-baseline /
+# --write-text-pin-baseline). Reformatting would make the committed snapshot
+# disagree with what the audit writes.
 scripts/sprawl/snapshot.json
 scripts/sprawl/literal-baseline.json
+scripts/sprawl/text-pin-baseline.json
 # Written by operator/bin/gen-seat-layout.py; operator/bin/tests/test_seat_layout_generation.py
 # requires it byte-equal to the generator's output.
 operator/templates/seat-layout.generated.json

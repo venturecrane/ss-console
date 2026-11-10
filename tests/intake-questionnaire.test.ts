@@ -59,34 +59,15 @@ describe('intake questionnaire canonical helper', () => {
 })
 
 describe('intake surfaces', () => {
-  const bookSrc = readFileSync(resolve('src/pages/book.astro'), 'utf-8')
   const getStartedSrc = readFileSync(resolve('src/pages/get-started.astro'), 'utf-8')
   const componentSrc = readFileSync(
     resolve('src/components/booking/IntakeQuestionnaire.astro'),
     'utf-8'
   )
 
-  // /book was refactored across three passes:
-  //   - V2: categorical IntakeQuestionnaire → UnifiedIntake (4 required
-  //     fields + textarea + AI follow-up, all in one form).
-  //   - V3: UnifiedIntake → three-state shell with AI chat gating
-  //     (IntakeIntroCard, IntakeChat, IntakeClosed).
-  //   - V4: chat removed. AI runs backstage. Visible flow is intro form
-  //     → slot picker → confirmation (IntakeIntroCard, IntakeSlots,
-  //     IntakeClosed). See Captain decision on Direction A.
-  // /get-started keeps using the shared questionnaire for the post-booking
-  // prep flow, where the categorical fields still serve a purpose.
-
-  it('/book renders the V4 three-state intake shell (intro → slots → closed)', () => {
-    expect(bookSrc).toContain(
-      "import IntakeIntroCard from '../components/booking/IntakeIntroCard.astro'"
-    )
-    expect(bookSrc).toContain("import IntakeSlots from '../components/booking/IntakeSlots.astro'")
-    expect(bookSrc).toContain("import IntakeClosed from '../components/booking/IntakeClosed.astro'")
-    expect(bookSrc).toContain('<IntakeIntroCard')
-    expect(bookSrc).toContain('<IntakeSlots')
-    expect(bookSrc).toContain('<IntakeClosed')
-  })
+  // Policy (CLAUDE.md, "shared product flows must stay shared"): /get-started
+  // keeps the shared questionnaire, its normalization helper, and the
+  // canonical option lists rather than an inline duplicate.
 
   it('/get-started still uses the shared categorical questionnaire (prep flow)', () => {
     expect(getStartedSrc).toContain(

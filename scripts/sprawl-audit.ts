@@ -17,6 +17,10 @@
  *   npx tsx scripts/sprawl-audit.ts --write-literal-baseline
  *       # rewrite scripts/sprawl/literal-baseline.json from the tree (literal census only, fast);
  *       # run after removing restated literals, so the CI ratchet locks the lower count in
+ *   npx tsx scripts/sprawl-audit.ts --text-pins
+ *       # list every source-text pin outside the allowlisted policy scans, file:line
+ *   npx tsx scripts/sprawl-audit.ts --write-text-pin-baseline
+ *       # rewrite scripts/sprawl/text-pin-baseline.json from the tree; run after removing pins
  *
  * Tool versions are pinned so two runs measure with the same instrument.
  */
@@ -37,8 +41,18 @@ import {
   literalCensus,
   summarizeClones,
   summarizeVulture,
+  textPinCensus,
 } from './sprawl/analyze'
-import { LITERAL_BASELINE, generatedPaths, readSources, trackedFiles } from './sprawl/sources'
+import {
+  LITERAL_BASELINE,
+  TEXT_PIN_BASELINE,
+  generatedPaths,
+  readSources,
+  readTestFiles,
+  trackedFiles,
+} from './sprawl/sources'
+import { TEXT_PIN_POLICY_SCANS } from './sprawl/text-pin-allowlist'
+import { sourceTextPinLines } from './sprawl/text-pins'
 
 const JSCPD = 'jscpd@4.3.0'
 const VULTURE = 'vulture==2.14'
@@ -50,16 +64,31 @@ type Args = {
   since: string
   writeBaseline: boolean
   strict: boolean
+  textPins: boolean
+  writePinBaseline: boolean
 }
 
-const FLAGS = new Set(['--write-literal-baseline', '--strict'])
+const FLAGS = new Set([
+  '--write-literal-baseline',
+  '--strict',
+  '--text-pins',
+  '--write-text-pin-baseline',
+])
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { since: '6.months', writeBaseline: false, strict: false }
+  const args: Args = {
+    since: '6.months',
+    writeBaseline: false,
+    strict: false,
+    textPins: false,
+    writePinBaseline: false,
+  }
   for (let i = 0; i < argv.length; i++) {
     const v = argv[i + 1]
     if (argv[i] === '--write-literal-baseline') args.writeBaseline = true
     else if (argv[i] === '--strict') args.strict = true
+    else if (argv[i] === '--text-pins') args.textPins = true
+    else if (argv[i] === '--write-text-pin-baseline') args.writePinBaseline = true
     else if (argv[i] === '--out') args.out = v
     else if (argv[i] === '--compare') args.compare = v
     else if (argv[i] === '--since') args.since = v
@@ -254,8 +283,37 @@ function print(s: Snapshot, prev?: Snapshot): void {
   )
 }
 
+/** Every source-text pin outside the allowlist, one `file:line` per assertion, then the total. */
+function printTextPins(): void {
+  let total = 0
+  for (const f of readTestFiles(trackedFiles())) {
+    if (TEXT_PIN_POLICY_SCANS[f.path]) continue
+    for (const line of sourceTextPinLines(f.path, f.text)) {
+      console.log(`${f.path}:${line}`)
+      total++
+    }
+  }
+  console.log(`${total} source-text pins outside the allowlist`)
+}
+
+function writePinBaseline(): void {
+  const allow = new Set(Object.keys(TEXT_PIN_POLICY_SCANS))
+  const census = textPinCensus(readTestFiles(trackedFiles()), allow)
+  const doc = {
+    $comment:
+      'Written by scripts/sprawl-audit.ts --write-text-pin-baseline; gated by tests/text-pin-ratchet.test.ts. Lower only.',
+    ...census,
+  }
+  writeFileSync(TEXT_PIN_BASELINE, JSON.stringify(doc, null, 2) + '\n')
+  console.log(`${TEXT_PIN_BASELINE}: ${Object.keys(census).length} files`)
+}
+
 const args = parseArgs(process.argv.slice(2))
-if (args.writeBaseline) {
+if (args.textPins) {
+  printTextPins()
+} else if (args.writePinBaseline) {
+  writePinBaseline()
+} else if (args.writeBaseline) {
   const baseline = literalBaselineOf(literalCensus(readSources(trackedFiles())))
   const doc = {
     $comment:

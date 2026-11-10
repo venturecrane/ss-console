@@ -23,10 +23,6 @@ import { describe, expect, it } from 'vitest'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
-function read(relative: string): string {
-  return readFileSync(new URL(relative, import.meta.url), 'utf8')
-}
-
 describe('0010_voice_corrections is retired', () => {
   it('the migration is absent from operator/migrations/', () => {
     const files = readdirSync(new URL('../operator/migrations', import.meta.url))
@@ -37,21 +33,6 @@ describe('0010_voice_corrections is retired', () => {
   it('its test is gone too — a test for a deleted table passes vacuously', () => {
     const files = readdirSync(new URL('../operator/tests', import.meta.url))
     expect(files).not.toContain('test_migration_0010_voice_corrections.py')
-  })
-
-  it('the retirement and its negative probes are written down', () => {
-    // The store decision has to be findable by the next person, or it will be
-    // re-derived — probably differently.
-    const readme = read('../operator/migrations/README.md')
-    expect(readme).toContain('Retired: 0010_voice_corrections')
-    expect(readme).toContain('Negative probes')
-    expect(readme).toMatch(/vfy_[A-Z0-9]{26}/)
-  })
-
-  it('the replacement store exists and says why it is where it is', () => {
-    const migration = read('../migrations/0102_operator_voice_corrections.sql')
-    expect(migration).toContain('CREATE TABLE IF NOT EXISTS operator_voice_corrections')
-    expect(migration).toContain('Retires operator/migrations/0010_voice_corrections.sql')
   })
 
   it('no source file still describes the table as a live runtime store', () => {

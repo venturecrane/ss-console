@@ -85,6 +85,15 @@ describe('agentmail webhook-read fence', () => {
     expect(output).toContain('inbox-scoped key lists zero webhooks')
   })
 
+  it('never falls back to the inbox-scoped agent key', () => {
+    const { status, output } = runFence({
+      CUSTOMER_ID: 'pilot-smokeball',
+      AGENTMAIL_API_KEY: 'am_us_inboxscopedagentkey',
+    })
+    expect(status).toBe(1)
+    expect(output).not.toContain('FENCE-PASSED')
+  })
+
   it('dies when the key is present but empty', () => {
     const { status } = runFence({
       CUSTOMER_ID: 'pilot-smokeball',

@@ -271,21 +271,6 @@ describe('canonical app-url: signwell signature orchestration uses canonical hel
 })
 
 describe('canonical app-url: env declarations', () => {
-  it('CfEnv declares APP_BASE_URL', () => {
-    const source = readFileSync(resolve('src/env.d.ts'), 'utf-8')
-    expect(source).toContain('APP_BASE_URL')
-  })
-
-  it('CfEnv declares PORTAL_BASE_URL', () => {
-    const source = readFileSync(resolve('src/env.d.ts'), 'utf-8')
-    expect(source).toContain('PORTAL_BASE_URL')
-  })
-
-  it('CfEnv declares ADMIN_BASE_URL', () => {
-    const source = readFileSync(resolve('src/env.d.ts'), 'utf-8')
-    expect(source).toContain('ADMIN_BASE_URL')
-  })
-
   it('wrangler.toml declares APP_BASE_URL under [vars]', () => {
     const source = readFileSync(resolve('wrangler.toml'), 'utf-8')
     expect(source).toContain('[vars]')

@@ -66,29 +66,8 @@ describe('observability/sentry: gating', () => {
 describe('observability/sentry: source-level guarantees', () => {
   const source = readFileSync(resolve('src/lib/observability/sentry.ts'), 'utf-8')
 
-  it('imports from @sentry/cloudflare (Workers SDK, not @sentry/astro)', () => {
-    expect(source).toContain("from '@sentry/cloudflare'")
-    expect(source).not.toContain('@sentry/astro')
-  })
-
   it('reads DSN from env, never hardcodes a fallback', () => {
     expect(source).toContain('env.SENTRY_DSN')
     expect(source).not.toMatch(/dsn:\s*['"]https:\/\//i)
-  })
-
-  it('gates wrapRequestHandler call on DSN presence', () => {
-    expect(source).toMatch(/if\s*\(\s*!dsn\s*\)/)
-  })
-})
-
-describe('middleware: wires Sentry wrapper', () => {
-  const source = readFileSync(resolve('src/middleware.ts'), 'utf-8')
-
-  it('imports withSentryRequestHandler', () => {
-    expect(source).toContain('withSentryRequestHandler')
-  })
-
-  it('wraps the handler in onRequest', () => {
-    expect(source).toContain('withSentryRequestHandler(context')
   })
 })
