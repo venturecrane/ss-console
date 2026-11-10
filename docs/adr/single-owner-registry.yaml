@@ -59,19 +59,19 @@ entries:
         why: a record SMD produces carries a product format in code (ADR 0083 amendment 2026-11-10, item 3)
       - path: operator/runners/jobs/jobs/stages/render.py
         why: a record SMD produces carries a product format in code (ADR 0083 amendment 2026-11-10, item 3)
+      - path: operator/runners/jobs/jobs/drafting/pleading.py
+        why: the drafting lane's one rule-derived layout module, pleading paper and line pitch under Cal. Rules of Court 2.108 and 2.110 (ADR 0083 amendment 2026-11-10, item 2)
     known_violation:
       - path: operator/hermes-smd-overlay/shared/layout_rules.py
         why: a firm's layout rule compiled to the drafting lane's spacing keys, not into the firm's template
       - path: operator/runners/jobs/jobs/drafting/briefpage.py
         why: "the drafting lane's own typography path (#3093 onward): yaml format and layout keys laid over the template, not the template alone"
       - path: operator/runners/jobs/jobs/drafting/firm.py
-        why: declares format.font, format.size_pt and layout spacing keys in drafting-firm.yaml
+        why: declares format.font, format.size_pt and layout keys in drafting-firm.yaml; FORMAT_KEY_HOME names each key's home (template or firm_yaml, ADR 0083 amendment items 1 and 4) and the template-homed ones are the copies this row tracks
       - path: operator/runners/jobs/jobs/drafting/firm_rules.py
         why: "the drafting lane's own typography path (#3093 onward): yaml format and layout keys laid over the template, not the template alone"
       - path: operator/runners/jobs/jobs/drafting/house.py
         why: builds the renderer's HouseStyle from drafting-firm.yaml (#3093)
-      - path: operator/runners/jobs/jobs/drafting/pleading.py
-        why: "the drafting lane's own typography path (#3093 onward): yaml format and layout keys laid over the template, not the template alone"
       - path: operator/runners/jobs/jobs/drafting/revise/checklist.py
         why: the drafting revise step sets spacing and size in code from the lane's layout keys
       - path: operator/runners/jobs/jobs/drafting/revise/filed.py
