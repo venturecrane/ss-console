@@ -424,7 +424,7 @@ def test_a_firm_numbered_exhibit_in_the_folder_takes_its_number_and_the_list_has
     listed = B.table_rows(upd.split("## Exhibit List", 1)[1].split("## Records Reviewed", 1)[0])
     assert listed[1:] == [
         "| 1 | Example Clinic - 12-01-2025 - 01-20-2026 (Medical Records) |",
-        "| 2 | Exhibit 2- Example Radiology.pdf |",
+        "| 2 | Example Radiology |",
         "| 3 | Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records) |",
     ]
     assert "(Exhibit 3 - p. 2)" in upd and seat.deleted == ["c1"]
@@ -450,7 +450,7 @@ def test_a_new_record_identical_to_a_firm_numbered_file_reuses_its_number_and_is
     listed = B.table_rows(upd.split("## Exhibit List", 1)[1].split("## Records Reviewed", 1)[0])
     assert listed[1:] == [
         "| 1 | Example Clinic - 12-01-2025 - 01-20-2026 (Medical Records) |",
-        "| 2 | Exhibit 2- Example Radiology.pdf |",
+        "| 2 | Example Radiology |",
     ]
     assert "(Exhibit 2 - p. 2)" in upd and "Exhibit 3" not in upd and seat.deleted == ["c1"]
 

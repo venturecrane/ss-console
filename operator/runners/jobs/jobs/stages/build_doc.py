@@ -23,6 +23,7 @@ from collections import defaultdict
 from typing import Any
 
 from ..medchron import icd_tables, meta_markers
+from ..medchron.lane_ref import lane_references
 from .base import StageRun, read_json
 from .group import Canon, index_rows
 from .limitations import section as limitations_section
@@ -82,19 +83,19 @@ def parse_entries(text: str) -> list[dict[str, Any]]:
 
 
 def provider_rows(entries: list[dict[str, Any]], canon: Canon) -> list[tuple]:
-    agg: dict[str, dict[str, Any]] = defaultdict(lambda: {"dates": [], "ref": ""})
-    for e in entries:
+    agg: dict[str, dict[str, Any]] = defaultdict(lambda: {"dates": [], "texts": []})
+    for e in sorted(entries, key=lambda x: x["iso"]):
         a = agg[canon(e["provider"])]
         a["dates"].append(e["iso"])
-        if not a["ref"]:
-            a["ref"] = e["ref"]
+        a["texts"].append(e.get("text") or (f"({e['ref']})" if e.get("ref") else ""))
+    refs = lane_references({prov: a["texts"] for prov, a in agg.items()})
     rows = []
     for prov, a in agg.items():
         ds = sorted(a["dates"])
         period = f"{ds[0][5:7]}/{ds[0][8:10]}/{ds[0][:4]}" + (
             f" - {ds[-1][5:7]}/{ds[-1][8:10]}/{ds[-1][:4]}" if ds[-1] != ds[0] else ""
         )
-        rows.append((ds[0], prov, period, len(ds), a["ref"]))
+        rows.append((ds[0], prov, period, len(ds), refs[prov]))
     return sorted(rows)
 
 

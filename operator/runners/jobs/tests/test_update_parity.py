@@ -141,7 +141,7 @@ def test_a_firm_numbered_file_takes_its_number_and_is_listed_without_a_gap() -> 
     )
     assert [e["exhibit"] for e in where["exhibits"]] == [1, 2, 3] and where["others"] == []
     rows = C.folder_rows(K.base_md(), where["exhibits"], {4})
-    assert rows == ["| 2 | Exhibit 2- Example Radiology.pdf |", "| 3 | Exhibit 3: Example Lab.pdf |"]
+    assert rows == ["| 2 | Example Radiology |", "| 3 | Example Lab |"]
     doc = C.audit_document(
         K.base_md(), [], [{"exhibit": 4, "title": "Exhibit 4 - X (Medical Records)"}], folder=where["exhibits"]
     )

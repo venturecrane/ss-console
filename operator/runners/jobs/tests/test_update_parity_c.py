@@ -204,11 +204,11 @@ def test_records_reviewed_says_after_the_incident_only_when_only_later_visits_we
     (ud / "new_exhibits.final.json").write_text(json.dumps(nex))
     sr = SimpleNamespace(job=SimpleNamespace(incident_date=K.INCIDENT))
     text = update_note(sr, ud)({2: "Example Imaging - 02-10-2026 (Medical Records)"})  # type: ignore[arg-type]
-    assert "were added, after the incident, and they are cited" in text and "before" not in text
+    assert "(dated after the incident) were added and are cited" in text and "before" not in text
     pre = _ent("Example Imaging", "Cervical radiographs before the incident.", "11/03/2025")
     (ud.parent / "final-chronology.md").write_text(C.audit_document(K.base_md(), [pre, post], nex))
     text = update_note(sr, ud)({2: "Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records)"})  # type: ignore[arg-type]
-    assert "were added, before and after the incident, and" in text
+    assert "(dated before and after the incident) were added and" in text
 
 
 # ---- fix 27: delivered timeline lanes stay as delivered; credentials are kept ---------------
