@@ -1,11 +1,11 @@
 {
-  "measuredAt": "2026-11-10T15:25:22.805Z",
-  "commit": "e996638f89bb9d262cfa8fe19b3ec3b8ae256f87",
+  "measuredAt": "2026-11-10T17:25:18.092Z",
+  "commit": "ab0a92c888777d121fa9deab4c6913e59c9d899c",
   "instruments": {
     "jscpd": "jscpd@4.3.0",
     "vulture": "vulture==2.14",
     "couplingWindow": "6.months",
-    "commits": 2308
+    "commits": 2317
   },
   "clones": {
     "duplicatedPct": 4.24,
@@ -313,7 +313,7 @@
     {
       "literal": "CUSTOMER_SLUG",
       "kind": "env",
-      "files": 88,
+      "files": 87,
       "testFiles": 20,
       "languages": [
         "config",
@@ -333,8 +333,8 @@
     {
       "literal": "/opt/data",
       "kind": "path",
-      "files": 87,
-      "testFiles": 25,
+      "files": 80,
+      "testFiles": 21,
       "languages": [
         "config",
         "python",
@@ -353,7 +353,7 @@
     {
       "literal": "HERMES_HOME",
       "kind": "env",
-      "files": 81,
+      "files": 78,
       "testFiles": 58,
       "languages": [
         "config",
@@ -361,7 +361,7 @@
         "shell",
         "ts/js"
       ],
-      "areas": 23,
+      "areas": 22,
       "sample": [
         "operator/bin/lib/boot_harness/cli.py",
         "operator/bin/lib/boot_harness/collect.py",
@@ -373,71 +373,52 @@
     {
       "literal": "SMD_WORKSPACE_BROKER_SOCKET",
       "kind": "env",
-      "files": 73,
+      "files": 70,
       "testFiles": 16,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 27,
+      "areas": 26,
       "sample": [
         "operator/bin/medchron-backfill-covered.py",
-        "operator/contracts/env-consumption.yaml",
         "operator/hermes-smd-overlay/contracts/consumes.yaml",
         "operator/hermes-smd-overlay/plugins/hermes-smd-corrections/__init__.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-corrections/plugin.yaml"
-      ]
-    },
-    {
-      "literal": "SMD_AUDIT_BROKER_SOCKET",
-      "kind": "env",
-      "files": 46,
-      "testFiles": 12,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 27,
-      "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/connectors/smokeball/smokeball_connector/write_record.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py"
+        "operator/hermes-smd-overlay/plugins/hermes-smd-corrections/plugin.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/__init__.py"
       ]
     },
     {
       "literal": "SMD_CUSTOMER_YAML_PATH",
       "kind": "env",
-      "files": 46,
+      "files": 44,
       "testFiles": 67,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 23,
+      "areas": 22,
       "sample": [
         "operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py",
         "operator/connectors/smokeball/smokeball_connector/library.py",
         "operator/connectors/smokeball/smokeball_connector/logic_in_code.py",
         "operator/contracts/customer-yaml-blocks.yaml",
-        "operator/customers/pilot-smokeball/customer.yaml"
+        "operator/hermes-smd-overlay/contracts/consumes.yaml"
       ]
     },
     {
       "literal": "R2_ACCESS_KEY_ID",
       "kind": "env",
-      "files": 45,
+      "files": 41,
       "testFiles": 18,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 11,
+      "areas": 10,
       "sample": [
         ".github/workflows/deploy.yml",
         ".github/workflows/release-tick.yml",
@@ -447,16 +428,53 @@
       ]
     },
     {
+      "literal": "SMD_AUDIT_BROKER_SOCKET",
+      "kind": "env",
+      "files": 40,
+      "testFiles": 12,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 26,
+      "sample": [
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/connectors/smokeball/smokeball_connector/write_record.py",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/shared/audit_client.py",
+        "operator/hermes-smd-overlay/shared/audit_failure_counter.py"
+      ]
+    },
+    {
+      "literal": "SMD_CUSTOMER_SLUG",
+      "kind": "env",
+      "files": 40,
+      "testFiles": 27,
+      "languages": [
+        "config",
+        "python"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/plugin.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-calendar/__init__.py"
+      ]
+    },
+    {
       "literal": "R2_SECRET_ACCESS_KEY",
       "kind": "env",
-      "files": 43,
+      "files": 39,
       "testFiles": 18,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 10,
+      "areas": 9,
       "sample": [
         ".github/workflows/deploy.yml",
         ".github/workflows/release-tick.yml",
@@ -468,15 +486,14 @@
     {
       "literal": "R2_BUCKET_CONFIG",
       "kind": "env",
-      "files": 42,
+      "files": 37,
       "testFiles": 11,
       "languages": [
         "config",
         "python",
-        "shell",
-        "ts/js"
+        "shell"
       ],
-      "areas": 14,
+      "areas": 11,
       "sample": [
         "docs/adr/single-owner-registry.yaml",
         "operator/bin/lib/boot_harness/cli.py",
@@ -486,61 +503,22 @@
       ]
     },
     {
-      "literal": "SMD_CUSTOMER_SLUG",
-      "kind": "env",
-      "files": 41,
-      "testFiles": 28,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/plugin.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-calendar/__init__.py"
-      ]
-    },
-    {
       "literal": "R2_ENDPOINT_URL",
       "kind": "env",
-      "files": 39,
+      "files": 35,
       "testFiles": 11,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 10,
+      "areas": 9,
       "sample": [
         ".github/workflows/deploy.yml",
         ".github/workflows/release-tick.yml",
         "operator/bin/audit-chain-watch.py",
         "operator/bin/lib/boot_harness/cli.py",
         "operator/bin/lib/fleet/r2.py"
-      ]
-    },
-    {
-      "literal": "RESEND_API_KEY",
-      "kind": "env",
-      "files": 38,
-      "testFiles": 18,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 9,
-      "sample": [
-        ".github/workflows/deploy.yml",
-        ".github/workflows/work-health.yml",
-        "bin/reauth-connector.sh",
-        "operator/bin/rehearse-card.py",
-        "operator/bin/work-health.py"
       ]
     },
     {
@@ -563,49 +541,10 @@
       ]
     },
     {
-      "literal": "ANTHROPIC_API_KEY",
+      "literal": "RESEND_API_KEY",
       "kind": "env",
-      "files": 29,
-      "testFiles": 23,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 15,
-      "sample": [
-        "operator/assessment-eval/cli.ts",
-        "operator/assessment-eval/types.ts",
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-smokeball.sh"
-      ]
-    },
-    {
-      "literal": "SMD_D1_AUDIT_BINDING",
-      "kind": "env",
-      "files": 29,
-      "testFiles": 18,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/hooks/smd-overlay-activation/handler.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py"
-      ]
-    },
-    {
-      "literal": "SMD_SPEC_DIR",
-      "kind": "env",
-      "files": 29,
-      "testFiles": 13,
+      "files": 32,
+      "testFiles": 16,
       "languages": [
         "config",
         "python",
@@ -614,18 +553,18 @@
       ],
       "areas": 8,
       "sample": [
-        "operator/bin/publish-output-class-spec.py",
-        "operator/bin/retire-output-class-spec.py",
-        "operator/connectors/_sdk/operator_connector_sdk/library/copies.py",
-        "operator/connectors/_sdk/operator_connector_sdk/library/ledger.py",
-        "operator/connectors/smokeball/smokeball_connector/library_pick.py"
+        ".github/workflows/work-health.yml",
+        "bin/reauth-connector.sh",
+        "operator/bin/rehearse-card.py",
+        "operator/bin/work-health.py",
+        "src/env.d.ts"
       ]
     },
     {
       "literal": "/opt/data/skills",
       "kind": "path",
-      "files": 27,
-      "testFiles": 3,
+      "files": 26,
+      "testFiles": 2,
       "languages": [
         "python",
         "shell"
@@ -640,41 +579,42 @@
       ]
     },
     {
-      "literal": "OPERATOR_RUNTIME_READ_URL",
+      "literal": "SMD_D1_AUDIT_BINDING",
       "kind": "env",
-      "files": 27,
-      "testFiles": 10,
-      "languages": [
-        "config",
-        "python",
-        "ts/js"
-      ],
-      "areas": 7,
-      "sample": [
-        ".github/workflows/audit-chain-verify.yml",
-        ".github/workflows/cron-slot-watchdog.yml",
-        ".github/workflows/terminal-state-reconcile.yml",
-        ".github/workflows/unaudited-send-reconcile.yml",
-        ".github/workflows/work-health.yml"
-      ]
-    },
-    {
-      "literal": "AGENTMAIL_API_KEY",
-      "kind": "env",
-      "files": 26,
-      "testFiles": 16,
+      "files": 25,
+      "testFiles": 18,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 8,
+      "areas": 4,
       "sample": [
-        ".github/workflows/unaudited-send-reconcile.yml",
-        "operator/bin/check-agentmail-lists.py",
-        "operator/bin/decommission-customer.sh",
-        "operator/bin/lib/decommission.py",
-        "operator/bin/lib/decommission_backends.py"
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/hooks/smd-overlay-activation/handler.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/plugin.yaml"
+      ]
+    },
+    {
+      "literal": "SMD_SPEC_DIR",
+      "kind": "env",
+      "files": 25,
+      "testFiles": 13,
+      "languages": [
+        "config",
+        "python",
+        "shell",
+        "ts/js"
+      ],
+      "areas": 7,
+      "sample": [
+        "operator/bin/publish-output-class-spec.py",
+        "operator/bin/retire-output-class-spec.py",
+        "operator/connectors/_sdk/operator_connector_sdk/library/copies.py",
+        "operator/connectors/_sdk/operator_connector_sdk/library/ledger.py",
+        "operator/connectors/smokeball/smokeball_connector/library_pick.py"
       ]
     },
     {
@@ -714,17 +654,16 @@
       ]
     },
     {
-      "literal": "OPERATOR_RUNTIME_READ_SECRET",
+      "literal": "OPERATOR_RUNTIME_READ_URL",
       "kind": "env",
-      "files": 23,
-      "testFiles": 8,
+      "files": 22,
+      "testFiles": 10,
       "languages": [
         "config",
         "python",
-        "shell",
         "ts/js"
       ],
-      "areas": 8,
+      "areas": 6,
       "sample": [
         ".github/workflows/audit-chain-verify.yml",
         ".github/workflows/cron-slot-watchdog.yml",
@@ -734,29 +673,49 @@
       ]
     },
     {
-      "literal": "/var/lib/smd-config/customer.yaml",
-      "kind": "path",
-      "files": 22,
-      "testFiles": 4,
+      "literal": "OPERATOR_RUNTIME_READ_SECRET",
+      "kind": "env",
+      "files": 20,
+      "testFiles": 8,
       "languages": [
         "config",
         "python",
         "shell",
         "ts/js"
       ],
-      "areas": 9,
+      "areas": 6,
       "sample": [
-        "operator/bin/lib/boot_harness/collect.py",
-        "operator/bin/participant-fence-replay.py",
-        "operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py",
-        "operator/connectors/smokeball/smokeball_connector/library.py",
-        "operator/connectors/smokeball/smokeball_connector/logic_in_code.py"
+        ".github/workflows/audit-chain-verify.yml",
+        ".github/workflows/cron-slot-watchdog.yml",
+        ".github/workflows/terminal-state-reconcile.yml",
+        ".github/workflows/unaudited-send-reconcile.yml",
+        ".github/workflows/work-health.yml"
       ]
     },
     {
-      "literal": "CLOUDFLARE_API_TOKEN",
+      "literal": "ANTHROPIC_API_KEY",
       "kind": "env",
-      "files": 20,
+      "files": 18,
+      "testFiles": 21,
+      "languages": [
+        "config",
+        "python",
+        "shell",
+        "ts/js"
+      ],
+      "areas": 10,
+      "sample": [
+        "operator/assessment-eval/cli.ts",
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/bin/provision-customer.sh",
+        "operator/connectors/smokeball/smokeball_connector/page_finder.py",
+        "operator/connectors/smokeball/smokeball_connector/vision.py"
+      ]
+    },
+    {
+      "literal": "/var/lib/smd-config/customer.yaml",
+      "kind": "path",
+      "files": 17,
       "testFiles": 1,
       "languages": [
         "config",
@@ -765,49 +724,11 @@
       ],
       "areas": 7,
       "sample": [
-        ".github/workflows/audit-chain-verify.yml",
-        ".github/workflows/cron-slot-watchdog.yml",
-        ".github/workflows/customer-config-reconcile.yml",
-        ".github/workflows/deploy.yml",
-        ".github/workflows/obligation-reconcile.yml"
-      ]
-    },
-    {
-      "literal": "CLOUDFLARE_ACCOUNT_ID",
-      "kind": "env",
-      "files": 19,
-      "testFiles": 2,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 7,
-      "sample": [
-        ".github/workflows/audit-chain-verify.yml",
-        ".github/workflows/cron-slot-watchdog.yml",
-        ".github/workflows/customer-config-reconcile.yml",
-        ".github/workflows/deploy.yml",
-        ".github/workflows/obligation-reconcile.yml"
-      ]
-    },
-    {
-      "literal": "MSGRAPH_CLIENT_SECRET",
-      "kind": "env",
-      "files": 19,
-      "testFiles": 9,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 7,
-      "sample": [
-        "operator/bin/killtest-msgraph-send.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/bin/rehearse-card.py",
-        "operator/connectors/msgraph-mail/manifest.toml"
+        "operator/bin/lib/boot_harness/collect.py",
+        "operator/bin/participant-fence-replay.py",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py",
+        "operator/connectors/smokeball/smokeball_connector/library.py",
+        "operator/connectors/smokeball/smokeball_connector/logic_in_code.py"
       ]
     },
     {
@@ -829,29 +750,48 @@
       ]
     },
     {
-      "literal": "/opt/data/customer.yaml",
-      "kind": "path",
-      "files": 14,
-      "testFiles": 4,
+      "literal": "MSGRAPH_CLIENT_SECRET",
+      "kind": "env",
+      "files": 16,
+      "testFiles": 9,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 3,
+      "areas": 6,
       "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/hermes-smd-overlay/bootstrap/cli.py",
-        "operator/hermes-smd-overlay/bootstrap/translate.py",
-        "operator/hermes-smd-overlay/config_applier/__main__.py",
-        "operator/hermes-smd-overlay/config_applier/applier.py"
+        "operator/bin/killtest-msgraph-send.py",
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "operator/bin/rehearse-card.py",
+        "operator/connectors/msgraph-mail/manifest.toml"
+      ]
+    },
+    {
+      "literal": "AGENTMAIL_API_KEY",
+      "kind": "env",
+      "files": 15,
+      "testFiles": 16,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 6,
+      "sample": [
+        ".github/workflows/unaudited-send-reconcile.yml",
+        "operator/bin/check-agentmail-lists.py",
+        "operator/bin/lib/decommission_backends.py",
+        "operator/bin/lib/stage-agentmail.sh",
+        "operator/bin/mint-agentmail-keys.py"
       ]
     },
     {
       "literal": "JOBS_DATA_DIR",
       "kind": "env",
-      "files": 14,
-      "testFiles": 4,
+      "files": 15,
+      "testFiles": 5,
       "languages": [
         "python",
         "shell"
@@ -866,40 +806,22 @@
       ]
     },
     {
-      "literal": "SMD_GATEWAY_PID",
-      "kind": "env",
+      "literal": "/opt/data/customer.yaml",
+      "kind": "path",
       "files": 14,
-      "testFiles": 8,
+      "testFiles": 5,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 6,
+      "areas": 3,
       "sample": [
-        "operator/bin/lib/boot_harness/audit.py",
-        "operator/bin/lib/boot_harness/collect.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/shared/audit_client.py"
-      ]
-    },
-    {
-      "literal": "/run/smd-jobs",
-      "kind": "path",
-      "files": 13,
-      "testFiles": 5,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lane-proof.sh",
-        "operator/bin/lib/fleet/busy.py",
-        "operator/bin/lib/fleet/remote_busy_probe.py",
-        "operator/bin/lib/fleet/remote_quiesce.py",
-        "operator/bin/lib/fleet/rollout.py"
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/hermes-smd-overlay/bootstrap/cli.py",
+        "operator/hermes-smd-overlay/bootstrap/translate.py",
+        "operator/hermes-smd-overlay/config_applier/__main__.py",
+        "operator/hermes-smd-overlay/config_applier/applier.py"
       ]
     },
     {
@@ -922,62 +844,41 @@
       ]
     },
     {
-      "literal": "ALERT_TO_EMAIL",
+      "literal": "CLOUDFLARE_ACCOUNT_ID",
+      "kind": "env",
+      "files": 13,
+      "testFiles": 2,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 3,
+      "sample": [
+        ".github/workflows/audit-chain-verify.yml",
+        ".github/workflows/cron-slot-watchdog.yml",
+        ".github/workflows/customer-config-reconcile.yml",
+        ".github/workflows/deploy.yml",
+        ".github/workflows/obligation-reconcile.yml"
+      ]
+    },
+    {
+      "literal": "CLOUDFLARE_API_TOKEN",
       "kind": "env",
       "files": 13,
       "testFiles": 1,
       "languages": [
         "config",
         "python",
-        "ts/js"
+        "shell"
       ],
-      "areas": 6,
+      "areas": 4,
       "sample": [
-        "operator/bin/work-health.py",
-        "src/env.d.ts",
-        "src/lib/operator/request-card-email.ts",
-        "workers/cost-anomaly/src/index.ts",
-        "workers/cost-anomaly/wrangler.toml"
-      ]
-    },
-    {
-      "literal": "GOOGLE_SERVICE_ACCOUNT_JSON",
-      "kind": "env",
-      "files": 13,
-      "testFiles": 3,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 7,
-      "sample": [
-        "operator/bin/gen-staging-google-cred.py",
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/bin/lib/stage-web-connectors.sh",
-        "operator/bin/provision-customer.sh",
-        "operator/bin/reprovision-staging.sh"
-      ]
-    },
-    {
-      "literal": "HERMES_TIMEZONE",
-      "kind": "env",
-      "files": 13,
-      "testFiles": 6,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 11,
-      "sample": [
-        "operator/bin/lib/cron_slots.py",
-        "operator/connectors/smokeball/smokeball_connector/layout_tools.py",
-        "operator/contracts/customer-yaml-blocks.yaml",
-        "operator/customers/ashton-price/customer.yaml",
-        "operator/customers/pilot-smokeball/customer.yaml"
+        ".github/workflows/audit-chain-verify.yml",
+        ".github/workflows/cron-slot-watchdog.yml",
+        ".github/workflows/customer-config-reconcile.yml",
+        ".github/workflows/deploy.yml",
+        ".github/workflows/obligation-reconcile.yml"
       ]
     },
     {
@@ -999,157 +900,22 @@
       ]
     },
     {
-      "literal": "TELEGRAM_BOT_TOKEN",
+      "literal": "ALERT_TO_EMAIL",
       "kind": "env",
-      "files": 13,
-      "testFiles": 4,
+      "files": 12,
+      "testFiles": 1,
       "languages": [
         "config",
         "python",
-        "shell",
         "ts/js"
       ],
       "areas": 6,
       "sample": [
-        "operator/contracts/env-consumption.yaml",
-        "operator/customers/smd-guide/customer.yaml",
-        "operator/hermes-smd-overlay/bootstrap/translate.py",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-group-audience/plugin.yaml"
-      ]
-    },
-    {
-      "literal": "WEBHOOK_SECRET_MCP",
-      "kind": "env",
-      "files": 13,
-      "testFiles": 6,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 7,
-      "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/bin/lib/boot_harness/fixture.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/contracts/customer-yaml-blocks.yaml"
-      ]
-    },
-    {
-      "literal": "/run/smd-audit",
-      "kind": "path",
-      "files": 12,
-      "testFiles": 0,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 10,
-      "sample": [
-        "operator/hermes-smd-overlay/shared/escalation_ledger.py",
-        "operator/skills/client-verification-tracker/escalation_ledger.py",
-        "operator/skills/daily-needs-you-digest/escalation_ledger.py",
-        "operator/skills/date-prep-brief/escalation_ledger.py",
-        "operator/skills/deadline-miss-escalator/escalation_ledger.py"
-      ]
-    },
-    {
-      "literal": "HERMES_UPSTREAM_SHA",
-      "kind": "env",
-      "files": 12,
-      "testFiles": 6,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 6,
-      "sample": [
-        ".github/workflows/operator-substrate.yml",
-        ".github/workflows/security.yml",
-        "operator/bin/boot-smoke-test.sh",
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/bin/lib/fleet/build.py"
-      ]
-    },
-    {
-      "literal": "MSGRAPH_CLIENT_ID",
-      "kind": "env",
-      "files": 12,
-      "testFiles": 5,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 6,
-      "sample": [
-        "operator/bin/killtest-msgraph-send.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/connectors/msgraph-mail/manifest.toml",
-        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py"
-      ]
-    },
-    {
-      "literal": "MSGRAPH_MAILBOX",
-      "kind": "env",
-      "files": 12,
-      "testFiles": 5,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/connectors/msgraph-mail/manifest.toml",
-        "operator/connectors/msgraph-mail/msgraph_mail_connector/__init__.py",
-        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py"
-      ]
-    },
-    {
-      "literal": "MSGRAPH_TENANT_ID",
-      "kind": "env",
-      "files": 12,
-      "testFiles": 6,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 6,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/connectors/msgraph-mail/manifest.toml",
-        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py",
-        "operator/contracts/env-consumption.yaml"
-      ]
-    },
-    {
-      "literal": "SMD_D1_AGENT_STATE_BINDING",
-      "kind": "env",
-      "files": 12,
-      "testFiles": 3,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-peer-memory/__init__.py"
+        "operator/bin/work-health.py",
+        "src/env.d.ts",
+        "src/lib/operator/request-card-email.ts",
+        "workers/cost-anomaly/src/index.ts",
+        "workers/fleet-alerts/src/index.ts"
       ]
     },
     {
@@ -1189,46 +955,9 @@
       ]
     },
     {
-      "literal": "/opt/data/profiles",
-      "kind": "path",
-      "files": 11,
-      "testFiles": 3,
-      "languages": [
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 5,
-      "sample": [
-        "docs/reviews/claims-2026-10-17.probe.sh",
-        "docs/reviews/claims-2026-10-27.probe.sh",
-        "operator/bin/lib/boot_harness/collect.py",
-        "operator/bin/lib/fleet/remote_busy_probe.py",
-        "operator/bin/provision-customer.sh"
-      ]
-    },
-    {
-      "literal": "/opt/jobs",
-      "kind": "path",
-      "files": 11,
-      "testFiles": 4,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/fleet/bundles.py",
-        "operator/hermes-smd-overlay/bundle_installer/__init__.py",
-        "operator/hermes-smd-overlay/bundle_installer/installer.py",
-        "operator/hermes-smd-overlay/bundle_installer/manifest.py",
-        "operator/templates/Dockerfile"
-      ]
-    },
-    {
       "literal": "/opt/hermes/.venv/bin/python3",
       "kind": "path",
-      "files": 10,
+      "files": 11,
       "testFiles": 6,
       "languages": [
         "python",
@@ -1244,10 +973,10 @@
       ]
     },
     {
-      "literal": "AGENTMAIL_SEND_API_KEY",
+      "literal": "SMD_GATEWAY_PID",
       "kind": "env",
-      "files": 10,
-      "testFiles": 4,
+      "files": 11,
+      "testFiles": 8,
       "languages": [
         "config",
         "python",
@@ -1255,29 +984,85 @@
       ],
       "areas": 5,
       "sample": [
-        "operator/bin/lib/stage-agentmail.sh",
-        "operator/bin/mint-agentmail-keys.py",
-        "operator/bin/provision-customer.sh",
-        "operator/bin/seat-probe.sh",
-        "operator/contracts/env-consumption.yaml"
+        "operator/bin/lib/boot_harness/audit.py",
+        "operator/bin/lib/boot_harness/collect.py",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/shared/audit_client.py",
+        "operator/hermes-smd-overlay/shared/cron_session_sweep.py"
       ]
     },
     {
-      "literal": "CONFIG_DIR",
+      "literal": "WEBHOOK_SECRET_MCP",
       "kind": "env",
+      "files": 11,
+      "testFiles": 6,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 5,
+      "sample": [
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/bin/lib/boot_harness/fixture.py",
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "operator/contracts/customer-yaml-blocks.yaml"
+      ]
+    },
+    {
+      "literal": "/opt/data/profiles",
+      "kind": "path",
       "files": 10,
       "testFiles": 3,
       "languages": [
-        "config",
+        "python",
+        "shell",
+        "ts/js"
+      ],
+      "areas": 5,
+      "sample": [
+        "docs/reviews/claims-2026-10-17.probe.sh",
+        "docs/reviews/claims-2026-10-27.probe.sh",
+        "operator/bin/lib/boot_harness/collect.py",
+        "operator/bin/lib/fleet/remote_busy_probe.py",
+        "operator/hermes-smd-overlay/bootstrap/translate.py"
+      ]
+    },
+    {
+      "literal": "/opt/jobs/.venv/bin/python",
+      "kind": "path",
+      "files": 10,
+      "testFiles": 3,
+      "languages": [
+        "python",
         "shell"
       ],
-      "areas": 2,
+      "areas": 4,
       "sample": [
-        "operator/contracts/env-consumption.yaml",
+        "operator/bin/medchron-backfill-covered.py",
+        "operator/hermes-smd-overlay/firm_inputs_applier/applier.py",
+        "operator/templates/entrypoint-bundles.sh",
         "operator/templates/entrypoint-casefile.sh",
-        "operator/templates/entrypoint-demand.sh",
-        "operator/templates/entrypoint-drafting.sh",
         "operator/templates/entrypoint-fetch-inputs.sh"
+      ]
+    },
+    {
+      "literal": "/run/smd-jobs",
+      "kind": "path",
+      "files": 10,
+      "testFiles": 4,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lane-proof.sh",
+        "operator/bin/lib/fleet/busy.py",
+        "operator/bin/lib/fleet/remote_busy_probe.py",
+        "operator/bin/lib/fleet/remote_quiesce.py",
+        "operator/hermes-smd-overlay/shared/fleet_facts.py"
       ]
     },
     {
@@ -1296,6 +1081,25 @@
         "operator/bin/boot-smoke-test.sh",
         "operator/bin/lib/stage-seat-spec.sh",
         "operator/bin/lib/stage-smokeball.sh"
+      ]
+    },
+    {
+      "literal": "HERMES_TIMEZONE",
+      "kind": "env",
+      "files": 10,
+      "testFiles": 6,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 10,
+      "sample": [
+        "operator/bin/lib/cron_slots.py",
+        "operator/connectors/smokeball/smokeball_connector/layout_tools.py",
+        "operator/contracts/customer-yaml-blocks.yaml",
+        "operator/customers/pilot-smokeball/customer.yaml",
+        "operator/hermes-smd-overlay/shared/config_snapshot.py"
       ]
     },
     {
@@ -1351,22 +1155,60 @@
       ]
     },
     {
-      "literal": "SMD_IDENTIFIER_GATE_MODE",
+      "literal": "MSGRAPH_CLIENT_ID",
       "kind": "env",
       "files": 10,
-      "testFiles": 8,
+      "testFiles": 5,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 4,
+      "areas": 5,
       "sample": [
-        "operator/bin/boot-smoke-test.sh",
-        "operator/bin/lib/fleet/status.py",
-        "operator/contracts/runtime-controls.yaml",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-initiation/seat_facts.py"
+        "operator/bin/killtest-msgraph-send.py",
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "operator/connectors/msgraph-mail/manifest.toml",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py"
+      ]
+    },
+    {
+      "literal": "MSGRAPH_MAILBOX",
+      "kind": "env",
+      "files": 10,
+      "testFiles": 4,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 3,
+      "sample": [
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "operator/connectors/msgraph-mail/manifest.toml",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/__init__.py",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py"
+      ]
+    },
+    {
+      "literal": "MSGRAPH_TENANT_ID",
+      "kind": "env",
+      "files": 10,
+      "testFiles": 5,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 5,
+      "sample": [
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "operator/connectors/msgraph-mail/manifest.toml",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py",
+        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
       ]
     },
     {
@@ -1386,25 +1228,6 @@
         "operator/contracts/runtime-controls.yaml",
         "operator/hermes-smd-overlay/contracts/consumes.yaml",
         "operator/hermes-smd-overlay/shared/heartbeat.py"
-      ]
-    },
-    {
-      "literal": "/opt/connectors/smokeball",
-      "kind": "path",
-      "files": 9,
-      "testFiles": 3,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/fleet/bundles.py",
-        "operator/hermes-smd-overlay/bundle_installer/__init__.py",
-        "operator/hermes-smd-overlay/bundle_installer/manifest.py",
-        "operator/pyproject.toml",
-        "operator/templates/Dockerfile"
       ]
     },
     {
@@ -1445,58 +1268,21 @@
       ]
     },
     {
-      "literal": "/opt/jobs/.venv/bin/python",
+      "literal": "/opt/jobs",
       "kind": "path",
       "files": 9,
-      "testFiles": 3,
+      "testFiles": 4,
       "languages": [
         "python",
         "shell"
       ],
       "areas": 4,
       "sample": [
-        "operator/bin/medchron-backfill-covered.py",
-        "operator/hermes-smd-overlay/firm_inputs_applier/applier.py",
-        "operator/templates/entrypoint-bundles.sh",
-        "operator/templates/entrypoint-casefile.sh",
-        "operator/templates/entrypoint-fetch-inputs.sh"
-      ]
-    },
-    {
-      "literal": "/var/lib/smd-config",
-      "kind": "path",
-      "files": 9,
-      "testFiles": 1,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/boot-smoke-test.sh",
-        "operator/hermes-smd-overlay/firm_inputs_applier/__init__.py",
-        "operator/hermes-smd-overlay/firm_inputs_applier/applier.py",
-        "operator/runners/jobs/jobs/firm_inputs.py",
-        "operator/runners/jobs/tools/draft_attorney_roster.py"
-      ]
-    },
-    {
-      "literal": "ADMIN_BASE_URL",
-      "kind": "env",
-      "files": 9,
-      "testFiles": 5,
-      "languages": [
-        "config",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 8,
-      "sample": [
-        "bin/reauth-connector.sh",
-        "operator/bin/provision-customer.sh",
-        "src/env.d.ts",
-        "src/lib/config/app-url.ts",
-        "src/pages/auth/after-sign-in.ts"
+        "operator/bin/lib/fleet/bundles.py",
+        "operator/hermes-smd-overlay/bundle_installer/__init__.py",
+        "operator/hermes-smd-overlay/bundle_installer/installer.py",
+        "operator/hermes-smd-overlay/bundle_installer/manifest.py",
+        "operator/templates/Dockerfile"
       ]
     },
     {
@@ -1517,100 +1303,77 @@
       ]
     },
     {
-      "literal": "MACHINE_HEARTBEAT_KEY",
+      "literal": "SMD_D1_AGENT_STATE_BINDING",
       "kind": "env",
       "files": 9,
-      "testFiles": 4,
+      "testFiles": 3,
       "languages": [
         "config",
-        "python",
-        "shell",
-        "ts/js"
+        "python"
       ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/machine_credential.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/bin/rotate-machine-credential.sh",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml"
-      ]
-    },
-    {
-      "literal": "OPERATOR_MCP_WEBHOOK_SECRET",
-      "kind": "env",
-      "files": 9,
-      "testFiles": 4,
-      "languages": [
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "src/env.d.ts",
-        "src/lib/operator/mcp/tools.ts",
-        "src/lib/operator/mcp/webhook-transport.ts"
-      ]
-    },
-    {
-      "literal": "R2_SKILL_BODIES_BUCKET",
-      "kind": "env",
-      "files": 9,
-      "testFiles": 5,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
+      "areas": 3,
       "sample": [
         "operator/bin/lib/boot_harness/cli.py",
-        "operator/bin/lib/render-fly-toml.sh",
-        "operator/bin/provision-customer.sh",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml"
-      ]
-    },
-    {
-      "literal": "SENTRY_DSN",
-      "kind": "env",
-      "files": 9,
-      "testFiles": 5,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
         "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/hooks/smd-overlay-activation/handler.py",
-        "operator/hermes-smd-overlay/shared/sentry_init.py"
+        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-peer-memory/__init__.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-peer-memory/plugin.yaml"
       ]
     },
     {
-      "literal": "SMOKEBALL_CLIENT_ID",
+      "literal": "SMD_IDENTIFIER_GATE_MODE",
       "kind": "env",
       "files": 9,
-      "testFiles": 9,
+      "testFiles": 8,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 5,
+      "areas": 4,
       "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-smokeball.sh",
-        "operator/connectors/smokeball/manifest.toml",
-        "operator/connectors/smokeball/smokeball_connector/client.py",
-        "operator/contracts/env-consumption.yaml"
+        "operator/bin/boot-smoke-test.sh",
+        "operator/bin/lib/fleet/status.py",
+        "operator/contracts/runtime-controls.yaml",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-initiation/seat_facts.py"
+      ]
+    },
+    {
+      "literal": "/var/lib/smd-config",
+      "kind": "path",
+      "files": 8,
+      "testFiles": 1,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 3,
+      "sample": [
+        "operator/hermes-smd-overlay/firm_inputs_applier/__init__.py",
+        "operator/hermes-smd-overlay/firm_inputs_applier/applier.py",
+        "operator/runners/jobs/jobs/firm_inputs.py",
+        "operator/runners/jobs/tools/draft_attorney_roster.py",
+        "operator/templates/entrypoint.sh"
+      ]
+    },
+    {
+      "literal": "ADMIN_BASE_URL",
+      "kind": "env",
+      "files": 8,
+      "testFiles": 5,
+      "languages": [
+        "config",
+        "shell",
+        "ts/js"
+      ],
+      "areas": 7,
+      "sample": [
+        "bin/reauth-connector.sh",
+        "operator/bin/provision-customer.sh",
+        "src/env.d.ts",
+        "src/lib/config/app-url.ts",
+        "workers/cost-anomaly/src/index.ts"
       ]
     },
     {
@@ -1631,30 +1394,27 @@
       ]
     },
     {
-      "literal": "CUSTOMER_ID",
+      "literal": "CONFIG_DIR",
       "kind": "env",
       "files": 8,
-      "testFiles": 5,
+      "testFiles": 3,
       "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
+        "shell"
       ],
-      "areas": 4,
+      "areas": 1,
       "sample": [
-        "operator/bin/lib/stage-agentmail.sh",
-        "operator/bin/lib/stage-smokeball.sh",
-        "operator/bin/lib/stage-web-connectors.sh",
-        "operator/bin/provision-customer.sh",
-        "operator/contracts/env-consumption.yaml"
+        "operator/templates/entrypoint-casefile.sh",
+        "operator/templates/entrypoint-demand.sh",
+        "operator/templates/entrypoint-drafting.sh",
+        "operator/templates/entrypoint-lanes.sh",
+        "operator/templates/entrypoint-litigation.sh"
       ]
     },
     {
-      "literal": "GOOGLE_TOKEN_JSON",
+      "literal": "HERMES_UPSTREAM_SHA",
       "kind": "env",
       "files": 8,
-      "testFiles": 2,
+      "testFiles": 6,
       "languages": [
         "config",
         "python",
@@ -1663,11 +1423,11 @@
       ],
       "areas": 5,
       "sample": [
-        "operator/contracts/env-consumption.yaml",
-        "operator/templates/_env-arrays.generated.sh",
-        "operator/templates/bootstrap.sh",
-        "operator/templates/entrypoint.sh",
-        "operator/workspace_broker/google_auth.py"
+        ".github/workflows/operator-substrate.yml",
+        "operator/bin/boot-smoke-test.sh",
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/bin/lib/fleet/build.py",
+        "operator/bin/pip_audit_gate.py"
       ]
     },
     {
@@ -1689,10 +1449,29 @@
       ]
     },
     {
-      "literal": "OPERATOR_RUNTIME_READ_KEY",
+      "literal": "OPERATOR_MCP_WEBHOOK_SECRET",
       "kind": "env",
       "files": 8,
-      "testFiles": 2,
+      "testFiles": 4,
+      "languages": [
+        "python",
+        "shell",
+        "ts/js"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "src/env.d.ts",
+        "src/lib/operator/mcp/webhook-transport.ts",
+        "src/lib/operator/sticky-stop-clear.ts"
+      ]
+    },
+    {
+      "literal": "SMOKEBALL_CLIENT_ID",
+      "kind": "env",
+      "files": 8,
+      "testFiles": 9,
       "languages": [
         "config",
         "python",
@@ -1700,87 +1479,11 @@
       ],
       "areas": 4,
       "sample": [
-        "operator/bin/lib/seam_pull.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml"
-      ]
-    },
-    {
-      "literal": "SMD_AUDIT_DB_PATH",
-      "kind": "env",
-      "files": 8,
-      "testFiles": 1,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/shared/review_job.py",
-        "operator/runners/jobs/jobs/note_by_smd.py",
-        "operator/templates/entrypoint.sh",
-        "operator/workspace_broker/attachment_intake.py"
-      ]
-    },
-    {
-      "literal": "SMOKEBALL_API_KEY",
-      "kind": "env",
-      "files": 8,
-      "testFiles": 8,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-smokeball.sh",
-        "operator/bin/seat-readiness.py",
-        "operator/connectors/smokeball/manifest.toml",
-        "operator/connectors/smokeball/smokeball_connector/client.py"
-      ]
-    },
-    {
-      "literal": "SMOKEBALL_CLIENT_SECRET",
-      "kind": "env",
-      "files": 8,
-      "testFiles": 8,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
         "operator/bin/lib/secret_custody.py",
         "operator/bin/lib/stage-smokeball.sh",
         "operator/connectors/smokeball/manifest.toml",
         "operator/connectors/smokeball/smokeball_connector/client.py",
-        "operator/contracts/env-consumption.yaml"
-      ]
-    },
-    {
-      "literal": "SMOKEBALL_ENVIRONMENT",
-      "kind": "env",
-      "files": 8,
-      "testFiles": 7,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-smokeball.sh",
-        "operator/connectors/_sdk/operator_connector_sdk/manifest.py",
-        "operator/connectors/smokeball/smokeball_connector/client.py",
-        "operator/contracts/env-consumption.yaml"
+        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
       ]
     },
     {
@@ -1798,6 +1501,43 @@
         "operator/bin/lib/stage-casefile-inputs.sh",
         "operator/bin/lib/stage-demand-inputs.sh",
         "operator/bin/lib/stage-drafting-inputs.sh"
+      ]
+    },
+    {
+      "literal": "/opt/connectors/smokeball",
+      "kind": "path",
+      "files": 7,
+      "testFiles": 2,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lib/fleet/bundles.py",
+        "operator/hermes-smd-overlay/bundle_installer/__init__.py",
+        "operator/hermes-smd-overlay/bundle_installer/manifest.py",
+        "operator/templates/Dockerfile",
+        "operator/templates/entrypoint-bundles.sh"
+      ]
+    },
+    {
+      "literal": "AGENTMAIL_SEND_API_KEY",
+      "kind": "env",
+      "files": 7,
+      "testFiles": 4,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lib/stage-agentmail.sh",
+        "operator/bin/mint-agentmail-keys.py",
+        "operator/bin/seat-probe.sh",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/templates/entrypoint.sh"
       ]
     },
     {
@@ -1819,41 +1559,21 @@
       ]
     },
     {
-      "literal": "BRAVE_SEARCH_API_KEY",
+      "literal": "GOOGLE_SERVICE_ACCOUNT_JSON",
       "kind": "env",
       "files": 7,
-      "testFiles": 2,
+      "testFiles": 3,
       "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-web-connectors.sh",
-        "operator/customers/_template/presets/self-serve/customer.yaml",
-        "operator/customers/pilot-smokeball/customer.yaml",
-        "operator/hermes-smd-overlay/bootstrap/translate.py"
-      ]
-    },
-    {
-      "literal": "CF_ACCOUNT_ID",
-      "kind": "env",
-      "files": 7,
-      "testFiles": 2,
-      "languages": [
-        "config",
         "python",
         "shell"
       ],
       "areas": 3,
       "sample": [
-        "operator/adapter/audit_log.py",
-        "operator/adapter/d1_env.py",
-        "operator/bin/lib/decommission_backends.py",
-        "operator/bin/lib/decommission_cli.py",
-        "operator/bin/lib/decommission_inventory.py"
+        "operator/bin/gen-staging-google-cred.py",
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/bin/lib/stage-web-connectors.sh",
+        "operator/bin/provision-customer.sh",
+        "operator/bin/reprovision-staging.sh"
       ]
     },
     {
@@ -1896,7 +1616,7 @@
       ]
     },
     {
-      "literal": "MSGRAPH_SEND_CLIENT_ID",
+      "literal": "MACHINE_HEARTBEAT_KEY",
       "kind": "env",
       "files": 7,
       "testFiles": 3,
@@ -1905,51 +1625,51 @@
         "python",
         "shell"
       ],
-      "areas": 4,
+      "areas": 3,
       "sample": [
+        "operator/bin/lib/machine_credential.py",
+        "operator/bin/lib/secret_custody.py",
         "operator/bin/provision-customer.sh",
-        "operator/bin/seat-probe.sh",
-        "operator/contracts/env-consumption.yaml",
-        "operator/templates/_env-arrays.generated.sh",
-        "operator/templates/entrypoint.sh"
+        "operator/bin/rotate-machine-credential.sh",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml"
       ]
     },
     {
-      "literal": "MSGRAPH_SEND_CLIENT_SECRET",
+      "literal": "OPERATOR_RUNTIME_READ_KEY",
       "kind": "env",
       "files": 7,
-      "testFiles": 4,
+      "testFiles": 2,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 4,
+      "areas": 3,
       "sample": [
+        "operator/bin/lib/seam_pull.py",
+        "operator/bin/lib/secret_custody.py",
         "operator/bin/provision-customer.sh",
-        "operator/bin/seat-probe.sh",
-        "operator/contracts/env-consumption.yaml",
-        "operator/templates/_env-arrays.generated.sh",
-        "operator/templates/entrypoint.sh"
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/shared/runtime_read.py"
       ]
     },
     {
-      "literal": "MSGRAPH_SEND_TENANT_ID",
+      "literal": "R2_SKILL_BODIES_BUCKET",
       "kind": "env",
       "files": 7,
-      "testFiles": 3,
+      "testFiles": 5,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 4,
+      "areas": 3,
       "sample": [
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/bin/lib/render-fly-toml.sh",
         "operator/bin/provision-customer.sh",
-        "operator/bin/seat-probe.sh",
-        "operator/contracts/env-consumption.yaml",
-        "operator/templates/_env-arrays.generated.sh",
-        "operator/templates/entrypoint.sh"
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/plugin.yaml"
       ]
     },
     {
@@ -1967,6 +1687,24 @@
         "scripts/ci-publish-bundle.sh",
         "scripts/ci-publish-customer-configs.sh",
         "scripts/ci-publish-skills.sh"
+      ]
+    },
+    {
+      "literal": "SMD_AUDIT_DB_PATH",
+      "kind": "env",
+      "files": 7,
+      "testFiles": 1,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/hermes-smd-overlay/shared/review_job.py",
+        "operator/runners/jobs/jobs/note_by_smd.py",
+        "operator/templates/entrypoint.sh",
+        "operator/workspace_broker/attachment_intake.py",
+        "operator/workspace_broker/note_verbs.py"
       ]
     },
     {
@@ -2003,42 +1741,6 @@
         "operator/hermes-smd-overlay/shared/casework_ledger.py",
         "operator/skills/date-prep-brief/casework_ledger.py",
         "operator/skills/deadline-miss-escalator/casework_ledger.py"
-      ]
-    },
-    {
-      "literal": "SMD_CUSTOMER_YAML",
-      "kind": "env",
-      "files": 7,
-      "testFiles": 6,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/connectors/smokeball/smokeball_connector/logic_in_code.py",
-        "operator/hermes-smd-overlay/shared/logic_in_code.py",
-        "operator/runners/jobs/jobs/records_lane.py",
-        "operator/templates/entrypoint.sh",
-        "operator/workspace_broker/establishment_constants.py"
-      ]
-    },
-    {
-      "literal": "SMD_DEMAND_QUEUE_DIR",
-      "kind": "env",
-      "files": 7,
-      "testFiles": 2,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 3,
-      "sample": [
-        "operator/runners/jobs/jobs/demand_lane.py",
-        "operator/runners/jobs/jobs/lanes.py",
-        "operator/templates/entrypoint-demand.sh",
-        "operator/templates/entrypoint-lanes.sh",
-        "operator/templates/entrypoint.sh"
       ]
     },
     {
@@ -2096,6 +1798,62 @@
       ]
     },
     {
+      "literal": "SMOKEBALL_API_KEY",
+      "kind": "env",
+      "files": 7,
+      "testFiles": 8,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/lib/stage-smokeball.sh",
+        "operator/bin/seat-readiness.py",
+        "operator/connectors/smokeball/manifest.toml",
+        "operator/connectors/smokeball/smokeball_connector/client.py"
+      ]
+    },
+    {
+      "literal": "SMOKEBALL_CLIENT_SECRET",
+      "kind": "env",
+      "files": 7,
+      "testFiles": 8,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/lib/stage-smokeball.sh",
+        "operator/connectors/smokeball/manifest.toml",
+        "operator/connectors/smokeball/smokeball_connector/client.py",
+        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
+      ]
+    },
+    {
+      "literal": "SMOKEBALL_ENVIRONMENT",
+      "kind": "env",
+      "files": 7,
+      "testFiles": 7,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/lib/stage-smokeball.sh",
+        "operator/connectors/_sdk/operator_connector_sdk/manifest.py",
+        "operator/connectors/smokeball/smokeball_connector/client.py",
+        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
+      ]
+    },
+    {
       "literal": "SMOKEBALL_REFRESH_TOKEN_FILE",
       "kind": "env",
       "files": 7,
@@ -2115,81 +1873,22 @@
       ]
     },
     {
-      "literal": "SMOKEBALL_REGION",
+      "literal": "TELEGRAM_BOT_TOKEN",
       "kind": "env",
       "files": 7,
       "testFiles": 4,
       "languages": [
         "config",
         "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-smokeball.sh",
-        "operator/connectors/smokeball/smokeball_connector/client.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
-      ]
-    },
-    {
-      "literal": "TELEGRAM_ALLOWED_USERS",
-      "kind": "env",
-      "files": 7,
-      "testFiles": 5,
-      "languages": [
-        "config",
-        "python",
-        "shell",
         "ts/js"
       ],
-      "areas": 4,
+      "areas": 3,
       "sample": [
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/bootstrap/translate.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-trust/approval.py",
-        "operator/templates/_env-arrays.generated.sh",
-        "operator/templates/bootstrap.sh"
-      ]
-    },
-    {
-      "literal": "WEBHOOK_SECRET_MSGRAPH",
-      "kind": "env",
-      "files": 7,
-      "testFiles": 1,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 2,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
         "operator/hermes-smd-overlay/bootstrap/translate.py",
         "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/shared/msgraph_poller.py"
-      ]
-    },
-    {
-      "literal": "WORDPRESS_APP_PASSWORD",
-      "kind": "env",
-      "files": 7,
-      "testFiles": 3,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 6,
-      "sample": [
-        "operator/bin/lib/stage-web-connectors.sh",
-        "operator/connectors/wordpress/manifest.toml",
-        "operator/connectors/wordpress/wordpress_connector/client.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/customers/ashton-price-marketing/customer.yaml"
+        "operator/hermes-smd-overlay/plugins/hermes-smd-group-audience/plugin.yaml",
+        "operator/hermes-smd-overlay/shared/group_audience.py",
+        "operator/hermes-smd-overlay/shared/telegram_bot.py"
       ]
     },
     {
@@ -2230,24 +1929,6 @@
       ]
     },
     {
-      "literal": "/opt/data/installs",
-      "kind": "path",
-      "files": 6,
-      "testFiles": 2,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 3,
-      "sample": [
-        "operator/bin/lib/boot_harness/collect.py",
-        "operator/bin/lib/boot_harness/judge.py",
-        "operator/hermes-smd-overlay/bootstrap/plugin_selection.py",
-        "operator/hermes-smd-overlay/bootstrap/translate.py",
-        "operator/templates/bootstrap.sh"
-      ]
-    },
-    {
       "literal": "/opt/data/medchron",
       "kind": "path",
       "files": 6,
@@ -2264,24 +1945,6 @@
         "operator/templates/entrypoint-lanes.sh",
         "operator/templates/entrypoint.sh",
         "operator/templates/seat-checks.sh"
-      ]
-    },
-    {
-      "literal": "/opt/hermes/.venv",
-      "kind": "path",
-      "files": 6,
-      "testFiles": 1,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 3,
-      "sample": [
-        "operator/bin/lib/boot_harness/audit.py",
-        "operator/bin/pip_audit_gate.py",
-        "operator/requirements/compile.sh",
-        "operator/requirements/hermes_pip_check.py",
-        "operator/templates/Dockerfile"
       ]
     },
     {
@@ -2303,21 +1966,21 @@
       ]
     },
     {
-      "literal": "/run/smd-lanes",
+      "literal": "/opt/workspace-broker/.venv/bin/python",
       "kind": "path",
       "files": 6,
-      "testFiles": 0,
+      "testFiles": 1,
       "languages": [
         "python",
         "shell"
       ],
-      "areas": 2,
+      "areas": 3,
       "sample": [
-        "operator/hermes-smd-overlay/firm_inputs_applier/applier.py",
-        "operator/hermes-smd-overlay/shared/policy_profile.py",
-        "operator/templates/entrypoint-fetch-inputs.sh",
-        "operator/templates/entrypoint-lanes.sh",
-        "operator/templates/seat-checks.sh"
+        "operator/bin/participant-fence-replay.py",
+        "operator/templates/Dockerfile",
+        "operator/templates/entrypoint.sh",
+        "operator/templates/seat-layout-probe.py",
+        "operator/workspace_broker/ops_close.py"
       ]
     },
     {
@@ -2339,22 +2002,21 @@
       ]
     },
     {
-      "literal": "CF_API_TOKEN",
+      "literal": "CF_ACCOUNT_ID",
       "kind": "env",
       "files": 6,
       "testFiles": 2,
       "languages": [
-        "config",
         "python",
         "shell"
       ],
-      "areas": 3,
+      "areas": 2,
       "sample": [
         "operator/adapter/audit_log.py",
         "operator/adapter/d1_env.py",
         "operator/bin/lib/decommission_backends.py",
         "operator/bin/lib/decommission_cli.py",
-        "operator/bin/provision-customer.sh"
+        "operator/bin/lib/decommission_inventory.py"
       ]
     },
     {
@@ -2376,43 +2038,6 @@
       ]
     },
     {
-      "literal": "GA4_PROPERTY_ID",
-      "kind": "env",
-      "files": 6,
-      "testFiles": 3,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-web-connectors.sh",
-        "operator/connectors/ga4/ga4_connector/server.py",
-        "operator/connectors/ga4/manifest.toml",
-        "operator/contracts/env-consumption.yaml"
-      ]
-    },
-    {
-      "literal": "HEALTHCHECKS_API_KEY",
-      "kind": "env",
-      "files": 6,
-      "testFiles": 1,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 1,
-      "sample": [
-        "operator/bin/decommission-customer.sh",
-        "operator/bin/lib/decommission.py",
-        "operator/bin/lib/decommission_backends.py",
-        "operator/bin/lib/decommission_cli.py",
-        "operator/bin/lib/secret_custody.py"
-      ]
-    },
-    {
       "literal": "JOBS_LITIGATION_INPUTS",
       "kind": "env",
       "files": 6,
@@ -2431,59 +2056,23 @@
       ]
     },
     {
-      "literal": "R2_SKILL_BODIES_ACCESS_KEY_ID",
+      "literal": "SENTRY_DSN",
       "kind": "env",
       "files": 6,
-      "testFiles": 1,
+      "testFiles": 5,
       "languages": [
         "config",
         "python",
-        "shell"
+        "shell",
+        "ts/js"
       ],
       "areas": 4,
       "sample": [
+        "operator/bin/lib/secret_custody.py",
         "operator/bin/provision-customer.sh",
-        "operator/contracts/env-consumption.yaml",
         "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/plugin.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/skill_capture.py"
-      ]
-    },
-    {
-      "literal": "R2_SKILL_BODIES_SECRET_ACCESS_KEY",
-      "kind": "env",
-      "files": 6,
-      "testFiles": 1,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/provision-customer.sh",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/plugin.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/skill_capture.py"
-      ]
-    },
-    {
-      "literal": "SMD_CASEFILE_FIRM_CONFIG",
-      "kind": "env",
-      "files": 6,
-      "testFiles": 2,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 2,
-      "sample": [
-        "operator/templates/entrypoint-casefile.sh",
-        "operator/templates/entrypoint-lanes.sh",
-        "operator/templates/entrypoint.sh",
-        "operator/workspace_broker/casefile_scheduled.py",
-        "operator/workspace_broker/casefile_verbs.py"
+        "operator/hermes-smd-overlay/shared/sentry_init.py",
+        "src/env.d.ts"
       ]
     },
     {
@@ -2505,85 +2094,82 @@
       ]
     },
     {
-      "literal": "SMD_RECORDS_QUEUE_DIR",
+      "literal": "SMD_CUSTOMER_YAML",
       "kind": "env",
       "files": 6,
-      "testFiles": 1,
+      "testFiles": 6,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 5,
+      "sample": [
+        "operator/connectors/smokeball/smokeball_connector/logic_in_code.py",
+        "operator/hermes-smd-overlay/shared/logic_in_code.py",
+        "operator/runners/jobs/jobs/records_lane.py",
+        "operator/templates/entrypoint.sh",
+        "operator/workspace_broker/logic_in_code.py"
+      ]
+    },
+    {
+      "literal": "SMD_DEMAND_QUEUE_DIR",
+      "kind": "env",
+      "files": 6,
+      "testFiles": 2,
       "languages": [
         "python",
         "shell"
       ],
       "areas": 3,
       "sample": [
-        "operator/runners/jobs/jobs/records_lane.py",
+        "operator/runners/jobs/jobs/demand_lane.py",
+        "operator/templates/entrypoint-demand.sh",
         "operator/templates/entrypoint-lanes.sh",
-        "operator/templates/entrypoint-records.sh",
         "operator/templates/entrypoint.sh",
-        "operator/workspace_broker/records_store.py"
+        "operator/workspace_broker/reply_binding.py"
       ]
     },
     {
-      "literal": "SMOKEBALL_ACCOUNT_ID",
+      "literal": "SMD_SEAT_ROOT",
       "kind": "env",
       "files": 6,
-      "testFiles": 1,
+      "testFiles": 5,
       "languages": [
-        "config",
         "python",
         "shell"
       ],
-      "areas": 5,
+      "areas": 1,
+      "sample": [
+        "operator/templates/attorney-roster-agrees-probe.py",
+        "operator/templates/firm-inputs-current-probe.py",
+        "operator/templates/jobs-bundle-commit-probe.py",
+        "operator/templates/lane-memory-caps-probe.py",
+        "operator/templates/seat-layout-probe.py"
+      ]
+    },
+    {
+      "literal": "SMOKEBALL_REGION",
+      "kind": "env",
+      "files": 6,
+      "testFiles": 4,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 4,
       "sample": [
         "operator/bin/lib/secret_custody.py",
         "operator/bin/lib/stage-smokeball.sh",
         "operator/connectors/smokeball/smokeball_connector/client.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
-      ]
-    },
-    {
-      "literal": "SMOKEBALL_AUTH_MODE",
-      "kind": "env",
-      "files": 6,
-      "testFiles": 2,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-smokeball.sh",
-        "operator/connectors/smokeball/smokeball_connector/client.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
-      ]
-    },
-    {
-      "literal": "SMOKEBALL_REFRESH_TOKEN",
-      "kind": "env",
-      "files": 6,
-      "testFiles": 2,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-smokeball.sh",
-        "operator/connectors/smokeball/smokeball_connector/client.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/customers/pilot-smokeball/customer.yaml"
+        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py",
+        "operator/hermes-smd-overlay/shared/oauth_callback.py"
       ]
     },
     {
       "literal": "SMOKEBALL_STAGING_API_KEY",
       "kind": "env",
       "files": 6,
-      "testFiles": 0,
+      "testFiles": 2,
       "languages": [
         "config",
         "python",
@@ -2616,58 +2202,22 @@
       ]
     },
     {
-      "literal": "WEBHOOK_SECRET_AGENTMAIL",
+      "literal": "WEBHOOK_SECRET_MSGRAPH",
       "kind": "env",
       "files": 6,
-      "testFiles": 11,
+      "testFiles": 1,
       "languages": [
+        "config",
         "python",
         "shell"
       ],
       "areas": 2,
       "sample": [
         "operator/bin/lib/secret_custody.py",
-        "operator/bin/lib/stage-agentmail.sh",
         "operator/bin/provision-customer.sh",
-        "operator/templates/agentmail-webhook-secret-probe.py",
-        "operator/templates/bootstrap.sh"
-      ]
-    },
-    {
-      "literal": "WORDPRESS_SITE_URL",
-      "kind": "env",
-      "files": 6,
-      "testFiles": 3,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/stage-web-connectors.sh",
-        "operator/connectors/wordpress/manifest.toml",
-        "operator/connectors/wordpress/wordpress_connector/client.py",
-        "operator/connectors/wordpress/wordpress_connector/server.py",
-        "operator/contracts/env-consumption.yaml"
-      ]
-    },
-    {
-      "literal": "/opt/connectors",
-      "kind": "path",
-      "files": 5,
-      "testFiles": 2,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 3,
-      "sample": [
-        "operator/bin/webhook_reconcile.py",
-        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py",
-        "operator/hermes-smd-overlay/bundle_installer/installer.py",
-        "operator/templates/Dockerfile",
-        "operator/templates/jobs-runtime.sh"
+        "operator/hermes-smd-overlay/bootstrap/translate.py",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/shared/msgraph_poller.py"
       ]
     },
     {
@@ -2706,49 +2256,10 @@
       ]
     },
     {
-      "literal": "/opt/data/requests.db",
-      "kind": "path",
-      "files": 5,
-      "testFiles": 1,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 4,
-      "sample": [
-        ".claude/bin/requests",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/shared/request_index.py",
-        "operator/runners/jobs/jobs/note_by_smd.py",
-        "scripts/request-cards.ts"
-      ]
-    },
-    {
-      "literal": "/opt/data/smokeball-extract-cache",
-      "kind": "path",
-      "files": 5,
-      "testFiles": 0,
-      "languages": [
-        "config",
-        "python",
-        "ts/js"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/connectors/smokeball/smokeball_connector/extract_cache.py",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/shared/record_store.py",
-        "operator/runners/jobs/jobs/drafting/newfacts.py",
-        "src/lib/operator/customer-yaml/sections-record-stores.ts"
-      ]
-    },
-    {
       "literal": "/opt/hermes",
       "kind": "path",
       "files": 5,
-      "testFiles": 2,
+      "testFiles": 1,
       "languages": [
         "python",
         "shell"
@@ -2763,7 +2274,7 @@
       ]
     },
     {
-      "literal": "/opt/workspace-broker/.venv/bin/python",
+      "literal": "/opt/hermes/.venv",
       "kind": "path",
       "files": 5,
       "testFiles": 1,
@@ -2773,11 +2284,47 @@
       ],
       "areas": 3,
       "sample": [
+        "operator/bin/lib/boot_harness/audit.py",
+        "operator/bin/pip_audit_gate.py",
+        "operator/requirements/compile.sh",
+        "operator/requirements/hermes_pip_check.py",
+        "operator/templates/Dockerfile"
+      ]
+    },
+    {
+      "literal": "/opt/workspace-broker",
+      "kind": "path",
+      "files": 5,
+      "testFiles": 2,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 3,
+      "sample": [
         "operator/bin/participant-fence-replay.py",
         "operator/templates/Dockerfile",
         "operator/templates/entrypoint.sh",
-        "operator/workspace_broker/ops_close.py",
-        "operator/workspace_broker/sender_enrollment_cli.py"
+        "operator/templates/seat-layout-probe.py",
+        "operator/workspace_broker/ops_close.py"
+      ]
+    },
+    {
+      "literal": "/run/smd-lanes",
+      "kind": "path",
+      "files": 5,
+      "testFiles": 0,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 2,
+      "sample": [
+        "operator/hermes-smd-overlay/firm_inputs_applier/applier.py",
+        "operator/hermes-smd-overlay/shared/policy_profile.py",
+        "operator/templates/entrypoint-fetch-inputs.sh",
+        "operator/templates/entrypoint-lanes.sh",
+        "operator/templates/selftest.sh"
       ]
     },
     {
@@ -2795,44 +2342,6 @@
         "operator/bin/lib/fleet/remote_busy_probe.py",
         "operator/bin/lib/fleet/remote_quiesce.py",
         "operator/templates/entrypoint-lanes.sh",
-        "operator/templates/seat-checks.sh"
-      ]
-    },
-    {
-      "literal": "/run/smd-selftest/results.json",
-      "kind": "path",
-      "files": 5,
-      "testFiles": 0,
-      "languages": [
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/boot_harness/collect.py",
-        "operator/bin/lib/boot_harness/judge.py",
-        "operator/hermes-smd-overlay/shared/selftest_check.py",
-        "operator/templates/selftest.sh",
-        "workers/fleet-alerts/src/selftest.ts"
-      ]
-    },
-    {
-      "literal": "/var/lib/smd-config/marketing/marketing-firm.yaml",
-      "kind": "path",
-      "files": 5,
-      "testFiles": 1,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/connectors/wordpress/wordpress_connector/gate.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-initiation/marketing_facts.py",
-        "operator/hermes-smd-overlay/shared/policy_profile.py",
-        "operator/roles/marketing/role.yaml",
         "operator/templates/seat-checks.sh"
       ]
     },
@@ -2890,6 +2399,24 @@
       ]
     },
     {
+      "literal": "CF_API_TOKEN",
+      "kind": "env",
+      "files": 5,
+      "testFiles": 2,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 2,
+      "sample": [
+        "operator/adapter/audit_log.py",
+        "operator/adapter/d1_env.py",
+        "operator/bin/lib/decommission_backends.py",
+        "operator/bin/lib/decommission_cli.py",
+        "operator/bin/provision-customer.sh"
+      ]
+    },
+    {
       "literal": "CRANE_RELAY_KEY",
       "kind": "env",
       "files": 5,
@@ -2906,6 +2433,24 @@
         ".github/workflows/runtime-ac-proof.yml",
         "operator/bin/lib/fleet/ledger.py",
         "scripts/runtime-ac-proof.mjs"
+      ]
+    },
+    {
+      "literal": "CUSTOMER_ID",
+      "kind": "env",
+      "files": 5,
+      "testFiles": 5,
+      "languages": [
+        "config",
+        "shell"
+      ],
+      "areas": 2,
+      "sample": [
+        "operator/bin/lib/stage-agentmail.sh",
+        "operator/bin/lib/stage-smokeball.sh",
+        "operator/bin/lib/stage-web-connectors.sh",
+        "operator/bin/provision-customer.sh",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml"
       ]
     },
     {
@@ -2928,24 +2473,6 @@
       ]
     },
     {
-      "literal": "FLEET_IMAGE_LOOKUP",
-      "kind": "env",
-      "files": 5,
-      "testFiles": 0,
-      "languages": [
-        "config",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        ".github/workflows/customer-config-reconcile.yml",
-        ".github/workflows/deploy.yml",
-        "scripts/ci-publish-customer-configs.sh",
-        "scripts/ci-reconcile-r2-customer-configs.sh",
-        "scripts/lib/seat-spec-inputs.sh"
-      ]
-    },
-    {
       "literal": "FLY_IMAGE_REF",
       "kind": "env",
       "files": 5,
@@ -2961,44 +2488,6 @@
         "operator/hermes-smd-overlay/shared/fleet_facts.py",
         "operator/templates/entrypoint.sh",
         "operator/templates/selftest.sh"
-      ]
-    },
-    {
-      "literal": "FLY_REGISTRY_TOKEN",
-      "kind": "env",
-      "files": 5,
-      "testFiles": 3,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 3,
-      "sample": [
-        ".github/workflows/deploy.yml",
-        ".github/workflows/release-tick.yml",
-        "operator/bin/lib/fleet/build.py",
-        "operator/bin/lib/fleet/fly.py",
-        "scripts/ci-publish-bundle.sh"
-      ]
-    },
-    {
-      "literal": "GA4_SERVICE_ACCOUNT_JSON",
-      "kind": "env",
-      "files": 5,
-      "testFiles": 3,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/stage-web-connectors.sh",
-        "operator/connectors/ga4/ga4_connector/server.py",
-        "operator/connectors/ga4/manifest.toml",
-        "operator/contracts/env-consumption.yaml",
-        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
       ]
     },
     {
@@ -3039,40 +2528,75 @@
       ]
     },
     {
-      "literal": "SMD_ACTIVE_PERSONA",
+      "literal": "MSGRAPH_SEND_CLIENT_ID",
+      "kind": "env",
+      "files": 5,
+      "testFiles": 3,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 3,
+      "sample": [
+        "operator/bin/provision-customer.sh",
+        "operator/bin/seat-probe.sh",
+        "operator/templates/entrypoint.sh",
+        "operator/templates/seat-checks.sh",
+        "operator/workspace_broker/msgraph_auth.py"
+      ]
+    },
+    {
+      "literal": "MSGRAPH_SEND_CLIENT_SECRET",
+      "kind": "env",
+      "files": 5,
+      "testFiles": 4,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 3,
+      "sample": [
+        "operator/bin/provision-customer.sh",
+        "operator/bin/seat-probe.sh",
+        "operator/templates/entrypoint.sh",
+        "operator/templates/seat-checks.sh",
+        "operator/workspace_broker/msgraph_auth.py"
+      ]
+    },
+    {
+      "literal": "MSGRAPH_SEND_TENANT_ID",
+      "kind": "env",
+      "files": 5,
+      "testFiles": 3,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 3,
+      "sample": [
+        "operator/bin/provision-customer.sh",
+        "operator/bin/seat-probe.sh",
+        "operator/templates/entrypoint.sh",
+        "operator/templates/seat-checks.sh",
+        "operator/workspace_broker/msgraph_auth.py"
+      ]
+    },
+    {
+      "literal": "SMD_CASEFILE_FIRM_CONFIG",
       "kind": "env",
       "files": 5,
       "testFiles": 2,
       "languages": [
-        "config",
         "python",
         "shell"
       ],
       "areas": 2,
       "sample": [
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-peer-memory/__init__.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py",
-        "operator/templates/bootstrap.sh"
-      ]
-    },
-    {
-      "literal": "SMD_LITIGATION_FIRM_CONFIG",
-      "kind": "env",
-      "files": 5,
-      "testFiles": 0,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 2,
-      "sample": [
+        "operator/templates/entrypoint-casefile.sh",
         "operator/templates/entrypoint-lanes.sh",
-        "operator/templates/entrypoint-litigation.sh",
         "operator/templates/entrypoint.sh",
-        "operator/workspace_broker/litigation_intake.py",
-        "operator/workspace_broker/server.py"
+        "operator/workspace_broker/casefile_scheduled.py",
+        "operator/workspace_broker/casefile_verbs.py"
       ]
     },
     {
@@ -3094,7 +2618,7 @@
       ]
     },
     {
-      "literal": "SMD_RECORDS_FIRM_CONFIG",
+      "literal": "SMD_RECORDS_QUEUE_DIR",
       "kind": "env",
       "files": 5,
       "testFiles": 1,
@@ -3102,49 +2626,49 @@
         "python",
         "shell"
       ],
-      "areas": 2,
+      "areas": 3,
       "sample": [
+        "operator/runners/jobs/jobs/records_lane.py",
         "operator/templates/entrypoint-lanes.sh",
         "operator/templates/entrypoint-records.sh",
         "operator/templates/entrypoint.sh",
-        "operator/workspace_broker/records_verbs.py",
-        "operator/workspace_broker/server.py"
+        "operator/workspace_broker/records_store.py"
       ]
     },
     {
-      "literal": "SMD_SEAT_ROOT",
+      "literal": "SMOKEBALL_ACCOUNT_ID",
       "kind": "env",
       "files": 5,
-      "testFiles": 4,
+      "testFiles": 1,
       "languages": [
         "python",
         "shell"
       ],
-      "areas": 1,
+      "areas": 4,
       "sample": [
-        "operator/templates/attorney-roster-agrees-probe.py",
-        "operator/templates/firm-inputs-current-probe.py",
-        "operator/templates/jobs-bundle-commit-probe.py",
-        "operator/templates/lane-memory-caps-probe.py",
-        "operator/templates/selftest.sh"
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/lib/stage-smokeball.sh",
+        "operator/connectors/smokeball/smokeball_connector/client.py",
+        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py",
+        "operator/runners/jobs/jobs/daemon.py"
       ]
     },
     {
-      "literal": "SMOKEBALL_VISION_MODEL",
+      "literal": "SMOKEBALL_AUTH_MODE",
       "kind": "env",
       "files": 5,
       "testFiles": 2,
       "languages": [
-        "config",
-        "python"
+        "python",
+        "shell"
       ],
       "areas": 4,
       "sample": [
-        "operator/connectors/smokeball/smokeball_connector/vision.py",
-        "operator/contracts/env-consumption.yaml",
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/lib/stage-smokeball.sh",
+        "operator/connectors/smokeball/smokeball_connector/client.py",
         "operator/hermes-smd-overlay/bootstrap/mcp_registry.py",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/runners/jobs/jobs/records_lane.py"
+        "operator/runners/jobs/jobs/daemon.py"
       ]
     },
     {
@@ -3203,7 +2727,7 @@
       ]
     },
     {
-      "literal": "WORDPRESS_USERNAME",
+      "literal": "WORDPRESS_APP_PASSWORD",
       "kind": "env",
       "files": 5,
       "testFiles": 3,
@@ -3217,7 +2741,7 @@
         "operator/bin/lib/stage-web-connectors.sh",
         "operator/connectors/wordpress/manifest.toml",
         "operator/connectors/wordpress/wordpress_connector/client.py",
-        "operator/contracts/env-consumption.yaml",
+        "operator/customers/ashton-price-marketing/customer.yaml",
         "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
       ]
     }
@@ -3303,12 +2827,6 @@
     },
     {
       "a": "docs/adr/0096-release-controller-and-fleet-credentials.md",
-      "b": "docs/handbook/deployment-release.md",
-      "shared": 17,
-      "degree": 50
-    },
-    {
-      "a": "docs/adr/0096-release-controller-and-fleet-credentials.md",
       "b": "operator/bin/lib/fleet/tick.py",
       "shared": 14,
       "degree": 85
@@ -3317,13 +2835,13 @@
       "a": "docs/handbook/connectors-channels.md",
       "b": "operator/connectors/smokeball/manifest.toml",
       "shared": 13,
-      "degree": 52
+      "degree": 51
     },
     {
       "a": "docs/handbook/connectors-channels.md",
       "b": "operator/connectors/smokeball/smokeball_connector/attachment_tools.py",
       "shared": 12,
-      "degree": 71
+      "degree": 69
     },
     {
       "a": "src/lib/admin/fleet-status.ts",
@@ -3332,16 +2850,16 @@
       "degree": 58
     },
     {
-      "a": "docs/handbook/connectors-channels.md",
-      "b": "operator/skills/file-work-requests/SKILL.md",
-      "shared": 9,
-      "degree": 53
-    },
-    {
       "a": "operator/skills/client-verification-tracker/pre_run.py",
       "b": "operator/skills/deadline-miss-escalator/pre_run.py",
       "shared": 9,
       "degree": 53
+    },
+    {
+      "a": "docs/handbook/connectors-channels.md",
+      "b": "operator/skills/file-work-requests/SKILL.md",
+      "shared": 9,
+      "degree": 51
     },
     {
       "a": "operator/skills/daily-needs-you-digest/escalation_ledger.py",
@@ -3783,14 +3301,14 @@
     }
   ],
   "dead": {
-    "candidates": 437,
+    "candidates": 539,
     "byKind": {
-      "variable": 110,
-      "property": 3,
-      "method": 75,
-      "attribute": 96,
-      "function": 148,
-      "class": 5
+      "variable": 130,
+      "property": 4,
+      "method": 110,
+      "attribute": 112,
+      "function": 177,
+      "class": 6
     }
   }
 }

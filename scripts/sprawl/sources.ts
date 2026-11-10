@@ -6,7 +6,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import type { SourceFile } from './analyze'
+import { type SourceFile, isGenerated } from './analyze'
 
 const CODE_EXT = /\.(ts|tsx|mjs|cjs|js|astro|py|sh|bash|ya?ml|toml|md)$/
 const SKIP = /(^|\/)(node_modules|dist|\.venv|__pycache__|fixtures)\/|package-lock\.json$/
@@ -19,7 +19,7 @@ export function trackedFiles(cwd = '.'): string[] {
   return raw.split('\0').filter((p) => p && !SKIP.test(p))
 }
 
-export function readSources(paths: string[], cwd = '.'): SourceFile[] {
+function readAll(paths: string[], cwd: string): SourceFile[] {
   const out: SourceFile[] = []
   for (const path of paths) {
     const wanted =
@@ -32,6 +32,33 @@ export function readSources(paths: string[], cwd = '.'): SourceFile[] {
     }
   }
   return out
+}
+
+/**
+ * The single declarations a literal is meant to live in. Naming a value in its
+ * one home is the cure, not the sprawl, so these files are not counted.
+ */
+const DECLARATIONS = new Set([
+  'operator/contracts/seat-layout.yaml',
+  'operator/contracts/env-consumption.yaml',
+])
+
+/** The hand-written sources: generated files (analyze.ts isGenerated) and the declarations are left out. */
+export function readSources(paths: string[], cwd = '.'): SourceFile[] {
+  const tracked = new Set(paths)
+  return readAll(paths, cwd).filter(
+    (f) => !DECLARATIONS.has(f.path) && !isGenerated(f.text, tracked)
+  )
+}
+
+/** The generated files among `paths`, for the clone and dead-code reports to leave out too. */
+export function generatedPaths(paths: string[], cwd = '.'): Set<string> {
+  const tracked = new Set(paths)
+  return new Set(
+    readAll(paths, cwd)
+      .filter((f) => isGenerated(f.text, tracked))
+      .map((f) => f.path)
+  )
 }
 
 /**

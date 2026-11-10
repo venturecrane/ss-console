@@ -648,6 +648,15 @@ else
 # No lane: the tree exists only if an earlier boot moved one, and then its record must still agree.
 check "jobs-volume-move-counts-equal" "! test -e ${_jv_tree}/volume-epoch.state || { ${_jv_equal}; }"
 fi
+# ---------- Step 14b: the live seat matches its declared folder layout ----------
+# operator/contracts/seat-layout.yaml declares every seat path once; each tree
+# imports a generated copy (operator/bin/gen-seat-layout.py). This reads the seat
+# back: declared paths hold, every tree's copy agrees with the image's, and every
+# process carrying a declared env var carries the declared value. Runs as root
+# (reads /proc/<pid>/environ, compares declared names only).
+# FALSIFIER: move a declared dir, plant the volume customer.yaml, give one tree's
+# module another value, or start a process with JOBS_DATA_DIR elsewhere.
+check_file "seat-layout-live" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3" "seat-layout-probe.py"
 if lane_runs medchron; then
 check "jobs-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/queue)\" = root:workspace-broker:770 ]"
 check "medchron-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/jobs)\" = root:jobs:710 ]"

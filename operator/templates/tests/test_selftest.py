@@ -141,6 +141,9 @@ def seat(tmp_path: Path) -> dict[str, Path]:
         "#!/bin/sh\n"
         f'if [ "$1" = -I ] && [ "$2" = -m ] && [ "$3" = shared.capabilities ]; then shift; '
         f'exec env PYTHONPATH="{OVERLAY}" "{sys.executable}" "$@"; fi\n'
+        # seat-layout-probe.py imports the overlay's generated shared.seat_layout the same way.
+        f'if [ "$1" = -I ] && [ "$2" = -c ]; then shift; '
+        f'exec env PYTHONPATH="{OVERLAY}" "{sys.executable}" "$@"; fi\n'
         f'exec "{sys.executable}" "$@"\n',
         0o755,
     )
@@ -158,6 +161,9 @@ def seat(tmp_path: Path) -> dict[str, Path]:
     _write(root / "app/overlay-pack/bootstrap/pm_state.py", PM_STATE.read_text())
     _write(root / "run/smd-gateway-liveness/state", "armed")
     _write(root / "app/agentmail-webhook-secret-probe.py", "raise SystemExit(0)\n")
+    # The real probe; with no /app/seat-layout.generated.json it passes and says
+    # so (an image from before the layout). The layout tests below plant the JSON.
+    _write(root / "app/seat-layout-probe.py", (TEMPLATES / "seat-layout-probe.py").read_text())
     return {"root": root, "shims": shims}
 
 
@@ -670,3 +676,93 @@ def test_a_bundle_lagging_the_image_at_its_floor_passes_the_self_test(seat: dict
 
 def test_a_seat_with_no_lane_runs_no_bundle_commit_check(seat: dict[str, Path]) -> None:
     assert "jobs-bundle-built-for-image" not in _ran(_once(seat, "hourly"))
+
+
+# 2026-11-10, seat-layout-live: the live seat matches operator/contracts/seat-layout.yaml.
+# Each falsifier below plants one way the seat and the declared layout can part,
+# and a clean seat passes. FALSIFIER of the whole: drop the check_file line from
+# seat-checks.sh and _check finds the check ran 0 times.
+def _plant_layout(seat: dict[str, Path]) -> Path:
+    root = seat["root"]
+    _write(root / "app/seat-layout.generated.json", (TEMPLATES / "seat-layout.generated.json").read_text())
+    return root
+
+
+def _layout(seat: dict[str, Path]) -> dict:
+    return _check(_once(seat, "hourly"), "seat-layout-live")
+
+
+def test_an_image_without_the_layout_passes_and_says_so(seat: dict[str, Path]) -> None:
+    found = _layout(seat)
+    assert found["ok"] is True, found
+
+
+def test_a_clean_seat_matches_its_layout(seat: dict[str, Path]) -> None:
+    _plant_layout(seat)
+    found = _layout(seat)
+    assert found["ok"] is True, found
+
+
+def test_the_volume_customer_yaml_fails_the_layout(seat: dict[str, Path]) -> None:
+    root = _plant_layout(seat)
+    _write(root / "opt/data/customer.yaml", "personas: []\n")
+    found = _layout(seat)
+    assert found["ok"] is False and "/opt/data/customer.yaml must be absent" in found["detail"], found
+
+
+def test_a_lane_seat_missing_its_jobs_tree_fails_the_layout(seat: dict[str, Path]) -> None:
+    root = _plant_layout(seat)
+    _write(root / "var/lib/smd-config/customer.yaml", _customer_yaml(["demand-letter-drafter"]))
+    found = _layout(seat)
+    assert found["ok"] is False and "/opt/data/jobs is missing" in found["detail"], found
+
+
+def test_a_tree_that_disagrees_with_the_image_fails_the_layout(seat: dict[str, Path]) -> None:
+    root = _plant_layout(seat)
+    _write(root / "opt/jobs/.venv/bin/python", '#!/bin/sh\necho \'{"jobs_run": "/run/elsewhere"}\'\n', 0o755)
+    found = _layout(seat)
+    assert found["ok"] is False and "jobs: jobs_run is /run/elsewhere" in found["detail"], found
+
+
+def test_a_process_carrying_another_path_fails_the_layout(seat: dict[str, Path]) -> None:
+    root = _plant_layout(seat)
+    _write(root / "proc/4242/environ", "JOBS_DATA_DIR=/tmp/elsewhere\0HOME=/opt/data\0")
+    found = _layout(seat)
+    assert found["ok"] is False and "pid 4242: JOBS_DATA_DIR is /tmp/elsewhere" in found["detail"], found
+
+
+def test_a_lane_var_set_empty_because_the_lane_is_off_passes_the_layout(seat: dict[str, Path]) -> None:
+    # entrypoint-lanes.sh passes SMD_MEDCHRON_QUEUE_DIR="" to the broker on every
+    # seat that authors no chronology lane, so its verbs fail closed. Empty is off.
+    root = _plant_layout(seat)
+    _write(root / "proc/4243/environ", "SMD_MEDCHRON_QUEUE_DIR=\0JOBS_DATA_DIR=/opt/data/jobs\0")
+    found = _layout(seat)
+    assert found["ok"] is True, found
+
+
+def _probe(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 - the repo's own probe against a tmp tree
+        [sys.executable, str(TEMPLATES / "seat-layout-probe.py"), *args],
+        env={"SMD_SEAT_ROOT": str(root), "PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def test_a_clean_seat_compares_the_overlay_tree_not_skips_it(seat: dict[str, Path]) -> None:
+    # The pass above could be vacuous if no tree were compared; the overlay's
+    # interpreter is present in the fixture, so its generated module is imported.
+    done = _probe(_plant_layout(seat))
+    assert done.returncode == 0 and "trees overlay," in done.stdout, done.stdout + done.stderr
+
+
+def test_capture_names_declared_variables_only(seat: dict[str, Path]) -> None:
+    root = _plant_layout(seat)
+    _write(root / "proc/4242/environ", "JOBS_DATA_DIR=/opt/data/jobs\0ANTHROPIC_API_KEY=sk-not-a-real-key\0")
+    done = _probe(root, "--capture")
+    assert done.returncode == 0, done.stderr
+    doc = json.loads(done.stdout)
+    assert doc["env"] == {"JOBS_DATA_DIR": {"/opt/data/jobs": 1}}
+    assert "ANTHROPIC_API_KEY" not in done.stdout and "sk-not" not in done.stdout
