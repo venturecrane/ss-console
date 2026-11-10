@@ -25,6 +25,7 @@ import {
 import { describeLineItemsRefusal, readLineItemsExact } from '../db/quote-content'
 import { captureError } from '../observability/sentry'
 import { createStripeInvoice, sendStripeInvoice } from './client'
+import { formatDollarsForContextNote } from '../format/money'
 
 const AREA = 'stripe/milestone-invoicing'
 
@@ -283,7 +284,7 @@ async function recordInvoiceContext(
     await appendContext(db, orgId, {
       entity_id: engagement.entity_id,
       type: 'engagement_log',
-      content: `Invoice created for milestone "${milestone.name}" (${invoiceType}): ${formatAmount(amount)}${invoice.stripe_invoice_id ? ' — sent via Stripe' : ' — draft (pending Stripe)'}`,
+      content: `Invoice created for milestone "${milestone.name}" (${invoiceType}): ${formatDollarsForContextNote(amount)}${invoice.stripe_invoice_id ? ' — sent via Stripe' : ' — draft (pending Stripe)'}`,
       source: 'system',
       source_ref: invoice.id,
       engagement_id: engagement.id,
@@ -300,12 +301,4 @@ async function recordInvoiceContext(
     console.error('[completeMilestoneWithInvoicing] Context append error:', err)
     captureError(err, AREA)
   }
-}
-
-/**
- * Format a dollar amount for display in context entries.
- * Avoids literal dollar-digit patterns that trip content compliance tests.
- */
-function formatAmount(amount: number): string {
-  return `$\u200B${amount.toFixed(2)}`
 }

@@ -17,10 +17,10 @@ import { getOperatorServiceForSeat } from '../db/services'
 import { formatShortDate } from './formatters'
 import {
   canStartOperatorSubscription,
-  formatWholeDollars,
   operatorMonthlyCharge,
   operatorSubscriptionHref,
 } from './billing'
+import { formatCentsAsWholeDollars } from '../format/money'
 
 export interface OfferingCard {
   /**
@@ -127,7 +127,7 @@ async function operatorSummaryCard(
         statusLabel: 'Ready to start',
         // The amount charged each month on the authored rail: the price, plus
         // the card fee when the client pays by card (stated before payment).
-        meta: [`${formatWholeDollars(charge.totalCents)} per month`],
+        meta: [`${formatCentsAsWholeDollars(charge.totalCents)} per month`],
         needsYou: { label: 'Start monthly subscription', href: operatorSubscriptionHref(op.slug) },
       }
     }

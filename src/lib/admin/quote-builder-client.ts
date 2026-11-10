@@ -1,19 +1,10 @@
 import { parseLineItems } from '../db/quote-content'
+import { formatDollars } from '../format/money'
 
 type QuoteLineItem = {
   problem: string
   description: string
   estimated_hours: number
-}
-
-function formatDollars(amount: number): string {
-  return (
-    '$' +
-    amount.toLocaleString('en-US', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    })
-  )
 }
 
 interface QuoteBuilderElements {

@@ -368,7 +368,3 @@ export async function loadMedchronJobsView(
   jobs.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
   return { status: 'items', jobs, credits, month: monthTotals(jobs, window, credits) }
 }
-
-export function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
-}

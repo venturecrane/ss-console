@@ -10,6 +10,7 @@ import { createSOWRevisionForQuote } from '../../../../lib/sow/service'
 import { env } from 'cloudflare:workers'
 import { requireAdminSession } from '../../../../lib/auth/admin-session'
 import { errorResponse } from '../../../../lib/api/helpers'
+import { formatDollars } from '../../../../lib/format/money'
 
 /**
  * POST /api/admin/quotes/:id
@@ -25,10 +26,6 @@ import { errorResponse } from '../../../../lib/api/helpers'
 type Redirect = APIContext['redirect']
 type Quote = NonNullable<Awaited<ReturnType<typeof getQuote>>>
 
-function formatCurrency(amount: number): string {
-  return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-}
-
 function formatDate(date: Date): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
@@ -41,20 +38,20 @@ function buildPaymentProps(existing: Quote): SOWTemplateProps['payment'] {
   if (isThreeMilestone) {
     return {
       schedule: 'three_milestone',
-      totalPrice: formatCurrency(totalPrice),
-      deposit: formatCurrency(totalPrice * 0.4),
-      milestone: formatCurrency(totalPrice * 0.3),
+      totalPrice: formatDollars(totalPrice),
+      deposit: formatDollars(totalPrice * 0.4),
+      milestone: formatDollars(totalPrice * 0.3),
       ...(existing.milestone_label?.trim()
         ? { milestoneLabel: existing.milestone_label.trim() }
         : {}),
-      completion: formatCurrency(totalPrice * 0.3),
+      completion: formatDollars(totalPrice * 0.3),
     }
   }
   return {
     schedule: 'two_part',
-    totalPrice: formatCurrency(totalPrice),
-    deposit: formatCurrency(totalPrice * depositPct),
-    completion: formatCurrency(totalPrice * (1 - depositPct)),
+    totalPrice: formatDollars(totalPrice),
+    deposit: formatDollars(totalPrice * depositPct),
+    completion: formatDollars(totalPrice * (1 - depositPct)),
   }
 }
 

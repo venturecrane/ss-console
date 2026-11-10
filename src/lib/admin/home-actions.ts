@@ -8,7 +8,7 @@
 
 import type { Invoice } from '../db/invoices'
 import type { ServiceListRow } from './services-list'
-import { formatMoney } from './client-hub'
+import { formatDollarsHalfUp } from '../format/money'
 
 export type ActionTone = 'alert' | 'warn' | 'muted'
 
@@ -37,7 +37,7 @@ export function buildActionQueue(input: BuildActionQueueInput): ActionItem[] {
     items.push({
       tone: 'alert',
       type: 'Invoice',
-      text: `${input.clientName(inv.entity_id)} — ${formatMoney(inv.amount)} overdue`,
+      text: `${input.clientName(inv.entity_id)} — ${formatDollarsHalfUp(inv.amount)} overdue`,
       href: '/admin/billing',
     })
   }

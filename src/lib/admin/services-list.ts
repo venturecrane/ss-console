@@ -15,7 +15,7 @@ import type { Engagement, EngagementStatus } from '../db/engagements'
 import { ENGAGEMENT_STATUSES } from '../db/engagements'
 import type { Quote } from '../db/quotes'
 import type { ServiceTone } from './client-hub'
-import { formatMoney } from './client-hub'
+import { formatDollarsHalfUp } from '../format/money'
 
 export type ServiceKind = 'consulting' | 'operator'
 export type RiskTone = 'alert' | 'warn' | 'muted'
@@ -116,7 +116,7 @@ function consultingRow(eng: Engagement, quotesById: Map<string, Quote>, now: Dat
     title: eng.scope_summary?.trim() || 'Consulting engagement',
     statusLabel,
     tone: ENGAGEMENT_TONE[status] ?? 'muted',
-    value: quote ? formatMoney(quote.total_price) : null,
+    value: quote ? formatDollarsHalfUp(quote.total_price) : null,
     ...consultingRisk(eng, status, now),
     href: `/admin/clients/${eng.entity_id}`,
   }
@@ -172,7 +172,7 @@ function operatorRow(op: OperatorInput): ServiceListRow {
     statusLabel: s.statusLabel,
     tone: s.tone,
     // Monthly price from the spine; null renders as "—" (unpriced), never fabricated.
-    value: op.recurringPrice == null ? null : `${formatMoney(op.recurringPrice)}/mo`,
+    value: op.recurringPrice == null ? null : `${formatDollarsHalfUp(op.recurringPrice)}/mo`,
     risk: s.risk,
     riskTone: s.riskTone,
     riskRank: s.riskRank,
