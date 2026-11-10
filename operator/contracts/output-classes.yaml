@@ -815,6 +815,13 @@ skill_bindings:
   rep-training:
     internal: []
     outbound: derived # lessons, quiz and feedback to the requester, no one else
+  # The guide role's desk (ss-console #3946): the person's own notes, leads and
+  # reminders in their own walled stores; the reply in their thread, and the
+  # code-rendered hourly digest addressed to each person alone.
+  rep-desk:
+    internal:
+      - { artifact: desk_record, seam: local_file, class: record }
+    outbound: derived # replies and the per-person digest go to the person whose records they are, no one else
   operator-self-test:
     internal:
       - { artifact: self_test_certificate, seam: smokeball_file, class: record }

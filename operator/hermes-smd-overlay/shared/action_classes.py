@@ -409,6 +409,13 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # Nothing is sent and no recipient is named.
     "training_record": ActionClass.INTERNAL_WRITE,
     "tone_check": ActionClass.INTERNAL_WRITE,
+    # A dated reminder in the asking person's own walled store (plugins/
+    # hermes-smd-desk, ss-console #3946). INTERNAL_WRITE: one record in that
+    # person's partition of a managed store, the date resolved and checked in
+    # code. It sends nothing; the reminder reaches the person only in the
+    # code-rendered hourly digest, addressed to them alone. The tool refuses a
+    # scheduled turn, an unlisted sender and a tainted turn itself.
+    "reminder_set": ActionClass.INTERNAL_WRITE,
     # A rostered sender's voice memo as text (plugins/hermes-smd-voice-notes,
     # 2026-09-29, ss-console#2793). READ: it spools the seat's own mail
     # attachment to the scratch spool and runs the seat's speech-to-text on

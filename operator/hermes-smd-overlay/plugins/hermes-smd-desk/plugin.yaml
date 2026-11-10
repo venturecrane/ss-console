@@ -1,0 +1,7 @@
+name: hermes-smd-desk
+version: "0.1.0"
+description: "The rep desk on a guide seat (ss-console #3946): reminder_set, which keeps a dated reminder in the asking person's own walled store with the date resolved and checked in code, and a post_llm_call counter of the product library's fixed not-covered answer by closed topic key for the weekly administrator report. Registers only on a seat whose rep-desk skill is enabled; the tool only when that skill names a reminder store authored partition sender and managed."
+author: VentureCrane
+# Empty on purpose: the gate is register(), which reads the seat's authored
+# rep-desk skill. A failing requires_env would drop the tool silently.
+requires_env: []

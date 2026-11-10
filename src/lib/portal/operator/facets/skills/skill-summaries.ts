@@ -154,6 +154,8 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     "Reads the opposing side's discovery responses and surfaces candidate gaps for an attorney. An assist, never a legal finding.",
   'pitch-practice':
     'Lets a listed person practice pitching the Operator against an authored buyer, then gives feedback cited to the product library. Never role-plays pricing or a real person.',
+  'rep-desk':
+    "Keeps a listed person's own notes, leads and reminders, sends them a digest of what is due, and drafts follow-ups back to them. Never shows one person's records to another.",
   'product-guide':
     "Answers a listed person's emailed question about the Operator from the product library, naming the document and section. Never discusses pricing or clients.",
   'press-release-draft':
