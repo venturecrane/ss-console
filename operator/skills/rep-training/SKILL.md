@@ -67,8 +67,8 @@ request to practice a pitch goes to pitch-practice.
    not, pass on its `say` sentence in your own words.
 4. **The discovery lesson's draft.** When the lesson's exercise asks for a
    draft, call `tone_check` (it reads their email itself). Tell them each
-   miss with its `fix`, and the number of misses. Then call
-   `complete_lesson` as in step 3; the seat completes it once a tone check is
+   miss with its `fix`, and the number of misses. Then mark the lesson
+   complete as in step 3; the seat completes it once a tone check is
    on record. They can send the draft again and check it again.
 5. **The mock pitch lesson.** Tell them to say "let's practice" to start a
    mock pitch. The seat counts the lesson complete once every objection of
@@ -90,7 +90,8 @@ request to practice a pitch goes to pitch-practice.
 
 ## Readiness
 
-"Am I ready", "where am I": call `status` and report each `readiness` entry
+"Am I ready", "where am I": call `training_record` with `action: "status"`
+and report each `readiness` entry
 in plain words, and whether they are ready. Readiness is the seat's
 judgement from what it recorded, never yours. Your own feedback on a practice
 or an exercise is coaching and changes nothing in it.

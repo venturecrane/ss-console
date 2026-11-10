@@ -808,6 +808,13 @@ skill_bindings:
   pitch-practice:
     internal: []
     outbound: derived # practice turns and feedback to the requester, no one else
+  # Representative training (ss-console #3946): the progress record is written
+  # by code (training_record, tone_check), never composed, so it is no output
+  # class; the replies go to the requester, and the weekly report to the seat's
+  # administrators is rendered by code and dispatched before the model is asked.
+  rep-training:
+    internal: []
+    outbound: derived # lessons, quiz and feedback to the requester, no one else
   operator-self-test:
     internal:
       - { artifact: self_test_certificate, seam: smokeball_file, class: record }

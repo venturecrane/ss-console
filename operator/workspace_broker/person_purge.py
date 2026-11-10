@@ -388,10 +388,7 @@ def _envelope_mentions(entry: Any, address: str) -> bool:
             people.append(value)
     if any(_bare(p) == address for p in people):
         return True
-    return any(
-        isinstance(entry.get(key), str) and address in entry[key].lower()
-        for key in _ENVELOPE_TEXT_FIELDS
-    )
+    return any(isinstance(entry.get(key), str) and address in entry[key].lower() for key in _ENVELOPE_TEXT_FIELDS)
 
 
 # ---------------------------------------------------------------------------

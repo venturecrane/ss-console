@@ -127,9 +127,17 @@ def _redeem(r: Any, mark_c: str) -> dict[str, Any]:
     mid = f"<{uuid.uuid4().hex}@mail.example.test>"
     payload = r._payload(C, mid, f"Here is my code {_code()} {mark_c}")
     verdict = r._deliver(payload, event_id=mid)
+    # Only what this email caused: an earlier turn's reply can reach the stub
+    # broker late, from the reply plugin's own thread.
+    mine = [
+        req
+        for req in r.broker.since(broker_mark)
+        if mid in json.dumps(req.get("payload") or {}, default=str)
+    ]
     return {
+        "message_id": mid,
         "router_verdict": verdict if isinstance(verdict, (dict, type(None))) else str(verdict),
-        "broker": r.broker.since(broker_mark),
+        "broker": mine,
     }
 
 

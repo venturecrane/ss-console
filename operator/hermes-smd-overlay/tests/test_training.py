@@ -43,8 +43,14 @@ B_MARK = "CANARY-B-2m8x4w"
 A_QUIZ = "1 B\n2. C\nQ3: A\n4) D\n5 A\n6 C\n7 B\n8 C\n9 B\n10 A"
 
 
-def _seat_doc(volume: Path, *, role: str = "guide", skill: bool = True, managed: bool = True) -> dict:
-    progress: dict[str, Any] = {"name": "rep-progress", "path": f"{volume}/rep/progress", "partition": "sender"}
+def _seat_doc(
+    volume: Path, *, role: str = "guide", skill: bool = True, managed: bool = True
+) -> dict:
+    progress: dict[str, Any] = {
+        "name": "rep-progress",
+        "path": f"{volume}/rep/progress",
+        "partition": "sender",
+    }
     if managed:
         progress["managed"] = True
     return {
@@ -70,7 +76,13 @@ def _seat_doc(volume: Path, *, role: str = "guide", skill: bool = True, managed:
 
 def _enroll(path: Path, *people: tuple[str, str | None]) -> None:
     entries = [
-        {"address": a, "label": "t", "code_id": "c_1", "enrolled_at": "x", **({"name": n} if n else {})}
+        {
+            "address": a,
+            "label": "t",
+            "code_id": "c_1",
+            "enrolled_at": "x",
+            **({"name": n} if n else {}),
+        }
         for a, n in people
     ]
     path.write_text(json.dumps({"schema": 1, "enrolled": entries}), encoding="utf-8")
@@ -271,11 +283,20 @@ def test_lessons_go_in_order_and_requirements_are_code_checked() -> None:
 def test_an_objection_counts_only_when_answered_in_order_with_an_answer() -> None:
     cur = _cur()
     p = training.new_progress()
-    assert training.record_objection(cur, p, "owner", 2, "a real answer in several words")[0] is False
+    assert (
+        training.record_objection(cur, p, "owner", 2, "a real answer in several words")[0] is False
+    )
     assert training.record_objection(cur, p, "owner", 1, "ok")[0] is False
-    assert training.record_objection(cur, p, "law-practice", 1, "a real answer in several words")[0] is False
-    assert training.record_objection(cur, p, "owner", 1, "a real answer in several words")[0] is True
-    assert training.record_objection(cur, p, "owner", 1, "a real answer in several words")[0] is False
+    assert (
+        training.record_objection(cur, p, "law-practice", 1, "a real answer in several words")[0]
+        is False
+    )
+    assert (
+        training.record_objection(cur, p, "owner", 1, "a real answer in several words")[0] is True
+    )
+    assert (
+        training.record_objection(cur, p, "owner", 1, "a real answer in several words")[0] is False
+    )
     assert p["mock_pitch"] == {"owner": [1]}
 
 
@@ -353,20 +374,31 @@ def test_a_whole_path_to_ready_is_recorded_by_code(seat) -> None:
     assert status["next_lesson"]["id"] == "l01" and status["ready"] is False
     for n in range(1, 9):
         s = _email(seat, A, f"my answer to the exercise {A_MARK}")
-        assert _call(seat, "training_record", {"action": "complete_lesson", "lesson_id": f"l0{n}"}, s)["ok"]
+        assert _call(
+            seat, "training_record", {"action": "complete_lesson", "lesson_id": f"l0{n}"}, s
+        )["ok"]
     s = _email(seat, A, f"We build better systems in two weeks! {A_MARK}")
     tone = _call(seat, "tone_check", {}, s)
     assert tone["misses"] >= 3 and {"solution-not-systems", "no-timeframe"} <= {
         m["rule"] for m in tone["rules_missed"]
     }
-    assert _call(seat, "training_record", {"action": "complete_lesson", "lesson_id": "l09"}, s)["ok"]
+    assert _call(seat, "training_record", {"action": "complete_lesson", "lesson_id": "l09"}, s)[
+        "ok"
+    ]
     s = _email(seat, A, "Where are you trying to take the business?")
     assert _call(seat, "tone_check", {}, s)["misses"] == 0
     for n in range(1, 7):
         s = _email(seat, A, f"an answer to the buyer with substance {A_MARK}")
-        out = _call(seat, "training_record", {"action": "objection_answered", "scenario": "owner", "number": n}, s)
+        out = _call(
+            seat,
+            "training_record",
+            {"action": "objection_answered", "scenario": "owner", "number": n},
+            s,
+        )
         assert out["ok"], out
-    assert _call(seat, "training_record", {"action": "complete_lesson", "lesson_id": "l10"}, s)["ok"]
+    assert _call(seat, "training_record", {"action": "complete_lesson", "lesson_id": "l10"}, s)[
+        "ok"
+    ]
     s = _email(seat, A, "quiz please")
     quiz = _call(seat, "training_record", {"action": "quiz"}, s)
     # The key never reaches the model: each question is its words and choices only.

@@ -120,8 +120,8 @@ pitch.
 ## Stepping out of role
 
 "Stop", "feedback", "end", "how did I do", or the last objection answered,
-always ends the role-play. When the message answers the last objection, call
-`objection_answered` for it first, as in each turn in role. The feedback message does NOT carry the marker line;
+always ends the role-play. When the message answers the last objection,
+record that answer first, as in each turn in role. The feedback message does NOT carry the marker line;
 it opens with the plain line "Practice ended. Feedback:" (without the quotation marks) so nobody reads it as
 the buyer.
 

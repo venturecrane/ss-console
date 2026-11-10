@@ -46,7 +46,9 @@ ADMIN = "admin@example.test"
 A_MARK = "CANARY-A-7f3k9q"
 
 
-def _seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, admins: list[str] | None = None) -> Path:
+def _seat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, admins: list[str] | None = None
+) -> Path:
     volume = tmp_path / "opt-data"
     volume.mkdir(exist_ok=True)
     monkeypatch.setattr(record_store, "VOLUME_ROOT", volume)
@@ -61,7 +63,12 @@ def _seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, admins: list[str] 
         "record_stores": [
             {"name": "rep-notes", "path": f"{volume}/rep/notes", "partition": "sender"},
             {"name": "rep-leads", "path": f"{volume}/rep/leads", "partition": "sender"},
-            {"name": "rep-progress", "path": f"{volume}/rep/progress", "partition": "sender", "managed": True},
+            {
+                "name": "rep-progress",
+                "path": f"{volume}/rep/progress",
+                "partition": "sender",
+                "managed": True,
+            },
         ],
     }
     path = tmp_path / "customer.yaml"
@@ -70,10 +77,18 @@ def _seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, admins: list[str] 
     return volume
 
 
-def _enroll(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *people: tuple[str, str | None]) -> None:
+def _enroll(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *people: tuple[str, str | None]
+) -> None:
     path = tmp_path / "enrolled.json"
     entries = [
-        {"address": a, "label": "t", "code_id": "c_1", "enrolled_at": "x", **({"name": n} if n else {})}
+        {
+            "address": a,
+            "label": "t",
+            "code_id": "c_1",
+            "enrolled_at": "x",
+            **({"name": n} if n else {}),
+        }
         for a, n in people
     ]
     path.write_text(json.dumps({"schema": 1, "enrolled": entries}), encoding="utf-8")
@@ -87,7 +102,9 @@ def _cur() -> training.Curriculum:
 def _ready_progress(cur: training.Curriculum) -> dict[str, Any]:
     p = training.new_progress()
     p["lessons_complete"] = [x.id for x in cur.lessons]
-    training.grade_quiz(cur, p, "\n".join(f"{i} {q.answer}" for i, q in enumerate(cur.questions, 1)))
+    training.grade_quiz(
+        cur, p, "\n".join(f"{i} {q.answer}" for i, q in enumerate(cur.questions, 1))
+    )
     for n in range(1, cur.scenarios["owner"] + 1):
         training.record_objection(cur, p, "owner", n, "a real answer in several words")
     training.record_tone(p, [])
@@ -104,7 +121,9 @@ def _envelope(tmp_path: Path) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_report_is_rendered_from_progress_and_no_note_or_lead_reaches_it(tmp_path, monkeypatch) -> None:
+def test_the_report_is_rendered_from_progress_and_no_note_or_lead_reaches_it(
+    tmp_path, monkeypatch
+) -> None:
     _seat(tmp_path, monkeypatch)
     _enroll(tmp_path, monkeypatch, (A, "Avery Example"), (B, None))
     cur = _cur()
@@ -156,7 +175,9 @@ def test_the_report_module_opens_no_store_but_the_progress_store() -> None:
     assert calls and set(calls) == {"PROGRESS_STORE"}, calls
 
 
-def test_nothing_is_written_or_woken_when_nobody_is_enrolled_or_no_administrator(tmp_path, monkeypatch) -> None:
+def test_nothing_is_written_or_woken_when_nobody_is_enrolled_or_no_administrator(
+    tmp_path, monkeypatch
+) -> None:
     _seat(tmp_path, monkeypatch)
     _enroll(tmp_path, monkeypatch)
     assert training_report.run() == {"wakeAgent": False, "status": "nobody_enrolled", "people": 0}
@@ -167,12 +188,17 @@ def test_nothing_is_written_or_woken_when_nobody_is_enrolled_or_no_administrator
     assert _envelope(tmp_path) is None
 
 
-def test_the_pre_run_prints_one_verdict_and_wakes_nothing_on_a_crash(tmp_path, monkeypatch, capsys) -> None:
+def test_the_pre_run_prints_one_verdict_and_wakes_nothing_on_a_crash(
+    tmp_path, monkeypatch, capsys
+) -> None:
     _seat(tmp_path, monkeypatch)
     _enroll(tmp_path, monkeypatch, (A, None))
     monkeypatch.setattr(training, "_IMAGE_SKILL_ROOTS", (str(tmp_path / "nowhere"),))
     assert training_report.main() == 0
-    assert json.loads(capsys.readouterr().out.strip()) == {"status": "report_crashed", "wakeAgent": False}
+    assert json.loads(capsys.readouterr().out.strip()) == {
+        "status": "report_crashed",
+        "wakeAgent": False,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -191,10 +217,16 @@ def _held(text: str) -> list[str]:
     gate = _relay().gate_body(text, vertical=None, cohort=None, internal_recipient=True)
     if not gate.allowed:
         why.append(gate.reason)
-    found = output_checklist.check(text, output_checklist.STAFF_SEND, output_checklist.PROFILE_PARALEGAL)
+    found = output_checklist.check(
+        text, output_checklist.STAFF_SEND, output_checklist.PROFILE_PARALEGAL
+    )
     why += [v.rule for v in output_checklist.refusing(found)]
-    unverified = identifier_filter.unverified_identifiers(text, identifier_filter.ProvenanceRegister())
-    why += [f"identifier:{h.kind.value}" for h in unverified if h.kind != identifier_filter.IdKind.NAME]
+    unverified = identifier_filter.unverified_identifiers(
+        text, identifier_filter.ProvenanceRegister()
+    )
+    why += [
+        f"identifier:{h.kind.value}" for h in unverified if h.kind != identifier_filter.IdKind.NAME
+    ]
     return why
 
 
@@ -217,7 +249,10 @@ def _authored_texts() -> list[tuple[str, str]]:
     cur = _cur()
     texts: list[tuple[str, str]] = []
     for lesson in cur.lessons:
-        texts += [(f"{lesson.id} title", f"Lesson 1 of 10: {lesson.title}"), (f"{lesson.id} exercise", lesson.exercise)]
+        texts += [
+            (f"{lesson.id} title", f"Lesson 1 of 10: {lesson.title}"),
+            (f"{lesson.id} exercise", lesson.exercise),
+        ]
     for i, q in enumerate(cur.questions, 1):
         texts.append((f"{q.id} ask", f"{i}. {q.ask}"))
         texts += [(f"{q.id} {k}", f"{k}. {v}") for k, v in q.choices]
@@ -225,7 +260,9 @@ def _authored_texts() -> list[tuple[str, str]]:
         texts.append((f"tone {rule.id}", rule.fix))
     drills = yaml.safe_load((PRACTICE_DIR / "references" / "drills.yaml").read_text())
     for theme in drills["themes"]:
-        texts.append((f"drill theme {theme['id']}", f"Drill (theme: {theme['title']}, drill 1 of 3)"))
+        texts.append(
+            (f"drill theme {theme['id']}", f"Drill (theme: {theme['title']}, drill 1 of 3)")
+        )
         for d in theme["drills"]:
             texts.append((f"drill {theme['id']} says", d["says"]))
             texts += [(f"drill {theme['id']} covers", c) for c in d["covers"]]
@@ -246,7 +283,9 @@ def test_every_authored_training_line_clears_the_reply_checks() -> None:
     assert held == {}
 
 
-def test_every_sentence_the_tools_and_the_welcome_return_clears_the_reply_checks(tmp_path, monkeypatch) -> None:
+def test_every_sentence_the_tools_and_the_welcome_return_clears_the_reply_checks(
+    tmp_path, monkeypatch
+) -> None:
     from shared import sender_enrollment as se
 
     plugin = load_plugin("hermes-smd-training")
@@ -261,14 +300,15 @@ def test_every_sentence_the_tools_and_the_welcome_return_clears_the_reply_checks
     sentences.append(training.record_objection(cur, p, "owner", 3, "x")[1])
     sentences.append(training.record_objection(cur, p, "owner", 1, "ok")[1])
     sentences.append(training.record_objection(cur, p, "nobody", 1, "x")[1])
-    sentences.append(training.record_objection(cur, p, "owner", 1, "a real answer in several words")[1])
+    sentences.append(
+        training.record_objection(cur, p, "owner", 1, "a real answer in several words")[1]
+    )
     sentences += [c.value for c in training.readiness(cur, p)[1]]
     sentences += [c.value for c in training.readiness(cur, _ready_progress(cur))[1]]
     status = plugin._status(cur, p)
     sentences += [json.dumps(status["next_lesson"]["read"])]
     sentences.append(se.welcome_text("Avery Example", training=True))
-    for name, (description, _schema) in plugin.TOOLS.items():
-        sentences.append(description)
+    sentences += [description for description, _schema in plugin.TOOLS.values()]
     held = {s[:60]: why for s in sentences if (why := _held(s))}
     assert held == {}
 
@@ -282,7 +322,8 @@ def test_a_rendered_report_with_realistic_values_clears_the_reply_checks(name) -
     half["tone"] = {"checks": 12, "last_misses": 3, "total_misses": 41}
     label = f"{name} (rep-a@example.test)" if name else "rep-a@example.test"
     body = training_report.render(
-        cur, [(label, _ready_progress(cur)), ("rep-b@example.test", half), ("rep-c@example.test", None)]
+        cur,
+        [(label, _ready_progress(cur)), ("rep-b@example.test", half), ("rep-c@example.test", None)],
     )
     assert _held(body) == [] and _held(training_report.SKELETON) == []
     assert "1 ready" in body and "3 people enrolled" in body
