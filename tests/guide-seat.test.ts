@@ -91,8 +91,11 @@ describe('smd-guide seat config (ADR 0105)', () => {
 describe('smd-guide chat channel (ADR 0105, ADR 0033)', () => {
   const seat = load(SEAT)
 
-  it('is enabled with an allowlist of exactly the ids already bound to a named person', () => {
-    expect(seat.telegram.enabled).toBe(true)
+  it('is off for first boot, with an allowlist of exactly the ids already bound to a named person', () => {
+    // Off until a bot exists and its token is vaulted (Captain, 2026-11-09): a
+    // seat with chat enabled and no token does not boot. The allowlist stays
+    // authored so turning it on is a one-line reviewed change.
+    expect(seat.telegram.enabled).toBe(false)
     // Every id on the guide's chat allowlist must be one the repo already binds
     // to a person: the Captain's id is people p2 on captain-mark. A new id (a
     // representative's) arrives with its own reviewed PR, never invented here.
@@ -108,6 +111,7 @@ describe('smd-guide chat channel (ADR 0105, ADR 0033)', () => {
   it('cannot fail open: the validator refuses the same block with an empty or missing allowlist', () => {
     for (const allow of [[], undefined]) {
       const d = clone(seat)
+      d.telegram.enabled = true
       if (allow === undefined) delete d.telegram.allow_from
       else d.telegram.allow_from = allow
       expect(codes(d).some((e) => e.path === 'telegram.allow_from')).toBe(true)
