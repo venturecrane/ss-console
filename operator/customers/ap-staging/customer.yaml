@@ -65,11 +65,11 @@ fly_region: sjc
 model: claude-sonnet-5-5
 escalation_model: claude-opus-5-5
 machine:
-  size: shared-cpu-4x
-  memory_mb: 8192
-  lane_memory_mb:
-    medchron: 4096
-    demand: 3072
+  # Smaller than A&P on purpose (Captain, 2026-11-10): the twin proves each
+  # release boots and passes its checks; it never runs A&P's heavy jobs (every
+  # lane is capped at $0.01). The size smd-staging has passed every release on.
+  size: shared-cpu-2x
+  memory_mb: 4096
 users:
   - email: ss-probe-admin@agentmail.to
     role: principal
