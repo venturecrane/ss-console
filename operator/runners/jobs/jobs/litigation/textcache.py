@@ -43,10 +43,11 @@ from typing import Any, Callable
 
 from ..stages.pleading_margin import strip_document
 from . import extract as extract_mod
+from .. import seat_layout
 
 ENV = "JOBS_LITIGATION_TEXTCACHE_DIR"
 DATA_ENV = "JOBS_DATA_DIR"
-DEFAULT_DATA_DIR = "/opt/data/jobs"
+DEFAULT_DATA_DIR = seat_layout.JOBS_DATA
 #: The rehearsal's counting OCR stub marks every page it did not transcribe
 #: with this; such text is never cached or seeded.
 REHEARSAL_MARK = "[rehearsal OCR stub:"

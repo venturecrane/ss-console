@@ -205,8 +205,9 @@ export function summarize(rows: readonly CardRow[]): Summary {
  */
 export const SOURCE_NOTE =
   "This is SMD's card ledger (numbers only), not the Operator. To see what a client asked and " +
-  "what the Operator replied, read the seat's request index (/opt/data/requests.db) from that " +
-  "client's ops workspace: ops-handoff <client> '<task>'. Never Gmail or team@ for this."
+  'what the Operator replied on a day, run: ops-requests <client> [YYYY-MM-DD]. It reads the ' +
+  "seat's request index (/opt/data/requests.db) through that client's ops workspace and takes " +
+  'seconds. Never Gmail or team@ for this.'
 
 export function renderReport(rows: readonly CardRow[], sinceLabel: string): string {
   if (rows.length === 0) return `requests: no request cards since ${sinceLabel}.\n${SOURCE_NOTE}`

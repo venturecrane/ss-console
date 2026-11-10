@@ -13,9 +13,10 @@
 # bounced 2026-10-27), and the workspace cannot address a laptop session at all,
 # so the outbox file is its only way back.
 #
-# If a workspace session is already running (tmux "main" exists), the task opens
-# at once in a new window of it, so the Captain switches windows rather than
-# re-running `ops`. Otherwise he types `ops <client>` and it opens first.
+# The task opens at once in a tmux window on the workspace (a new window of
+# "main", or a new "main" after a restart), and this script then reads the
+# workspace's process list for the session. It exits 0 only when that session
+# is running; otherwise it exits 1 and says nothing is working on the task.
 #
 # ops-handoff <client> --results: print the outcomes the workspace wrote back
 # (~/outbox, newest last), so a laptop session sees what happened without the
@@ -92,11 +93,30 @@ n=$(fly ssh console -a "$app" -u ops -C "sh -c 'wc -c < ~/inbox/$file'" </dev/nu
 start="/opt/ops/bin/ops-start \$HOME/inbox/$file"
 opened=$(fly ssh console -a "$app" -u ops --pty=false \
   -C "sh -c 'export TERM=xterm-256color; if tmux has-session -t main 2>/dev/null; then tmux new-window -t main -n task \"$start\"; else tmux new-session -d -s main -n task \"$start\"; fi && echo opened'" </dev/null 2>/dev/null | tr -d '\r' | tail -1)
+# "Handed over" is a claim; a running session is the fact. Until 2026-11-10 this
+# script exited 0 with "Tell the Captain: type `ops`" when nothing had started,
+# and a laptop session read "Handed over" and waited 16 minutes on a task no one
+# was doing. So read the workspace's process list for the session by the name
+# ops-start gives it, and fail loudly when it is not there.
+running=0
 if [ "$opened" = "opened" ]; then
-  echo "Handed over to $app and opened in a new window there (tmux window \"task\")."
-  echo "It runs on its own there; the Captain has nothing to do in that terminal unless it stops on a permission."
-else
-  echo "Handed over to $app. Tell the Captain: type \`ops $client\` to continue there."
+  for _ in $(seq 1 "${OPS_HANDOFF_WAIT:-10}"); do
+    running=$(fly ssh console -a "$app" -u ops --pty=false \
+      -C "sh -c 'ps -eo args | grep -c \"[c]laude --name $session \"'" </dev/null 2>/dev/null | tr -d '\r' | tail -1)
+    [[ "${running:-}" =~ ^[1-9][0-9]*$ ]] && break
+    running=0
+    sleep "${OPS_HANDOFF_SLEEP:-3}"
+  done
 fi
+if [ "$running" = 0 ]; then
+  {
+    echo "HANDOFF NOT RUNNING on $app: the task file arrived (~/inbox/$file) but no session named $session started."
+    echo "Nothing is working on it. Do not wait for a result."
+    echo "It opens when the Captain types \`ops $client\`; before asking him, look at why: fly ssh console -a $app -u ops -C 'tmux ls'."
+  } >&2
+  exit 1
+fi
+echo "Handed over to $app and running there (seen in its process list, tmux window \"task\")."
+echo "It runs on its own there; the Captain has nothing to do in that terminal unless it stops on a permission."
 echo "Its session is $session. Talk to it yourself, never through the Captain: ops-handoff $client --say $session \"<message>\". Its outcome lands in its outbox: ops-handoff $client --results."
 exit 0

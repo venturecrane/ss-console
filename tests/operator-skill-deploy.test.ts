@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url'
 
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { afterEach, describe, expect, it } from 'vitest'
+import { readSeatScript } from './_support/seat-layout'
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SMD_CUSTOMER_YAML = join(REPO_ROOT, 'operator', 'customers', 'smd-staging', 'customer.yaml')
@@ -216,7 +217,7 @@ describe('bootstrap.sh: skill-catalog seed is additive (#1206)', () => {
   it(
     'bootstrap.sh seeds per-skill additively and never destructively wipes the catalog',
     () => {
-      const script = readFileSync(BOOTSTRAP_SH, 'utf8')
+      const script = readSeatScript(BOOTSTRAP_SH)
       // The per-skill replace idiom must be present: scoped to one repo skill at a
       // time so agent-authored skills (present only on the volume) survive.
       expect(script).toContain('for _src in /app/skills/*/')
@@ -244,7 +245,7 @@ describe('bootstrap.sh: retired repo skills are pruned from the volume (retired-
    * means an edit to the shipped block is what this test runs.
    */
   function pruneScript(hermesHome: string, appSkills: string, list: string): string {
-    const src = readFileSync(BOOTSTRAP_SH, 'utf8')
+    const src = readSeatScript(BOOTSTRAP_SH)
     const begin = src.indexOf('# retired-skill-prune:begin')
     const end = src.indexOf('# retired-skill-prune:end')
     expect(begin, 'retired-skill-prune markers missing from bootstrap.sh').toBeGreaterThan(-1)
@@ -367,7 +368,7 @@ describe('bootstrap omitted-skill prune', () => {
     enabled: string,
     readerExit = 0
   ): string {
-    const src = readFileSync(BOOTSTRAP_SH, 'utf8')
+    const src = readSeatScript(BOOTSTRAP_SH)
     const begin = src.indexOf('# omitted-skill-prune:begin')
     const end = src.indexOf('# omitted-skill-prune:end')
     expect(begin, 'omitted-skill-prune markers missing from bootstrap.sh').toBeGreaterThan(-1)
@@ -462,7 +463,7 @@ describe('bootstrap omitted-skill prune', () => {
   it(
     'reads the enabled set through the one predicate (shared.capabilities)',
     () => {
-      const src = readFileSync(BOOTSTRAP_SH, 'utf8')
+      const src = readSeatScript(BOOTSTRAP_SH)
       const block = src.slice(
         src.indexOf('# omitted-skill-prune:begin'),
         src.indexOf('# omitted-skill-prune:end')

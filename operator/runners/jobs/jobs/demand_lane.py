@@ -43,6 +43,7 @@ from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
+from . import seat_layout
 
 logger = logging.getLogger("jobs.demand")
 
@@ -100,7 +101,7 @@ def demand_runner_cmd() -> list[str]:
 
 @dataclass
 class DemandLane(Daemon):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/demand-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path(seat_layout.DEMAND_QUEUE))
     inputs_dir: str | None = None
     LANE = "demand"
     HEARTBEAT = "demand-heartbeat"

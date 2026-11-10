@@ -30,8 +30,9 @@ function tasks(): string[] {
 
 /**
  * A stub fly: machine list says started, ssh answers, `cat > ~/inbox/pending-<stamp>.md`
- * writes its stdin to a file, `wc -c` reports that file's size, and the tmux
- * step answers "opened" unless TMUX_FAIL=1 (tmux itself cannot start).
+ * writes its stdin to a file, `wc -c` reports that file's size, the tmux
+ * step answers "opened" unless TMUX_FAIL=1 (tmux itself cannot start), and the
+ * process-list read answers PS_RESULT sessions by that name (default 1).
  */
 function stubFly(dir: string): void {
   const bin = path.join(dir, 'bin')
@@ -45,6 +46,7 @@ case "$*" in
   *"cat > ~/inbox/pending-"*) f=$(echo "$*" | grep -o 'pending-[^ ]*\\.md' | head -1); cat > "${inbox}/$f" ;;
   *"wc -c"*) f=$(echo "$*" | grep -o 'pending-[^ ]*\\.md' | head -1); wc -c < "${inbox}/$f" ;;
   *"tmux has-session"*) [ "\${TMUX_FAIL:-0}" = 1 ] || echo opened ;;
+  *"ps -eo args"*) echo "\${PS_RESULT:-1}" ;;
   *"sh -s"*) cat > "${home}/say.sh"; echo "\${SAY_RESULT:-1}" ;;
   *) : ;;
 esac
@@ -74,6 +76,8 @@ function handoff(args: string[], env: Record<string, string> = {}): string {
       ...process.env,
       HOME: home,
       PATH: `${path.join(home, 'bin')}:${process.env.PATH}`,
+      OPS_HANDOFF_SLEEP: '0',
+      OPS_HANDOFF_WAIT: '2',
       ...env,
     },
     encoding: 'utf8',
@@ -136,7 +140,7 @@ describe('ops-handoff', () => {
 
   it('opens the task in a new window when a workspace session is already running', () => {
     const out = handoff(['ap', 'check the facilities'])
-    expect(out).toContain('opened in a new window')
+    expect(out).toContain('running there')
     // The window is opened on THIS handoff's file, never on whatever is waiting.
     expect(fs.readFileSync(calls, 'utf8')).toMatch(
       /tmux new-window -t main -n task \\?"\/opt\/ops\/bin\/ops-start \$HOME\/inbox\/pending-\d{8}T\d{6}-\d+\.md/
@@ -145,16 +149,43 @@ describe('ops-handoff', () => {
 
   it('starts the session itself when none is running (after a restart), on this task', () => {
     const out = handoff(['ap', 'check the facilities'])
-    expect(out).toContain('opened in a new window')
+    expect(out).toContain('running there')
     expect(fs.readFileSync(calls, 'utf8')).toMatch(
       /else tmux new-session -d -s main -n task \\?"\/opt\/ops\/bin\/ops-start \$HOME\/inbox\/pending-\d{8}T\d{6}-\d+\.md/
     )
   })
 
-  it('tells the Captain to run ops only when tmux itself cannot start', () => {
-    const out = handoff(['ap', 'check the facilities'], { TMUX_FAIL: '1' })
-    expect(out).toContain('type `ops ap`')
-    expect(out).not.toContain('opened in a new window')
+  // 2026-11-10: the script used to exit 0 with "Handed over ... tell the Captain
+  // to type `ops`" when nothing had started, and a laptop session waited 16
+  // minutes on a task no one was doing. "Handed over" now means a session by
+  // that name is in the workspace's process list; anything else is exit 1.
+  const failure = (env: Record<string, string>): { status: number; stderr: string } => {
+    try {
+      handoff(['ap', 'check the facilities'], env)
+    } catch (e) {
+      const err = e as { status: number; stderr: string }
+      return { status: err.status, stderr: err.stderr }
+    }
+    return { status: 0, stderr: '' }
+  }
+
+  it('fails, and says nothing is working on the task, when tmux cannot start', () => {
+    const got = failure({ TMUX_FAIL: '1' })
+    expect(got.status).toBe(1)
+    expect(got.stderr).toContain('HANDOFF NOT RUNNING')
+    expect(got.stderr).toContain('Do not wait for a result')
+  })
+
+  it('fails when the window opened but no session by that name is running', () => {
+    const got = failure({ PS_RESULT: '0' })
+    expect(got.status).toBe(1)
+    expect(got.stderr).toMatch(/no session named ops-ashton-price-\d+ started/)
+  })
+
+  it('asks the workspace process list for exactly the session name it printed', () => {
+    const out = handoff(['ap', 'check the facilities'])
+    const name = out.match(/Its session is (ops-ashton-price-\d+)\./)?.[1]
+    expect(fs.readFileSync(calls, 'utf8')).toContain(`grep -c "[c]laude --name ${name} "`)
   })
 
   it('gives each handoff its own file, so two at once never share a session', () => {

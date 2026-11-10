@@ -274,7 +274,7 @@ describe('the report names where a request actually lives', () => {
   it('ends every report, including an empty one, with the seat source', () => {
     for (const text of [renderReport([], 'then'), renderReport([row(A, 'replied')], 'then')]) {
       expect(text).toContain('/opt/data/requests.db')
-      expect(text).toContain('ops-handoff')
+      expect(text).toContain('ops-requests <client>')
       expect(text).toMatch(/Never Gmail/)
     }
   })

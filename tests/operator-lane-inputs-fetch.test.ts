@@ -23,6 +23,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { readSeatScript } from './_support/seat-layout'
 
 const code = (s: string) =>
   s
@@ -30,19 +31,19 @@ const code = (s: string) =>
     .filter((l) => !/^\s*#/.test(l))
     .join('\n')
 
-const HELPER = readFileSync(resolve('operator/templates/entrypoint-fetch-inputs.sh'), 'utf8')
-const ENTRYPOINT = code(readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8'))
+const HELPER = readSeatScript('operator/templates/entrypoint-fetch-inputs.sh')
+const ENTRYPOINT = code(readSeatScript('operator/templates/entrypoint.sh'))
 const DOCKERFILE = code(readFileSync(resolve('operator/templates/Dockerfile'), 'utf8'))
 const SMOKE = code(readFileSync(resolve('operator/bin/boot-smoke-test.sh'), 'utf8'))
 // The check list both the laptop smoke and the in-image self-test run.
-const CHECKS = code(readFileSync(resolve('operator/templates/seat-checks.sh'), 'utf8'))
+const CHECKS = code(readSeatScript('operator/templates/seat-checks.sh'))
 // Literal paths, one per lane: the file set is fixed and named here.
 const LANE_FILES = {
   demand: code(readFileSync(resolve('operator/templates/entrypoint-demand.sh'), 'utf8')),
   drafting: code(readFileSync(resolve('operator/templates/entrypoint-drafting.sh'), 'utf8')),
   litigation: code(readFileSync(resolve('operator/templates/entrypoint-litigation.sh'), 'utf8')),
-  casefile: code(readFileSync(resolve('operator/templates/entrypoint-casefile.sh'), 'utf8')),
-  records: code(readFileSync(resolve('operator/templates/entrypoint-records.sh'), 'utf8')),
+  casefile: code(readSeatScript('operator/templates/entrypoint-casefile.sh')),
+  records: code(readSeatScript('operator/templates/entrypoint-records.sh')),
 } as const
 const LANES = ['demand', 'drafting', 'litigation', 'casefile', 'records'] as const
 // The env each lane file exports its inputs dir under (the runner reads it).
@@ -163,7 +164,7 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
   })
 
   it('a marketing seat fetches its advertising-gate registers through the helper, root:hermes 0640 (ADR 0098)', () => {
-    const f = code(readFileSync(resolve('operator/templates/entrypoint-marketing.sh'), 'utf8'))
+    const f = code(readSeatScript('operator/templates/entrypoint-marketing.sh'))
     expect(ENTRYPOINT).toMatch(/for _lane in fetch-inputs [a-z -]*\bmarketing\b[a-z -]*; do/)
     expect(DOCKERFILE).toContain(
       'COPY operator/templates/entrypoint-marketing.sh /app/entrypoint-marketing.sh'

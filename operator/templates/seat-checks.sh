@@ -42,6 +42,15 @@ seat_prog() {
   cat
 }
 
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated beside
+# this file in the image (/app) and in the checkout (operator/templates)): the
+# check strings below name seat paths as ${SMD_LAYOUT_*}, expanded where the
+# list is composed (the quoted heredoc programs keep "$R/..." spellings: nothing
+# expands inside them). A list that cannot read it does not load: sourcing this
+# file fails, and the self-test records selftest-checks-unloadable.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh" || return 1
+
 # shellcheck disable=SC2016 # the check strings are evaluated on the Machine, not here
 seat_checks() {
 local _lane
@@ -59,13 +68,13 @@ local _lane
 # (it owned the file before — proven exploitable: one sed flipped external_send
 # draft_for_review->autonomous) NOR rename it (it owned the parent dir). These are
 # the negative-fire conformance proof of that close (SEC-07/08/09/18/30, EFF-14).
-check "customer-yaml-present" "test -s ${SEAT_ROOT}/var/lib/smd-config/customer.yaml"
-check "customer-yaml-root-owned" "[ \"\$(stat -c %U ${SEAT_ROOT}/var/lib/smd-config/customer.yaml)\" = root ]"
-check "customer-yaml-dir-root-owned" "[ \"\$(stat -c %U ${SEAT_ROOT}/var/lib/smd-config)\" = root ]"
-check "customer-yaml-agent-readable" "setpriv --reuid=hermes --regid=hermes --init-groups test -r ${SEAT_ROOT}/var/lib/smd-config/customer.yaml"
-check "customer-yaml-not-agent-writable" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"! test -w ${SEAT_ROOT}/var/lib/smd-config/customer.yaml\""
-check "customer-yaml-dir-not-agent-writable" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"! test -w ${SEAT_ROOT}/var/lib/smd-config\""
-check "customer-yaml-absent-from-agent-volume" "! test -e ${SEAT_ROOT}/opt/data/customer.yaml"
+check "customer-yaml-present" "test -s ${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML}"
+check "customer-yaml-root-owned" "[ \"\$(stat -c %U ${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML})\" = root ]"
+check "customer-yaml-dir-root-owned" "[ \"\$(stat -c %U ${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG})\" = root ]"
+check "customer-yaml-agent-readable" "setpriv --reuid=hermes --regid=hermes --init-groups test -r ${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML}"
+check "customer-yaml-not-agent-writable" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"! test -w ${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML}\""
+check "customer-yaml-dir-not-agent-writable" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"! test -w ${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}\""
+check "customer-yaml-absent-from-agent-volume" "! test -e ${SEAT_ROOT}${SMD_LAYOUT_VOLUME_CUSTOMER_YAML}"
 
 # ---------- Step 6: Hermes profiles directory exists ----------
 # bootstrap.sh's `hermes-smd bootstrap` step materializes one profile per
@@ -85,7 +94,7 @@ check "hermes-profiles-dir" "test -d ${SEAT_ROOT}/opt/data/profiles && [ -n \"\$
 # must contain NO single quotes and NO newlines (the first cut of this step
 # used both and never parsed on the Machine; the volume was clean, the check
 # was broken). Python strings below are double-quoted only, one line.
-check "no-unauthored-profile-homes" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 -c \"import sys, yaml, pathlib; a = {p[\\\"slug\\\"] for p in (yaml.safe_load(open(\\\"${SEAT_ROOT}/var/lib/smd-config/customer.yaml\\\")) or {}).get(\\\"personas\\\", [])}; d = {e.name for e in pathlib.Path(\\\"${SEAT_ROOT}/opt/data/profiles\\\").iterdir() if e.is_dir() and not e.name.startswith(\\\".\\\")}; drift = sorted(d - a) + sorted(a - d); sys.stderr.write(f\\\"profile-home drift: orphans={sorted(d - a)} missing={sorted(a - d)}\\n\\\") if drift else None; sys.exit(1 if drift else 0)\""
+check "no-unauthored-profile-homes" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} -c \"import sys, yaml, pathlib; a = {p[\\\"slug\\\"] for p in (yaml.safe_load(open(\\\"${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML}\\\")) or {}).get(\\\"personas\\\", [])}; d = {e.name for e in pathlib.Path(\\\"${SEAT_ROOT}/opt/data/profiles\\\").iterdir() if e.is_dir() and not e.name.startswith(\\\".\\\")}; drift = sorted(d - a) + sorted(a - d); sys.stderr.write(f\\\"profile-home drift: orphans={sorted(d - a)} missing={sorted(a - d)}\\n\\\") if drift else None; sys.exit(1 if drift else 0)\""
 
 # ---------- Step 6c: retired repo skills absent from the volume ----------
 # The skill seed in bootstrap.sh is additive, so a skill deleted from the repo
@@ -162,9 +171,9 @@ check_report "staged-scripts-current" "${STAGED_SCRIPTS_CHECK}"
 # be run by reading its files (2026-10-06). This asserts the convergence held:
 # no omitted repo skill is on the volume. A config that enables NO skill fails
 # here rather than passing on an empty set.
-check_script "omitted-skills-absent" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 -c '
+check_script "omitted-skills-absent" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} -c '
 import os, sys, yaml
-p = os.environ.get(\"SMD_CUSTOMER_YAML_PATH\") or next((c for c in (\"${SEAT_ROOT}/var/lib/smd-config/customer.yaml\", \"${SEAT_ROOT}/opt/data/customer.yaml\") if os.path.exists(c)), \"\")
+p = os.environ.get(\"SMD_CUSTOMER_YAML_PATH\") or next((c for c in (\"${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML}\", \"${SEAT_ROOT}${SMD_LAYOUT_VOLUME_CUSTOMER_YAML}\") if os.path.exists(c)), \"\")
 doc = yaml.safe_load(open(p)) or {}
 on = {s[\"name\"] for q in doc.get(\"personas\") or [] for s in (q or {}).get(\"skills\") or [] if isinstance(s, dict) and s.get(\"enabled\") is not False and isinstance(s.get(\"name\"), str)}
 if not on:
@@ -256,7 +265,7 @@ SELECTION_CHECK
 # mismatch is the one failure that means "the wrong Hermes is running", so it
 # is a FAIL, not a log.
 if printf '%s' "${EXPECTED_HERMES_SHA:-}" | grep -qE '^[0-9a-f]{40}$'; then
-  check "hermes-sha-matches-pin" "[ \"\$(tr -d \"[:space:]\" < ${SEAT_ROOT}/opt/hermes/HERMES_SHA)\" = ${EXPECTED_HERMES_SHA} ]"
+  check "hermes-sha-matches-pin" "[ \"\$(tr -d \"[:space:]\" < ${SEAT_ROOT}${SMD_LAYOUT_HERMES_SHA})\" = ${EXPECTED_HERMES_SHA} ]"
 else
   check_broken "hermes-sha-matches-pin" "no 40-hex expected Hermes pin to compare against"
 fi
@@ -265,7 +274,7 @@ fi
 # The autonomous curator is turned off per-customer (it rewrites agent-authored
 # skills out of band — see docs/adr/0017). bootstrap.sh step 7b enforces
 # curator.enabled:false in every profile config; --check re-verifies it held.
-check "curator-disabled" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/ensure-curator-disabled.py --check ${SEAT_ROOT}/opt/data"
+check "curator-disabled" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/ensure-curator-disabled.py --check ${SEAT_ROOT}/opt/data"
 
 # ---------- Step 8b: customer-disabled bundled skills stayed off the menu (#1198) ----------
 # customer.yaml personas[].skills_disabled is the per-customer authority over
@@ -276,7 +285,7 @@ check "curator-disabled" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}
 # the fail-closed guard against a Hermes-upgrade rehydration regression (a
 # re-exposed google-workspace skill is a governance-bypass path back to the raw
 # credential, exactly what ADR 0045 closes). No-op when no skills_disabled authored.
-check "disabled-skills-pruned" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/ensure-disabled-skills.py --check ${SEAT_ROOT}/var/lib/smd-config/customer.yaml ${SEAT_ROOT}/opt/data"
+check "disabled-skills-pruned" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/ensure-disabled-skills.py --check ${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML} ${SEAT_ROOT}/opt/data"
 
 # ---------- Step 8c: the matter-mixing READ fence discriminates (ss#2167) ----------
 # The fence refuses a session holding one matter's substance from reading a
@@ -291,7 +300,7 @@ check "disabled-skills-pruned" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT
 # against a fence that refused every content read — not a safe fence, a bricked
 # Operator the firm switches off. It also fails the boot if the overlay pin
 # predates ss#2167, which is the cross-repo drift this catches.
-check "matter-mixing-fence" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/matter-mixing-fence-probe.py"
+check "matter-mixing-fence" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/matter-mixing-fence-probe.py"
 
 # ---------- Step 9: audit ledger is broker-owned and NOT agent-writable (OP-P1-4) ----------
 # The immutable ledger must be owned by the broker uid (workspace-broker), the
@@ -300,7 +309,7 @@ check "matter-mixing-fence" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_RO
 # refused — the affirmative tamper-resistance proof.
 check "audit-db-owner-is-broker" "[ \"\$(stat -c %U ${SEAT_ROOT}/opt/data/audit/audit.db)\" = workspace-broker ]"
 check "audit-dir-setgid-2750" "[ \"\$(stat -c %a ${SEAT_ROOT}/opt/data/audit)\" = 2750 ]"
-check "audit-db-not-agent-writable" "setpriv --reuid=hermes --regid=hermes --init-groups ${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/audit-write-fail-probe.py ${SEAT_ROOT}/opt/data/audit/audit.db"
+check "audit-db-not-agent-writable" "setpriv --reuid=hermes --regid=hermes --init-groups ${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/audit-write-fail-probe.py ${SEAT_ROOT}/opt/data/audit/audit.db"
 
 # ---------- Step 10: mutable agent state stayed hermes-writable (regression for the split) ----------
 # agent_skills_inventory moved off the ledger onto a hermes-owned file so locking
@@ -345,7 +354,7 @@ check "broker-respawn-supervised" "pid=\$(pgrep -f workspace_broker.server | hea
 # reason that has nothing to do with the broker, which is worse than a path that
 # can drift. Same idiom as every other absolute path in this file. If the
 # entrypoint's SOCKET_PATH ever moves, this line moves with it.
-check_script "broker-socket-answers-health" "setpriv --reuid=hermes --regid=hermes --init-groups ${SEAT_ROOT}/opt/hermes/.venv/bin/python3 -c \"import socket,os,json,sys; p=os.environ.get('SMD_WORKSPACE_BROKER_SOCKET') or '${SEAT_ROOT}/run/smd-workspace-broker/broker.sock'; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(5); s.connect(p); s.sendall(b'{\\\"action\\\":\\\"health\\\"}'+bytes([10])); r=json.loads(s.recv(65536).decode()); sys.exit(0 if r.get('ok') and r.get('credential_ready') and r.get('customer_ready') else 1)\""
+check_script "broker-socket-answers-health" "setpriv --reuid=hermes --regid=hermes --init-groups ${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} -c \"import socket,os,json,sys; p=os.environ.get('SMD_WORKSPACE_BROKER_SOCKET') or '${SEAT_ROOT}${SMD_LAYOUT_BROKER_SOCKET}'; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(5); s.connect(p); s.sendall(b'{\\\"action\\\":\\\"health\\\"}'+bytes([10])); r=json.loads(s.recv(65536).decode()); sys.exit(0 if r.get('ok') and r.get('credential_ready') and r.get('customer_ready') else 1)\""
 
 # ---------- Step 11c: the GATEWAY is supervised, and its loop is beating (P0 ss#2488) ----------
 # On 2026-08-20 the paying client's seat wedged for 33 minutes: Hermes' own
@@ -445,7 +454,7 @@ MULTIPLEX_CHECK
 # provision here instead of paging at 02:00. Inert on an older Hermes pin, which
 # ignores the keys; the read-back is still what proves translate wrote them.
 # (No single quotes: ssh_exec wraps the command in sh -c '...'.)
-check "gateway-loop-watchdog-budget-authored" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 -c \"import sys, yaml, pathlib; c = yaml.safe_load(open(\\\"${SEAT_ROOT}/var/lib/smd-config/customer.yaml\\\")) or {}; mb = int((c.get(\\\"machine\\\") or {}).get(\\\"memory_mb\\\") or 0); want = 12 if mb <= 1024 else 6; got = {str(p): ((yaml.safe_load(open(p)) or {}).get(\\\"gateway\\\") or {}).get(\\\"loop_watchdog_max_strikes\\\") for p in pathlib.Path(\\\"${SEAT_ROOT}/opt/data/profiles\\\").glob(\\\"*/config.yaml\\\")}; bad = {k: v for k, v in got.items() if v != want}; sys.stderr.write(f\\\"loop-watchdog budget drift: want max_strikes={want} for {mb} MB, got {bad}\\n\\\") if (bad or not got) else None; sys.exit(1 if (bad or not got) else 0)\""
+check "gateway-loop-watchdog-budget-authored" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} -c \"import sys, yaml, pathlib; c = yaml.safe_load(open(\\\"${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML}\\\")) or {}; mb = int((c.get(\\\"machine\\\") or {}).get(\\\"memory_mb\\\") or 0); want = 12 if mb <= 1024 else 6; got = {str(p): ((yaml.safe_load(open(p)) or {}).get(\\\"gateway\\\") or {}).get(\\\"loop_watchdog_max_strikes\\\") for p in pathlib.Path(\\\"${SEAT_ROOT}/opt/data/profiles\\\").glob(\\\"*/config.yaml\\\")}; bad = {k: v for k, v in got.items() if v != want}; sys.stderr.write(f\\\"loop-watchdog budget drift: want max_strikes={want} for {mb} MB, got {bad}\\n\\\") if (bad or not got) else None; sys.exit(1 if (bad or not got) else 0)\""
 
 # ---------- Step 12: /app governance artifacts are root-owned, not agent-writable (SEC-31) ----------
 # The activation-gate source the gateway:startup hook force-loads
@@ -474,7 +483,7 @@ check "activation-handler-not-agent-writable" "setpriv --reuid=hermes --regid=he
 # wait retries ONLY the no-agent-process verdict; a real offender still fails
 # the instant a scan sees it. Later strip probes need no wait — once this one
 # passes, the gateway is up.
-check "r2-account-key-stripped-from-agent" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/r2-account-key-strip-probe.py --wait-gateway-s 120"
+check "r2-account-key-stripped-from-agent" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/r2-account-key-strip-probe.py --wait-gateway-s 120"
 
 # ss#2258, the same proof for the AgentMail SEND credential. This is the one
 # check that would have caught the incident class before a client ever saw it:
@@ -488,7 +497,7 @@ check "r2-account-key-stripped-from-agent" "${SEAT_ROOT}/opt/hermes/.venv/bin/py
 # block moved, the gateway inherits the send key and this exits non-zero naming
 # the pid. The value is never printed.
 check "agentmail-send-key-stripped-from-agent" \
-  "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/r2-account-key-strip-probe.py hermes AGENTMAIL_SEND_API_KEY"
+  "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/r2-account-key-strip-probe.py hermes AGENTMAIL_SEND_API_KEY"
 
 # The webhook-READ key is the one AgentMail credential on the seat with ORG scope
 # (2026-09-17). It exists so boot smoke can ask the vendor about this seat's
@@ -496,7 +505,7 @@ check "agentmail-send-key-stripped-from-agent" \
 # reach beyond this inbox. Same instrument, same failure mode: remove the unset in
 # entrypoint.sh and this exits non-zero naming the pid, printing no value.
 check "agentmail-webhook-read-key-stripped-from-agent" \
-  "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/r2-account-key-strip-probe.py hermes AGENTMAIL_WEBHOOK_READ_API_KEY"
+  "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/r2-account-key-strip-probe.py hermes AGENTMAIL_WEBHOOK_READ_API_KEY"
 
 # The staged AgentMail webhook secret is the VENDOR's, for THIS seat's webhook.
 #
@@ -520,7 +529,7 @@ check "agentmail-webhook-read-key-stripped-from-agent" \
 # carrying the secret with no key file exits 1 naming the path. A seat with no
 # AgentMail channel passes vacuously and says so.
 check_vendor "agentmail-webhook-secret-matches-vendor" \
-  "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/agentmail-webhook-secret-probe.py ${APP_NAME}.fly.dev hermes"
+  "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/agentmail-webhook-secret-probe.py ${APP_NAME}.fly.dev hermes"
 
 # The same proof for the Graph SEND app credential (ss#2258 msgraph wave).
 #
@@ -546,7 +555,7 @@ check_vendor "agentmail-webhook-secret-matches-vendor" \
 # nothing is staged and this passes vacuously, which is the honest outcome for a
 # credential that does not exist.
 check "msgraph-send-credential-stripped-from-agent" \
-  "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/r2-account-key-strip-probe.py hermes MSGRAPH_SEND_CLIENT_SECRET MSGRAPH_SEND_CLIENT_ID MSGRAPH_SEND_TENANT_ID"
+  "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/r2-account-key-strip-probe.py hermes MSGRAPH_SEND_CLIENT_SECRET MSGRAPH_SEND_CLIENT_ID MSGRAPH_SEND_TENANT_ID"
 
 # ADR 0089: the half the check above says it does NOT cover, asked of Microsoft,
 # on the seats where it matters. A seat authoring scope.staff_send_as has had the
@@ -556,7 +565,7 @@ check "msgraph-send-credential-stripped-from-agent" \
 # claim; Mail.Send present fails, no credential to ask with fails, and a seat
 # with no staff_send_as passes vacuously and says so. Role names only in output.
 check_vendor "msgraph-read-app-cannot-send-on-send-as-seat" \
-  "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/msgraph-read-app-cannot-send-probe.py ${SEAT_ROOT}/var/lib/smd-config/customer.yaml hermes"
+  "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/msgraph-read-app-cannot-send-probe.py ${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML} hermes"
 
 # ADR 0089 amendment 5a. The approve buttons in an approval email are signed
 # one-decision links, and the broker keeps no Sent Items copy of that email so
@@ -566,7 +575,7 @@ check_vendor "msgraph-read-app-cannot-send-on-send-as-seat" \
 # approver: the scope group may hold staff mailboxes the firm authored for
 # reading, so one approver being out of it says nothing about the next.
 check_vendor "msgraph-read-app-cannot-read-staff-mailbox" \
-  "${SEAT_ROOT}/opt/hermes/.venv/bin/python3 ${SEAT_ROOT}/app/msgraph-read-app-cannot-read-staff-probe.py ${SEAT_ROOT}/var/lib/smd-config/customer.yaml hermes"
+  "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/msgraph-read-app-cannot-read-staff-probe.py ${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML} hermes"
 
 # ---------- Step 13b: the identifier-gate rollback lever is not set (ADR 0093) ----------
 # SMD_IDENTIFIER_GATE_MODE=report turns OFF all identifier blocking on a seat,
@@ -605,23 +614,23 @@ check_lever "for e in ${SEAT_ROOT}/proc/[0-9]*/environ; do if tr \"\\000\" \"\\n
 # drop the chown of the firm config and the write test passes.
 check "jobs-uid-exists" "id -u jobs >/dev/null"
 if any_lane_runs; then
-check "jobs-daemon-ticking" "t=${SEAT_ROOT}/run/smd-jobs/tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "jobs-daemon-idle" "! test -f ${SEAT_ROOT}/run/smd-jobs/child.pid"
+check "jobs-daemon-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check_idle "jobs-daemon-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/child.pid"
 # cgroup2 on a unified guest, cgroup1 on Fly's hybrid layout (live-probed
 # 2026-08-31: v2 is mounted bare at /sys/fs/cgroup/unified with no
 # controllers; memory is on the v1 mount). `none` is the failure.
-check "jobs-memory-cap-present" "grep -q memory_cap.:..cgroup ${SEAT_ROOT}/run/smd-jobs/heartbeat.json"
+check "jobs-memory-cap-present" "grep -q memory_cap.:..cgroup ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/heartbeat.json"
 # ADR 0100 W3: what the heartbeat's bundles.jobs says runs is what is mounted. A
 # version means both image paths are bind mounts; "image" means neither is. Fails
 # when the boot wrote no state, or the state and the mounts disagree (a release
 # controller reading bundles.jobs back would otherwise trust a wrong answer).
-check "jobs-bundle-state-matches-mounts" "s=\$(cat ${SEAT_ROOT}/run/smd-bundles/jobs) && if [ \"\$s\" = image ]; then ! mountpoint -q ${SEAT_ROOT}/opt/jobs && ! mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; else mountpoint -q ${SEAT_ROOT}/opt/jobs && mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; fi"
+check "jobs-bundle-state-matches-mounts" "s=\$(cat ${SEAT_ROOT}/run/smd-bundles/jobs) && if [ \"\$s\" = image ]; then ! mountpoint -q ${SEAT_ROOT}${SMD_LAYOUT_JOBS_BUNDLE} && ! mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; else mountpoint -q ${SEAT_ROOT}${SMD_LAYOUT_JOBS_BUNDLE} && mountpoint -q ${SEAT_ROOT}/opt/connectors/smokeball; fi"
 # The mounted bundle is not older than the image. A bundle built from
 # a commit before the image's bundle floor (/app/bundle-floor) lacks lane code the
 # image was built with; a bundle that lags because no bundle path changed since
 # passes. A failure at boot after an image deploy rolls the seat back.
 # FALSIFIER: mount a bundle whose manifest names an earlier commit than the floor.
-check_file "jobs-bundle-built-for-image" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3" "jobs-bundle-commit-probe.py"
+check_file "jobs-bundle-built-for-image" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3}" "jobs-bundle-commit-probe.py"
 fi
 # ---------- Step 14a: the jobs tree is at its one name, whole (ADR 0103 R2) ----------
 # entrypoint-lanes.sh moved /opt/data/medchron to /opt/data/jobs once and wrote
@@ -637,12 +646,12 @@ fi
 # with the bind loop skipped, or bind a run dir to another directory; edit
 # files_after in the state file, or remove the file on a seat that authors a
 # lane. operator/templates/tests/test_selftest.py plants each one.
-local _jv_tree="${SEAT_ROOT}/opt/data/jobs"
+local _jv_tree="${SEAT_ROOT}${SMD_LAYOUT_JOBS_DATA}"
 local _jv_equal="f=${_jv_tree}/volume-epoch.state; b=\$(sed -n s/^files_before=//p \$f); a=\$(sed -n s/^files_after=//p \$f); [ -n \"\$b\" ] && [ \"\$b\" = \"\$a\" ] || { echo \"files_before=\$b files_after=\$a in \$f\" >&2; false; }"
 check "jobs-volume-old-tree-holds-no-files" "[ -z \"\$(find ${SEAT_ROOT}/opt/data/medchron ! -type d 2>/dev/null | head -n 1)\" ]"
 if any_lane_runs; then
 check "jobs-volume-tree-present" "test -d ${_jv_tree} && ! test -L ${_jv_tree}"
-check "jobs-volume-run-dirs-bound" "t=\$(stat -c %d:%i ${_jv_tree}) && for d in ${SEAT_ROOT}/run/smd-jobs ${SEAT_ROOT}/run/smd-medchron; do mountpoint -q \$d && [ \"\$(stat -c %d:%i \$d)\" = \"\$t\" ] || exit 1; done"
+check "jobs-volume-run-dirs-bound" "t=\$(stat -c %d:%i ${_jv_tree}) && for d in ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN} ${SEAT_ROOT}/run/smd-medchron; do mountpoint -q \$d && [ \"\$(stat -c %d:%i \$d)\" = \"\$t\" ] || exit 1; done"
 check "jobs-volume-move-counts-equal" "${_jv_equal}"
 else
 # No lane: the tree exists only if an earlier boot moved one, and then its record must still agree.
@@ -656,58 +665,58 @@ fi
 # (reads /proc/<pid>/environ, compares declared names only).
 # FALSIFIER: move a declared dir, plant the volume customer.yaml, give one tree's
 # module another value, or start a process with JOBS_DATA_DIR elsewhere.
-check_file "seat-layout-live" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3" "seat-layout-probe.py"
+check_file "seat-layout-live" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3}" "seat-layout-probe.py"
 if lane_runs medchron; then
-check "jobs-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/queue)\" = root:workspace-broker:770 ]"
-check "medchron-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/jobs)\" = root:jobs:710 ]"
+check "jobs-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_QUEUE})\" = root:workspace-broker:770 ]"
+check "medchron-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/jobs)\" = root:jobs:710 ]"
 # ADR 0103: the jobs group is gid 995 on every seat and in the image, so a
 # job dir written before the rename is still traversable by the child.
-check "jobs-gid-owns-jobs-dir" "[ \"\$(stat -c %g ${SEAT_ROOT}/run/smd-jobs/jobs)\" = \"\$(id -g jobs)\" ]"
+check "jobs-gid-owns-jobs-dir" "[ \"\$(stat -c %g ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/jobs)\" = \"\$(id -g jobs)\" ]"
 fi
 # The demand lane (2026-10-06): its own thread in the same daemon, its own tick,
 # queue and job dirs. A lane thread that died leaves the chronology ticking and
 # this tick aging, which is the only way that death would be seen.
 if lane_runs demand; then
-check "demand-lane-ticking" "t=${SEAT_ROOT}/run/smd-jobs/demand-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "demand-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-jobs/demand-child.pid"
-check "demand-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/demand-queue)\" = root:workspace-broker:770 ]"
-check "demand-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/demand-jobs)\" = root:jobs:710 ]"
+check "demand-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/demand-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check_idle "demand-lane-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/demand-child.pid"
+check "demand-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_DEMAND_QUEUE})\" = root:workspace-broker:770 ]"
+check "demand-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/demand-jobs)\" = root:jobs:710 ]"
 fi
 # The drafting lane (2026-10-07): the daemon's third thread, the same four checks.
 # A seat that authors document-drafter runs it (ADR 0100); one with
 # no drafting inputs ticks and defers, so a silent tick is still a dead thread.
 if lane_runs drafting; then
-check "drafting-lane-ticking" "t=${SEAT_ROOT}/run/smd-jobs/drafting-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "drafting-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-jobs/drafting-child.pid"
-check "drafting-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/drafting-queue)\" = root:workspace-broker:770 ]"
-check "drafting-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/drafting-jobs)\" = root:jobs:710 ]"
+check "drafting-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/drafting-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check_idle "drafting-lane-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/drafting-child.pid"
+check "drafting-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_DRAFTING_QUEUE})\" = root:workspace-broker:770 ]"
+check "drafting-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/drafting-jobs)\" = root:jobs:710 ]"
 fi
 # The litigation status lane (2026-10-07): the daemon's fourth thread, the same
 # four checks plus its state dir (client facts: the child's alone, 0700) and the
 # broker's copy of the firm config (present exactly when the runner's is, and
 # group workspace-broker read-only, never writable by it).
 if lane_runs litigation; then
-check "litigation-lane-ticking" "t=${SEAT_ROOT}/run/smd-jobs/litigation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "litigation-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-jobs/litigation-child.pid"
-check "litigation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/litigation-queue)\" = root:workspace-broker:770 ]"
-check "litigation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/litigation-jobs)\" = root:jobs:710 ]"
-check "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/litigation/state)\" = jobs:jobs:700 ]"
+check "litigation-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check_idle "litigation-lane-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation-child.pid"
+check "litigation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_LITIGATION_QUEUE})\" = root:workspace-broker:770 ]"
+check "litigation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation-jobs)\" = root:jobs:710 ]"
+check "litigation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation/state)\" = jobs:jobs:700 ]"
 # The text cache (2026-10-24): transcribed matter text, the child's alone, and
 # the child must be able to write it (its parent is root-owned).
-check "litigation-textcache-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/litigation/textcache)\" = jobs:jobs:700 ]"
-check "litigation-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/litigation/litigation-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/litigation-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
+check "litigation-textcache-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/litigation/textcache)\" = jobs:jobs:700 ]"
+check "litigation-broker-config-matches-runner" "r=${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/litigation/litigation-firm.yaml; b=${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/litigation-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
 fi
 # The case file manager: the litigation lane's checks for its own thread,
 # queue, job dir, state dir (client facts: the child's alone, 0700) and the
 # broker's copy of its firm config. It reads through the litigation lane's text
 # cache, which the litigation checks above already hold.
 if lane_runs casefile; then
-check "casefile-lane-ticking" "t=${SEAT_ROOT}/run/smd-jobs/casefile-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check_idle "casefile-lane-idle" "! test -f ${SEAT_ROOT}/run/smd-jobs/casefile-child.pid"
-check "casefile-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/casefile-queue)\" = root:workspace-broker:770 ]"
-check "casefile-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/casefile-jobs)\" = root:jobs:710 ]"
-check "casefile-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/casefile/state)\" = jobs:jobs:700 ]"
-check "casefile-broker-config-matches-runner" "r=${SEAT_ROOT}/var/lib/smd-config/casefile/casefile-firm.yaml; b=${SEAT_ROOT}/var/lib/smd-config/casefile-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
+check "casefile-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check_idle "casefile-lane-idle" "! test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile-child.pid"
+check "casefile-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_CASEFILE_QUEUE})\" = root:workspace-broker:770 ]"
+check "casefile-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile-jobs)\" = root:jobs:710 ]"
+check "casefile-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile/state)\" = jobs:jobs:700 ]"
+check "casefile-broker-config-matches-runner" "r=${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/casefile/casefile-firm.yaml; b=${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/casefile-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
 fi
 # MEMORY BUDGET (2026-10-07). Every lane child runs under a memory cgroup cap,
 # and the gateway runs under none, so the caps must leave the gateway room: the
@@ -736,7 +745,7 @@ fi
 # cgroup, so there is no cap to sum (ring 2's scott seat failed this on
 # rel-ab97b966, 2026-11-03).
 if any_lane_runs; then
-check_file "lane-memory-caps-leave-gateway-reserve" "${SEAT_ROOT}/opt/jobs/.venv/bin/python" "lane-memory-caps-probe.py"
+check_file "lane-memory-caps-leave-gateway-reserve" "${SEAT_ROOT}${SMD_LAYOUT_JOBS_PYTHON}" "lane-memory-caps-probe.py"
 else
 check_note "lane-memory-caps-leave-gateway-reserve" "this seat runs no job lane, so no lane cgroup takes memory from the gateway"
 fi
@@ -746,26 +755,26 @@ fi
 # must exist, or the fleet table says one thing while the lane runs another.
 # FALSIFIER: re-point a lane's symlink, delete its version, or delete the state.
 if any_lane_runs; then
-check_file "jobs-firm-inputs-current" "${SEAT_ROOT}/opt/hermes/.venv/bin/python3" "firm-inputs-current-probe.py"
+check_file "jobs-firm-inputs-current" "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3}" "firm-inputs-current-probe.py"
 # The firm's attorney roster (2026-11-07, jobs.attorneys.agree): once installed it
 # wins over each lane's own attorney list, and any list that still says something
 # else fails here, which pages SMD. No roster installed passes (nothing to compare).
 # FALSIFIER: install a roster that gives a demand signer another title.
-check_file "attorney-roster-agrees" "${SEAT_ROOT}/opt/jobs/.venv/bin/python" "attorney-roster-agrees-probe.py"
+check_file "attorney-roster-agrees" "${SEAT_ROOT}${SMD_LAYOUT_JOBS_PYTHON}" "attorney-roster-agrees-probe.py"
 fi
 # The negotiation watch (2026-10-09): its own daemon thread, the same checks,
 # and its state dir (file cursors: the child's alone, 0700).
 if lane_runs negotiation; then
-check "negotiation-lane-ticking" "t=${SEAT_ROOT}/run/smd-jobs/negotiation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check "negotiation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/negotiation-queue)\" = root:workspace-broker:770 ]"
-check "negotiation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/negotiation-jobs)\" = root:jobs:710 ]"
-check "negotiation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/negotiation/state)\" = jobs:jobs:700 ]"
+check "negotiation-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/negotiation-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check "negotiation-queue-root-owned" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_NEGOTIATION_QUEUE})\" = root:workspace-broker:770 ]"
+check "negotiation-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/negotiation-jobs)\" = root:jobs:710 ]"
+check "negotiation-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/negotiation/state)\" = jobs:jobs:700 ]"
 fi
 # The SMD note lane (2026-10-15): its own daemon thread (wakes and reply
 # watches only, no child) and its root-only job dir.
 if lane_runs note; then
-check "note-lane-ticking" "t=${SEAT_ROOT}/run/smd-jobs/note-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
-check "note-jobs-dir-root-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/note-jobs)\" = root:root:700 ]"
+check "note-lane-ticking" "t=${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/note-tick; [ -f \$t ] && [ \$(( \$(date -u +%s) - \$(stat -c %Y \$t) )) -lt 90 ]"
+check "note-jobs-dir-root-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/note-jobs)\" = root:root:700 ]"
 fi
 
 # The firm config is authored per-seat in the PRIVATE engagements repo, and
@@ -794,8 +803,8 @@ MEDCHRON_AUTHORED=0
 lane_authored medchron && MEDCHRON_AUTHORED=1
 if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
   # stat -L: the live path is a symlink to its version (firm_inputs_applier).
-  check "medchron-firm-config-present" "[ \"\$(stat -L -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml)\" = root:jobs:640 ]"
-  check "jobs-uid-cannot-write-config" "setpriv --reuid=jobs --regid=jobs --init-groups sh -c \"! test -w ${SEAT_ROOT}/var/lib/smd-config/medchron-firm.yaml\""
+  check "medchron-firm-config-present" "[ \"\$(stat -L -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/medchron-firm.yaml)\" = root:jobs:640 ]"
+  check "jobs-uid-cannot-write-config" "setpriv --reuid=jobs --regid=jobs --init-groups sh -c \"! test -w ${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/medchron-firm.yaml\""
   check "jobs-token-shared" "[ \"\$(stat -c %G:%a ${SEAT_ROOT}/run/smd-smokeball-token/refresh_token)\" = smokeball-token:660 ]"
   # A seat that authors a firm config must also carry the
   # install-level tree the entrypoint seeds from vaults/<slug>/medchron-controls/
@@ -809,9 +818,9 @@ if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
   # controls measures nothing). What makes these able to FAIL: empty the vault
   # prefix and reboot; drop the chown/chmod in entrypoint.sh and the stat or
   # the write test reads it.
-  check "medchron-controls-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/run/smd-jobs/controls)\" = root:jobs:750 ] && test -f ${SEAT_ROOT}/run/smd-jobs/controls/controls.json"
-  check "medchron-icd-tables-present" "test -f ${SEAT_ROOT}/run/smd-jobs/controls/icd/VERSION.json"
-  check "jobs-uid-reads-controls-cannot-write" "setpriv --reuid=jobs --regid=jobs --init-groups sh -c \"test -r ${SEAT_ROOT}/run/smd-jobs/controls/controls.json && ! test -w ${SEAT_ROOT}/run/smd-jobs/controls/controls.json && ! test -w ${SEAT_ROOT}/run/smd-jobs/controls\""
+  check "medchron-controls-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/controls)\" = root:jobs:750 ] && test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/controls/controls.json"
+  check "medchron-icd-tables-present" "test -f ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/controls/icd/VERSION.json"
+  check "jobs-uid-reads-controls-cannot-write" "setpriv --reuid=jobs --regid=jobs --init-groups sh -c \"test -r ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/controls/controls.json && ! test -w ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/controls/controls.json && ! test -w ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/controls\""
 else
   check_note "medchron-firm-config-absent" "not authored for this seat; runner refuses jobs by design, so the config-perm, token, controls, and gate-refusal checks are skipped"
 fi
@@ -827,7 +836,7 @@ fi
 # prefix (or break the fetch) and reboot a seat that authors the lane.
 for _lane in demand drafting litigation casefile records; do
   if lane_authored "${_lane}"; then
-    check "${_lane}-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/${_lane}/${_lane}-firm.yaml)\" = root:jobs:640 ]"
+    check "${_lane}-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/${_lane}/${_lane}-firm.yaml)\" = root:jobs:640 ]"
   else
     check_note "${_lane}-firm-inputs-absent" "not authored for this seat; the ${_lane} lane defers jobs by design"
   fi
@@ -838,8 +847,8 @@ done
 # FALSIFIER: empty vaults/<slug>/marketing/ and reboot, or drop the chown in
 # entrypoint-marketing.sh; the stat or the read/write probe fails.
 if lane_authored marketing; then
-  check "marketing-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}/var/lib/smd-config/marketing/marketing-firm.yaml)\" = root:hermes:640 ]"
-  check "marketing-registers-agent-reads-cannot-write" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"test -r ${SEAT_ROOT}/var/lib/smd-config/marketing/marketing-firm.yaml && ! test -w ${SEAT_ROOT}/var/lib/smd-config/marketing/marketing-firm.yaml && ! test -w ${SEAT_ROOT}/var/lib/smd-config/marketing\""
+  check "marketing-firm-inputs-present" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_MARKETING_REGISTERS})\" = root:hermes:640 ]"
+  check "marketing-registers-agent-reads-cannot-write" "setpriv --reuid=hermes --regid=hermes --init-groups sh -c \"test -r ${SEAT_ROOT}${SMD_LAYOUT_MARKETING_REGISTERS} && ! test -w ${SEAT_ROOT}${SMD_LAYOUT_MARKETING_REGISTERS} && ! test -w ${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/marketing\""
 else
   check_note "marketing-firm-inputs-absent" "not a marketing seat; no advertising-gate registers are expected"
 fi
@@ -856,10 +865,10 @@ fi
 # on a seat with no medchron authored the runner refuses every job, and the
 # pass-annotated skip is emitted by the firm-config branch.
 if [ "${MEDCHRON_AUTHORED}" = 1 ]; then
-  check "medchron-gate-claim-audit-refuses" "${SEAT_ROOT}/opt/jobs/.venv/bin/jobs probe claim_audit | grep -q REFUSED"
-  check "medchron-gate-extractive-refuses" "${SEAT_ROOT}/opt/jobs/.venv/bin/jobs probe extractive | grep -q REFUSED"
-  check "medchron-gate-cross-client-refuses" "${SEAT_ROOT}/opt/jobs/.venv/bin/jobs probe cross_client | grep -q REFUSED"
-  check "medchron-gate-provenance-refuses" "${SEAT_ROOT}/opt/jobs/.venv/bin/jobs probe provenance | grep -q REFUSED"
+  check "medchron-gate-claim-audit-refuses" "${SEAT_ROOT}${SMD_LAYOUT_JOBS_BIN} probe claim_audit | grep -q REFUSED"
+  check "medchron-gate-extractive-refuses" "${SEAT_ROOT}${SMD_LAYOUT_JOBS_BIN} probe extractive | grep -q REFUSED"
+  check "medchron-gate-cross-client-refuses" "${SEAT_ROOT}${SMD_LAYOUT_JOBS_BIN} probe cross_client | grep -q REFUSED"
+  check "medchron-gate-provenance-refuses" "${SEAT_ROOT}${SMD_LAYOUT_JOBS_BIN} probe provenance | grep -q REFUSED"
 fi
 
 }

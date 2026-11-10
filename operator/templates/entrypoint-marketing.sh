@@ -30,10 +30,15 @@
 # lane as unauthored because the marketing router skill is not enabled there.
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # CUSTOMER_SLUG, LIVE_CUSTOMER_YAML and the R2_* names are set by entrypoint.sh, which sources this file
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated beside
+# this file): the SMD_LAYOUT_* paths below. Sourced here as well as by
+# entrypoint.sh, so this file reads it on every path that reaches it.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh"
 
 SMD_MARKETING_INPUTS="${CONFIG_DIR}/marketing"
 _marketing_rc=0
-/opt/hermes/.venv/bin/python3 -I - "${LIVE_CUSTOMER_YAML}" <<'PY' 2>/dev/null || _marketing_rc=$?
+${SMD_LAYOUT_HERMES_PYTHON3} -I - "${LIVE_CUSTOMER_YAML}" <<'PY' 2>/dev/null || _marketing_rc=$?
 import sys, yaml
 with open(sys.argv[1], encoding="utf-8") as fh:
     cfg = yaml.safe_load(fh) or {}

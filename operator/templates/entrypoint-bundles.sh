@@ -22,8 +22,14 @@
 # boot) for the heartbeat's `bundles` field (overlay shared/fleet_facts.py).
 # shellcheck shell=bash
 
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated beside
+# this file): the SMD_LAYOUT_* paths below. Sourced here as well as by
+# entrypoint.sh, so this file reads it on every path that reaches it.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh"
+
 SMD_BUNDLE_STATE_DIR="${SMD_BUNDLE_STATE_DIR:-/run/smd-bundles}"
-SMD_BUNDLE_PYTHON="${SMD_BUNDLE_PYTHON:-/opt/hermes/.venv/bin/python}"
+SMD_BUNDLE_PYTHON="${SMD_BUNDLE_PYTHON:-${SMD_LAYOUT_HERMES_PYTHON}}"
 # Test seam only (tests/operator-entrypoint.test.ts), like seat-checks.sh's
 # SEAT_ROOT: empty on a seat, so the targets are the image's own paths.
 _SMD_BT="${SMD_BUNDLE_TARGET_ROOT:-}"
@@ -31,7 +37,7 @@ _SMD_BT="${SMD_BUNDLE_TARGET_ROOT:-}"
 # Undo whatever of a bundle got mounted (targets in mount order).
 _smd_bundle_unmount() {
   local _t
-  for _t in "${_SMD_BT}/opt/connectors/smokeball" "${_SMD_BT}/opt/jobs"; do
+  for _t in "${_SMD_BT}/opt/connectors/smokeball" "${_SMD_BT}${SMD_LAYOUT_JOBS_BUNDLE}"; do
     if mountpoint -q "${_t}"; then umount "${_t}" || log "WARN: could not unmount ${_t}"; fi
   done
 }
@@ -40,7 +46,7 @@ _smd_bundle_unmount() {
 _smd_bundle_reachable() {
   setpriv --reuid=jobs --regid=jobs --init-groups \
     env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
-    /opt/jobs/.venv/bin/python -I -c 'import jobs.daemon, smokeball_connector' \
+    ${SMD_LAYOUT_JOBS_PYTHON} -I -c 'import jobs.daemon, smokeball_connector' \
   && setpriv --reuid=hermes --regid=hermes --init-groups \
     env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 \
     /opt/connectors/smokeball/.venv/bin/python -I -c 'import smokeball_connector'
@@ -50,7 +56,7 @@ _smd_bundle_reachable() {
 # mounted and reachable. Any failure unmounts both: never half a bundle.
 _smd_bundle_mount_jobs() {
   local _dir="$1" _src _dst _pair
-  for _pair in "jobs:/opt/jobs" "connectors/smokeball:/opt/connectors/smokeball"; do
+  for _pair in "jobs:${SMD_LAYOUT_JOBS_BUNDLE}" "connectors/smokeball:/opt/connectors/smokeball"; do
     _src="${_dir}/${_pair%%:*}" _dst="${_SMD_BT}${_pair#*:}"
     if [ ! -d "${_dst}" ] || [ ! -d "${_src}" ] || ! mount --bind "${_src}" "${_dst}"; then
       log "bundle: could not bind-mount ${_src} -> ${_dst}"; _smd_bundle_unmount; return 1
@@ -78,7 +84,7 @@ else
     [ "${_smd_bundle_rest}" = "${_smd_bundle_dir}" ] || _smd_bundle_how=" (${_smd_bundle_rest#*$'\t'})"
     if _smd_bundle_mount_jobs "${_smd_bundle_dir}"; then
       _smd_bundle_jobs="${_smd_bundle_version}"
-      log "jobs bundle ${_smd_bundle_version}${_smd_bundle_how} mounted over /opt/jobs and /opt/connectors/smokeball"
+      log "jobs bundle ${_smd_bundle_version}${_smd_bundle_how} mounted over ${SMD_LAYOUT_JOBS_BUNDLE} and /opt/connectors/smokeball"
     fi
   fi
   if [ "${_smd_bundle_jobs}" = "image" ]; then

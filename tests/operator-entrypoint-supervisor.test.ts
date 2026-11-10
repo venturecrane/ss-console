@@ -26,9 +26,10 @@ import { spawn, spawnSync } from 'child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { readSeatScript } from './_support/seat-layout'
 
 const SUPERVISOR = resolve('operator/runners/supervisor/entrypoint-supervisor.sh')
-const ENTRYPOINT = readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8')
+const ENTRYPOINT = readSeatScript('operator/templates/entrypoint.sh')
 
 const GATEWAY_PY = `
 import json, os, signal, sys, time
@@ -575,7 +576,7 @@ describe('entrypoint.sh wires the supervisor', () => {
  * The block is cut at its markers and run with the paths and python stubbed.
  */
 describe('bootstrap.sh: the skills release seed and its fallback', () => {
-  const src = readFileSync(resolve('operator/templates/bootstrap.sh'), 'utf8')
+  const src = readSeatScript('operator/templates/bootstrap.sh')
   const begin = src.indexOf('# skills-release-seed:begin')
   const end = src.indexOf('# skills-release-seed:end')
 

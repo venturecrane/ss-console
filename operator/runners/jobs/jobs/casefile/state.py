@@ -32,10 +32,11 @@ from pathlib import Path
 from typing import Any
 
 from . import own_writes
+from .. import seat_layout
 
 ENV = "JOBS_CASEFILE_STATE_DIR"
 DATA_ENV = "JOBS_DATA_DIR"
-DEFAULT_DATA_DIR = "/opt/data/jobs"
+DEFAULT_DATA_DIR = seat_layout.JOBS_DATA
 
 
 def state_dir(explicit: str | Path | None = None) -> Path:

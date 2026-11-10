@@ -44,6 +44,7 @@ from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
 from .drafting_lane import DraftingLane
 from .proof import holds as proof_holds, watch as proof_watch
 from .skill_load import load_line
+from . import seat_layout
 
 logger = logging.getLogger("jobs.casefile")
 
@@ -144,7 +145,7 @@ def read_verdict(job_dir: Path, out: str) -> dict[str, Any] | None:
 
 @dataclass
 class CasefileLane(DraftingLane):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/casefile-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path(seat_layout.CASEFILE_QUEUE))
     inputs_dir: str | None = None
     state_dir: str | None = None
     textcache_dir: str | None = None

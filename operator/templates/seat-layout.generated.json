@@ -43,6 +43,10 @@
       "path": "/var/lib/smd-config/casefile",
       "when": "always"
     },
+    "casefile_queue": {
+      "path": "/run/smd-jobs/casefile-queue",
+      "when": "always"
+    },
     "casework_ledger": {
       "path": "/opt/data/audit/casework-ledger.jsonl",
       "when": "always"
@@ -71,8 +75,16 @@
       "path": "/var/lib/smd-config/demand",
       "when": "always"
     },
+    "demand_queue": {
+      "path": "/run/smd-jobs/demand-queue",
+      "when": "always"
+    },
     "drafting_inputs": {
       "path": "/var/lib/smd-config/drafting",
+      "when": "always"
+    },
+    "drafting_queue": {
+      "path": "/run/smd-jobs/drafting-queue",
       "when": "always"
     },
     "escalation_ledger": {
@@ -110,6 +122,10 @@
       "path": "/opt/data/installs",
       "when": "always"
     },
+    "jobs_bin": {
+      "path": "/opt/jobs/.venv/bin/jobs",
+      "when": "always"
+    },
     "jobs_bundle": {
       "path": "/opt/jobs",
       "expect": "present",
@@ -124,6 +140,10 @@
       "expect": "present",
       "kind": "dir",
       "when": "lanes"
+    },
+    "jobs_pricing": {
+      "path": "/opt/jobs/anthropic_pricing.json",
+      "when": "always"
     },
     "jobs_python": {
       "path": "/opt/jobs/.venv/bin/python",
@@ -161,12 +181,20 @@
       "path": "/var/lib/smd-config/litigation",
       "when": "always"
     },
+    "litigation_queue": {
+      "path": "/run/smd-jobs/litigation-queue",
+      "when": "always"
+    },
     "marketing_registers": {
       "path": "/var/lib/smd-config/marketing/marketing-firm.yaml",
       "when": "always"
     },
     "medchron_firm_yaml": {
       "path": "/var/lib/smd-config/medchron-firm.yaml",
+      "when": "always"
+    },
+    "negotiation_queue": {
+      "path": "/run/smd-jobs/negotiation-queue",
       "when": "always"
     },
     "profiles": {
@@ -181,6 +209,18 @@
     },
     "records_inputs": {
       "path": "/var/lib/smd-config/records",
+      "when": "always"
+    },
+    "records_queue": {
+      "path": "/run/smd-jobs/records-queue",
+      "when": "always"
+    },
+    "records_queue_volume": {
+      "path": "/opt/data/jobs/records-queue",
+      "when": "always"
+    },
+    "records_state": {
+      "path": "/opt/data/jobs/records-state",
       "when": "always"
     },
     "requests_db": {

@@ -29,7 +29,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DIR = "/run/smd-jobs"
+from shared import seat_layout
+
+DEFAULT_DIR = seat_layout.JOBS_RUN
 DIR_ENV = "SMD_LANE_PROOFS_DIR"
 AUTHORED_NAME = "lane-proofs.yaml"
 RUNTIME_NAME = "lane-proofs.runtime.json"

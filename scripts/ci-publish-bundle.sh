@@ -88,18 +88,21 @@ docker pull --quiet --platform linux/amd64 "$BASE_IMAGE" >/dev/null
 
 # ---------- the build, inside the image, at the final paths ----------
 # The merge's operator tree is mounted read-only and copied in, because a local
-# `uv pip install` may write build files beside its source.
+# `uv pip install` may write build files beside its source. The runner's path is
+# the merge's own generated seat layout (operator/contracts/seat-layout.yaml),
+# read inside the build from the mounted tree: the base image may predate it.
 mkdir -p "${work}/out"
 docker run --rm --platform linux/amd64 --user 0 --entrypoint /bin/sh \
   -v "${REPO_ROOT}/operator:/src:ro" -v "${work}/out:/out" "$BASE_IMAGE" -c '
     set -eu
     mkdir -p /tmp/src
     cp -R /src/connectors /src/runners /src/requirements /src/templates /tmp/src/
-    rm -rf /opt/jobs /opt/connectors/smokeball
+    . /src/templates/_seat-layout.generated.sh
+    rm -rf "$SMD_LAYOUT_JOBS_BUNDLE" /opt/connectors/smokeball
     export SRC=/tmp/src
     sh /tmp/src/templates/jobs-runtime.sh connector smokeball
     PRICING_JSON=/src/adapter/cost_telemetry/anthropic_pricing.json sh /tmp/src/templates/jobs-runtime.sh jobs
-    /opt/jobs/.venv/bin/python -c "import platform; print(platform.python_version())" > /out/python
+    "$SMD_LAYOUT_JOBS_PYTHON" -c "import platform; print(platform.python_version())" > /out/python
     tar --numeric-owner -C /opt -cf /out/bundle.tar jobs connectors/smokeball
   '
 

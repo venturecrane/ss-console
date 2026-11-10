@@ -44,6 +44,7 @@ from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .drafting_lane import DraftingLane
+from . import seat_layout
 
 logger = logging.getLogger("jobs.negotiation")
 
@@ -136,7 +137,7 @@ def wake_task(job_id: str, outcome: str, stage: str = "") -> str:
 
 @dataclass
 class NegotiationLane(DraftingLane):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/negotiation-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path(seat_layout.NEGOTIATION_QUEUE))
     state_dir: str | None = None
     heartbeat_seconds: float = HEARTBEAT_SECONDS
     LANE = "negotiation"

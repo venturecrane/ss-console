@@ -79,12 +79,13 @@ escalation_model: claude-opus-5-5
 # One gateway and no job lanes (no skill below queues a job). 2048 MB is this
 # seat's floor, not a preference: the 2026-09-01 crash loop ran here at 1024
 # (docs/runbooks/operator/incidents/2026-09-01-gateway-startup-watchdog-collision.md).
-# Kept at the running Machine's size: the boot harness's large-store case is
-# rendered from the demo seat at exactly this guest (operator/bin/lib/
-# boot_harness/cli.py SIZES "4x-8192"), and a smaller seat is a reprovision.
+# 2 shared CPUs and 4 GB (Captain, 2026-11-10): a demo answers one email at a
+# time and runs no heavy job. The boot harness's large-store case renders from
+# this seat at exactly this guest (operator/bin/lib/boot_harness/cli.py SIZES
+# "large-store"). Moving the running Machine to it is a reprovision.
 machine:
-  size: shared-cpu-4x
-  memory_mb: 8192
+  size: shared-cpu-2x
+  memory_mb: 4096
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 users:

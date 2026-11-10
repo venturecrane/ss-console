@@ -17,6 +17,11 @@
 # inherits them and hands them to each casefile child).
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # _seed_endpoint, CUSTOMER_SLUG and the R2_* names are set by entrypoint.sh, which sources this file
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated beside
+# this file): the SMD_LAYOUT_* paths below. Sourced here as well as by
+# entrypoint.sh, so this file reads it on every path that reaches it.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh"
 
 # The queue and job dirs, same owners and modes as the litigation lane's:
 # casefile-queue/ is written by the broker (casefile_job_submit,
@@ -56,7 +61,7 @@ if [ -d "${JOBS_CASEFILE_INPUTS_DIR}" ]; then
   # it is said here at boot, not first discovered by a job at config_missing.
   # Exit 1 is a problem with the inputs (logged, the copy kept: the lane holds
   # each job and says why); anything else is a validator that could not run.
-  _cf_out="$(/opt/jobs/.venv/bin/python -m jobs.casefile.firm "${JOBS_CASEFILE_INPUTS_DIR}" 2>&1)" && _cf_rc=0 || _cf_rc=$?
+  _cf_out="$(${SMD_LAYOUT_JOBS_PYTHON} -m jobs.casefile.firm "${JOBS_CASEFILE_INPUTS_DIR}" 2>&1)" && _cf_rc=0 || _cf_rc=$?
   case "${_cf_rc}" in
     0) log "casefile firm inputs validate" ;;
     1) log "ERROR: the casefile firm inputs do not validate; casefile jobs will hold at config_missing: $(printf '%s' "${_cf_out}" | head -n 3 | tr '\n' ' ' | cut -c1-300)" ;;

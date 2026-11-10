@@ -33,7 +33,7 @@ import os
 import secrets
 from typing import Any
 
-from . import bound_replies, casework_ledger
+from . import bound_replies, casework_ledger, seat_layout
 from .broker_context import BrokerContext
 from .casefile_ledger import APPLIED_OUTCOMES, NOTHING_TO_DO, SKILL_NAME
 from .casefile_store import CasefileLedger
@@ -65,7 +65,7 @@ def casework_event(line: dict[str, Any], event: str, **extra: Any) -> dict[str, 
 
 def casefile_ledger_of(broker: BrokerContext) -> CasefileLedger:
     """The ledger the reply binding reads (a read: the queue dir is never written)."""
-    queue = os.environ.get("SMD_CASEFILE_QUEUE_DIR") or "/run/smd-jobs/casefile-queue"
+    queue = os.environ.get("SMD_CASEFILE_QUEUE_DIR") or seat_layout.CASEFILE_QUEUE
     return CasefileLedger(str(broker.audit_db_path), queue)
 
 

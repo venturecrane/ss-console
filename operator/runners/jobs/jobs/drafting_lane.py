@@ -63,6 +63,7 @@ from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, memory_cap_mode, sticky_level
+from . import seat_layout
 
 logger = logging.getLogger("jobs.drafting")
 
@@ -141,7 +142,7 @@ def drafting_runner_cmd() -> list[str]:
 
 @dataclass
 class DraftingLane(Daemon):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/drafting-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path(seat_layout.DRAFTING_QUEUE))
     inputs_dir: str | None = None
     LANE = "drafting"
     HEARTBEAT = "drafting-heartbeat"
