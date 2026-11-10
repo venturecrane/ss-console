@@ -200,7 +200,9 @@ def _add_release_parser(sub: Any) -> None:
 
 
 def _add_seat_parsers(sub: Any) -> None:
-    st = sub.add_parser("selftest", help="release twin only: re-prove the self-test alert path with a planted violation")
+    st = sub.add_parser(
+        "selftest", help="release twin only: re-prove the self-test alert path with a planted violation"
+    )
     st.add_argument("--plant", required=True, metavar="CHECK_ID")
     st.add_argument("slug")
     st.add_argument("--window", type=float, default=15 * 60.0)
