@@ -42,10 +42,17 @@ def test_no_authored_seat_asks_for_debug(seat: Path) -> None:
     assert str(level).lower() != "debug", f"{seat.parent.name} authors logging.level: debug"
 
 
-@pytest.mark.parametrize("seat", CUSTOMERS, ids=lambda p: p.parent.name)
-def test_no_translated_profile_logs_at_debug(seat: Path, tmp_path: Path) -> None:
+def test_translate_never_authors_a_logging_level() -> None:
+    """Hermes defaults to INFO when a profile names no ``logging.level``; the
+    translator writes no ``logging`` block for any seat."""
+    source = (OPERATOR / "hermes-smd-overlay" / "bootstrap" / "translate.py").read_text()
+    assert not re.search(r"""["']logging["']\s*[\]:]""", source)
+
+
+def test_the_guide_seats_translated_profile_logs_at_info(tmp_path: Path) -> None:
     from bootstrap.translate import translate_customer_yaml
 
+    seat = next(p for p in CUSTOMERS if p.parent.name == "smd-guide")
     slugs = translate_customer_yaml(
         str(seat),
         str(tmp_path / "home"),
