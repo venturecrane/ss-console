@@ -56,7 +56,7 @@ themes:
         answer:
           - document: isolation-and-data-custody.md
             section: What SMD can see beyond the console
-      - says: 'Will our information be used to train someone else's AI?'
+      - says: "Will our information be used to train someone else's AI?"
         covers:
           - what the agreement says about how client data is used and never used
         answer:

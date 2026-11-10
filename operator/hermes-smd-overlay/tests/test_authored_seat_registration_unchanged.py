@@ -78,3 +78,50 @@ def test_the_collector_sees_a_change(tmp_path: Path) -> None:
     assert "record_peer_preference" not in actual["tools"]
     assert ["pre_llm_call", "hermes-smd-peer-memory"] in expected["hooks"]
     assert ["pre_llm_call", "hermes-smd-peer-memory"] not in actual["hooks"]
+
+
+def test_a_guide_seat_that_authors_training_gains_exactly_the_training_tools(
+    tmp_path: Path,
+) -> None:
+    """The training slice's falsifier (ss-console #3946): the guide seat with
+    the rep-training skill enabled and the progress store authored (walled per
+    person, written only by code) registers the two training tools, plus the
+    record-store trio its new store brings, and nothing else changes. No
+    authored seat in the snapshot, the real guide seat included, registers them."""
+    guide = next(p for p in authored_seats() if p.parent.name == "smd-guide")
+    doc = yaml.safe_load(guide.read_text(encoding="utf-8"))
+    doc["personas"][0]["skills"].append(
+        {
+            "name": "rep-training",
+            "version": "pending",
+            "initiation": {"manual": True, "scheduled": True, "webhook": True},
+            "enabled": True,
+        }
+    )
+    doc["record_stores"] = [
+        {
+            "name": "rep-progress",
+            "path": "/opt/data/rep/progress",
+            "partition": "sender",
+            "managed": True,
+        }
+    ]
+    changed = tmp_path / "smd-guide" / "customer.yaml"
+    changed.parent.mkdir()
+    changed.write_text(yaml.safe_dump(doc), encoding="utf-8")
+    actual = collect(changed, load_plugin)
+    expected = _snapshot()["smd-guide"]
+    assert set(actual["tools"]) - set(expected["tools"]) == {
+        "training_record",
+        "tone_check",
+        "record_store_list",
+        "record_store_read",
+        "record_store_write",
+    }
+    assert set(expected["tools"]) <= set(actual["tools"])
+    assert actual["tools"]["training_record"] == {
+        "plugin": "hermes-smd-training",
+        "toolset": "training",
+    }
+    for seat in _snapshot().values():
+        assert "training_record" not in seat["tools"] and "tone_check" not in seat["tools"]

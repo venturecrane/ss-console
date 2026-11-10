@@ -488,3 +488,39 @@ def test_orphans_never_reads_a_planted_link_as_a_store(seat: dict) -> None:
     seat["leads"].symlink_to(elsewhere, target_is_directory=True)
     result = person_orphans.orphan_partitions(seat["targets"], [A, B])
     assert not result.clean and result.problems
+
+
+def test_purge_clears_a_representatives_progress_and_the_report_that_names_them(seat: dict) -> None:
+    """Training (ss-console #3946): a representative's progress record lives in
+    a store walled per person (``rep-progress``), and the weekly report to SMD's
+    administrators names each representative in its BODY, never as a recipient.
+    Purging A removes A's progress directory and every report entry naming A;
+    B's progress stays, and the probe reads both before and after."""
+    progress = seat["data"] / "rep" / "progress"
+    for person in (A, B):
+        directory = progress / person_purge.person_slug(person)
+        directory.mkdir(parents=True)
+        (directory / "progress.json").write_text('{"schema":1,"lessons_complete":["l01"]}', encoding="utf-8")
+    report = {
+        "recipients": ["admin@example.test"],
+        "cc": [],
+        "subject": "Representative progress and readiness",
+        "full_body": f"Hello,\n\nAvery Example ({A})\n- Readiness: ready\n\n{B}\n- Readiness: not ready yet",
+        "skeleton_body": "Hello,\n\nThis week's representative progress report could not be sent in full.",
+    }
+    other = {**report, "full_body": f"{B}\n- Readiness: not ready yet"}
+    envelope = seat["home"] / ".smd" / "pre_run" / "rep-training.dispatch.consumed.json"
+    envelope.parent.mkdir(parents=True, exist_ok=True)
+    envelope.write_text(json.dumps({"skill": "rep-training", "dispatches": [report, other]}), encoding="utf-8")
+    targets = person_purge.PurgeTargets(data_root=seat["data"], partition_roots=[progress])
+
+    before = person_purge.probe(A, targets)
+    assert {"partitioned store directory", "scheduled-send envelope"} <= _layers(before)
+
+    result = person_purge.purge(A, targets)
+
+    assert result.clean, [f.line() for f in result.remaining]
+    assert not (progress / person_purge.person_slug(A)).exists()
+    assert (progress / person_purge.person_slug(B) / "progress.json").is_file()
+    kept = json.loads(envelope.read_text(encoding="utf-8"))["dispatches"]
+    assert kept == [other] and A not in envelope.read_text(encoding="utf-8")
