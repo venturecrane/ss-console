@@ -167,7 +167,8 @@ connectors:
     #   tenant_id: '[the CLIENT tenant GUID]'
     #   client_id: '[the READ app client id — the one WITHOUT Mail.Send]'
     #   mailbox: '[the Operator's own mailbox in the CLIENT's tenant]'
-    #   secret_ref: 'fly-secret:MSGRAPH_CLIENT_SECRET'  # READ app secret, ADR 0010
+    #   secret_ref: the READ app secret's Fly name, exactly as
+    #     operator/customers/ashton-price/customer.yaml authors it (ADR 0010)
     # poll_seconds: 45   # delta poll cadence; inbound is polling, not webhooks
   Calendar:
     # ADR 0021 Stream F migration (PR #1080): M365 calendar shipped as
