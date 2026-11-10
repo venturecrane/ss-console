@@ -24,6 +24,11 @@
  * section that exist. The paid answer-quality check runs the questions against
  * a seat; nothing here calls a model.
  *
+ * Invite codes (ADR 0106). Nothing the guide reads or is graded against may
+ * carry a string shaped like an invite code: the library, the skill and the
+ * answer key are matched against the code pattern the seat's own router uses
+ * (read from the overlay, so the two cannot drift).
+ *
  * Each rule is shown able to fail on a planted string (the last describe).
  */
 
@@ -42,6 +47,22 @@ const SCENARIOS = join(PRACTICE_DIR, 'references', 'scenarios.yaml')
 const RUBRIC = join(PRACTICE_DIR, 'references', 'rubric.md')
 /** The seat's own send gate's banned markers (fabrication gate, every email reply). */
 const MARKERS_JSON = resolve('operator/hermes-smd-overlay/shared/fabrication_markers.json')
+/** The router's invite-code detector (ADR 0106); its CODE_PATTERN literal is read, not copied. */
+const ENROLLMENT_PY = resolve('operator/hermes-smd-overlay/shared/sender_enrollment.py')
+
+/** The invite-code pattern exactly as the seat's router compiles it (re.IGNORECASE). */
+function codePattern(): RegExp {
+  const m = readFileSync(ENROLLMENT_PY, 'utf8').match(/^CODE_PATTERN = r"([^"]+)"$/m)
+  if (!m) throw new Error('CODE_PATTERN not found in the overlay')
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp - the pattern is the overlay's own checked-in literal, never user input
+  return new RegExp(m[1], 'gi')
+}
+const CODE_RE = codePattern()
+
+/** Every code-shaped token in a text. */
+function codeShaped(text: string): string[] {
+  return [...text.matchAll(CODE_RE)].map((m) => m[0])
+}
 
 /**
  * The reviewed explainer page. Its address lives in ONE place, INDEX.md, on the
@@ -307,10 +328,19 @@ type KeyEntry = {
   id: string
   category: string
   question: string
-  expect: 'answer' | 'refuse'
+  /**
+   * `tool` (ADR 0106): the outcome comes from a tool the guide must call, not
+   * from the library; graded on `tool` being called and on `must_contain` /
+   * `must_not_contain`, with no citation.
+   */
+  expect: 'answer' | 'refuse' | 'tool'
   refusal?: string
+  tool?: string
+  /** Who sends the question, where it matters: `administrator` or `listed`. */
+  sender?: 'administrator' | 'listed'
   cite?: { document: string; section: string }[]
   must_contain?: string[]
+  must_not_contain?: string[]
 }
 
 describe('product guide answer key (ADR 0105)', () => {
@@ -320,18 +350,62 @@ describe('product guide answer key (ADR 0105)', () => {
     : { questions: [] }
   const qs = key.questions ?? []
 
-  it('has 25 questions with unique ids, 5 of them refusals of the five kinds', () => {
-    expect(qs.length).toBe(25)
-    expect(new Set(qs.map((q) => q.id)).size).toBe(25)
+  // 28 = the 25 of ADR 0105 plus three invite-code cases of ADR 0106: one
+  // refusal (a non-administrator asks; kind `invite-code`) and two `tool`
+  // cases (an administrator's named request, and a name carrying a link and a
+  // line break). Changed deliberately with ADR 0106; a count that moves again
+  // needs the same reason written here.
+  it('has 28 questions with unique ids, 6 of them refusals of the six kinds', () => {
+    expect(qs.length).toBe(28)
+    expect(new Set(qs.map((q) => q.id)).size).toBe(28)
+    expect(qs.every((q) => ['answer', 'refuse', 'tool'].includes(q.expect))).toBe(true)
     const refusals = qs.filter((q) => q.expect === 'refuse')
-    expect(refusals.length).toBe(5)
+    expect(refusals.length).toBe(6)
     expect(refusals.map((q) => q.refusal).sort()).toEqual([
       'client-documents',
       'ignore-rules',
+      'invite-code',
       'named-client',
       'not-covered',
       'pricing',
     ])
+  })
+
+  it('the invite-code cases: a non-administrator is declined, an administrator reaches the tool', () => {
+    const decline = qs.find((q) => q.refusal === 'invite-code')
+    expect(decline?.sender).toBe('listed')
+    const mc = (decline?.must_contain ?? []).join(' ')
+    expect(mc).toContain("issued only to the guide seat's administrators at SMD Services")
+    expect(mc).toContain('team@smd.services')
+    expect((decline?.must_not_contain ?? []).some((m) => /invite code/.test(m))).toBe(true)
+
+    const tools = qs.filter((q) => q.expect === 'tool')
+    expect(tools.length).toBe(2)
+    for (const q of tools) {
+      expect({ id: q.id, tool: q.tool, sender: q.sender, cites: q.cite }).toEqual({
+        id: q.id,
+        tool: 'invite_code_issue',
+        sender: 'administrator',
+        cites: undefined,
+      })
+      expect((q.must_contain ?? []).length).toBeGreaterThanOrEqual(1)
+      expect((q.must_not_contain ?? []).some((m) => /invite code/.test(m))).toBe(true)
+    }
+    // One is sent; one is refused for its name (a link and a line break).
+    const badName = tools.filter((q) => /https?:\/\//.test(q.question) && q.question.includes('\n'))
+    expect(badName.length).toBe(1)
+    expect(badName[0].must_contain?.join(' ')).toMatch(/plain text/)
+  })
+
+  it('no code-shaped string appears in the key, the library or the skill', () => {
+    // A planted one is caught (built from parts so no code-shaped literal is committed).
+    const planted = ['SMD', 'ABCD', 'EFGH', 'JKMN'].join('-')
+    expect(codeShaped(`use ${planted} today`)).toEqual([planted])
+    const found: string[] = []
+    for (const f of [KEY, join(SKILL_DIR, 'SKILL.md'), ...libraryFiles]) {
+      for (const c of codeShaped(readFileSync(f, 'utf8'))) found.push(`${f}: ${c}`)
+    }
+    expect(found).toEqual([])
   })
 
   it('has the 5 practice-flow cases: start, a mid-scenario turn, stop, a haggle, a named person', () => {

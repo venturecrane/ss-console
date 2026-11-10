@@ -105,6 +105,8 @@ const CONDITION_LABEL: Record<string, string> = {
   selftest_failing: 'Seat self-test failed a check',
   // Migration 0140, ./spec. Wave 2 W4, shadow mode.
   spec_unverified: 'Seat cannot verify its signed config spec',
+  // Migration 0152, ./enrollment-guessing (ADR 0106).
+  enrollment_guessing: 'Invite codes being guessed on a guide seat',
 }
 
 /**

@@ -65,6 +65,7 @@ import { checkEscalation } from './sections-escalation'
 import { checkSendPolicy } from './sections-send-policy'
 import { checkCredentialCustodyDefault } from './sections-connectors'
 import { checkGmailPush } from './sections-gmail-push'
+import { checkSenderEnrollment } from './sections-sender-enrollment'
 import { checkFirmIdentity } from './sections-firm-identity'
 import { checkTelegram } from './sections-telegram'
 import { checkPeople, checkSpaceMode, checkSpaces } from './sections-people'
@@ -296,6 +297,7 @@ function validateSections(
   checkTelegram(root, errors) // optional telegram block; validate-only (ADR 0033)
   checkRecordStores(root, errors) // optional record_stores block; validate-only (#2793)
   checkGmailPush(root, errors) // optional gmail_push block; validate-only
+  checkSenderEnrollment(root, errors) // optional, guide seats only (ADR 0106)
   checkFirmIdentity(root, errors) // optional firm_identity (letterhead); validate-only
   checkCapabilityOwnedBlocks(root, errors) // ADR 0100: a capability's block needs the capability
   const escalation = checkEscalation(root, errors)

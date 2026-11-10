@@ -227,6 +227,10 @@ const EXPECTED_VERBS = [
   'send_as_decide_link',
   'send_as_match_reply',
   'send_as_propose',
+  // ADR 0106 invite-code enrollment on a guide seat: the router's redeem and
+  // an administrator's code request. Gateway-only; each writes its own row.
+  'sender_enrollment_issue',
+  'sender_enrollment_redeem',
   // Every write to a firm's Smokeball, recorded before it is sent (the
   // connector's write_record.py refuses a write whose row did not land).
   'smokeball_write_append',

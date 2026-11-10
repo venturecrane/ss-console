@@ -724,6 +724,27 @@ def _help_pointer_block(session_id: str, user_message: object, cfg: Any) -> str 
         return None
 
 
+def _enrolled_name_line(cfg: Any, sender: str) -> str:
+    """ADR 0106: the name SMD issued an enrolled person's invite code for, as
+    one platform-stated line, or ``""``. Read from the broker-owned enrolled
+    list and re-validated as a plain name; only on a seat that switches
+    enrollment on. Never a placeholder when there is no name."""
+    try:
+        from shared import sender_enrollment
+
+        if not sender_enrollment.enabled_in(cfg.raw):
+            return ""
+        name = sender_enrollment.enrolled_name(sender)
+    except Exception:  # noqa: BLE001 - no name is said rather than a wrong one
+        return ""
+    if not name:
+        return ""
+    return (
+        f"\n- This sender connected with an invite code SMD issued for {name}; "
+        "address them by that name."
+    )
+
+
 def _load_config() -> Any | None:
     """The LIVE authored config, or ``None`` on any read fault.
 
@@ -800,6 +821,7 @@ def on_pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
         is_admin = bool(cfg.sender_is_admin(sender))
         admin_line = "YES (scope.admins)" if is_admin else "NO (not on scope.admins)"
         statement = _ROSTERED_STATEMENT.format(sender=sender, admin_line=admin_line)
+        statement += _enrolled_name_line(cfg, sender)
         lines = [f"{_HEADER}\n{statement}"]
         # The grounding nudge rides the SAME rostered predicate (a stranger gets
         # nothing here either), and only on the channel where the skill body is

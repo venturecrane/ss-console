@@ -88,6 +88,7 @@ import {
 } from './token-expiry'
 import { toolFailingConditions } from './tool-failing'
 import { selftestConditions } from './selftest'
+import { enrollmentGuessingConditions } from './enrollment-guessing'
 import { getOpenWebhookSurfaceKeys, webhookSurfaceConditions } from './webhook-surface'
 import { gatewayLoopConditions, gatewayLoopRedSeconds } from './gateway-loop'
 import { hardStopDetail } from './conditions'
@@ -208,6 +209,9 @@ export type FleetCondition =
   // Migration 0140. The seat cannot verify its signed spec, or holds an older
   // one than the published pointer names. See ./spec.
   | 'spec_unverified'
+  // Migration 0152 (ADR 0106). Failed invite-code attempts on a guide seat,
+  // or the broker's seat-wide lockout. See ./enrollment-guessing.
+  | 'enrollment_guessing'
   // Wave 8.2. Keyed by the probe TARGET in customer_slug, not a seat.
   | 'edge_down'
   | `connector_down:${string}`
@@ -493,6 +497,7 @@ export function evaluateConditions(
     out.push(...gatewayLoopConditions(row, loopRed))
     out.push(...toolFailingConditions(row))
     out.push(...selftestConditions(row))
+    out.push(...enrollmentGuessingConditions(row))
   }
   return out
 }

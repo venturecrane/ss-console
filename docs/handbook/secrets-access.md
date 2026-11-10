@@ -21,6 +21,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/src/lib/portal/operator/entitlement-change.ts
   - label: ADR 0010 (per-customer OAuth token storage)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0010-per-customer-oauth-token-storage.md
+  - label: ADR 0106 (invite-code enrollment for guide seats)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0106-invite-code-enrollment-for-guide-seats.md
   - label: ADR 0042 (Operator credential custody)
     href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0042-operator-credential-custody.md
   - label: workers/cost-anomaly/wrangler.toml (Sentry read token)
@@ -155,7 +157,13 @@ names are the procedure.
   (`<slug>@agentmail.to` unless its `customer.yaml` authors `inbox_address`; see
   `operator/workspace_broker/agentmail_auth.py`). Its `scope.inbound_allow_from` roster
   decides which senders it treats as authorized; mail from anyone else is handled as
-  untrusted content behind the inbound trust boundary (ADR 0027). The `smdurgan@venturecrane.com` address that can appear in session
+  untrusted content behind the inbound trust boundary (ADR 0027). A guide seat that
+  switches on invite-code enrollment adds the addresses that joined with a code (ADR 0106).
+  An invite code is a credential: only its salted hash is kept, in the broker-owned store on
+  the seat's volume (`/opt/data/sender-enrollment/private/codes.db`), never in git, Infisical
+  or a log; the plain code exists once, in the email to the administrator who asked for it or
+  in the output of `operator/workspace_broker/sender_enrollment_cli.py issue`. A code is
+  stopped with that command's `revoke`, and an enrolled person removed with `remove`. The `smdurgan@venturecrane.com` address that can appear in session
   context belongs to a different venture and must never be used in SMD code, config, or
   content.
 - **Admin vs portal.** Session cookies are per-host with no shared domain; an admin cookie

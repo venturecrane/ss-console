@@ -19,6 +19,8 @@ For local D1 (testing):
 ## Per-file safety notes
 
 - `0033_add_prospect_role_down.sql` — restores the original narrow `users.role CHECK (role IN ('admin', 'client'))`. The INSERT into `users_old` will fail if any `users.role = 'prospect'` rows exist (intentional safeguard). Cleanup or migrate prospect rows to `'client'` before invoking.
+- `0152_enrollment_guessing_condition_down.sql`: narrows the `fleet_alert_state` CHECK back to the 0140 vocabulary and drops any `enrollment_guessing` rows. Roll the fleet-alerts Worker back first: a deployed Worker that still emits it pages on every tick with nothing recorded.
+- `0151_fleet_status_sender_enrollment_down.sql`: drops `fleet_status.sender_enrollment_json`. Roll the web Worker and the fleet-alerts Worker back first (and 0152): the heartbeat upsert and the worker's SELECT both name the column. Seats keep enrolling and auditing; only the console's copy is lost.
 - `0150_fleet_releases_volume_epoch_down.sql`: drops `fleet_releases.volume_epoch`. Roll the code back first: `fleet build` inserts the column. Every release then reads as epoch 1, so a release built on epoch 2 loses its guard against a rollback onto an older layout: put holds on the seats before running it.
 - `0149_fleet_status_firm_inputs_down.sql`: drops `fleet_status.firm_inputs_json`. Roll the web Worker back first (its heartbeat upsert names the column). Seats keep adopting firm inputs and writing their state file; only the console's copy is lost.
 - `0148_fleet_releases_merged_at_down.sql`: drops `fleet_releases.merged_at`. Roll the code back first: `fleet build` inserts the column and the admin Fleet page selects it. The merge times recorded so far are lost; the rollouts are untouched.

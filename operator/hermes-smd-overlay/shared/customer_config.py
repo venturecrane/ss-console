@@ -339,6 +339,14 @@ class CustomerConfig:
                 norm = entry.strip().lower()
                 if norm:
                     out.append(norm)
+        # ADR 0106: on a guide seat that switches enrollment on, a person who
+        # redeemed an invite code is on the roster exactly as an authored entry
+        # is. Read from the broker-owned list this process cannot write; absent
+        # everywhere else. Never added to admins.
+        from shared import sender_enrollment
+
+        if sender_enrollment.enabled_in(self._data):
+            out.extend(a for a in sender_enrollment.enrolled_addresses() if a not in out)
         return out
 
     @property

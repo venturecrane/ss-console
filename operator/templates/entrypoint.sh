@@ -171,7 +171,7 @@ umask 027
 # Both names of the jobs tree are pruned, whatever entrypoint-lanes.sh's
 # JOBS_VOLUME_EPOCH says (ADR 0103): this sweep runs before that fragment, and an
 # image booting over the other name must never hand the root-owned tree to hermes.
-find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path "${JOBS_DATA_DIR}" -o -path /opt/data/medchron -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
+find /opt/data \( -path "${AUDIT_DIR}" -o -path "${GATEWAY_LIVENESS_LEDGER_DIR}" -o -path /opt/data/sender-enrollment -o -path "${JOBS_DATA_DIR}" -o -path /opt/data/medchron -o -path "${HERMES_HOME:-/opt/data}/.smd-root" \) -prune -o -print0 | xargs -0 -r chown hermes:hermes
 
 # NOTE: the broker reaches the ledger via the bind mount established below, NOT
 # by traversing /opt/data. The Hermes gateway chmods its home (/opt/data) to
@@ -249,8 +249,9 @@ mountpoint -q "${AUDIT_BIND_DIR}" \
 # lanes with firm inputs share (2026-10-14: one silent failed fetch left A&P's
 # litigation lane with no inputs for a whole release), so it is sourced first.
 # marketing is a marketing seat's advertising-gate registers (ADR 0098), root:hermes.
-# shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,casefile,records,negotiation,marketing,lane-proofs,image-manifest}.sh
-for _lane in fetch-inputs demand drafting litigation casefile records negotiation marketing lane-proofs image-manifest; do case "${_lane}" in demand|drafting|litigation|casefile|negotiation) lane_on "${_lane}" || continue ;; esac; . "/app/entrypoint-${_lane}.sh"; done
+# sender-enrollment is the broker-owned invite-code store (ADR 0106), on every seat.
+# shellcheck disable=SC1090 # /app/entrypoint-{fetch-inputs,demand,drafting,litigation,casefile,records,negotiation,marketing,sender-enrollment,lane-proofs,image-manifest}.sh
+for _lane in fetch-inputs demand drafting litigation casefile records negotiation marketing sender-enrollment lane-proofs image-manifest; do case "${_lane}" in demand|drafting|litigation|casefile|negotiation) lane_on "${_lane}" || continue ;; esac; . "/app/entrypoint-${_lane}.sh"; done
 
 SMOKEBALL_TOKEN_DIR="/opt/data/.smokeball-mcp"
 SMOKEBALL_TOKEN_RUN_DIR="/run/smd-smokeball-token"
@@ -461,7 +462,7 @@ launch_broker() {
     SMD_AGENT_UID="$(id -u hermes)" \
     SMD_AUDIT_DB_PATH="${AUDIT_BIND_DB}" \
     SMD_ESTABLISH_SPOOL_DIR="${SMD_ESTABLISH_SPOOL_DIR}" \
-    SMD_MEDCHRON_QUEUE_DIR="${SMD_MEDCHRON_QUEUE_DIR}" SMD_JOBS_RUN_DIR="${JOBS_RUN_DIR}" \
+    SMD_MEDCHRON_QUEUE_DIR="${SMD_MEDCHRON_QUEUE_DIR}" SMD_JOBS_RUN_DIR="${JOBS_RUN_DIR}" SMD_SENDER_ENROLLMENT_DIR="${SMD_SENDER_ENROLLMENT_DIR}" \
     SMD_DEMAND_QUEUE_DIR="${SMD_DEMAND_QUEUE_DIR}" SMD_DRAFTING_QUEUE_DIR="${SMD_DRAFTING_QUEUE_DIR}" SMD_LITIGATION_QUEUE_DIR="${SMD_LITIGATION_QUEUE_DIR}" SMD_LITIGATION_FIRM_CONFIG="${SMD_LITIGATION_FIRM_CONFIG}" SMD_CASEFILE_QUEUE_DIR="${SMD_CASEFILE_QUEUE_DIR}" SMD_CASEFILE_FIRM_CONFIG="${SMD_CASEFILE_FIRM_CONFIG}" SMD_RECORDS_QUEUE_DIR="${SMD_RECORDS_QUEUE_DIR}" SMD_RECORDS_FIRM_CONFIG="${SMD_RECORDS_FIRM_CONFIG}" SMD_NEGOTIATION_QUEUE_DIR="${SMD_NEGOTIATION_QUEUE_DIR}" \
     SMD_AGENTMAIL_CREDENTIAL_PATH="${SMD_AGENTMAIL_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_CREDENTIAL_PATH="${SMD_MSGRAPH_CREDENTIAL_PATH}" \
