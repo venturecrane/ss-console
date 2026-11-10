@@ -23,7 +23,11 @@ function load(slug: string): Record<string, unknown> {
   >
 }
 
-const pilot = load('pilot-smokeball')
+// The A&P-shaped fixture: pilot-smokeball's config as of 2026-11-10, frozen when
+// that seat became SMD's demo seat (which runs no case-manager job).
+const pilot = parseYaml(
+  readFileSync(join(__dirname, 'fixtures', 'ap-shaped-seat', 'customer.yaml'), 'utf8')
+) as Record<string, unknown>
 
 function withBlock(value: unknown) {
   return validate({ ...pilot, case_manager: value })
@@ -35,7 +39,7 @@ function errorPaths(value: unknown): string[] {
 }
 
 describe('case_manager', () => {
-  it('the pilot authors it and validates', () => {
+  it('the fixture authors it and validates', () => {
     const result = validate(pilot)
     if (!result.ok) throw new Error(JSON.stringify(result.errors, null, 2))
     const cm = result.value.case_manager

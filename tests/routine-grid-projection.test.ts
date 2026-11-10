@@ -4,7 +4,7 @@
  *
  * Two concerns:
  *   1. The canonical parser (src/lib/operator/routine-grid.ts) accepts the real
- *      pilot-smokeball grid and rejects malformed input with path-named errors.
+ *      A&P-shaped fixture grid and rejects malformed input with path-named errors.
  *   2. The write → read round-trip
  *      projectRow(projectCustomerYamlToConfigRow(yaml, ctx, grid)) never throws
  *      with the grid present, absent, or a MALFORMED stored value — the read
@@ -29,15 +29,17 @@ const CTX = {
   syncedAt: '2026-07-14T18:00:00.000Z',
 }
 
-const GRID_PATH = resolve('operator/customers/pilot-smokeball/routine-grid.yaml')
-const SEAT_YAML_PATH = resolve('operator/customers/pilot-smokeball/customer.yaml')
+// The A&P-shaped fixture (the pilot-smokeball grid as of 2026-11-10, frozen when that
+// seat became SMD's demo seat): a realistic 19-row input no live seat has to keep.
+const GRID_PATH = resolve('tests/fixtures/ap-shaped-seat/routine-grid.yaml')
+const SEAT_YAML_PATH = resolve('tests/fixtures/ap-shaped-seat/customer.yaml')
 
 /** Parse the real grid YAML into an `unknown` for the parser under test. */
 function rawGrid(): unknown {
   return parseYaml(readFileSync(GRID_PATH, 'utf-8'))
 }
 
-/** The real pilot-smokeball grid, validated. */
+/** The A&P-shaped fixture grid, validated. */
 function liveGrid(): RoutineGrid {
   const result = validateRoutineGrid(rawGrid())
   if (!result.ok) {
@@ -48,7 +50,7 @@ function liveGrid(): RoutineGrid {
   return result.value
 }
 
-/** The live pilot-smokeball customer.yaml as a realistic projection base. */
+/** The A&P-shaped fixture customer.yaml as a realistic projection base. */
 function seatYaml(): CustomerYaml {
   const result = validate(parseYaml(readFileSync(SEAT_YAML_PATH, 'utf-8')))
   if (!result.ok) {
@@ -59,7 +61,7 @@ function seatYaml(): CustomerYaml {
   return result.value
 }
 
-describe('routine-grid parser: the live pilot-smokeball grid', () => {
+describe('routine-grid parser: the A&P-shaped fixture grid', () => {
   it('validates and exposes the authored header + all rows', () => {
     const grid = liveGrid()
     expect(grid.adr).toBe('0075')

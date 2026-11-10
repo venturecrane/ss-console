@@ -3,8 +3,12 @@
 # seat at boot. After editing run `npm run gen:seat-registries`;
 # tests/seat-inventory.test.ts fails while a generated registry is stale.
 #
-# SMD's own Smokeball test firm (ADR 0053), a demo seat (ADR 0107). It gates no
-# release: client seats are gated by their release twin, not by this seat.
+# SMD's demo seat (ADR 0107): the real Operator working for the fictional firm
+# Brannock & Ferreira LLP on SMD's own Smokeball staging tenant, driven by a
+# sales representative in front of a prospect (docs/handbook/demo-seat.md). Its
+# customer.yaml authors the matching seat.kind: demo (tests/demo-seat.test.ts).
+# It gates no release: client seats are gated by their release twin, not by
+# this seat.
 
 # What this seat is for (ADR 0107): client | release-twin | demo | internal.
 purpose: demo

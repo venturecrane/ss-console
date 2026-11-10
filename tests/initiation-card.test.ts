@@ -14,9 +14,11 @@
  *    exists to prevent (locked stages are exempt: they name their unlock)
  *  - every command carries expected AND falsifier — a command we cannot
  *    grade honestly does not go on the card (Law 12)
- *  - the rehearsal mirror: the pilot card carries every unlocked
- *    ashton-price command verbatim (same `say`, same `backed_by`), so what
- *    is rehearsed is what the client is told to say
+ *  - locked stages name their unlock
+ *
+ * The pilot-smokeball card that mirrored ashton-price's for rehearsal was
+ * retired 2026-11-10 with the mirror itself (pilot-smokeball is SMD's demo
+ * seat now; client changes are rehearsed on the client's release twin).
  */
 
 import { describe, it, expect } from 'vitest'
@@ -27,12 +29,10 @@ import { parse as parseYaml } from 'yaml'
 // Constant paths only — no interpolated filesystem paths in this suite.
 const CARD_PATHS = {
   'ashton-price': resolve('operator/customers/ashton-price/initiation-card.yaml'),
-  'pilot-smokeball': resolve('operator/customers/pilot-smokeball/initiation-card.yaml'),
 } as const
 
 const SEAT_YAML_PATHS = {
   'ashton-price': resolve('operator/customers/ashton-price/customer.yaml'),
-  'pilot-smokeball': resolve('operator/customers/pilot-smokeball/customer.yaml'),
 } as const
 
 type Slug = keyof typeof CARD_PATHS
@@ -136,24 +136,7 @@ describe.each(SEATS)('initiation card: %s', (slug) => {
   })
 })
 
-describe('rehearsal mirror', () => {
-  it('every unlocked ashton-price command exists verbatim on the pilot card', () => {
-    const ap = loadCard('ashton-price')
-    const pilot = loadCard('pilot-smokeball')
-    const pilotCommands = new Set(
-      pilot.stages.flatMap((s) => s.commands.map((c) => `${c.say}::${c.backed_by}`))
-    )
-    for (const stage of ap.stages) {
-      if (stage.locked) continue
-      for (const cmd of stage.commands) {
-        expect(
-          pilotCommands.has(`${cmd.say}::${cmd.backed_by}`),
-          `ashton-price card says "${cmd.say}" but the pilot card does not rehearse it`
-        ).toBe(true)
-      }
-    }
-  })
-
+describe('locked stages', () => {
   it('locked stages name their unlock event', () => {
     const ap = loadCard('ashton-price')
     for (const stage of ap.stages) {

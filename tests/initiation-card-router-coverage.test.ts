@@ -51,7 +51,6 @@ import { parse as parseYaml } from 'yaml'
 // Constant paths only - no interpolated resolve() anywhere in this suite.
 const CARD_PATHS = {
   'ashton-price': resolve('operator/customers/ashton-price/initiation-card.yaml'),
-  'pilot-smokeball': resolve('operator/customers/pilot-smokeball/initiation-card.yaml'),
 } as const
 
 const ROUTER_SKILL_PATH = resolve('operator/skills/matter-inbox-router/SKILL.md')

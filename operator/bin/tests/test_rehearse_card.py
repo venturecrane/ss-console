@@ -50,13 +50,14 @@ def test_unlocked_work_stage_is_included() -> None:
     assert [c["say"] for c in rc.unlocked_commands(card)] == ["draft it"]
 
 
-def test_real_cards_differ_exactly_as_authored() -> None:
-    """pilot 18 / ashton-price 17 is a deliberate per-seat divergence, recorded
-    in the pilot card's own header. If these ever match, one of them changed."""
-    pilot = yaml.safe_load((rc.CUSTOMERS / "pilot-smokeball" / "initiation-card.yaml").read_text())
+def test_real_card_unlocks_exactly_as_authored() -> None:
+    """ashton-price's card unlocks 17 commands. The pilot-smokeball card that
+    mirrored it (18, the drafting stage left open) was retired 2026-11-10 when
+    that seat became SMD's demo seat; client cards are rehearsed on the client's
+    release twin now."""
     ap = yaml.safe_load((rc.CUSTOMERS / "ashton-price" / "initiation-card.yaml").read_text())
-    assert len(rc.unlocked_commands(pilot)) == 18
     assert len(rc.unlocked_commands(ap)) == 17
+    assert not (rc.CUSTOMERS / "pilot-smokeball" / "initiation-card.yaml").exists()
 
 
 def test_seat_inbox_from_the_authored_connector() -> None:
@@ -96,7 +97,7 @@ def test_quote_trail_stripper_leaves_clean_bodies_alone() -> None:
     assert rc.strip_quote_trail("just an answer") == "just an answer"
 
 
-@pytest.mark.parametrize("slug", ["pilot-smokeball", "ashton-price"])
+@pytest.mark.parametrize("slug", ["ashton-price"])
 def test_real_cards_carry_expected_and_falsifier(slug: str) -> None:
     """The transcript pairs each reply with these two fields so a second reader
     can judge without re-deriving them. A command missing either would produce a

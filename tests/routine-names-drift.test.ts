@@ -26,10 +26,6 @@ import { parse as parseYaml } from 'yaml'
 // Literal path constants (never interpolated) so the paths are auditable and
 // the semgrep path-traversal rule has nothing to flag.
 const SEAT_PATHS = {
-  'pilot-smokeball': {
-    yaml: resolve('operator/customers/pilot-smokeball/customer.yaml'),
-    grid: resolve('operator/customers/pilot-smokeball/routine-grid.yaml'),
-  },
   'ashton-price': {
     yaml: resolve('operator/customers/ashton-price/customer.yaml'),
     grid: resolve('operator/customers/ashton-price/routine-grid.yaml'),
