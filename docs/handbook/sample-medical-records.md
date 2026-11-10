@@ -56,17 +56,17 @@ What is real and what is supplied, so nobody overstates it:
 
 - **Real (production code):** text extraction and scan detection, assembly, exhibit
   building and page citations, the Treatment Timeline and Diagnostic Highlights tables, the
-  coverage and date-of-service checks, the billing chart and worksheet, the Word rendering,
-  and the delivery manifest.
+  coverage and date-of-service checks, the page strip that takes fax covers and custodian
+  certifications out of the exhibits and renumbers every citation, the duplicate-exhibit
+  check, the billing chart and worksheet, the Word rendering, and the delivery manifest. The
+  exhibits come out as clean as a client delivery.
 - **Supplied by the answer key instead of a model:** the reading of each scanned page, the
-  reading of each bill, and the chronology entries themselves. They are written from the case
-  spec in the exact shape the model's output takes, so the stages after them cannot tell the
-  difference. No model is called and nothing is spent; a stage that tried to call one would
-  stop the build.
-- **Not run:** the scanned-page classifier, the page strip that removes fax covers and
-  certifications, the duplicate-exhibit merge, the independent audit and the pre-delivery
-  review. The sample exhibits therefore still hold fax covers and certifications that a real
-  delivery would remove.
+  reading of each bill, the call on which scanned pages are covers rather than records, and
+  the chronology entries themselves. They are written from the case spec in the exact shape
+  the model's output takes, so the stages after them cannot tell the difference. No model is
+  called and nothing is spent; a stage that tried to call one would stop the build.
+- **Not run:** the independent audit and the pre-delivery review, which are model reads of
+  the finished package with nothing to supply them from.
 
 The pipeline's own checks show the planted problems: the billing worksheet marks itself
 incomplete for the missing ambulance bill, the date-of-service check names the therapy visit

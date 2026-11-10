@@ -283,10 +283,14 @@ def custodian_cert(p: dict[str, Any], cx: Ctx) -> list[Page]:
         "",
         f"Executed {us_date(str(p.get('date', '')))}.",
         "",
-        cx.provider.custodian,
+        f"/s/ {cx.provider.custodian}",
         "Custodian of Records",
     ]
-    return [Page(cx.doc_id, "custodian_cert", "", lines, scan=True, hand=[10])]
+    # Electronically signed and released as a typed page: the certification
+    # rides at the END of the production with a text layer, where the firm's
+    # text page classes find it (a scanned page is classified only near the
+    # head of a file, and the head is where the record control is taken).
+    return [Page(cx.doc_id, "custodian_cert", "", lines, scan=False)]
 
 
 def intake_form(p: dict[str, Any], cx: Ctx) -> list[Page]:

@@ -236,7 +236,6 @@ documents:
     fax: { sent: '2025-11-24 09:14', from_name: KP Release of Information }
     pages:
       - { kind: fax_cover, date: '2025-11-24', re: 'Emergency department records, 11/02/2025' }
-      - { kind: custodian_cert, date: '2025-11-24', span: '11/02/2025' }
       - id: ked-triage
         title: Triage Note
         date: '2025-11-02'
@@ -352,6 +351,7 @@ documents:
           Insurance: Kaiser
       - { kind: access_log, count: 6, date: '2025-11-03' }
       - { kind: blank, count: 6 }
+      - { kind: custodian_cert, date: '2025-11-24', span: '11/02/2025' }
 
   - id: kaiser-pcp
     name: 2025-12-02 Kaiser Permanente Sacramento - Primary Care Records
@@ -363,7 +363,6 @@ documents:
           date: '2025-12-02',
           re: 'Primary care records, 11/10/2025, and chart summary',
         }
-      - { kind: custodian_cert, date: '2025-12-02', span: '11/10/2025' }
       - id: kpcp-1
         title: Office Visit
         date: '2025-11-10'
@@ -428,6 +427,7 @@ documents:
         }
       - { kind: access_log, count: 10, date: '2025-11-11' }
       - { kind: blank, count: 16 }
+      - { kind: custodian_cert, date: '2025-12-02', span: '11/10/2025' }
 
   - id: kaiser-rx
     name: 2025-12-02 Kaiser Permanente Sacramento - Pharmacy Dispensing History
@@ -498,7 +498,6 @@ documents:
     fax: { sent: '2026-03-16 13:48', from_name: ROS Medical Records }
     pages:
       - { kind: fax_cover, date: '2026-03-16', re: 'Records 12/18/2025 through 03/12/2026' }
-      - { kind: custodian_cert, date: '2026-03-16', span: '12/18/2025 through 03/12/2026' }
       - kind: intake_form
         date: '2025-12-18'
         heading: 'NEW PATIENT QUESTIONNAIRE (completed by patient)'
@@ -620,6 +619,7 @@ documents:
           meds: ['Gabapentin 300 mg PO at bedtime'],
         }
       - { kind: access_log, count: 2, date: '2026-03-13' }
+      - { kind: custodian_cert, date: '2026-03-16', span: '12/18/2025 through 03/12/2026' }
 
   - id: capital
     name: 2026-03-18 Capital Physical Therapy - Treatment Records
@@ -627,7 +627,6 @@ documents:
     fax: { sent: '2026-03-18 10:26', from_name: Capital PT Front Desk }
     pages:
       - { kind: fax_cover, date: '2026-03-18', re: 'Therapy records 01/13/2026 through 03/08/2026' }
-      - { kind: custodian_cert, date: '2026-03-18', span: '01/13/2026 through 03/08/2026' }
       - kind: intake_form
         id: pt-intake
         date: '2026-01-13'
@@ -712,6 +711,7 @@ documents:
       - { kind: hep, count: 70 }
       - { kind: education, count: 24, topic: 'Lifting and Body Mechanics at Work' }
       - { kind: access_log, count: 4, date: '2026-01-13' }
+      - { kind: custodian_cert, date: '2026-03-18', span: '01/13/2026 through 03/08/2026' }
 
   # ---- billing ---------------------------------------------------------------
   - id: kaiser-bill
