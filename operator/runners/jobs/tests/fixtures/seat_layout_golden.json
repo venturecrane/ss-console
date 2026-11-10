@@ -1,0 +1,14 @@
+{
+  "jobs.casefile.book:DEFAULT_BROWSERS": "/opt/hermes/.playwright",
+  "jobs.casefile.firm:DEFAULT_DIR": "/var/lib/smd-config/casefile",
+  "jobs.demand.firm:DEFAULT_DIR": "/var/lib/smd-config/demand",
+  "jobs.drafting.firm:DEFAULT_DIR": "/var/lib/smd-config/drafting",
+  "jobs.drafting.firm_rules:DEFAULT_DIR": "/var/lib/smd-config/specs",
+  "jobs.firm_wording:DEFAULT_DIR": "/var/lib/smd-config/specs",
+  "jobs.litigation.firm:DEFAULT_DIR": "/var/lib/smd-config/litigation",
+  "jobs.medchron.config:DEFAULT_PATH": "/var/lib/smd-config/medchron-firm.yaml",
+  "jobs.note_by_smd:DEFAULT_AUDIT_DB": "/run/smd-audit/audit.db",
+  "jobs.records.firm:DEFAULT_DIR": "/var/lib/smd-config/records",
+  "jobs.records_lane:DEFAULT_CUSTOMER_YAML": "/var/lib/smd-config/customer.yaml",
+  "jobs.rewake:DEFAULT_SOCKET": "/run/smd-workspace-broker/broker.sock"
+}

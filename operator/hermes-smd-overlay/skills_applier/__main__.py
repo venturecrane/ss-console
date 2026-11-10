@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from shared import seat_layout
 from skills_applier.applier import (
     DEFAULT_CAPABILITIES,
     DEFAULT_IMAGE_SKILLS,
@@ -58,7 +59,7 @@ EXIT_STOPPED = 130
 
 _DEFAULT_POLL_SECONDS = 15.0
 _DEFAULT_HERMES_HOME = "/opt/data"
-_DEFAULT_CUSTOMER_YAML = "/var/lib/smd-config/customer.yaml"
+_DEFAULT_CUSTOMER_YAML = seat_layout.CUSTOMER_YAML
 _IMAGE_RETIRED = "/app/retired-skills.txt"
 _SYNC_TIMEOUT_SECONDS = 600
 #: The only env the hermes-uid sync child sees. Never the R2 credentials.

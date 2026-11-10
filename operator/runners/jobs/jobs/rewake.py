@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from . import seat_layout
 from .lane_proof_cli import DEFAULT_RUN_DIR, JOBS
 
 #: Proof alerts a re-send must be able to raise again within the day.
@@ -89,7 +90,7 @@ def _iso(epoch: float) -> str:
 
 #: The broker's socket when ``SMD_WORKSPACE_BROKER_SOCKET`` is unset (the
 #: same default ``operator/bin/medchron-backfill-covered.py`` uses).
-DEFAULT_SOCKET = "/run/smd-workspace-broker/broker.sock"
+DEFAULT_SOCKET = seat_layout.BROKER_SOCKET
 
 #: What ``thread(kind, job_id)`` answers: the broker's ``delivery_reply_status``
 #: ``thread`` field, ``{"checked": bool, "answered": sentence}``.

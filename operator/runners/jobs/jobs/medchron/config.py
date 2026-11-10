@@ -22,11 +22,12 @@ from typing import Any
 
 import yaml
 
+from .. import seat_layout
 from ..deadline import NETWORK_RETRY_S
 from ..firm_inputs import pin
 
 ENV_PATH = "MEDCHRON_FIRM_CONFIG"
-DEFAULT_PATH = "/var/lib/smd-config/medchron-firm.yaml"
+DEFAULT_PATH = seat_layout.MEDCHRON_FIRM_YAML
 
 
 class ConfigError(ValueError):

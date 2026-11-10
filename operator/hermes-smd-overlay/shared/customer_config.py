@@ -41,6 +41,8 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
+from shared import seat_layout
+
 try:
     import yaml
 except ImportError as exc:  # pragma: no cover - import-time guard
@@ -51,7 +53,7 @@ except ImportError as exc:  # pragma: no cover - import-time guard
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_VOLUME_PATH = "/opt/data/customer.yaml"
+DEFAULT_VOLUME_PATH = seat_layout.VOLUME_CUSTOMER_YAML
 
 #: The two mail domains an operations answer may come from (ss-console#2546).
 #: Held HERE rather than read from the per-seat file on purpose: the point of

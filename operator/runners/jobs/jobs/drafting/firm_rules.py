@@ -51,6 +51,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .. import seat_layout
 from ..firmbase.base import package
 from . import layout_store
 from .revise.checklist import LAYOUT_KEYS, _layout_problems
@@ -59,7 +60,7 @@ logger = logging.getLogger(__name__)
 
 ENV_DIR = "JOBS_SPEC_DIR"
 #: The spec applier's install dir (``spec_applier/__main__.py``).
-DEFAULT_DIR = "/var/lib/smd-config/specs"
+DEFAULT_DIR = seat_layout.SPECS
 #: The output class whose rules this lane reads (the overlay's
 #: ``shared.layout_rules.LAYOUT_RULE_CLASSES``; parity-tested both sides).
 RULE_CLASS = "work_product"

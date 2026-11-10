@@ -33,10 +33,10 @@ from typing import Any
 
 from records_contract.review_row import JOB_ID_RE, JOB_KINDS, ReviewError
 
-from shared import request_index
+from shared import request_index, seat_layout
 
 AUDIT_DB_ENV = "SMD_AUDIT_DB_PATH"
-DEFAULT_AUDIT_DB = "/opt/data/audit.db"
+DEFAULT_AUDIT_DB = seat_layout.LEGACY_AUDIT_DB
 #: The ledgers a requested job's reply is marked on (``reply_sent_at`` /
 #: ``reply_key``), by kind. A medchron job carries no mark (its once-only is the
 #: broker's claim alone) and a negotiation or note job has no request thread of

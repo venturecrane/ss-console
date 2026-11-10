@@ -32,6 +32,7 @@ import yaml
 
 from bootstrap.validate import validate_customer_yaml
 from config_applier import safety
+from shared import seat_layout
 from shared.audit_contract import INSERT_SQL, agent_event_params
 from shared.ids import sha256
 
@@ -465,7 +466,7 @@ def apply(
     s3_client: Any,
     bucket: str,
     slug: str,
-    volume_path: str | Path = "/opt/data/customer.yaml",
+    volume_path: str | Path = seat_layout.VOLUME_CUSTOMER_YAML,
     audit_client: Any,
     prev_epoch: int | None = None,
     allow_deferred_paths: bool = False,

@@ -166,6 +166,35 @@ paths:
   smokeball_python:
     path: '{smokeball_bundle}/.venv/bin/python'
 
+  # ---- PR C: config, interpreter and audit families (W2-W4) ----
+  # Declared so the Python trees read them from the generated module. No `env`:
+  # an env name is asserted on live seats, and none of these has been measured
+  # there under a declared name. No `volume` flag either: none of them moves here.
+  casefile_inputs:
+    path: '{smd_config}/casefile'
+  demand_inputs:
+    path: '{smd_config}/demand'
+  drafting_inputs:
+    path: '{smd_config}/drafting'
+  litigation_inputs:
+    path: '{smd_config}/litigation'
+  records_inputs:
+    path: '{smd_config}/records'
+  medchron_firm_yaml:
+    path: '{smd_config}/medchron-firm.yaml'
+  casefile_broker_firm_yaml:
+    path: '{smd_config}/casefile-broker-firm.yaml'
+  litigation_broker_firm_yaml:
+    path: '{smd_config}/litigation-broker-firm.yaml'
+  records_broker_firm_yaml:
+    path: '{smd_config}/records-broker-firm.yaml'
+  hermes_playwright:
+    # PLAYWRIGHT_BROWSERS_PATH: the image installs the browsers under the Hermes root.
+    path: '{hermes_root}/.playwright'
+  legacy_audit_db:
+    # The pre-/run/smd-audit audit db on the volume (entrypoint.sh LEGACY_AUDIT_DB).
+    path: '{data}/audit.db'
+
 # Files that must spell a path rather than import it, each with the reason. The
 # generation test pins each named path in each file to the value above.
 restated:

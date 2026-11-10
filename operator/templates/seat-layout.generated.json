@@ -31,6 +31,14 @@
       ],
       "when": "always"
     },
+    "casefile_broker_firm_yaml": {
+      "path": "/var/lib/smd-config/casefile-broker-firm.yaml",
+      "when": "always"
+    },
+    "casefile_inputs": {
+      "path": "/var/lib/smd-config/casefile",
+      "when": "always"
+    },
     "casework_ledger": {
       "path": "/opt/data/audit/casework-ledger.jsonl",
       "when": "always"
@@ -55,11 +63,23 @@
       "kind": "dir",
       "when": "always"
     },
+    "demand_inputs": {
+      "path": "/var/lib/smd-config/demand",
+      "when": "always"
+    },
+    "drafting_inputs": {
+      "path": "/var/lib/smd-config/drafting",
+      "when": "always"
+    },
     "escalation_ledger": {
       "path": "/opt/data/audit/escalation-ledger.jsonl",
       "env": [
         "SMD_ESCALATION_LEDGER_PATH"
       ],
+      "when": "always"
+    },
+    "hermes_playwright": {
+      "path": "/opt/hermes/.playwright",
       "when": "always"
     },
     "hermes_python": {
@@ -125,14 +145,38 @@
       "path": "/run/smd-lanes",
       "when": "always"
     },
+    "legacy_audit_db": {
+      "path": "/opt/data/audit.db",
+      "when": "always"
+    },
+    "litigation_broker_firm_yaml": {
+      "path": "/var/lib/smd-config/litigation-broker-firm.yaml",
+      "when": "always"
+    },
+    "litigation_inputs": {
+      "path": "/var/lib/smd-config/litigation",
+      "when": "always"
+    },
     "marketing_registers": {
       "path": "/var/lib/smd-config/marketing/marketing-firm.yaml",
+      "when": "always"
+    },
+    "medchron_firm_yaml": {
+      "path": "/var/lib/smd-config/medchron-firm.yaml",
       "when": "always"
     },
     "profiles": {
       "path": "/opt/data/profiles",
       "expect": "present",
       "kind": "dir",
+      "when": "always"
+    },
+    "records_broker_firm_yaml": {
+      "path": "/var/lib/smd-config/records-broker-firm.yaml",
+      "when": "always"
+    },
+    "records_inputs": {
+      "path": "/var/lib/smd-config/records",
       "when": "always"
     },
     "requests_db": {

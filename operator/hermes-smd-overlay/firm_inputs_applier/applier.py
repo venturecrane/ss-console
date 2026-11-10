@@ -40,9 +40,11 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from shared import seat_layout
+
 logger = logging.getLogger("firm_inputs_applier")
 
-DEFAULT_CONFIG_DIR = "/var/lib/smd-config"
+DEFAULT_CONFIG_DIR = seat_layout.SMD_CONFIG
 DEFAULT_STATE_DIR = "/run/smd-firm-inputs"
 DEFAULT_LANE_STATE_DIR = "/run/smd-lanes"
 DEFAULT_VALIDATOR_PYTHON = "/opt/jobs/.venv/bin/python"
