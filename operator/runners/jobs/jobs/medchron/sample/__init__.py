@@ -19,8 +19,8 @@ THE PIECES.
   into image-only scans (skew, fax header, noise, handwriting, one page nobody
   can read). Seeded, so the same spec gives the same bytes.
 * ``answer_key``: what a model WOULD have produced at each paid seam (the page
-  transcriptions, the billing transcriptions, the map entries), derived from
-  the spec instead of from a model.
+  transcriptions, the billing transcriptions, the scanned-page classifier's
+  labels, the map entries), derived from the spec instead of from a model.
 * ``pipeline``: seeds those artifacts into a job workdir and runs the
   PRODUCTION $0 stages over them, so the chronology and billing worksheet are
   the deliverables the real renderer writes, citing real exhibit pages.

@@ -5,16 +5,20 @@ demo tenant). Then a job workdir is laid out the way ``download`` leaves one,
 and the production stages run over it in the DAG's order. The paid stages are
 not skipped by pretending: each is either fed its own checkpoint from the
 answer key and run (vision, billing_extract, which find nothing left to read),
-or replaced at its output file by the answer key (map, condense), and the
-stages after are the production code unchanged. Every stage runs with a
-client that raises on any call, so a stage that would spend stops the build
-instead of spending.
+or replaced at its output file by the answer key (map, condense,
+classify_scanned), and the stages after are the production code unchanged.
+Every stage runs with a client that raises on any call, so a stage that would
+spend stops the build instead of spending.
 
-Not run, and why: ``classify_scanned``, ``audit`` and ``review`` are model
-reads of the finished package with no checkpoint to feed, and the strip and
-exhibit_merge stages consume classify's labels. The exhibits here are
-therefore the unstripped exhibits: fax covers and certifications stay in.
-``upload`` writes to a tenant and is never run here.
+The strip runs as in production: ``classify_nonrecord`` reads the text pages
+against the demo firm's page classes, ``decide_control`` picks the record
+control, the answer key labels the scanned head pages, and ``strip`` (falsify,
+dry, apply) and ``exhibit_merge`` take the fax covers and certifications out of
+the exhibits and renumber every citation.
+
+Not run, and why: ``audit`` and ``review`` are model reads of the finished
+package with no checkpoint to feed. ``upload`` writes to a tenant and is never
+run here.
 """
 
 from __future__ import annotations
@@ -30,7 +34,7 @@ from typing import Any, Callable
 
 import yaml
 
-from .. import config as config_mod, decisions, job as job_mod
+from .. import config as config_mod, decision_rules, decisions, job as job_mod
 from ..probes import SYNTHETIC_FIRM
 from ...stages import (
     assemble,
@@ -38,9 +42,11 @@ from ...stages import (
     billing_chart,
     billing_docx,
     build_doc,
+    classify,
     content_dupes,
     coverage,
     dos_check,
+    exhibit_merge,
     exhibits,
     extract,
     group,
@@ -50,6 +56,7 @@ from ...stages import (
     render,
     repair,
     scope,
+    strip,
     summarize,
     units,
     vision,
@@ -115,6 +122,13 @@ def firm_config(plan: Plan) -> dict[str, Any]:
         r"(?i)claim form",
         r"(?i)\bEOB\b",
         r"(?i)lien",
+    ]
+    # The demo firm's text page classes: the two kinds of paper a production
+    # wraps its records in. Scanned covers are labelled by the answer key.
+    cfg["nonrecord"]["page_classes"] = [
+        *cfg["nonrecord"]["page_classes"],
+        {"name": "COVER", "patterns": [r"FACSIMILE TRANSMITTAL"]},
+        {"name": "CERT", "patterns": [r"CERTIFICATION OF CUSTODIAN OF RECORDS"]},
     ]
     cfg["delivery"]["folder_template"] = "MEDICAL CHRONOLOGY - {CLIENT} {MM-DD-YY}"
     return cfg
@@ -230,12 +244,46 @@ def _back_half(b: Build, sr: StageRun) -> None:
     _run(b, sr, "summarize", summarize.run)
     icd.vendor(b.plan, b.root / "install")
     _run(b, sr, "build_doc", build_doc.run)
+    _strip(b, sr)
     _run(b, sr, "coverage_gate", coverage.run, gate=True)
     _run(b, sr, "dos_check", dos_check.run, gate=True)
     _run(b, sr, "billing_chart", billing_chart.run)
     _run(b, sr, "billing_docx", billing_docx.run)
     _run(b, sr, "render", render.run)
     _run(b, sr, "manifest", manifest.run)
+
+
+def _strip(b: Build, sr: StageRun) -> None:
+    """classify_nonrecord, decide_control, classify_scanned (answered), the
+    three strip passes and exhibit_merge, in the DAG's order."""
+    _run(b, sr, "classify_nonrecord", classify.run_nonrecord)
+    decision_rules.control(sr.job, sr.cfg, b.slug_dir, sr.unit, dry_run=False)
+    labels = answer_key.seed_classify(b.plan, b.slug_dir, b.unit)
+    b.log.append(
+        f"--- classify_scanned (answered): controls_ok={labels['controls_ok']}, {len(labels['labels'])} labels"
+    )
+    if not labels["controls_ok"]:
+        raise StageFailed("the record control decide_control chose is not a record page in the answer key")
+    _run(b, sr, "strip_falsify", strip.run_falsify)
+    _run(b, sr, "strip_dry", strip.run_dry)
+    _run(b, sr, "strip_apply", strip.run_apply)
+    _run(b, sr, "exhibit_merge", exhibit_merge.run)
+
+
+def exhibit_pages(b: Build) -> dict[str, list[int]]:
+    """{exhibit: [pages before the strip, pages after]}."""
+    pm = json.loads((b.out_dir / "page_map.json").read_text(encoding="utf-8"))
+    after = json.loads(_strip_result(b)).get("new_page_counts", {})
+    return {str(e["exhibit"]): [int(e["total_pages"]), int(after.get(str(e["exhibit"]), e["total_pages"]))] for e in pm}
+
+
+def _strip_result(b: Build) -> str:
+    p = b.slug_dir / "strip_result.json"
+    return p.read_text(encoding="utf-8") if p.is_file() else "{}"
+
+
+def strip_drops(b: Build) -> dict[str, list[int]]:
+    return json.loads(_strip_result(b)).get("drops", {})
 
 
 def build(plan: Plan, out: Path) -> Build:
@@ -260,7 +308,8 @@ def build(plan: Plan, out: Path) -> Build:
         (out / "build.log").write_text("\n".join(b.log) + "\n", encoding="utf-8")
     answer_key.write(plan, out / "answer-key.json")
     final = (b.slug_dir / "runs" / b.unit / "final-chronology.md").read_text(encoding="utf-8")
-    b.problems = answer_key.score(plan, final, json.loads((b.out_dir / "page_map.json").read_text(encoding="utf-8")))
+    page_map = json.loads((b.out_dir / "page_map.json").read_text(encoding="utf-8"))
+    b.problems = answer_key.score(plan, final, page_map, strip_drops(b))
     report = {
         "matter": plan.matter["slug"],
         "pages": plan.total_pages(),
@@ -270,6 +319,7 @@ def build(plan: Plan, out: Path) -> Build:
         "seconds": b.seconds,
         "verdicts": b.verdicts,
         "deliverables": sorted(p.name for p in b.out_dir.iterdir() if p.is_file()),
+        "exhibit_pages_before_after_strip": exhibit_pages(b),
         "answer_key_problems": b.problems,
     }
     (out / "build.json").write_text(json.dumps(report, indent=1), encoding="utf-8")

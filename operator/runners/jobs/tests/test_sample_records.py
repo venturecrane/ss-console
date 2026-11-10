@@ -58,6 +58,38 @@ def test_every_citation_lands_on_the_page_that_prints_its_fact(built: dict, slug
     assert len(cited) == len(answer_key.expected_citations(b.plan)) > 0
 
 
+@pytest.mark.parametrize("slug", MATTERS)
+def test_no_fax_cover_or_certification_lands_in_an_exhibit(built: dict, slug: str) -> None:
+    """The strip ran as in production: every page left in a delivered exhibit
+    is a record page, read off the exhibit PDF itself and traced to the spec
+    through the page map and the strip's own drops."""
+    from jobs.stages.classify import resolve_exhibit_files
+
+    b = built[slug]
+    by_name = {d.file_name: d for d in b.plan.documents}
+    drops = pipeline.strip_drops(b)
+    stripped = 0
+    for ex, path in resolve_exhibit_files(b.out_dir).items():
+        with pymupdf.open(str(path)) as pdfdoc:
+            n = len(pdfdoc)
+        for page in range(1, n + 1):
+            src = answer_key.source_page(_page_map(b), ex, answer_key.unstripped_page(drops, ex, page))
+            assert src is not None
+            kind = by_name[src[0]].pages[src[1] - 1].kind
+            assert kind not in ("fax_cover", "custodian_cert"), f"Exhibit {ex} p. {page} is a {kind}"
+        before, after = pipeline.exhibit_pages(b)[str(ex)]
+        assert n == after < before
+        stripped += before - after
+    wrappers = sum(
+        1
+        for e in _page_map(b)
+        for f in e["files"]
+        for p in by_name[f["file"]].pages
+        if p.kind in ("fax_cover", "custodian_cert")
+    )
+    assert stripped == wrappers > 0, "every cover and certification in an exhibited file was removed, nothing else"
+
+
 def test_the_score_can_fail(built: dict) -> None:
     """A check that cannot fail measures nothing: move one citation a page and
     replace one paragraph, and the score names both."""
@@ -65,8 +97,10 @@ def test_the_score_can_fail(built: dict) -> None:
     text = _final(b)
     _day, para, exhibit, page = answer_key.cited_paragraphs(text)[0]
     shifted = text.replace(f"(Exhibit {exhibit} - p. {page})", f"(Exhibit {exhibit} - p. {page + 1})", 1)
-    assert any("cites" in p for p in answer_key.score(b.plan, shifted, _page_map(b)))
-    swapped = answer_key.score(b.plan, text.replace(para, "A sentence no record states.", 1), _page_map(b))
+    assert any("cites" in p for p in answer_key.score(b.plan, shifted, _page_map(b), pipeline.strip_drops(b)))
+    swapped = answer_key.score(
+        b.plan, text.replace(para, "A sentence no record states.", 1), _page_map(b), pipeline.strip_drops(b)
+    )
     assert any("not in the answer key" in p for p in swapped) and any("lost" in p for p in swapped)
 
 
