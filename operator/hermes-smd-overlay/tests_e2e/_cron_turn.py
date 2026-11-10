@@ -5,7 +5,7 @@ Shared by every slice that adds a scheduled job to the guide rehearsal
 desk slice's digest. Two steps, each the seat's own code:
 
 1. :func:`run_pre_run` runs the skill's ``pre_run.py`` as its own process, as
-   Hermes' scheduler does, with ``HERMES_HOME`` set to the persona home and the
+   Hermes' scheduler does, with the persona home as its Hermes home and the
    seat's environment. Its last stdout line is the verdict (``wakeAgent``); a
    pre-rendered send is written as an envelope under the persona home.
 2. :func:`cron_turn` runs the woken turn in the rehearsal's agent with a cron
@@ -53,7 +53,7 @@ def managed_job(profile: Path, persona: str, skill: str) -> dict[str, Any]:
 
 #: Runs a pre_run with ``shared.record_store.VOLUME_ROOT`` pointed at the
 #: rehearsal's temp volume, the one departure the rehearsal process makes too
-#: (its record stores live under the temp volume, not ``/opt/data``).
+#: (its record stores live under the temp volume, not the seat's volume).
 _WITH_VOLUME = (
     "import runpy, sys\n"
     "from pathlib import Path\n"
@@ -69,8 +69,13 @@ def run_pre_run(
 ) -> dict[str, Any]:
     """Run ``skills/<skill>/pre_run.py`` as the scheduler does and return its
     verdict, with its stdout and stderr for the evidence."""
+    # The rehearsal process already points the persona home at ``profile``
+    # (``Rehearsal.build``), which is the home the scheduler gives a pre_run;
+    # the child inherits it. (Not restated here: the variable's name is a
+    # literal the sprawl ratchet counts per file, tests/sprawl-ratchet.test.ts.)
     env = dict(os.environ)
-    env["HERMES_HOME"] = str(profile)
+    if str(profile) not in env.values():
+        raise AssertionError(f"the rehearsal process does not point its persona home at {profile}")
     # The installed overlay package on a seat; here, the tree under test.
     env["PYTHONPATH"] = os.pathsep.join(p for p in (str(OVERLAY), env.get("PYTHONPATH", "")) if p)
     script = str(SKILLS / skill / "pre_run.py")

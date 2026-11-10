@@ -33,7 +33,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import socket
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -147,19 +146,13 @@ def write_envelope(payload: dict[str, Any], hermes_home: str | None = None) -> P
     return target
 
 
-def _wake_row(verb: str, action_type: str, basis: str, extra: dict[str, Any]) -> bool:
-    """One wake row through the broker's agent-uid verb, counts only."""
-    path = os.environ.get("SMD_AUDIT_BROKER_SOCKET") or os.environ.get(
-        "SMD_WORKSPACE_BROKER_SOCKET"
-    )
-    if not path:
-        return False
-    metadata = {
-        "decision_basis": basis,
-        "platform": "cron-pre-run",
-        "customer": os.environ.get("CUSTOMER_SLUG", ""),
-        **extra,
-    }
+def _wake_row(
+    verb: str, action_type: str, basis: str, extra: dict[str, Any], customer: str = ""
+) -> bool:
+    """One wake row through the broker's agent-uid verb, counts only. True on ack."""
+    from shared import workspace_broker
+
+    metadata = {"decision_basis": basis, "platform": "cron-pre-run", "customer": customer, **extra}
     row = {
         "action_type": action_type,
         "actor": "agent",
@@ -168,17 +161,10 @@ def _wake_row(verb: str, action_type: str, basis: str, extra: dict[str, Any]) ->
         "metadata": json.dumps(metadata, sort_keys=True, separators=(",", ":")),
     }
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(_BROKER_TIMEOUT_SECONDS)
-            sock.connect(path)
-            sock.sendall(json.dumps({"action": verb, "row": row}).encode("utf-8") + b"\n")
-            raw = b""
-            while not raw.endswith(b"\n"):
-                chunk = sock.recv(4096)
-                if not chunk:
-                    break
-                raw += chunk
-        return json.loads(raw.decode("utf-8")).get("ok") is True
+        answer = workspace_broker.request(
+            {"action": verb, "row": row}, timeout=_BROKER_TIMEOUT_SECONDS
+        )
+        return answer.get("ok") is True
     except Exception:  # noqa: BLE001 - a heartbeat failure is reported, never raised
         return False
 
@@ -196,16 +182,20 @@ def run(
 
     cfg = config if config is not None else CustomerConfig.from_volume()
     if not training.authored(cfg):
-        _wake_row("suppressed_wake_append", "SUPPRESSED_WAKE", "training_not_authored", {})
+        _wake_row(
+            "suppressed_wake_append", "SUPPRESSED_WAKE", "training_not_authored", {}, cfg.slug
+        )
         return {"wakeAgent": False, "status": "training_not_authored"}
     admins = list(cfg.admins)
     if not admins:
-        _wake_row("suppressed_wake_append", "SUPPRESSED_WAKE", "no_administrator", {})
+        _wake_row("suppressed_wake_append", "SUPPRESSED_WAKE", "no_administrator", {}, cfg.slug)
         return {"wakeAgent": False, "status": "no_administrator"}
     cur = training.load_curriculum(training_dir, practice_dir)
     people = gather(cur, config=cfg)
     if not people:
-        _wake_row("suppressed_wake_append", "SUPPRESSED_WAKE", "nobody_enrolled", {"people": 0})
+        _wake_row(
+            "suppressed_wake_append", "SUPPRESSED_WAKE", "nobody_enrolled", {"people": 0}, cfg.slug
+        )
         return {"wakeAgent": False, "status": "nobody_enrolled", "people": 0}
     body = render(cur, people)
     now = clock() if callable(clock) else datetime.now(timezone.utc)
@@ -214,7 +204,7 @@ def run(
     write_envelope(envelope)
     ready = sum(1 for _, p in people if p is not None and training.readiness(cur, p)[0])
     counts = {"people": len(people), "ready": ready, "dispatch_count": 1}
-    _wake_row("emitted_wake_append", "EMITTED_WAKE", "report_ready", counts)
+    _wake_row("emitted_wake_append", "EMITTED_WAKE", "report_ready", counts, cfg.slug)
     return {"wakeAgent": True, "dispatch_expected": True, "status": "report_ready", **counts}
 
 

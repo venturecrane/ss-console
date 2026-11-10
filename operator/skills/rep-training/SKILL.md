@@ -1,6 +1,6 @@
 ---
 name: rep-training
-description: Teaches a sales representative the Operator through lessons, an open-book quiz and a mock pitch, and keeps their progress.
+description: Trains a sales representative on the Operator. Lessons, an open-book quiz and a mock pitch, with progress kept by the seat.
 version: 0.1.0
 author: SMD Services
 license: MIT

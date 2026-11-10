@@ -47,13 +47,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from shared import pre_run_handoff, seat_layout
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +73,10 @@ CURRICULUM_REL = Path("references") / "curriculum.yaml"
 TONE_RULES_REL = Path("references") / "tone-rules.yaml"
 SCENARIOS_REL = Path("references") / "scenarios.yaml"
 
-#: The image's read-only skill tree, and the volume's. A persona's own copy
-#: (``$HERMES_HOME/skills``, ``$HERMES_HOME/profiles/<slug>/skills``) is tried
-#: first, as every other skill reader on the seat does.
-_IMAGE_SKILL_ROOTS: tuple[str, ...] = ("/opt/data/skills", "/app/skills")
+#: The volume's skill tree, and the image's read-only one. A persona's own copy
+#: (``skills/`` under the process's home, and under each profile home beneath
+#: it) is tried first, as every other skill reader on the seat does.
+_IMAGE_SKILL_ROOTS: tuple[str, ...] = (seat_layout.SKILLS, "/app/skills")
 
 #: An answer to an objection must carry at least this many words to count.
 MIN_ANSWER_WORDS = 4
@@ -144,7 +145,9 @@ def authored(config: Any = None) -> bool:
 def skill_dir(skill: str = SKILL, *, home: str | None = None) -> Path:
     """The directory ``skill`` is read from on this seat. Raises TrainingError
     when no copy is found."""
-    base = Path(home or os.environ.get("HERMES_HOME") or "/opt/data")
+    # The process's home, resolved the one way every pre-run reader resolves
+    # it (``shared.pre_run_handoff``): ``<home>/.smd/pre_run``.
+    base = Path(home) if home else pre_run_handoff.handoff_dir().parents[1]
     candidates = [base / "skills" / skill]
     profiles = base / "profiles"
     if profiles.is_dir():
