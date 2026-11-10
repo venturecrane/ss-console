@@ -32,7 +32,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # a managed cron firing within 10 minutes or a stale heartbeat all mean busy;
 # busy sets the quiesce marker (no new claims) and waits up to 30 minutes for
 # idle. Still busy, or the probe could not tell, refuses. A seat with no app yet
-# is idle by definition. FLEET_FORCE_MID_JOB=1 overrides, loudly, on purpose.
+# or with an app but no Machine yet is idle by definition (a failed Machine
+# listing still refuses). FLEET_FORCE_MID_JOB=1 overrides, loudly, on purpose.
 if [ "${FLEET_FORCE_MID_JOB:-}" = "1" ]; then
   echo "reprovision: WARNING FLEET_FORCE_MID_JOB=1: skipping the busy gate; a running job will be stopped" >&2
 elif ! "${HERE}/fleet" busy "${SLUG}" --wait; then

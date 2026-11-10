@@ -17,9 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from bin.lib.fleet import busy
+from bin.lib.fleet import busy, cli
+from bin.lib.fleet.fly import Fly, FlyTokens
 from bin.lib.fleet.runner import Result, ToolingError, looks_like_transport_failure
-from bin.tests.fleet_fakes import FakeFly
+from bin.tests.fleet_fakes import FakeFly, FakeR2, FakeStore
 
 HERE = Path(busy.__file__).resolve().parent
 
@@ -403,3 +404,90 @@ def test_a_probe_that_answers_badly_halts_at_once() -> None:
         _gate(fly).wait_idle("captain-mark", 3600, lambda _: None)
     assert not isinstance(caught.value, busy.TransportFailure)
     assert fly.probe_calls == 1
+
+
+# --- a seat with no Machine yet (a first provision, 2026-11-10) ---------------------
+#
+# Real Fly, real BusyGate, real `fleet busy` CLI: only the subprocess layer (the
+# Runner protocol, i.e. the `fly` binary) is scripted, so what is tested is the
+# listing as Fly.machines parses it and the verdict as the gate reaches it.
+
+REPO = Path(__file__).resolve().parents[3]
+
+
+class _FlyBinary:
+    """Answers `fly status`, `fly machines list` and `fly machine exec` as scripted."""
+
+    def __init__(self, machines: Result, probe_facts: dict | None = None) -> None:
+        self.machines = machines
+        self.probe_facts = probe_facts if probe_facts is not None else _facts()
+        self.calls: list[list[str]] = []
+
+    def run(self, argv, *, input_text=None, timeout=120, cwd=None, env=None) -> Result:
+        argv = list(argv)
+        self.calls.append(argv)
+        if argv[1] == "status":
+            return Result(0, "{}", "")
+        if argv[1:3] == ["machines", "list"]:
+            return self.machines
+        if argv[1:3] == ["machine", "exec"]:
+            return Result(0, "SMD_BUSY_PROBE " + json.dumps(self.probe_facts), "")
+        raise AssertionError(f"unexpected fly call: {argv}")
+
+
+def _real_fly(binary: _FlyBinary) -> Fly:
+    return Fly(binary, str(REPO), FlyTokens({}))  # type: ignore[arg-type]
+
+
+def _fleet_busy(binary: _FlyBinary, *extra: str) -> tuple[int, list[str]]:
+    logs: list[str] = []
+    ctx = cli.Ctx(REPO, binary, FakeStore(), FakeR2(), _real_fly(binary), sleep=lambda s: None, log=logs.append)  # type: ignore[arg-type]
+    return cli.main(["busy", "smd-guide", *extra], ctx), logs
+
+
+def test_zero_machines_is_idle_not_a_tooling_error(capsys: pytest.CaptureFixture[str]) -> None:
+    # FALSIFIER: on the unfixed gate this raised "hermes-smd-guide has no Machine to
+    # run a command on" (exit 3), and a first provision needed FLEET_FORCE_MID_JOB=1.
+    binary = _FlyBinary(Result(0, "[]", ""))
+    verdict = _gate(_real_fly(binary)).probe("smd-guide")  # type: ignore[arg-type]
+    assert not verdict.busy and verdict.reasons == [busy.NO_MACHINE_REASON]
+    assert not any(c[1:3] == ["machine", "exec"] for c in binary.calls)
+    rc, _ = _fleet_busy(binary, "--wait")
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out == {"seat": "smd-guide", "busy": False, "reasons": [busy.NO_MACHINE_REASON]}
+
+
+def test_a_failed_machine_listing_is_a_tooling_error_never_idle(capsys: pytest.CaptureFixture[str]) -> None:
+    # FALSIFIER: read "could not list" as "no Machines" and a seat that cannot be
+    # reached mid-job is restarted by a reprovision.
+    for failure in (
+        Result(1, "", "Error: unauthorized (Request ID: 01M5WVSBZ3EP8ENTTX85MA964K-lax)"),
+        Result(1, "", FLY_API_EOF),
+        Result(124, "", "timed out after 180s"),
+    ):
+        binary = _FlyBinary(failure)
+        with pytest.raises(ToolingError):
+            _gate(_real_fly(binary)).probe("smd-guide")  # type: ignore[arg-type]
+        rc, _ = _fleet_busy(binary)
+        captured = capsys.readouterr()
+        assert rc == 3 and "TOOLING ERROR" in captured.out + captured.err
+        assert '"busy": false' not in captured.out
+
+
+def test_a_seat_with_a_machine_is_probed_as_before() -> None:
+    one = Result(0, '[{"id": "6e8206d0f36d08", "state": "started"}]', "")
+    binary = _FlyBinary(one)
+    assert not _gate(_real_fly(binary)).probe("smd-guide").busy  # type: ignore[arg-type]
+    assert any(c[1:4] == ["machine", "exec", "6e8206d0f36d08"] for c in binary.calls)
+    binary = _FlyBinary(one, probe_facts=_BUSY)
+    verdict = _gate(_real_fly(binary)).probe("smd-guide")  # type: ignore[arg-type]
+    assert verdict.busy and verdict.reasons == ["cron slot fires in 60s"]
+    rc, _ = _fleet_busy(binary)
+    assert rc == 1
+
+
+def test_unquiesce_on_a_seat_with_no_machine_says_so() -> None:
+    binary = _FlyBinary(Result(0, "[]", ""))
+    assert "no Machine" in _gate(_real_fly(binary)).clear_any_fleet("smd-guide")  # type: ignore[arg-type]
+    assert not any(c[1:3] == ["machine", "exec"] for c in binary.calls)
