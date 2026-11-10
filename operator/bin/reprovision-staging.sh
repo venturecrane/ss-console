@@ -39,12 +39,20 @@
 #
 # The slug is an ARGUMENT, and the wrapper REFUSES any seat whose seat.yaml does
 # not say `purpose: release-twin` (read from operator/fleet/seats.yaml through
-# operator/bin/lib/seat_purpose.py). It must never touch a real customer.
+# operator/bin/lib/seat_purpose.py), or, with --pre-flip, any seat that is not
+# `purpose: internal` with a twin.yaml naming a client seat. It must never touch
+# a real customer.
 #
 # Usage:  operator/bin/reprovision-staging.sh [<twin-slug>]
 #   With no argument it provisions the one release twin the inventory declares
 #   (smd-staging today), so the old no-argument invocation still works; with
 #   more than one twin declared, name the one you mean.
+#         operator/bin/reprovision-staging.sh --pre-flip <twin-slug>
+#   The first provision of a new exact twin while another seat still holds the
+#   release-twin role (ap-staging before its flip; the runbook is
+#   docs/handbook/deployment-release.md, "Provisioning ap-staging"). Isolates
+#   the declared client's customer-owned secrets and keeps the twin's own
+#   per-seat names, since a new app has no earlier Machine secret to fall back on.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,8 +63,14 @@ purpose_cli() {
   (cd "${REPO_ROOT}" && "${PYRUN[@]}" operator/bin/lib/seat_purpose.py "$@")
 }
 
+PRE_FLIP=0
+if [ "${1:-}" = "--pre-flip" ]; then
+  PRE_FLIP=1
+  shift
+  [ "$#" -eq 1 ] || { echo "usage: reprovision-staging.sh --pre-flip <twin-slug>" >&2; exit 2; }
+fi
 if [ "$#" -gt 1 ]; then
-  echo "usage: reprovision-staging.sh [<twin-slug>]" >&2
+  echo "usage: reprovision-staging.sh [<twin-slug>] | --pre-flip <twin-slug>" >&2
   exit 2
 fi
 if [ "$#" -eq 1 ]; then
@@ -70,29 +84,51 @@ else
   fi
   SLUG="${TWINS}"
 fi
-# The refusal: only a seat authored as a release twin. twin-of exits non-zero
-# for any other purpose (or an unknown slug), naming why.
-CLIENT="$(purpose_cli twin-of "${SLUG}")" \
-  || { echo "reprovision-staging: refusing ${SLUG}: it is not a release twin (seat.yaml purpose: release-twin)" >&2; exit 1; }
-echo "reprovision-staging: ${SLUG} is the release twin of ${CLIENT}; isolating both seats' customer-owned secrets" >&2
-if [ -n "${REPROVISION_STAGING_DRY_RUN:-}" ]; then
-  # Test hook (operator/bin/tests/test_reprovision_staging.py): stop after the
-  # refusal and the isolate set, before anything reaches Infisical or Fly.
-  (cd "${REPO_ROOT}" && {
-    "${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${SLUG}"
-    "${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${CLIENT}"
-  } | sort -u)
-  exit 0
+if [ "${PRE_FLIP}" = 1 ]; then
+  # PRE-FLIP: the first provision of an exact twin that is not the release twin
+  # yet. A client has at most one release twin (ADR 0107), so the new twin is
+  # authored `purpose: internal` and provisioned and proven green while the old
+  # twin still holds the role; only then does the flip PR make it the release
+  # twin. What it copies is declared by its twin.yaml (`twin_of`, the file the
+  # twin-drift test holds it to). The refusals: the seat must be `internal`, and
+  # it must declare an exact twin of a seat whose purpose is client.
+  [ "$(purpose_cli purpose "${SLUG}")" = internal ] \
+    || { echo "reprovision-staging: refusing --pre-flip ${SLUG}: only an internal seat before its flip (a release twin takes the plain form)" >&2; exit 1; }
+  CLIENT="$(purpose_cli declared-twin "${SLUG}")" \
+    || { echo "reprovision-staging: refusing --pre-flip ${SLUG}: it declares no exact twin (operator/customers/${SLUG}/twin.yaml)" >&2; exit 1; }
+  [ "$(purpose_cli purpose "${CLIENT}")" = client ] \
+    || { echo "reprovision-staging: refusing --pre-flip ${SLUG}: its twin_of ${CLIENT} is not a client seat" >&2; exit 1; }
+  echo "reprovision-staging: ${SLUG} is the exact twin of ${CLIENT} (pre-flip); isolating ${CLIENT}'s customer-owned secrets" >&2
+else
+  # The refusal: only a seat authored as a release twin. twin-of exits non-zero
+  # for any other purpose (or an unknown slug), naming why.
+  CLIENT="$(purpose_cli twin-of "${SLUG}")" \
+    || { echo "reprovision-staging: refusing ${SLUG}: it is not a release twin (seat.yaml purpose: release-twin)" >&2; exit 1; }
+  echo "reprovision-staging: ${SLUG} is the release twin of ${CLIENT}; isolating both seats' customer-owned secrets" >&2
 fi
 
 # Contract-driven isolate set, computed BEFORE infisical run (it needs no secret —
 # only the classification + the slugs). Newline-separated customer-owned source
-# names, per-seat __<CID> expanded for the twin AND for the client it copies.
-# Fails loud if the classification cannot load.
-ISOLATE_NAMES="$(cd "${REPO_ROOT}" \
-  && TWIN_NAMES="$("${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${SLUG}")" \
-  && CLIENT_NAMES="$("${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${CLIENT}")" \
-  && printf '%s\n%s\n' "${TWIN_NAMES}" "${CLIENT_NAMES}" | sort -u)" \
+# names (secret_custody.py: SMD's own sandbox credentials are never among them),
+# per-seat __<CID> expanded for the client it copies AND, after the flip, for
+# the twin itself. A pre-flip run keeps the twin's OWN per-seat names: its app is
+# new, so no earlier Machine secret stands in for them (its per-seat Anthropic
+# workspace key above all), and every value vaulted under the twin's own slug is
+# SMD's, for this seat. Fails loud if the classification cannot load.
+isolate_set() {
+  (cd "${REPO_ROOT}" \
+    && CLIENT_NAMES="$("${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${CLIENT}")" \
+    && if [ "${PRE_FLIP}" = 1 ]; then TWIN_NAMES=""; else
+         TWIN_NAMES="$("${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${SLUG}")"; fi \
+    && printf '%s\n%s\n' "${TWIN_NAMES}" "${CLIENT_NAMES}" | grep . | sort -u)
+}
+if [ -n "${REPROVISION_STAGING_DRY_RUN:-}" ]; then
+  # Test hook (operator/bin/tests/test_reprovision_staging.py): stop after the
+  # refusal and the isolate set, before anything reaches Infisical or Fly.
+  isolate_set
+  exit $?
+fi
+ISOLATE_NAMES="$(isolate_set)" \
   || { echo "reprovision-staging: could not compute the customer-owned isolate set" >&2; exit 1; }
 [ -n "${ISOLATE_NAMES}" ] \
   || { echo "reprovision-staging: empty isolate set — refusing to run without isolation" >&2; exit 1; }

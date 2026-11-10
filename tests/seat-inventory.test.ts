@@ -88,6 +88,8 @@ describe('generated registries are current (drift)', () => {
         loadSeatInventory(CUSTOMERS).map((s) => [s.slug, [s.purpose, s.twinOf, s.ring]])
       )
     ).toEqual({
+      // The exact twin of ashton-price, internal until its flip (twin.yaml).
+      'ap-staging': ['internal', null, 2],
       'ashton-price': ['client', null, 1],
       'ashton-price-marketing': ['client', null, 1],
       brokery: ['client', null, 2],
@@ -99,12 +101,14 @@ describe('generated registries are current (drift)', () => {
     })
   })
 
-  it('the live inventory is the eight seats, each with its authored app or null', () => {
+  it('the live inventory is the nine seats, each with its authored app or null', () => {
     // A tripwire for the PR that introduced the inventory: the generated
     // registry was proven value-identical to the hand-kept one it replaced.
     // Adding or retiring a seat updates this list in the same change.
     expect(Object.fromEntries(loadSeatInventory(CUSTOMERS).map((s) => [s.slug, s.flyApp]))).toEqual(
       {
+        // Authored, not yet provisioned (docs/handbook/deployment-release.md).
+        'ap-staging': null,
         'ashton-price': 'hermes-ashton-price',
         // Authored, not yet provisioned (the firm creates its mailbox first).
         'ashton-price-marketing': null,

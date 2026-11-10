@@ -90,8 +90,36 @@ def test_every_staged_secret_is_classified() -> None:
         except sc.UnclassifiedSecret:
             unclassified.append(name)
             continue
-        assert klass in sc.VALID_CUSTODY
+        assert klass in sc.ALL_CLASSES
     assert not unclassified, f"staged but unclassified (classify these): {unclassified}"
+
+
+def test_smokeball_source_names_stage_smokeball_reads_are_all_classified() -> None:
+    # The SOURCE names the Smokeball block reads (`${SMOKEBALL_<ENV>_<X>:-}`)
+    # are not staged literals, so the parse above never sees them; they decide
+    # what a twin keeps. FALSIFIER: drop a name from both tables and this raises.
+    text = _STAGE_SMOKEBALL.read_text(encoding="utf-8")
+    sources = set(re.findall(r"\$\{(SMOKEBALL_(?:STAGING|PROD)_[A-Z_]+):-", text))
+    assert sources, "stage-smokeball.sh parse found no source names; the regex drifted"
+    for name in sorted(sources):
+        sc.classify(name)
+
+
+def test_smd_sandbox_credentials_are_sandbox_not_customer() -> None:
+    # SMD's own Smokeball sandbox app (bin/lib/stage-smokeball.sh reads these for
+    # `environment: staging`). Not customer: a release twin keeps them. Not infra:
+    # a client seat must never run on them. The production app stays customer.
+    for name in ("SMOKEBALL_STAGING_CLIENT_ID", "SMOKEBALL_STAGING_CLIENT_SECRET", "SMOKEBALL_STAGING_API_KEY"):
+        assert sc.classify(name) == sc.SANDBOX, name
+    for name in ("SMOKEBALL_PROD_CLIENT_ID", "SMOKEBALL_PROD_CLIENT_SECRET", "SMOKEBALL_PROD_API_KEY"):
+        assert sc.classify(name) == sc.CUSTOMER, name
+    # A new name in the staging family is not SMD's until someone says so.
+    assert sc.classify("SMOKEBALL_STAGING_SOMETHING_NEW") == sc.CUSTOMER
+    names = set(sc.customer_owned_source_names("ap-staging"))
+    assert "SMOKEBALL_STAGING_CLIENT_SECRET" not in names
+    assert "SMOKEBALL_PROD_CLIENT_SECRET" in names
+    # The sandbox class is never a contract class: env-consumption.yaml cannot assign it.
+    assert sc.SANDBOX not in sc.VALID_CUSTODY
 
 
 def test_known_customer_secrets_classify_customer() -> None:

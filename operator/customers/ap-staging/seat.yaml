@@ -1,0 +1,38 @@
+# Seat inventory entry. CONSOLE-SIDE ONLY: read by scripts/lib/seat-inventory.ts,
+# never published to R2 and never read by the seat, so nothing here can fail a
+# seat at boot. After editing run `npm run gen:seat-registries`;
+# tests/seat-inventory.test.ts fails while a generated registry is stale.
+#
+# The exact twin of ashton-price (customer.yaml beside this file, held equal to
+# A&P's by tests/twin-drift.test.ts and twin.yaml). It BECOMES ashton-price's
+# release twin at the flip, and is `internal` until then, because a client has at
+# most one release twin (ADR 0107) and smd-staging holds that role until this
+# seat is provisioned and green. The flip is one PR: here `purpose: release-twin`,
+# `twin_of: ashton-price`, and the ring line removed (a twin's ring 0 is
+# derived); smd-staging leaves the twin role in the same PR. Until the flip the
+# intended twin is declared by twin.yaml (`twin_of`), which is what
+# `operator/bin/reprovision-staging.sh --pre-flip ap-staging` isolates on.
+#
+# TO PROVISION: docs/handbook/deployment-release.md, "Provisioning ap-staging,
+# the exact twin of ashton-price".
+
+# What this seat is for (ADR 0107): client | release-twin | demo | internal.
+purpose: internal
+# The seat's Fly app (ADR 0036). Authored, never derived: confirm with
+# `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
+# Fly cannot rename an app, so this is a new app, never hermes-smd-staging.
+fly_app: null
+unprovisioned_reason: >-
+  The Fly app hermes-ap-staging is not created yet, and the twin's Operator
+  Library matter ids and expense staff id in SMD's staging tenant are PENDING
+  in customer.yaml; the Captain provisions it by the runbook in
+  docs/handbook/deployment-release.md.
+# Release ring until the flip: with SMD's own seats, last. At the flip this
+# line goes (a release twin is ring 0, derived).
+ring: 2
+# No wait after this seat: it is in the last ring until the flip.
+bake_minutes: 0
+# The day this seat's customer.yaml first landed on main. Orders seats in a ring.
+authored: '2026-11-10'
+# The client this seat's obligations roll up to (scripts/lib/seat-clients.mjs).
+client: smd-services

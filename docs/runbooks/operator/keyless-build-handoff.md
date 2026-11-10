@@ -8,10 +8,11 @@
 
 ## The custody boundary
 
-Every provisioning secret is one of two classes (see `operator/contracts/env-consumption.yaml` `custody:` and the connector tables in `secret_custody.py`):
+Every provisioning secret is one of three classes (see `operator/contracts/env-consumption.yaml` `custody:` and the connector tables in `secret_custody.py`):
 
 - **infra** — operator/SMD-owned (R2, Fly, Sentry, HMAC masters, bucket names, D1 bindings). Safe to be **real or emulated** during a build; we hold it regardless of which customer is provisioning.
 - **customer** — carries or grants access to a specific customer's world (their model key, connector OAuth creds, inbox/webhook secrets, Google identity). Enters **only at handoff**. A build sees a placeholder; staging/keyless runs must not borrow the live value. `GOOGLE_*` is customer-by-**effect** (DWD impersonation) → staging **substitutes** an isolated credential rather than the live one.
+- **sandbox** — SMD's own vendor-sandbox app credentials (today `SMOKEBALL_STAGING_CLIENT_ID`, `_CLIENT_SECRET`, `_API_KEY`), reaching only SMD's own sandbox tenant. A release twin keeps them (`reprovision-staging.sh` blanks customer names only), so a twin authored `environment: staging` boots with its connector. Assigned by exact name in `secret_custody.py`, never by the contract; any other `SMOKEBALL_STAGING_*` name stays customer until someone decides it is SMD's.
 
 Classify one name:
 

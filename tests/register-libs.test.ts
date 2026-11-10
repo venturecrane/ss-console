@@ -95,6 +95,7 @@ describe('clientOf', () => {
     // failure this register exists to end. Found in review of PR #2837 and
     // reproduced against production before the fix.
     expect(seatsOf(SMD_CLIENT).sort()).toEqual([
+      'ap-staging',
       'pilot-smokeball',
       'scott',
       'smd-guide',
