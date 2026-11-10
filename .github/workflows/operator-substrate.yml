@@ -116,6 +116,17 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         run: python3 -m pip install --quiet -e ./operator
 
+      # The seat's safety filters (shared/citation_filter.py,
+      # shared/identifier_filter.py, shared/sticky_stop.py) exist once, in the
+      # overlay's `shared` package, which is what the gateway imports. The boot
+      # invariants and safety_substrate/tests import that same package, the way
+      # bootstrap.sh runs them on a seat (the Hermes venv has the overlay
+      # installed). --no-deps: those modules are stdlib-only, and the overlay's
+      # own dependency closure is tested in the overlay job below.
+      - name: Install the overlay's shared package (the filters the gateway runs)
+        if: steps.changes.outputs.relevant == 'true'
+        run: python3 -m pip install --quiet --no-deps -e ./operator/hermes-smd-overlay
+
       - name: Run ruff
         if: steps.changes.outputs.relevant == 'true'
         # Selection is exactly the set that reports zero across the tree, so this

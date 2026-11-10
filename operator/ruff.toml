@@ -105,22 +105,18 @@ select = [
 ]
 
 [format]
-# The ten overlay twins (contracts/overlay-pairs.json adapterPath) are
-# byte-identical mirrors of overlay runtime files, and the five skill copies
-# of escalation_ledger.py are byte-identical to that twin
-# (tests/test_escalation_ledger_sync.py). Formatting them is a PAIRED
-# cross-repo change (ss-console first, then the overlay, then the pin bump),
-# not a one-repo chore, so the formatter skips them until that pair ships.
+# The overlay twins (contracts/overlay-pairs.json adapterPath) mirror overlay
+# runtime files, and the skill copies of escalation_ledger.py are
+# byte-identical to that twin (tests/test_escalation_ledger_sync.py).
+# Formatting one side is a PAIRED change (re-record both hashes in
+# overlay-pairs.json), not a one-file chore, so the formatter skips them.
 exclude = [
     "adapter/audit_log.py",
     "adapter/namespace_assertion.py",
     "adapter/d1_env.py",
     "workspace_broker/chain.py",
-    "safety_substrate/citation_filter.py",
-    "safety_substrate/identifier_filter.py",
     "adapter/recipient_classifier.py",
     "workspace_broker/escalation_ledger.py",
-    "safety_substrate/sticky_stop.py",
     "skills/*/escalation_ledger.py",
     # The casework ledger twin (overlay shared/casework_ledger.py) is formatted at
     # the OVERLAY's line-length 100, so both repos' format checks pass on one set

@@ -86,7 +86,9 @@ class ProbeContext:
     red, and a check that cannot fail has measured nothing.
     """
 
-    substrate_dir: Path = OPERATOR / "safety_substrate"
+    #: The overlay's shared package: the one copy of sticky_stop.py, the module
+    #: the gateway imports, so a probe exercises what the seat runs.
+    substrate_dir: Path = OPERATOR / "hermes-smd-overlay" / "shared"
     search_root: Path = OPERATOR
     seat: str | None = None
     run_seat: Callable[[str, list[str]], tuple[int, str]] | None = None

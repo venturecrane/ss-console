@@ -12,9 +12,9 @@
 # ZERO callers in ss-console and ZERO references in the overlay where dispatch
 # runs; the circuit breaker named in PRD §7.5 did not exist at runtime. ADR 0062
 # then vendored it into the overlay as shared/sticky_stop.py and wired the cost
-# arm through shared/cost_breaker.py (see sticky_stop_cost_cap below). Since
-# 2026-09-10 the two copies are a tracked pair in overlay-pairs.json, so the
-# ss-console file can no longer drift silently from what seats run.
+# arm through shared/cost_breaker.py (see sticky_stop_cost_cap below). The
+# overlay's shared/sticky_stop.py is now the only copy: the substrate tests and
+# the control probes import it, so nothing can drift from what seats run.
 #
 # WHAT THIS REGISTRY GUARANTEES (the "wires-nothing" subset). It does NOT wire
 # any control. It makes a control's live status EXPLICIT and OWNED, and — via
@@ -74,10 +74,9 @@
 #   control          — stable id.
 #   class            — dispatch-guard | emitter | circuit-breaker.
 #   substrate_module — implementing code. ss-console paths are relative to
-#                      operator/. Overlay-resident code is prefixed `overlay:`
-#                      (path is in venturecrane/hermes-smd-overlay, not checked
-#                      out here — the same cross-repo limit overlay-pairs.json and
-#                      overlay-hook-surface.json document).
+#                      operator/. Overlay-resident code is prefixed `overlay:`,
+#                      and the path is relative to operator/hermes-smd-overlay/
+#                      (ADR 0095); the conformance test checks that it exists.
 #   wired_via        — how the control is REACHED, in one of two forms:
 #                        "<hook> / <overlay-plugin>"  — cross-checked against
 #                          overlay-hook-surface.json.
@@ -433,15 +432,14 @@ controls:
       that probe is Component 3, folded into the B3 review.
 
   # ---- the sticky-stop arms (the motivating class, now partly wired) ----
-  # All four arms live in safety_substrate/sticky_stop.py, vendored into the
-  # overlay as shared/sticky_stop.py (a tracked pair in overlay-pairs.json since
-  # 2026-09-10). The cost arm is enforced through shared/cost_breaker.py; the
+  # All four arms live in the overlay's shared/sticky_stop.py, the one copy.
+  # The cost arm is enforced through shared/cost_breaker.py; the
   # tool-failure and refusal arms are unprobed; the time-budget arm is inert.
   # Nothing in ss-console calls the module; the overlay is where it runs.
   sticky_stop_cost_cap:
     control: sticky_stop_cost_cap
     class: circuit-breaker
-    substrate_module: safety_substrate/sticky_stop.py
+    substrate_module: overlay:shared/sticky_stop.py
     # Enforcement spans the job-worker thread + the webhook gate, but the
     # DOMINANT (interactive) path is metered at post_llm_call, which is the hook
     # named here for the hook-surface check. Full wiring is in the note.
@@ -483,7 +481,7 @@ controls:
   sticky_stop_tool_failure:
     control: sticky_stop_tool_failure
     class: circuit-breaker
-    substrate_module: safety_substrate/sticky_stop.py
+    substrate_module: overlay:shared/sticky_stop.py
     wired_via: 'post_tool_call / hermes-smd-audit'
     live_probe: ''
     probe_surface: ''
@@ -517,7 +515,7 @@ controls:
   sticky_stop_refusal_cascade:
     control: sticky_stop_refusal_cascade
     class: circuit-breaker
-    substrate_module: safety_substrate/sticky_stop.py
+    substrate_module: overlay:shared/sticky_stop.py
     wired_via: 'post_tool_call / hermes-smd-audit'
     live_probe: ''
     probe_surface: ''
@@ -540,7 +538,7 @@ controls:
   sticky_stop_time_budget:
     control: sticky_stop_time_budget
     class: circuit-breaker
-    substrate_module: safety_substrate/sticky_stop.py
+    substrate_module: overlay:shared/sticky_stop.py
     wired_via: ''
     live_probe: ''
     probe_surface: ''
@@ -567,7 +565,7 @@ controls:
   operator_pause:
     control: operator_pause
     class: dispatch-guard
-    substrate_module: safety_substrate/sticky_stop.py
+    substrate_module: overlay:shared/sticky_stop.py
     # The pause rides the SAME persisted ladder as sticky_stop_cost_cap:
     # pin_hard_stops (overlay#188) writes HARD_STOP rows; every enforcement arm
     # of that control (gate 503s, wake-guard park, job dead-letter) fires for a

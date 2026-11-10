@@ -1,10 +1,9 @@
 """Citation detector — PI-vertical safety invariant #6.
 
-VENDORED from ``ss-console/operator/safety_substrate/citation_filter.py``,
-which is the source-of-truth primitive. This is a pure-python copy carried in
-the overlay so the outbound gate (ADR 0028) can run the law-vertical Tier-2
-citation scan inside the trust plugin without a cross-repo runtime dependency.
-Keep this aligned with ss-console; changes land there first.
+The one copy. The outbound gate (ADR 0028) runs the law-vertical Tier-2
+citation scan from here inside the trust plugin, and the seat's boot invariant
+(``operator/safety_substrate/tests/test_invariant_6_no_citations.py``) imports
+this same module, so the boot gate proves the filter the gateway runs.
 
 Detects patterns in agent output that look like legal citations (case names
 with reporter cites, statute references, court rule references). The
@@ -22,7 +21,7 @@ text, agent re-drafts without the suspect string); false negatives are not
 (a real citation slipping through is the venture-killer).
 
 Usage:
-    from safety_substrate.citation_filter import contains_citation, scan
+    from shared.citation_filter import contains_citation, scan
     if contains_citation(agent_output):
         raise CitationRefused(scan(agent_output))
 """
@@ -204,10 +203,9 @@ def canonical_caption(text: str) -> str:
     s = _normalize_encoding_bypass(text or "")
     s = re.sub(r"\s+", " ", s).strip().casefold()
     # Alternation ordered so "ersus" is tried before "s", and the optional dot
-    # sits outside the group so "versus." folds too. Kept character-identical to
-    # the ss-console twin (operator/safety_substrate/citation_filter.py): the two
-    # copies must agree on canonical form or an allowlist entry registered by one
-    # will not match a hit canonicalized by the other.
+    # sits outside the group so "versus." folds too. Every caller that registers
+    # a caption and every caller that checks one goes through this function, so
+    # an allowlist entry and a hit always agree on canonical form.
     return re.sub(r"\bv(?:ersus|s)?\.?\s", "v. ", s)
 
 

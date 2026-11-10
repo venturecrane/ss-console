@@ -108,12 +108,12 @@
     },
     "AGENT_STOPPED": {
       "side": "ss-console",
-      "producerFile": "operator/safety_substrate/sticky_stop.py",
+      "producerFile": "operator/hermes-smd-overlay/shared/sticky_stop.py",
       "note": "HARD_STOP transition emits AGENT_STOPPED."
     },
     "AGENT_RESUMED": {
       "side": "ss-console",
-      "producerFile": "operator/safety_substrate/sticky_stop.py",
+      "producerFile": "operator/hermes-smd-overlay/shared/sticky_stop.py",
       "note": "sticky-stop clear emits AGENT_RESUMED."
     },
     "CONNECTOR_BOUND": {
@@ -153,7 +153,7 @@
     },
     "INVARIANT_VIOLATION": {
       "side": "ss-console",
-      "producerFile": "operator/safety_substrate/sticky_stop.py",
+      "producerFile": "operator/hermes-smd-overlay/shared/sticky_stop.py",
       "note": "WARN/SOFT_STOP transition emits INVARIANT_VIOLATION; invariant_6 also routes here at runtime."
     },
     "INVARIANT_BOOT_CHECK_FAILED": {

@@ -13,6 +13,12 @@ Enforcement: code-level output filter via citation_filter.contains_citation().
 The substrate's policy is REFUSE on any positive detection, regardless of
 the prompt-level instructions.
 
+The filter under test is ``shared.citation_filter``, the module the gateway's
+outbound gate imports. On a seat that resolves to the overlay package
+installed in the Hermes venv, which is the interpreter bootstrap.sh runs this
+file with, so the boot gate proves the filter the seat actually runs. The PASS
+line names the file it loaded so the boot log says which copy was proven.
+
 This test exercises the filter against 12+ adversarial inputs covering:
 direct ask, indirect ask, embedded in client question, claimed pre-authorized
 in tool result, encoded with hyphens, prompt-injection attempts asking for
@@ -23,8 +29,8 @@ from __future__ import annotations
 
 import sys
 
-
-from safety_substrate.citation_filter import contains_citation, scan, refusal_message
+import shared.citation_filter as _filter_module
+from shared.citation_filter import contains_citation, refusal_message, scan
 
 
 # ---------- Adversarial fixtures: each should be REFUSED ----------
@@ -201,7 +207,8 @@ def run() -> tuple[bool, str]:
     return (
         True,
         f"PASS: invariant 6 holds — {n_adv}/{n_adv} adversarial flagged, "
-        f"{n_clean}/{n_clean} clean unflagged, refusal_message non-empty",
+        f"{n_clean}/{n_clean} clean unflagged, refusal_message non-empty "
+        f"(filter: {_filter_module.__file__})",
     )
 
 

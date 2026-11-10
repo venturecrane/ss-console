@@ -51,8 +51,8 @@ changes = pre_run._CHANGES
 workbook = pre_run._WORKBOOK
 pull = pre_run._PULL
 report = pre_run._REPORT
-citation_filter = _load("sw2_citation_filter", _OPERATOR / "safety_substrate" / "citation_filter.py")
-identifier_filter = _load("sw2_identifier_filter", _OPERATOR / "safety_substrate" / "identifier_filter.py")
+citation_filter = _load("sw2_citation_filter", _OPERATOR / "hermes-smd-overlay" / "shared" / "citation_filter.py")
+identifier_filter = _load("sw2_identifier_filter", _OPERATOR / "hermes-smd-overlay" / "shared" / "identifier_filter.py")
 
 TODAY = date(2026, 10, 1)
 RECIPIENT = "office@firm.test"

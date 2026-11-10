@@ -12,7 +12,7 @@ The substrate runs every container start (via `bootstrap.sh`). On `--strict`, an
 4. **"Don't act" / "stop" instructions are sticky.** Pinned outside compressible turn history; survive context compaction; honored across the session.
 5. **Autonomy is enforced in code, not prompt.** The overlay's `hermes-smd-trust` plugin (runtime — `venturecrane/hermes-smd-overlay`) and `adapter.trust_ceiling.enforce` (substrate test primitive) both resolve the effective ceiling from the persona's per-action-class **exposure** authored in the trusted `customer.yaml` (`personas[].entitlements.exposure`, ADR 0056) — never from model-supplied args or the prompt. The retired per-skill `trust_ceiling` scalar is not read (ADR 0056; no compatibility shim). Refusal fires when prompt drift tries to escalate. The overlay plugin runs in the customer Machine; the substrate primitive backs the in-tree invariant test fixture.
 6. **No fabricated citations / source-provenance discipline.** Ships in two complementary layers per [`docs/specs/operator/safety-invariants.md`](../../docs/specs/operator/safety-invariants.md):
-   - **Refusal layer** (`citation_filter.py`): refuses any law-vertical skill output that contains a fabricated citation (case names, reporter cites, statute references, court rules). Reference incident: Mata v. Avianca, S.D.N.Y. 2023 — ChatGPT fabricated six federal cases; attorney sanctioned. Exercised by `tests/test_invariant_6_no_citations.py`.
+   - **Refusal layer** (the overlay's `shared/citation_filter.py`, the module the gateway imports): refuses any law-vertical skill output that contains a fabricated citation (case names, reporter cites, statute references, court rules). Reference incident: Mata v. Avianca, S.D.N.Y. 2023 — ChatGPT fabricated six federal cases; attorney sanctioned. Exercised by `tests/test_invariant_6_no_citations.py`.
    - **Enforcement layer** (`invariants/invariant_6.py`): every fact a skill renders into a declared fact-bearing field must carry a `Citation` attached to a real source. Exercised by `tests/test_invariant_6.py`.
 7. **Cross-Machine query prohibition at boot.** The runtime refuses to start if its storage bindings (D1, R2, Vectorize) name another customer's resource. Per ADR 0007 (per-customer Machine isolation) and ADR 0009 (cross-Machine query prohibition), this is enforced at Machine boot — a misconfigured binding fails the boot, never reaches a tool call. Exercised by `tests/test_invariant_7.py` against `invariants/invariant_7.py`.
 
@@ -38,10 +38,11 @@ python3 /app/safety_substrate/run_invariants.py \
   --strict
 ```
 
-From the repo root for development:
+From the repo root for development (the overlay's `shared` package must be importable, as it is in the seat's Hermes venv):
 
 ```
-uv run --with pyyaml python3 operator/safety_substrate/run_invariants.py \
+uv run --with pyyaml --with-editable operator/hermes-smd-overlay --no-project \
+  env PYTHONPATH=operator python3 operator/safety_substrate/run_invariants.py \
   --customer smd \
   --fixtures operator/safety_substrate/tests
 ```
@@ -55,7 +56,7 @@ uv run --with pyyaml python3 operator/safety_substrate/run_invariants.py \
 - It asserts the primitive refuses or routes-to-draft the way the invariant requires.
 - Any actual call to a real Composio/MCP/build connector is monkey-patched to record-only — substrate tests never reach a real tool.
 
-The substrate primitives the tests exercise are the same primitives the overlay's `hermes-smd-trust` plugin invokes at runtime. The substrate is the test surface; the overlay is the production surface; both use the same enforcement code paths so a passing test means the runtime invariant is real.
+The citation filter, the identifier filter and the sticky-stop machine exist once, in the overlay's `shared` package (`operator/hermes-smd-overlay/shared/`), and the tests here import them from there: on a seat that is the package installed in the Hermes venv, the same one the gateway imports. There is no substrate copy to drift from what the seat runs, and `tests/test_filters_are_the_gateways.py` fails if one comes back. The ceiling invariants (#1-#5) still exercise `adapter.trust_ceiling.enforce`, a substrate primitive, rather than the overlay's `hermes-smd-trust` plugin.
 
 ## When to extend
 

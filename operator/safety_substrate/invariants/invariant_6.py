@@ -2,7 +2,7 @@
 
 Per platform PRD §7.5, invariant #6 governs how facts surface in skill
 output. The law-firm vertical implements it as REFUSAL on fabricated legal
-citations (handled by ``safety_substrate/citation_filter.py``). This module
+citations (handled by the overlay's ``shared/citation_filter.py``). This module
 implements the platform-universal complement: every fact a skill renders
 into a client-facing fact-bearing field must carry a Citation attached to
 a real source.

@@ -8,8 +8,8 @@ it. This runbook is that pointer.
 
 ## What the sticky stop is
 
-The seat's automated circuit breaker (ADR 0062; `operator/safety_substrate/sticky_stop.py`,
-vendored into the overlay). Two states, `OK -> HARD_STOP`, driven by recorded
+The seat's automated circuit breaker (ADR 0062; `operator/hermes-smd-overlay/shared/sticky_stop.py`,
+the one copy, which the gateway imports). Two states, `OK -> HARD_STOP`, driven by recorded
 conditions - cost spend, consecutive tool failures, refusal cascades, time
 budget (`operator/contracts/runtime-controls.yaml`, the
 `sticky_stop_*` rows). State is one row per `(customer, persona)` in

@@ -1,12 +1,9 @@
 """Identifier-integrity filter — provenance discipline for asserted identifiers.
 
-SOURCE OF TRUTH: ``ss-console/operator/safety_substrate/identifier_filter.py``.
-This is a VENDORED copy carried in the overlay so the trust plugin can run the
-gate at runtime without a cross-repo import (the overlay cannot runtime-import
-ss-console). Keep aligned with ss-console; the shape changes there first.
-Alignment is asserted by a CONTRACT test (``tests/test_identifier_filter.py``),
-not a byte hash — this is CODE, and formatting/lint deltas between the two repos
-would break a byte hash (same rationale as ``shared/inbound.py``).
+The one copy. The trust plugin runs the gate from here, and
+``operator/safety_substrate/tests/test_identifier_filter.py`` and this
+package's ``tests/test_identifier_filter.py`` both import this same module, so
+neither suite can pass against a copy the gateway does not run.
 
 A fabrication-discipline primitive in the same family as ``citation_filter.py``
 (invariant #6) and the spec'd-but-unbuilt fabrication filter (invariant #8,
