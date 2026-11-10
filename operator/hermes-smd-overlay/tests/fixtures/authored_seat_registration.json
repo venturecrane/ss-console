@@ -2793,10 +2793,6 @@
    ],
    [
     "on_session_end",
-    "hermes-smd-peer-memory"
-   ],
-   [
-    "on_session_end",
     "hermes-smd-reply"
    ],
    [
@@ -2845,7 +2841,7 @@
    ],
    [
     "post_tool_call",
-    "hermes-smd-peer-memory"
+    "hermes-smd-record-store"
    ],
    [
     "post_tool_call",
@@ -2885,10 +2881,6 @@
    ],
    [
     "pre_llm_call",
-    "hermes-smd-peer-memory"
-   ],
-   [
-    "pre_llm_call",
     "hermes-smd-reply"
    ],
    [
@@ -2917,7 +2909,7 @@
    ],
    [
     "pre_tool_call",
-    "hermes-smd-peer-memory"
+    "hermes-smd-record-store"
    ],
    [
     "pre_tool_call",
@@ -3037,9 +3029,17 @@
     "plugin": "hermes-smd-initiation",
     "toolset": "initiation"
    },
-   "record_peer_preference": {
-    "plugin": "hermes-smd-peer-memory",
-    "toolset": "relationship"
+   "record_store_list": {
+    "plugin": "hermes-smd-record-store",
+    "toolset": "record_store"
+   },
+   "record_store_read": {
+    "plugin": "hermes-smd-record-store",
+    "toolset": "record_store"
+   },
+   "record_store_write": {
+    "plugin": "hermes-smd-record-store",
+    "toolset": "record_store"
    },
    "reply_bind": {
     "plugin": "hermes-smd-reply",
@@ -3056,6 +3056,14 @@
    "start_background_job": {
     "plugin": "hermes-smd-jobs",
     "toolset": "jobs"
+   },
+   "tone_check": {
+    "plugin": "hermes-smd-training",
+    "toolset": "training"
+   },
+   "training_record": {
+    "plugin": "hermes-smd-training",
+    "toolset": "training"
    },
    "voice_note_transcribe": {
     "plugin": "hermes-smd-voice-notes",

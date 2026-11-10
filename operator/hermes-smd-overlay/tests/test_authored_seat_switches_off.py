@@ -67,10 +67,24 @@ TODAY = {
 }
 
 
+# The one seat that authors the switches (ss-console #3946): SMD's guide seat,
+# switched on for representative training. Every other seat reads as TODAY.
+AUTHORED_ON = {
+    "smd-guide": {
+        "request_card_text": False,
+        "held_notice": True,
+        "daily_limit": 60,
+        "partitioned_stores": ["rep-progress"],
+        "managed_stores": ["rep-progress"],
+        "peer_memory_off": True,
+    }
+}
+
+
 @pytest.mark.parametrize("seat", authored_seats(), ids=lambda p: p.parent.name)
 def test_every_authored_seat_keeps_todays_behaviour(seat: Path) -> None:
     raw = yaml.safe_load(seat.read_text(encoding="utf-8"))
-    assert switches(raw) == TODAY
+    assert switches(raw) == AUTHORED_ON.get(seat.parent.name, TODAY)
 
 
 def test_the_switches_can_be_seen_on() -> None:

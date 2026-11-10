@@ -97,6 +97,25 @@ personas:
           scheduled: false
           webhook: true
         enabled: true
+      # Training (issue #3946): guided lessons with an exercise each, an
+      # open-book quiz graded in code, a mock pitch, and readiness worked out
+      # by code from those facts. Reached from product-guide on email;
+      # scheduled for the weekly progress report below.
+      - name: rep-training
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: true
+        enabled: true
+    cron:
+      # Weekly progress and readiness report to scope.admins, Mondays 8:00 MST
+      # (15:00 UTC). Code renders it from the progress store only; a week with
+      # nobody enrolled wakes no model and sends nothing.
+      - skill: rep-training
+        schedule: '0 15 * * 1'
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
 
 # ---- CONNECTORS ----
 connectors:
@@ -123,6 +142,10 @@ webhook_triggers:
 # held replies auto-release, non-roster bounds unchanged.
 send_policy:
   reply:
+    # A reply the checks hold tells the sender in one fixed line that it could
+    # not be answered and to send it again; redrafts after a hold are capped.
+    held_notice: true
+    max_redrafts: 2
     internal_exempt: true
     per_sender_max: 3
     per_sender_window_seconds: 600
@@ -156,6 +179,9 @@ escalation:
     - scott@smd.services
   failure_recipients:
     - team@smd.services
+  # Request cards and the email to SMD say who wrote and what happened, never
+  # the words: a representative's messages are not copied into SMD's mailbox.
+  request_card_text: false
 
 # ---- SAFETY ----
 # On SMD's key: the runaway guard, the same caps as SMD's own scott seat.
@@ -173,6 +199,11 @@ safety:
 # the seat, never here. Accepted on guide seats only (both validators).
 sender_enrollment:
   enabled: true
+  # Emails a day from one enrolled person before the seat stops answering them
+  # until tomorrow, with one fixed notice (Captain, 2026-11-10: 60). It ends a
+  # mail loop and keeps one person from using the whole seat's day
+  # (safety.sticky_stop.inbound_daily_cap). Administrators are exempt.
+  daily_limit: 60
 
 # ---- TELEGRAM (chat) ----
 # Chat, mainly so pitch practice runs turn by turn. Per-seat bot (BotFather);
@@ -199,4 +230,20 @@ memory:
   r2_vault_path: 'vaults/smd-guide/'
   vectorize_index: 'hermes-smd-guide-vault'
   memory_enabled: false
+  # Per-sender memory is off too: what a representative keeps lives only in
+  # the walled record stores below, which removal purges.
+  peer_memory_enabled: false
   user_profile_enabled: false
+
+# ---- RECORD STORES (ADR 0106 amendment, issue #3946) ----
+# Walled per person: each enrolled representative's records sit in their own
+# directory, named by code from the verified sender; nobody reads across.
+# `managed` stores are written by code only, never by the model. Removing a
+# person (sender_enrollment_cli remove) purges their directory in every store.
+record_stores:
+  # Lessons completed, quiz result, practice answered, readiness. Ids and
+  # counts only. The weekly report to administrators is rendered from this.
+  - name: rep-progress
+    path: /opt/data/rep/progress
+    partition: sender
+    managed: true

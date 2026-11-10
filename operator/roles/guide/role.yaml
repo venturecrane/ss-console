@@ -20,8 +20,10 @@
 #   - the seat enables only the role's two skills, so the omitted-skill read
 #     fence refuses every other skill's files
 #     (plugins/hermes-smd-initiation/skill_fence.py);
-#   - the seat authors no record store, no connector but its own mailbox, and
-#     no code execution, so there is nothing else on the seat to read or run;
+#   - the seat authors no connector but its own mailbox and no code
+#     execution; the only record stores it may author are walled per person
+#     (`partition: sender`), so what one person keeps is never another's
+#     source, and product answers still come from the library alone;
 #   - email replies go only to the rostered sender, in the sender's thread,
 #     through the recipient-locked reply relay (fabrication markers and the
 #     output checklist run on every one); every other send is unauthored and
@@ -46,6 +48,9 @@ skills:
   - name: pitch-practice
     built: true
     purpose: Plays an authored buyer scenario turn by turn, then gives rubric feedback cited to the library.
+  - name: rep-training
+    built: true
+    purpose: Guided lessons from the library with an exercise each, an open-book quiz graded in code, and readiness worked out by code; a weekly progress report to administrators.
 
 # What this role's seats may send (ADR 0093). Nothing is loosened: the platform
 # default holds, and the reply to a rostered sender is the only send a guide
