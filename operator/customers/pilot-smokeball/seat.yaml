@@ -3,8 +3,11 @@
 # seat at boot. After editing run `npm run gen:seat-registries`;
 # tests/seat-inventory.test.ts fails while a generated registry is stale.
 #
-# SMD's own staging rehearsal rig for the Smokeball Operator (ADR 0053).
+# SMD's own Smokeball test firm (ADR 0053), a demo seat (ADR 0107). It gates no
+# release: client seats are gated by their release twin, not by this seat.
 
+# What this seat is for (ADR 0107): client | release-twin | demo | internal.
+purpose: demo
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 fly_app: hermes-pilot-smokeball

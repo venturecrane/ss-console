@@ -193,7 +193,7 @@ def test_plant_says_so_when_another_failing_check_holds_the_alert_open() -> None
     assert world.fly.plant_calls[-1][1] == "clear"
 
 
-def test_plant_refuses_any_seat_but_staging_and_any_unplantable_check() -> None:
+def test_plant_refuses_any_seat_but_a_release_twin_and_any_unplantable_check() -> None:
     with pytest.raises(Refusal):
         _plant(PlantWorld(), seat="ashton-price")
     with pytest.raises(Refusal):

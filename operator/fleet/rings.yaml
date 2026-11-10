@@ -1,4 +1,4 @@
-# GENERATED from operator/customers/<slug>/seat.yaml (`ring:`) by
+# GENERATED from operator/customers/<slug>/seat.yaml (`ring:`, `purpose:`, `twin_of:`) by
 # scripts/gen-seat-registries.ts. Do not edit: change the seat's seat.yaml and
 # run `npm run gen:seat-registries`. tests/seat-inventory.test.ts fails while
 # this file is stale.
@@ -9,13 +9,22 @@
 # next starts; any seat that FAILS (smoke red, so it is rolled back) halts the
 # whole rollout, so a defect stops at the smallest ring that shows it. A seat
 # that ends in a TOOLING ERROR (nothing decided) stalls only itself and is
-# retried; it never holds the rings after it back. Ring 0 is SMD's own staging
-# seat. The client's seat follows it at once, with no bake (2026-10-30: with one
-# client, a fix must not wait an hour behind SMD's own seats); SMD's other seats
-# come after. The last ring always deploys one seat at a time; a client ring
-# between rolls a canary first (its first seat, alone), then every other seat at
-# once (max_parallel, CLIENT_RING_PARALLEL in scripts/lib/seat-registries.ts),
-# since twenty seats one at a time is a two-hour release.
+# retried; it never holds the rings after it back. Ring 0 is the release twins
+# (seat.yaml `purpose: release-twin`, ring derived, ADR 0107). The client's seat
+# follows at once, with no bake (2026-10-30: with one client, a fix must not
+# wait an hour behind SMD's own seats); SMD's other seats come after. The last
+# ring always deploys one seat at a time; a ring between rolls a canary first
+# (its first seat, alone), then every other seat at once (max_parallel,
+# CLIENT_RING_PARALLEL in scripts/lib/seat-registries.ts), since twenty seats
+# one at a time is a two-hour release.
+#
+# twins (ADR 0107): client seat -> its release twin. A client seat with a twin
+# takes a release only after its twin's OWN rollout of that release is done
+# (operator/bin/lib/fleet/tick.py twin_deferrals, waves.py for a laptop run);
+# a seat done on a newer release does not count, and a twin in no ring keeps
+# its client from every release. This is the gate the 2026-10-30 releases
+# 9bd7caa3 and f835d1d9 lacked: both reached ashton-price with no smd-staging
+# rollout row.
 #
 # Holds are NOT authored here. `fleet hold <slug> --reason "..." --until "..."` writes D1
 # fleet_holds and takes effect at once, without a PR (a held seat is skipped
@@ -43,3 +52,5 @@ rings:
   - ring: 2
     seats: [pilot-smokeball, scott, brokery, captain-mark, smd-guide]
     max_parallel: 1
+twins:
+  ashton-price: smd-staging

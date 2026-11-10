@@ -15,8 +15,9 @@
  *  2. ONE RULE. The TypeScript, Python and bash homes of the seat-dir rule agree
  *     on a fixture tree holding every kind of non-seat, a tombstone included.
  *  3. AUTHORED, NOT GUESSED. A seat cannot load without a seat.yaml that names
- *     its Fly app (or says why it has none) and its ring; two seats cannot claim
- *     one app.
+ *     its purpose (ADR 0107), its Fly app (or says why it has none) and its
+ *     ring; two seats cannot claim one app; a release twin names one client seat
+ *     and a client has at most one twin.
  */
 
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
@@ -29,15 +30,38 @@ import {
   seatSlugs,
   skipReason,
   SeatInventoryError,
+  type Seat,
 } from '../scripts/lib/seat-inventory'
 import { renderRingsYaml, renderSeatRegistries } from '../scripts/lib/seat-registries'
 
 const ROOT = resolve('.')
 const CUSTOMERS = resolve('operator/customers')
 
-const SEAT_YAML = (app: string | null, ring: number, authored: string, extra = '') =>
+const SEAT_YAML = (
+  app: string | null,
+  ring: number,
+  authored: string,
+  extra = '',
+  purpose = 'internal'
+) =>
+  `purpose: ${purpose}\n` +
   (app === null ? 'fly_app: null\nunprovisioned_reason: not stood up yet\n' : `fly_app: ${app}\n`) +
   `ring: ${ring}\nauthored: '${authored}'\n${extra}`
+
+const TWIN_YAML = (app: string, client: string, extra = '') =>
+  `purpose: release-twin\ntwin_of: ${client}\nfly_app: ${app}\nauthored: '2026-01-01'\n${extra}`
+
+/** A renderer-input seat (the loader's output shape). */
+const seatOf = (over: Partial<Seat> & { slug: string }): Seat => ({
+  purpose: 'internal',
+  twinOf: null,
+  flyApp: `hermes-${over.slug}`,
+  unprovisionedReason: null,
+  ring: 1,
+  authored: '2026-01-01',
+  client: over.slug,
+  ...over,
+})
 
 function seatDir(root: string, name: string, seatYaml: string | null, customerYaml = true) {
   mkdirSync(join(root, name), { recursive: true })
@@ -56,6 +80,23 @@ describe('generated registries are current (drift)', () => {
       `stale generated file(s): ${stale.join(', ')}. A seat dir or seat.yaml changed without ` +
         'regeneration. Run `npm run gen:seat-registries` and commit the result.'
     ).toEqual([])
+  })
+
+  it('the live inventory declares each seat purpose, and the one twin names its client', () => {
+    expect(
+      Object.fromEntries(
+        loadSeatInventory(CUSTOMERS).map((s) => [s.slug, [s.purpose, s.twinOf, s.ring]])
+      )
+    ).toEqual({
+      'ashton-price': ['client', null, 1],
+      'ashton-price-marketing': ['client', null, 1],
+      brokery: ['client', null, 2],
+      'captain-mark': ['client', null, 2],
+      'pilot-smokeball': ['demo', null, 2],
+      scott: ['internal', null, 2],
+      'smd-guide': ['internal', null, 2],
+      'smd-staging': ['release-twin', 'ashton-price', 0],
+    })
   })
 
   it('the live inventory is the eight seats, each with its authored app or null', () => {
@@ -85,7 +126,7 @@ describe('one seat-dir rule across TypeScript, Python and bash', () => {
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'seat-inventory-'))
     seatDir(root, 'acme', SEAT_YAML('hermes-acme', 1, '2026-01-02'))
-    seatDir(root, 'beta-firm', SEAT_YAML('hermes-beta-firm', 0, '2026-01-01'))
+    seatDir(root, 'beta-firm', SEAT_YAML('hermes-beta-firm', 1, '2026-01-01'))
     // Not seats, every kind, each WITH a customer.yaml so only the rule excludes it.
     seatDir(root, '_template', null)
     seatDir(root, '_other-scaffold', null)
@@ -173,13 +214,13 @@ describe('a seat is authored, not guessed', () => {
 
   it('refuses a seat.yaml with no fly_app, and says not to assume hermes-<slug>', () => {
     const r = fresh()
-    seatDir(r, 'acme', "ring: 1\nauthored: '2026-01-01'\n")
+    seatDir(r, 'acme', "purpose: client\nring: 1\nauthored: '2026-01-01'\n")
     expect(() => loadSeatInventory(r)).toThrow(/Do not assume hermes-acme/)
   })
 
   it('refuses fly_app: null without a reason, and accepts it with one', () => {
     const r = fresh()
-    seatDir(r, 'acme', "fly_app: null\nring: 1\nauthored: '2026-01-01'\n")
+    seatDir(r, 'acme', "purpose: client\nfly_app: null\nring: 1\nauthored: '2026-01-01'\n")
     expect(() => loadSeatInventory(r)).toThrow(SeatInventoryError)
     writeFileSync(join(r, 'acme', 'seat.yaml'), SEAT_YAML(null, 1, '2026-01-01'))
     expect(loadSeatInventory(r)[0]).toMatchObject({
@@ -199,8 +240,69 @@ describe('a seat is authored, not guessed', () => {
     const r = fresh()
     seatDir(r, 'acme', SEAT_YAML('hermes-acme', 1, '2026-01-01', 'lifecycle: live\n'))
     expect(() => loadSeatInventory(r)).toThrow(/unknown key\(s\): lifecycle/)
-    writeFileSync(join(r, 'acme', 'seat.yaml'), 'fly_app: hermes-acme\nring: 1\nauthored: soon\n')
+    writeFileSync(
+      join(r, 'acme', 'seat.yaml'),
+      'purpose: client\nfly_app: hermes-acme\nring: 1\nauthored: soon\n'
+    )
     expect(() => loadSeatInventory(r)).toThrow(/authored is required/)
+  })
+
+  it('refuses a seat.yaml with no purpose, or one that is not a purpose (ADR 0107)', () => {
+    const r = fresh()
+    seatDir(r, 'acme', "fly_app: hermes-acme\nring: 1\nauthored: '2026-01-01'\n")
+    expect(() => loadSeatInventory(r)).toThrow(/purpose is required/)
+    writeFileSync(
+      join(r, 'acme', 'seat.yaml'),
+      SEAT_YAML('hermes-acme', 1, '2026-01-01', '', 'staging')
+    )
+    expect(() => loadSeatInventory(r)).toThrow(/client \| release-twin \| demo \| internal/)
+  })
+
+  it('a release twin names one client seat; twin_of belongs to no other purpose', () => {
+    const r = fresh()
+    seatDir(r, 'firm', SEAT_YAML('hermes-firm', 1, '2026-01-01', '', 'client'))
+    seatDir(
+      r,
+      'firm-twin',
+      "purpose: release-twin\nfly_app: hermes-firm-twin\nauthored: '2026-01-01'\n"
+    )
+    expect(() => loadSeatInventory(r)).toThrow(/needs twin_of/)
+    writeFileSync(join(r, 'firm-twin', 'seat.yaml'), TWIN_YAML('hermes-firm-twin', 'nobody'))
+    expect(() => loadSeatInventory(r)).toThrow(/twin_of nobody is not a seat/)
+    seatDir(r, 'ours', SEAT_YAML('hermes-ours', 2, '2026-01-01'))
+    writeFileSync(join(r, 'firm-twin', 'seat.yaml'), TWIN_YAML('hermes-firm-twin', 'ours'))
+    expect(() => loadSeatInventory(r)).toThrow(
+      /has purpose internal; a twin rehearses a client seat/
+    )
+    writeFileSync(join(r, 'firm-twin', 'seat.yaml'), TWIN_YAML('hermes-firm-twin', 'firm'))
+    const twin = loadSeatInventory(r).find((s) => s.slug === 'firm-twin')
+    expect(twin).toMatchObject({ purpose: 'release-twin', twinOf: 'firm', ring: 0 })
+    writeFileSync(
+      join(r, 'ours', 'seat.yaml'),
+      SEAT_YAML('hermes-ours', 2, '2026-01-01', 'twin_of: firm\n')
+    )
+    expect(() => loadSeatInventory(r)).toThrow(/twin_of is only for purpose: release-twin/)
+  })
+
+  it('a client has at most one release twin', () => {
+    const r = fresh()
+    seatDir(r, 'firm', SEAT_YAML('hermes-firm', 1, '2026-01-01', '', 'client'))
+    seatDir(r, 'twin-a', TWIN_YAML('hermes-twin-a', 'firm'))
+    seatDir(r, 'twin-b', TWIN_YAML('hermes-twin-b', 'firm'))
+    expect(() => loadSeatInventory(r)).toThrow(/already has a release twin \(twin-a\)/)
+  })
+
+  it('ring 0 is the release twins, derived: a twin authors no other ring, nothing else authors 0', () => {
+    const r = fresh()
+    seatDir(r, 'firm', SEAT_YAML('hermes-firm', 1, '2026-01-01', '', 'client'))
+    seatDir(r, 'firm-twin', TWIN_YAML('hermes-firm-twin', 'firm', 'ring: 2\n'))
+    expect(() => loadSeatInventory(r)).toThrow(/a release-twin is ring 0, derived/)
+    writeFileSync(join(r, 'firm-twin', 'seat.yaml'), TWIN_YAML('hermes-firm-twin', 'firm'))
+    writeFileSync(
+      join(r, 'firm', 'seat.yaml'),
+      SEAT_YAML('hermes-firm', 0, '2026-01-01', '', 'client')
+    )
+    expect(() => loadSeatInventory(r)).toThrow(/ring 0 is the release twins/)
   })
 
   it('defaults client to the seat itself', () => {
@@ -216,14 +318,7 @@ describe('a seat is authored, not guessed', () => {
 
 describe('renderers', () => {
   it('orders a ring by authored date, then slug, and caps only the last ring', () => {
-    const seat = (slug: string, ring: number, authored: string) => ({
-      slug,
-      flyApp: `hermes-${slug}`,
-      unprovisionedReason: null,
-      ring,
-      authored,
-      client: slug,
-    })
+    const seat = (slug: string, ring: number, authored: string) => seatOf({ slug, ring, authored })
     const yaml = renderRingsYaml([
       seat('zeta', 2, '2026-01-01'),
       seat('alpha', 2, '2026-03-01'),
@@ -236,14 +331,8 @@ describe('renderers', () => {
   })
 
   it('puts a seat with no Fly app in no ring (fleet release has nothing to deploy to)', () => {
-    const seat = (slug: string, flyApp: string | null) => ({
-      slug,
-      flyApp,
-      unprovisionedReason: flyApp === null ? 'not stood up yet' : null,
-      ring: 1,
-      authored: '2026-01-01',
-      client: slug,
-    })
+    const seat = (slug: string, flyApp: string | null) =>
+      seatOf({ slug, flyApp, unprovisionedReason: flyApp === null ? 'not stood up yet' : null })
     const yaml = renderRingsYaml([seat('live', 'hermes-live'), seat('pending', null)])
     // FALSIFIER: drop the flyApp filter in renderRingsYaml and `pending` joins ring 1.
     expect(yaml.slice(yaml.indexOf('\nrings:') + 1)).toBe(
@@ -252,15 +341,8 @@ describe('renderers', () => {
   })
 
   it('bakes a ring for the longest bake_minutes any of its seats authors (ADR 0096)', () => {
-    const seat = (slug: string, ring: number, bakeMinutes: number | null) => ({
-      slug,
-      flyApp: `hermes-${slug}`,
-      unprovisionedReason: null,
-      ring,
-      authored: '2026-01-01',
-      client: slug,
-      bakeMinutes,
-    })
+    const seat = (slug: string, ring: number, bakeMinutes: number | null) =>
+      seatOf({ slug, ring, bakeMinutes })
     const yaml = renderRingsYaml([
       seat('a', 0, 10),
       seat('b', 0, 45),
@@ -277,6 +359,16 @@ describe('renderers', () => {
     )
     // The last ring has no next ring to gate.
     expect(yaml).toContain('  - ring: 2\n    seats: [e]\n    max_parallel: 1\n')
+  })
+
+  it('writes each client seat with a twin into rings.yaml twins (the release gate reads it)', () => {
+    const yaml = renderRingsYaml([
+      seatOf({ slug: 'firm', purpose: 'client', ring: 1 }),
+      seatOf({ slug: 'firm-twin', purpose: 'release-twin', twinOf: 'firm', ring: 0 }),
+      seatOf({ slug: 'ours', ring: 2 }),
+    ])
+    // FALSIFIER: drop renderTwins and fleet's tick has no twin to wait for.
+    expect(yaml.endsWith('twins:\n  firm: firm-twin\n')).toBe(true)
   })
 
   it('refuses a bake_minutes that is not a whole minute count', () => {
@@ -309,7 +401,9 @@ describe('renderers', () => {
       expect(stale).toEqual([
         'src/lib/operator/fly-app-registry.generated.ts',
         'operator/fleet/rings.yaml',
-        'src/lib/operator/seat-rings.generated.ts',
+        'src/lib/operator/seat-purposes.generated.ts',
+        'scripts/lib/seat-purposes.generated.mjs',
+        'operator/fleet/seats.yaml',
       ])
     } finally {
       rmSync(root, { recursive: true, force: true })

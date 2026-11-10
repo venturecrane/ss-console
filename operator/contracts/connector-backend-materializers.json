@@ -61,8 +61,9 @@
     "synthetic:": {
       "status": "inert",
       "reason": "synthetic: backends (no_pm/fixture) are substrate stand-ins with no real connector; they surface no live tools. Binding synthetic:* as a capability's sole backend in a real customer = zero tools at runtime.",
-      "tracking": "synthetic: is acceptable ONLY for _template menus and explicitly-listed staging seats. A real customer must resolve every enabled capability to mcp: or an impl'd build: adapter — a PM backend should be an mcp: server (live Clio dev or a seeded mock MCP) per the capability-adapters runtime-wiring finding."
+      "tracking": "synthetic: is acceptable ONLY for _template menus (exemptCustomers) and seats whose seat.yaml purpose is in exemptPurposes (release-twin, demo; ADR 0107). A real customer must resolve every enabled capability to mcp: or an impl'd build: adapter — a PM backend should be an mcp: server (live Clio dev or a seeded mock MCP) per the capability-adapters runtime-wiring finding."
     }
   },
-  "exemptCustomers": ["_template/presets/pi-law-firm", "smd-staging"]
+  "exemptCustomers": ["_template/presets/pi-law-firm"],
+  "exemptPurposes": ["release-twin", "demo"]
 }

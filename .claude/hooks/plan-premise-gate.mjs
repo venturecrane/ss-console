@@ -35,6 +35,7 @@
 import { readFileSync, mkdirSync, appendFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { homedir } from 'node:os'
+import { INVENTORY_SEAT_PURPOSES } from '../../scripts/lib/seat-purposes.generated.mjs'
 
 const EVIDENCE_RE = /(`[^`]+`|vfy_[0-9A-Z]+|[\w./-]+\.(ts|mjs|sh|py|md|json|yaml|yml):\d+|https?:\/\/|probe|docs fetch|live |read )/i
 const HOLLOW_RE = /\b(TODO|TBD|\?\?\?|fill in)\b/i
@@ -87,18 +88,46 @@ const MEASURE_TEACH =
  * Law 18 (2026-11-04, the records job and the jobs-runner rename): nothing
  * runs first on a client seat. A client-work plan whose effect lands on a seat
  * (SEAT_RE) must carry a premise row naming its off-seat rehearsal (the ops
- * workspace, an answer key, smd-staging or the pilot, a lane-proof dry-run), or
- * state the opt-out line with its reason. The 2026-11-02 records job was built
- * and tested on the live client seat for twenty hours (about $58, two wrong
- * emails to the attorney); a $0 rehearsal on copies of the seat's own indexes
- * found four defects in minutes once it was finally run.
+ * workspace, an answer key, the client's release twin, a demo seat, a
+ * lane-proof dry-run), or state the opt-out line with its reason. The
+ * 2026-11-02 records job was built and tested on the live client seat for
+ * twenty hours (about $58, two wrong emails to the attorney); a $0 rehearsal on
+ * copies of the seat's own indexes found four defects in minutes once it was
+ * finally run.
+ *
+ * The seat names come from the seat inventory (ADR 0107, every seat's
+ * seat.yaml `purpose:`, rendered into scripts/lib/seat-purposes.generated.mjs),
+ * never a slug written here: any seat named means the plan lands on a seat, and
+ * naming a release twin or a demo seat names a rehearsal. A renamed or added
+ * seat changes these with `npm run gen:seat-registries` and no edit here.
  */
-const SEAT_RE = /(\bseats?\b|lane-proof|\brelease\b|ashton-price|pilot-smokeball|smd-staging|customer\.yaml)/i
-const REHEARSAL_RE = /(rehears|ops workspace|ops-handoff|answer key|smd-staging|pilot-smokeball|lane-proof|dry-run|\$\s?0\b)/i
+const escapeRe = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const slugsWhere = (keep) =>
+  INVENTORY_SEAT_PURPOSES.filter(([, purpose]) => keep(purpose)).map(([slug]) => escapeRe(slug))
+const SEAT_SLUGS = slugsWhere(() => true)
+const REHEARSAL_SLUGS = slugsWhere((purpose) => purpose === 'release-twin' || purpose === 'demo')
+const SEAT_RE = new RegExp(
+  ['\\bseats?\\b', 'lane-proof', '\\brelease\\b', ...SEAT_SLUGS, 'customer\\.yaml'].join('|'),
+  'i'
+)
+const REHEARSAL_RE = new RegExp(
+  [
+    'rehears',
+    'ops workspace',
+    'ops-handoff',
+    'answer key',
+    'release twin',
+    ...REHEARSAL_SLUGS,
+    'lane-proof',
+    'dry-run',
+    '\\$\\s?0\\b',
+  ].join('|'),
+  'i'
+)
 const REHEARSAL_OPTOUT_RE = /off-seat rehearsal:\s*none\s*\(/i
 
 const REHEARSAL_TEACH =
-  'Law 18 (docs/doctrine/agent-operating-doctrine.md): a client-work plan that lands on a seat needs one Premises row naming its off-seat rehearsal, the proof that runs BEFORE the client seat (e.g. "| the lane replays at $0 on copies of the seat indexes in the ops workspace against the answer key | rehearsal via `ops-handoff <client>` |", or staging / pilot-smokeball / a lane-proof dry-run), or the explicit line "Off-seat rehearsal: none (<why>)". Nothing runs first on a client seat.'
+  'Law 18 (docs/doctrine/agent-operating-doctrine.md): a client-work plan that lands on a seat needs one Premises row naming its off-seat rehearsal, the proof that runs BEFORE the client seat (e.g. "| the lane replays at $0 on copies of the seat indexes in the ops workspace against the answer key | rehearsal via `ops-handoff <client>` |", or the release twin of the client seat / a demo seat / a lane-proof dry-run), or the explicit line "Off-seat rehearsal: none (<why>)". Nothing runs first on a client seat.'
 
 export function landsOnSeat(planText) {
   return SEAT_RE.test(planText)

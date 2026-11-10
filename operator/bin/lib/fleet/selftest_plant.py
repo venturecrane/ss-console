@@ -3,7 +3,7 @@
 The self-test is only worth what its alert path delivers, and that path has
 five hops (check, results file, heartbeat, fleet_status, fleet-alerts worker),
 each of which can break silently. After any change to the self-test this verb
-proves all five on smd-staging, end to end, with a REAL violation:
+proves all five on a release twin, end to end, with a REAL violation:
 
   1. plant the violation (remote_selftest_plant.py, as root by `fly machine exec`) and ask
      the seat's own self-test loop for a run (its root-only trigger),
@@ -15,7 +15,8 @@ proves all five on smd-staging, end to end, with a REAL violation:
      run, wait until the check passes and, when nothing else failed, until the
      alert RESOLVES.
 
-Staging only, refused for any other slug: it plants a fault on a seat.
+Release twins only (seat.yaml ``purpose: release-twin``, ADR 0107; smd-staging
+today), refused for any other seat: it plants a fault on a seat.
 """
 
 from __future__ import annotations
@@ -26,12 +27,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from bin.lib import seat_purpose
+
 from . import ids
 from .fly import Fly
 from .runner import Refusal, ToolingError
 
 HERE = Path(__file__).resolve().parent
-PLANT_SEAT = "smd-staging"
 PLANTABLE = frozenset({"retired-skills-absent"})
 POLL_S = 20.0
 DEFAULT_WINDOW_S = 15 * 60
@@ -101,8 +103,11 @@ class SelftestPlant:
         return self._until(window, probe)
 
     def run(self, seat: str, check_id: str, window: float = DEFAULT_WINDOW_S) -> PlantReport:
-        if ids.slug(seat) != PLANT_SEAT:
-            raise Refusal(f"fleet selftest --plant runs on {PLANT_SEAT} only (it plants a fault on a seat)")
+        twins = seat_purpose.release_twins()
+        if ids.slug(seat) not in twins:
+            raise Refusal(
+                f"fleet selftest --plant runs on a release twin only ({', '.join(twins)}); it plants a fault on a seat"
+            )
         if check_id not in PLANTABLE:
             raise Refusal(f"no planter for {check_id}; plantable: {', '.join(sorted(PLANTABLE))}")
         report = PlantReport()

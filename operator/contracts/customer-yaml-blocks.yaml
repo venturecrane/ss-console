@@ -284,8 +284,8 @@ top_level:
       checkCaseManager (src/lib/operator/customer-yaml/sections-case-manager.ts),
       strict on unknown keys so a misspelled job cannot read as "off"; the
       overlay's on-box validator does not inspect unknown top-level blocks.
-      Authored on pilot-smokeball only; a client seat authors it when its
-      agreement names the routines.
+      Authored on the demo seat (pilot-smokeball) only; a client seat authors it
+      when its agreement names the routines, and its release twin with it.
   firm_identity:
     status: implemented
     owner: smokeball # only reader: smokeball_connector/letterhead.py load_firm_identity

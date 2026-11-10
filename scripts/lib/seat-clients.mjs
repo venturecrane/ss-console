@@ -3,9 +3,10 @@
  *
  * The register answers "what does SMD owe, and to whom". Its rows are keyed by
  * SEAT (`customer_configs.customer_slug`), and most of the time a seat is a
- * client. Some are not: `pilot-smokeball` is our pilot, `smd-staging` is our
- * staging environment, and `scott` is the Captain's own seat. Rolling their
- * rows up under their own names made the register report "11 open across 3
+ * client. Some are not: `pilot-smokeball` is our demo seat, `smd-staging` is
+ * ashton-price's release twin (seat.yaml `purpose:`, ADR 0107), and `scott` is
+ * the Captain's own seat. Rolling their rows up under their own names made the
+ * register report "11 open across 3
  * clients" on the day it held work for exactly one. The same holds for a
  * client's SECOND seat: `ashton-price-marketing` is the first Operator
  * client's marketing seat, and its work is owed to that client, not to a

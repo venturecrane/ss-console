@@ -16,7 +16,8 @@
  *     (skills' lower-case `version: pending` is a different, legitimate value)
  *   - a GA4 `property_id` of 0 (no property has it)
  * and, in seat.yaml, `fly_app: null` (the seat says it has no app). Not
- * `.invalid` on its own: smd-staging authors .invalid addresses on purpose.
+ * `.invalid` on its own: a release twin (seat.yaml `purpose: release-twin`,
+ * ADR 0107) authors .invalid addresses on purpose.
  */
 
 import { existsSync, readFileSync } from 'node:fs'

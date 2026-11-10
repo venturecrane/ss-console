@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from bin.lib import seat_purpose
 from bin.lib import work_health as wh
 from bin.lib import work_health_auth as auth
 from bin.lib import work_health_mail as mail
@@ -874,11 +875,27 @@ def test_a_job_held_for_an_unproven_lane_is_waiting_not_stuck():
     assert "proof run" in items[0].what and "lane-proof.sh" in items[0].todo
 
 
-def test_the_no_reply_threshold_is_per_seat():
-    assert CFG.no_reply_for("smd-staging") == 5 and CFG.no_reply_for(SEAT) == 30
+def test_the_no_reply_threshold_is_per_purpose():
+    """A release twin answers within 5 minutes; every other seat within 30 (ADR 0107).
+    The twin is found by its authored purpose, never by its slug."""
+    twin = seat_purpose.release_twins()[0]
+    assert CFG.no_reply_for(twin) == 5 and CFG.no_reply_for(SEAT) == 30
     rows = [_inbound(NOW - timedelta(minutes=6))]
-    assert _kinds(wh.request_items("smd-staging", rows, CFG, NOW)) == ["no_reply"]
+    assert _kinds(wh.request_items(twin, rows, CFG, NOW)) == ["no_reply"]
     assert wh.request_items(SEAT, rows, CFG, NOW) == []
+
+
+def test_a_renamed_twin_takes_the_purpose_threshold_with_no_contract_edit():
+    seats = {"ap-staging": {"purpose": "release-twin", "twin_of": "x", "provisioned": True}}
+    cfg = wh.load_config(seats=seats)
+    assert cfg.no_reply_for("ap-staging") == 5 and cfg.no_reply_for("smd-staging") == 30
+
+
+def test_a_purpose_override_must_name_a_purpose(tmp_path):
+    bad = tmp_path / "wh.yaml"
+    bad.write_text(wh.CONTRACT_PATH.read_text().replace("  release-twin: 5", "  staging: 5"))
+    with pytest.raises(ValueError):
+        wh.load_config(bad)
 
 
 def test_a_drafting_job_held_by_the_lane_gate_is_waiting_not_stuck_in_queue():

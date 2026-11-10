@@ -5,6 +5,10 @@
 #
 # Couples hosted-agent seat, SMD's own proof of concept (ss#3264).
 
+# What this seat is for (ADR 0107): client | release-twin | demo | internal.
+# A client seat (seat.kind customer, two real people's records) though SMD's own
+# proof of concept: purpose follows whose records the seat holds.
+purpose: client
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 fly_app: hermes-captain-mark

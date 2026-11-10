@@ -11,10 +11,10 @@
  * rollout's `finished_at` is also set for failed, rolled-back and skipped
  * states, so only `state = 'done'` counts.
  *
- * A client seat is a seat of a CLIENT RING, the rollout's own definition: ring
- * 0 is staging, the last ring is SMD's own seats, and every ring strictly
- * between is a client ring. Derived from each seat's authored `seat.yaml`
- * (`ring:`, through the generated SEAT_RINGS), never a list kept here.
+ * A client seat is a provisioned seat whose authored `seat.yaml` says
+ * `purpose: client` (ADR 0107, through the generated SEAT_PURPOSES), never a
+ * list kept here and never inferred from ring numbers. An unprovisioned client
+ * seat has no Fly app to release to, so it is not waited for.
  *
  * Never invents a number (docs/style/empty-state-pattern.md): a release with no
  * merge time, or with any client seat not yet done, has no all-clients time; a
@@ -22,7 +22,7 @@
  * an error for the page to say so.
  */
 
-import { SEAT_RINGS } from '../operator/seat-rings.generated'
+import { SEAT_PURPOSES, type SeatPurposeEntry } from '../operator/seat-purposes.generated'
 
 /** One image release joined with one done rollout (or none: the LEFT JOIN). */
 export interface MergeToSeatRow {
@@ -61,18 +61,12 @@ const ISO_Z = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const WEEKS_SHOWN = 8
 
-/**
- * The client seats: those whose ring is strictly between the lowest (staging)
- * and the highest (SMD's own seats). Fewer than three rings means no ring is a
- * client ring, so the answer is [] and nothing is measured, never a guess.
- */
-export function clientSeats(rings: Readonly<Record<string, number>> = SEAT_RINGS): string[] {
-  const numbers = Object.values(rings)
-  if (numbers.length === 0) return []
-  const lowest = Math.min(...numbers)
-  const highest = Math.max(...numbers)
-  return Object.keys(rings)
-    .filter((seat) => rings[seat] > lowest && rings[seat] < highest)
+/** The client seats: every provisioned seat whose purpose is client, sorted. */
+export function clientSeats(
+  purposes: Readonly<Record<string, SeatPurposeEntry>> = SEAT_PURPOSES
+): string[] {
+  return Object.keys(purposes)
+    .filter((seat) => purposes[seat].purpose === 'client' && purposes[seat].provisioned)
     .sort()
 }
 

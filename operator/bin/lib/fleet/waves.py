@@ -22,6 +22,13 @@
 * RESUME. A full run skips a seat whose latest rollout of THIS release is
   ``done`` (reported, not recorded again), so re-running a release after a halt
   continues from where it stopped. ``--only`` still redeploys on request.
+* TWIN GATE (ADR 0107). A client seat whose release twin (rings.yaml
+  ``twins:``) is not done on this release is not deployed: under ``--only``
+  that is a refusal naming the twin, in a full run the seat ends
+  ``waiting_twin`` (recorded nowhere, halts nothing, keeps the release
+  incomplete). The done set is re-read for each such seat, so a twin that
+  finished earlier in the same run counts. A hotfix for a client seat goes to
+  its twin first: ``--only <twin>``, then ``--only <client>``.
 * HALT. A seat that ends rolled_back / failed stops the rollout: seats already
   started finish, nothing new starts, and every seat not reached is recorded
   halted. A tooling_error (Fly or the self-test decided nothing about the
@@ -125,6 +132,7 @@ class Waves:
     def __init__(self, store: FleetStore, log: Callable[[str], None]) -> None:
         self.store = store
         self.log = log
+        self.only: str | None = None
 
     def run(
         self,
@@ -139,6 +147,7 @@ class Waves:
         holder: str | None = None,
     ) -> WaveResult:
         """Walk the rings. ``holder`` (None only in a dry run) takes each seat's lease."""
+        self.only = only
         done = set() if only else self.store.release_done_seats(release["release_id"])
         result = WaveResult()
         halt = threading.Event()
@@ -195,6 +204,9 @@ class Waves:
             hold = self.store.holds().get(seat)
             if hold is not None:
                 return self._mark_held(release, seat, ring.number, hold, dry_run)
+            waiting = self._twin_waiting(ring, seat, release)
+            if waiting is not None:
+                return waiting
             out = do_seat(seat, ring.number)
             if out.halts:
                 halt.set()
@@ -207,6 +219,20 @@ class Waves:
             return [one(s) for s in seats]
         with ThreadPoolExecutor(max_workers=width) as pool:
             return list(pool.map(one, seats))
+
+    def _twin_waiting(self, ring: Ring, seat: str, release: dict[str, Any]) -> SeatOutcome | None:
+        """The twin gate: an outcome when ``seat``'s release twin is not done on ``release``, else None."""
+        twin = ring.twins.get(seat)
+        if twin is None or twin in self.store.release_done_seats(release["release_id"]):
+            return None
+        why = (
+            f"its release twin {twin} is not done on {release['release_id']}; "
+            f"a client seat takes only a release its twin has proved (ADR 0107). Run --only {twin} first"
+        )
+        if self.only:
+            raise Refusal(f"{seat}: {why}")
+        self.log(f"{seat}: WAITING_TWIN {why}")
+        return SeatOutcome(seat, "waiting_twin", why)
 
     def _record(
         self, release: dict[str, Any], seat: str, ring: int, state: str, detail: str, dry_run: bool

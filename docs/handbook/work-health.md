@@ -4,7 +4,7 @@ section: running
 order: 21
 owner: captain
 review_every: 30
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-11-10"
 summary: The hourly check of the WORK on every live seat (requests with no reply, stuck or held jobs, missed and silent scheduled runs, failing connections, new errors), how it reaches you as the triage report and urgent sign-in emails, and what each line means.
 sources:
   - label: operator/bin/work-health.py - the evaluation
@@ -53,7 +53,7 @@ The list below is what the evaluation produces and what the triage agent reads. 
 - **Subject:** `[SMD Ops] Work health: N need attention (M new)`. Then each client seat (A&P first) with its items. Times are Phoenix time, marked MST.
 - **NEW** lines carry a "To do". Items already reported are one line each with their age, "(open 2d)", so an unchanged problem never repeats at full volume.
 - **One line per problem, never per occurrence.** A send refused every few seconds for a day is one line with the attempt count, first and last time. A job that failed is one line, not one per signal about it.
-- **Test seats are a count, not a list.** Seats whose `customer.yaml` says `seat.kind` is not `customer` (`pilot-smokeball`, `smd-staging`, `scott`) are counted on one "Test seats, not listed" line. A seat that could not be read, or a missed hourly run, is listed wherever it happens, because it usually means something every seat shares is broken.
+- **Test seats are a count, not a list.** Seats whose `customer.yaml` says `seat.kind` is not `customer` (today `pilot-smokeball`, `smd-staging`, `scott` and `smd-guide`) are counted on one "Test seats, not listed" line. A seat that could not be read, or a missed hourly run, is listed wherever it happens, because it usually means something every seat shares is broken.
 - **Open work only.** A refusal or failure followed by delivered work is counted on one "Answered by later work" line, never listed.
 - **A seat that could not be read is an item**, never silence: "Could not read this seat's work ledger" means nothing about that seat is known.
 - **Not checked** names what the run could not vouch for: a seat that has never reported a heartbeat (being built, not broken). Every other seat gets the same checks, the self-serve offering included (ADR 0100 W6, 2026-10-31); each check grades only what the seat authors, so a seat with no Smokeball connector, no Graph mailbox or no schedule is never graded on one.
@@ -88,7 +88,7 @@ The hourly Smokeball check is the only detector of a dead Smokeball token: the c
 
 | Line | What went wrong | What to do |
 | --- | --- | --- |
-| NO reply | A firm person's request has had no reply for 30 minutes or more. A job starting does not excuse it: the acknowledgement is owed either way. | Agent: find the request by its card id (`.claude/bin/requests`) and find out why. You: make sure the person is answered. |
+| NO reply | A firm person's request has had no reply for 30 minutes or more (5 on a release twin, the seat whose `seat.yaml` says `purpose: release-twin`, so a test of this line proves it in minutes; `no_reply_minutes_by_purpose` in the contract, ADR 0107). A job starting does not excuse it: the acknowledgement is owed either way. | Agent: find the request by its card id (`.claude/bin/requests`) and find out why. You: make sure the person is answered. |
 | Reply held | The Operator wrote a reply and a gate held it; nothing was sent. | Agent reads the held reply and proposes release or rewrite. Releasing words to a client follows [Who Does What](/admin/playbook/who-does-what). |
 | Job queued / running too long | A job has not started, or has run past its lane's limit (drafting 2h, demand 6h, chronology 12h, litigation 3h, case file 6h, negotiation 1h). | Agent: check the job on the seat; a hung runner looks like progress forever. |
 | Job held / failed | A job ended without delivering. The reason's first word is shown (`review_held`, `request_incomplete`); the rest stays on the seat. Drops off after 72 hours, or as soon as a later job in the same lane on the same matter delivers. | You decide, on the agent's findings: rerun, release, or tell the requester why. |

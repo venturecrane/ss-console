@@ -309,15 +309,26 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    epoch of the tree it built, the integer in `operator/fleet/volume-epoch`
    (no file is epoch 1), on the release (`fleet_releases.volume_epoch`,
    migration 0150).
-3. **Prove it on the rig, then release:** `fleet release <release-id> --only
-   pilot-smokeball`, drive the shadow firm against the rig and cite the run id
-   (below), then `fleet release <release-id>` for the rings. Rings live in
-   `operator/fleet/rings.yaml`: 0 `smd-staging`, 1 `ashton-price`, 2
-   `pilot-smokeball` `scott` `brokery` `captain-mark` (the last ring always one
-   at a time). The client seat has been ring 1 since 2026-10-30; the reason is
-   under "The release controller" below. That file
-   is generated from each seat's `ring:` in `operator/customers/<slug>/seat.yaml`
-   (`npm run gen:seat-registries`); a seat in no ring would join the last. A
+3. **Release, twin first:** `fleet release <release-id>` walks the rings, and
+   ring 0 is each client's **release twin**: the seat whose `seat.yaml` says
+   `purpose: release-twin` and names its client in `twin_of` (ADR 0107). A
+   client seat with a twin takes a release only after its twin is done on that
+   same release, on a laptop run as in the controller: `--only <client>` is
+   refused until `--only <twin>` is done, and a full run whose twin was held or
+   failed records the client `waiting_twin` and leaves it alone. The pilot
+   (`pilot-smokeball`, now `purpose: demo`) gates nothing and is not a step
+   before the client. Rings live in `operator/fleet/rings.yaml`: 0
+   `smd-staging` (the twin of `ashton-price`), 1 `ashton-price`, 2
+   `pilot-smokeball` `scott` `brokery` `captain-mark` `smd-guide` (the last ring
+   always one at a time), with a `twins:` block naming each client's twin. The
+   client seat has been ring 1 since 2026-10-30; the reason is under "The
+   release controller" below. That file is generated from each seat's
+   `purpose:`, `twin_of:` and `ring:` in `operator/customers/<slug>/seat.yaml`
+   (`npm run gen:seat-registries`); a twin is ring 0 by derivation, and a seat
+   in no ring would join the last. The stated gap: the twin is still named
+   `smd-staging` and binds no Smokeball connector, so it is not yet an exact
+   copy of the client seat; a Smokeball-path change is rehearsed at $0 in the
+   client's ops workspace until it does. A
    seat authored with `fly_app: null` (`ashton-price-marketing` until the firm
    creates its mailbox) is in no ring at all, in the generator and in
    `rings.py` alike: it has no app to release to. `--parallel N` widens a ring; `--dry-run` runs every
@@ -514,6 +525,13 @@ Two workflows run the release (ADR 0096).
     2026-10-29 one Fly deploy that failed without a reason, first on
     smd-staging and then on brokery, kept every later seat, the client's
     included, off merged fixes for hours.
+  - a client seat whose **release twin** is not done on this release, by the
+    twin's own rollout row, is not pending: the tick names it as waiting on its
+    twin (`twin_deferrals`, ADR 0107). A twin done only on a newer release does
+    not count, and a twin with no row, held, stalled or failed keeps its client
+    waiting. On 2026-10-30 releases `9bd7caa3` and `f835d1d9` reached
+    `ashton-price` with no `smd-staging` rollout row; this is the gate that was
+    missing.
   - otherwise the remaining seats of the first unfinished ring deploy, after
     **the bake**: every unheld seat of the ring before it done on the release
     for that ring's `bake_minutes` (10 by default; a seat may author
@@ -554,8 +572,10 @@ Two workflows run the release (ADR 0096).
   progress.
 
 There is no approval step before the client ring. Since 2026-10-30 the client
-seat is ring 1, straight after smd-staging with no bake on either, and SMD's
-other seats follow it: with one client, a fix waited about an hour behind four
+seat is ring 1, straight after its release twin (`smd-staging`) with no bake on
+either, and SMD's other seats follow it. Since 2026-11-10 the client seat also
+waits for its twin to be done on each release (ADR 0107), so a release that
+skipped the twin never reaches the client: with one client, a fix waited about an hour behind four
 rings of bakes, and the bakes protected nothing a seat's own self-test and
 automatic rollback did not. So a merged fix reaches ashton-price in the same
 run that takes staging, straight after staging's self-test is green, about 20
@@ -570,7 +590,9 @@ person back on every release. When a second client signs, revisit the order.
 **An urgent fix for one seat skips the queue.** Merge the fix, let Deploy build
 the image (about 6 minutes), then run `release-tick` by hand (Actions, Run
 workflow; it works from a phone) and pick the seat. That release goes to the one
-seat now, with no ring order and no bake. The seat's self-test still judges it,
+seat now, with no ring order and no bake. For a client seat with a release twin,
+pick the twin first and then the client: the client is refused, naming the
+twin, until the twin is done on that release (ADR 0107). The seat's self-test still judges it,
 a failure still rolls it back, a hold is still honored, and a running client job
 is still waited for, up to 30 minutes. It runs in its own lane per seat, so it
 never queues behind a tick, and the tick later skips the seat as done.
@@ -819,9 +841,9 @@ and rolls nothing, while CI still publishes candidates. To send one bundle to
 one seat, run release-tick by hand with the seat and `artifact: bundle`
 (`fleet release --bundle latest --only <seat>`): the same lease, busy gate,
 read-back and rollback, with no ring order and no bake, whatever the switch
-says, and only to a seat that authors a job lane. That is how the first bundle
-goes to smd-staging, then pilot-smokeball (a real job), then ashton-price, while
-the rings run staging, ashton-price, pilot. `fleet status` shows
+says, and only to a seat that authors a job lane. A client seat with a twin
+takes a bundle only after its twin is done on that bundle, here as in the tick
+(ADR 0107), so a bundle goes to smd-staging first, then ashton-price. `fleet status` shows
 what each seat runs in its bundles column: a version, `image` when the image's
 own copy runs, `-` when the seat reports none.
 
@@ -1083,7 +1105,7 @@ paths now judge lanes the same way (#3448), so the default is `selftest`.
 path after any change to the self-test: it plants one real violation as root,
 asks the seat's loop for two runs (through its root-only trigger), waits for
 `selftest_failing` to open, clears the violation (always, even after a timeout),
-and waits for the alert to resolve. It refuses any seat but `smd-staging`.
+and waits for the alert to resolve. It refuses any seat but a release twin (`seat.yaml` `purpose: release-twin`, ADR 0107; `smd-staging` today).
 
 ## Build commands reference
 

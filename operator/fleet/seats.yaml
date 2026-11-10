@@ -1,0 +1,34 @@
+# GENERATED from operator/customers/<slug>/seat.yaml (`purpose:`, `twin_of:`) by
+# scripts/gen-seat-registries.ts. Do not edit. Regenerate with `npm run gen:seat-registries`;
+# tests/seat-inventory.test.ts fails while this file is stale.
+#
+# What every seat is for (ADR 0107), for the Python tooling: the boot harness
+# (its fixture source), reprovision-staging.sh (which seat it may provision
+# and whose secrets it isolates), and work-health (per-purpose overrides). Read
+# through operator/bin/lib/seat_purpose.py.
+seats:
+  ashton-price:
+    purpose: client
+    provisioned: true
+  ashton-price-marketing:
+    purpose: client
+    provisioned: false
+  brokery:
+    purpose: client
+    provisioned: true
+  captain-mark:
+    purpose: client
+    provisioned: true
+  pilot-smokeball:
+    purpose: demo
+    provisioned: true
+  scott:
+    purpose: internal
+    provisioned: true
+  smd-guide:
+    purpose: internal
+    provisioned: true
+  smd-staging:
+    purpose: release-twin
+    twin_of: ashton-price
+    provisioned: true

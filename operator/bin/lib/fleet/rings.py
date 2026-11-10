@@ -1,4 +1,11 @@
-"""Ring membership (operator/fleet/rings.yaml) resolved against the live seat set."""
+"""Ring membership (operator/fleet/rings.yaml) resolved against the live seat set.
+
+Each ring also carries its client seats' release twins (rings.yaml ``twins:``,
+rendered from seat.yaml ``purpose: release-twin`` / ``twin_of``, ADR 0107). A
+client seat with a twin may take a release only when its twin's own rollout of
+that release is done: tick.twin_deferrals for the controller, waves.Waves for a
+laptop run.
+"""
 
 from __future__ import annotations
 
@@ -24,6 +31,9 @@ class Ring:
     seats: list[str] = field(default_factory=list)
     max_parallel: int | None = None
     bake_minutes: int = DEFAULT_BAKE_MINUTES
+    # Client seat of this ring -> its release twin (ADR 0107). Kept with the ring
+    # so every copy of it (bundles.authoring_rings, tick waves) keeps the gate.
+    twins: dict[str, str] = field(default_factory=dict)
 
 
 def live_seats(customers_dir: Path) -> list[str]:
@@ -60,7 +70,7 @@ def load_rings(rings_file: Path, customers_dir: Path) -> list[Ring]:
         raise ValueError(f"{rings_file}: no rings")
     rings.sort(key=lambda r: r.number)
     # The last ring (SMD's own seats) always deploys one seat at a time. Client
-    # rings between staging and it carry max_parallel from rings.yaml and roll a
+    # rings between the twins and it carry max_parallel from rings.yaml and roll a
     # canary, then the rest at once (tick.py _advance; CLIENT_RING_PARALLEL in
     # scripts/lib/seat-registries.ts).
     rings[-1].max_parallel = 1
@@ -71,7 +81,25 @@ def load_rings(rings_file: Path, customers_dir: Path) -> list[Ring]:
     known = set(live)
     for ring in rings:
         ring.seats = [s for s in ring.seats if s in known]
+    _attach_twins(rings, raw.get("twins") or {}, rings_file)
     return rings
+
+
+def _attach_twins(rings: list[Ring], twins: object, rings_file: Path) -> None:
+    """Put each ``client: twin`` pair on the ring that holds the client.
+
+    A pair whose client is in no ring (unprovisioned) is dropped with it. The
+    twin is kept even when it is in no ring: then it never has a row, and its
+    client takes no release, which is the fail-closed answer.
+    """
+    if not isinstance(twins, dict):
+        raise ValueError(f"{rings_file}: twins is not a client: twin mapping")
+    for client, twin in twins.items():
+        ids.slug(client)
+        ids.slug(twin)
+        for ring in rings:
+            if client in ring.seats:
+                ring.twins[client] = twin
 
 
 def parallel_for(ring: Ring, requested: int) -> int:

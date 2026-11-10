@@ -5,8 +5,10 @@
  * `customer.yaml`, is not a `_`-prefixed provisioning scaffold, is not a
  * `<slug>.decommissioned.<date>` tombstone, is not a dotfile, and has a valid
  * slug. Each seat also authors a console-side sidecar, `seat.yaml`, carrying
- * what used to be hand-kept elsewhere: its Fly app, its release ring, the day it
- * was authored (orders a ring), and the client its obligations roll up to.
+ * what used to be hand-kept elsewhere: what the seat is for (`purpose`, and a
+ * release twin's `twin_of`, ADR 0107), its Fly app, its release ring, the day
+ * it was authored (orders a ring), and the client its obligations roll up to.
+ * Renaming or adding a seat is an edit here, never a slug in code.
  *
  * ## Why a sidecar and not keys in customer.yaml
  *
@@ -19,13 +21,15 @@
  *
  * ## What is derived from it
  *
- * `scripts/gen-seat-registries.ts` renders three committed files from
- * {@link loadSeatInventory}: `src/lib/operator/fly-app-registry.generated.ts`
- * (the ADR 0036 allow-list), `operator/fleet/rings.yaml` (read by the Python
- * fleet tool), and `scripts/lib/seat-clients.generated.mjs` (the obligation
- * register's seat-to-client rollup). They stay committed so no consumer changes
- * how it reads; `tests/seat-inventory.test.ts` re-renders them and fails on any
- * byte of drift.
+ * `scripts/gen-seat-registries.ts` renders the committed files named in
+ * GENERATED_PATHS (scripts/lib/seat-registries.ts) from
+ * {@link loadSeatInventory}: the ADR 0036 Fly app allow-list, the release
+ * rings with each client's twin (`operator/fleet/rings.yaml`, read by the
+ * Python fleet tool), every seat's purpose for TypeScript, for the hooks and
+ * for Python (`operator/fleet/seats.yaml`), and the obligation register's
+ * seat-to-client rollup. They stay committed so no consumer changes how it
+ * reads; `tests/seat-inventory.test.ts` re-renders them and fails on any byte of
+ * drift.
  *
  * The same directory rule lives in Python (`operator/bin/lib/seat_dirs.py`) and
  * bash (`scripts/lib/seat-dir.sh`) for the tooling that cannot import this;
@@ -43,6 +47,8 @@ const TOMBSTONE_MARKER = '.decommissioned.'
 const FLY_APP_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const SEAT_YAML_KEYS = new Set([
+  'purpose',
+  'twin_of',
   'fly_app',
   'unprovisioned_reason',
   'ring',
@@ -50,6 +56,20 @@ const SEAT_YAML_KEYS = new Set([
   'client',
   'bake_minutes',
 ])
+
+/**
+ * What a seat is for (ADR 0107). A `client` seat holds a paying client's work; a
+ * `release-twin` is an exact copy of one client seat that takes every release
+ * first and gates that client's releases (`twin_of`); a `demo` seat shows the
+ * product on SMD's own test data; an `internal` seat is SMD's own work. Named
+ * `purpose`, not `role`: customer.yaml `seat.role` already selects a role
+ * package (ADR 0093).
+ */
+export const SEAT_PURPOSES = ['client', 'release-twin', 'demo', 'internal'] as const
+export type SeatPurpose = (typeof SEAT_PURPOSES)[number]
+
+/** The ring every release-twin seat is in, derived (ADR 0107). No other seat may author it. */
+export const TWIN_RING = 0
 
 export type SkipReason = 'scaffold' | 'hidden' | 'tombstone'
 
@@ -79,6 +99,10 @@ export function seatSlugs(customersRoot: string): string[] {
 
 export interface Seat {
   slug: string
+  /** What the seat is for (ADR 0107). */
+  purpose: SeatPurpose
+  /** The client seat a release-twin rehearses; null for every other purpose. */
+  twinOf: string | null
   /** The seat's Fly app, or null when it deliberately has none (see unprovisionedReason). */
   flyApp: string | null
   unprovisionedReason: string | null
@@ -132,9 +156,8 @@ function parseSeat(slug: string, raw: unknown): Seat {
   const unknown = Object.keys(doc).filter((k) => !SEAT_YAML_KEYS.has(k))
   if (unknown.length) fail(slug, `unknown key(s): ${unknown.join(', ')}`)
 
-  const ring = doc.ring
-  if (typeof ring !== 'number' || !Number.isInteger(ring) || ring < 0)
-    fail(slug, 'ring is required: a non-negative integer')
+  const { purpose, twinOf } = parsePurpose(slug, doc)
+  const ring = parseRing(slug, doc, purpose)
 
   const authored = doc.authored
   if (typeof authored !== 'string' || !DATE_RE.test(authored))
@@ -146,12 +169,85 @@ function parseSeat(slug: string, raw: unknown): Seat {
 
   return {
     slug,
+    purpose,
+    twinOf,
     ...parseFlyApp(slug, doc),
     ring,
     authored,
     client,
     bakeMinutes: parseBake(slug, doc),
   }
+}
+
+/** `purpose` (required) and `twin_of` (exactly when purpose is release-twin). */
+function parsePurpose(
+  slug: string,
+  doc: Record<string, unknown>
+): Pick<Seat, 'purpose' | 'twinOf'> {
+  const purpose = doc.purpose
+  if (typeof purpose !== 'string' || !(SEAT_PURPOSES as readonly string[]).includes(purpose))
+    fail(slug, `purpose is required: one of ${SEAT_PURPOSES.join(' | ')} (ADR 0107)`)
+  const twinOf = doc.twin_of ?? null
+  if (purpose === 'release-twin') {
+    if (typeof twinOf !== 'string' || !SLUG_RE.test(twinOf))
+      fail(slug, 'purpose release-twin needs twin_of: the slug of the client seat it rehearses')
+  } else if (twinOf !== null) {
+    fail(slug, 'twin_of is only for purpose: release-twin')
+  }
+  return { purpose: purpose as SeatPurpose, twinOf: twinOf }
+}
+
+/**
+ * `ring`: a release-twin is ring 0, derived (it may author `ring: 0` or nothing);
+ * every other seat authors a ring of 1 or more, so nothing but a twin ever takes
+ * a release first.
+ */
+function parseRing(slug: string, doc: Record<string, unknown>, purpose: SeatPurpose): number {
+  const ring = doc.ring
+  if (purpose === 'release-twin') {
+    if (ring !== undefined && ring !== TWIN_RING)
+      fail(slug, `a release-twin is ring ${TWIN_RING}, derived; do not author another ring`)
+    return TWIN_RING
+  }
+  if (typeof ring !== 'number' || !Number.isInteger(ring) || ring < 1)
+    fail(
+      slug,
+      `ring is required: an integer of 1 or more (ring ${TWIN_RING} is the release twins')`
+    )
+  return ring
+}
+
+/**
+ * Every release-twin names a seat whose purpose is client, and
+ * no client has two twins. Throws on the first violation.
+ */
+function checkTwins(seats: Seat[]): void {
+  const bySlug = new Map(seats.map((s) => [s.slug, s]))
+  const twinOfClient = new Map<string, string>()
+  for (const seat of seats) {
+    if (seat.twinOf === null) continue
+    const client = bySlug.get(seat.twinOf)
+    if (!client) fail(seat.slug, `twin_of ${seat.twinOf} is not a seat`)
+    if (client.purpose !== 'client')
+      fail(
+        seat.slug,
+        `twin_of ${seat.twinOf} has purpose ${client.purpose}; a twin rehearses a client seat`
+      )
+    const prior = twinOfClient.get(seat.twinOf)
+    if (prior)
+      fail(
+        seat.slug,
+        `${seat.twinOf} already has a release twin (${prior}); a client has at most one`
+      )
+    twinOfClient.set(seat.twinOf, seat.slug)
+  }
+}
+
+/** The release twin of each client seat that has one: client slug -> twin slug. */
+export function twinsByClient(seats: Seat[]): Map<string, string> {
+  return new Map(
+    seats.filter((s) => s.twinOf !== null).map((s) => [s.twinOf as string, s.slug] as const)
+  )
 }
 
 /** `bake_minutes`: optional; a non-negative whole number of minutes (ADR 0096). */
@@ -175,7 +271,7 @@ export function loadSeatInventory(customersRoot: string): Seat[] {
     if (!existsSync(path)) {
       fail(
         slug,
-        'missing. Every seat authors one (fly_app, ring, authored, optional client); ' +
+        'missing. Every seat authors one (purpose, fly_app, ring, authored, optional client); ' +
           'copy a sibling seat.yaml and run `npm run gen:seat-registries`.'
       )
     }
@@ -188,5 +284,6 @@ export function loadSeatInventory(customersRoot: string): Seat[] {
     if (prior) fail(seat.slug, `fly_app ${seat.flyApp} is already ${prior}'s app`)
     byApp.set(seat.flyApp, seat.slug)
   }
+  checkTwins(seats)
   return seats
 }
