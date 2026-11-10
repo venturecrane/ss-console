@@ -56,6 +56,8 @@
  * @see docs/doctrine/agent-operating-doctrine.md - Law 9
  */
 
+import { classifyPaths } from './lib/touch-map.mjs'
+
 /** A header cell naming the status column. */
 const STATUS_HEADER_RE = /^(status|state)\b/i
 
@@ -188,7 +190,10 @@ function columnsOf(header) {
  * is where a deferral's owner and date are looked for.
  *
  * @param {string} body - the pull request description
- * @returns {{ ac: string, status: string, evidence: string, kind: 'met' | 'deferred' | 'na' | 'unmet', row: string, ids: string[], malformed: string[] }[]}
+ * `evidenceColumn` is false when the table has no Evidence column and
+ * `evidence` is therefore the rest of the row, AC text included.
+ *
+ * @returns {{ ac: string, status: string, evidence: string, kind: 'met' | 'deferred' | 'na' | 'unmet', row: string, evidenceColumn: boolean, ids: string[], malformed: string[] }[]}
  */
 export function runtimeRows(body) {
   const found = []
@@ -212,6 +217,7 @@ export function runtimeRows(body) {
         evidence,
         kind: statusKind(status),
         row: row.join(' | '),
+        evidenceColumn: evidenceAt !== -1,
         ids: ids.filter((id) => CANONICAL_ID_RE.test(id)),
         malformed: ids.filter((id) => !CANONICAL_ID_RE.test(id)),
       })
@@ -437,4 +443,101 @@ export function formatViolations(violations) {
     '"not met", "unmet", "pending" and "not yet" are not states this gate accepts.',
     'See docs/doctrine/wired-contract.md.',
   ].join('\n')
+}
+
+/*
+ * THE TOUCH RULE (2026-11-09, wave 2 PR 1).
+ *
+ * Everything above reads the body, so a PR that changes a client lane and
+ * writes no `(runtime)` row at all has nothing to check and passes. The touch
+ * rule looks from the diff side: scripts/lib/touch-map.mjs classifies the PR's
+ * changed paths into send-path, client-lane, seat or none, and the rule reads
+ * the body against that class.
+ *
+ * Two findings, deliberately treated differently:
+ *
+ *   no runtime row   a client-surface PR with no `(runtime)` row. REPORTED,
+ *                    never blocking: a warning and a job-summary line. The
+ *                    replay of 1,120 merged PRs (2026-09-01 to 11-09) put
+ *                    69.7% of them on a client surface, and 81% of last
+ *                    week's client-surface PRs had no runtime row. A blocking
+ *                    rule at that rate buys boilerplate deferrals, not proof,
+ *                    which is the "our own checks misfire" cause behind 50+
+ *                    fixes. Enforcement of this half moves to session close
+ *                    (/eos check J), which reads these same classifications.
+ *   bare n/a         a `(runtime)` row marked n/a with no reason, on a
+ *                    client-surface PR. BLOCKS. An n/a there must say why, in
+ *                    its status cell (`n/a: <why>`) or its Evidence cell. The
+ *                    replay found 0 of these in the last 50 merged PRs, so it
+ *                    costs no false alarms, and a bare n/a is the same silence
+ *                    as "not met" in a different word.
+ *
+ * Exported for reuse (scripts/eos-ready.mjs): checkTouchRule, and
+ * classifyPaths from scripts/lib/touch-map.mjs.
+ */
+
+/** Words that are not a reason. */
+const NOT_A_REASON_RE = /\b(n\/a|na|not applicable|none|tbd|tba|nothing)\b|-+/gi
+
+/**
+ * Why a runtime row marked n/a does not apply, or null when it gives none.
+ * @param {{ status: string, evidence: string, evidenceColumn: boolean }} row
+ * @returns {string | null}
+ */
+export function naReason(row) {
+  const fromStatus = String(row.status ?? '').replace(/^[\s*`_]*(n\/a|na|not applicable)\b/i, '')
+  const fromEvidence = row.evidenceColumn ? String(row.evidence ?? '') : ''
+  const text = `${fromStatus} ${fromEvidence}`
+    .replace(/[*`_|:;,.()[\]]/g, ' ')
+    .replace(NOT_A_REASON_RE, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return /[a-z]{3,}/i.test(text) ? text : null
+}
+
+/**
+ * The touch rule on one PR: its changed paths against its body.
+ *
+ * `warnings` are reported and never fail the check; `blocking` fails it.
+ *
+ * @param {string} body - the pull request description
+ * @param {string[]} paths - the PR's changed files
+ * @returns {{ cls: 'send-path' | 'client-lane' | 'seat' | 'none', clientSurface: boolean, byClass: Record<string, string[]>, hasRuntimeRow: boolean, warnings: string[], blocking: string[] }}
+ */
+export function checkTouchRule(body, paths) {
+  const touch = classifyPaths(paths)
+  const rows = runtimeRows(body)
+  const result = {
+    cls: touch.cls,
+    clientSurface: touch.clientSurface,
+    byClass: touch.byClass,
+    hasRuntimeRow: rows.length > 0,
+    warnings: [],
+    blocking: [],
+  }
+  if (!touch.clientSurface) return result
+
+  const touched = Object.entries(touch.byClass)
+    .map(
+      ([cls, ps]) =>
+        `${cls}: ${ps.slice(0, 3).join(', ')}${ps.length > 3 ? ` (+${ps.length - 3} more)` : ''}`
+    )
+    .join('; ')
+  if (rows.length === 0) {
+    result.warnings.push(
+      `this PR touches a client surface (${touched}) and carries no (runtime) row. ` +
+        'Name the act a client performs as a (runtime) row: `met` with a crane_verify ID, ' +
+        '`deferred` with `owner: <who>; enforce_by: YYYY-MM-DD`, or `n/a: <why>`. ' +
+        'Reported only; /eos reads it at session close.'
+    )
+  }
+  for (const r of rows) {
+    if (r.kind === 'na' && !naReason(r)) {
+      result.blocking.push(
+        `"${r.ac}" is n/a with no reason, on a PR that touches a client surface (${touched}). ` +
+          'Write `n/a: <why it does not apply>` in the status or Evidence cell.'
+      )
+    }
+  }
+  return result
 }
