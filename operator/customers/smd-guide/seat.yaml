@@ -5,22 +5,12 @@
 #
 # SMD's product guide (ADR 0105, seat.role: guide): answers listed sales
 # representatives' questions about the Operator from the product library.
-# AUTHORED BUT NOT PROVISIONED. With fly_app null the seat is in no release
-# ring (rings.py and the rings.yaml generator both skip an unprovisioned seat),
-# so no `fleet release` deploys to an app that does not exist and no ring waits
-# on it.
-#
-# TO PROVISION: create the app (expected hermes-smd-guide), replace fly_app
-# with it, delete unprovisioned_reason, run `npm run gen:seat-registries`, then
-# provision per docs/runbooks/hosted-agent/concierge.md.
+# Provisioned 2026-11-09 as hermes-smd-guide, per
+# docs/runbooks/hosted-agent/concierge.md.
 
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
-fly_app: null
-unprovisioned_reason: >-
-  Provisioning is the Captain's act: the seat's inbox, its two inbox-scoped
-  mail keys and its webhook secret are created and vaulted at provisioning,
-  and no representative's address is on the roster yet.
+fly_app: hermes-smd-guide
 # Release ring once provisioned: SMD's own seats.
 ring: 2
 # The day this seat's customer.yaml first landed on main. Orders seats in a ring.

@@ -318,7 +318,7 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    under "The release controller" below. That file
    is generated from each seat's `ring:` in `operator/customers/<slug>/seat.yaml`
    (`npm run gen:seat-registries`); a seat in no ring would join the last. A
-   seat authored with `fly_app: null` (`smd-guide` until it is provisioned, and `ashton-price-marketing` until the firm
+   seat authored with `fly_app: null` (`ashton-price-marketing` until the firm
    creates its mailbox) is in no ring at all, in the generator and in
    `rings.py` alike: it has no app to release to. `--parallel N` widens a ring; `--dry-run` runs every
    check and touches nothing.
@@ -593,7 +593,7 @@ controller not enabled" and the build job is skipped, and neither enters the
 environment (a job's `if:` is checked first, so GitHub never auto-creates
 `fleet-release` without its branch policy). Set the variable only after the
 `fleet-release` environment exists with its main-only deployment branch policy
-and all seven Fly tokens. Then immediately dispatch `release-tick.yml` with
+and all eight Fly tokens. Then immediately dispatch `release-tick.yml` with
 `dry_run: true` and read the plan in its log before the first scheduled tick
 acts.
 
