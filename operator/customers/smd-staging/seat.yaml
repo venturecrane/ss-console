@@ -12,11 +12,13 @@
 # What this seat is for (ADR 0107): client | release-twin | demo | internal.
 # A release-twin names the purpose: client seat it rehearses (twin_of); a
 # client seat with a twin takes no release its twin is not done on.
-purpose: release-twin
-twin_of: ashton-price
+purpose: internal
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 fly_app: hermes-smd-staging
+# Superseded as ashton-price's release twin by ap-staging (2026-11-10); takes
+# releases in the last ring until it is decommissioned.
+ring: 2
 # No wait after the twin (Captain, 2026-10-30): with one client, each seat's own
 # self-test and automatic rollback are the gate; a bake only delayed fixes.
 bake_minutes: 0

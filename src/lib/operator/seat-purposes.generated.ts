@@ -18,7 +18,7 @@ export interface SeatPurposeEntry {
 
 /** Seat slug -> what it is for. */
 export const SEAT_PURPOSES: Readonly<Record<string, SeatPurposeEntry>> = Object.freeze({
-  'ap-staging': { purpose: 'internal', twinOf: null, provisioned: true },
+  'ap-staging': { purpose: 'release-twin', twinOf: 'ashton-price', provisioned: true },
   'ashton-price': { purpose: 'client', twinOf: null, provisioned: true },
   'ashton-price-marketing': { purpose: 'client', twinOf: null, provisioned: false },
   brokery: { purpose: 'client', twinOf: null, provisioned: true },
@@ -26,5 +26,5 @@ export const SEAT_PURPOSES: Readonly<Record<string, SeatPurposeEntry>> = Object.
   'pilot-smokeball': { purpose: 'demo', twinOf: null, provisioned: true },
   scott: { purpose: 'internal', twinOf: null, provisioned: true },
   'smd-guide': { purpose: 'internal', twinOf: null, provisioned: true },
-  'smd-staging': { purpose: 'release-twin', twinOf: 'ashton-price', provisioned: true },
+  'smd-staging': { purpose: 'internal', twinOf: null, provisioned: true },
 })

@@ -28,7 +28,7 @@ REPO = OPERATOR.parent
 def test_real_rings_file_puts_the_paying_seat_straight_after_staging() -> None:
     """2026-10-30 (Captain): one client, so its fixes go right after staging, not an hour behind our seats."""
     rings = load_rings(OPERATOR / "fleet/rings.yaml", OPERATOR / "customers")
-    assert rings[0].seats == ["smd-staging"] and rings[0].bake_minutes == 0
+    assert rings[0].seats == ["ap-staging"] and rings[0].bake_minutes == 0  # the release twin (ADR 0107)
     assert rings[1].seats == ["ashton-price"] and rings[1].bake_minutes == 0
     # The client ring rolls a canary, then the rest at once, up to CLIENT_RING_PARALLEL (20);
     # SMD's own last ring one at a time.

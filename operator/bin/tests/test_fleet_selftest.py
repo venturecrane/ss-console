@@ -168,7 +168,7 @@ class PlantWorld:
         return self.row
 
 
-def _plant(world: PlantWorld, seat: str = "smd-staging", check: str = "retired-skills-absent"):
+def _plant(world: PlantWorld, seat: str = "ap-staging", check: str = "retired-skills-absent"):
     clock = {"t": 0.0}
 
     def sleep(s: float) -> None:

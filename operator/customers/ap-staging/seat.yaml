@@ -17,14 +17,14 @@
 # the exact twin of ashton-price".
 
 # What this seat is for (ADR 0107): client | release-twin | demo | internal.
-purpose: internal
+purpose: release-twin
+twin_of: ashton-price
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 # Fly cannot rename an app, so this is a new app, never hermes-smd-staging.
 fly_app: hermes-ap-staging
 # Release ring until the flip: with SMD's own seats, last. At the flip this
 # line goes (a release twin is ring 0, derived).
-ring: 2
 # No wait after this seat: it is in the last ring until the flip.
 bake_minutes: 0
 # The day this seat's customer.yaml first landed on main. Orders seats in a ring.

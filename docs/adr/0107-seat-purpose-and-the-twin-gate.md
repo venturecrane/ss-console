@@ -78,6 +78,8 @@ A `client` seat with a declared twin takes a release only after its twin's OWN r
 
 The twin is not yet an exact copy. It is still named `smd-staging`, and it binds no Smokeball connector, so a change to a Smokeball read or write path is not exercised on it before `ashton-price` takes it. A later change renames it `ap-staging` (one seat.yaml rename and `npm run gen:seat-registries`, the point of this record) and binds the connector against a test firm; `pilot-smokeball` becomes a demo seat in name as well as purpose. Until then, a Smokeball-path change is rehearsed at $0 in the client's ops workspace against an answer key (Law 18), and the twin gate still guarantees the image, skills and bundle booted green on the twin before the client.
 
+**Closed 2026-11-10.** `ap-staging` is the release twin of `ashton-price`: its `customer.yaml` equals the client's except the paths its `twin.yaml` declares (held by `tests/twin-drift.test.ts`), it binds SMD's Smokeball staging tenant, and its self-test runs the client's 101 checks (vfy_01M73GY7D0R92GM5J0VBCA0VE6). `smd-staging` is `internal` in the last ring until it is decommissioned. The rename needed no code change, which is what this record set out to make true.
+
 ## Consequences
 
 - Renaming a seat or adding one is an edit to its `seat.yaml` and a regeneration; no Python, TypeScript, hook or contract names it.

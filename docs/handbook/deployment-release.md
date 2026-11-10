@@ -325,10 +325,9 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    release controller" below. That file is generated from each seat's
    `purpose:`, `twin_of:` and `ring:` in `operator/customers/<slug>/seat.yaml`
    (`npm run gen:seat-registries`); a twin is ring 0 by derivation, and a seat
-   in no ring would join the last. The stated gap: the twin is still named
-   `smd-staging` and binds no Smokeball connector, so it is not yet an exact
-   copy of the client seat; a Smokeball-path change is rehearsed at $0 in the
-   client's ops workspace until it does. A
+   in no ring would join the last. The twin of `ashton-price` is `ap-staging`,
+   an exact copy of the client seat on SMD's Smokeball staging tenant
+   (`twin.yaml` declares every difference). A
    seat authored with `fly_app: null` (`ashton-price-marketing` until the firm
    creates its mailbox) is in no ring at all, in the generator and in
    `rings.py` alike: it has no app to release to. `--parallel N` widens a ring; `--dry-run` runs every

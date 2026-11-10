@@ -8,7 +8,8 @@
 # through operator/bin/lib/seat_purpose.py.
 seats:
   ap-staging:
-    purpose: internal
+    purpose: release-twin
+    twin_of: ashton-price
     provisioned: true
   ashton-price:
     purpose: client
@@ -32,6 +33,5 @@ seats:
     purpose: internal
     provisioned: true
   smd-staging:
-    purpose: release-twin
-    twin_of: ashton-price
+    purpose: internal
     provisioned: true

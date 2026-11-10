@@ -88,8 +88,8 @@ describe('generated registries are current (drift)', () => {
         loadSeatInventory(CUSTOMERS).map((s) => [s.slug, [s.purpose, s.twinOf, s.ring]])
       )
     ).toEqual({
-      // The exact twin of ashton-price, internal until its flip (twin.yaml).
-      'ap-staging': ['internal', null, 2],
+      // The exact twin of ashton-price (twin.yaml), its release twin since 2026-11-10.
+      'ap-staging': ['release-twin', 'ashton-price', 0],
       'ashton-price': ['client', null, 1],
       'ashton-price-marketing': ['client', null, 1],
       brokery: ['client', null, 2],
@@ -97,7 +97,8 @@ describe('generated registries are current (drift)', () => {
       'pilot-smokeball': ['demo', null, 2],
       scott: ['internal', null, 2],
       'smd-guide': ['internal', null, 2],
-      'smd-staging': ['release-twin', 'ashton-price', 0],
+      // Superseded as the twin 2026-11-10; last ring until decommissioned.
+      'smd-staging': ['internal', null, 2],
     })
   })
 
