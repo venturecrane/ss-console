@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# reprovision-staging.sh — (re)provision the STAGING Operator: the permanent,
-# faithful pre-production gate for Operator lifecycle work.
+# reprovision-staging.sh — (re)provision a RELEASE TWIN: the exact copy of one
+# client seat that takes every release first and gates that client's releases
+# (ADR 0107; seat.yaml `purpose: release-twin`, `twin_of: <client>`).
 #
 # WHY THIS EXISTS: a world-class deploy process never tests changes to the
-# deploy/boot/voice/env machinery on the one live customer. This stands up
-# hermes-smd-staging from the EXACT same tooling as production, so every cut is
-# proven here before it touches a real customer.
+# deploy/boot/voice/env machinery on a live client. This stands up the twin from
+# the EXACT same tooling as production, so every cut is proven there before it
+# touches the client it copies.
 #
 # ISOLATION (the load-bearing part): the normal reprovision injects every
 # Infisical /ss key as an env var, and provision-customer.sh stages the
 # customer-owned ones (GOOGLE_*, CLIO_*, AGENTMAIL_*, SMOKEBALL_*, webhook
 # secrets, the per-seat Anthropic key) onto the Machine. Those are REAL customer
-# credentials. This wrapper isolates staging from ALL of them.
+# credentials. This wrapper isolates the twin from ALL of them, both its own
+# per-seat names and the per-seat names of the client it copies (twin_of), so
+# the client's real credentials can never reach its twin.
 #
 # FAIL-CLOSED (2026-07 rework, issue #1783). The previous version blanked a
 # HAND-MAINTAINED DENYLIST (`CLIO_*` only) and so failed OPEN: any customer-owned
@@ -32,23 +35,64 @@
 #     service account (gen-staging-google-cred.py): Google is customer-by-EFFECT
 #     (DWD impersonation), so the broker still needs *a* credential to boot
 #     identically to prod — wired to nothing real.
-# Result: staging borrows none of the live business's access.
+# Result: the twin borrows none of the live business's access.
 #
-# The slug is HARDCODED to smd-staging. This wrapper must never touch a real
-# customer.
+# The slug is an ARGUMENT, and the wrapper REFUSES any seat whose seat.yaml does
+# not say `purpose: release-twin` (read from operator/fleet/seats.yaml through
+# operator/bin/lib/seat_purpose.py). It must never touch a real customer.
 #
-# Usage:  operator/bin/reprovision-staging.sh
+# Usage:  operator/bin/reprovision-staging.sh [<twin-slug>]
+#   With no argument it provisions the one release twin the inventory declares
+#   (smd-staging today), so the old no-argument invocation still works; with
+#   more than one twin declared, name the one you mean.
 set -euo pipefail
 
-SLUG="smd-staging"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
+PYRUN=(uv run --quiet --with pyyaml python3)
+[ -n "${REPROVISION_STAGING_PYTHON:-}" ] && PYRUN=("${REPROVISION_STAGING_PYTHON}")
+purpose_cli() {
+  (cd "${REPO_ROOT}" && "${PYRUN[@]}" operator/bin/lib/seat_purpose.py "$@")
+}
+
+if [ "$#" -gt 1 ]; then
+  echo "usage: reprovision-staging.sh [<twin-slug>]" >&2
+  exit 2
+fi
+if [ "$#" -eq 1 ]; then
+  SLUG="$1"
+else
+  TWINS="$(purpose_cli release-twins)" \
+    || { echo "reprovision-staging: could not read the seat inventory" >&2; exit 1; }
+  if [ "$(printf '%s\n' "${TWINS}" | grep -c .)" -ne 1 ]; then
+    echo "reprovision-staging: the inventory does not declare exactly one release twin; name one" >&2
+    exit 2
+  fi
+  SLUG="${TWINS}"
+fi
+# The refusal: only a seat authored as a release twin. twin-of exits non-zero
+# for any other purpose (or an unknown slug), naming why.
+CLIENT="$(purpose_cli twin-of "${SLUG}")" \
+  || { echo "reprovision-staging: refusing ${SLUG}: it is not a release twin (seat.yaml purpose: release-twin)" >&2; exit 1; }
+echo "reprovision-staging: ${SLUG} is the release twin of ${CLIENT}; isolating both seats' customer-owned secrets" >&2
+if [ -n "${REPROVISION_STAGING_DRY_RUN:-}" ]; then
+  # Test hook (operator/bin/tests/test_reprovision_staging.py): stop after the
+  # refusal and the isolate set, before anything reaches Infisical or Fly.
+  (cd "${REPO_ROOT}" && {
+    "${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${SLUG}"
+    "${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${CLIENT}"
+  } | sort -u)
+  exit 0
+fi
 
 # Contract-driven isolate set, computed BEFORE infisical run (it needs no secret —
-# only the classification + the slug). Newline-separated customer-owned source
-# names, per-seat __<CID> expanded. Fails loud if the classification cannot load.
-ISOLATE_NAMES="$(cd "${REPO_ROOT}" && uv run --quiet --with pyyaml python3 \
-  operator/bin/lib/secret_custody.py isolate-names "${SLUG}")" \
+# only the classification + the slugs). Newline-separated customer-owned source
+# names, per-seat __<CID> expanded for the twin AND for the client it copies.
+# Fails loud if the classification cannot load.
+ISOLATE_NAMES="$(cd "${REPO_ROOT}" \
+  && TWIN_NAMES="$("${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${SLUG}")" \
+  && CLIENT_NAMES="$("${PYRUN[@]}" operator/bin/lib/secret_custody.py isolate-names "${CLIENT}")" \
+  && printf '%s\n%s\n' "${TWIN_NAMES}" "${CLIENT_NAMES}" | sort -u)" \
   || { echo "reprovision-staging: could not compute the customer-owned isolate set" >&2; exit 1; }
 [ -n "${ISOLATE_NAMES}" ] \
   || { echo "reprovision-staging: empty isolate set — refusing to run without isolation" >&2; exit 1; }
@@ -75,7 +119,7 @@ infisical run --env=prod --path=/ss --silent -- bash -c '
   set -euo pipefail
   HERE="$1"; SLUG="$2"; ISOLATE_NAMES="$3"
 
-  # Blank every customer-owned secret so the real value never reaches the staging
+  # Blank every customer-owned secret so the real value never reaches the twin
   # Machine. Empty-string assignments, not secrets (gitleaks false positive). # gitleaks:allow
   while IFS= read -r _n; do
     [ -n "${_n}" ] || continue

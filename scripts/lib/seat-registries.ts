@@ -9,7 +9,7 @@
 
 import { format, resolveConfig } from 'prettier'
 import { resolve } from 'node:path'
-import type { Seat } from './seat-inventory'
+import { twinsByClient, type Seat } from './seat-inventory'
 
 export interface GeneratedFile {
   /** Repo-relative path. */
@@ -19,7 +19,7 @@ export interface GeneratedFile {
 
 const REGEN = 'Regenerate with `npm run gen:seat-registries`'
 
-const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ring:\`) by
+const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ring:\`, \`purpose:\`, \`twin_of:\`) by
 # scripts/gen-seat-registries.ts. Do not edit: change the seat's seat.yaml and
 # run \`npm run gen:seat-registries\`. tests/seat-inventory.test.ts fails while
 # this file is stale.
@@ -30,13 +30,22 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 # next starts; any seat that FAILS (smoke red, so it is rolled back) halts the
 # whole rollout, so a defect stops at the smallest ring that shows it. A seat
 # that ends in a TOOLING ERROR (nothing decided) stalls only itself and is
-# retried; it never holds the rings after it back. Ring 0 is SMD's own staging
-# seat. The client's seat follows it at once, with no bake (2026-10-30: with one
-# client, a fix must not wait an hour behind SMD's own seats); SMD's other seats
-# come after. The last ring always deploys one seat at a time; a client ring
-# between rolls a canary first (its first seat, alone), then every other seat at
-# once (max_parallel, CLIENT_RING_PARALLEL in scripts/lib/seat-registries.ts),
-# since twenty seats one at a time is a two-hour release.
+# retried; it never holds the rings after it back. Ring 0 is the release twins
+# (seat.yaml \`purpose: release-twin\`, ring derived, ADR 0107). The client's seat
+# follows at once, with no bake (2026-10-30: with one client, a fix must not
+# wait an hour behind SMD's own seats); SMD's other seats come after. The last
+# ring always deploys one seat at a time; a ring between rolls a canary first
+# (its first seat, alone), then every other seat at once (max_parallel,
+# CLIENT_RING_PARALLEL in scripts/lib/seat-registries.ts), since twenty seats
+# one at a time is a two-hour release.
+#
+# twins (ADR 0107): client seat -> its release twin. A client seat with a twin
+# takes a release only after its twin's OWN rollout of that release is done
+# (operator/bin/lib/fleet/tick.py twin_deferrals, waves.py for a laptop run);
+# a seat done on a newer release does not count, and a twin in no ring keeps
+# its client from every release. This is the gate the 2026-10-30 releases
+# 9bd7caa3 and f835d1d9 lacked: both reached ashton-price with no smd-staging
+# rollout row.
 #
 # Holds are NOT authored here. \`fleet hold <slug> --reason "..." --until "..."\` writes D1
 # fleet_holds and takes effect at once, without a PR (a held seat is skipped
@@ -59,14 +68,14 @@ const RINGS_HEADER = `# GENERATED from operator/customers/<slug>/seat.yaml (\`ri
 export const DEFAULT_BAKE_MINUTES = 10
 
 /**
- * How many seats of a CLIENT ring deploy at once. Ring 0 is staging (one seat) and
+ * How many seats of a CLIENT ring deploy at once. Ring 0 is the release twins and
  * the last ring is SMD's own seats, one at a time; every ring between them is a
  * client ring. A client ring rolls a canary first (its first seat, alone); once
  * that seat is done, every other seat rolls at once, up to this many
  * (operator/bin/lib/fleet/tick.py). Designed for 10 to 20 paying seats: serial,
  * twenty seats at four to ten minutes each is a two-hour release; canary then
- * the rest is about two seat restarts after staging, whatever the count.
- * Staging's self-test has already passed the image, each seat still judges
+ * the rest is about two seat restarts after the twin, whatever the count.
+ * The twin's self-test has already passed the image, each seat still judges
  * itself and rolls itself back, and a failure halts the release, so a defect
  * that only a client seat shows reaches the canary alone.
  */
@@ -98,7 +107,7 @@ export function renderRingsYaml(seats: Seat[]): string {
   rings.forEach((r, i) => {
     lines.push(`  - ring: ${r.ring}`, `    seats: [${r.seats.join(', ')}]`)
     // rings.py forces the last ring to one at a time regardless; stated here so
-    // the file says what the tool does. Rings between staging and the last one
+    // the file says what the tool does. Rings between the twins and the last one
     // are client rings and roll in waves (CLIENT_RING_PARALLEL).
     if (i === rings.length - 1) lines.push('    max_parallel: 1')
     else {
@@ -106,7 +115,14 @@ export function renderRingsYaml(seats: Seat[]): string {
       if (i > 0) lines.push(`    max_parallel: ${CLIENT_RING_PARALLEL}`)
     }
   })
+  lines.push(...renderTwins(seats))
   return RINGS_HEADER + lines.join('\n') + '\n'
+}
+
+export function renderTwins(seats: Seat[]): string[] {
+  const twins = [...twinsByClient(seats)].sort((a, b) => a[0].localeCompare(b[0]))
+  if (!twins.length) return []
+  return ['twins:', ...twins.map(([client, twin]) => `  ${client}: ${twin}`)]
 }
 
 const IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/
@@ -150,30 +166,85 @@ ${rolled.map((s) => `  ['${s.slug}', '${s.client}'],`).join('\n')}
 `
 }
 
-export function renderSeatRings(seats: Seat[]): string {
-  // Same membership as rings.yaml: a seat with no Fly app is in no ring.
-  const ringed = seats.filter((s) => s.flyApp !== null).sort((a, b) => a.slug.localeCompare(b.slug))
+const PURPOSE_HEADER = (
+  comment: string
+) => `${comment} GENERATED from operator/customers/<slug>/seat.yaml (\`purpose:\`, \`twin_of:\`) by
+${comment} scripts/gen-seat-registries.ts. Do not edit. ${REGEN};
+${comment} tests/seat-inventory.test.ts fails while this file is stale.`
+
+/** Every seat's purpose entry: what it is for, its twin's client, and whether it has a Fly app. */
+function purposeRows(seats: Seat[]): Array<[string, Seat]> {
+  return [...seats].sort((a, b) => a.slug.localeCompare(b.slug)).map((s) => [s.slug, s])
+}
+
+export function renderSeatPurposesTs(seats: Seat[]): string {
   return `/**
- * GENERATED from operator/customers/<slug>/seat.yaml (\`ring:\`) by
- * scripts/gen-seat-registries.ts. Do not edit. ${REGEN};
- * tests/seat-inventory.test.ts fails while this file is stale.
+${PURPOSE_HEADER(' *')}
  *
- * Data only: the release ring of every provisioned seat, the same membership
- * as operator/fleet/rings.yaml. Ring 0 is staging, the last ring is SMD's own
- * seats, and every ring between is a client ring (src/lib/admin/merge-to-seat.ts).
+ * Data only: what every seat is for (ADR 0107). Read through this module, never
+ * by slug: a client seat is \`purpose === 'client'\`, a release twin names its
+ * client in \`twinOf\`, and \`provisioned\` is false for a seat with no Fly app.
  */
 
-/** Seat slug -> its release ring. */
-export const SEAT_RINGS: Readonly<Record<string, number>> = Object.freeze({
-${ringed.map((s) => `  ${key(s.slug)}: ${s.ring},`).join('\n')}
+export type SeatPurpose = 'client' | 'release-twin' | 'demo' | 'internal'
+
+export interface SeatPurposeEntry {
+  purpose: SeatPurpose
+  twinOf: string | null
+  provisioned: boolean
+}
+
+/** Seat slug -> what it is for. */
+export const SEAT_PURPOSES: Readonly<Record<string, SeatPurposeEntry>> = Object.freeze({
+${purposeRows(seats)
+  .map(
+    ([slug, s]) =>
+      `  ${key(slug)}: { purpose: '${s.purpose}', twinOf: ${s.twinOf ? `'${s.twinOf}'` : 'null'}, provisioned: ${s.flyApp !== null} },`
+  )
+  .join('\n')}
 })
 `
+}
+
+export function renderSeatPurposesMjs(seats: Seat[]): string {
+  return `${PURPOSE_HEADER('//')}
+// Data only, for the hooks and scripts that cannot import TypeScript
+// (.claude/hooks/plan-premise-gate.mjs). TypeScript reads
+// src/lib/operator/seat-purposes.generated.ts; Python reads operator/fleet/seats.yaml.
+
+/** [seat, purpose, twinOf or null] for every seat (ADR 0107). */
+export const INVENTORY_SEAT_PURPOSES = Object.freeze([
+${purposeRows(seats)
+  .map(([slug, s]) => `  ['${slug}', '${s.purpose}', ${s.twinOf ? `'${s.twinOf}'` : 'null'}],`)
+  .join('\n')}
+])
+`
+}
+
+export function renderSeatsYaml(seats: Seat[]): string {
+  const lines = [
+    PURPOSE_HEADER('#'),
+    '#',
+    '# What every seat is for (ADR 0107), for the Python tooling: the boot harness',
+    '# (its fixture source), reprovision-staging.sh (which seat it may provision',
+    '# and whose secrets it isolates), and work-health (per-purpose overrides). Read',
+    '# through operator/bin/lib/seat_purpose.py.',
+    'seats:',
+  ]
+  for (const [slug, s] of purposeRows(seats)) {
+    lines.push(`  ${slug}:`, `    purpose: ${s.purpose}`)
+    if (s.twinOf) lines.push(`    twin_of: ${s.twinOf}`)
+    lines.push(`    provisioned: ${s.flyApp !== null}`)
+  }
+  return lines.join('\n') + '\n'
 }
 
 export const GENERATED_PATHS = {
   flyApps: 'src/lib/operator/fly-app-registry.generated.ts',
   rings: 'operator/fleet/rings.yaml',
-  seatRings: 'src/lib/operator/seat-rings.generated.ts',
+  seatPurposes: 'src/lib/operator/seat-purposes.generated.ts',
+  seatPurposesMjs: 'scripts/lib/seat-purposes.generated.mjs',
+  seats: 'operator/fleet/seats.yaml',
   seatClients: 'scripts/lib/seat-clients.generated.mjs',
 } as const
 
@@ -191,7 +262,9 @@ export async function renderSeatRegistries(
   const raw: GeneratedFile[] = [
     { path: GENERATED_PATHS.flyApps, text: renderFlyAppRegistry(seats) },
     { path: GENERATED_PATHS.rings, text: renderRingsYaml(seats) },
-    { path: GENERATED_PATHS.seatRings, text: renderSeatRings(seats) },
+    { path: GENERATED_PATHS.seatPurposes, text: renderSeatPurposesTs(seats) },
+    { path: GENERATED_PATHS.seatPurposesMjs, text: renderSeatPurposesMjs(seats) },
+    { path: GENERATED_PATHS.seats, text: renderSeatsYaml(seats) },
     { path: GENERATED_PATHS.seatClients, text: renderSeatClients(seats) },
   ]
   return Promise.all(

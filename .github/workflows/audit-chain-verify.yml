@@ -55,7 +55,8 @@ on:
         description: >-
           ALARM DRILL (ss#2500): one customer slug. Forces a head mismatch with a
           synthetic pin, proves the alert reaches the sink, clears its own row.
-          Writes no archive; never touches audit_head_history. Prefer smd-staging.
+          Writes no archive; never touches audit_head_history. Prefer a release twin
+          (seat.yaml purpose: release-twin, ADR 0107; smd-staging today).
         required: false
   pull_request:
     paths:

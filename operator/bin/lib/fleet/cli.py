@@ -15,7 +15,7 @@
   fleet bundle-record --version V --sha SHA --image-ref REF
                                                       record a published jobs bundle (CI)
   fleet selftest --plant CHECK_ID SLUG [--window SECONDS]
-                                                      staging only: plant one real violation, prove
+                                                      release twin only: plant one real violation, prove
                                                       the self-test alert opens and resolves
   fleet release --skills <version> [--only SLUG] [--parallel N] [--dry-run]
   fleet release --bundle <version>|latest --only SLUG [--max-idle-wait SECONDS] [--dry-run]
@@ -200,7 +200,9 @@ def _add_release_parser(sub: Any) -> None:
 
 
 def _add_seat_parsers(sub: Any) -> None:
-    st = sub.add_parser("selftest", help="staging only: re-prove the self-test alert path with a planted violation")
+    st = sub.add_parser(
+        "selftest", help="release twin only: re-prove the self-test alert path with a planted violation"
+    )
     st.add_argument("--plant", required=True, metavar="CHECK_ID")
     st.add_argument("slug")
     st.add_argument("--window", type=float, default=15 * 60.0)

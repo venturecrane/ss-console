@@ -105,7 +105,12 @@ def authoring_seats(repo: Path, seats: list[str]) -> set[str]:
 
 def authoring_rings(rings: list[Ring], authoring: set[str]) -> list[Ring]:
     """The rings with every seat that authors no lane removed (an emptied ring is skipped by the tick)."""
-    return [Ring(r.number, [s for s in r.seats if s in authoring], r.max_parallel, r.bake_minutes) for r in rings]
+    # The twins ride along (ADR 0107): a client seat's bundle waits for its twin
+    # exactly as its image does.
+    return [
+        Ring(r.number, [s for s in r.seats if s in authoring], r.max_parallel, r.bake_minutes, dict(r.twins))
+        for r in rings
+    ]
 
 
 # -- what a seat reports ---------------------------------------------------------------

@@ -367,11 +367,13 @@ describe('generated handbook content matches the tree', () => {
     const seat = {
       slug: 'x',
       kind: 'customer',
+      purpose: 'client',
       product: 'operator',
       role: null,
       vertical: 'law-firm',
     }
     expect(renderSeatRoster([seat])).not.toBe(renderSeatRoster([{ ...seat, kind: 'proving' }]))
+    expect(renderSeatRoster([seat])).not.toBe(renderSeatRoster([{ ...seat, purpose: 'demo' }]))
     expect(renderSeatRoster([seat])).not.toBe(renderSeatRoster([seat, { ...seat, slug: 'y' }]))
   })
 

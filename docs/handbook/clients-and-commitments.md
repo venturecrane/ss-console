@@ -4,7 +4,7 @@ section: running
 order: 3
 owner: captain
 review_every: 30
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-11-10"
 summary: Which seats exist, which are clients and which are SMD's own, what we owe each client, and where the commercial detail lives.
 sources:
   - label: Seat definitions (customer-yaml types)
@@ -31,31 +31,31 @@ Seats declared in the repository (`operator/customers/`). Whether each one is ru
 
 **Client seats**
 
-| Seat | Product | Role | Vertical |
-|---|---|---|---|
-| `ashton-price` | operator | none | law-firm |
-| `ashton-price-marketing` | operator | marketing | law-firm |
-| `brokery` | hosted-agent | none | real-estate |
-| `captain-mark` | hosted-agent | couples | mixed |
+| Seat | Purpose | Product | Role | Vertical |
+|---|---|---|---|---|
+| `ashton-price` | client | operator | none | law-firm |
+| `ashton-price-marketing` | client | operator | marketing | law-firm |
+| `brokery` | client | hosted-agent | none | real-estate |
+| `captain-mark` | client | hosted-agent | couples | mixed |
 
 **SMD's own: proving**
 
-| Seat | Product | Role | Vertical |
-|---|---|---|---|
-| `pilot-smokeball` | operator | none | law-firm |
+| Seat | Purpose | Product | Role | Vertical |
+|---|---|---|---|---|
+| `pilot-smokeball` | demo | operator | none | law-firm |
 
 **SMD's own: pre-production**
 
-| Seat | Product | Role | Vertical |
-|---|---|---|---|
-| `smd-staging` | operator | none | mixed |
+| Seat | Purpose | Product | Role | Vertical |
+|---|---|---|---|---|
+| `smd-staging` | release-twin of `ashton-price` | operator | none | mixed |
 
 **SMD's own: internal**
 
-| Seat | Product | Role | Vertical |
-|---|---|---|---|
-| `scott` | hosted-agent | none | mixed |
-| `smd-guide` | operator | guide | mixed |
+| Seat | Purpose | Product | Role | Vertical |
+|---|---|---|---|---|
+| `scott` | internal | hosted-agent | none | mixed |
+| `smd-guide` | internal | operator | guide | mixed |
 
 <!-- END GENERATED: seat roster -->
 
@@ -74,6 +74,19 @@ Every seat declares a kind, and the kind never changes over the seat's life (`sr
 The **product** column says which offering's commercial terms the seat is on: `operator` (built with the client) or `hosted-agent` (the stored value for the self-serve offering). Both are the one Operator; nothing on a seat branches on this column (ADR 0100). A **role** is a packaged job, such as `couples` ([ADR 0090](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0090-hosted-agent-roles.md)).
 
 Only `customer` seats appear in the hourly work-health checks as individual lines; SMD's own seats are counted together, so a problem on a client seat is never buried under test noise.
+
+## Kinds and purposes
+
+A seat carries two labels that answer different questions. Its **kind** (above, in `customer.yaml`) says whose records are on it. Its **purpose** (in the seat's `seat.yaml`, [ADR 0107](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0107-seat-purpose-and-the-twin-gate.md)) says what it is for when SMD changes the Operator:
+
+| Purpose | What it is for |
+|---|---|
+| client | Serves a client. Every client seat here is also kind `customer`. |
+| release-twin | An exact copy of one client seat, named in its `twin_of`. Every release goes to the twin first, and the client seat takes a release only after its twin is done on it. |
+| demo | Shows the product on SMD's own test data. It gates nothing. |
+| internal | SMD's own work. |
+
+Every tool that used to name a seat now asks for a purpose instead, so renaming a seat or adding one is an edit to its `seat.yaml` and `npm run gen:seat-registries`, nothing else. Today the one twin is `smd-staging`, the twin of `ashton-price`. It is not yet an exact copy: it binds no Smokeball connection. A later change renames it `ap-staging` and connects it to a test firm.
 
 ## What we owe
 

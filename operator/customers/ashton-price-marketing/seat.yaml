@@ -14,6 +14,8 @@
 # `npm run gen:seat-registries`, and replace every PENDING value in
 # customer.yaml (the provisioner refuses each one by name).
 
+# What this seat is for (ADR 0107): client | release-twin | demo | internal.
+purpose: client
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 fly_app: null

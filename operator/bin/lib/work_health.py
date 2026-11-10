@@ -34,6 +34,8 @@ from typing import Any, Optional
 
 import yaml
 
+from bin.lib import seat_purpose
+
 CONTRACT_PATH = Path(__file__).resolve().parents[2] / "contracts" / "work-health.yaml"
 
 #: The audit action_type prefix of each job lane, as the broker writes it
@@ -75,13 +77,17 @@ class Config:
     auth_probe_stale_minutes: int
     all_clear_hour_utc: int
     lanes: dict[str, Lane]
-    no_reply_minutes_by_seat: dict[str, int]
+    no_reply_minutes_by_purpose: dict[str, int]
+    # Seat slug -> purpose (ADR 0107, operator/fleet/seats.yaml). A seat the
+    # file does not name takes the default threshold.
+    seat_purposes: dict[str, str] = field(default_factory=dict)
 
     def no_reply_for(self, seat: str) -> int:
-        return self.no_reply_minutes_by_seat.get(seat, self.no_reply_minutes)
+        purpose = self.seat_purposes.get(seat)
+        return self.no_reply_minutes_by_purpose.get(purpose or "", self.no_reply_minutes)
 
 
-def load_config(path: Path = CONTRACT_PATH) -> Config:
+def load_config(path: Path = CONTRACT_PATH, seats: Optional[dict[str, dict[str, Any]]] = None) -> Config:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict) or not isinstance(raw.get("lanes"), dict):
         raise ValueError(f"{path}: not a work-health contract")
@@ -90,9 +96,19 @@ def load_config(path: Path = CONTRACT_PATH) -> Config:
         lanes[name] = Lane(name, str(spec["label"]), int(spec["queue_minutes"]), int(spec["run_minutes"]))
     if set(lanes) != set(LANE_PREFIXES.values()):
         raise ValueError(f"{path}: lanes must be exactly {sorted(LANE_PREFIXES.values())}")
-    keys = [k for k in Config.__dataclass_fields__ if k not in ("lanes", "no_reply_minutes_by_seat")]
-    by_seat = {str(k): int(v) for k, v in (raw.get("no_reply_minutes_by_seat") or {}).items()}
-    return Config(**{k: int(raw[k]) for k in keys}, lanes=lanes, no_reply_minutes_by_seat=by_seat)
+    skip = ("lanes", "no_reply_minutes_by_purpose", "seat_purposes")
+    keys = [k for k in Config.__dataclass_fields__ if k not in skip]
+    by_purpose = {str(k): int(v) for k, v in (raw.get("no_reply_minutes_by_purpose") or {}).items()}
+    unknown = set(by_purpose) - set(seat_purpose.PURPOSES)
+    if unknown:
+        raise ValueError(f"{path}: no_reply_minutes_by_purpose names no purpose: {sorted(unknown)}")
+    purposes = {slug: str(e["purpose"]) for slug, e in (seats or seat_purpose.load()).items()}
+    return Config(
+        **{k: int(raw[k]) for k in keys},
+        lanes=lanes,
+        no_reply_minutes_by_purpose=by_purpose,
+        seat_purposes=purposes,
+    )
 
 
 @dataclass

@@ -46,6 +46,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, existsSync } from 'fs'
 import { resolve, join } from 'path'
 import { parse as parseYaml } from 'yaml'
+import { SEAT_PURPOSES } from '../src/lib/operator/seat-purposes.generated'
 
 const TYPES_SOURCE = resolve('src/lib/operator/customer-yaml/types.ts')
 const CONTRACT_PATH = resolve('operator/contracts/connector-backend-materializers.json')
@@ -61,7 +62,10 @@ interface PrefixEntry {
 
 interface MaterializerContract {
   prefixes: Record<string, PrefixEntry>
+  /** Template presets (`_template/presets/<name>`): never a seat, so no purpose. */
   exemptCustomers: string[]
+  /** Seat purposes (ADR 0107) whose seats may bind a non-materializable backend. */
+  exemptPurposes: string[]
 }
 
 /** Parse ACCEPTED_BACKEND_PREFIXES = ['mcp:', 'build:', 'synthetic:'] from types.ts. */
@@ -207,7 +211,29 @@ describe('connector backend materializer guard (validate-fail-closed)', () => {
 describe('fail-closed: no real customer ships a zero-tool capability', () => {
   const contract = loadContract()
   const buildAllowlist = materializedBuildAdapters()
-  const exempt = new Set(contract.exemptCustomers)
+  // A seat is exempt by its authored purpose (seat.yaml, ADR 0107), never by a
+  // slug listed in the contract: a renamed or added release twin or demo seat
+  // is exempt with no edit to the contract.
+  const exemptPurposes = new Set(contract.exemptPurposes)
+  const exempt = new Set([
+    ...contract.exemptCustomers,
+    ...Object.entries(SEAT_PURPOSES)
+      .filter(([, entry]) => exemptPurposes.has(entry.purpose))
+      .map(([slug]) => slug),
+  ])
+
+  it('exempts seats by purpose only, and names no seat slug in the contract', () => {
+    expect([...exemptPurposes].sort()).toEqual(['demo', 'release-twin'])
+    for (const name of contract.exemptCustomers) {
+      expect(name, 'exemptCustomers holds template presets only').toMatch(/^_template\/presets\//)
+    }
+    const twin = Object.entries(SEAT_PURPOSES).find(([, e]) => e.purpose === 'release-twin')
+    expect(twin, 'a release twin is declared').toBeDefined()
+    expect(exempt.has(twin![0])).toBe(true)
+    for (const [slug, entry] of Object.entries(SEAT_PURPOSES)) {
+      if (entry.purpose === 'client') expect(exempt.has(slug), slug).toBe(false)
+    }
+  })
 
   const customersDir = resolve('operator/customers')
   const customerFiles = existsSync(customersDir)
@@ -264,7 +290,8 @@ describe('fail-closed: no real customer ships a zero-tool capability', () => {
       'A real customer capability whose only backend is non-materializable (synthetic:*, or a ' +
         'build:<adapter> with no impl under operator/connectors/) validates clean but surfaces no ' +
         "runtime tools. Bind it to an mcp: backend or an impl'd build: adapter, or add the " +
-        'customer to exemptCustomers if it is an intentional staging/template seat (and wire the ' +
+        'seat purpose to exemptPurposes (or a template preset to exemptCustomers) if it is an ' +
+        'intentional twin/demo/template seat (and wire the ' +
         'overlay translate.py fail-closed rejection per the contract tracking note).\n' +
         violations.join('\n')
     ).toEqual([])

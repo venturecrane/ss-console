@@ -16,6 +16,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { isRehearsalRow, landsOnSeat } from '../.claude/hooks/plan-premise-gate.mjs'
+import { INVENTORY_SEAT_PURPOSES } from '../scripts/lib/seat-purposes.generated.mjs'
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const HOOK = join(REPO_ROOT, '.claude', 'hooks', 'plan-premise-gate.mjs')
@@ -224,6 +226,31 @@ describe('premise-gate: Law 18, seat plans name their off-seat rehearsal', () =>
       /\bseats?\b|lane-proof|\brelease\b|ashton-price|pilot-smokeball|smd-staging|customer\.yaml/
     )
     expect(permission(runHook(payload({ tool_input: { plan } })))).toBeNull()
+  })
+})
+
+// ADR 0107: the seat names in the Law 18 check come from the seat inventory,
+// never slugs written into the hook, so a renamed or added seat needs no edit.
+describe('premise-gate: Law 18 seat names come from each seat.yaml purpose', () => {
+  const where = (purpose: string) =>
+    INVENTORY_SEAT_PURPOSES.filter(([, p]) => p === purpose).map(([slug]) => slug)
+
+  it('every seat named lands a plan on a seat', () => {
+    for (const [slug] of INVENTORY_SEAT_PURPOSES) {
+      expect(landsOnSeat(`change the persona on ${slug}`), String(slug)).toBe(true)
+    }
+  })
+
+  it('naming a release twin or a demo seat is a rehearsal; naming a client seat is not', () => {
+    const rehearsals = [...where('release-twin'), ...where('demo')]
+    expect(rehearsals.length).toBeGreaterThan(0)
+    for (const slug of rehearsals) {
+      expect(isRehearsalRow(`| proven first on ${slug} | probe |`), String(slug)).toBe(true)
+    }
+    for (const slug of where('client')) {
+      expect(isRehearsalRow(`| proven first on ${slug} | probe |`), String(slug)).toBe(false)
+    }
+    expect(isRehearsalRow('| proven on the release twin of the client seat | probe |')).toBe(true)
   })
 })
 

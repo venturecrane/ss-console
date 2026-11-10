@@ -21,6 +21,12 @@ ONE TICK.
      this release and that seat's image; when they do, the seat is pending
      again and its ring rolls it (``retriable``). A declaration merged after
      the refusal is then enough; no laptop command.
+  3a. THE TWIN GATE (ADR 0107). A client seat whose seat.yaml-declared release
+     twin is not done on THIS release, by the twin's own rollout row, is not
+     pending: it waits, named, like a deferred seat (``twin_deferrals``). A
+     twin done only on a newer release does not count, and a twin with no row
+     never releases its client. Before this, on 2026-10-30, releases 9bd7caa3
+     and f835d1d9 reached ashton-price with no smd-staging rollout row.
   4. Find the first ring with a seat that is neither done nor held. Before it
      may start, the ring before it must have BAKED: every done seat there done
      for at least that ring's ``bake_minutes``, at least one seat done, and no
@@ -183,6 +189,26 @@ def _newer_done_on_ring_before(
     return None
 
 
+def twin_deferrals(rings: list[Ring], own: dict[str, dict[str, Any]]) -> dict[str, str]:
+    """Client seats that may not take this release yet because their release twin has not (ADR 0107).
+
+    ``own`` is THIS release's rows only, never overlaid with a newer release's:
+    the twin must have proved this exact release. A twin in no ring has no row,
+    so its client waits for good; that is the fail-closed answer, and the reason
+    names the twin so a person sees it.
+    """
+    waiting: dict[str, str] = {}
+    for ring in rings:
+        for client, twin in ring.twins.items():
+            if client not in ring.seats:
+                continue
+            state = (own.get(twin) or {}).get("state")
+            if state != "done":
+                seen = f"its row is {state}" if state else "it has no rollout row for this release"
+                waiting[client] = f"its release twin {twin} is not done on this release ({seen})"
+    return waiting
+
+
 def plan_tick(
     rings: list[Ring],
     latest: dict[str, dict[str, Any]],
@@ -191,6 +217,7 @@ def plan_tick(
     now: datetime,
     deferred: dict[str, str] | None = None,
     retriable: Callable[[str, dict[str, Any]], bool] | None = None,
+    own: dict[str, dict[str, Any]] | None = None,
 ) -> TickPlan:
     """The one step this tick may take. Pure: every input was read before the call.
 
@@ -200,8 +227,11 @@ def plan_tick(
 
     ``retriable(seat, row)`` says a halting row may be tried again (a lane-input
     refusal the declarations now cover); such a seat is pending, not halted.
+
+    ``own`` is this release's own rows when ``latest`` was overlaid with newer
+    releases (Ticker._choose); the twin gate reads it, never the overlay.
     """
-    deferred = deferred or {}
+    deferred = {**twin_deferrals(rings, latest if own is None else own), **(deferred or {})}
     ringed = [s for ring in rings for s in ring.seats]
     halted = sorted(
         s
@@ -527,6 +557,7 @@ class Ticker:
                 lambda seats: self.store.open_alerts(seats, BAKE_ALARMS),
                 now,
                 self.defer(rel),
+                own=rows,
             )
             if plan.code == TICK_PROGRESS and plan.ring is not None and plan.ring.number in taken:
                 newer.append((rid, rows))
@@ -586,7 +617,7 @@ class Ticker:
                 )
                 return TICK_PROGRESS
             rolled += len(wave)
-            ring = Ring(plan.ring.number, wave, width, plan.ring.bake_minutes)
+            ring = Ring(plan.ring.number, wave, width, plan.ring.bake_minutes, dict(plan.ring.twins))
             result = Waves(self.store, self.log).run(
                 [ring], do_seat, release=release, only=None, parallel=len(wave), dry_run=False, lease=lease,
                 holder=holder,

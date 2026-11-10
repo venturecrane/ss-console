@@ -15,6 +15,7 @@ import {
   weekLabel,
   type MergeToSeatRow,
 } from '../src/lib/admin/merge-to-seat'
+import type { SeatPurposeEntry } from '../src/lib/operator/seat-purposes.generated'
 
 const SEATS = ['client-a', 'client-b']
 // Wednesday 2026-11-04; its ISO week starts Monday 2026-11-02.
@@ -194,24 +195,37 @@ describe('parseRow', () => {
 })
 
 describe('clientSeats', () => {
-  it('is the seats of the rings strictly between staging and SMD own seats', () => {
-    expect(clientSeats({ a: 0, b: 1, c: 1, d: 2, e: 2 })).toEqual(['b', 'c'])
+  const entry = (purpose: SeatPurposeEntry['purpose'], provisioned = true): SeatPurposeEntry => ({
+    purpose,
+    twinOf: null,
+    provisioned,
   })
 
-  it('every client ring counts, not only ring 1', () => {
-    expect(clientSeats({ s: 0, x: 1, y: 2, z: 3 })).toEqual(['x', 'y'])
+  it('is every provisioned seat whose purpose is client, whatever its ring', () => {
+    expect(
+      clientSeats({
+        twin: { purpose: 'release-twin', twinOf: 'b', provisioned: true },
+        b: entry('client'),
+        c: entry('client'),
+        demo: entry('demo'),
+        smd: entry('internal'),
+      })
+    ).toEqual(['b', 'c'])
   })
 
-  it('no rings, or no ring between the first and last, means no client seats', () => {
+  it('an unprovisioned client seat is not waited for (nothing can be released to it)', () => {
+    expect(clientSeats({ a: entry('client'), later: entry('client', false) })).toEqual(['a'])
+  })
+
+  it('no client seat means no client seats, never a guess', () => {
     expect(clientSeats({})).toEqual([])
-    expect(clientSeats({ s: 0, t: 0 })).toEqual([])
-    expect(clientSeats({ s: 0, smd: 2 })).toEqual([])
+    expect(clientSeats({ s: entry('internal'), d: entry('demo') })).toEqual([])
   })
 
-  it('the live rings give the client ring and none of the staging or SMD seats', () => {
+  it('the live inventory gives the client seats and none of the twin, demo or SMD seats', () => {
     const seats = clientSeats()
-    expect(seats.length).toBeGreaterThan(0)
-    for (const seat of ['smd-staging', 'scott', 'pilot-smokeball', 'brokery', 'captain-mark']) {
+    expect(seats).toContain('ashton-price')
+    for (const seat of ['smd-staging', 'scott', 'pilot-smokeball', 'smd-guide']) {
       expect(seats).not.toContain(seat)
     }
   })

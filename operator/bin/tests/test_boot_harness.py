@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 import yaml
 
+from bin.lib import seat_purpose
 from bin.lib.boot_harness import cli, collect, fixture, judge
 
 OPERATOR = Path(__file__).resolve().parents[2]
@@ -422,3 +423,21 @@ def test_a_volume_run_mounts_it_and_ships_the_fixture_to_the_rootfs() -> None:
     assert "hermes_state:/opt/data" in argv
     assert "/harness/customer.yaml=/x/customer.yaml" in argv
     assert not any(a.startswith("/opt/data/") for a in argv)
+
+
+def test_the_fixture_sources_are_found_by_purpose_never_by_slug() -> None:
+    """ADR 0107: the default source is the release twin and the large-store source is
+    the demo seat, both read from operator/fleet/seats.yaml (each seat.yaml's purpose)."""
+    seats = seat_purpose.load()
+    assert seats[fixture.SOURCE_SLUG]["purpose"] == "release-twin"
+    assert seats[cli.SIZES["2x-4096"][1]]["purpose"] == "release-twin"
+    assert seats[cli.SIZES["4x-8192"][1]]["purpose"] == "demo"
+
+
+def test_a_twin_source_is_deslugged_with_its_own_slug() -> None:
+    # FALSIFIER: replace a fixed slug instead of the source's, and a renamed twin's
+    # paths keep naming the twin.
+    twin = fixture.SOURCE_SLUG
+    text = f"customer_id: {twin}\nnote: vaults/{twin}/x\n"
+    assert fixture._deslug(text, twin) == "customer_id: boot-harness\nnote: vaults/boot-harness/x\n"
+    assert fixture._deslug("customer_id: scott\n", "scott") == "customer_id: scott\n"

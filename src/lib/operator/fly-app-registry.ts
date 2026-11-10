@@ -32,7 +32,7 @@
  * from a missing registry entry, which is what the drift guard below is for.
  *
  * That is exactly what happened: `scott` (ADR 0067 hosted-agent founding seat)
- * and `smd-staging` (the pre-production mirror of customer-zero) were both
+ * and `smd-staging` (ashton-price's release twin, ADR 0107) were both
  * deployed Fly apps and both projected into `customer_configs`, and neither was
  * in this map. Every runtime surface for those seats rendered empty for weeks
  * with nothing raised.

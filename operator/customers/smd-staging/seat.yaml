@@ -3,15 +3,21 @@
 # seat at boot. After editing run `npm run gen:seat-registries`;
 # tests/seat-inventory.test.ts fails while a generated registry is stale.
 #
-# The permanent pre-production mirror of customer-zero. Ring 0: takes every
-# release first.
+# ashton-price's release twin (ADR 0107): the seat every release proves itself
+# on before the client seat may take it. Ring 0 is derived from the purpose, so
+# it authors no ring. STATED GAP: the twin is still named smd-staging and binds
+# no Smokeball connector, so it is not yet an exact copy of the client seat; a
+# later change renames it ap-staging and binds the connector.
 
+# What this seat is for (ADR 0107): client | release-twin | demo | internal.
+# A release-twin names the purpose: client seat it rehearses (twin_of); a
+# client seat with a twin takes no release its twin is not done on.
+purpose: release-twin
+twin_of: ashton-price
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 fly_app: hermes-smd-staging
-# Release ring (operator/bin/fleet release walks rings in order).
-ring: 0
-# No wait after staging (Captain, 2026-10-30): with one client, each seat's own
+# No wait after the twin (Captain, 2026-10-30): with one client, each seat's own
 # self-test and automatic rollback are the gate; a bake only delayed fixes.
 bake_minutes: 0
 # The day this seat's customer.yaml first landed on main. Orders seats in a ring.

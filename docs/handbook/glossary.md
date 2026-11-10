@@ -4,7 +4,7 @@ section: running
 order: 25
 owner: captain
 review_every: 30
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-11-10"
 summary: The venture's vocabulary, defined for a newcomer with zero context
 sources:
   - label: CLAUDE.md (project instructions)
@@ -27,6 +27,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/src/pages/api/admin/invoices/[id].ts
   - label: Release rings
     href: https://github.com/venturecrane/ss-console/blob/main/operator/fleet/rings.yaml
+  - label: ADR 0107 (seat purpose and the twin gate)
+    href: https://github.com/venturecrane/ss-console/blob/main/docs/adr/0107-seat-purpose-and-the-twin-gate.md
 ---
 
 Every term an agent's report or a Playbook page is likely to use, defined in plain words. When a word in a report is not here, ask the agent to explain it and to add it to this page.
@@ -149,6 +151,10 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **seat.** One running Operator instance for one customer, named by its customer slug (for example `smd-staging`). Each seat has its own `operator/customers/<slug>/customer.yaml`, its own Fly Machine, and one row in `fleet_status`; one client may hold several seats (migrations 0089, 0093).
 
+**seat purpose.** What a seat is for, written as `purpose:` in its `operator/customers/<slug>/seat.yaml`: `client`, `release-twin`, `demo` or `internal`. Every tool that once named a seat asks for a purpose instead, so a seat is renamed or added by editing that one file (ADR 0107; [Clients & Commitments](/admin/playbook/clients-and-commitments)). Different from a seat's kind, which says whose records are on it.
+
+**release twin.** A seat that is an exact copy of one client seat (named in its `twin_of`) and takes every Operator release first. The client seat takes a release only after its twin is done on it, so a change reaches the twin before the client sees it. Today `smd-staging` is the twin of `ashton-price`; it does not yet connect to Smokeball (ADR 0107).
+
 **routine.** A named duty the client bought: what the Operator does, how it starts, its level of autonomy, and any volume limit. Its definition lives in six artifacts, from the agreement's schedule to `routine-grid.yaml` and the skill body (`docs/runbooks/operator/routine-lifecycle.md`, ADR 0075).
 
 **Named Administrator.** The client's person, named in the signed agreement, who may administer their Operator: apply firm-wide rules, establish its voice, and change routine levels. In configuration these people are `scope.admins` (ADR 0085).
@@ -205,7 +211,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **reprovision.** Rebuilding or redeploying one seat's Machine from its authored config with `operator/bin/reprovision.sh <slug>`, which wraps `provision-customer.sh` under Infisical credentials.
 
-**ring (rollout).** A group of seats that takes a fleet release together. `operator/fleet/rings.yaml` orders them from SMD's own staging seat to the paying client's seat, and a failure in one ring halts the rollout before the next. See [Deployment & Release](/admin/playbook/deployment-release).
+**ring (rollout).** A group of seats that takes a fleet release together. `operator/fleet/rings.yaml` orders them: ring 0 is the release twins, then the client seats, then SMD's own seats, and a failure in one ring halts the rollout before the next. A client seat with a twin also waits for its twin on each release (ADR 0107). See [Deployment & Release](/admin/playbook/deployment-release).
 
 **Infisical.** The one secrets vault for SMD; every credential is stored at the `/ss` path and pushed from there to the runtime stores. See [Secrets & Access](/admin/playbook/secrets-access).
 

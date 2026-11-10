@@ -13,7 +13,10 @@
  * slug. The integrity test runs the Python fleet function and asserts the same
  * set, so the two cannot quietly diverge.
  *
- * The block carries only what a seat IS (kind, product, role, vertical). Who
+ * The block carries only what a seat IS (kind, purpose, product, role,
+ * vertical). Kind comes from customer.yaml `seat.kind` (what the records on it
+ * are); purpose from seat.yaml `purpose` (what the seat is for in the release
+ * and rehearsal process, ADR 0107; a release twin names its client). Who
  * pays and on what terms is commercial detail and lives in the private
  * engagements repository, never here.
  */
@@ -21,7 +24,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { seatSlugs } from './seat-inventory'
+import { loadSeatInventory, seatSlugs } from './seat-inventory'
 
 export const BEGIN =
   '<!-- BEGIN GENERATED: seat roster. Regenerate with `npm run handbook:roster -- --write`; tests/handbook-integrity.test.ts fails while it is stale. -->'
@@ -40,6 +43,8 @@ const KIND_LABELS: Record<string, string> = {
 export interface SeatEntry {
   slug: string
   kind: string
+  /** seat.yaml `purpose` (ADR 0107), with a twin's client: `release-twin of ashton-price`. */
+  purpose: string
   product: string
   role: string | null
   vertical: string
@@ -51,6 +56,7 @@ export function liveSeatSlugs(customersRoot: string): string[] {
 }
 
 export function buildSeatRoster(customersRoot: string): SeatEntry[] {
+  const inventory = new Map(loadSeatInventory(customersRoot).map((s) => [s.slug, s]))
   return liveSeatSlugs(customersRoot).map((slug) => {
     const doc = (parseYaml(readFileSync(join(customersRoot, slug, 'customer.yaml'), 'utf8')) ??
       {}) as Record<string, unknown>
@@ -59,11 +65,17 @@ export function buildSeatRoster(customersRoot: string): SeatEntry[] {
     return {
       slug,
       kind: str(seat.kind) ?? 'unset',
+      purpose: purposeLabel(inventory.get(slug)),
       product: str(seat.product) ?? 'unset',
       role: str(seat.role),
       vertical: str(doc.vertical) ?? 'unset',
     }
   })
+}
+
+function purposeLabel(seat: { purpose: string; twinOf: string | null } | undefined): string {
+  if (!seat) return 'unset'
+  return seat.twinOf ? `${seat.purpose} of \`${seat.twinOf}\`` : seat.purpose
 }
 
 export function renderSeatRoster(entries: SeatEntry[]): string {
@@ -81,9 +93,11 @@ export function renderSeatRoster(entries: SeatEntry[]): string {
   ]
   for (const kind of kinds) {
     lines.push(`**${KIND_LABELS[kind] ?? `Kind \`${kind}\``}**`, '')
-    lines.push('| Seat | Product | Role | Vertical |', '|---|---|---|---|')
+    lines.push('| Seat | Purpose | Product | Role | Vertical |', '|---|---|---|---|---|')
     for (const e of entries.filter((x) => x.kind === kind))
-      lines.push(`| \`${e.slug}\` | ${e.product} | ${e.role ?? 'none'} | ${e.vertical} |`)
+      lines.push(
+        `| \`${e.slug}\` | ${e.purpose} | ${e.product} | ${e.role ?? 'none'} | ${e.vertical} |`
+      )
     lines.push('')
   }
   lines.push(END)

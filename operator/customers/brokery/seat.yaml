@@ -5,6 +5,8 @@
 #
 # Hosted-agent seat for a real-estate brokerage's agent pilot.
 
+# What this seat is for (ADR 0107): client | release-twin | demo | internal.
+purpose: client
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 fly_app: hermes-brokery

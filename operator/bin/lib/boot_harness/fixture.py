@@ -1,13 +1,15 @@
-"""The harness customer.yaml: smd-staging's shape with every reach into the world removed.
+"""The harness customer.yaml: the release twin's shape with every reach into the world removed.
 
-Derived, not hand-copied, so the harness boots what staging boots today (same
-persona, skills, entitlements, output classes, machine size) and cannot drift
-from it unnoticed. What is changed, and why:
+Derived, not hand-copied, so the harness boots what the release twin (the seat
+whose seat.yaml says ``purpose: release-twin``, ADR 0107; smd-staging today)
+boots (same persona, skills, entitlements, output classes, machine size) and
+cannot drift from it unnoticed. The source is looked up by purpose, never by
+slug, so renaming the twin needs no edit here. What is changed, and why:
 
 * the slug becomes ``boot-harness`` everywhere, so no path, R2 prefix, D1
-  namespace or vectorize index names staging's;
+  namespace or vectorize index names the twin's;
 * ``connectors``, ``webhook_triggers`` and ``mcp_connector`` are dropped: the
-  msgraph connector would poll staging's real test mailbox and act on it;
+  msgraph connector would poll the twin's real test mailbox and act on it;
 * every human address (roster, admins, device senders, send-as, the smd-note
   recipient) becomes an address under ``.invalid``, so no real person is
   reachable even if a send path somehow ran.
@@ -25,8 +27,13 @@ from typing import Any
 
 import yaml
 
+from bin.lib import seat_purpose
+
 SLUG = "boot-harness"
-SOURCE_SLUG = "smd-staging"
+# The release twin (ADR 0107): the first seat whose seat.yaml says purpose:
+# release-twin. A twin's slug is distinctive (it is never a word), so it is the
+# one source replaced textually.
+SOURCE_SLUG = seat_purpose.release_twins()[0]
 # The smallest seat's shape (ring 2: scott, brokery, captain-mark run
 # shared-cpu-2x / 2048 MB, the floor after the 2026-09-01 and 2026-11-09
 # startup-watchdog crash loops). scott carries no medchron or litigation lane,
@@ -37,10 +44,10 @@ _DROPPED_KEYS = ("connectors", "webhook_triggers", "mcp_connector", "telegram", 
 
 
 def _deslug(text: str, source: str) -> str:
-    # Only staging's slug is distinctive enough to replace textually; any other
-    # source is re-homed structurally (_rehome), so a short slug like "scott"
-    # never rewrites an unrelated word.
-    return text.replace(SOURCE_SLUG, SLUG) if source == SOURCE_SLUG else text
+    # Only a release twin's slug is distinctive enough to replace textually (it
+    # is replaced with its own slug); any other source is re-homed structurally
+    # (_rehome), so a short slug like "scott" never rewrites an unrelated word.
+    return text.replace(source, SLUG) if source in seat_purpose.release_twins() else text
 
 
 def _rehome(doc: dict[str, Any]) -> None:

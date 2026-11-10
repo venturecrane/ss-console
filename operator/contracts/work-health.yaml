@@ -17,10 +17,12 @@
 # NO REPLY card (overlay shared/request_cards.py NO_REPLY_AFTER).
 no_reply_minutes: 30
 
-# Per-seat override of no_reply_minutes. Short on the staging seat so a
-# no-reply falsifier proves the line in minutes, not half an hour.
-no_reply_minutes_by_seat:
-  smd-staging: 5
+# Per-purpose override of no_reply_minutes (ADR 0107; each seat's purpose is
+# authored in its seat.yaml and read from operator/fleet/seats.yaml). Short on a
+# release twin so a no-reply falsifier proves the line in minutes, not half an
+# hour. No seat slug here: a renamed or added twin takes it with no edit.
+no_reply_minutes_by_purpose:
+  release-twin: 5
 
 # Requests older than this drop off the email (the seat's request index keeps
 # 7 days of text; past that nobody can act on the card either).
