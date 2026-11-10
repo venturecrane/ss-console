@@ -54,8 +54,19 @@ def test_no_test_here_imports_a_substrate_copy() -> None:
 
 
 def test_the_boot_invariant_imports_the_gateways_citation_filter() -> None:
-    src = (Path(__file__).parent / "test_invariant_6_no_citations.py").read_text(encoding="utf-8")
-    assert "from shared.citation_filter import" in src
+    # Load the boot invariant the way the boot runner does and check that the
+    # functions it proves are the gateway module's own objects, not copies.
+    import importlib.util
+
+    import shared.citation_filter as gateway
+
+    path = Path(__file__).parent / "test_invariant_6_no_citations.py"
+    spec = importlib.util.spec_from_file_location("_boot_invariant_6", path)
+    assert spec is not None and spec.loader is not None
+    invariant = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(invariant)
+    for name in ("contains_citation", "refusal_message", "scan"):
+        assert getattr(invariant, name) is getattr(gateway, name), name
 
 
 def test_no_overlay_pair_names_a_retired_substrate_copy() -> None:
