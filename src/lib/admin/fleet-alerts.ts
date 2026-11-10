@@ -90,7 +90,7 @@ export function alertLink(row: CostAnomalyAlertRow): string {
  */
 export function alertDetail(
   row: CostAnomalyAlertRow,
-  formatCurrency: (cents: number) => string
+  formatCents: (cents: number) => string
 ): string {
   if (row.source === 'cost') {
     return costAnomalyDetail({
@@ -98,7 +98,7 @@ export function alertDetail(
       daily_cents: row.daily_cents,
       rolling_avg_cents: row.rolling_avg_cents,
       ratio_bps: row.ratio_bps,
-      formatCurrency,
+      formatCents,
     })
   }
   return row.summary ?? '(no detail recorded)'

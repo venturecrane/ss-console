@@ -45,6 +45,7 @@ npx tsx scripts/sprawl-audit.ts --compare scripts/sprawl/snapshot.json
 | Change coupling | code-maat's measure, in `analyze.ts` | Files in different areas that change in the same commit, 6-month window. |
 | Dead-code candidates | vulture 2.14, 60%+ | Python only (knip gates TypeScript in verify). Includes code only tests call, so each is a candidate. |
 | Source-text pins | `scripts/sprawl/text-pins.ts` (`npx tsx scripts/sprawl-audit.ts --text-pins`) | Test assertions on the wording of a repo source or doc file read as text, instead of running the code (change-detector tests). Each pin needs a reason (a named guard or known false positive on `scripts/sprawl/text-pin-allowlist.ts`) and a cap (its file's count in `scripts/sprawl/text-pin-baseline.json`). |
+| Built N times | `scripts/sprawl/concepts.ts` (`npx tsx scripts/sprawl-audit.ts --concepts`) | One idea (the job-lane list, the lane-to-skill table, a `customer.yaml` parser, a broker socket client, a money formatter, a Resend sender, an inline rolling issue, a hand-kept Python copy, the law-seat writing rules) counted by the places it lives, each by one stated rule with a target. Capped at `scripts/sprawl/concept-baseline.json`; lower it with `--write-concept-baseline`. |
 
 The pure half is tested on known answers (`tests/sprawl-analyze.test.ts`). The
 per-PR gates are `tests/sprawl-ratchet.test.ts`, which fails when a literal is

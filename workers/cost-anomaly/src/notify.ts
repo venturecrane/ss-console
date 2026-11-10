@@ -11,6 +11,8 @@
  * email is a courtesy nudge.
  */
 
+import { formatCents } from '../../../src/lib/format/money'
+
 const RESEND_API_URL = 'https://api.resend.com/emails'
 
 export interface AlertNotificationItem {
@@ -90,8 +92,8 @@ function renderDigestHtml(
     .map((a) => {
       const name = escapeHtml(a.entity_name ?? a.customer_slug)
       const driverLabel = a.driver === '' ? 'all drivers (aggregate)' : escapeHtml(a.driver)
-      const daily = formatCurrency(a.daily_cents)
-      const avg = formatCurrency(a.rolling_avg_cents)
+      const daily = formatCents(a.daily_cents)
+      const avg = formatCents(a.rolling_avg_cents)
       const ratio = `${(a.ratio_bps / 100).toFixed(0)}%`
       return `<tr>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${name}</td>
@@ -123,16 +125,6 @@ function renderDigestHtml(
   </table>
   <p style="margin:20px 0 0;"><a href="${safeUrl}" style="color:#2563eb;">Open cost dashboard</a> to snooze or acknowledge.</p>
 </body></html>`
-}
-
-function formatCurrency(cents: number): string {
-  const dollars = cents / 100
-  return dollars.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function escapeHtml(s: string): string {

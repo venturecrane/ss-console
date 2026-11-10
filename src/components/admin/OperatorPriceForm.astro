@@ -1,5 +1,5 @@
 ---
-import { formatMoney } from '../../lib/admin/client-hub'
+import { formatDollarsHalfUp } from '../../lib/format/money'
 import { cardProcessingFeeCents } from '../../lib/pricing/card-fee'
 import { OPERATOR_LABEL_MAX, type OperatorPaymentMethod } from '../../lib/db/services'
 
@@ -37,7 +37,7 @@ const { entityId, instance, operatorPrice, operatorPaymentRail, operatorLabel } 
       operatorPrice == null && 'text-[color:var(--ss-color-text-muted)]',
     ]}
   >
-    {operatorPrice == null ? 'Not set' : `${formatMoney(operatorPrice)}/mo`}
+    {operatorPrice == null ? 'Not set' : `${formatDollarsHalfUp(operatorPrice)}/mo`}
   </span>
 </div>
 <form
@@ -94,9 +94,9 @@ const { entityId, instance, operatorPrice, operatorPaymentRail, operatorLabel } 
 {
   operatorPaymentRail === 'card' && operatorPrice != null && (
     <p class="mt-2 text-sm text-[color:var(--ss-color-text-muted)]">
-      Paid by card: {formatMoney(operatorPrice)} plus a{' '}
-      {formatMoney(cardProcessingFeeCents(Math.round(operatorPrice * 100)) / 100)} card processing
-      fee (3%) each month.
+      Paid by card: {formatDollarsHalfUp(operatorPrice)} plus a{' '}
+      {formatDollarsHalfUp(cardProcessingFeeCents(Math.round(operatorPrice * 100)) / 100)} card
+      processing fee (3%) each month.
     </p>
   )
 }

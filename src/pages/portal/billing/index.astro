@@ -11,13 +11,13 @@ import { resolvePortalOfferings } from '../../../lib/portal/offerings'
 import type { SubscriptionRow } from '../../../lib/portal/product-access'
 import {
   canStartOperatorSubscription,
-  formatWholeDollars,
   operatorMonthlyPriceCents,
   operatorSubscriptionHref,
   productDisplayName,
   resolveStartDoneMessage,
   subscriptionStamp,
 } from '../../../lib/portal/billing'
+import { formatCentsAsWholeDollars } from '../../../lib/format/money'
 import { parseCancelAt } from '../../../lib/db/subscriptions'
 import { getOperatorCheckoutSession } from '../../../lib/stripe/subscriptions'
 import { listOperatorServicesForEntity } from '../../../lib/db/services'
@@ -117,7 +117,11 @@ const paidCount = invoices.filter((i) => i.status === 'paid').length
 // The page meta states the one number a client comes here for. "Up to
 // date" is a claim about history and needs some: a paid invoice.
 const headMeta =
-  balanceCents > 0 ? `${formatWholeDollars(balanceCents)} due` : paidCount > 0 ? 'Up to date' : null
+  balanceCents > 0
+    ? `${formatCentsAsWholeDollars(balanceCents)} due`
+    : paidCount > 0
+      ? 'Up to date'
+      : null
 
 const csStatus = Astro.url.searchParams.get('cs')
 const startStatus = Astro.url.searchParams.get('start')

@@ -39,7 +39,7 @@ interface Props {
   ratio: CogsRatio
   windowStart: string
   windowEnd: string
-  formatCurrency: (cents: number) => string
+  formatCents: (cents: number) => string
   formatBps: (bps: number | null) => string
   statusColor: (status: CogsRatio['status']) => string
 }
@@ -53,7 +53,7 @@ const {
   ratio,
   windowStart,
   windowEnd,
-  formatCurrency,
+  formatCents,
   formatBps,
   statusColor,
 } = Astro.props
@@ -88,7 +88,7 @@ const sentryTitle = fleet ? `Synced ${relativeTimestamp(fleet.sentry_errors_sync
       card.error ? (
         <span class="text-[color:var(--ss-color-text-muted)]">—</span>
       ) : (
-        formatCurrency(cogs30dCents)
+        formatCents(cogs30dCents)
       )
     }
   </td>
@@ -97,7 +97,7 @@ const sentryTitle = fleet ? `Synced ${relativeTimestamp(fleet.sentry_errors_sync
       rollingAvgDailyCents === null ? (
         <span class="text-[color:var(--ss-color-text-muted)]">—</span>
       ) : (
-        formatCurrency(rollingAvgDailyCents)
+        formatCents(rollingAvgDailyCents)
       )
     }
   </td>
@@ -107,7 +107,7 @@ const sentryTitle = fleet ? `Synced ${relativeTimestamp(fleet.sentry_errors_sync
         <span class="text-[color:var(--ss-color-text-muted)]">—</span>
       ) : (
         <span title="30-day COGS scaled to a 30.4375-day month">
-          {formatCurrency(monthlyEstimateCents)} <span class="text-xs">est</span>
+          {formatCents(monthlyEstimateCents)} <span class="text-xs">est</span>
         </span>
       )
     }
@@ -117,7 +117,7 @@ const sentryTitle = fleet ? `Synced ${relativeTimestamp(fleet.sentry_errors_sync
       card.monthly_revenue_cents === null ? (
         <span class="text-[color:var(--ss-color-text-muted)]">—</span>
       ) : (
-        formatCurrency(card.monthly_revenue_cents)
+        formatCents(card.monthly_revenue_cents)
       )
     }
   </td>

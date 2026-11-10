@@ -4,11 +4,8 @@ import AdminFlashNotice from '../../../../../components/admin/AdminFlashNotice.a
 import QuoteClientContent from '../../../../../components/admin/QuoteClientContent.astro'
 import QuoteActions from '../../../../../components/admin/QuoteActions.astro'
 import { statusBadgeClass } from '../../../../../lib/ui/status-badge'
-import {
-  formatCurrency,
-  formatDate,
-  loadQuoteBuilderPage,
-} from '../../../../../lib/admin/quote-builder-page'
+import { formatDate, loadQuoteBuilderPage } from '../../../../../lib/admin/quote-builder-page'
+import { formatDollars } from '../../../../../lib/format/money'
 import { env } from 'cloudflare:workers'
 
 /**
@@ -143,7 +140,7 @@ const {
                 </span>
               )
             }
-            <span>Rate: {formatCurrency(quote.rate)}/hr</span>
+            <span>Rate: {formatDollars(quote.rate)}/hr</span>
             <span>v{quote.version}</span>
           </div>
         </div>
@@ -277,7 +274,7 @@ const {
             >
           </div>
           <div class="text-lg font-semibold text-[color:var(--ss-color-text-primary)]">
-            Project price: <span id="total-price">{formatCurrency(quote.total_price)}</span>
+            Project price: <span id="total-price">{formatDollars(quote.total_price)}</span>
           </div>
         </div>
       </div>
@@ -330,7 +327,7 @@ const {
           <div class="flex justify-between max-w-xs">
             <span>Deposit:</span>
             <span id="deposit-amount" class="font-medium text-[color:var(--ss-color-text-primary)]">
-              {formatCurrency(quote.deposit_amount ?? quote.total_price * depositPct)}
+              {formatDollars(quote.deposit_amount ?? quote.total_price * depositPct)}
             </span>
           </div>
           {
@@ -339,13 +336,13 @@ const {
                 <div class="flex justify-between max-w-xs">
                   <span>Mid-engagement milestone:</span>
                   <span class="font-medium text-[color:var(--ss-color-text-primary)]">
-                    {formatCurrency(quote.total_price * 0.3)}
+                    {formatDollars(quote.total_price * 0.3)}
                   </span>
                 </div>
                 <div class="flex justify-between max-w-xs">
                   <span>Completion:</span>
                   <span class="font-medium text-[color:var(--ss-color-text-primary)]">
-                    {formatCurrency(quote.total_price * 0.3)}
+                    {formatDollars(quote.total_price * 0.3)}
                   </span>
                 </div>
               </>
@@ -356,7 +353,7 @@ const {
                   id="completion-amount"
                   class="font-medium text-[color:var(--ss-color-text-primary)]"
                 >
-                  {formatCurrency(quote.total_price * (1 - depositPct))}
+                  {formatDollars(quote.total_price * (1 - depositPct))}
                 </span>
               </div>
             )

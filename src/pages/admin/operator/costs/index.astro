@@ -18,6 +18,7 @@ import {
   type FleetStatusRow,
 } from '../../../../lib/admin/fleet-status'
 import { env } from 'cloudflare:workers'
+import { formatCents } from '../../../../lib/format/money'
 
 /**
  * Captain cost dashboard — landing page.
@@ -105,16 +106,6 @@ function fleetForCard(card: CustomerCard): FleetStatusRow | undefined {
   const bySlug = fleetBySlug.get(card.customer_slug)
   if (bySlug) return bySlug
   return card.entity_id ? fleetByEntityId.get(card.entity_id) : undefined
-}
-
-function formatCurrency(cents: number): string {
-  const dollars = cents / 100
-  return dollars.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function formatBps(bps: number | null): string {
@@ -220,7 +211,7 @@ const totalCogs30dCents = rows.reduce((sum, r) => sum + r.cogs30dCents, 0)
               const pill = sourcePill(alert.source)
               const detail =
                 alert.source === 'cost'
-                  ? costAnomalyDetail({ ...alert, formatCurrency })
+                  ? costAnomalyDetail({ ...alert, formatCents })
                   : (alert.summary ?? '(no summary)')
               return (
                 <li
@@ -288,7 +279,7 @@ const totalCogs30dCents = rows.reduce((sum, r) => sum + r.cogs30dCents, 0)
           Totals (30-day window)
         </h3>
         <p class="text-sm text-[color:var(--ss-color-text-secondary)]">
-          {formatCurrency(totalCogs30dCents)} across {totalCustomers} customers
+          {formatCents(totalCogs30dCents)} across {totalCustomers} customers
         </p>
       </div>
 
@@ -343,7 +334,7 @@ const totalCogs30dCents = rows.reduce((sum, r) => sum + r.cogs30dCents, 0)
                       ratio={ratio}
                       windowStart={window.start}
                       windowEnd={window.end}
-                      formatCurrency={formatCurrency}
+                      formatCents={formatCents}
                       formatBps={formatBps}
                       statusColor={statusColor}
                     />

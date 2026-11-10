@@ -14,6 +14,7 @@ import {
   distinctCustomers,
 } from '../../../lib/admin/fleet-alerts'
 import { env } from 'cloudflare:workers'
+import { formatCents } from '../../../lib/format/money'
 
 /**
  * Operator admin console — fleet alerts (§4.2).
@@ -50,10 +51,6 @@ const filters = {
 }
 const filtered = sortAlerts(filterAlerts(allOpen, filters))
 const counts = countBySeverity(filtered)
-
-function formatCurrency(cents: number): string {
-  return (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-}
 
 const SOURCE_OPTIONS = [
   { value: 'all', label: 'All sources' },
@@ -211,7 +208,7 @@ const curCustomer = filters.customer ?? 'all'
                       <span class="text-[color:var(--ss-color-text-muted)]">· {alertAge(row)}</span>
                     </div>
                     <p class="text-xs text-[color:var(--ss-color-text-secondary)] mt-0.5">
-                      {alertDetail(row, formatCurrency)}
+                      {alertDetail(row, formatCents)}
                     </p>
                   </div>
                   <div class="flex gap-2 shrink-0">

@@ -278,9 +278,9 @@ export function costAnomalyDetail(args: {
   daily_cents: number
   rolling_avg_cents: number
   ratio_bps: number
-  formatCurrency: (cents: number) => string
+  formatCents: (cents: number) => string
 }): string {
   const driverLabel = args.driver === '' ? 'all drivers (aggregate)' : args.driver
   const ratio = (args.ratio_bps / 100).toFixed(0)
-  return `Top driver: ${driverLabel} · ${args.formatCurrency(args.daily_cents)} vs ${args.formatCurrency(args.rolling_avg_cents)} 7-day avg · ${ratio}%`
+  return `Top driver: ${driverLabel} · ${args.formatCents(args.daily_cents)} vs ${args.formatCents(args.rolling_avg_cents)} 7-day avg · ${ratio}%`
 }
