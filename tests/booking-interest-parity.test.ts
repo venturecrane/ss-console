@@ -101,11 +101,4 @@ describe('single source of truth (no reintroduced local maps)', () => {
     )
     expect(offenders).toEqual([resolve('src/lib/booking/config.ts')])
   })
-
-  it('CtaButton resolves its href through bookHref with explicit-href precedence', () => {
-    const src = readFileSync(resolve('src/components/CtaButton.astro'), 'utf-8')
-    // The interest prop is dead code unless the bare-`/book` default was removed.
-    expect(src).toContain('href ?? bookHref(interest)')
-    expect(src).not.toContain("href = '/book'")
-  })
 })

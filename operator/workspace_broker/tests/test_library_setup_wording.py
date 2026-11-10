@@ -115,8 +115,3 @@ def test_every_sentence_has_a_short_key_and_no_banned_marker():
         assert "coming soon" not in text.lower(), key
         for word in (" day", " week", " hour", " minute", " soon", " shortly", " today", " tomorrow"):
             assert word not in text.lower(), (key, word)  # no timeframes
-
-
-def test_the_wording_file_says_who_reads_it():
-    doc = (OP / "workspace_broker/library_setup_wording.py").read_text(encoding="utf-8").split('"""')[1]
-    assert "The Captain reads this file before any seat is switched on" in doc

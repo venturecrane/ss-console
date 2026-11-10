@@ -15,13 +15,6 @@ describe('email templates: shared shell', () => {
     expect(lines.length).toBeLessThanOrEqual(500)
   })
 
-  it('uses one shared HTML document shell', () => {
-    const source = readFileSync(templatePath, 'utf-8')
-    expect(source.match(/<!DOCTYPE html>/g)?.length).toBe(1)
-    expect(source).toContain('function emailDocument')
-    expect(source).toContain('function emailFooter')
-  })
-
   it('escapes user-authored values in rendered emails', () => {
     const payload = `<script>alert("x")</script>`
     const magic = magicLinkEmailHtml(payload, 'https://portal.example/auth?token=x&next=<bad>')

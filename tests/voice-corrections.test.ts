@@ -70,7 +70,6 @@ const BROKER_CORRECTIONS = source('../operator/workspace_broker/corrections.py')
 // a verb table (2026-09-10); server.py no longer carries any verb body.
 const BROKER_AUDIT_VERBS = source('../operator/workspace_broker/audit_verbs.py')
 const ENDPOINT = source('../src/pages/api/portal/operator/settings/output-class-specs.ts')
-const MIGRATION = source('../migrations/0102_operator_voice_corrections.sql')
 
 // ---------------------------------------------------------------------------
 // The gap between a capture and a spec
@@ -149,26 +148,6 @@ describe('no path from an agent-originated record to a spec file', () => {
     expect(ENDPOINT).toContain('promotedBody: written.body')
     expect(ENDPOINT).not.toContain('promotedBody: cited')
     expect(ENDPOINT).toContain('statement: cited?.statement ?? null')
-  })
-
-  it('the split is written down as a decision, where the next reader will look', () => {
-    // A comment is not a guard, but an unexplained two-store design is the one
-    // most likely to be "simplified" into the single store this issue exists to
-    // avoid. The reasoning has to survive in the files themselves.
-    for (const text of [MIGRATION, CORRECTIONS_MODULE, BROKER_CORRECTIONS]) {
-      expect(text).toMatch(/capture belongs where the agent is/i)
-    }
-    expect(MIGRATION).toContain('DO NOT MERGE THEM')
-  })
-
-  it('the visibility gap is named rather than left looking complete', () => {
-    // The console can receive a capture on the existing audit_log kind, but
-    // nothing presents the queue yet. Saying so in the code is what keeps a
-    // (runtime) row from being ticked on the strength of the promotion half.
-    for (const text of [MIGRATION, CORRECTIONS_MODULE]) {
-      expect(text).toContain('runtime_read')
-    }
-    expect(MIGRATION).toMatch(/No `?\(runtime\)`? row/)
   })
 })
 
@@ -360,11 +339,5 @@ describe('0102 schema, executed', () => {
         )
         .run()
     ).rejects.toThrow()
-  })
-
-  it('has a manual-only rollback, outside the auto-applied directory', () => {
-    const rollback = source('../migrations/rollbacks/0102_operator_voice_corrections_down.sql')
-    expect(rollback).toContain('DROP TABLE IF EXISTS operator_voice_corrections')
-    expect(rollback).toContain('NOT auto-applied')
   })
 })

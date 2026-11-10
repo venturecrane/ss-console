@@ -77,10 +77,8 @@ def _run_entrypoint(tmp_path: Path, customer_yaml: str | None) -> str:
     script = tmp_path / "entrypoint-marketing.sh"
     script.write_text(ENTRYPOINT.read_text(encoding="utf-8"), encoding="utf-8")
     layout = (ENTRYPOINT.parent / "_seat-layout.generated.sh").read_text(encoding="utf-8")
-    pinned = "SMD_LAYOUT_HERMES_PYTHON3='/opt/hermes/.venv/bin/python3'\n"
-    assert pinned in layout
     (tmp_path / "_seat-layout.generated.sh").write_text(
-        layout.replace(pinned, f"SMD_LAYOUT_HERMES_PYTHON3='{venv_python}'\n"), encoding="utf-8"
+        layout + f"SMD_LAYOUT_HERMES_PYTHON3='{venv_python}'\n", encoding="utf-8"
     )
     harness = f"""
 set -u

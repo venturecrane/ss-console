@@ -23,22 +23,13 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { workflowStepRun } from './helpers/workflow-steps'
+
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'cron-slot-watchdog.yml')
 
 /** The `run:` body of a named step, dedented, exactly as GitHub runs it. */
-const stepBody = (name: string): string => {
-  const source = readFileSync(WORKFLOW, 'utf8')
-  const start = source.indexOf(`      - name: ${name}`)
-  expect(start).toBeGreaterThan(-1)
-  const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-  const lines: string[] = []
-  for (const line of body.split('\n')) {
-    if (line.trim() !== '' && !line.startsWith('          ')) break
-    lines.push(line.slice(10))
-  }
-  return lines.join('\n')
-}
+const stepBody = (name: string): string => workflowStepRun(WORKFLOW, name)
 
 const RECONCILE = "Reconcile every seat's slot grid"
 const HOLD = 'Fail loudly when nothing could be evaluated'

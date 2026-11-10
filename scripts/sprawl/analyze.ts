@@ -22,7 +22,13 @@
  * 4. Dead-code candidates (vulture for Python; knip already gates TypeScript in
  *    verify.yml). Reported as candidates, because vulture's 60% tier includes
  *    code only tests call.
+ * 5. Source-text pins (change-detector tests; Google Testing Blog, "Change-
+ *    Detector Tests Considered Harmful"). A test that reads a repo source or doc
+ *    file as text and asserts on its wording instead of running the code. The
+ *    detector is scripts/sprawl/text-pins.ts; textPinCensus counts it per file.
  */
+
+import { sourceTextPins } from './text-pins'
 
 export type Clone = {
   lines: number
@@ -250,17 +256,75 @@ export function literalRatchet(
   baseline: Record<string, number>
 ): RatchetResult {
   const now = new Map(rows.map((r) => [r.literal, r.files]))
+  return countRatchet(now, baseline, LITERAL_MIN_FILES - 1, 'files')
+}
+
+/**
+ * The strict ratchet shared by both gates: a key may not exceed its baseline (a
+ * key absent from the baseline may not exceed `unlisted`), and a key below its
+ * baseline also fails until the baseline is lowered to match.
+ */
+function countRatchet(
+  now: Map<string, number>,
+  baseline: Record<string, number>,
+  unlisted: number,
+  unit: string
+): RatchetResult {
   const rose: string[] = []
   const fell: string[] = []
-  for (const [literal, files] of now) {
-    const allowed = baseline[literal] ?? LITERAL_MIN_FILES - 1
-    if (files > allowed) rose.push(`${literal}: ${files} files (allowed ${allowed})`)
+  for (const [key, n] of now) {
+    const allowed = baseline[key] ?? unlisted
+    if (n > allowed) rose.push(`${key}: ${n} ${unit} (allowed ${allowed})`)
   }
-  for (const [literal, allowed] of Object.entries(baseline)) {
-    const files = now.get(literal) ?? 0
-    if (files < allowed) fell.push(`${literal}: ${files} files (baseline ${allowed})`)
+  for (const [key, allowed] of Object.entries(baseline)) {
+    const n = now.get(key) ?? 0
+    if (n < allowed) fell.push(`${key}: ${n} ${unit} (baseline ${allowed})`)
   }
   return { rose: rose.sort(), fell: fell.sort() }
+}
+
+/**
+ * Source-text pin assertions per test file, every test file (allowlisted policy
+ * scans included, so each is capped too). Files with none are omitted.
+ */
+export function textPinCensus(files: SourceFile[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const f of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    const n = sourceTextPins(f.path, f.text)
+    if (n > 0) out[f.path] = n
+  }
+  return out
+}
+
+/**
+ * Files that hold pins with no stated reason: in the census but in neither the
+ * allowlist of guards nor the list of known detector false positives
+ * (scripts/sprawl/text-pin-allowlist.ts). A pin needs a reason AND a cap.
+ *
+ * @public Merge-gate check. tests/text-pin-ratchet.test.ts imports it.
+ */
+export function unexplainedPinFiles(
+  census: Record<string, number>,
+  reasons: ReadonlySet<string>
+): string[] {
+  return Object.keys(census)
+    .filter((path) => !reasons.has(path))
+    .sort()
+}
+
+/**
+ * The fitness function for source-text pins: every file is capped at its count
+ * in scripts/sprawl/text-pin-baseline.json, allowlisted guards included, so a
+ * new pin in a guard file fails like a new pin anywhere; a file not in it may
+ * have none; and a count that fell fails until the baseline is lowered.
+ *
+ * @public Merge-gate check. tests/text-pin-ratchet.test.ts imports it and fails a PR that adds a source-text pin.
+ */
+export function textPinRatchet(
+  census: Record<string, number>,
+  baseline: Record<string, number>
+): RatchetResult {
+  return countRatchet(new Map(Object.entries(census)), baseline, 0, 'pins')
 }
 
 export function literalBaselineOf(rows: LiteralRow[]): Record<string, number> {

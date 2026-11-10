@@ -75,4 +75,3 @@ def test_the_shipped_seat_authors_the_skill_and_leaves_the_cron_commented() -> N
     assert li.scheduled_recipients(settings)
     # The weekday row ships commented out: the firm's enable act is the uncomment.
     assert li.cron_row_live(seat) is False
-    assert "#   - skill: litigation-status" in seat.read_text() or "# - skill: litigation-status" in seat.read_text()

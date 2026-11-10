@@ -156,8 +156,6 @@ def test_no_queue_env_no_lane(monkeypatch, tmp_path):
 
 
 def test_the_daemon_starts_the_drafting_lane_beside_the_demand_lane_and_survives_its_failure(monkeypatch):
-    src = (Path(__file__).resolve().parents[1] / "jobs" / "daemon.py").read_text()
-    assert "start_lanes(d, stop=" in src
     from jobs import casefile_lane, demand_lane, drafting_lane, lanes, litigation_lane, negotiation_lane, note_lane
     from jobs import records_lane
     from jobs.medchron import lane as medchron_lane

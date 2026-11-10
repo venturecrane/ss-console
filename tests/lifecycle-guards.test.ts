@@ -20,7 +20,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { createEntity, transitionStage, type EntityStage } from '../src/lib/db/entities'
 import { createContact } from '../src/lib/db/contacts'
 import { createQuote, updateQuoteStatus } from '../src/lib/db/quotes'
-import { readFileSync } from 'fs'
+import * as contextModule from '../src/lib/db/context'
 
 const migrationsDir = resolve(process.cwd(), 'migrations')
 
@@ -305,25 +305,15 @@ describe('lifecycle invariant guards', () => {
   // =========================================================================
 
   describe('context.ts append-only invariant', () => {
-    const source = () => readFileSync(resolve('src/lib/db/context.ts'), 'utf-8')
-
-    it('does not export any UPDATE operations', () => {
-      const code = source()
-      const exportedFunctions = code.match(/export\s+async\s+function\s+\w+/g) ?? []
-      const functionNames = exportedFunctions.map((m) =>
-        m.replace(/export\s+async\s+function\s+/, '')
-      )
-
-      // All exported functions should be append (INSERT) or read (SELECT) only
-      for (const name of functionNames) {
+    it('exports no update or delete operation', () => {
+      // All exported functions are append (INSERT) or read (SELECT) only.
+      const names = Object.entries(contextModule)
+        .filter(([, value]) => typeof value === 'function')
+        .map(([name]) => name)
+      expect(names).toContain('appendContext')
+      for (const name of names) {
         expect(name).not.toMatch(/update|delete|remove|drop/i)
       }
-    })
-
-    it('documents the append-only invariant', () => {
-      const code = source()
-      expect(code).toContain('INVARIANT: APPEND-ONLY')
-      expect(code).toContain('NO update or delete operations')
     })
   })
 })

@@ -2,8 +2,7 @@
  * Tests for the engagement_contacts data access layer.
  *
  * Covers:
- *   - Source-level invariants (parameterized queries, JOIN-based scoping,
- *     UUID generation)
+ *   - Org scoping and the single-primary invariant against a migrated D1
  *   - Single-primary behaviour: addEngagementContact with is_primary=true
  *     clears any existing primary on the same engagement; without is_primary
  *     it does not touch existing primaries
@@ -13,16 +12,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import {
   addEngagementContact,
+  getEngagementContact,
+  listEngagementContacts,
   removeEngagementContact,
   setEngagementContactPrimary,
 } from './engagement-contacts'
-
-const SOURCE_PATH = resolve('src/lib/db/engagement-contacts.ts')
-const source = () => readFileSync(SOURCE_PATH, 'utf-8')
+import { createContact } from './contacts'
+import { migratedDb, seedEngagement, seedEntity, seedOrg } from '../../../tests/_stubs/behavioural'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,62 +71,77 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-// ---------------------------------------------------------------------------
-// Source-level invariants
-// ---------------------------------------------------------------------------
-
-describe('engagement-contacts: source-level invariants', () => {
-  it('engagement-contacts.ts exists', () => {
-    expect(existsSync(SOURCE_PATH)).toBe(true)
-  })
-
-  it('exports the role enum and label list', () => {
-    const code = source()
-    expect(code).toContain('export type EngagementContactRole')
-    expect(code).toContain("'owner'")
-    expect(code).toContain("'decision_maker'")
-    expect(code).toContain("'champion'")
-    expect(code).toContain('export const ENGAGEMENT_CONTACT_ROLES')
-  })
-
-  it('exports the four mutation/read functions', () => {
-    const code = source()
-    expect(code).toContain('export async function listEngagementContacts')
-    expect(code).toContain('export async function getEngagementContact')
-    expect(code).toContain('export async function addEngagementContact')
-    expect(code).toContain('export async function setEngagementContactPrimary')
-    expect(code).toContain('export async function removeEngagementContact')
-  })
-
+describe('engagement-contacts: SQL safety', () => {
   it('uses parameterized queries (no string interpolation in SQL)', () => {
-    const code = source()
+    const code = readFileSync(resolve('src/lib/db/engagement-contacts.ts'), 'utf-8')
     expect(code).toContain('.bind(')
     expect(code).not.toMatch(/prepare\(`[^`]*\$\{/)
   })
+})
 
-  it('generates UUIDs for primary keys', () => {
-    expect(source()).toContain('crypto.randomUUID()')
+// ---------------------------------------------------------------------------
+// Org scoping and the single-primary invariant against a migrated D1
+// ---------------------------------------------------------------------------
+
+describe('engagement-contacts against real D1', () => {
+  const ORG_A = 'org-a'
+  const ORG_B = 'org-b'
+  const ENG_A = 'eng-a'
+  let db: D1Database
+  let contactA: string
+  let contactB: string
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedOrg(db, ORG_A)
+    await seedOrg(db, ORG_B)
+    await seedEntity(db, { id: 'ent-a', orgId: ORG_A })
+    await seedEngagement(db, { id: ENG_A, orgId: ORG_A, entityId: 'ent-a' })
+    contactA = (await createContact(db, ORG_A, 'ent-a', { name: 'Avery Owner' })).id
+    contactB = (await createContact(db, ORG_A, 'ent-a', { name: 'Blake Champion' })).id
   })
 
-  it('listEngagementContacts enforces org scoping via JOIN through engagements', () => {
-    const code = source()
-    expect(code).toMatch(/listEngagementContacts[\s\S]*INNER JOIN engagements/)
-    expect(code).toContain('e.org_id = ?')
+  it('lists and reads an assignment only within its own org', async () => {
+    const row = await addEngagementContact(db, ENG_A, { contact_id: contactA, role: 'owner' })
+    const listed = await listEngagementContacts(db, ORG_A, ENG_A)
+    expect(listed.map((r) => r.id)).toEqual([row.id])
+    expect(listed[0].contact_name).toBe('Avery Owner')
+    expect(await getEngagementContact(db, ORG_A, row.id)).not.toBeNull()
+
+    expect(await listEngagementContacts(db, ORG_B, ENG_A)).toEqual([])
+    expect(await getEngagementContact(db, ORG_B, row.id)).toBeNull()
+    expect(await setEngagementContactPrimary(db, ORG_B, row.id)).toBeNull()
+    expect(await removeEngagementContact(db, ORG_B, row.id)).toBe(false)
+    expect(await getEngagementContact(db, ORG_A, row.id)).not.toBeNull()
   })
 
-  it('getEngagementContact enforces org scoping via JOIN through engagements', () => {
-    const code = source()
-    expect(code).toMatch(/getEngagementContact[\s\S]*INNER JOIN engagements/)
+  it('keeps exactly one primary as primaries are added and promoted', async () => {
+    const first = await addEngagementContact(db, ENG_A, {
+      contact_id: contactA,
+      role: 'owner',
+      is_primary: true,
+    })
+    const second = await addEngagementContact(db, ENG_A, {
+      contact_id: contactB,
+      role: 'champion',
+      is_primary: true,
+    })
+    const primaries = async () =>
+      (await listEngagementContacts(db, ORG_A, ENG_A)).filter((r) => r.is_primary).map((r) => r.id)
+    expect(await primaries()).toEqual([second.id])
+
+    const promoted = await setEngagementContactPrimary(db, ORG_A, first.id)
+    expect(promoted?.is_primary).toBe(1)
+    expect(await primaries()).toEqual([first.id])
+
+    await setEngagementContactPrimary(db, ORG_A, first.id)
+    expect(await primaries()).toEqual([first.id])
   })
 
-  it('addEngagementContact clears existing primary before insert when is_primary=true', () => {
-    const code = source()
-    expect(code).toMatch(/UPDATE engagement_contacts SET is_primary = 0[\s\S]*WHERE engagement_id/)
-  })
-
-  it('setEngagementContactPrimary clears other rows but not the target row (id <> ?)', () => {
-    const code = source()
-    expect(code).toContain('id <> ?')
+  it('gives each assignment a distinct id', async () => {
+    const a = await addEngagementContact(db, ENG_A, { contact_id: contactA, role: 'owner' })
+    const b = await addEngagementContact(db, ENG_A, { contact_id: contactB, role: 'champion' })
+    expect(a.id).not.toBe(b.id)
   })
 })
 

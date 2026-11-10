@@ -1,10 +1,10 @@
-"""scripts/ci-publish-bundle.sh: the content check reads a listing file, never a pipe.
+"""scripts/ci-publish-bundle.sh, run end to end against fakes: what it publishes,
+in what order, and what it refuses.
 
-2026-10-31, the first real publish (run 41238271283): `tar -tf | grep -qx` under
-`set -o pipefail` reported "the tarball holds no jobs/.venv/bin/jobs"
-right after `tar: stdout: write error`. grep -q exits at its first match, tar
-then fails writing the rest of the listing to the closed pipe, and pipefail
-turns a FOUND entry into a failed check.
+2026-10-31, the first real publish (run 41238271283): the content check reported
+"the tarball holds no jobs/.venv/bin/jobs" for an entry the tarball held. The
+check must pass a tarball that holds every guaranteed entry and refuse one that
+lacks any.
 """
 
 from __future__ import annotations
@@ -26,22 +26,6 @@ def _code() -> str:
     return "\n".join(
         line for line in SCRIPT.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
     )
-
-
-def test_no_tar_listing_is_piped_into_an_early_exit_grep() -> None:
-    assert not re.search(r"tar\s+-t\S*[^\n|]*\|\s*grep\s+-\S*q", _code())
-
-
-def test_the_check_still_requires_both_entry_points() -> None:
-    code = _code()
-    assert 'tar -tf "${work}/out/bundle.tar" > "${work}/listing.txt"' in code
-    # The guaranteed set is one file the image also records (ADR 0100 W5).
-    assert "operator/templates/jobs-bundle-paths.txt" in code
-    listed = (SCRIPT.parents[1] / "operator" / "templates" / "jobs-bundle-paths.txt").read_text(encoding="utf-8")
-    for entry in ("jobs/.venv/bin/jobs", "connectors/smokeball/.venv/bin/smokeball-mcp"):
-        assert entry in listed.splitlines()
-    assert 'for entry in "${guaranteed[@]}"; do' in code
-    assert 'grep -qxF "${entry}" "${work}/listing.txt"' in code
 
 
 # -- the layout (ADR 0103), the script run end to end against fakes ---------------------
@@ -81,6 +65,7 @@ mkdir -p "$tree/jobs/.venv/bin" "$tree/connectors/smokeball/.venv/bin"
 for f in jobs/.venv/bin/jobs jobs/.venv/bin/python connectors/smokeball/.venv/bin/smokeball-mcp \\
          connectors/smokeball/.venv/bin/python; do echo x > "$tree/$f"; done
 echo 3.13.9 > "$out/python"
+[ -z "$SKIP_ENTRY" ] || rm "$tree/$SKIP_ENTRY"
 tar -C "$tree" -cf "$out/bundle.tar" jobs connectors/smokeball
 """
 
@@ -184,3 +169,12 @@ def test_a_failed_record_writes_no_layout_latest(tmp_path: Path) -> None:
     assert proc.returncode != 0
     assert list(prefix.glob("*.json")), "the manifest went up before the record"
     assert not (prefix / "layout-2" / "latest.json").exists()
+
+
+@pytest.mark.parametrize("entry", ["jobs/.venv/bin/jobs", "connectors/smokeball/.venv/bin/smokeball-mcp"])
+def test_a_tarball_missing_a_guaranteed_entry_publishes_nothing(tmp_path: Path, entry: str) -> None:
+    """FALSIFIER: drop the content check and the manifest goes up for a bundle a seat cannot run."""
+    proc, prefix, events = _publish(tmp_path, SKIP_ENTRY=entry)
+    assert proc.returncode != 0
+    assert f"the tarball holds no {entry}" in proc.stdout + proc.stderr
+    assert events == [] and not list(prefix.glob("*.json"))

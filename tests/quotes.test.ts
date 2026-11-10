@@ -12,8 +12,6 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
 import type { D1Database } from '@cloudflare/workers-types'
 import {
   createQuote,
@@ -544,11 +542,5 @@ describe('entity detail: the new-quote action (#472)', () => {
     expect((await load(ENT_A1)).showNewQuoteButton).toBe(true)
     await db.prepare("UPDATE entities SET stage = 'engaged' WHERE id = ?").bind(ENT_A1).run()
     expect((await load(ENT_A1)).showNewQuoteButton).toBe(false)
-  })
-
-  it('the page renders the action only behind that flag (drift guard on an Astro component)', () => {
-    const actions = readFileSync(resolve('src/components/admin/EntityStageActions.astro'), 'utf-8')
-    const page = readFileSync(resolve('src/pages/admin/entities/[id].astro'), 'utf-8')
-    expect(`${page}\n${actions}`).toMatch(/showNewQuoteButton\s*&&/)
   })
 })

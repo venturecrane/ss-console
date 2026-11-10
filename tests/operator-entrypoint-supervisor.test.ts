@@ -23,7 +23,15 @@
  */
 import { afterEach, describe, it, expect } from 'vitest'
 import { spawn, spawnSync } from 'child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { readSeatScript } from './_support/seat-layout'
@@ -489,17 +497,53 @@ wait
 })
 
 describe('the root audit-loss directory is made by root before the agent runs', () => {
-  const src = readFileSync(SUPERVISOR, 'utf8')
-  it('is the first thing smd_supervisor_boot does, and replaces anything that is not root’s', () => {
-    // 2026-10-20 review: /opt/data is the agent's; a planted .smd-root (its own
-    // dir or a symlink) is removed, never followed, and root's is created 0755.
+  // 2026-10-20 review: /opt/data is the agent's; a planted .smd-root (its own
+  // dir or a symlink) is removed, never followed, and root's is created 0755.
+  // Run as "root" by stubbing id/stat/install: the owner stat reports is the
+  // only input the function reads, and install records how it was called.
+  const rootLossDir = (plant: (home: string, outside: string) => void, owner: string) => {
+    const dir = mkdtempSync(join(tmpdir(), 'smd-rootloss-'))
+    const home = `${dir}/home`
+    const outside = `${dir}/outside`
+    mkdirSync(home)
+    mkdirSync(outside)
+    writeFileSync(`${outside}/keep`, 'x')
+    plant(home, outside)
+    const driver = join(dir, 'driver.sh')
+    writeFileSync(
+      driver,
+      `log() { :; }\nid() { echo 0; }\nstat() { echo "${owner}"; }\n` +
+        `install() { echo "$*" >> "${dir}/install.log"; command mkdir -p "\${@: -1}"; }\n` +
+        `HERMES_HOME="${home}"\n. "${SUPERVISOR}"\nsmd_root_loss_dir\n`
+    )
+    // nosemgrep: javascript.lang.security.audit.dangerous-spawn-shell.dangerous-spawn-shell -- argv is bash plus a script this test wrote into its own mkdtemp dir; no input reaches it
+    const r = spawnSync('bash', [driver], { encoding: 'utf8' })
+    expect(r.status, r.stderr).toBe(0)
+    return { dir, home, outside, install: readFileSync(`${dir}/install.log`, 'utf8') }
+  }
+
+  it('is the first thing smd_supervisor_boot does', () => {
+    const src = readFileSync(SUPERVISOR, 'utf8')
     const boot = src.slice(src.indexOf('smd_supervisor_boot() {'))
     expect(boot.split('\n')[1].trim()).toBe('smd_root_loss_dir')
-    expect(src).toMatch(
-      /\[ -L "\$\{_d\}" \] \|\| \[ ! -d "\$\{_d\}" \] \|\| \[ "\$\(stat -c %u "\$\{_d\}"\)" != 0 \]/
-    )
-    expect(src).toContain('rm -rf -- "${_d}"')
-    expect(src).toContain('install -d -o root -g root -m 0755 "${_d}"')
+  })
+
+  it('replaces a planted symlink without following it, and creates root’s dir 0755', () => {
+    const { home, outside, install } = rootLossDir((h, o) => symlinkSync(o, `${h}/.smd-root`), '0')
+    expect(existsSync(`${outside}/keep`), 'the symlink target is untouched').toBe(true)
+    expect(lstatSync(`${home}/.smd-root`).isSymbolicLink()).toBe(false)
+    expect(install.trim()).toBe(`-d -o root -g root -m 0755 ${home}/.smd-root`)
+  })
+
+  it('replaces a dir the agent owns, and keeps one root already owns', () => {
+    const plantWithFile = (h: string) => {
+      mkdirSync(`${h}/.smd-root`)
+      writeFileSync(`${h}/.smd-root/count`, '3')
+    }
+    const agents = rootLossDir(plantWithFile, '10000')
+    expect(existsSync(`${agents.home}/.smd-root/count`)).toBe(false)
+    const roots = rootLossDir(plantWithFile, '0')
+    expect(existsSync(`${roots.home}/.smd-root/count`)).toBe(true)
   })
 
   it('the boot chown of /opt/data leaves .smd-root alone, or root’s counts reset every boot', () => {

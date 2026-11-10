@@ -7,6 +7,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { type SourceFile, isGenerated } from './analyze'
+import { pinLangOf } from './text-pins'
 
 const CODE_EXT = /\.(ts|tsx|mjs|cjs|js|astro|py|sh|bash|ya?ml|toml|md)$/
 const SKIP = /(^|\/)(node_modules|dist|\.venv|__pycache__|fixtures)\/|package-lock\.json$/
@@ -62,22 +63,41 @@ export function generatedPaths(paths: string[], cwd = '.'): Set<string> {
 }
 
 /**
- * Parse the committed baseline: a flat map of literal to allowed file count.
+ * Parse a committed baseline: a flat map of key to allowed count (`$`-keys are comments).
  *
- * @public Merge-gate check. tests/sprawl-ratchet.test.ts imports it to read scripts/sprawl/literal-baseline.json.
+ * @public Merge-gate check. tests/sprawl-ratchet.test.ts and tests/text-pin-ratchet.test.ts import it to read their baselines.
  */
-export function parseLiteralBaseline(text: string): Record<string, number> {
+export function parseLiteralBaseline(
+  text: string,
+  name = LITERAL_BASELINE
+): Record<string, number> {
   const raw: unknown = JSON.parse(text)
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    throw new Error(`${LITERAL_BASELINE}: expected an object of literal -> count`)
+    throw new Error(`${name}: expected an object of key -> count`)
   }
   const out: Record<string, number> = {}
   for (const [k, v] of Object.entries(raw)) {
     if (k.startsWith('$')) continue
     if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) {
-      throw new Error(`${LITERAL_BASELINE}: ${k} must be a non-negative integer`)
+      throw new Error(`${name}: ${k} must be a non-negative integer`)
     }
     out[k] = v
+  }
+  return out
+}
+
+export const TEXT_PIN_BASELINE = 'scripts/sprawl/text-pin-baseline.json'
+
+/** The tracked test files (TypeScript and Python), read, for the source-text pin census. */
+export function readTestFiles(paths: string[], cwd = '.'): SourceFile[] {
+  const out: SourceFile[] = []
+  for (const path of paths) {
+    if (!pinLangOf(path)) continue
+    try {
+      out.push({ path, text: readFileSync(`${cwd}/${path}`, 'utf8') })
+    } catch {
+      // Deleted in the working tree: nothing to count.
+    }
   }
   return out
 }

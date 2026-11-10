@@ -185,10 +185,8 @@ describe('operator-help: the skill', () => {
     expect(undo).toContain('never undo for a firm person')
   })
 
-  it('ships a pre_run that wakes the review daily and renders the Monday note itself', () => {
+  it('ships a pre_run whose text carries no em dash', () => {
     const pre = read(`${HELP}/pre_run.py`)
-    expect(pre).toContain('"mode": "review"')
-    expect(pre).toContain('NOTE_WEEKDAY = 0')
     expect(pre).not.toContain(EM_DASH)
   })
 
@@ -236,13 +234,6 @@ describe('operator-help: the skill', () => {
     expect(guide).toContain('[number]')
     expect(guide).not.toMatch(/matter \d{3,}/i)
     expect(guide).not.toMatch(/\b(within|by tomorrow|same day)\b/i)
-  })
-
-  it("names the detailed example's party generically, never a real one", () => {
-    // Real party names are denied repo-wide, guide and tips included, by
-    // tests/skill-no-pilot-client-names.test.ts (REAL_PARTIES); this pins the
-    // replacement wording so the example stays a generic party.
-    expect(flat(read(`${HELP}/references/guide.md`))).toContain('to the defendant store')
   })
 
   it('says so when some kinds of request could not be checked, and offers only what is listed', () => {

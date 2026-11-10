@@ -241,9 +241,17 @@ def test_validator_modes_match_the_connectors_own(tmp_path):
     sdk = (
         Path(__file__).resolve().parents[2] / "connectors/_sdk/operator_connector_sdk/resolution.py"
     )
-    text = sdk.read_text(encoding="utf-8")
-    assert 'MODE_OBSERVE = "observe"' in text and 'MODE_ENFORCE = "enforce"' in text
-    assert MATTER_RESOLUTION_MODES == ("observe", "enforce")
+    import ast
+
+    modes = {
+        node.targets[0].id: node.value.value
+        for node in ast.parse(sdk.read_text(encoding="utf-8")).body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id.startswith("MODE_")
+        and isinstance(node.value, ast.Constant)
+    }
+    assert MATTER_RESOLUTION_MODES == (modes["MODE_OBSERVE"], modes["MODE_ENFORCE"])
 
 
 # ---- logic_in_code (ADR 0104) ------------------------------------------------

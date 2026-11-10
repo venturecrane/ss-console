@@ -382,13 +382,22 @@ describe('matter-inbox-router: SKILL.md and the rubric agree', () => {
   })
 
   it('scopes to routing regions only, never to the whole body', () => {
-    // The falsifier, stated without a line number. Phase 1 names `inbox-triage`
-    // to compare SHAPES ("the shape matches inbox-triage Phase 1"); it is not a
-    // routing target. A region that swallowed it would demand a rubric row for
-    // a class that does not exist, and the "fix" would be a bogus row.
-    const body = read(ROUTER)
-    expect(body).toContain('inbox-triage')
-    expect([...routingTargets(body)]).not.toContain('inbox-triage')
+    // The falsifier. A skill named outside the class table and the per-class
+    // bullets (Phase 1 compares SHAPES with `inbox-triage`) is not a routing
+    // target. A region that swallowed it would demand a rubric row for a class
+    // that does not exist, and the "fix" would be a bogus row.
+    const body = [
+      'Phase 1: the shape matches `inbox-triage` Phase 1.',
+      '',
+      '| Inbound class | Route |',
+      '| --- | --- |',
+      '| Demand request | `demand-letter-drafter` |',
+      '',
+      '4. Handle each class:',
+      '   - **Demand request**: read `demand-letter-drafter`.',
+      '5. Stop.',
+    ].join('\n')
+    expect([...routingTargets(body)]).toEqual(['demand-letter-drafter'])
   })
 
   it('cites a rubric that exists', () => {

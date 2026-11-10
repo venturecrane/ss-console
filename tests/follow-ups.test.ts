@@ -439,16 +439,8 @@ describe('POST /api/admin/follow-ups/[id]', () => {
   })
 })
 
-// Astro pages have no handler to invoke. Two things about them are policy
-// rather than composition and stay as drift guards: follow-ups remain one
-// click away from the Settings hub (ADR 0046 demoted them from the top nav),
-// and the admin surface is never indexed.
-describe('follow-ups: reachability and privacy (drift guards)', () => {
-  it('the Settings hub links to /admin/follow-ups', () => {
-    const settings = readFileSync(resolve('src/pages/admin/settings/index.astro'), 'utf-8')
-    expect(settings).toContain('/admin/follow-ups')
-  })
-
+// Privacy: the admin surface is never indexed.
+describe('follow-ups: privacy', () => {
   it('the admin layout is noindex', () => {
     expect(readFileSync(resolve('src/layouts/AdminLayout.astro'), 'utf-8')).toContain('noindex')
   })

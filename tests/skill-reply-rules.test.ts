@@ -163,18 +163,25 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
   // request to the tool and relay its sentences; these pins keep it from ever
   // building a template of its own again.
   describe('document-library-establishment routes every library request to the code', () => {
-    const rendererClasses = (() => {
+    const tupleElements = (() => {
       const src = readFileSync(
         resolve('operator/connectors/smokeball/smokeball_connector/docx_format.py'),
         'utf-8'
       )
       const tuple = src.match(/^DOCUMENT_CLASSES = \(([\s\S]*?)\)/m)
       if (!tuple) throw new Error('DOCUMENT_CLASSES tuple not found in docx_format.py')
-      return [...tuple[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1])
+      return tuple[1]
+        .split(',')
+        .map((e) => e.replace(/#.*$/gm, '').trim())
+        .filter(Boolean)
     })()
+    const rendererClasses = tupleElements.flatMap((e) => /^"([a-z_]+)"$/.exec(e)?.[1] ?? [])
 
-    it('reads seven classes out of the renderer (sanity)', () => {
-      expect(rendererClasses.length).toBe(7)
+    it('reads every element of the renderer tuple as a class token', () => {
+      // Each element must be a plain string token, so a class written any other
+      // way (a constant, a different quote) cannot drop out of the check below.
+      expect(tupleElements.length).toBeGreaterThan(0)
+      expect(rendererClasses).toHaveLength(tupleElements.length)
     })
 
     it('names every class the renderer knows and says how each is covered', () => {

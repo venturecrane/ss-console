@@ -34,6 +34,8 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { workflowStepRun, workflowStepRuns } from './helpers/workflow-steps'
+
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'unaudited-send-reconcile.yml')
 
@@ -46,18 +48,7 @@ describe('the reconcile step reports what the reconciler found (ss#2309)', () =>
   })
 
   /** The `run:` body of the reconcile step, dedented, exactly as GitHub runs it. */
-  const stepBody = (): string => {
-    const source = readFileSync(WORKFLOW, 'utf8')
-    const start = source.indexOf('      - name: Reconcile every inbox')
-    expect(start).toBeGreaterThan(-1)
-    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-    const lines: string[] = []
-    for (const line of body.split('\n')) {
-      if (line.trim() !== '' && !line.startsWith('          ')) break
-      lines.push(line.slice(10))
-    }
-    return lines.join('\n')
-  }
+  const stepBody = (): string => workflowStepRun(WORKFLOW, 'Reconcile every inbox')
 
   /**
    * Run a step body the way the runner does: `bash -e <file>`, with `python3`
@@ -159,18 +150,8 @@ describe('the reconciler does not file the same finding twice (ss#2386)', () => 
   })
 
   /** The `run:` body of the issue-opening step, dedented, as GitHub runs it. */
-  const issueStepBody = (): string => {
-    const source = readFileSync(WORKFLOW, 'utf8')
-    const start = source.indexOf('      - name: Open an issue when a send has no audit record')
-    expect(start).toBeGreaterThan(-1)
-    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-    const lines: string[] = []
-    for (const line of body.split('\n')) {
-      if (line.trim() !== '' && !line.startsWith('          ')) break
-      lines.push(line.slice(10))
-    }
-    return lines.join('\n')
-  }
+  const issueStepBody = (): string =>
+    workflowStepRun(WORKFLOW, 'Open an issue when a send has no audit record')
 
   const FINGERPRINT = 'c0ffee1234567890'
 
@@ -310,18 +291,8 @@ describe('a hold fails the run (ss#2386)', () => {
     dir = undefined
   })
 
-  const holdStepBody = (): string => {
-    const source = readFileSync(WORKFLOW, 'utf8')
-    const start = source.indexOf('      - name: Fail the run when an inbox could not be evaluated')
-    expect(start).toBeGreaterThan(-1)
-    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-    const lines: string[] = []
-    for (const line of body.split('\n')) {
-      if (line.trim() !== '' && !line.startsWith('          ')) break
-      lines.push(line.slice(10))
-    }
-    return lines.join('\n')
-  }
+  const holdStepBody = (): string =>
+    workflowStepRun(WORKFLOW, 'Fail the run when an inbox could not be evaluated')
 
   /** Run the final step against a given holds.txt (undefined = file absent). */
   const runHoldStep = (holds: string | undefined) => {
@@ -392,32 +363,6 @@ describe('workflow steps never interpolate body content (phase 4 leak safety)', 
     dir = undefined
   })
 
-  /** Every `run:` body in the workflow, dedented, keyed by step name. */
-  const allStepBodies = (): Map<string, string> => {
-    const source = readFileSync(WORKFLOW, 'utf8')
-    const bodies = new Map<string, string>()
-    const namePattern = /^ {6}- name: (.+)$/gm
-    let match: RegExpExecArray | null
-    while ((match = namePattern.exec(source)) !== null) {
-      const runAt = source.indexOf('run: |', match.index)
-      if (runAt === -1) continue
-      const nextName = namePattern.lastIndex
-      // From past the matched line: the match itself starts at the indent, so
-      // searching from index+1 would find this step's own `- name:` again.
-      const following = source.indexOf('- name:', match.index + match[0].length)
-      if (following !== -1 && runAt > following) continue // step with no run body
-      const body = source.slice(runAt + 'run: |\n'.length)
-      const lines: string[] = []
-      for (const line of body.split('\n')) {
-        if (line.trim() !== '' && !line.startsWith('          ')) break
-        lines.push(line.slice(10))
-      }
-      bodies.set(match[1], lines.join('\n'))
-      namePattern.lastIndex = nextName
-    }
-    return bodies
-  }
-
   it('the only files catted into an issue body are the sentinel-tested reports', () => {
     // The producers of these two files are leak-tested python-side
     // (test_send_verify.py walks render() and --json for a sentinel body;
@@ -425,7 +370,7 @@ describe('workflow steps never interpolate body content (phase 4 leak safety)', 
     // `cat` inside a step that writes a body*.md is a new egress nobody
     // sentinel-tested, and this assertion is what makes adding one a red PR.
     const allowed = new Set(['reconcile.txt', 'lists.txt'])
-    const bodies = allStepBodies()
+    const bodies = workflowStepRuns(WORKFLOW)
     expect(bodies.size).toBeGreaterThanOrEqual(4)
     for (const [name, body] of bodies) {
       if (!/> *body[^\s]*\.md/.test(body)) continue
@@ -454,15 +399,7 @@ describe('workflow steps never interpolate body content (phase 4 leak safety)', 
     chmodSync(join(bin, 'python3'), 0o755)
     const outputs = join(dir, 'github_output')
     writeFileSync(outputs, '')
-    const source = readFileSync(WORKFLOW, 'utf8')
-    const start = source.indexOf('      - name: Reconcile every inbox')
-    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-    const lines: string[] = []
-    for (const line of body.split('\n')) {
-      if (line.trim() !== '' && !line.startsWith('          ')) break
-      lines.push(line.slice(10))
-    }
-    writeFileSync(join(dir, 'step.sh'), lines.join('\n'))
+    writeFileSync(join(dir, 'step.sh'), workflowStepRun(WORKFLOW, 'Reconcile every inbox'))
     execFileSync('bash', ['-e', join(dir, 'step.sh')], {
       cwd: dir,
       encoding: 'utf-8',
@@ -495,20 +432,11 @@ describe('the lists check keeps one rolling issue (ss#2582 discipline)', () => {
   const SERIES = 'agentmail-lists'
   const DIGEST = 'feedc0de12345678'
 
-  const listsStepBody = (): string => {
-    const source = readFileSync(WORKFLOW, 'utf8')
-    const start = source.indexOf(
-      '      - name: Report suppressed rostered recipients on ONE issue, updated in place'
+  const listsStepBody = (): string =>
+    workflowStepRun(
+      WORKFLOW,
+      'Report suppressed rostered recipients on ONE issue, updated in place'
     )
-    expect(start).toBeGreaterThan(-1)
-    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-    const lines: string[] = []
-    for (const line of body.split('\n')) {
-      if (line.trim() !== '' && !line.startsWith('          ')) break
-      lines.push(line.slice(10))
-    }
-    return lines.join('\n')
-  }
 
   const report = (digest: string = DIGEST): string =>
     `FIND  pilot-smokeball@agentmail.to [pilot-smokeball] rostered=4 list-findings=1\n\n` +

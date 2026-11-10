@@ -359,6 +359,6 @@ def test_a_mixed_update_names_the_requested_files_the_firms_rules_left_out_with_
 def test_every_disclosed_reason_has_fixed_wording_in_the_skill() -> None:
     skill = (Path(__file__).resolve().parents[3] / "skills" / "medical-chronology-maintainer" / "SKILL.md").read_text()
     flat = " ".join(skill.split())
-    assert "`Update outcome: already_current.`" in flat
+    assert f"`Update outcome: {UO.KIND}.`" in flat
     for code in set(UO.WORDING) - UO.NOT_PROVEN:
         assert f"`{code}`" in flat, code

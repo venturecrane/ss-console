@@ -21,20 +21,19 @@
  * against state that actually changes.
  */
 import { execFileSync } from 'node:child_process'
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
+
+import {
+  workflowStep,
+  workflowStepRun,
+  workflowSteps,
+  workflowTriggers,
+} from './helpers/workflow-steps'
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const RECONCILER = join(REPO_ROOT, 'scripts', 'ci-reconcile-customer-configs.sh')
@@ -576,26 +575,25 @@ describe('ci-reconcile-customer-configs: cannot-evaluate is never reported as cl
 
 describe('the reconciler is actually scheduled', () => {
   const workflow = join(REPO_ROOT, '.github', 'workflows', 'customer-config-reconcile.yml')
+  const d1Steps = () => workflowSteps(workflow).filter((s) => s.job === 'reconcile')
 
   it('runs on a schedule, not only on a push range', () => {
-    expect(existsSync(workflow)).toBe(true)
-    const source = readFileSync(workflow, 'utf8')
-    expect(source).toContain('schedule:')
-    expect(source).toMatch(/cron:/)
+    const on = workflowTriggers(workflow)
+    expect(Array.isArray(on.schedule) && on.schedule.length).toBeGreaterThan(0)
     // A reconciler that cannot be run on demand is one nobody runs after a fix.
-    expect(source).toContain('workflow_dispatch:')
+    expect(on).toHaveProperty('workflow_dispatch')
   })
 
   it('opens an issue on findings instead of only annotating the log', () => {
-    const source = readFileSync(workflow, 'utf8')
-    expect(source).toContain('gh issue create')
     // Exit 2 is the findings code; exit 1 fails the run on its own.
-    expect(source).toContain("== '2'")
+    const issue = workflowStep(workflow, 'Open an issue when a row drifted or lost its provenance')
+    expect(issue.job).toBe('reconcile')
+    expect(issue.if).toMatch(/steps\.reconcile\.outputs\.status == '2'/)
   })
 
   it('checks out full history, which the reconciler requires', () => {
-    const source = readFileSync(workflow, 'utf8')
-    expect(source).toContain('fetch-depth: 0')
+    const checkout = d1Steps().find((s) => s.uses?.startsWith('actions/checkout@'))
+    expect(checkout?.with['fetch-depth']).toBe(0)
   })
 })
 
@@ -623,18 +621,7 @@ describe('the reconcile step reports what the reconciler found (ss#2307)', () =>
   })
 
   /** The `run:` body of the reconcile step, dedented, exactly as GitHub runs it. */
-  const stepBody = (): string => {
-    const source = readFileSync(workflow, 'utf8')
-    const start = source.indexOf('      - name: Reconcile every row against main')
-    expect(start).toBeGreaterThan(-1)
-    const body = source.slice(source.indexOf('run: |', start) + 'run: |\n'.length)
-    const lines: string[] = []
-    for (const line of body.split('\n')) {
-      if (line.trim() !== '' && !line.startsWith('          ')) break
-      lines.push(line.slice(10))
-    }
-    return lines.join('\n')
-  }
+  const stepBody = (): string => workflowStepRun(workflow, 'Reconcile every row against main')
 
   /**
    * Run a step body the way the runner does: `bash -e <file>`, with the

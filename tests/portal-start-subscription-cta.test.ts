@@ -281,17 +281,6 @@ describe('Home: the Operator card carries the start door', () => {
 describe('the surfaces read the one gate and act in one place', () => {
   const read = (p: string) => readFileSync(resolve(p), 'utf-8')
 
-  it('the Operator hero links to the subscription page while provisioning; it does not POST', () => {
-    const hero = read('src/components/portal/operator/facets/OperatorHero.astro')
-    expect(hero).toContain('provisioning && start ?')
-    expect(hero).toContain('Ready to start')
-    expect(hero).toContain('href={start.href}')
-    expect(hero).toContain('Start monthly subscription')
-    expect(hero).not.toContain('start-subscription')
-    // The plain setup posture survives for an unpriced row.
-    expect(hero).toContain('Being set up')
-  })
-
   it('the Operator page decides with the shared predicate and hands the hero the page link', () => {
     const page = read('src/pages/portal/products/operator/[instance]/index.astro')
     expect(page).toContain('canStartOperatorSubscription(subscription, charge.priceCents)')
@@ -299,22 +288,15 @@ describe('the surfaces read the one gate and act in one place', () => {
     expect(page).toContain('start={startDoor}')
   })
 
-  it('Billing is a ledger: stamped rows through PortalListItem, no inline start, no KPI pair', () => {
+  it('Billing gates each row on its own seat price and never POSTs the start route', () => {
     const billing = read('src/pages/portal/billing/index.astro')
     // Each row is gated on its OWN seat's price (migration 0126).
     expect(billing).toContain('canStartOperatorSubscription(sub, seatPriceCents(sub))')
     expect(billing).toContain('subscriptionStamp(sub, canStart(sub))')
     expect(billing).toContain('operatorSubscriptionHref(sub.instance_slug)')
-    expect(billing).toContain('id="subscriptions"')
     // No POST to the start route from the ledger (the comment naming the
     // route file is documentation, not a form).
     expect(billing).not.toContain('/start-subscription`')
-    expect(billing).not.toContain('Paid to date')
-    expect(billing).not.toContain('Balance due')
-    // The row's stamp is the status; no second status line beside it.
-    expect(billing).not.toContain('subscriptionStatusLabel')
-    expect(billing).not.toContain('subscriptionStatusProse')
-    expect(billing).toContain('due`')
   })
 
   it('the subscription page holds the one POST to the start route, through the form kit', () => {
@@ -340,38 +322,13 @@ describe('the surfaces read the one gate and act in one place', () => {
   })
 })
 
-describe('the two money detail pages share one shape (Captain, 2026-09-09: cohesive, not made without knowledge of each other)', () => {
+describe('the two money detail pages state only real payment facts', () => {
   const read = (p: string) => readFileSync(resolve(p), 'utf-8')
   const invoice = () => read('src/pages/portal/billing/invoices/[id].astro')
   const subscription = () => read('src/pages/portal/billing/subscriptions/[instance].astro')
 
-  it('both render their facts through PortalDetailTable / PortalDetailRow', () => {
-    for (const page of [invoice(), subscription()]) {
-      expect(page).toContain('components/portal/PortalDetailTable.astro')
-      expect(page).toContain('components/portal/PortalDetailRow.astro')
-      expect(page).toContain('<PortalDetailTable eyebrow=')
-    }
-  })
-
-  it('both carry one primary action with a mono caption under it, in the kit geometry', () => {
-    expect(subscription()).toContain('label="Start monthly subscription" tone="primary"')
-    expect(invoice()).toContain('components/portal/PortalActionLink.astro')
-    expect(invoice()).toContain('tone="primary"')
-    expect(invoice().match(/tone="primary"/g)?.length).toBe(1)
-    for (const page of [invoice(), subscription()]) {
-      expect(page).toContain('Opens secure')
-      expect(page).toContain('mt-3 font-mono text-label uppercase tracking-[0.14em]')
-    }
-  })
-
-  it('the invoice page left the calm card register (ADR 0082) and restates nothing the head already says', () => {
+  it('the invoice page links to Stripe only when the link is real (#419)', () => {
     const page = invoice()
-    expect(page).not.toContain('rounded-lg')
-    expect(page).not.toContain('Remaining balance')
-    expect(page).not.toContain('material-symbols-outlined')
-    expect(page).not.toContain('md:sticky')
-    // The dates live in the head meta, once.
-    expect(page).not.toContain('calendar_today')
     // The safety facts from #419 survive: Stripe link only when real; a
     // pending state that is prose, never a link to a server route.
     expect(page).toContain('stripe_hosted_url')
@@ -385,20 +342,6 @@ describe('the two money detail pages share one shape (Captain, 2026-09-09: cohes
     expect(subscription()).not.toContain('Payment method</')
     expect(subscription()).not.toContain('label="Payment method"')
     expect(subscription()).not.toContain('Bank account or card')
-  })
-
-  it('PortalActionLink renders the same tones and geometry as the kit SubmitButton', () => {
-    const link = read('src/components/portal/PortalActionLink.astro')
-    const button = read('src/components/portal/form/SubmitButton.astro')
-    const tone = (src: string, name: 'neutral' | 'primary') =>
-      src.match(new RegExp(`${name}:\\s*\\n?\\s*'([^']+)'`))?.[1]
-    expect(tone(link, 'primary')).toBeDefined()
-    expect(tone(link, 'primary')).toBe(tone(button, 'primary'))
-    expect(tone(link, 'neutral')).toBe(tone(button, 'neutral'))
-    for (const cls of ['h-11', 'border-[3px]', 'px-5', 'font-bold uppercase tracking-[0.08em]']) {
-      expect(link).toContain(cls)
-      expect(button).toContain(cls)
-    }
   })
 })
 

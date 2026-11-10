@@ -1,47 +1,36 @@
 /**
- * Guard: the per-customer Machine fly.toml template must set every env var the
- * SMD overlay plugins REQUIRE at register.
+ * The per-customer Machine fly.toml, rendered for real by the one renderer
+ * (operator/bin/lib/render-fly-toml.sh, sourced the way provision-customer.sh
+ * sources it) and parsed as TOML.
  *
  * The overlay plugins (audit, voice, webhook-router, trust, memory-mirror) call
  * `require("SMD_CUSTOMER_SLUG", "SMD_D1_AUDIT_BINDING")` at register and bail to
  * a degraded no-op branch if either is missing. `SMD_CUSTOMER_SLUG` was once
  * omitted from the template (only `CUSTOMER_SLUG` was set), which silently
- * disabled the entire SMD plugin suite on customer-zero — audit emission never
- * wrote, so the ADR 0043 runtime-read seam read a dry well (ss-console#1285).
- * This test fails loudly if a required SMD_* var is dropped from the template.
+ * disabled the entire SMD plugin suite on customer-zero (ss-console#1285).
+ *
+ * ss#2612: the [[vm]] block once hardcoded `cpus = 1` while rendering size and
+ * memory from customer.yaml, so an authored shared-cpu-2x ran on one vCPU. The
+ * cpu fields come from operator/bin/lib/machine-size.sh, exercised here for
+ * every seat size in use and through the render.
  */
 
 import { describe, it, expect } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
-const template = readFileSync(resolve(__dirname, '../operator/templates/fly.toml.template'), 'utf8')
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { parse as parseToml } from 'smol-toml'
+import { parse as parseYaml } from 'yaml'
 
 // Env vars the overlay plugins require() at register. Dropping any silently
-// degrades the whole suite — keep this list in lockstep with the plugins'
-// require(...) calls in venturecrane/hermes-smd-overlay.
+// degrades the whole suite.
 const REQUIRED_PLUGIN_ENV = ['SMD_CUSTOMER_SLUG', 'SMD_D1_AUDIT_BINDING'] as const
 
-describe('operator fly.toml template — required plugin env', () => {
-  for (const key of REQUIRED_PLUGIN_ENV) {
-    it(`declares ${key} in [env]`, () => {
-      // A key=value assignment for this var must appear in the template.
-      expect(template).toMatch(new RegExp(`^\\s*${key}\\s*=`, 'm'))
-    })
-  }
-
-  it('binds SMD_CUSTOMER_SLUG to the customer slug placeholder', () => {
-    expect(template).toMatch(/SMD_CUSTOMER_SLUG\s*=\s*"\{\{CUSTOMER_SLUG\}\}"/)
-  })
-})
-
-// ss#2612: the [[vm]] block once hardcoded `cpus = 1` while rendering size and
-// memory from customer.yaml, so an authored shared-cpu-2x ran on one vCPU. The
-// cpu fields are placeholders now, and their values come from the same shell
-// function provisioning sources (operator/bin/lib/machine-size.sh), exercised
-// here for both seat sizes in use.
 const MACHINE_SIZE_LIB = resolve(__dirname, '../operator/bin/lib/machine-size.sh')
+const RENDER_LIB = resolve(__dirname, '../operator/bin/lib/render-fly-toml.sh')
+const TEMPLATE_DIR = resolve(__dirname, '../operator/templates')
+
 function derive(fn: 'machine_cpus' | 'machine_cpu_kind', size: string): string {
   return execFileSync('bash', ['-c', `source "${MACHINE_SIZE_LIB}" && ${fn} "${size}"`], {
     encoding: 'utf8',
@@ -49,45 +38,69 @@ function derive(fn: 'machine_cpus' | 'machine_cpu_kind', size: string): string {
   }).trim()
 }
 
-describe('operator fly.toml template — [[vm]] renders cpus from machine.size (ss#2612)', () => {
-  it('renders cpu_kind and cpus from placeholders, never a literal', () => {
-    expect(template).toMatch(/^\s*cpu_kind\s*=\s*"\{\{MACHINE_CPU_KIND\}\}"/m)
-    expect(template).toMatch(/^\s*cpus\s*=\s*\{\{MACHINE_CPUS\}\}/m)
-    expect(template).not.toMatch(/^\s*cpus\s*=\s*\d/m)
-  })
+interface FlyToml {
+  kill_signal?: string
+  kill_timeout?: number
+  build?: Record<string, unknown>
+  env: Record<string, string>
+  vm: Array<{ size: string; memory: string; cpu_kind: string; cpus: number }>
+}
 
-  it('the one renderer substitutes both placeholders, and provisioning uses it', () => {
-    // Rendering moved to operator/bin/lib/render-fly-toml.sh (fleet release,
-    // 2026-10-19) so `fleet release` deploys with exactly the toml provisioning
-    // renders. Provisioning sources it; it derives the cpu fields from the size.
-    const render = readFileSync(
-      resolve(__dirname, '../operator/bin/lib/render-fly-toml.sh'),
-      'utf8'
-    )
-    expect(render).toContain('{{MACHINE_CPU_KIND}}')
-    expect(render).toContain('{{MACHINE_CPUS}}')
-    expect(render).toContain('machine-size.sh')
-    const provision = readFileSync(
-      resolve(__dirname, '../operator/bin/provision-customer.sh'),
-      'utf8'
-    )
-    expect(provision).toContain('lib/render-fly-toml.sh')
-    expect(provision).toContain('lib/machine-size.sh')
+/** Render the template the way provisioning does, then parse it. */
+function render(slug: string, size: string): FlyToml {
+  const out = join(mkdtempSync(join(tmpdir(), 'smd-flytoml-')), 'fly.toml')
+  execFileSync(
+    'bash',
+    [
+      '-c',
+      'set -euo pipefail; source "$1"; source "$2"; ' +
+        'MACHINE_CPU_KIND="$(machine_cpu_kind "$MACHINE_SIZE")"; ' +
+        'MACHINE_CPUS="$(machine_cpus "$MACHINE_SIZE")"; render_fly_toml "$3"',
+      'render',
+      MACHINE_SIZE_LIB,
+      RENDER_LIB,
+      out,
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SLUG: slug,
+        FLY_REGION: 'phx',
+        MACHINE_SIZE: size,
+        MEMORY_MB: '4096',
+        R2_BUCKET_CONFIG: 'smd-customer-config',
+        TEMPLATE_DIR,
+      },
+    }
+  )
+  return parseToml(readFileSync(out, 'utf8')) as unknown as FlyToml
+}
+
+describe('operator fly.toml: required plugin env', () => {
+  const toml = render('acme-law', 'shared-cpu-2x')
+
+  for (const key of REQUIRED_PLUGIN_ENV) {
+    it(`renders ${key} in [env]`, () => {
+      expect(toml.env[key], key).toBeTruthy()
+    })
+  }
+
+  it('binds SMD_CUSTOMER_SLUG to the seat slug', () => {
+    expect(toml.env.SMD_CUSTOMER_SLUG).toBe('acme-law')
   })
 })
 
-describe('operator fly.toml template: one image for every seat (fleet release, 2026-10-19)', () => {
-  it('gives the supervisor its stop allowance: SIGTERM and 300 s', () => {
-    // Fly's default (SIGINT, 5 s) killed every running job on every deploy.
-    expect(template).toMatch(/^kill_signal\s*=\s*"SIGTERM"\s*$/m)
-    expect(template).toMatch(/^kill_timeout\s*=\s*300\s*$/m)
-  })
-
-  it('passes no per-seat build args (the slug and the Hermes pin never reach the image)', () => {
-    expect(template).not.toMatch(/\[build\.args\]/)
-    expect(template).not.toMatch(/HERMES_REF|HERMES_UPSTREAM_(TAG|SHA)/)
-    // [build] stays only for the --build fallback.
-    expect(template).toMatch(/^\[build\]\s*$/m)
+describe('operator fly.toml: [[vm]] renders cpus from machine.size (ss#2612)', () => {
+  it.each([
+    ['shared-cpu-2x', 'shared', 2],
+    ['shared-cpu-4x', 'shared', 4],
+    ['performance-2x', 'performance', 2],
+  ])('a %s seat renders cpu_kind %s and %s cpus', (size, kind, cpus) => {
+    const [vm] = render('acme-law', size).vm
+    expect(vm.size).toBe(size)
+    expect(vm.cpu_kind).toBe(kind)
+    expect(vm.cpus).toBe(cpus)
   })
 
   it.each([
@@ -105,12 +118,28 @@ describe('operator fly.toml template: one image for every seat (fleet release, 2
     expect(() => derive('machine_cpus', 'shared-cpu-3x')).toThrow()
     expect(() => derive('machine_cpus', 'medium')).toThrow()
   })
+})
+
+describe('operator fly.toml: one image for every seat (fleet release, 2026-10-19)', () => {
+  const toml = render('acme-law', 'shared-cpu-2x')
+
+  it('gives the supervisor its stop allowance: SIGTERM and 300 s', () => {
+    // Fly's default (SIGINT, 5 s) killed every running job on every deploy.
+    expect(toml.kill_signal).toBe('SIGTERM')
+    expect(toml.kill_timeout).toBe(300)
+  })
+
+  it('passes no per-seat build args (the slug and the Hermes pin never reach the image)', () => {
+    // [build] stays only for the --build fallback.
+    expect(toml.build).toBeDefined()
+    expect(toml.build?.args).toBeUndefined()
+    expect(Object.keys(toml.env).filter((k) => /^HERMES_(REF|UPSTREAM_)/.test(k))).toEqual([])
+  })
 
   it('the A&P seat authors the runner-capable size (ADR 0087)', () => {
-    const ap = readFileSync(
-      resolve(__dirname, '../operator/customers/ashton-price/customer.yaml'),
-      'utf8'
-    )
-    expect(ap).toMatch(/^machine:\n\s+size: shared-cpu-4x\n\s+memory_mb: 8192/m)
+    const ap = parseYaml(
+      readFileSync(resolve(__dirname, '../operator/customers/ashton-price/customer.yaml'), 'utf8')
+    ) as { machine: { size: string; memory_mb: number } }
+    expect(ap.machine).toMatchObject({ size: 'shared-cpu-4x', memory_mb: 8192 })
   })
 })

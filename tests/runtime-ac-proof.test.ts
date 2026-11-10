@@ -21,8 +21,71 @@ import {
   LOOKUP_BATCH,
   resolveVerifyIds,
 } from '../scripts/runtime-ac-proof.mjs'
+import { workflowJobs, workflowStep, workflowTriggers } from './helpers/workflow-steps'
 
 const VERIFY_ID = 'vfy_01KYNVJ4VG90G26SZSYPXF05KY'
+const WORKFLOW = resolve(__dirname, '../.github/workflows/runtime-ac-proof.yml')
+const GATE_STEP = 'Inspect the AC status table and resolve its IDs'
+
+type AsyncScript = (...args: unknown[]) => Promise<unknown>
+const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
+  ...params: string[]
+) => AsyncScript
+
+/**
+ * Run the gate step's own github-script body against fakes: `github.paginate`
+ * returns `files` (or throws it), `core` records warnings and failures, and the
+ * script imports this checkout's parser exactly as the runner does.
+ */
+async function runGateScript(body: string, files: string[] | Error) {
+  const script = workflowStep(WORKFLOW, GATE_STEP).with.script
+  if (typeof script !== 'string') throw new Error(`${GATE_STEP} has no script`)
+  const warnings: string[] = []
+  const failed: string[] = []
+  const summary = {
+    addHeading: () => summary,
+    addList: () => summary,
+    addCodeBlock: () => summary,
+    write: async () => summary,
+  }
+  const core = {
+    info: () => undefined,
+    warning: (w: string) => warnings.push(w),
+    setFailed: (m: string) => failed.push(m),
+    summary,
+  }
+  const github = {
+    rest: { pulls: { listFiles: {} } },
+    paginate: async () => {
+      if (files instanceof Error) throw files
+      return files.map((filename) => ({ filename }))
+    },
+  }
+  const context = {
+    payload: { pull_request: { body, number: 1 } },
+    repo: { owner: 'example', repo: 'example' },
+  }
+  const saved = { workspace: process.env.GITHUB_WORKSPACE, key: process.env.CRANE_RELAY_KEY }
+  process.env.GITHUB_WORKSPACE = resolve(__dirname, '..')
+  delete process.env.CRANE_RELAY_KEY
+  try {
+    // A Function body has no module loader of its own, so the script's
+    // `import()` is handed this module's.
+    const run = new AsyncFunction(
+      'github',
+      'context',
+      'core',
+      'importModule',
+      script.replace(/\bimport\(/g, 'importModule(')
+    )
+    await run(github, context, core, (path: string) => import(path))
+  } finally {
+    if (saved.workspace === undefined) delete process.env.GITHUB_WORKSPACE
+    else process.env.GITHUB_WORKSPACE = saved.workspace
+    if (saved.key !== undefined) process.env.CRANE_RELAY_KEY = saved.key
+  }
+  return { warnings, failed }
+}
 const NOW = new Date('2026-11-09T12:00:00Z')
 
 function pr(rows: string): string {
@@ -311,23 +374,33 @@ describe('runtime AC proof: a required check must report green on PRs that claim
 describe('runtime AC proof: the workflow wires the ledger stage', () => {
   // The script is only half the gate; a workflow still calling the format-only
   // function would pass every ID-shaped string, which is what this replaced.
-  const workflow = readFileSync(
-    resolve(__dirname, '../.github/workflows/runtime-ac-proof.yml'),
-    'utf8'
-  )
+  it('passes the relay key to the gate step', () => {
+    expect(workflowStep(WORKFLOW, GATE_STEP).env.CRANE_RELAY_KEY).toBe(
+      '${{ secrets.CRANE_RELAY_KEY }}'
+    )
+  })
 
-  it('calls the resolving entry point with the relay key', () => {
-    expect(workflow).toContain('checkRuntimeAcProof')
-    expect(workflow).toContain('CRANE_RELAY_KEY: ${{ secrets.CRANE_RELAY_KEY }}')
+  it('resolves a cited ID against the ledger, failing closed when it cannot', async () => {
+    const run = await runGateScript(pr(`| (runtime) Seat sends it | met | ${VERIFY_ID} |`), [
+      'docs/handbook/x.md',
+    ])
+    expect(run.failed).toHaveLength(1)
+    expect(run.failed[0]).toMatch(/Cannot resolve 1 verification ID/)
   })
 
   it('runs on every PR event a body change can arrive on, with no paths filter', () => {
-    expect(workflow).toMatch(/types: \[opened, synchronize, reopened, edited/)
-    expect(workflow).not.toMatch(/^\s+paths:/m)
+    const pullRequest = workflowTriggers(WORKFLOW).pull_request
+    const config = typeof pullRequest === 'object' && pullRequest !== null ? pullRequest : {}
+    expect(config).toMatchObject({
+      types: expect.arrayContaining(['opened', 'synchronize', 'reopened', 'edited']),
+    })
+    expect(config).not.toHaveProperty('paths')
   })
 
   it('keeps the job name the ruleset requires', () => {
-    expect(workflow).toContain('name: Runtime ACs carry a verification ID')
+    expect(workflowJobs(WORKFLOW).map((j) => j.name)).toContain(
+      'Runtime ACs carry a verification ID'
+    )
   })
 })
 
@@ -543,15 +616,22 @@ describe('runtime AC proof: the touch rule reads the changed paths', () => {
     ).not.toBeNull()
   })
 
-  it('the workflow lists the PR files, warns on the report half, and fails only on blocking', () => {
-    const workflow = readFileSync(
-      resolve(__dirname, '../.github/workflows/runtime-ac-proof.yml'),
-      'utf8'
+  it('the workflow warns on the report half and fails only on blocking', async () => {
+    const LANE = ['operator/runners/medchron/medchron/records/run.py']
+    const warned = await runGateScript(pr('| repo thing (repo) | met | src/x.ts:1 |'), LANE)
+    expect(warned.warnings).toHaveLength(1)
+    expect(warned.failed).toEqual([])
+
+    const blocked = await runGateScript(pr('| (runtime) Seat sends it | n/a | |'), LANE)
+    expect(blocked.failed).toHaveLength(1)
+  })
+
+  it('the workflow skips the touch rule, with a warning, when the file list fails', async () => {
+    const run = await runGateScript(
+      pr('| (runtime) Seat sends it | n/a | |'),
+      new Error('listFiles 502')
     )
-    expect(workflow).toContain('github.paginate(github.rest.pulls.listFiles')
-    expect(workflow).toContain('checkTouchRule(body, paths)')
-    expect(workflow).toMatch(/for \(const w of touch\.warnings\) core\.warning\(w\)/)
-    expect(workflow).toContain('failures.push(...touch.blocking)')
-    expect(workflow).not.toMatch(/failures\.push\(\.\.\.touch\.warnings\)/)
+    expect(run.warnings).toHaveLength(1)
+    expect(run.failed).toEqual([])
   })
 })

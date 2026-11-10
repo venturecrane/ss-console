@@ -124,10 +124,8 @@ def test_a_live_client_child_holds_the_start_and_the_demand_lane_never_waits_on_
     _submit(lane, client)
     (lane.run_dir / "demand-child.pid").write_text(str(os.getpid()))
     assert lane.tick() == "waiting" and client.records == []
-    from jobs import drafting_lane, litigation_lane
+    from jobs import litigation_lane
 
-    src = (Path(drafting_lane.__file__).parent / "demand_lane.py").read_text()
-    assert "casefile-child.pid" not in src  # a demand never waits on a case file job
     # The demand cgroup's other lanes wait on a running case file job (2026-10-26 review).
     from jobs import negotiation_lane
 

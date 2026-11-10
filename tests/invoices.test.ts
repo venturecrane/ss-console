@@ -484,8 +484,6 @@ describe('billing pages: policy guards', () => {
   })
 
   it('the detail page pays through the Stripe hosted URL only, never a route that does not exist (#419)', () => {
-    expect(detail).toContain('isPayable')
-    expect(detail).toContain('Payment link pending')
     expect(detail).not.toMatch(/\/api\/invoices\/\$\{[^}]*\}\/pay/)
     expect(detail).not.toContain('payHref')
   })
@@ -502,8 +500,7 @@ describe('billing pages: policy guards', () => {
     expect(existsSync(resolve('src/components/portal/InvoicePaymentDetails.astro'))).toBe(false)
   })
 
-  it('the list signals action through tone, not a second Pay control beside the card link (UI-PATTERNS R2)', () => {
-    expect(list).toContain('resolveInvoiceTone')
+  it('the list carries no second Pay control beside the card link (UI-PATTERNS R2)', () => {
     expect(list).not.toMatch(/\bPay\b/)
     expect(list).not.toContain('Payment link pending')
   })

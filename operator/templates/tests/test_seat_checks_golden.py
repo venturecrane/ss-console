@@ -88,7 +88,6 @@ def test_the_list_reads_the_generated_layout_beside_it(tmp_path: Path) -> None:
     # dir and every path derived from it, as the generator would write them)
     # composes the moved commands, so the golden above measures the layout's values.
     generated = (TEMPLATES / "_seat-layout.generated.sh").read_text(encoding="utf-8")
-    assert "SMD_LAYOUT_JOBS_RUN='/run/smd-jobs'\n" in generated
     moved = generated.replace("='/run/smd-jobs", "='/run/smd-jobz")
     golden = FIXTURE.read_text(encoding="utf-8")
     assert compose(_copy_with_layout(tmp_path, generated)) == golden

@@ -44,10 +44,16 @@ npx tsx scripts/sprawl-audit.ts --compare scripts/sprawl/snapshot.json
 | Restated literals | `scripts/sprawl/analyze.ts` | A seat path or env-var name in 5+ non-test files. Clone detectors cannot see these. |
 | Change coupling | code-maat's measure, in `analyze.ts` | Files in different areas that change in the same commit, 6-month window. |
 | Dead-code candidates | vulture 2.14, 60%+ | Python only (knip gates TypeScript in verify). Includes code only tests call, so each is a candidate. |
+| Source-text pins | `scripts/sprawl/text-pins.ts` (`npx tsx scripts/sprawl-audit.ts --text-pins`) | Test assertions on the wording of a repo source or doc file read as text, instead of running the code (change-detector tests). Each pin needs a reason (a named guard or known false positive on `scripts/sprawl/text-pin-allowlist.ts`) and a cap (its file's count in `scripts/sprawl/text-pin-baseline.json`). |
 
 The pure half is tested on known answers (`tests/sprawl-analyze.test.ts`). The
-per-PR gate is `tests/sprawl-ratchet.test.ts`, which fails when a literal is
-restated in more files than `scripts/sprawl/literal-baseline.json` allows.
+per-PR gates are `tests/sprawl-ratchet.test.ts`, which fails when a literal is
+restated in more files than `scripts/sprawl/literal-baseline.json` allows, and
+`tests/text-pin-ratchet.test.ts`, which fails when any test file, allowlisted
+guards included, holds more source-text pins than
+`scripts/sprawl/text-pin-baseline.json` allows, or a file holds pins with no
+reason on `scripts/sprawl/text-pin-allowlist.ts`. Lower that
+baseline with `npx tsx scripts/sprawl-audit.ts --write-text-pin-baseline`.
 
 ## Steps
 

@@ -129,6 +129,16 @@ def test_the_router_creates_the_toolset_at_load(monkeypatch):
     assert "register_couples_toolset()" in router.read_text()
 
 
+def test_the_router_registers_the_couples_toolset_when_it_loads(fake_ctx, monkeypatch):
+    """FALSIFIER: drop the register_couples_toolset() call from the router's register()."""
+    calls: list[str] = []
+    monkeypatch.setattr(
+        couples_surface, "register_couples_toolset", lambda: calls.append("couples")
+    )
+    load_plugin("hermes-smd-webhook-router").register(fake_ctx)
+    assert calls == ["couples"]
+
+
 # ---------------------------------------------------------------------------
 # What that read_file may open: the record-store path fence
 # ---------------------------------------------------------------------------

@@ -1,55 +1,93 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { toSqliteDatetime } from '../../src/lib/booking/holds'
+import type { D1Database } from '@cloudflare/workers-types'
+import { acquireHold, releaseHold, toSqliteDatetime } from '../../src/lib/booking/holds'
+import { migratedDb, seedOrg } from '../_stubs/behavioural'
 
 /**
- * Holds DAL — structural source-string tests + format validation.
- *
- * Full behavioral verification of the upsert-when-expired pattern requires
- * a D1 instance and is covered by integration tests against local D1.
- * This file ensures the source contains the critical SQL pieces and that
- * datetime formatting matches SQLite's expectations.
+ * Holds DAL, run against a migrated D1: the upsert-when-expired claim, the
+ * live-hold refusal, expired-row reclaim, idempotent release, and the
+ * SQLite datetime format the expiry comparison depends on.
  */
 
-const source = () => readFileSync(resolve('src/lib/booking/holds.ts'), 'utf-8')
+const ORG = 'org-holds'
+const SLOT = '2026-05-01T17:00:00.000Z'
 
-describe('holds DAL: structural', () => {
-  it('exports acquireHold, releaseHold', () => {
-    const code = source()
-    expect(code).toContain('export async function acquireHold')
-    expect(code).toContain('export async function releaseHold')
+async function holdRow(db: D1Database, slot = SLOT) {
+  return db
+    .prepare(
+      'SELECT id, expires_at, guest_email FROM booking_holds WHERE org_id = ? AND slot_start_utc = ?'
+    )
+    .bind(ORG, slot)
+    .first<{ id: string; expires_at: string; guest_email: string | null }>()
+}
+
+describe('holds DAL against real D1', () => {
+  let db: D1Database
+
+  beforeEach(async () => {
+    db = await migratedDb()
+    await seedOrg(db, ORG)
   })
 
-  it('acquireHold uses upsert-when-expired pattern (ON CONFLICT … DO UPDATE … WHERE expires_at < now)', () => {
-    const code = source()
-    expect(code).toContain('ON CONFLICT(org_id, slot_start_utc) DO UPDATE')
-    expect(code).toContain("WHERE booking_holds.expires_at < datetime('now')")
+  it('claims a free slot with a fresh id and a five-minute expiry', async () => {
+    const before = Date.now()
+    const result = await acquireHold(db, ORG, SLOT, 'jamie@example.com')
+    expect(result.acquired).toBe(true)
+    const row = await holdRow(db)
+    expect(row?.id).toBe(result.id)
+    expect(row?.guest_email).toBe('jamie@example.com')
+    const expiresMs = Date.parse(`${row?.expires_at.replace(' ', 'T')}Z`)
+    expect(expiresMs - before).toBeGreaterThan(4 * 60_000)
+    expect(expiresMs - before).toBeLessThanOrEqual(5 * 60_000 + 1_000)
   })
 
-  it('acquireHold returns the new id via RETURNING and verifies it matches', () => {
-    const code = source()
-    expect(code).toContain('RETURNING id')
-    expect(code).toContain('result.id !== id')
+  it('refuses a slot whose hold is still live, leaving the holder in place', async () => {
+    const first = await acquireHold(db, ORG, SLOT, 'jamie@example.com')
+    const second = await acquireHold(db, ORG, SLOT, 'dana@example.com')
+    expect(second).toEqual({ acquired: false, reason: 'slot_taken' })
+    expect((await holdRow(db))?.id).toBe(first.id)
   })
 
+  it('reclaims a slot whose hold has expired (a crashed request does not block it)', async () => {
+    await db
+      .prepare(
+        `INSERT INTO booking_holds (id, org_id, slot_start_utc, expires_at, guest_email, created_at)
+         VALUES ('stale', ?, ?, '2020-01-01 00:00:00', 'old@example.com', '2020-01-01 00:00:00')`
+      )
+      .bind(ORG, SLOT)
+      .run()
+    const result = await acquireHold(db, ORG, SLOT, 'dana@example.com')
+    expect(result.acquired).toBe(true)
+    const row = await holdRow(db)
+    expect(row?.id).toBe(result.id)
+    expect(row?.id).not.toBe('stale')
+    expect(row?.guest_email).toBe('dana@example.com')
+  })
+
+  it('gives each claim a distinct id', async () => {
+    const a = await acquireHold(db, ORG, SLOT, null)
+    const b = await acquireHold(db, ORG, '2026-05-01T18:00:00.000Z', null)
+    expect(a.id).toBeTruthy()
+    expect(b.id).toBeTruthy()
+    expect(a.id).not.toBe(b.id)
+  })
+
+  it('releaseHold frees the slot and is idempotent', async () => {
+    const first = await acquireHold(db, ORG, SLOT, null)
+    await releaseHold(db, first.id as string)
+    await releaseHold(db, first.id as string)
+    expect(await holdRow(db)).toBeNull()
+    expect((await acquireHold(db, ORG, SLOT, null)).acquired).toBe(true)
+  })
+})
+
+describe('holds DAL: SQL safety', () => {
   it('uses parameterized queries (no string interpolation)', () => {
-    const code = source()
+    const code = readFileSync(resolve('src/lib/booking/holds.ts'), 'utf-8')
     expect(code).toContain('.bind(')
     expect(code).not.toMatch(/prepare\(`[^`]*\$\{/)
-  })
-
-  it('generates UUIDs via crypto.randomUUID()', () => {
-    expect(source()).toContain('crypto.randomUUID()')
-  })
-
-  it('hold TTL is 5 minutes (matches the plan and reserve flow)', () => {
-    expect(source()).toContain('HOLD_TTL_MINUTES = 5')
-  })
-
-  it('releaseHold is idempotent — DELETE WHERE id matches', () => {
-    const code = source()
-    expect(code).toContain('DELETE FROM booking_holds WHERE id = ?')
   })
 })
 

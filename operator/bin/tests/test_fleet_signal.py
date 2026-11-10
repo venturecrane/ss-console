@@ -19,6 +19,8 @@ import textwrap
 import time
 from pathlib import Path
 
+import pytest
+
 OPERATOR = Path(__file__).resolve().parents[2]
 REPO = OPERATOR.parent
 WORKFLOW = REPO / ".github/workflows/release-tick.yml"
@@ -79,7 +81,8 @@ def test_without_the_handler_sigterm_leaks_the_lease(tmp_path: Path) -> None:
 def _run_fleet_function() -> str:
     text = WORKFLOW.read_text()
     m = re.search(r"^( +)run_fleet\(\) \{\n.*?^\1\}\n", text, re.S | re.M)
-    assert m, "release-tick.yml lost its run_fleet signal forwarder"
+    if m is None:
+        pytest.fail("release-tick.yml lost its run_fleet signal forwarder")
     return textwrap.dedent(m.group(0))
 
 
