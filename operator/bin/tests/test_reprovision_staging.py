@@ -68,27 +68,22 @@ def test_a_release_twin_keeps_smds_sandbox_credentials_and_blanks_the_production
     assert set(_PROD) <= names
 
 
-def test_pre_flip_isolates_the_declared_client_and_keeps_the_twins_own_names() -> None:
-    # ap-staging is `internal` until its flip; twin.yaml declares ashton-price.
-    # FALSIFIER: drop twin_of from operator/customers/ap-staging/twin.yaml and the
-    # run refuses; isolate the twin's own names and ANTHROPIC_API_KEY__AP_STAGING
-    # (the new app's only source for its model key) is blanked.
-    assert seat_purpose.purpose_of("ap-staging") == "internal"
-    client = seat_purpose.declared_twin_of("ap-staging")
-    res = _run("--pre-flip", "ap-staging")
+def test_the_flipped_twin_isolates_its_client() -> None:
+    # ap-staging became ashton-price's release twin on 2026-11-10 (the pre-flip
+    # path provisioned it first). Its plain run isolates the client's per-seat
+    # names and every SMOKEBALL_PROD_* name, and keeps SMD's sandbox names.
+    # FALSIFIER: drop twin_of from ap-staging/seat.yaml and the run refuses.
+    assert seat_purpose.purpose_of("ap-staging") == "release-twin"
+    client = seat_purpose.twin_of("ap-staging")
+    res = _run("ap-staging")
     assert res.returncode == 0, res.stderr
     names = set(res.stdout.split())
     assert f"ANTHROPIC_API_KEY__{_seat_suffix(client)}" in names
-    assert f"ANTHROPIC_API_KEY__{_seat_suffix('ap-staging')}" not in names
     assert set(_PROD) <= names and not names & set(_SANDBOX)
-    assert "MSGRAPH_CLIENT_SECRET" in names  # the bare name; the per-seat one survives
-    assert f"exact twin of {client} (pre-flip)" in res.stderr
 
 
 def test_pre_flip_refuses_a_seat_that_is_not_an_internal_declared_twin() -> None:
     for slug, entry in seat_purpose.load().items():
-        if slug == "ap-staging":
-            continue
         res = _run("--pre-flip", slug)
         assert res.returncode == 1 and f"refusing --pre-flip {slug}" in res.stderr, (slug, entry, res.stderr)
         assert res.stdout == ""

@@ -7,7 +7,7 @@
 
 /** [seat, purpose, twinOf or null] for every seat (ADR 0107). */
 export const INVENTORY_SEAT_PURPOSES = Object.freeze([
-  ['ap-staging', 'internal', null],
+  ['ap-staging', 'release-twin', 'ashton-price'],
   ['ashton-price', 'client', null],
   ['ashton-price-marketing', 'client', null],
   ['brokery', 'client', null],
@@ -15,5 +15,5 @@ export const INVENTORY_SEAT_PURPOSES = Object.freeze([
   ['pilot-smokeball', 'demo', null],
   ['scott', 'internal', null],
   ['smd-guide', 'internal', null],
-  ['smd-staging', 'release-twin', 'ashton-price'],
+  ['smd-staging', 'internal', null],
 ])

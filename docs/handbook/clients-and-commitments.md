@@ -42,8 +42,8 @@ Seats declared in the repository (`operator/customers/`). Whether each one is ru
 
 | Seat | Purpose | Product | Role | Vertical |
 |---|---|---|---|---|
-| `ap-staging` | internal | operator | none | law-firm |
-| `smd-staging` | release-twin of `ashton-price` | operator | none | mixed |
+| `ap-staging` | release-twin of `ashton-price` | operator | none | law-firm |
+| `smd-staging` | internal | operator | none | mixed |
 
 **SMD's own: demo**
 

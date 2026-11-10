@@ -35,9 +35,7 @@ const CUSTOMERS = resolve('operator/customers')
  * replaces it at the flip (docs/handbook/deployment-release.md), and that PR
  * removes this entry, after which every release twin must declare twin.yaml.
  */
-const STATED_GAPS: Record<string, string> = {
-  'smd-staging': 'predates exact twins; retired at the ap-staging flip',
-}
+const STATED_GAPS: Record<string, string> = {}
 
 function declarations(): TwinDeclaration[] {
   return readdirSync(CUSTOMERS)

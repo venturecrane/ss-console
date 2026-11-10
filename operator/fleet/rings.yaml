@@ -43,14 +43,14 @@
 # tests: operator/bin/tests/test_fleet_parts.py
 rings:
   - ring: 0
-    seats: [smd-staging]
+    seats: [ap-staging]
     bake_minutes: 0
   - ring: 1
     seats: [ashton-price]
     bake_minutes: 0
     max_parallel: 20
   - ring: 2
-    seats: [pilot-smokeball, scott, brokery, captain-mark, smd-guide, ap-staging]
+    seats: [smd-staging, pilot-smokeball, scott, brokery, captain-mark, smd-guide]
     max_parallel: 1
 twins:
-  ashton-price: smd-staging
+  ashton-price: ap-staging
