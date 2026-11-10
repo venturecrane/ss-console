@@ -348,8 +348,8 @@ def test_a_gateway_whose_job_worker_died_fails_job_worker_ready() -> None:
 def test_the_pilot_fixture_reaches_nobody_and_keeps_its_roster_classes_disjoint() -> None:
     """pilot-smokeball carries addresses outside scope/users (rosters, routine
     recipients). Every one becomes a distinct .invalid stand-in; a pack ref stays."""
-    doc = yaml.safe_load(fixture.render(OPERATOR, cli.SIZES["4x-8192"][1]))
-    assert doc["machine"]["size"] == "shared-cpu-4x" and doc["machine"]["memory_mb"] == 8192
+    doc = yaml.safe_load(fixture.render(OPERATOR, cli.SIZES["large-store"][1]))
+    assert doc["machine"]["size"] == "shared-cpu-2x" and doc["machine"]["memory_mb"] == 4096
     assert fixture.reachable_addresses(doc) == []
     roster = [e["address"] for e in (doc.get("scope") or {}).get("outbound_roster") or []]
     assert len(roster) == len(set(roster))
@@ -431,7 +431,7 @@ def test_the_fixture_sources_are_found_by_purpose_never_by_slug() -> None:
     seats = seat_purpose.load()
     assert seats[fixture.SOURCE_SLUG]["purpose"] == "release-twin"
     assert seats[cli.SIZES["2x-4096"][1]]["purpose"] == "release-twin"
-    assert seats[cli.SIZES["4x-8192"][1]]["purpose"] == "demo"
+    assert seats[cli.SIZES["large-store"][1]]["purpose"] == "demo"
 
 
 def test_a_twin_source_is_deslugged_with_its_own_slug() -> None:

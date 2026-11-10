@@ -61,15 +61,17 @@ DUMMY_SECRETS = ("ANTHROPIC_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"
 #   1x-2048  fixture.SOURCE_SMALL, named (an internal seat at the floor), the
 #            smallest size a seat may author (2 GB since 2026-11-03; 1 GB was the
 #            size of the 2026-09-01 startup-watchdog crash loop);
-#   4x-8192  the demo seat (purpose: demo, SMD's own Smokeball test firm, never
-#            client data): its large state.db is the large-store timing case. A
-#            snapshot of it is only ever restored inside the harness app. DERIVED,
-#            not declared: the demo seat is the one non-client seat that carries a
-#            real-sized store, and a later demo seat inherits the case.
+#   large-store  the demo seat (purpose: demo, SMD's own Smokeball test firm,
+#            never client data) at its own size: its large state.db is the
+#            large-store timing case. A snapshot of it is only ever restored
+#            inside the harness app. DERIVED, not declared: the demo seat is the
+#            one non-client seat that carries a real-sized store, and a later
+#            demo seat inherits the case. (Was 4x-8192 until the demo seat was
+#            sized down to 2 shared CPUs and 4 GB, Captain 2026-11-10.)
 SIZES = {
     "2x-4096": (("shared", 2, 4096), fixture.SOURCE_SLUG),
     "1x-2048": (("shared", 1, 2048), fixture.SOURCE_SMALL),
-    "4x-8192": (("shared", 4, 8192), seat_purpose.with_purpose("demo")[0]),
+    "large-store": (("shared", 2, 4096), seat_purpose.with_purpose("demo")[0]),
 }
 GUEST = SIZES["2x-4096"][0]
 POLL_S = 15.0
