@@ -317,7 +317,7 @@ def envelope(chunk: list[Dispatch], started_at: str) -> dict[str, Any]:
 
 def write_envelope(payload: dict[str, Any], hermes_home: str | None = None) -> bool:
     """Atomic 0600 write beside the handoff (``shared.prerendered_dispatch.envelope_path``
-    under the scheduler's ``HERMES_HOME``). False on any failure."""
+    under the persona home the scheduler runs the pre_run in). False on any failure."""
     try:
         directory = pre_run_handoff.handoff_dir(hermes_home)
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -366,6 +366,56 @@ def run(cfg: Any, now: datetime | None = None, *, dry: bool = False) -> dict[str
     }
 
 
+def wake_row(slug: str, verdict: dict[str, Any]) -> bool:
+    """The run's one wake row, through the broker's agent-uid verb: an
+    EMITTED_WAKE when the turn wakes, else a SUPPRESSED_WAKE. The status and
+    the counts only. True on the broker's ack; never raises."""
+    from shared import workspace_broker
+
+    woke = verdict.get("wakeAgent") is True
+    counts = {k: v for k, v in verdict.items() if isinstance(v, int) and not isinstance(v, bool)}
+    metadata = {
+        "decision_basis": str(verdict.get("status") or ""),
+        "platform": "cron-pre-run",
+        "customer": slug,
+        **counts,
+        **({"render_mode": "templated"} if verdict.get("dispatch_expected") else {}),
+    }
+    row = {
+        "action_type": "EMITTED_WAKE" if woke else "SUPPRESSED_WAKE",
+        "actor": "agent",
+        "actor_role": "agent",
+        "skill_name": SKILL,
+        "metadata": json.dumps(metadata, sort_keys=True, separators=(",", ":")),
+    }
+    verb = "emitted_wake_append" if woke else "suppressed_wake_append"
+    try:
+        return workspace_broker.request({"action": verb, "row": row}, timeout=10).get("ok") is True
+    except Exception as exc:  # noqa: BLE001 - a heartbeat failure is reported, never raised
+        logger.warning("person_digest: wake row not written (%s)", type(exc).__name__)
+        return False
+
+
+def pre_run(*, dry: bool = False) -> dict[str, Any]:
+    """What the rep-desk pre_run does: read the seat's config, run, write the
+    wake row (not on a dry run). A crash still wakes the turn, which sends
+    nothing, so its EMITTED_WAKE is an obligation no delivery closes and the
+    triage reports it; a SUPPRESSED_WAKE would be a recorded no-op nobody sees."""
+    from shared.customer_config import CustomerConfig
+
+    slug = ""
+    try:
+        cfg = CustomerConfig.from_volume()
+        slug = cfg.slug
+        verdict = run(cfg, dry=dry)
+    except Exception as exc:  # noqa: BLE001 - the verdict says it crashed; never raised
+        logger.warning("person_digest: the run crashed (%s)", type(exc).__name__)
+        verdict = {"wakeAgent": not dry, "status": "pre_run_crashed"}
+    if not dry:
+        wake_row(slug, verdict)
+    return verdict
+
+
 __all__ = [
     "CHUNK",
     "LOOKBACK_DAYS",
@@ -378,8 +428,10 @@ __all__ = [
     "envelope",
     "people",
     "plan",
+    "pre_run",
     "render",
     "run",
     "subject",
+    "wake_row",
     "write_envelope",
 ]

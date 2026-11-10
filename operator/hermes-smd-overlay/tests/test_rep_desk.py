@@ -140,7 +140,6 @@ def desk(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SMD_SENDER_ENROLLMENT_ENROLLED", str(enrolled))
     monkeypatch.setenv("HERMES_HOME", str(home))
     monkeypatch.setenv("SMD_GAP_COUNTS_DB_PATH", str(tmp_path / "gap_counts.db"))
-    monkeypatch.delenv("HERMES_TIMEZONE", raising=False)
     provenance._reset_for_tests()
     inbound.SESSION_INBOUND_ORIGIN._reset_for_tests()
     ctx = FakePluginContext()

@@ -1,9 +1,9 @@
 ---
 name: rep-desk
 description: >-
-  A listed person's own desk: notes, leads, pipeline, reminders, a meeting
-  brief from their own records, follow-up drafts returned to them, critique and
-  debriefs; private to that person.
+  A listed person's own notes, leads and reminders. It also gives a pipeline
+  view, a meeting brief from their own records, follow-up drafts returned to
+  them, critique and debriefs, private to that person.
 version: 0.1.0
 author: SMD Services
 license: MIT

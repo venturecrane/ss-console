@@ -237,13 +237,6 @@ vars:
     requirement: optional
     consumed_by: [webhook-router]
     note: "test/dev override for the Machine-local per-sender daily count; defaults to /opt/data/smd/sender_daily.db (plugins/hermes-smd-webhook-router/daily_limit.py). Read and written only on a guide seat that authors sender_enrollment.daily_limit. One row per sender and UTC day: the sha256 sender_key, the count answered, whether the over-limit notice went. Rows older than three days are deleted on every write; a person's purge deletes their rows."
-  # ---- ss-console #3946: the rep desk's clock ----
-  HERMES_TIMEZONE:
-    discovery: static
-    stage: agent
-    requirement: optional
-    consumed_by: [desk]
-    note: "The zone Hermes' scheduler runs in. shared/reminders.py seat_zone reads it after the rep-desk skill's own settings.timezone and before business_hours.timezone, to resolve a person's words for a reminder's date and to decide the digest's local day and hour; unset with neither authored is UTC."
   # ---- ss-console #3946: the library gap counter on a guide seat's rep desk ----
   SMD_GAP_COUNTS_DB_PATH:
     discovery: indirect

@@ -38,7 +38,6 @@ directory is the owner. The digest (``shared/person_digest.py``) reads it.
 from __future__ import annotations
 
 import json
-import os
 import re
 import secrets
 from dataclasses import dataclass
@@ -118,15 +117,13 @@ def reminder_store(cfg: Any) -> str | None:
 
 def seat_zone(cfg: Any) -> str:
     """The seat's zone: ``rep-desk`` ``settings.timezone``, else
-    ``HERMES_TIMEZONE`` (what the scheduler runs in), else
-    ``business_hours.timezone``, else UTC."""
+    ``business_hours.timezone``, else UTC. Authored, so the reminder's day and
+    the digest's hour do not depend on the zone the scheduler process runs in
+    (the job is hourly; the digest hour is read in this zone)."""
     settings = desk_settings(cfg) or {}
     zone = settings.get(TIMEZONE_SETTING)
     if isinstance(zone, str) and zone.strip():
         return zone.strip()
-    env = os.environ.get("HERMES_TIMEZONE", "").strip()
-    if env:
-        return env
     raw = cfg.raw if hasattr(cfg, "raw") else cfg
     hours = raw.get("business_hours") if isinstance(raw, dict) else None
     zone = hours.get("timezone") if isinstance(hours, dict) else None

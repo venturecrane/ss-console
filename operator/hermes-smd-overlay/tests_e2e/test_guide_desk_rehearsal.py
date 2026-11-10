@@ -161,6 +161,17 @@ def test_the_hourly_digest_reaches_each_person_with_only_their_own(rehearsal) ->
 def test_the_digest_output_carries_counts_only(rehearsal) -> None:
     out = (Path(rehearsal["root"]) / "digest-pre-run.out").read_text(encoding="utf-8")
     assert A not in out and B not in out and A_MARK not in out and B_MARK not in out
+    [row] = [
+        q["row"]
+        for q in _broker(rehearsal)
+        if q.get("action") == "emitted_wake_append"
+        and (q.get("row") or {}).get("skill_name") == "rep-desk"
+    ]
+    assert row["action_type"] == "EMITTED_WAKE"
+    metadata = json.loads(row["metadata"])
+    assert metadata["decision_basis"] == "digest_ready" and metadata["chunk"] == 2
+    text = json.dumps(row)
+    assert A not in text and B not in text and A_MARK not in text and B_MARK not in text
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +276,7 @@ def projected_costs(rehearsal: dict) -> dict[str, dict[str, Any]]:
         sum(len(json.dumps(t)) for t in tools if str(t.get("name", "")).endswith("reminder_set"))
         / 4
     )
-    skill_line = len("rep-desk: A listed person's own desk: notes, leads, pipeline, remin...") / 4
+    skill_line = len("rep-desk: A listed person's own notes, leads and reminders.") / 4
     added_prefix = desk_schema + skill_line
     procedure = len(DESK_SKILL_MD.read_text(encoding="utf-8")) / 4
 

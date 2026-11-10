@@ -50,7 +50,9 @@ NOT_COVERED = "The product library doesn't cover that."
 _NOT_COVERED_RE = re.compile(r"the product library doesn[’']t cover that", re.I)
 
 DB_ENV = "SMD_GAP_COUNTS_DB_PATH"
-DEFAULT_DB = "/opt/data/smd/gap_counts.db"
+#: Under the seat's volume (``shared.record_store.VOLUME_ROOT``), beside the
+#: seat's other small state files in ``smd/``.
+DEFAULT_DB_PARTS = ("smd", "gap_counts.db")
 KEEP_DAYS = 120
 
 OTHER = "other"
@@ -214,7 +216,12 @@ def detect(user_message: str, history: Any, final_response: str) -> str | None:
 
 
 def db_path() -> Path:
-    return Path(os.environ.get(DB_ENV) or DEFAULT_DB)
+    configured = os.environ.get(DB_ENV)
+    if configured:
+        return Path(configured)
+    from shared.record_store import VOLUME_ROOT
+
+    return VOLUME_ROOT.joinpath(*DEFAULT_DB_PARTS)
 
 
 def _connect(path: Path) -> sqlite3.Connection:
