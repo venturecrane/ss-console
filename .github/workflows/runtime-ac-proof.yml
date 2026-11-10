@@ -1,7 +1,27 @@
 name: Runtime AC proof
 
-# Law 9 merge gate. A PR may not mark a `(runtime)` acceptance criterion as
-# `met` without a crane_verify ID in the Evidence column.
+# Law 9 merge gate. Every `(runtime)` acceptance criterion in a PR's status
+# table is, in its Status column, one of:
+#
+#   met       with a crane_verify ID (live_state or fresh_process, resolved
+#             against the ledger) in the Evidence column;
+#   deferred  with `owner: <who switches it on>; enforce_by: YYYY-MM-DD`
+#             anywhere in the row, the date not already passed;
+#   n/a       the AC does not apply to this PR.
+#
+#   | (runtime) Seat adopts it | deferred | owner: release lead; enforce_by: 2026-11-20; needs the next release |
+#
+# Anything else ("not met", "unmet", "pending", "not yet", "open") is red.
+#
+# ACCEPTED FORM, 2026-11-09 (critique PREV-6). #3852 merged with two runtime
+# rows "not met" and this check green: it read only a section headed exactly
+# "## Acceptance criteria status", and skipped every row not marked met. Of
+# the 40 merged PRs with a `(runtime)` row from 10-16 to 11-09, 3 used that
+# heading, and none wrote a deferral with an owner or a date; the vocabulary
+# was "not met", "unmet", "pending", "not yet", "open". The parser now reads
+# every markdown table whose header has a Status (or State) column, under any
+# heading, finds the status and evidence columns by header name, and takes the
+# runtime tag from the AC text or from a Layer/Kind column.
 #
 # Rationale (2026-07-28, the entitlement-control incident): tick-acs-on-merge
 # parses the merging PR's own AC status table and ticks the linked issue's

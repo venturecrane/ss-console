@@ -15,13 +15,13 @@ import { resolve } from 'path'
 import {
   checkRuntimeAcProof,
   findUnprovenRuntimeAcs,
-  extractAcSection,
   formatViolations,
   LOOKUP_BATCH,
   resolveVerifyIds,
 } from '../scripts/runtime-ac-proof.mjs'
 
 const VERIFY_ID = 'vfy_01KYNVJ4VG90G26SZSYPXF05KY'
+const NOW = new Date('2026-11-09T12:00:00Z')
 
 function pr(rows: string): string {
   return [
@@ -96,9 +96,11 @@ describe('runtime AC proof: what it deliberately leaves alone', () => {
     expect(findUnprovenRuntimeAcs(body)).toEqual([])
   })
 
-  it('ignores a runtime AC that is deferred rather than claimed', () => {
-    const body = pr('| (runtime) Machine adopts config | deferred | tracked in #2044 |')
-    expect(findUnprovenRuntimeAcs(body)).toEqual([])
+  it('accepts a runtime AC deferred with an owner and an enforce_by date', () => {
+    const body = pr(
+      '| (runtime) Machine adopts config | deferred | owner: release lead; enforce_by: 2026-11-20; tracked in #2044 |'
+    )
+    expect(findUnprovenRuntimeAcs(body, { now: NOW })).toEqual([])
   })
 
   it('ignores a runtime AC marked n/a', () => {
@@ -121,21 +123,51 @@ describe('runtime AC proof: what it deliberately leaves alone', () => {
   })
 })
 
-describe('runtime AC proof: section extraction', () => {
-  it('stops at the next heading so later sections cannot leak rows in', () => {
-    const body = pr('| (repo) Something | met | file.ts:1 |')
-    const section = extractAcSection(body)
-    expect(section).toContain('(repo) Something')
-    expect(section).not.toContain('Test plan')
+describe('runtime AC proof: where it looks', () => {
+  it('reads a status table under any heading, not only "Acceptance criteria status"', () => {
+    for (const heading of ['## Acceptance', '## Acceptance criteria', '## Evidence', '## Status']) {
+      const body = `${heading}\n\n| AC | Status | Evidence |\n|---|---|---|\n| (runtime) X | not met | later |`
+      expect(findUnprovenRuntimeAcs(body), heading).toHaveLength(1)
+    }
   })
 
-  it('returns empty when the section is absent', () => {
-    expect(extractAcSection('## Summary\n\nNothing here.')).toBe('')
+  it('finds the status and evidence columns by header, in any order', () => {
+    const body = '| AC | Evidence | Status |\n|---|---|---|\n| (runtime) X | src/x.ts:1 | met |'
+    expect(findUnprovenRuntimeAcs(body)[0].reason).toMatch(/no crane_verify ID/)
   })
 
-  it('is case-insensitive on the heading', () => {
-    const body = '## ACCEPTANCE CRITERIA STATUS\n| (repo) X | met | f.ts:1 |'
-    expect(extractAcSection(body)).toContain('(repo) X')
+  it('reads the runtime tag from a Layer or Kind column', () => {
+    const body =
+      '| # | Gate | Layer | Status | Evidence |\n|---|---|---|---|---|\n| 4 | Token on the seat | runtime | met | seat-probe count = 1 |'
+    const v = findUnprovenRuntimeAcs(body)
+    expect(v).toHaveLength(1)
+    expect(v[0].ac).toBe('Token on the seat')
+  })
+
+  it('keeps an escaped pipe inside a cell', () => {
+    const body =
+      '| AC | Status | Evidence |\n|---|---|---|\n| (runtime) X | met | `env \\| grep -c KEY` = 1 |'
+    expect(findUnprovenRuntimeAcs(body)[0].evidence).toContain('grep -c KEY')
+  })
+
+  it('ignores tables with no Status column, fenced examples, and HTML comments', () => {
+    const body = [
+      '| Connector | Tools (runtime names) |',
+      '|---|---|',
+      '| mail | send (runtime) |',
+      '',
+      '```',
+      '| AC | Status | Evidence |',
+      '|---|---|---|',
+      '| (runtime) X | not met | example |',
+      '```',
+      '<!--',
+      '| AC | Status | Evidence |',
+      '|---|---|---|',
+      '| (runtime) Y | not met | commented out |',
+      '-->',
+    ].join('\n')
+    expect(findUnprovenRuntimeAcs(body)).toEqual([])
   })
 })
 
@@ -251,10 +283,14 @@ describe('runtime AC proof: a required check must report green on PRs that claim
     ['no body', ''],
     ['no AC section', '## Summary\n\nBumped a dependency.'],
     ['only repo-layer rows', pr('| (repo) Parser handles tabs | met | src/x.ts:1 |')],
-    ['a runtime row deferred', pr('| (runtime) Seat adopts it | deferred | next reprovision |')],
+    [
+      'a runtime row deferred with an owner and a date',
+      pr('| (runtime) Seat adopts it | deferred | owner: release lead; enforce_by: 2026-11-20 |'),
+    ],
+    ['a runtime row n/a', pr('| (runtime) Monitoring field | n/a | no monitoring surface |')],
   ])('%s: green without a key or a ledger call', async (_name, body) => {
     const { fetchImpl, calls } = fakeLedger({})
-    const result = await checkRuntimeAcProof(body, { fetchImpl })
+    const result = await checkRuntimeAcProof(body, { fetchImpl, now: NOW })
     expect(result).toEqual({ violations: [], ledgerError: null, checked: 0 })
     expect(calls).toHaveLength(0)
   })
@@ -308,5 +344,135 @@ describe('runtime AC proof: the failure message tells you what to do', () => {
   it('renders empty evidence legibly rather than as a blank', () => {
     const message = formatViolations(findUnprovenRuntimeAcs(pr('| (runtime) X | met |  |')))
     expect(message).toContain('(empty)')
+  })
+})
+
+describe('runtime AC proof: a runtime AC that is not met cannot pass silently (PREV-6)', () => {
+  // #3852's Acceptance table, verbatim. It merged with both runtime rows "not
+  // met" and the check green: the gate read only "## Acceptance criteria
+  // status", and it skipped every row whose status was not "met".
+  const PR_3852 = [
+    '## Acceptance',
+    '',
+    '| AC | Status | Evidence |',
+    '|---|---|---|',
+    '| (repo) The applier installs, verifies, records and prunes the ledger and its copies, fail-static | met | tests above |',
+    '| (repo) The writer validates, hashes, calls `accept()`, writes copy then ledger, refuses with nothing written | met | tests above |',
+    '| (repo) The no-client-text check passes a blanked form and fails each planted leak | met | tests above |',
+    "| (repo) `resolve(copies_dir=...)` reads the seat copy and never the store's bytes; without it, unchanged | met | tests above |",
+    '| (repo) CLAUDE.md "Gone means gone" names the layer, its prune rule and its purge command | met | CLAUDE.md diff |',
+    '| (runtime) A seat with an installed accepted copy, read back by the reader | not met | needs the acceptance piece; no seat has a library today |',
+    "| (runtime) The purge shown removing a firm's library from the vault and the seat | not met | needs a seat with a library |",
+  ].join('\n')
+
+  it("fails #3852's body on both runtime rows, without a ledger call", async () => {
+    const { fetchImpl, calls } = fakeLedger({})
+    const result = await checkRuntimeAcProof(PR_3852, { relayKey: 'k', fetchImpl, now: NOW })
+    expect(result.violations).toHaveLength(2)
+    for (const v of result.violations)
+      expect(v.reason).toMatch(/"not met" is neither met nor deferred/)
+    expect(calls).toHaveLength(0)
+  })
+
+  it.each(['not met', 'unmet', 'NOT met', 'pending', 'not yet', 'open', '', 'not met in this PR'])(
+    'fails status %j',
+    (status) => {
+      const body = pr(`| (runtime) Seat adopts it | ${status} | later |`)
+      expect(findUnprovenRuntimeAcs(body)).toHaveLength(1)
+    }
+  )
+
+  it('fails a deferral with no owner', () => {
+    const body = pr('| (runtime) Seat adopts it | deferred | enforce_by: 2026-11-20 |')
+    expect(findUnprovenRuntimeAcs(body, { now: NOW })[0].reason).toMatch(/without an `owner:`/)
+  })
+
+  it('fails a deferral with no enforce_by date', () => {
+    const body = pr(
+      '| (runtime) Seat adopts it | deferred | owner: release lead; next reprovision |'
+    )
+    expect(findUnprovenRuntimeAcs(body, { now: NOW })[0].reason).toMatch(
+      /without an `enforce_by: YYYY-MM-DD`/
+    )
+  })
+
+  it('fails a deferral with neither, which is how "tracked in #NNN" used to pass', () => {
+    const body = pr('| (runtime) Seat adopts it | deferred | tracked in #2044 |')
+    expect(findUnprovenRuntimeAcs(body, { now: NOW })[0].reason).toMatch(/owner.*or.*enforce_by/)
+  })
+
+  it.each(['TBD', '?', 'none'])('fails a placeholder owner %j', (owner) => {
+    const body = pr(
+      `| (runtime) Seat adopts it | deferred | owner: ${owner}; enforce_by: 2026-11-20 |`
+    )
+    expect(findUnprovenRuntimeAcs(body, { now: NOW })).toHaveLength(1)
+  })
+
+  it('fails an enforce_by that is not a calendar date, or has already passed', () => {
+    const bad = pr('| (runtime) Seat adopts it | deferred | owner: lead; enforce_by: 2026-02-30 |')
+    expect(findUnprovenRuntimeAcs(bad, { now: NOW })[0].reason).toMatch(/not a calendar date/)
+    const past = pr('| (runtime) Seat adopts it | deferred | owner: lead; enforce_by: 2026-11-08 |')
+    expect(findUnprovenRuntimeAcs(past, { now: NOW })[0].reason).toMatch(/has passed/)
+  })
+
+  it('accepts the owner and date in the status cell, and enforce_by on the day itself', () => {
+    const body = pr(
+      '| (runtime) Seat adopts it | deferred (owner: release lead, enforce_by: 2026-11-09) | needs a release |'
+    )
+    expect(findUnprovenRuntimeAcs(body, { now: NOW })).toEqual([])
+  })
+})
+
+describe('runtime AC proof: the 20 most recent merged PRs with a runtime row', () => {
+  // tests/fixtures/runtime-ac-proof/recent-merged-tables.json holds, for the
+  // 20 most recent merged PRs with a (runtime) row as of 2026-11-09 (#3790 to
+  // #3903), each PR's status-table header and its runtime rows: the Status
+  // cell and any vfy_ IDs verbatim, the other text neutralised. 19 of the 20
+  // left a runtime row "not met", "unmet", "pending" or similar with no owner
+  // or date, which this gate now fails. #3803 alone is met with an ID.
+  const SAMPLE: { pr: number; table: string }[] = JSON.parse(
+    readFileSync(resolve(__dirname, 'fixtures/runtime-ac-proof/recent-merged-tables.json'), 'utf8')
+  )
+  const verdicts = () =>
+    SAMPLE.map(({ pr: n, table }) => ({ n, v: findUnprovenRuntimeAcs(table, { now: NOW }) }))
+
+  it('newly fails 19 of 20, every one for a status that is neither met nor deferred', () => {
+    expect(SAMPLE).toHaveLength(20)
+    const failing = verdicts().filter(({ v }) => v.length > 0)
+    expect(failing.map(({ n }) => n)).not.toContain(3803)
+    expect(failing).toHaveLength(19)
+    for (const { n, v } of failing) {
+      for (const row of v) expect(row.reason, `#${n}`).toMatch(/is neither met nor deferred/)
+    }
+  })
+
+  it('passes all 20 once their unmet rows are written as deferrals', async () => {
+    // Proves the parser reads every one of the 20 table shapes (AC | Status |
+    // Evidence, # | Criterion | ..., a Layer or Kind column, Evidence before
+    // Status): the rule is the only thing failing them, and the accepted form
+    // clears it.
+    const ids = new Set<string>()
+    const rewritten = SAMPLE.map(({ pr: n, table }) => {
+      const lines = table.split('\n')
+      const statusAt = lines[0].split('|').findIndex((h) => /^(status|state)\b/i.test(h.trim()))
+      const out = lines.map((line, i) => {
+        if (i < 2) return line
+        const cols = line.split('|')
+        if (/^met\b/i.test(cols[statusAt].trim())) {
+          for (const id of line.match(/vfy_[0-9A-Z]{26}/g) ?? []) ids.add(id)
+          return line
+        }
+        cols[statusAt] = ' deferred (owner: release lead; enforce_by: 2026-11-20) '
+        return cols.join('|')
+      })
+      return { n, body: out.join('\n') }
+    })
+    const { fetchImpl } = fakeLedger(Object.fromEntries([...ids].map((id) => [id, 'live_state'])))
+    for (const { n, body } of rewritten) {
+      const result = await checkRuntimeAcProof(body, { relayKey: 'k', fetchImpl, now: NOW })
+      expect(result.violations, `#${n}`).toEqual([])
+      expect(result.ledgerError, `#${n}`).toBeNull()
+    }
+    expect(ids.size).toBeGreaterThan(0)
   })
 })

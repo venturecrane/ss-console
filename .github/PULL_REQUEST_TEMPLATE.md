@@ -35,9 +35,12 @@ the tag rides into this table verbatim. A `(runtime)` AC is a gate on a live
 layer: D1, R2, the Fly volume, the running Machine, monitoring, or an external
 record. Marking one `met` requires a `crane_verify` ID (`vfy_...`) in the
 Evidence column, not a file:line — a file:line says the code exists, which is
-not the same claim. `.github/workflows/runtime-ac-proof.yml` blocks the PR
-otherwise. If the gate is not actually closed, mark the AC deferred and name
-which gate is open. See `docs/doctrine/wired-contract.md` and Law 9.
+not the same claim. If the gate is not actually closed, mark the AC
+`deferred` and put in the row who switches it on and by when:
+`owner: <who>; enforce_by: YYYY-MM-DD`. "not met", "unmet", "pending" and
+"not yet" are not accepted. `.github/workflows/runtime-ac-proof.yml` blocks the
+PR otherwise, reading any table with a Status column under any heading. See
+`docs/doctrine/wired-contract.md` and Law 9.
 -->
 
 | AC (verbatim from issue) | Status               | Evidence                         |
