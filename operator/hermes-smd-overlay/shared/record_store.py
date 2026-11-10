@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from shared import seat_layout
 from shared.customer_config import CustomerConfig, CustomerConfigError
 
 #: The customer.yaml key. A list of ``{name, path}`` mappings.
@@ -68,7 +69,7 @@ RESERVED_PREFIXES: tuple[str, ...] = (
     "/opt/data/smokeball-extract-cache",
     "/opt/data/.smd",
     "/opt/data/medchron",
-    "/opt/data/jobs",
+    seat_layout.JOBS_DATA,
 )
 
 #: A record is prose the size of an email. Anything larger is not a record.

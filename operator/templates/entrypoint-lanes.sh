@@ -10,6 +10,11 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # _seed_endpoint, CUSTOMER_SLUG and the R2_* names are set by entrypoint.sh, which sources this file
 # shellcheck disable=SC2034 # the SMD_*_QUEUE_DIR / *_FIRM_CONFIG names are read by entrypoint.sh's broker launch
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated beside
+# this file): the SMD_LAYOUT_* paths below. Sourced here as well as by
+# entrypoint.sh, so this file reads it on every path that reaches it.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh"
 
 # ADR 0100: what this seat authors decides what boots. A job lane is authored when a
 # persona enables its skill (shared/capabilities.py: the one predicate the gateway,
@@ -23,7 +28,7 @@
 # word-splitting; a space-separated value broke every probe on smd-staging
 # (2026-10-31). tests/operator-entrypoint.test.ts pins the separator.
 _ALL_LANES="medchron,demand,drafting,litigation,casefile,records,negotiation,note"
-if _lanes="$(/opt/hermes/.venv/bin/python -I -m shared.capabilities lanes "${LIVE_CUSTOMER_YAML}")"; then
+if _lanes="$(${SMD_LAYOUT_HERMES_PYTHON} -I -m shared.capabilities lanes "${LIVE_CUSTOMER_YAML}")"; then
   SMD_AUTHORED_LANES="$(printf '%s' "${_lanes}" | paste -sd, -)"
 else
   SMD_AUTHORED_LANES="${_ALL_LANES}"
@@ -93,7 +98,7 @@ JOBS_RUN_DIR="${_SMD_JV}/run/smd-medchron"
 _smd_jobs_run_dirs=("${JOBS_RUN_DIR}")
 _jv_refused="" _jv_outcome="" _jv_before="" _jv_after=""
 if [ "${JOBS_VOLUME_EPOCH}" = 2 ]; then
-  _jv_old="${_SMD_JV}/opt/data/medchron" _jv_new="${_SMD_JV}/opt/data/jobs"
+  _jv_old="${_SMD_JV}/opt/data/medchron" _jv_new="${_SMD_JV}${SMD_LAYOUT_JOBS_DATA}"
   _jv_files() { find "$1" -type f 2>/dev/null | wc -l | tr -d ' '; }
   _jv_held() { find "$1" ! -type d 2>/dev/null | wc -l | tr -d ' '; }
   if [ -L "${_jv_old}" ] || [ -L "${_jv_new}" ]; then
@@ -134,7 +139,7 @@ if [ "${JOBS_VOLUME_EPOCH}" = 2 ]; then
     export SMD_AUTHORED_LANES
   else
     export JOBS_DATA_DIR="${_jv_new}"
-    JOBS_RUN_DIR="${_SMD_JV}/run/smd-jobs"
+    JOBS_RUN_DIR="${_SMD_JV}${SMD_LAYOUT_JOBS_RUN}"
     _smd_jobs_run_dirs=("${JOBS_RUN_DIR}" "${_SMD_JV}/run/smd-medchron")
   fi
 fi

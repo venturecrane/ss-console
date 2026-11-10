@@ -35,6 +35,11 @@
 # "absent" standing in for this one's verdict.
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # _seed_endpoint, CUSTOMER_SLUG and the R2_* names are set by entrypoint.sh
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated beside
+# this file): the SMD_LAYOUT_* paths below. Sourced here as well as by
+# entrypoint.sh, so this file reads it on every path that reaches it.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh"
 
 _record_lane_inputs_state() { # <prefix> <fetched|kept|absent|unreachable>
   local dir="${SMD_LANE_INPUTS_STATE_DIR:-/run/smd-lanes}" tmp
@@ -98,8 +103,8 @@ _fetch_lane_inputs() {
 # does the same live, every 15 s, so a published change reaches a running seat
 # with no restart; a running job resolved the symlink once and keeps its version.
 # Before this the swap was `rm -rf; mv` and validation ran after it, only logging.
-_FIRM_VALIDATOR_PY="${SMD_FIRM_VALIDATOR_PYTHON:-/opt/jobs/.venv/bin/python}"
-_FIRM_LINK_PY="${SMD_FIRM_LINK_PYTHON:-/opt/hermes/.venv/bin/python}"
+_FIRM_VALIDATOR_PY="${SMD_FIRM_VALIDATOR_PYTHON:-${SMD_LAYOUT_JOBS_PYTHON}}"
+_FIRM_LINK_PY="${SMD_FIRM_LINK_PYTHON:-${SMD_LAYOUT_HERMES_PYTHON}}"
 
 # _lane_version_path <live> <label>
 _lane_version_path() { case "$1" in *.yaml) printf '%s' "${1%.yaml}.v$2.yaml" ;; *) printf '%s' "$1.v$2" ;; esac; }

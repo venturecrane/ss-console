@@ -29,7 +29,10 @@ GOLDEN: dict[str, tuple[object, object]] = {
             "/opt/data/jobs",
         ),
     ),
-    "applier.DEFAULT_VALIDATOR_PYTHON": (applier.DEFAULT_VALIDATOR_PYTHON, "/opt/jobs/.venv/bin/python"),
+    "applier.DEFAULT_VALIDATOR_PYTHON": (
+        applier.DEFAULT_VALIDATOR_PYTHON,
+        "/opt/jobs/.venv/bin/python",
+    ),
     "installer._LINK_ROOTS": (installer._LINK_ROOTS, ("/usr/", "/opt/jobs/", "/opt/connectors/")),
     "manifest.JOBS.mounts": (
         manifest.JOBS.mounts,

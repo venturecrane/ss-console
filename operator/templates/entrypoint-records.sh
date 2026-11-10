@@ -15,6 +15,11 @@
 # records child).
 # shellcheck shell=bash
 # shellcheck disable=SC2154 # _seed_endpoint, CUSTOMER_SLUG and the R2_* names are set by entrypoint.sh, which sources this file
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated beside
+# this file): the SMD_LAYOUT_* paths below. Sourced here as well as by
+# entrypoint.sh, so this file reads it on every path that reaches it.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh"
 
 # Only a seat that authors the lane builds its tree (ADR 0100). The gate is
 # here, not in entrypoint.sh's loop line, which the ratchet holds.
@@ -84,7 +89,7 @@ if [ -d "${JOBS_RECORDS_INPUTS_DIR}" ]; then
   # The runner's own validator: a copy that does not pass is said here at
   # boot. Exit 1 is a problem with the inputs; anything else is a validator
   # that could not run.
-  _rf_out="$(/opt/jobs/.venv/bin/python -m jobs.records.firm "${JOBS_RECORDS_INPUTS_DIR}" 2>&1)" && _rf_rc=0 || _rf_rc=$?
+  _rf_out="$(${SMD_LAYOUT_JOBS_PYTHON} -m jobs.records.firm "${JOBS_RECORDS_INPUTS_DIR}" 2>&1)" && _rf_rc=0 || _rf_rc=$?
   case "${_rf_rc}" in
     0) log "records firm inputs validate" ;;
     1) log "ERROR: the records firm inputs do not validate; records jobs will fail at config_missing: $(printf '%s' "${_rf_out}" | head -n 3 | tr '\n' ' ' | cut -c1-300)" ;;

@@ -78,6 +78,11 @@ describe('envNames', () => {
     const sh = 'echo x >> "${GITHUB_OUTPUT}"; echo "${RUNNER_TEMP}"; echo "${SMD_OWN}"'
     expect([...envNames([{ path: 'c.sh', text: sh }])]).toEqual(['SMD_OWN'])
   })
+
+  it('does not count a read of the generated seat layout as an env var', () => {
+    const sh = 'test -d ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/queue; echo "${SMD_LAYOUT_DATA}"'
+    expect([...envNames([{ path: 'c.sh', text: sh }])]).toEqual(['SEAT_ROOT'])
+  })
 })
 
 const facts = (entries: Array<[string, number, string]>) =>

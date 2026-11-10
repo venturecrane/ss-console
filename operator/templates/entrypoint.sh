@@ -12,8 +12,17 @@ log() {
   exit 1
 }
 
+# The seat's folder layout, generated from operator/contracts/seat-layout.yaml
+# (operator/bin/gen-seat-layout.py) and COPY'd beside this file: SMD_LAYOUT_<ID>
+# assignments, exported to nothing. Sourced first, so every path below can name
+# it; a missing file fails the boot here (set -e), never a later `set -u` mid-boot.
+# Each sourced lane file that names it sources it too. Unquoted uses are safe:
+# the generator refuses a path with any character but [A-Za-z0-9/._-].
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh"
+
 BROKER_DIR="/var/lib/smd-workspace-broker"
-BROKER_SOCKET="/run/smd-workspace-broker/broker.sock"
+BROKER_SOCKET="${SMD_LAYOUT_BROKER_SOCKET}"
 
 # Keystone (audit 2026-06-15 — SEC-07/08/09/18/30, EFF-14, proven-live on
 # hermes-smd-staging). The live customer.yaml is the source every trust-ceiling /
@@ -24,7 +33,7 @@ BROKER_SOCKET="/run/smd-workspace-broker/broker.sock"
 # It lives in a fully root-owned directory, world-readable (0644) but NEVER
 # writable or renameable by the hermes uid. Root — this entrypoint plus the
 # ADR-0044 config applier — is the only writer.
-CONFIG_DIR="/var/lib/smd-config"
+CONFIG_DIR="${SMD_LAYOUT_SMD_CONFIG}"
 LIVE_CUSTOMER_YAML="${CONFIG_DIR}/customer.yaml"
 
 # Root fetches the authoritative customer.yaml from R2 (source of truth) on EVERY
@@ -39,9 +48,9 @@ chown root:root "${CONFIG_DIR}"
 chmod 0755 "${CONFIG_DIR}"
 : "${R2_BUCKET_CONFIG:?R2_BUCKET_CONFIG required to fetch customer.yaml}"
 : "${CUSTOMER_SLUG:?CUSTOMER_SLUG required to fetch customer.yaml}"
-if [ -f /opt/data/customer.yaml ] && [ ! -f "${LIVE_CUSTOMER_YAML}" ]; then
-  mv /opt/data/customer.yaml "${LIVE_CUSTOMER_YAML}"
-  log "migrated legacy /opt/data/customer.yaml -> ${LIVE_CUSTOMER_YAML} (keystone relocation)"
+if [ -f ${SMD_LAYOUT_VOLUME_CUSTOMER_YAML} ] && [ ! -f "${LIVE_CUSTOMER_YAML}" ]; then
+  mv ${SMD_LAYOUT_VOLUME_CUSTOMER_YAML} "${LIVE_CUSTOMER_YAML}"
+  log "migrated legacy ${SMD_LAYOUT_VOLUME_CUSTOMER_YAML} -> ${LIVE_CUSTOMER_YAML} (keystone relocation)"
 fi
 # Validate a CANDIDATE customer.yaml before it becomes the live one, using the
 # SAME on-box validator the ADR 0044 live applier uses. Until ss #2082 the boot
@@ -63,7 +72,7 @@ fi
 # adopt from (the standing fail-closed posture, same as the invariant_7 gate
 # further down, which refuses boot on a missing module rather than skipping).
 validate_candidate_config() {
-  /opt/hermes/.venv/bin/python3 - "$1" <<'PY'
+  ${SMD_LAYOUT_HERMES_PYTHON3} - "$1" <<'PY'
 import sys
 from pathlib import Path
 
@@ -129,7 +138,7 @@ fi
 # dir is root-owned). This is the structural close of the self-loopback.
 chown root:root "${LIVE_CUSTOMER_YAML}"
 chmod 0644 "${LIVE_CUSTOMER_YAML}"
-rm -f /opt/data/customer.yaml
+rm -f ${SMD_LAYOUT_VOLUME_CUSTOMER_YAML}
 
 # OP-P1-4 audit ledger: owned by the broker uid, readable (not writable) by the
 # agent uid via the audit-readers group. The agent's only write path is the
@@ -157,7 +166,7 @@ GATEWAY_LIVENESS_LEDGER_DIR="${HERMES_HOME:-/opt/data}/.smd-root/gateway-livenes
 # ADR 0103 R2: the tree is /opt/data/jobs (entrypoint-lanes.sh moves the old
 # /opt/data/medchron there once). Exported: the jobs daemon passes it to each
 # lane child, whose volume defaults resolve under it.
-export JOBS_DATA_DIR="/opt/data/jobs"
+export JOBS_DATA_DIR="${SMD_LAYOUT_JOBS_DATA}"
 # Group-readable default so the broker's rollback journal is readable by the
 # hermes mode=ro read seam during a write window. Explicit chmods below for the
 # 0700/0600 broker paths are unaffected by this.
@@ -232,7 +241,7 @@ setpriv --reuid=hermes --regid=hermes --init-groups test -r "${AUDIT_DB}" \
 # Same underlying volume inodes as ${AUDIT_DIR}; the broker writes via this path,
 # the hermes read seam reads via ${AUDIT_DB} (hermes owns its home). /run is a
 # fresh tmpfs each boot, so re-create the mountpoint and bind idempotently.
-AUDIT_BIND_DIR="/run/smd-audit"
+AUDIT_BIND_DIR="${SMD_LAYOUT_AUDIT_RUN}"
 AUDIT_BIND_DB="${AUDIT_BIND_DIR}/audit.db"
 mkdir -p "${AUDIT_BIND_DIR}"
 mountpoint -q "${AUDIT_BIND_DIR}" \
@@ -335,8 +344,8 @@ export SMD_CUSTOMER_YAML="${LIVE_CUSTOMER_YAML}"
 . /app/runners/supervisor/entrypoint-supervisor.sh
 smd_supervisor_boot
 
-PYTHONPATH="/opt/workspace-broker" \
-  /opt/workspace-broker/.venv/bin/python -c \
+PYTHONPATH="${SMD_LAYOUT_BROKER_ROOT}" \
+  ${SMD_LAYOUT_BROKER_PYTHON} -c \
   'import os; from pathlib import Path; from workspace_broker.google_auth import materialize_credential; materialize_credential(Path(os.environ["SMD_WORKSPACE_CREDENTIAL_PATH"]))'
 [ -f "${SMD_WORKSPACE_CREDENTIAL_PATH}" ] || {
   log "FATAL: Workspace broker credential was not materialized"
@@ -357,8 +366,8 @@ chmod 0600 "${SMD_WORKSPACE_CREDENTIAL_PATH}"
 # fail closed when the file is missing, so absence cannot become permission.
 export SMD_AGENTMAIL_CREDENTIAL_PATH="${BROKER_DIR}/agentmail.json"
 if [ -n "${AGENTMAIL_SEND_API_KEY:-}" ]; then
-  PYTHONPATH="/opt/workspace-broker" \
-    /opt/workspace-broker/.venv/bin/python -c \
+  PYTHONPATH="${SMD_LAYOUT_BROKER_ROOT}" \
+    ${SMD_LAYOUT_BROKER_PYTHON} -c \
     'import os; from pathlib import Path; from workspace_broker.agentmail_auth import materialize_credential; materialize_credential(Path(os.environ["SMD_AGENTMAIL_CREDENTIAL_PATH"]))'
   [ -f "${SMD_AGENTMAIL_CREDENTIAL_PATH}" ] || {
     log "FATAL: AgentMail send credential was staged but not materialized"
@@ -401,8 +410,8 @@ fi
 # path. Setup: docs/runbooks/operator/ms-graph-azure-ad-setup.md.
 export SMD_MSGRAPH_CREDENTIAL_PATH="${BROKER_DIR}/msgraph.json"
 if [ -n "${MSGRAPH_SEND_CLIENT_SECRET:-}" ]; then
-  PYTHONPATH="/opt/workspace-broker" \
-    /opt/workspace-broker/.venv/bin/python -c \
+  PYTHONPATH="${SMD_LAYOUT_BROKER_ROOT}" \
+    ${SMD_LAYOUT_BROKER_PYTHON} -c \
     'import os; from pathlib import Path; from workspace_broker.msgraph_auth import materialize_credential; materialize_credential(Path(os.environ["SMD_MSGRAPH_CREDENTIAL_PATH"]))'
   [ -f "${SMD_MSGRAPH_CREDENTIAL_PATH}" ] || {
     log "FATAL: msgraph send credential was staged but not materialized"
@@ -424,8 +433,8 @@ fi
 # allowlist line below always references a set variable.
 export SMD_MSGRAPH_READ_CREDENTIAL_PATH="${BROKER_DIR}/msgraph-read.json"
 if [ -n "${MSGRAPH_CLIENT_SECRET:-}" ]; then
-  PYTHONPATH="/opt/workspace-broker" \
-    /opt/workspace-broker/.venv/bin/python -c \
+  PYTHONPATH="${SMD_LAYOUT_BROKER_ROOT}" \
+    ${SMD_LAYOUT_BROKER_PYTHON} -c \
     'import os; from pathlib import Path; from workspace_broker.msgraph_auth import materialize_read_credential; materialize_read_credential(Path(os.environ["SMD_MSGRAPH_READ_CREDENTIAL_PATH"]))'
   [ -f "${SMD_MSGRAPH_READ_CREDENTIAL_PATH}" ] || {
     log "FATAL: msgraph read credential was staged but not materialized"
@@ -451,8 +460,8 @@ launch_broker() {
     --init-groups \
     --no-new-privs \
     /usr/bin/env -i \
-    PATH="/opt/workspace-broker/.venv/bin:/usr/bin:/bin" \
-    PYTHONPATH="/opt/workspace-broker" \
+    PATH="${SMD_LAYOUT_BROKER_ROOT}/.venv/bin:/usr/bin:/bin" \
+    PYTHONPATH="${SMD_LAYOUT_BROKER_ROOT}" \
     PYTHONUNBUFFERED=1 \
     CUSTOMER_SLUG="${CUSTOMER_SLUG}" \
     SMD_WORKSPACE_BROKER_SOCKET="${SMD_WORKSPACE_BROKER_SOCKET}" \
@@ -467,7 +476,7 @@ launch_broker() {
     SMD_AGENTMAIL_CREDENTIAL_PATH="${SMD_AGENTMAIL_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_CREDENTIAL_PATH="${SMD_MSGRAPH_CREDENTIAL_PATH}" \
     SMD_MSGRAPH_READ_CREDENTIAL_PATH="${SMD_MSGRAPH_READ_CREDENTIAL_PATH}" \
-    /opt/workspace-broker/.venv/bin/python \
+    ${SMD_LAYOUT_BROKER_PYTHON} \
     -m workspace_broker.server
 }
 
@@ -585,8 +594,8 @@ chmod 0755 "${SPEC_DIR}"
 # seat its uptime — the runtime gate, not the boot, decides whether an output
 # whose declared spec never arrived may be produced.
 if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
-   && /opt/hermes/.venv/bin/python -c "import spec_applier" 2>/dev/null; then
-  if /opt/hermes/.venv/bin/python -m spec_applier --once; then
+   && ${SMD_LAYOUT_HERMES_PYTHON} -c "import spec_applier" 2>/dev/null; then
+  if ${SMD_LAYOUT_HERMES_PYTHON} -m spec_applier --once; then
     log "authored-spec boot fetch complete (${SPEC_DIR})"
   else
     log "WARN: authored-spec boot fetch exited non-zero; keeping the installed spec tree"
@@ -638,7 +647,7 @@ log "Workspace broker started as uid $(id -u workspace-broker); dropping gateway
 # on its own after 5 s, on its own thread, and the respawn loop restarts the
 # process if it dies; a Machine stop ends all four (exit 130).
 if [ -n "${R2_ACCESS_KEY_ID:-}" ] && [ -n "${R2_BUCKET_CONFIG:-}" ] \
-   && /opt/hermes/.venv/bin/python -c "import root_pollers, config_applier, spec_applier, skills_applier, firm_inputs_applier, establish_intake" 2>/dev/null; then
+   && ${SMD_LAYOUT_HERMES_PYTHON} -c "import root_pollers, config_applier, spec_applier, skills_applier, firm_inputs_applier, establish_intake" 2>/dev/null; then
   smd_root_poller root_pollers "root pollers"
   log "Root config applier launched (uid 0; polls R2 for live customer.yaml changes)"
   log "Root authored-spec applier launched (uid 0; polls R2 for live spec changes)"
@@ -669,18 +678,17 @@ fi
 # starts only the lanes this seat authors (SMD_AUTHORED_LANES, exported above).
 if [ -z "${SMD_AUTHORED_LANES//,/}" ]; then
   log "Root jobs daemon NOT launched (this seat authors no job lane)"
-elif [ -x /opt/jobs/.venv/bin/python ] \
-   && /opt/jobs/.venv/bin/python -c "import jobs.daemon" 2>/dev/null; then
+elif [ -x ${SMD_LAYOUT_JOBS_PYTHON} ] && ${SMD_LAYOUT_JOBS_PYTHON} -c "import jobs.daemon" 2>/dev/null; then
   # The stop flag: the supervisor (and tini's group signal) TERMs this loop
   # and the daemon together; the loop waits for the daemon's drain, then ends.
   ( _mc_stop=""; trap '_mc_stop=1' TERM INT
     while true; do
       # shellcheck disable=SC2046  # word-split on purpose: NAME=BYTES words
-      /usr/bin/env $(/opt/jobs/.venv/bin/python -m jobs.lane_memory "${LIVE_CUSTOMER_YAML}" 2>/dev/null || true) SMD_JOBS_RUN_DIR="${JOBS_RUN_DIR}" \
+      /usr/bin/env $(${SMD_LAYOUT_JOBS_PYTHON} -m jobs.lane_memory "${LIVE_CUSTOMER_YAML}" 2>/dev/null || true) SMD_JOBS_RUN_DIR="${JOBS_RUN_DIR}" \
       SMOKEBALL_REFRESH_TOKEN_FILE="${SMOKEBALL_TOKEN_RUN_DIR}/refresh_token" \
       MEDCHRON_FIRM_CONFIG="${MEDCHRON_FIRM_CONFIG}" \
-      JOBS_PRICING_JSON="/opt/jobs/anthropic_pricing.json" \
-      /opt/jobs/.venv/bin/python -m jobs.daemon && rc=0 || rc=$?
+      JOBS_PRICING_JSON="${SMD_LAYOUT_JOBS_PRICING}" \
+      ${SMD_LAYOUT_JOBS_PYTHON} -m jobs.daemon && rc=0 || rc=$?
       # 130 (jobs.daemon.STOPPED_EXIT): the Machine is stopping. A daemon
       # respawned now has no stop flag and works inside a dying Machine
       # (2026-10-15: a lost wake paged SMD for a deploy). Any other exit is a
@@ -692,7 +700,7 @@ elif [ -x /opt/jobs/.venv/bin/python ] \
   SMD_JOBS_LOOP_PID=$!
   log "Root jobs daemon launched (uid 0; runs chronology jobs as the jobs uid from ${JOBS_RUN_DIR}/queue)"
 else
-  log "ERROR: Root jobs daemon NOT launched: this seat authors job lanes (${SMD_AUTHORED_LANES}) but no jobs bundle is mounted at /opt/jobs (the image carries no runner since ADR 0100 W5)"
+  log "ERROR: Root jobs daemon NOT launched: this seat authors job lanes (${SMD_AUTHORED_LANES}) but no jobs bundle is mounted at ${SMD_LAYOUT_JOBS_BUNDLE} (the image carries no runner since ADR 0100 W5)"
 fi
 
 # Root-side authored-spec applier (ss ADR 0083 #2084). Same shape, same
@@ -773,7 +781,7 @@ GATEWAY_LIVENESS_PROC_DIR="${GATEWAY_LIVENESS_PROC_DIR:-/proc}"
 # perfectly healthy seat every 15 minutes until the ledger stopped it. Same
 # import-gate discipline as the establishment intake above: a lagging pin
 # degrades to a LOUD not-watching line, never to a wrong action.
-GATEWAY_LIVENESS_HEARTBEAT_WRITER="${GATEWAY_LIVENESS_HEARTBEAT_WRITER:-/opt/hermes/gateway/shutdown_watchdog.py}"
+GATEWAY_LIVENESS_HEARTBEAT_WRITER="${GATEWAY_LIVENESS_HEARTBEAT_WRITER:-${SMD_LAYOUT_HERMES_ROOT}/gateway/shutdown_watchdog.py}"
 # Every threshold is per-seat tunable, same shape as SMD_ESTABLISH_POLL_SECONDS
 # above. 240s of staleness is 8 missed beats, and the margin is sized against
 # CPU STARVATION rather than out of deference to Hermes' own watchdog — that
@@ -910,7 +918,7 @@ gateway_heartbeat_path() {
 
 # Epoch first so the window comparison is integer arithmetic, no date parsing.
 gateway_liveness_record_kill() {
-  "${SMD_ROOT_LEDGER_PY:-/opt/hermes/.venv/bin/python3}" "${SMD_ROOT_LEDGER:-/app/runners/supervisor/root_ledger.py}" \
+  "${SMD_ROOT_LEDGER_PY:-${SMD_LAYOUT_HERMES_PYTHON3}}" "${SMD_ROOT_LEDGER:-/app/runners/supervisor/root_ledger.py}" \
     append "${GATEWAY_LIVENESS_LEDGER_DIR}" kills "$(date -u +%s) $(date -u +%Y-%m-%dT%H:%M:%SZ) $1" \
     || log "WARN: kill ledger refused this restart (see root_ledger); it is not counted, and the restart limit is NOT being enforced"
 }
@@ -922,7 +930,7 @@ gateway_liveness_record_kill() {
 # make root write, chmod or follow anything (review 2026-10-20).
 gateway_liveness_kill_budget_ok() {
   local count
-  count="$("${SMD_ROOT_LEDGER_PY:-/opt/hermes/.venv/bin/python3}" "${SMD_ROOT_LEDGER:-/app/runners/supervisor/root_ledger.py}" \
+  count="$("${SMD_ROOT_LEDGER_PY:-${SMD_LAYOUT_HERMES_PYTHON3}}" "${SMD_ROOT_LEDGER:-/app/runners/supervisor/root_ledger.py}" \
     count "${GATEWAY_LIVENESS_LEDGER_DIR}" kills "$(( $(date -u +%s) - SMD_GATEWAY_LIVENESS_KILL_WINDOW_SECONDS ))")" || { count=0; gateway_liveness_nag "kill ledger unreadable (see root_ledger); the restart limit is NOT being enforced"; }
   [ "${count:-0}" -lt "${SMD_GATEWAY_LIVENESS_MAX_KILLS}" ]
 }
@@ -959,7 +967,7 @@ gateway_liveness_request_dump() {
     log "Gateway liveness: heartbeat names pid '${hbpid}', container main is ${SMD_GATEWAY_PID}; skipping the stack dump"
     return 0
   fi
-  if ! grep -q 'faulthandler.register' /opt/hermes/gateway/run.py 2>/dev/null; then
+  if ! grep -q 'faulthandler.register' ${SMD_LAYOUT_HERMES_ROOT}/gateway/run.py 2>/dev/null; then
     log "Gateway liveness: this Hermes pin registers no SIGUSR2 faulthandler; skipping the stack dump (sending it would terminate the process unlogged)"
     return 0
   fi
@@ -1258,7 +1266,7 @@ if [ ! -f "${INVARIANT7_BOOT_CHECK}" ]; then
   log "FATAL: cross-machine isolation boot check module missing (${INVARIANT7_BOOT_CHECK}); refusing to boot (ADR 0009 / SEC-22)"
   exit 3
 fi
-if PYTHONPATH=/app /opt/hermes/.venv/bin/python3 "${INVARIANT7_BOOT_CHECK}"; then
+if PYTHONPATH=/app ${SMD_LAYOUT_HERMES_PYTHON3} "${INVARIANT7_BOOT_CHECK}"; then
   log "Cross-machine isolation boot check PASSED (ADR 0009 / SEC-22)"
 else
   log "FATAL: INVARIANT_BOOT_CHECK_FAILED — cross-machine isolation boot check refused boot (ADR 0009 / SEC-22); see stderr for the offending binding or a module import error (both fail closed)"
@@ -1290,7 +1298,7 @@ if [ ! -f "${SPEC_OWNERSHIP_CHECK}" ]; then
   log "FATAL: authored-spec ownership boot check module missing (${SPEC_OWNERSHIP_CHECK}); refusing to boot (ss ADR 0083)"
   exit 3
 fi
-if PYTHONPATH=/app /opt/hermes/.venv/bin/python3 "${SPEC_OWNERSHIP_CHECK}"; then
+if PYTHONPATH=/app ${SMD_LAYOUT_HERMES_PYTHON3} "${SPEC_OWNERSHIP_CHECK}"; then
   log "Authored-spec tree ownership check PASSED (ss ADR 0083)"
 else
   log "FATAL: SPEC_DIR_OWNERSHIP_CHECK_FAILED — the authored-spec tree is writable by the agent uid, or reaches outside itself; refusing to boot (ss ADR 0083); see stderr for the offending paths"

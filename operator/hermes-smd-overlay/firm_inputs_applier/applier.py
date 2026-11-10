@@ -40,12 +40,14 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from shared import seat_layout
+
 logger = logging.getLogger("firm_inputs_applier")
 
 DEFAULT_CONFIG_DIR = "/var/lib/smd-config"
 DEFAULT_STATE_DIR = "/run/smd-firm-inputs"
 DEFAULT_LANE_STATE_DIR = "/run/smd-lanes"
-DEFAULT_VALIDATOR_PYTHON = "/opt/jobs/.venv/bin/python"
+DEFAULT_VALIDATOR_PYTHON = seat_layout.JOBS_PYTHON
 STATE_FILE = "state.json"
 #: The validator's first line for a lane's refused version, root-only, beside the state file:
 #: ``<lane>.rejected``. The state file itself is world-readable (the heartbeat runs as hermes and

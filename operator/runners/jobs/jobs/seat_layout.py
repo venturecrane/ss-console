@@ -16,10 +16,13 @@ AUDIT_RUN = "/run/smd-audit"
 BROKER_PYTHON = "/opt/workspace-broker/.venv/bin/python"
 BROKER_ROOT = "/opt/workspace-broker"
 BROKER_SOCKET = "/run/smd-workspace-broker/broker.sock"
+CASEFILE_QUEUE = "/run/smd-jobs/casefile-queue"
 CASEWORK_LEDGER = "/opt/data/audit/casework-ledger.jsonl"
 CONNECTORS_ROOT = "/opt/connectors"
 CUSTOMER_YAML = "/var/lib/smd-config/customer.yaml"
 DATA = "/opt/data"
+DEMAND_QUEUE = "/run/smd-jobs/demand-queue"
+DRAFTING_QUEUE = "/run/smd-jobs/drafting-queue"
 ESCALATION_LEDGER = "/opt/data/audit/escalation-ledger.jsonl"
 HERMES_PYTHON = "/opt/hermes/.venv/bin/python"
 HERMES_PYTHON3 = "/opt/hermes/.venv/bin/python3"
@@ -27,14 +30,21 @@ HERMES_ROOT = "/opt/hermes"
 HERMES_SHA = "/opt/hermes/HERMES_SHA"
 HERMES_VENV = "/opt/hermes/.venv"
 INSTALLS = "/opt/data/installs"
+JOBS_BIN = "/opt/jobs/.venv/bin/jobs"
 JOBS_BUNDLE = "/opt/jobs"
 JOBS_DATA = "/opt/data/jobs"
+JOBS_PRICING = "/opt/jobs/anthropic_pricing.json"
 JOBS_PYTHON = "/opt/jobs/.venv/bin/python"
 JOBS_QUEUE = "/run/smd-jobs/queue"
 JOBS_RUN = "/run/smd-jobs"
 LANES_RUN = "/run/smd-lanes"
+LITIGATION_QUEUE = "/run/smd-jobs/litigation-queue"
 MARKETING_REGISTERS = "/var/lib/smd-config/marketing/marketing-firm.yaml"
+NEGOTIATION_QUEUE = "/run/smd-jobs/negotiation-queue"
 PROFILES = "/opt/data/profiles"
+RECORDS_QUEUE = "/run/smd-jobs/records-queue"
+RECORDS_QUEUE_VOLUME = "/opt/data/jobs/records-queue"
+RECORDS_STATE = "/opt/data/jobs/records-state"
 REQUESTS_DB = "/opt/data/requests.db"
 SELFTEST_RESULTS = "/run/smd-selftest/results.json"
 SKILLS = "/opt/data/skills"
@@ -53,10 +63,13 @@ PATHS: dict[str, str] = {
     "broker_python": BROKER_PYTHON,
     "broker_root": BROKER_ROOT,
     "broker_socket": BROKER_SOCKET,
+    "casefile_queue": CASEFILE_QUEUE,
     "casework_ledger": CASEWORK_LEDGER,
     "connectors_root": CONNECTORS_ROOT,
     "customer_yaml": CUSTOMER_YAML,
     "data": DATA,
+    "demand_queue": DEMAND_QUEUE,
+    "drafting_queue": DRAFTING_QUEUE,
     "escalation_ledger": ESCALATION_LEDGER,
     "hermes_python": HERMES_PYTHON,
     "hermes_python3": HERMES_PYTHON3,
@@ -64,14 +77,21 @@ PATHS: dict[str, str] = {
     "hermes_sha": HERMES_SHA,
     "hermes_venv": HERMES_VENV,
     "installs": INSTALLS,
+    "jobs_bin": JOBS_BIN,
     "jobs_bundle": JOBS_BUNDLE,
     "jobs_data": JOBS_DATA,
+    "jobs_pricing": JOBS_PRICING,
     "jobs_python": JOBS_PYTHON,
     "jobs_queue": JOBS_QUEUE,
     "jobs_run": JOBS_RUN,
     "lanes_run": LANES_RUN,
+    "litigation_queue": LITIGATION_QUEUE,
     "marketing_registers": MARKETING_REGISTERS,
+    "negotiation_queue": NEGOTIATION_QUEUE,
     "profiles": PROFILES,
+    "records_queue": RECORDS_QUEUE,
+    "records_queue_volume": RECORDS_QUEUE_VOLUME,
+    "records_state": RECORDS_STATE,
     "requests_db": REQUESTS_DB,
     "selftest_results": SELFTEST_RESULTS,
     "skills": SKILLS,

@@ -36,20 +36,23 @@
 
 import type { ValidationError } from './types'
 import { isPlainObject } from './helpers'
+import { SEAT_LAYOUT } from '../seat-layout.generated'
 
 const STORE_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
 // A frontmatter key, as the overlay's FIELD_RE spells it.
 const FIELD_NAME = /^[a-z][a-z0-9_]{0,63}$/
 const POLICY_KEYS = ['owner_field', 'readers', 'index', 'writers'] as const
 const ALLOWED_KEYS = new Set<string>(['name', 'path', ...POLICY_KEYS])
-const VOLUME_ROOT = '/opt/data'
+// The seat paths come from the generated seat layout (operator/contracts/seat-layout.yaml);
+// .smd is not declared there, and medchron is the pre-ADR 0103 tree it leaves out.
+const VOLUME_ROOT = SEAT_LAYOUT.data
 const RESERVED_PREFIXES = [
-  '/opt/data/profiles',
-  '/opt/data/attachment-spool',
-  '/opt/data/smokeball-extract-cache',
+  SEAT_LAYOUT.profiles,
+  SEAT_LAYOUT.attachment_spool,
+  SEAT_LAYOUT.smokeball_extract_cache,
   '/opt/data/.smd',
   '/opt/data/medchron',
-  '/opt/data/jobs',
+  SEAT_LAYOUT.jobs_data,
 ] as const
 
 /**

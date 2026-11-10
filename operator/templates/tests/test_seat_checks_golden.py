@@ -76,12 +76,33 @@ def test_seat_checks_compose_the_captured_commands() -> None:
     assert now == golden, "seat-checks.sh composes different commands than the captured fixture"
 
 
-def test_the_golden_can_fail(tmp_path: Path) -> None:
-    # FALSIFIER: one path spelling changed in a copy beside the generated layout.
+def _copy_with_layout(tmp_path: Path, layout: str) -> Path:
     copy = tmp_path / "seat-checks.sh"
-    text = SEAT_CHECKS.read_text(encoding="utf-8")
-    assert "smd-config/customer.yaml" in text
-    copy.write_text(text.replace("smd-config/customer.yaml", "smd-config/customer.yml", 1), encoding="utf-8")
-    generated = TEMPLATES / "_seat-layout.generated.sh"
-    (tmp_path / generated.name).write_text(generated.read_text(encoding="utf-8"), encoding="utf-8")
-    assert compose(copy) != FIXTURE.read_text(encoding="utf-8")
+    copy.write_text(SEAT_CHECKS.read_text(encoding="utf-8"), encoding="utf-8")
+    (tmp_path / "_seat-layout.generated.sh").write_text(layout, encoding="utf-8")
+    return copy
+
+
+def test_the_list_reads_the_generated_layout_beside_it(tmp_path: Path) -> None:
+    # FALSIFIER: the same list beside a layout whose jobs run dir moved (the run
+    # dir and every path derived from it, as the generator would write them)
+    # composes the moved commands, so the golden above measures the layout's values.
+    generated = (TEMPLATES / "_seat-layout.generated.sh").read_text(encoding="utf-8")
+    assert "SMD_LAYOUT_JOBS_RUN='/run/smd-jobs'\n" in generated
+    moved = generated.replace("='/run/smd-jobs", "='/run/smd-jobz")
+    golden = FIXTURE.read_text(encoding="utf-8")
+    assert compose(_copy_with_layout(tmp_path, generated)) == golden
+    assert compose(_copy_with_layout(tmp_path, moved)) == golden.replace("/run/smd-jobs", "/run/smd-jobz")
+    assert "/run/smd-jobz/tick" in golden.replace("/run/smd-jobs", "/run/smd-jobz")
+
+
+def test_a_list_without_its_layout_does_not_load(tmp_path: Path) -> None:
+    copy = tmp_path / "seat-checks.sh"
+    copy.write_text(SEAT_CHECKS.read_text(encoding="utf-8"), encoding="utf-8")
+    done = subprocess.run(  # noqa: S603 - sources a copy of the repo's own list
+        ["bash", "-c", 'source "$1" && echo loaded || echo refused', "nolayout", str(copy)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.stdout.strip() == "refused"

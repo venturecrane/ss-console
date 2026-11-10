@@ -23,8 +23,9 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { parse as parseYaml } from 'yaml'
+import { readSeatScript } from './_support/seat-layout'
 
-const ENTRYPOINT = readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8')
+const ENTRYPOINT = readSeatScript('operator/templates/entrypoint.sh')
 
 // Strip `#`-comment lines so assertions match executable content only — the
 // rationale comments deliberately name the failure mode and its keywords.

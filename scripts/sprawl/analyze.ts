@@ -134,6 +134,14 @@ const SHELL_ENV_ACCESS = new RegExp(`\\$\\{${NAME}(?::?[-=?+][^}]*)?\\}`, 'g')
  */
 const PLATFORM_ENV = /^(GITHUB|RUNNER)_/
 
+/**
+ * The seat layout's generated shell constants (operator/templates/_seat-layout.generated.sh,
+ * from operator/contracts/seat-layout.yaml). `${SMD_LAYOUT_JOBS_RUN}` is a read of the one
+ * declaration, as `seat_layout.JOBS_RUN` is in Python: the cure for a restated path, not
+ * an environment variable restated (the file assigns them and exports nothing).
+ */
+const LAYOUT_CONSTANT = /^SMD_LAYOUT_/
+
 export function languageOf(path: string): string {
   const m = /\.([a-z]+)$/.exec(path)
   const ext = m ? m[1] : ''
@@ -150,7 +158,9 @@ export function envNames(files: SourceFile[]): Set<string> {
   for (const f of files) {
     const patterns = languageOf(f.path) === 'shell' ? [...ENV_ACCESS, SHELL_ENV_ACCESS] : ENV_ACCESS
     for (const re of patterns) {
-      for (const m of f.text.matchAll(re)) if (!PLATFORM_ENV.test(m[1])) names.add(m[1])
+      for (const m of f.text.matchAll(re)) {
+        if (!PLATFORM_ENV.test(m[1]) && !LAYOUT_CONSTANT.test(m[1])) names.add(m[1])
+      }
     }
   }
   return names

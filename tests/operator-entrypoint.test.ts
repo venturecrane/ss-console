@@ -30,8 +30,9 @@ import {
 } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
+import { readSeatScript } from './_support/seat-layout'
 
-const ENTRYPOINT = readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8')
+const ENTRYPOINT = readSeatScript('operator/templates/entrypoint.sh')
 
 // Strip `#`-comment lines so assertions match executable content only — the
 // supervisor's rationale comments deliberately NAME the failure mode.
@@ -41,7 +42,7 @@ const ENTRYPOINT_CODE = ENTRYPOINT.split('\n')
 
 // ADR 0100: the lanes' shared boot work (authored lanes, the chronology firm config
 // and controls, the run dir and its bind mount) is sourced from entrypoint-lanes.sh.
-const LANES_CODE = readFileSync(resolve('operator/templates/entrypoint-lanes.sh'), 'utf8')
+const LANES_CODE = readSeatScript('operator/templates/entrypoint-lanes.sh')
   .split('\n')
   .filter((l) => !/^\s*#/.test(l))
   .join('\n')
@@ -768,7 +769,7 @@ SMD_AUTHORED_LANES=records SMD_BUNDLE_STATE_DIR="${dir}/state" SMD_BUNDLE_PYTHON
  * removed as if it were empty, and a move whose file counts are not recorded.
  */
 describe('entrypoint-lanes: the jobs volume epoch (ADR 0103)', () => {
-  const LANES_RAW = readFileSync(resolve('operator/templates/entrypoint-lanes.sh'), 'utf8')
+  const LANES_RAW = readSeatScript('operator/templates/entrypoint-lanes.sh')
   const start = LANES_RAW.indexOf('# >>> jobs-volume')
   const end = LANES_RAW.indexOf('# <<< jobs-volume')
   const BLOCK = LANES_RAW.slice(start, end)
@@ -1049,7 +1050,7 @@ describe('entrypoint lane fragments: versioned firm inputs, validated before the
   }
 
   it('the chronology config is adopted after the bundle mounts, through the same helper', () => {
-    const lanes = readFileSync(resolve('operator/templates/entrypoint-lanes.sh'), 'utf8')
+    const lanes = readSeatScript('operator/templates/entrypoint-lanes.sh')
     const adopt = lanes.indexOf(
       '_adopt_lane_inputs medchron "${MEDCHRON_FIRM_CONFIG}" "${MEDCHRON_FIRM_CONFIG}.r2.tmp"'
     )

@@ -40,8 +40,12 @@ if [[ ! "${SLUG}" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; then
   exit 2
 fi
 APP="hermes-${SLUG}"
-JOBS="/opt/jobs/.venv/bin/jobs"
-RUN_DIR="/run/smd-jobs"
+# The seat's folder layout, from this checkout (operator/contracts/seat-layout.yaml,
+# generated): the runner and run dir the commands below name on the seat.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/../templates/_seat-layout.generated.sh"
+JOBS="${SMD_LAYOUT_JOBS_BIN}"
+RUN_DIR="${SMD_LAYOUT_JOBS_RUN}"
 RUN_DIR_BEFORE_R2="/run/smd-medchron"
 
 on_seat() {

@@ -69,6 +69,7 @@ from bundle_installer.manifest import (
     pointer_key,
     tarball_key,
 )
+from shared import seat_layout
 from skills_applier.applier import (
     CURRENT,
     PointerMissing,
@@ -97,7 +98,7 @@ DEFAULT_JOBS_RUNTIME = "/app/jobs-runtime.sh"
 #: Absolute symlink targets a bundle may carry. A venv's ``bin/python`` points
 #: at the base interpreter under /usr; nothing in a bundle points into the
 #: agent's volume, /tmp or /run.
-_LINK_ROOTS = ("/usr/", "/opt/jobs/", "/opt/connectors/")
+_LINK_ROOTS = ("/usr/", f"{seat_layout.JOBS_BUNDLE}/", "/opt/connectors/")
 _CHUNK = 1024 * 1024
 _IMPORT_TIMEOUT_SECONDS = 300
 

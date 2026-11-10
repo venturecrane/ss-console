@@ -33,6 +33,8 @@ from pathlib import Path
 
 import pytest
 
+from bin.lib.seat_layout_gen import expand_shell
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ENTRYPOINT = REPO_ROOT / "operator" / "templates" / "entrypoint.sh"
 ROOT_LEDGER = REPO_ROOT / "operator" / "runners" / "supervisor" / "root_ledger.py"
@@ -48,7 +50,7 @@ GATEWAY_PID = "4242"
 
 
 def _extract_supervisor() -> str:
-    src = ENTRYPOINT.read_text()
+    src = expand_shell(ENTRYPOINT.read_text())  # the seat layout's paths, as the seat runs it
     start = src.find(_START)
     assert start != -1, f"supervisor block start anchor not found in {ENTRYPOINT}"
     end = src.find(_END, start)
