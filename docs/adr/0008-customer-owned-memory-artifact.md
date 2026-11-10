@@ -14,6 +14,8 @@ related-issue: https://github.com/venturecrane/ss-console/issues/828
 
 ## Supersession note (2026-05-24)
 
+> **Amendment (2026-11-09).** Two of the three subsystems named below have changed since. `persona_observations` is a table in Machine-local SQLite on the seat's volume, not a Cloudflare D1 database ([ADR 0062](./0062-operator-cost-plane.md), Context item 1). The voice-samples vault no longer exists: the sample-transform voice mechanism was removed on 2026-11-07, and a firm's voice is an authored specification per output class ([ADR 0083](./0083-authorship-model-output-classes.md)). The ownership and portability principles stand.
+
 The "customer-owned memory artifact" is not a separate system. It is the union of three concrete per-customer subsystems, each independently customer-owned, portable, and operationally readable:
 
 1. **D1 `persona_observations`** — the mirror of Honcho's conclusions (see [ADR 0016 rewrite](./0016-honcho-disposition.md)). Carries provenance (`source_message_ids`, `confidence`, `evidence_status`) and is the customer-readable record of "what the Operator has learned about how to communicate on your behalf."

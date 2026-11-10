@@ -27,9 +27,10 @@ import yaml
 
 SLUG = "boot-harness"
 SOURCE_SLUG = "smd-staging"
-# A 1 GB seat's shape (ring 2: scott, brokery, captain-mark run shared-cpu-1x /
-# 1024 MB, the size of the 2026-09-01 startup-watchdog crash loop). scott carries
-# no medchron or litigation lane, so no lane-memory check applies at 1 GB.
+# The smallest seat's shape (ring 2: scott, brokery, captain-mark run
+# shared-cpu-2x / 2048 MB, the floor after the 2026-09-01 and 2026-11-09
+# startup-watchdog crash loops). scott carries no medchron or litigation lane,
+# so no lane-memory check applies.
 SOURCE_SMALL = "scott"
 NOBODY = "nobody@boot-harness.invalid"
 _DROPPED_KEYS = ("connectors", "webhook_triggers", "mcp_connector", "telegram", "record_stores")

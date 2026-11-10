@@ -14,7 +14,7 @@ related-adr: docs/adr/0007-per-customer-machine-isolation.md, docs/adr/0009-cros
 ## Context
 
 Each client's operator keeps its runtime state — audit log, activity, matters/workstreams, memory observations — on that
-operator's own isolated per-customer Machine D1 ([ADR 0007](0007-per-customer-machine-isolation.md)). That isolation is a
+operator's own isolated per-customer Machine D1 ([ADR 0007](0007-per-customer-machine-isolation.md)). **[Amended 2026-11-09: "Machine D1" and "runtime D1" in this record mean Machine-local SQLite on the seat's Fly volume. The per-customer Cloudflare D1 was never built ([ADR 0062](0062-operator-cost-plane.md), Context). The isolation rule is unchanged.]** That isolation is a
 security guarantee: the console cannot query a Machine's D1 directly, and cross-Machine queries are prohibited
 ([ADR 0009](0009-cross-machine-query-prohibition.md), invariant #7).
 

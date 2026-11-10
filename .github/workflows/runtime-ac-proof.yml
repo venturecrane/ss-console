@@ -1,7 +1,27 @@
 name: Runtime AC proof
 
-# Law 9 merge gate. A PR may not mark a `(runtime)` acceptance criterion as
-# `met` without a crane_verify ID in the Evidence column.
+# Law 9 merge gate. Every `(runtime)` acceptance criterion in a PR's status
+# table is, in its Status column, one of:
+#
+#   met       with a crane_verify ID (live_state or fresh_process, resolved
+#             against the ledger) in the Evidence column;
+#   deferred  with `owner: <who switches it on>; enforce_by: YYYY-MM-DD`
+#             anywhere in the row, the date not already passed;
+#   n/a       the AC does not apply to this PR.
+#
+#   | (runtime) Seat adopts it | deferred | owner: release lead; enforce_by: 2026-11-20; needs the next release |
+#
+# Anything else ("not met", "unmet", "pending", "not yet", "open") is red.
+#
+# ACCEPTED FORM, 2026-11-09 (critique PREV-6). #3852 merged with two runtime
+# rows "not met" and this check green: it read only a section headed exactly
+# "## Acceptance criteria status", and skipped every row not marked met. Of
+# the 40 merged PRs with a `(runtime)` row from 10-16 to 11-09, 3 used that
+# heading, and none wrote a deferral with an owner or a date; the vocabulary
+# was "not met", "unmet", "pending", "not yet", "open". The parser now reads
+# every markdown table whose header has a Status (or State) column, under any
+# heading, finds the status and evidence columns by header name, and takes the
+# runtime tag from the AC text or from a Layer/Kind column.
 #
 # Rationale (2026-07-28, the entitlement-control incident): tick-acs-on-merge
 # parses the merging PR's own AC status table and ticks the linked issue's
@@ -23,6 +43,14 @@ name: Runtime AC proof
 # LEDGER LOOKUP. Each cited vfy_ ID is resolved against crane-context's
 # GET /verify/lookup (the endpoint crane-console's own pr-verify-gate uses) and
 # must exist as a live_state or fresh_process row. Unreachable ledger = red.
+#
+# TOUCH RULE, 2026-11-09 (wave 2 PR 1). The PR's changed paths come from
+# pulls.listFiles (paginated) and scripts/lib/touch-map.mjs classifies them as
+# send-path, client-lane, seat or none. A client-surface PR with no `(runtime)`
+# row is a WARNING and a job-summary line only (replay: 69.7% of 1,120 merged
+# PRs touch a client surface; blocking at that rate buys boilerplate). A
+# client-surface PR with a bare `n/a` runtime row (no reason) FAILS (replay: 0
+# in the last 50). A failed listFiles call skips the rule with a warning.
 #
 # Parser lives in scripts/runtime-ac-proof.mjs and is unit-tested in
 # tests/runtime-ac-proof.test.ts, so the gate's logic is not untestable inline
@@ -72,7 +100,7 @@ jobs:
           CRANE_RELAY_KEY: ${{ secrets.CRANE_RELAY_KEY }}
         with:
           script: |
-            const { checkRuntimeAcProof, formatViolations } = await import(
+            const { checkRuntimeAcProof, formatViolations, checkTouchRule } = await import(
               `${process.env.GITHUB_WORKSPACE}/scripts/runtime-ac-proof.mjs`
             );
 
@@ -82,6 +110,34 @@ jobs:
             });
 
             const failures = [];
+
+            // The touch rule: the PR's changed paths, classified by
+            // scripts/lib/touch-map.mjs. "No (runtime) row on a client-surface
+            // PR" is a warning only; a bare n/a on such a PR fails.
+            let paths = null;
+            try {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              paths = files.map((f) => f.filename);
+            } catch (err) {
+              core.warning(`Touch rule skipped: could not list the PR's files (${err.message}).`);
+            }
+            if (paths) {
+              const touch = checkTouchRule(body, paths);
+              core.info(`Touch map: ${touch.cls} (${paths.length} changed file(s)).`);
+              if (touch.warnings.length > 0) {
+                for (const w of touch.warnings) core.warning(w);
+                await core.summary
+                  .addHeading('Touch rule (reported, not blocking)', 3)
+                  .addList(touch.warnings)
+                  .write();
+              }
+              failures.push(...touch.blocking);
+            }
             if (result.violations.length > 0) failures.push(formatViolations(result.violations));
             if (result.ledgerError) {
               failures.push(

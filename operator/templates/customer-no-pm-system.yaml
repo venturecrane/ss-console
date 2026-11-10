@@ -42,7 +42,7 @@ fly_region: '[FLY REGION SLUG, e.g., iad / lax / ord]'
 model: claude-opus-4-7
 
 machine:
-  size: shared-cpu-1x
+  size: shared-cpu-2x
   memory_mb: 2048
 
 # ---- HUMANS WITH PORTAL ACCESS ----

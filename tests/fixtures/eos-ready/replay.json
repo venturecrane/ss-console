@@ -1,0 +1,310 @@
+{
+  "source": "gh pr view + pulls/N/files, 2026-11-09. library = merge commits carrying the document-library session trailer; library-closed = #3882 and #3883 (closed, folded into #3906); wave1 = #3909-#3913 session. Paths and parsed row kinds only.",
+  "prs": [
+    {
+      "number": 3891,
+      "group": "library",
+      "paths": ["operator/customers/ashton-price/customer.yaml"],
+      "rows": []
+    },
+    {
+      "number": 3892,
+      "group": "library",
+      "paths": [
+        "docs/handbook/continuity.md",
+        "docs/handbook/glossary.md",
+        "docs/handbook/ops-machine.md",
+        "docs/handbook/scheduled-jobs.md",
+        "operator/ops-machine/bin/claude",
+        "operator/ops-machine/bin/ops-claude-accounts",
+        "operator/ops-machine/bin/ops-claude-failover",
+        "operator/ops-machine/bin/ops-reap-tasks",
+        "operator/ops-machine/bin/ops-selftest",
+        "operator/ops-machine/bin/ops-tool-env",
+        "operator/ops-machine/bin/ops-workspace",
+        "operator/ops-machine/crontab",
+        "operator/ops-machine/crontab-workspace",
+        "operator/ops-machine/entrypoint.sh",
+        "tests/ops-claude-failover.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3894,
+      "group": "library",
+      "paths": [
+        "operator/ops-machine/bin/claude",
+        "operator/ops-machine/bin/ops-workspace",
+        "tests/ops-claude-failover.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3895,
+      "group": "library",
+      "paths": [
+        "docs/handbook/ops-machine.md",
+        "operator/ops-machine/bin/ops-home-bin-sync",
+        "operator/ops-machine/bin/ops-selftest",
+        "operator/ops-machine/entrypoint.sh",
+        "tests/ops-home-bin-sync.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3896,
+      "group": "library",
+      "paths": [
+        "operator/ops-machine/bin/ops-workspace",
+        "operator/ops-machine/laptop/ops-handoff",
+        "tests/ops-handoff.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3897,
+      "group": "library",
+      "paths": [
+        "operator/ops-machine/bin/claude",
+        "operator/ops-machine/bin/ops-claude-failover",
+        "tests/ops-claude-failover.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3898,
+      "group": "library",
+      "paths": [
+        "docs/handbook/ops-machine.md",
+        "operator/ops-machine/bin/ops-workspace",
+        "operator/ops-machine/workspaces.json"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3899,
+      "group": "library",
+      "paths": [
+        "docs/handbook/ops-machine.md",
+        "operator/ops-machine/bin/ops-workspace",
+        "operator/ops-machine/workspaces.json"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3900,
+      "group": "library",
+      "paths": [
+        ".claude/hooks/reflex-primer.sh",
+        ".claude/skills/eos/SKILL.md",
+        "CLAUDE.md",
+        "docs/doctrine/agent-operating-doctrine.md",
+        "docs/doctrine/wired-contract.md",
+        "docs/handbook/operating-model.md"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3901,
+      "group": "library",
+      "paths": ["docs/adr/0104-logic-in-code-six-mechanisms.md"],
+      "rows": []
+    },
+    {
+      "number": 3905,
+      "group": "library",
+      "paths": [
+        "operator/connectors/smokeball/smokeball_connector/docx_base.py",
+        "operator/connectors/smokeball/smokeball_connector/docx_format.py",
+        "operator/runners/jobs/jobs/__main__.py",
+        "operator/runners/jobs/jobs/drafting/base_lay.py",
+        "operator/runners/jobs/jobs/drafting/firm.py",
+        "operator/runners/jobs/jobs/drafting/library_pick.py",
+        "operator/runners/jobs/jobs/drafting/placing.py",
+        "operator/runners/jobs/jobs/drafting/pleading.py",
+        "operator/runners/jobs/jobs/drafting/render.py",
+        "operator/runners/jobs/jobs/firmbase/cli.py",
+        "operator/runners/jobs/jobs/library_setup/make.py",
+        "operator/runners/jobs/jobs/library_setup/styles_make.py",
+        "operator/runners/jobs/tests/test_drafting_library_pick.py",
+        "operator/runners/jobs/tests/test_drafting_styles_base.py",
+        "operator/runners/jobs/tests/test_library_callers.py"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3906,
+      "group": "library",
+      "paths": [
+        "docs/handbook/operator-platform.md",
+        "docs/specs/operator/customer-yaml-schema.md",
+        "operator/customers/pilot-smokeball/customer.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-lanes/library_setup.py",
+        "operator/hermes-smd-overlay/tests/test_library_setup_tool.py",
+        "operator/runners/jobs/jobs/firmbase/hunt.py",
+        "operator/runners/jobs/jobs/library_setup/__init__.py",
+        "operator/runners/jobs/jobs/library_setup/accept.py",
+        "operator/runners/jobs/jobs/library_setup/job.py",
+        "operator/runners/jobs/jobs/library_setup/make.py",
+        "operator/runners/jobs/jobs/library_setup/plan.py",
+        "operator/runners/jobs/jobs/library_setup/styles_make.py",
+        "operator/runners/jobs/jobs/library_setup_handoff.py",
+        "operator/runners/jobs/jobs/library_setup_lane.py",
+        "operator/runners/jobs/tests/test_library_setup.py",
+        "operator/runners/jobs/tests/test_library_setup_every_kind.py",
+        "operator/runners/jobs/tests/test_library_setup_rehearse.py",
+        "operator/runners/jobs/tools/library_setup_rehearse.py",
+        "operator/skills/document-library-establishment/SKILL.md",
+        "operator/skills/operator-self-initiation/SKILL.md",
+        "operator/workspace_broker/library_setup_choose.py",
+        "operator/workspace_broker/library_setup_ledger.py",
+        "operator/workspace_broker/library_setup_verbs.py",
+        "operator/workspace_broker/library_setup_wording.py",
+        "operator/workspace_broker/tests/test_library_setup_every_kind.py",
+        "operator/workspace_broker/tests/test_library_setup_wording.py",
+        "src/lib/portal/operator/facets/skills/skill-summaries.ts",
+        "tests/skill-reply-rules.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3908,
+      "group": "library",
+      "paths": ["operator/customers/ashton-price/customer.yaml"],
+      "rows": []
+    },
+    {
+      "number": 3882,
+      "group": "library-closed",
+      "paths": [
+        "docs/handbook/operator-platform.md",
+        "docs/specs/operator/customer-yaml-schema.md",
+        "operator/bin/lib/work_health_sources.py",
+        "operator/bin/library-readback.sh",
+        "operator/connectors/smokeball/smokeball_connector/logic_in_code.py",
+        "operator/customers/_template/presets/pi-law-firm/customer.yaml",
+        "operator/hermes-smd-overlay/bootstrap/validate.py",
+        "operator/hermes-smd-overlay/shared/heartbeat.py",
+        "operator/hermes-smd-overlay/shared/logic_in_code.py",
+        "operator/hermes-smd-overlay/tests/test_customer_config.py",
+        "operator/hermes-smd-overlay/tests/test_heartbeat.py",
+        "operator/runners/jobs/jobs/__main__.py",
+        "operator/runners/jobs/jobs/demand_lane.py",
+        "operator/runners/jobs/jobs/drafting_lane.py",
+        "operator/runners/jobs/jobs/library_readback/__init__.py",
+        "operator/runners/jobs/jobs/library_readback/attorney.py",
+        "operator/runners/jobs/jobs/library_readback/cli.py",
+        "operator/runners/jobs/jobs/library_readback/lane.py",
+        "operator/runners/jobs/jobs/library_readback/measure.py",
+        "operator/runners/jobs/jobs/library_readback/rules.py",
+        "operator/runners/jobs/jobs/library_readback/score.py",
+        "operator/runners/jobs/jobs/proof/gate.py",
+        "operator/runners/jobs/tests/test_library_readback.py",
+        "operator/tests/test_logic_in_code_sync.py",
+        "operator/workspace_broker/delivery_proof.py",
+        "operator/workspace_broker/logic_in_code.py",
+        "src/lib/operator/customer-yaml/sections-logic-in-code.ts",
+        "src/lib/operator/customer-yaml/types.ts",
+        "tests/customer-yaml-logic-in-code.test.ts"
+      ],
+      "rows": [
+        {
+          "kind": "unmet",
+          "naReasoned": false
+        },
+        {
+          "kind": "unmet",
+          "naReasoned": false
+        }
+      ]
+    },
+    {
+      "number": 3883,
+      "group": "library-closed",
+      "paths": [
+        "operator/hermes-smd-overlay/tests/test_rule_reader_registry.py",
+        "operator/runners/jobs/jobs/drafting/compose.py",
+        "operator/runners/jobs/jobs/drafting/evidence_lane.py",
+        "operator/runners/jobs/jobs/drafting/firm.py",
+        "operator/runners/jobs/jobs/drafting/run.py",
+        "operator/runners/jobs/jobs/drafting/style_scope.py",
+        "operator/runners/jobs/jobs/firm_wording.py",
+        "operator/runners/jobs/tests/test_attorney_style.py",
+        "operator/runners/jobs/tests/test_firm_wording.py",
+        "operator/runners/jobs/tests/test_two_attorney_files.py"
+      ],
+      "rows": [
+        {
+          "kind": "unmet",
+          "naReasoned": false
+        }
+      ]
+    },
+    {
+      "number": 3909,
+      "group": "wave1",
+      "paths": [
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/workflows/runtime-ac-proof.yml",
+        "CLAUDE.md",
+        "docs/doctrine/wired-contract.md",
+        "docs/handbook/building-the-platform.md",
+        "scripts/runtime-ac-proof.mjs",
+        "tests/fixtures/runtime-ac-proof/recent-merged-tables.json",
+        "tests/runtime-ac-proof.test.ts"
+      ],
+      "rows": [
+        {
+          "kind": "met",
+          "naReasoned": false
+        }
+      ]
+    },
+    {
+      "number": 3910,
+      "group": "wave1",
+      "paths": [
+        ".claude/skills/auto-build/SKILL.md",
+        ".claude/skills/critique/SKILL.md",
+        ".claude/skills/wired/SKILL.md",
+        "CLAUDE.md",
+        "docs/doctrine/wired-contract.md",
+        "operator/CLAUDE.md",
+        "tests/smd-session-skills.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3912,
+      "group": "wave1",
+      "paths": [
+        "package.json",
+        "scripts/rework-measure.ts",
+        "scripts/rework/link.ts",
+        "scripts/rework/report.ts",
+        "tests/rework-link.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3913,
+      "group": "wave1",
+      "paths": [
+        "docs/adr/index.md",
+        "docs/adr/single-owner-registry.yaml",
+        "tests/_support/single-owner.ts",
+        "tests/single-owner-registry.test.ts"
+      ],
+      "rows": []
+    },
+    {
+      "number": 3916,
+      "group": "wave1",
+      "paths": [
+        "docs/adr/0083-authorship-model-output-classes.md",
+        "docs/adr/single-owner-registry.yaml"
+      ],
+      "rows": []
+    }
+  ]
+}
