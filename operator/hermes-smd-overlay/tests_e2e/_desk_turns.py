@@ -25,8 +25,11 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
+#: This repository's ``operator/`` tree (the broker's install on a seat).
+OPERATOR = Path(__file__).resolve().parents[2]
 SKILL = "rep-desk"
 REMINDERS = "rep-reminders"
 
@@ -87,9 +90,20 @@ def run_desk(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, Any]
     """The desk turns. Returns the digest's pre_run verdict and its turn label.
 
     The first turn's reply carries a receipt line, date included, through the
-    real reply relay and its checks."""
-    r.turn(
-        "a-desk-lead-and-reminder",
+    real reply relay and its checks.
+
+    Every desk label starts ``d-``, and each desk email starts on a fresh day
+    of the per-sender daily limit (the training slice's recorded departure,
+    ``_training_turns._fresh_day``): the foundation's turns spend A's three and
+    prove the limit, and that test leaves ``d-`` turns out of its count."""
+    from tests_e2e._training_turns import _fresh_day
+
+    def turn(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        _fresh_day()
+        return r.turn(*args, **kwargs)
+
+    turn(
+        "d-a-desk-lead-and-reminder",
         [
             (
                 "record_store_write",
@@ -110,11 +124,11 @@ def run_desk(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, Any]
         ],
         sender=a,
         body=f"New lead Globex, meeting today with the CFO, outline due in three days. {a_mark}",
-        final=receipt_ahead(f"Send Globex the pilot outline {a_mark}")
+        final_text=receipt_ahead(f"Send Globex the pilot outline {a_mark}")
         + "\nLead kept: Globex, meeting set.",
     )
-    r.turn(
-        "b-desk-reminder-and-look-across",
+    turn(
+        "d-b-desk-reminder-and-look-across",
         [
             ("reminder_set", {"when": "today", "what": f"Send Initech the deck {b_mark}"}),
             ("record_store_list", {"store": REMINDERS}),
@@ -128,8 +142,8 @@ def run_desk(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, Any]
         sender=b,
         body=f"Remind me today to send Initech the deck. {b_mark}",
     )
-    r.turn(
-        "a-brief-from-own-records",
+    turn(
+        "d-a-brief-from-own-records",
         [
             ("record_store_list", {"store": "rep-leads"}),
             ("record_store_read", {"store": "rep-leads", "name": "globex.md"}),
@@ -139,19 +153,19 @@ def run_desk(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, Any]
         ],
         sender=a,
         body="Brief me on Globex before my call.",
-        final=(
+        final_text=(
             "Who: Globex, the CFO.\n"
             "Where it stands: meeting set; next step, send the pilot outline.\n"
             "Amount: 12,000 dollars a year.\n"
             "Open questions: who else signs off.\n"
         ),
     )
-    r.turn(
-        "a-follow-up-draft",
+    turn(
+        "d-a-follow-up-draft",
         [("record_store_read", {"store": "rep-leads", "name": "globex.md"})],
         sender=a,
         body="Draft a follow-up to Globex.",
-        final=(
+        final_text=(
             "Draft for you to send:\n\n"
             "Thank you for the time today. As promised, here is an outline of how a pilot "
             "would start, built around the handoffs you described. Would a short call "
@@ -162,9 +176,20 @@ def run_desk(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, Any]
 
 
 def digest(r: Any) -> dict[str, Any]:
-    """The hourly job: the real pre_run, then the cron turn that sends."""
+    """The hourly job: the real pre_run, then the cron turn that sends.
+
+    The job counts walled directories nobody listed owns with the broker
+    tree's ``workspace_broker.person_orphans``, which a seat's agent reads from
+    the broker's install (``seat_layout.BROKER_ROOT``). Here that tree is this
+    repository's ``operator/``, put on the child's path: a recorded departure."""
+    import os
+
     from tests_e2e._cron_turn import cron_turn, run_pre_run
 
+    tree = str(OPERATOR)
+    path = os.environ.get("PYTHONPATH", "")
+    if tree not in path.split(os.pathsep):
+        os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (path, tree) if p)
     ran = run_pre_run(r.profile, SKILL, volume=r.volume)
     (r.root / "digest-pre-run.out").write_text(ran["stdout"] + ran["stderr"], encoding="utf-8")
     cron_turn(r, "desk-digest-cron-turn", skill=SKILL, script_output=json.dumps(ran["verdict"]))

@@ -12,8 +12,10 @@ A NOTE OR A LEAD CANNOT ENTER IT. This module opens exactly one store, the
 progress store, by its constant name, and that store holds ids and counts only
 (:func:`shared.training.clean_progress` re-cleans every record it reads, so even
 an edited file contributes nothing but counts). The only other inputs are the
-enrolled address and the name SMD issued the person's access for. There is no
-code path here that names another store, and the test pins that.
+enrolled address, the name SMD issued the person's access for, and the week's
+library-gap counts (``shared.gap_report.weekly_gap_counts``: topic keys from a
+closed list and counts, no text). There is no code path here that names
+another store, and the test pins that.
 
 HOW IT IS SENT. As a pre-rendered envelope (``shared.prerendered_dispatch``):
 the pre_run writes ``<persona home>/.smd/pre_run/rep-training.dispatch.json``
@@ -67,8 +69,41 @@ def _person_lines(
     return lines
 
 
-def render(cur: training.Curriculum, people: list[tuple[str, dict[str, Any] | None]]) -> str:
-    """The report body. ``people`` is ``[(label, progress or None)]`` in order."""
+#: The library-gap section (``shared.gap_report``): topic keys from a closed
+#: list and counts, nothing else, so no question, note or lead can reach it.
+GAP_HEADING = "Questions the library could not answer"
+GAP_UNREADABLE = "The count of questions the library could not answer could not be read this week."
+
+
+def gap_counts() -> dict[str, int] | None:
+    """The week's not-covered counts by topic, or None when the counter could
+    not be read (said in the report, never shown as no gaps)."""
+    from shared import gap_report
+
+    try:
+        return gap_report.weekly_gap_counts()
+    except Exception as exc:  # noqa: BLE001 - could not read is said, never "none"
+        logger.warning("training_report: gap counts unreadable (%s)", type(exc).__name__)
+        return None
+
+
+def _gap_lines(gaps: dict[str, int]) -> list[str]:
+    rows = sorted(((k, n) for k, n in gaps.items() if n), key=lambda r: (-r[1], r[0]))
+    if not rows:
+        return []
+    return ["", GAP_HEADING] + [f"- {k.replace('_', ' ').capitalize()}: {n}" for k, n in rows]
+
+
+def render(
+    cur: training.Curriculum,
+    people: list[tuple[str, dict[str, Any] | None]],
+    gaps: dict[str, int] | None = None,
+    *,
+    gaps_read: bool = True,
+) -> str:
+    """The report body. ``people`` is ``[(label, progress or None)]`` in order.
+    ``gaps`` is :func:`gap_counts`; the section is omitted when every count is
+    zero, and ``gaps_read=False`` prints the one could-not-read line."""
     ready = sum(1 for _, p in people if p is not None and training.readiness(cur, p)[0])
     n = len(people)
     lines = [
@@ -81,6 +116,7 @@ def render(cur: training.Curriculum, people: list[tuple[str, dict[str, Any] | No
     for label, progress in people:
         lines.append("")
         lines.extend(_person_lines(label, cur, progress))
+    lines.extend(_gap_lines(gaps or {}) if gaps_read else ["", GAP_UNREADABLE])
     return "\n".join(lines)
 
 
@@ -209,7 +245,8 @@ def run(
             "suppressed_wake_append", "SUPPRESSED_WAKE", "nobody_enrolled", {"people": 0}, cfg.slug
         )
         return {"wakeAgent": False, "status": "nobody_enrolled", "people": 0}
-    body = render(cur, people)
+    gaps = gap_counts()
+    body = render(cur, people, gaps, gaps_read=gaps is not None)
     now = clock() if callable(clock) else datetime.now(timezone.utc)
     stamp = now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     from shared import sender_enrollment
@@ -235,11 +272,14 @@ def main() -> int:
 
 
 __all__ = [
+    "GAP_HEADING",
+    "GAP_UNREADABLE",
     "NAMED_FIELD",
     "INTRO",
     "SKELETON",
     "SUBJECT",
     "build_envelope",
+    "gap_counts",
     "gather",
     "main",
     "render",

@@ -39,9 +39,11 @@ person's address:
 ``person_orphans.py`` lists the walled-store directories that belong to nobody
 listed now, by slug and count, through the same no-follow helpers.
 
-Rows are deleted with ``PRAGMA secure_delete`` on and the write-ahead log
-truncated afterwards, so the bytes are overwritten rather than left on a free
-page where a raw read of the file would still find them.
+Rows are deleted with ``PRAGMA secure_delete`` on, a database a row was deleted
+from is then VACUUMed (an older copy of a row the seat updated earlier sits on a
+free page secure_delete never saw), and the write-ahead log truncated
+afterwards, so the bytes are gone rather than left where a raw read of the file
+would still find them.
 
 WHAT IS KEPT, the NAMED-RETAINED SET (not deleted here, by decision; the purge
 report and the probe never claim them):
@@ -654,6 +656,14 @@ def _db_work(db: Path, rows_of: _RowsOf, address: str, act: bool) -> Callable[[]
             conn.execute("PRAGMA secure_delete = ON")
             with conn:
                 done = [[t, _delete_rowids(conn, t, ids)] for t, ids in rows_of(conn, address).items() if ids]
+            if done:
+                # secure_delete overwrites what THIS delete frees. A row the
+                # seat UPDATEd earlier (the request index fills in the reply)
+                # left its older copy on a free page under a connection without
+                # it, and a raw read of the file still finds the person's words
+                # there (the guide rehearsal's canary, 2026-11-10). VACUUM
+                # rewrites the file without its free pages.
+                conn.execute("VACUUM")
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             return done
         finally:

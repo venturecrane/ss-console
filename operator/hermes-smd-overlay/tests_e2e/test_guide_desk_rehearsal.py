@@ -66,14 +66,14 @@ def _broker(rehearsal: dict) -> list[dict]:
 
 
 def test_reminders_are_kept_behind_each_persons_wall(rehearsal) -> None:
-    a = _turn(rehearsal, "a-desk-lead-and-reminder")
+    a = _turn(rehearsal, "d-a-desk-lead-and-reminder")
     kept = [json.loads(r) for r in _results(a, "reminder_set")]
     assert [k["kept"] for k in kept] == [True, True], kept
     assert kept[0]["receipt"].startswith("Meeting kept for ")
     assert a["reply"].startswith(kept[1]["receipt"]), (
         "the reply must use the receipt line as written"
     )
-    b = _turn(rehearsal, "b-desk-reminder-and-look-across")
+    b = _turn(rehearsal, "d-b-desk-reminder-and-look-across")
     [b_kept] = [json.loads(r) for r in _results(b, "reminder_set")]
     assert B_MARK in b_kept["receipt"] and A_MARK not in b_kept["receipt"]
     reminders_list, leads_list = (json.loads(r) for r in _results(b, "record_store_list"))
@@ -92,7 +92,7 @@ def test_the_receipt_reply_went_out_through_the_reply_checks(rehearsal) -> None:
     receipt's date is refused before reminder_set and allowed after, on a turn
     that did read one, is ``tests/test_rep_desk.py::
     test_the_drafted_reply_with_the_receipt_passes_the_trust_gate``.)"""
-    a = _turn(rehearsal, "a-desk-lead-and-reminder")
+    a = _turn(rehearsal, "d-a-desk-lead-and-reminder")
     replies = [q for q in _broker(rehearsal) if q.get("action") == "agentmail_reply"]
     texts = [str((q.get("payload") or {}).get("text") or "") for q in replies]
     assert a["reply"].startswith("Reminder kept for ")
@@ -100,7 +100,7 @@ def test_the_receipt_reply_went_out_through_the_reply_checks(rehearsal) -> None:
 
 
 def test_a_brief_reads_only_the_persons_own_records(rehearsal) -> None:
-    brief = _turn(rehearsal, "a-brief-from-own-records")
+    brief = _turn(rehearsal, "d-a-brief-from-own-records")
     results = " ".join(c["result"] for c in brief["calls"])
     assert A_MARK in results and B_MARK not in results
     assert all('"error"' not in c["result"] for c in brief["calls"]), brief["calls"]
@@ -109,7 +109,7 @@ def test_a_brief_reads_only_the_persons_own_records(rehearsal) -> None:
 def test_the_follow_up_draft_goes_back_to_the_rep_and_nobody_else_is_sent_anything(
     rehearsal,
 ) -> None:
-    draft = _turn(rehearsal, "a-follow-up-draft")
+    draft = _turn(rehearsal, "d-a-follow-up-draft")
     assert draft["reply"].startswith("Draft for you to send:")
     replies = [q for q in _broker(rehearsal) if q.get("action") == "agentmail_reply"]
     assert any(
@@ -139,7 +139,12 @@ def test_the_hourly_digest_reaches_each_person_with_only_their_own(rehearsal) ->
         "deferred",
         "unreadable",
         "mark_failed",
+        "orphans",
+        "orphans_unreadable",
     }
+    # person_orphans ran from the hourly job and looked: nobody's directory
+    # here belongs to nobody listed (counts only, never a slug).
+    assert verdict["orphans"] == 0 and "orphans_unreadable" not in verdict, verdict
     turn = _turn(rehearsal, desk["turn"])
     assert (
         turn["exit"].startswith("text_response") and turn["job_name"] == "op-managed:guide:rep-desk"
@@ -189,7 +194,11 @@ def _named_tools() -> set[str]:
 def test_every_tool_the_procedure_names_is_offered_on_the_email_surface(rehearsal) -> None:
     named = _named_tools()
     assert named == {"record_store_list", "record_store_read", "record_store_write", "reminder_set"}
-    for label in ("a-desk-lead-and-reminder", "a-brief-from-own-records", "a-follow-up-draft"):
+    for label in (
+        "d-a-desk-lead-and-reminder",
+        "d-a-brief-from-own-records",
+        "d-a-follow-up-draft",
+    ):
         offered = {t.removeprefix("mcp__") for t in _turn(rehearsal, label)["offered"]}
         assert named <= offered, (label, named - offered)
 
@@ -212,7 +221,11 @@ def test_the_reply_checks_pass_every_desk_reply_and_fixed_line(rehearsal) -> Non
 
     replies = [
         _turn(rehearsal, label)["reply"]
-        for label in ("a-desk-lead-and-reminder", "a-brief-from-own-records", "a-follow-up-draft")
+        for label in (
+            "d-a-desk-lead-and-reminder",
+            "d-a-brief-from-own-records",
+            "d-a-follow-up-draft",
+        )
     ]
     for text in [*replies, *FIXED_LINES]:
         for surface in (output_checklist.STAFF_SEND, output_checklist.EVERY_OUTPUT):

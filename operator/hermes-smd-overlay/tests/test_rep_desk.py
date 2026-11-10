@@ -546,6 +546,19 @@ def test_the_job_output_carries_counts_only(desk) -> None:
     }
 
 
+def test_the_hourly_job_counts_walled_directories_nobody_listed_owns(desk) -> None:
+    """``workspace_broker.person_orphans`` from the hourly job: a count, never a
+    slug or anything inside a directory."""
+    _purge_cli()  # the operator tree on the path, as the seat's broker tree is
+    _keep(A, TODAY, f"Call Acme {A_MARK}")
+    gone = desk["volume"] / "rep" / "reminders" / person_slug("left@example.test")
+    gone.mkdir(parents=True)
+    (gone / "reminder-2026-11-10-abcdef.json").write_text(A_MARK)
+    assert person_digest.orphan_counts(_cfg()) == {"orphans": 1}
+    _enroll(desk["enrolled"], A, B, "left@example.test")
+    assert person_digest.orphan_counts(_cfg()) == {"orphans": 0}
+
+
 def test_nothing_due_means_no_model_call_and_no_send(desk) -> None:
     _keep(A, TODAY + timedelta(days=3), "Call Acme")
     _keep(B, TODAY - timedelta(days=person_digest.LOOKBACK_DAYS + 1), "Old")

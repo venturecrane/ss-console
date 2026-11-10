@@ -396,6 +396,47 @@ def wake_row(slug: str, verdict: dict[str, Any]) -> bool:
         return False
 
 
+def _orphan_finder() -> Any:
+    """``workspace_broker.person_orphans`` (stdlib only): importable as a
+    package where the operator tree is on the path (tests, the rehearsal),
+    else from the broker's tree on the seat (``seat_layout.BROKER_ROOT``),
+    which every uid may read."""
+    import sys
+
+    try:
+        from workspace_broker import person_orphans
+    except ImportError:
+        from shared import seat_layout
+
+        if seat_layout.BROKER_ROOT not in sys.path:
+            sys.path.append(seat_layout.BROKER_ROOT)
+        from workspace_broker import person_orphans
+    return person_orphans
+
+
+def orphan_counts(cfg: Any) -> dict[str, int]:
+    """How many directories in the seat's walled stores belong to nobody listed
+    now (``workspace_broker.person_orphans``), as counts only: never a slug or
+    anything inside a directory. ``orphans_unreadable`` is 1 when a store could
+    not be examined, so "could not look" never reads as none."""
+    try:
+        finder = _orphan_finder()
+        from workspace_broker.person_purge import PurgeTargets
+
+        roots = [p.root for p in record_store.authored_policies(cfg).values() if p.partitioned]
+        listed = [e for e in [*cfg.inbound_roster, *cfg.admins] if not e.startswith("@")]
+        found = finder.orphan_partitions(
+            PurgeTargets(data_root=record_store.VOLUME_ROOT, partition_roots=roots), listed
+        )
+    except Exception as exc:  # noqa: BLE001 - could not look is said, never "none"
+        logger.warning("person_digest: orphan check failed (%s)", type(exc).__name__)
+        return {"orphans_unreadable": 1}
+    out = {"orphans": sum(len(slugs) for slugs in found.found.values())}
+    if found.problems:
+        out["orphans_unreadable"] = 1
+    return out
+
+
 def pre_run(*, dry: bool = False) -> dict[str, Any]:
     """What the rep-desk pre_run does: read the seat's config, run, write the
     wake row (not on a dry run). A crash still wakes the turn, which sends
@@ -408,6 +449,7 @@ def pre_run(*, dry: bool = False) -> dict[str, Any]:
         cfg = CustomerConfig.from_volume()
         slug = cfg.slug
         verdict = run(cfg, dry=dry)
+        verdict.update(orphan_counts(cfg))
     except Exception as exc:  # noqa: BLE001 - the verdict says it crashed; never raised
         logger.warning("person_digest: the run crashed (%s)", type(exc).__name__)
         verdict = {"wakeAgent": not dry, "status": "pre_run_crashed"}

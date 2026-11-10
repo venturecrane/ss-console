@@ -351,3 +351,50 @@ def test_the_partition_slug_is_the_one_the_purge_uses(tmp_path, monkeypatch) -> 
     _enroll(tmp_path, monkeypatch, (A, None))
     training.start_progress(A)
     assert (volume / "rep" / "progress" / person_slug(A) / "progress.json").is_file()
+
+
+# ---------------------------------------------------------------------------
+# the library-gap section (shared.gap_report, the desk slice)
+# ---------------------------------------------------------------------------
+
+
+def _report_body(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    _enroll(tmp_path, monkeypatch, (A, "Avery Example"))
+    training_report.run(clock=lambda: datetime(2026, 11, 16, 15, tzinfo=timezone.utc))
+    envelope = _envelope(tmp_path)
+    assert envelope is not None
+    return envelope["dispatches"][0]["full_body"]
+
+
+def test_the_report_lists_the_weeks_library_gaps_by_topic(tmp_path, monkeypatch) -> None:
+    from shared import gap_report
+
+    _seat(tmp_path, monkeypatch)
+    db = tmp_path / "gap_counts.db"
+    monkeypatch.setenv("SMD_GAP_COUNTS_DB_PATH", str(db))
+    for topic in ("integrations", "integrations", "security_and_compliance"):
+        assert gap_report.count(topic, path=db)
+    body = _report_body(tmp_path, monkeypatch)
+    section = f"\n\n{training_report.GAP_HEADING}\n- Integrations: 2\n- Security and compliance: 1"
+    assert section in body
+    assert _held(body) == []
+
+
+def test_no_gaps_means_no_section(tmp_path, monkeypatch) -> None:
+    _seat(tmp_path, monkeypatch)
+    monkeypatch.setenv("SMD_GAP_COUNTS_DB_PATH", str(tmp_path / "never-written.db"))
+    body = _report_body(tmp_path, monkeypatch)
+    assert training_report.GAP_HEADING not in body and training_report.GAP_UNREADABLE not in body
+
+
+def test_an_unreadable_gap_counter_is_one_plain_line_never_an_empty_section(
+    tmp_path, monkeypatch
+) -> None:
+    _seat(tmp_path, monkeypatch)
+    db = tmp_path / "gap_counts.db"
+    db.write_bytes(b"not a database at all")
+    monkeypatch.setenv("SMD_GAP_COUNTS_DB_PATH", str(db))
+    body = _report_body(tmp_path, monkeypatch)
+    assert body.endswith("\n\n" + training_report.GAP_UNREADABLE)
+    assert training_report.GAP_HEADING not in body
+    assert _held(body) == []

@@ -344,9 +344,10 @@ def test_past_the_daily_limit_one_notice_then_silence(rehearsal) -> None:
         for t in rehearsal["evidence"]["turns"]
         if t["sender"] == A
         and t["router_verdict"] != {"action": "skip"}
-        # The training slice's turns ("t-...") each start on a fresh day of the
-        # limit (_training_turns._fresh_day); the limit is proven here.
-        and not t["label"].startswith("t-")
+        # The training and desk slices' turns ("t-...", "d-...") each start on a
+        # fresh day of the limit (_training_turns._fresh_day); the limit is
+        # proven here.
+        and not t["label"].startswith(("t-", "d-"))
     ]
     assert len(admitted) == DAILY_LIMIT
     first = _turn(rehearsal, "a-over-the-limit")
