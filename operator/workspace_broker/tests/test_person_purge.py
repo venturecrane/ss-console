@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -199,7 +200,7 @@ def test_the_probe_reports_planted_leftovers_and_exits_nonzero(seat: dict, capsy
     argv = ["purge", "--probe", A, "--data-root", str(seat["data"]), "--config", str(seat["config"])]
     assert cli_main(argv, store=seat["store"]) == 3
     out = capsys.readouterr().out
-    assert "still on this seat" in out and "held replies" in out
+    assert "STILL on this seat" in out and "held replies" in out
 
 
 def test_a_probe_that_cannot_read_the_config_is_never_clean(seat: dict) -> None:
@@ -246,6 +247,149 @@ def test_purge_clears_an_address_that_is_no_longer_enrolled(seat: dict) -> None:
 def test_a_still_enrolled_address_fails_the_probe(seat: dict) -> None:
     argv = ["purge", "--probe", A, "--data-root", str(seat["data"]), "--config", str(seat["config"])]
     assert cli_main(argv, store=seat["store"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# Could not look is never absent (PR #3956 review, finding 1)
+# ---------------------------------------------------------------------------
+
+
+def _run(seat: dict, capsys, *argv: str) -> tuple[int, str]:
+    """The CLI as a real invocation runs it (row removed in-process here: the
+    broker child needs root to drop), with its stdout and stderr."""
+    tail = ["--data-root", str(seat["data"]), "--config", str(seat["config"])]
+    code = cli_main([*argv, *tail], store=seat["store"], purge_targets=seat["targets"], isolate=False)
+    out = capsys.readouterr()
+    return code, out.out + out.err
+
+
+def _assert_failed_closed(seat: dict, code: int, out: str, layer: str) -> None:
+    assert code == 3, out
+    assert f"could not examine {layer}" in out, out
+    assert "found nothing" not in out and "nothing of theirs found" not in out, out
+    assert A in seat["store"].enrolled_addresses(), "the row went although a layer could not be examined"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a 0000 directory; the broker uid on a seat cannot")
+@pytest.mark.parametrize(
+    ("closed", "layer"),
+    [
+        ("opt-data", "the volume"),
+        ("opt-data/smd", "help state"),
+        ("opt-data/rep/leads", "partitioned store directory"),
+        ("opt-data/profiles/guide/.smd/pre_run", "scheduled-send envelope"),
+    ],
+)
+def test_a_directory_it_may_not_read_fails_closed_before_the_row_goes(seat: dict, capsys, closed, layer) -> None:
+    """The broker-uid run: a directory the uid may not read. Python 3.14's
+    ``Path.exists`` answers False there; this must be "could not examine",
+    exit 3, the enrollment row and every file untouched."""
+    _leave_traces(seat, A, A_MARK)
+    target = seat["data"].parent / closed
+    target.chmod(0)
+    try:
+        for argv in (["purge", "--probe", A], ["remove", A], ["purge", A]):
+            code, out = _run(seat, capsys, *argv)
+            _assert_failed_closed(seat, code, out, layer)
+    finally:
+        target.chmod(0o755)
+    assert _layers(person_purge.probe(A, seat["targets"])) == EVERY_LAYER, "something was removed"
+
+
+def _deny(monkeypatch: pytest.MonkeyPatch, suffix: str) -> None:
+    """``os.stat`` and ``os.lstat`` raise PermissionError for one database,
+    whichever of them the code under test asks."""
+    for name in ("stat", "lstat"):
+        real = getattr(os, name)
+
+        def denied(path, *args, _real=real, **kwargs):
+            if isinstance(path, (str, bytes, os.PathLike)) and os.fsdecode(path).endswith(suffix):
+                raise PermissionError(13, "Permission denied", os.fsdecode(path))
+            return _real(path, *args, **kwargs)
+
+        monkeypatch.setattr(os, name, denied)
+
+
+@pytest.mark.parametrize("argv", [["purge", "--probe", A], ["remove", A], ["purge", A]])
+def test_a_database_it_may_not_stat_fails_closed_before_the_row_goes(seat: dict, capsys, monkeypatch, argv) -> None:
+    _leave_traces(seat, A, A_MARK)
+    _deny(monkeypatch, "requests.db")
+    code, out = _run(seat, capsys, *argv)
+    _assert_failed_closed(seat, code, out, "request index")
+    monkeypatch.undo()
+    assert _layers(person_purge.probe(A, seat["targets"])) == EVERY_LAYER, "something was removed"
+
+
+# ---------------------------------------------------------------------------
+# Root never follows a link the agent could plant (PR #3956 review, finding 2)
+# ---------------------------------------------------------------------------
+
+
+def _outside(tmp_path: Path) -> Path:
+    precious = tmp_path / "outside-the-volume" / "precious"
+    precious.parent.mkdir()
+    precious.write_bytes(b"PRECIOUS, not a database file" * 300)
+    return precious
+
+
+@pytest.mark.parametrize("sidecar", ["-shm", "-wal"])
+def test_a_planted_sidecar_link_is_refused_and_its_target_untouched(seat: dict, capsys, tmp_path, sidecar) -> None:
+    _leave_traces(seat, A, A_MARK)
+    precious = _outside(tmp_path)
+    before = (precious.read_bytes(), precious.stat().st_uid, precious.stat().st_gid, precious.stat().st_mode)
+    side = Path(f"{seat['data'] / 'held_replies.db'}{sidecar}")
+    side.unlink(missing_ok=True)
+    side.symlink_to(precious)
+    for argv in (["purge", "--probe", A], ["remove", A]):
+        code, out = _run(seat, capsys, *argv)
+        _assert_failed_closed(seat, code, out, "held replies")
+        assert "symbolic link" in out, out
+        assert (
+            precious.read_bytes(),
+            *[getattr(precious.stat(), k) for k in ("st_uid", "st_gid", "st_mode")],
+        ) == before
+        assert side.is_symlink() and side.readlink() == precious
+
+
+def test_a_link_in_a_partitioned_store_is_removed_as_a_link(seat: dict, tmp_path) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "kept").mkdir(parents=True)
+    (elsewhere / "kept" / "keep.md").write_text("not theirs")
+    seat["leads"].mkdir(parents=True)
+    (seat["leads"] / person_purge.person_slug(A)).symlink_to(elsewhere / "kept")
+    report = person_purge.purge(A, seat["targets"])
+    assert report.clean, [f.line() for f in report.remaining]
+    assert not (seat["leads"] / person_purge.person_slug(A)).is_symlink()
+    assert (elsewhere / "kept" / "keep.md").read_text() == "not theirs"
+
+
+def test_a_partition_root_that_is_a_link_is_not_followed(seat: dict, capsys, tmp_path) -> None:
+    """The agent owns the volume, so it can swap a store's directory for a link
+    to anywhere. Root must refuse it, never delete through it."""
+    _leave_traces(seat, A, A_MARK)
+    elsewhere = tmp_path / "elsewhere"
+    seat["leads"].rename(elsewhere)
+    seat["leads"].symlink_to(elsewhere)
+    theirs = elsewhere / person_purge.person_slug(A) / "acme.md"
+    assert theirs.is_file()
+    code, out = _run(seat, capsys, "purge", A)
+    assert code == 3, out
+    assert "could not examine partitioned store directory" in out and "symbolic link" in out, out
+    assert theirs.is_file(), "root deleted through a link"
+    assert (seat["notes"] / person_purge.person_slug(A)).is_dir(), "a refused run removed something"
+
+
+def test_the_database_work_runs_in_the_owner_child(seat: dict, monkeypatch) -> None:
+    """The forked child path (a uid drop needs root; here the child keeps this
+    uid) purges exactly as in-process does."""
+    monkeypatch.setattr(person_purge, "_ALWAYS_FORK", True)
+    _leave_traces(seat, A, A_MARK)
+    _leave_traces(seat, B, B_MARK)
+    report = person_purge.purge(A, seat["targets"])
+    assert report.clean, [f.line() for f in report.remaining]
+    assert _layers(report.removed) == EVERY_LAYER
+    assert _raw_hits(seat["data"], A_MARK) == []
+    assert _raw_hits(seat["data"], B_MARK)
 
 
 @pytest.mark.parametrize("name", ["sqlite_master", "requests; DROP TABLE requests", "", "Requests", None])

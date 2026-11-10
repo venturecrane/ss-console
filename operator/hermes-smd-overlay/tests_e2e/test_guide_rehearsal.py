@@ -40,16 +40,24 @@ from tests_e2e._canary import Inventory, Location, classify, inventory, search
 from tests_e2e.test_guide_rehearsal_run import A_MARK, B_MARK, STORES, A, B
 
 OVERLAY = Path(__file__).resolve().parents[1]
-PURGE_MODULE = OVERLAY.parent / "workspace_broker" / "person_purge.py"
+BROKER_PACKAGE = OVERLAY.parent / "workspace_broker"
 
 
 def _person_purge() -> Any:
-    spec = importlib.util.spec_from_file_location("_e2e_person_purge", PURGE_MODULE)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["_e2e_person_purge"] = module
-    spec.loader.exec_module(module)
-    return module
+    """``workspace_broker.person_purge`` as the seat imports it (it imports its
+    sibling ``nofollow``), registered by path so ``operator/`` never joins
+    ``sys.path`` and shadows the overlay's own packages."""
+    if "workspace_broker" not in sys.modules:
+        spec = importlib.util.spec_from_file_location(
+            "workspace_broker",
+            BROKER_PACKAGE / "__init__.py",
+            submodule_search_locations=[str(BROKER_PACKAGE)],
+        )
+        assert spec and spec.loader
+        package = importlib.util.module_from_spec(spec)
+        sys.modules["workspace_broker"] = package
+        spec.loader.exec_module(package)
+    return importlib.import_module("workspace_broker.person_purge")
 
 
 def purge_set(slug: str) -> list[Location]:

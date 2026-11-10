@@ -27,18 +27,25 @@ Commands:
   seat walls per person, their per-sender memory, request-index, held-reply,
   help-pointer and sent-line rows, and any scheduled-send envelope naming them.
   Ends with a read-only probe; exits 1 if the address was not enrolled (its
-  data is purged all the same) and 3 if anything of theirs is still there.
+  data is purged all the same) and 3 if anything of theirs is still there or
+  any place could not be examined.
 * ``purge ADDRESS``: the same, for an address that may no longer be (or never
   was) enrolled, so data a removal left behind can be cleared. Exits 0 only
-  when the probe finds nothing.
+  when the probe examined every place and found nothing.
 * ``purge --probe ADDRESS``: read-only. Lists what of theirs is on the volume
-  (and whether they are still enrolled) and exits 3 if anything is.
+  (and whether they are still enrolled) and exits 3 if anything is, or if any
+  place could not be examined ("could not examine ..."; never "found nothing").
 
-``remove`` and ``purge`` run as root on a seat: a child process drops to the
-broker uid to remove the enrollment row (the broker's store), and the parent,
-still root, deletes the data on the agent's volume, which the broker uid cannot
-reach. The row goes first, so a turn of theirs still in flight is refused by the
-store's roster check and cannot recreate what the purge deletes.
+``remove`` and ``purge`` run as ROOT on a seat, and only as root. Before
+anything is removed every place is examined; if one cannot be (run as the
+broker or agent uid, a directory it may not read, a planted link), nothing is
+removed, the enrollment row included, and the command exits 3 naming each
+place. Then a child process drops to the broker uid to remove the enrollment
+row (the broker's store), and the parent, still root, deletes the files on the
+agent's volume, which the broker uid cannot reach, and hands each database to a
+child running as that file's owner (``person_purge``). The row goes first, so a
+turn of theirs still in flight is refused by the store's roster check and
+cannot recreate what the purge deletes.
 """
 
 from __future__ import annotations
@@ -187,7 +194,7 @@ def _enrollment_finding(address: str, store: EnrollmentStore | None) -> person_p
     try:
         listed = (store or EnrollmentStore()).enrolled_addresses()
     except (EnrollmentError, OSError) as exc:
-        return person_purge.Finding("enrollment list unreadable", type(exc).__name__, 1)
+        return person_purge.Finding("the enrollment list", "enrolled.json", 1, problem=type(exc).__name__)
     if person_purge.normalize_person_address(address) in listed:
         return person_purge.Finding("enrollment", "enrolled.json", 1)
     return None
@@ -197,6 +204,21 @@ def _print_findings(title: str, findings: list[person_purge.Finding]) -> None:
     print(title)
     for finding in findings:
         print(f"  {finding.line()}")
+
+
+def _report(address: str, findings: list[person_purge.Finding], after: str) -> bool:
+    """Print what could not be examined, then what is still there. True when
+    either list is non-empty: the result is then never clean."""
+    problems = [f for f in findings if f.problem]
+    found = [f for f in findings if not f.problem]
+    if problems:
+        _print_findings(
+            f"{address}: could not examine every place this seat keeps their data, so this is NOT a clean result",
+            problems,
+        )
+    if found:
+        _print_findings(f"{address}: STILL on this seat{after}", found)
+    return bool(problems or found)
 
 
 def _purge_command(
@@ -216,11 +238,17 @@ def _purge_command(
         enrolled = _enrollment_finding(address, store)
         if enrolled is not None:
             remaining.append(enrolled)
-        if remaining:
-            _print_findings(f"{address}: still on this seat", remaining)
+        if _report(address, remaining, ""):
             return EXIT_REMAINS
         print(f"{address}: nothing of theirs found on this seat")
         return 0
+    # Every location is examined BEFORE the row goes: a run that cannot look
+    # everywhere (the wrong uid above all) removes nothing, the row included.
+    blocked = person_purge.preflight(address, targets)
+    if blocked:
+        _report(address, blocked, "")
+        print(f"{address}: nothing removed; the enrollment row and every file are untouched")
+        return EXIT_REMAINS
     row = _remove_row(address, store, os.geteuid() == 0 if isolate is None else isolate)
     if "error" in row:
         print(f"refused: the enrollment row could not be removed ({row['error']}); nothing purged", file=sys.stderr)
@@ -233,8 +261,7 @@ def _purge_command(
     enrolled = _enrollment_finding(address, store)
     if enrolled is not None:
         remaining.append(enrolled)
-    if remaining:
-        _print_findings(f"{address}: STILL on this seat after the purge", remaining)
+    if _report(address, remaining, " after the purge"):
         return EXIT_REMAINS
     print(f"{address}: probe found nothing of theirs on this seat")
     if args.command == "remove" and not row.get("removed"):

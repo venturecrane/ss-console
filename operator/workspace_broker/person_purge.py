@@ -51,32 +51,71 @@ report and the probe never claim them):
   text custody nulled the sender (seven days for the request index), which
   carry nothing that names the person.
 
+COULD NOT LOOK IS NEVER ABSENT. Every "is it there" question goes through
+``nofollow.look``, which calls ``os.lstat`` itself: only ``FileNotFoundError`` means
+absent, and any other error (a permission error above all) makes that location
+a finding of its own, "could not examine". ``Path.exists`` is not used: on
+Python 3.14 it answers False for a path it was not allowed to look at, which is
+how a run as the wrong uid once reported clean with everything still there. A
+purge first examines every location and removes NOTHING unless all of them
+could be examined; a probe that could not examine a location is never clean.
+
+NOTHING HERE FOLLOWS A LINK THE AGENT COULD PLANT. The agent uid owns the
+volume's contents, and this runs as root. So every directory below the volume
+root is opened one component at a time with ``O_NOFOLLOW`` and every delete,
+read and rewrite goes through that directory's descriptor (``nofollow.py``,
+the sibling module that holds those helpers); a symbolic link
+where a directory or file is expected is refused (could not examine), a link
+in a partitioned store is removed as a link, and a database is opened only
+after ``lstat`` showed it and every sidecar (``-wal``, ``-shm``, ``-journal``)
+to be a plain regular file with one link. The SQLite work then runs in a forked
+child that has dropped to the database file's owner (``setgroups([])``,
+``setgid``, ``setuid``), so root never opens, checkpoints or creates a sidecar
+of an agent-owned database and no ownership has to be given back.
+
 WHO RUNS IT. ``sender_enrollment_cli remove ADDRESS`` and ``purge ADDRESS`` on
-the seat, as root: a child process drops to the broker uid and removes the
-enrollment row (the broker's store), and the parent, still root, deletes the
-data on the agent's volume (the volume root is 0700 to every uid but the agent and
-root). The row goes first, so a turn of theirs still in flight is refused by the
+the seat, as root, and only as root: no other uid can examine both the
+broker's store and the agent's volume, and a run that cannot examine every
+location removes nothing and exits nonzero. A child process drops to the broker
+uid and removes the enrollment row (the broker's store); the parent, still
+root, deletes the files on the agent's volume (the volume root is 0700 to every
+uid but the agent and root) and hands each database to a child running as its
+owner. The row goes first, so a turn of theirs still in flight is refused by the
 partitioned store's roster check before the directory is deleted, and cannot
 recreate it afterwards. ``purge --probe ADDRESS`` is read-only.
 
-STDLIB ONLY, so it runs from either Python on the seat. ``person_slug`` is a
+STDLIB ONLY (this module and ``nofollow.py``), so it runs from either Python on
+the seat; it is imported as ``workspace_broker.person_purge``. ``person_slug`` is a
 copy of the overlay's ``shared/person_prefs.py``; a parity test pins the two
 equal (``workspace_broker/tests/test_person_purge.py``).
 """
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import os
-import shutil
 import sqlite3
-import tempfile
-from collections.abc import Iterable
+import stat
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
+
+from .nofollow import (
+    CannotExamine,
+    Volume,
+    count_tree,
+    look,
+    read_json_at,
+    remove_tree,
+    require,
+    rewrite_json_at,
+    scan,
+    why,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +164,7 @@ def _bare(value: object) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Where a seat keeps person-keyed data
+# Where a seat keeps person-keyed data, and what a run found
 # ---------------------------------------------------------------------------
 
 
@@ -155,30 +194,22 @@ class PurgeTargets:
     def help_state_db(self) -> Path:
         return self.data_root / "smd" / "help_state.db"
 
-    def homes(self) -> list[Path]:
-        """The volume root and every profile home: where ``.smd`` lives."""
-        out = [self.data_root]
-        profiles = self.data_root / "profiles"
-        if profiles.is_dir():
-            out.extend(sorted(p for p in profiles.iterdir() if p.is_dir() and not p.is_symlink()))
-        return out
-
-    def sent_lines_files(self) -> list[Path]:
-        return [f for h in self.homes() for f in sorted((h / ".smd" / "sent_lines").glob("*.json"))]
-
-    def envelope_files(self) -> list[Path]:
-        return [f for h in self.homes() for f in sorted((h / ".smd" / "pre_run").glob("*.dispatch*.json"))]
-
 
 @dataclass
 class Finding:
-    """One place something of the person's is (or, after a purge, still is)."""
+    """One place something of the person's is (or, after a purge, still is),
+    or, when ``problem`` is set, one place that could not be examined (or
+    purged), which is never an absence."""
 
     layer: str
     location: str
     count: int
+    problem: str = ""
+    action: str = "examine"
 
     def line(self) -> str:
+        if self.problem:
+            return f"could not {self.action} {self.layer} at {self.location}: {self.problem}"
         return f"{self.layer}: {self.count} at {self.location}"
 
 
@@ -186,41 +217,156 @@ class Finding:
 class PurgeReport:
     removed: list[Finding]
     remaining: list[Finding]
+    #: True when a location could not be examined before anything was
+    #: deleted, so nothing was: ``remaining`` names the locations.
+    refused: bool = False
 
     @property
     def clean(self) -> bool:
         return not self.remaining
 
+    @property
+    def problems(self) -> list[Finding]:
+        return [f for f in self.remaining if f.problem]
+
 
 # ---------------------------------------------------------------------------
-# SQLite helpers
+# A run: what it found, removed, and could not examine
 # ---------------------------------------------------------------------------
 
 
-def _owner(path: Path) -> tuple[int, int] | None:
-    try:
-        st = path.stat()
-    except OSError:
-        return None
-    return st.st_uid, st.st_gid
+@dataclass
+class _Run:
+    act: bool
+    found: list[Finding] = field(default_factory=list)
+    problems: list[Finding] = field(default_factory=list)
+
+    def hit(self, layer: str, location: object, count: int) -> None:
+        if count:
+            self.found.append(Finding(layer, str(location), count))
+
+    def cannot(self, layer: str, exc: BaseException, location: object = "") -> None:
+        if isinstance(exc, CannotExamine):
+            where, why = exc.location, exc.why
+        else:
+            where, why = str(location), why(exc)
+        self.problems.append(Finding(layer, where, 1, problem=why, action="purge" if self.act else "examine"))
 
 
-def _restore_owner(db: Path, owner: tuple[int, int] | None) -> None:
-    """Run as root, SQLite creates its journal and WAL files as root; the agent
-    could then not open its own database. Give every sidecar back."""
-    if owner is None or os.geteuid() != 0:
-        return
-    for suffix in ("", "-wal", "-shm", "-journal"):
-        side = Path(str(db) + suffix)
+# ---------------------------------------------------------------------------
+# Files: partitioned stores, sent-line labels, scheduled-send envelopes
+# ---------------------------------------------------------------------------
+
+_PART = "partitioned store directory"
+
+
+def _partition_one(vol: Volume, root: Path, slug: str, run: _Run) -> None:
+    part = root / slug
+    with vol.dir(root) as fd:
+        if fd is None:
+            return
+        st = look(slug, fd, part)
+        if st is None:
+            return
+        if stat.S_ISDIR(st.st_mode):
+            n = count_tree(fd, slug, part)
+            if run.act:
+                remove_tree(fd, slug)
+            run.hit(_PART, part, max(n, 1))
+        else:  # a link (removed as a link, never followed) or a stray file
+            if run.act:
+                os.unlink(slug, dir_fd=fd)
+            link = stat.S_ISLNK(st.st_mode)
+            run.hit(f"{_PART} (a link)" if run.act and link else _PART, part, 1)
+
+
+def _partitions(vol: Volume, targets: PurgeTargets, slug: str, run: _Run) -> None:
+    for root in targets.partition_roots:
         try:
-            if side.exists() and (side.stat().st_uid, side.stat().st_gid) != owner:
-                os.chown(side, *owner)
-        except OSError:
-            pass
+            _partition_one(vol, root, slug, run)
+        except (CannotExamine, OSError) as exc:
+            run.cannot(_PART, exc, root / slug)
 
 
-def _connect_ro(db: Path) -> sqlite3.Connection:
-    return sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=10)
+def _homes(vol: Volume) -> list[Path]:
+    """The volume root and every profile home: where ``.smd`` lives."""
+    out = [vol.root]
+    profiles = vol.root / "profiles"
+    with vol.dir(profiles) as fd:
+        if fd is not None:
+            for entry in scan(fd, profiles):
+                st = look(entry.name, fd, profiles / entry.name)
+                if st is not None and stat.S_ISDIR(st.st_mode):
+                    out.append(profiles / entry.name)
+    return out
+
+
+def _sent_line(fd: int, name: str, shown: Path, address: str, run: _Run) -> None:
+    _st, raw = read_json_at(fd, name, shown)
+    if isinstance(raw, dict) and recipient_digest(address) in (raw.get("to_sha256") or []):
+        if run.act:
+            os.unlink(name, dir_fd=fd)
+        run.hit("sent-line labels", shown, 1)
+
+
+def _envelope(fd: int, name: str, shown: Path, address: str, run: _Run) -> None:
+    st, raw = read_json_at(fd, name, shown)
+    entries = raw.get("dispatches") if isinstance(raw, dict) else None
+    if not isinstance(raw, dict) or not isinstance(entries, list):
+        return
+    kept = [e for e in entries if not _envelope_mentions(e, address)]
+    if run.act and len(kept) != len(entries):
+        if kept:
+            rewrite_json_at(fd, name, {**raw, "dispatches": kept}, st)
+        else:
+            os.unlink(name, dir_fd=fd)
+    run.hit("scheduled-send envelope", shown, len(entries) - len(kept))
+
+
+_FILE_LAYERS: tuple[tuple[str, str, str, Callable[[int, str, Path, str, _Run], None]], ...] = (
+    ("sent-line labels", "sent_lines", "*.json", _sent_line),
+    ("scheduled-send envelope", "pre_run", "*.dispatch*.json", _envelope),
+)
+
+
+def _labelled_files(vol: Volume, address: str, run: _Run) -> None:
+    try:
+        homes = _homes(vol)
+    except CannotExamine as exc:
+        for layer, *_ in _FILE_LAYERS:
+            run.cannot(layer, exc)
+        return
+    for layer, sub, pattern, handle in _FILE_LAYERS:
+        for home in homes:
+            where = home / ".smd" / sub
+            try:
+                with vol.dir(where) as fd:
+                    names = [e.name for e in scan(fd, where)] if fd is not None else []
+                    for name in (n for n in names if fnmatch.fnmatchcase(n, pattern)):
+                        try:
+                            handle(fd, name, where / name, address, run)
+                        except (CannotExamine, OSError) as exc:
+                            run.cannot(layer, exc, where / name)
+            except (CannotExamine, OSError) as exc:
+                run.cannot(layer, exc, where)
+
+
+def _envelope_mentions(entry: Any, address: str) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    people: list[Any] = []
+    for key in ("recipients", "to", "cc", "bcc"):
+        value = entry.get(key)
+        if isinstance(value, list):
+            people.extend(value)
+        elif isinstance(value, str):
+            people.append(value)
+    return any(_bare(p) == address for p in people)
+
+
+# ---------------------------------------------------------------------------
+# SQLite: the allowlist and the per-layer row matchers
+# ---------------------------------------------------------------------------
 
 
 def _tables(conn: sqlite3.Connection) -> set[str]:
@@ -281,44 +427,41 @@ _DELETE = {
 }
 
 
-# ---------------------------------------------------------------------------
-# One function per layer: (match rows) -> ids. Shared by purge and probe.
-# ---------------------------------------------------------------------------
-
-
-def _peer_rows(conn: sqlite3.Connection, address: str) -> list[Any]:
+def _peer_rows(conn: sqlite3.Connection, address: str) -> dict[str, list[Any]]:
     if "peer_preferences" not in _tables(conn):
-        return []
-    return [
+        return {}
+    ids = [
         row[0]
         for row in conn.execute(_SELECT[_known("peer_preferences")])
         if isinstance(row[1], str) and row[1].strip().lower() == address
     ]
+    return {"peer_preferences": ids}
 
 
-def _request_rows(conn: sqlite3.Connection, address: str) -> tuple[list[Any], list[Any]]:
-    """``(request rowids, reply rowids)`` belonging to ``address``."""
+def _request_rows(conn: sqlite3.Connection, address: str) -> dict[str, list[Any]]:
+    """Request rowids belonging to ``address`` and the reply rowids answering them."""
     tables = _tables(conn)
     if "requests" not in tables:
-        return [], []
+        return {}
     rows = conn.execute(_SELECT[_known("requests")]).fetchall()
     mine = [r for r in rows if _bare(r[1]) == address]
     ids = {v for r in mine for v in r[2:] if isinstance(v, str) and v}
     replies: list[Any] = []
     if "replies" in tables and ids:
         replies = [row[0] for row in conn.execute(_SELECT[_known("replies")]) if row[1] in ids]
-    return [r[0] for r in mine], replies
+    return {"replies": replies, "requests": [r[0] for r in mine]}
 
 
-def _held_rows(conn: sqlite3.Connection, address: str) -> list[Any]:
+def _held_rows(conn: sqlite3.Connection, address: str) -> dict[str, list[Any]]:
     if "held_replies" not in _tables(conn):
-        return []
+        return {}
     query = "held_replies" if "reply_to" in _columns(conn, "held_replies") else "held_replies_old"
-    return [
+    ids = [
         row[0]
         for row in conn.execute(_SELECT[_known(query, _STATEMENT_KEYS)])
         if _bare(row[1]) == address or _bare(row[2]) == address
     ]
+    return {"held_replies": ids}
 
 
 def _help_key(conn: sqlite3.Connection, address: str) -> str | None:
@@ -341,112 +484,6 @@ def _help_rows(conn: sqlite3.Connection, address: str) -> dict[str, list[Any]]:
     return {t: [r[0] for r in conn.execute(_SELECT[_known(t)], (key,))] for t in _HELP_TABLES if t in present}
 
 
-def _envelope_mentions(entry: Any, address: str) -> bool:
-    if not isinstance(entry, dict):
-        return False
-    people: list[Any] = []
-    for key in ("recipients", "to", "cc", "bcc"):
-        value = entry.get(key)
-        if isinstance(value, list):
-            people.extend(value)
-        elif isinstance(value, str):
-            people.append(value)
-    return any(_bare(p) == address for p in people)
-
-
-def _read_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Probe (read-only) and purge
-# ---------------------------------------------------------------------------
-
-
-def _sql_findings(targets: PurgeTargets, address: str) -> list[Finding]:
-    found: list[Finding] = []
-    checks = (
-        (targets.agent_state_db, "per-sender memory (peer_preferences)", _peer_rows),
-        (targets.held_replies_db, "held replies (held_replies)", _held_rows),
-    )
-    for db, layer, rows_of in checks:
-        if not db.exists():
-            continue
-        with _closing(_connect_ro(db)) as conn:
-            n = len(rows_of(conn, address))
-        if n:
-            found.append(Finding(layer, str(db), n))
-    if targets.request_index_db.exists():
-        with _closing(_connect_ro(targets.request_index_db)) as conn:
-            requests, replies = _request_rows(conn, address)
-        if requests:
-            found.append(Finding("request index (requests)", str(targets.request_index_db), len(requests)))
-        if replies:
-            found.append(Finding("request index (replies)", str(targets.request_index_db), len(replies)))
-    if targets.help_state_db.exists():
-        with _closing(_connect_ro(targets.help_state_db)) as conn:
-            for table, ids in _help_rows(conn, address).items():
-                if ids:
-                    found.append(Finding(f"help state ({table})", str(targets.help_state_db), len(ids)))
-    return found
-
-
-def _file_findings(targets: PurgeTargets, address: str) -> list[Finding]:
-    found: list[Finding] = []
-    for root in targets.partition_roots:
-        part = root / person_slug(address)
-        if part.exists() or part.is_symlink():
-            n = sum(1 for p in part.rglob("*") if p.is_file()) if part.is_dir() else 1
-            found.append(Finding("partitioned store directory", str(part), max(n, 1)))
-    digest = recipient_digest(address)
-    for path in targets.sent_lines_files():
-        raw = _read_json(path)
-        if isinstance(raw, dict) and digest in (raw.get("to_sha256") or []):
-            found.append(Finding("sent-line labels", str(path), 1))
-    for path in targets.envelope_files():
-        raw = _read_json(path)
-        entries = raw.get("dispatches") if isinstance(raw, dict) else None
-        n = sum(1 for e in entries or [] if _envelope_mentions(e, address))
-        if n:
-            found.append(Finding("scheduled-send envelope", str(path), n))
-    return found
-
-
-def probe(address: str, targets: PurgeTargets) -> list[Finding]:
-    """Everything of ``address``'s the purge set covers that is on the volume
-    now. READ-ONLY. A location that cannot be read is a finding, never an
-    absence: the probe can only report clean having looked everywhere."""
-    norm = normalize_person_address(address)
-    if norm is None:
-        return [Finding("refused", f"not a person's address: {address!r}", 1)]
-    found: list[Finding] = []
-    if targets.config_error:
-        found.append(Finding("could not list the partitioned stores", targets.config_error, 1))
-    try:
-        found.extend(_file_findings(targets, norm))
-    except OSError as exc:
-        found.append(Finding("could not read the volume", str(exc), 1))
-    try:
-        found.extend(_sql_findings(targets, norm))
-    except sqlite3.Error as exc:
-        found.append(Finding("could not read a database", str(exc), 1))
-    return found
-
-
-class _closing:
-    def __init__(self, conn: sqlite3.Connection) -> None:
-        self.conn = conn
-
-    def __enter__(self) -> sqlite3.Connection:
-        return self.conn
-
-    def __exit__(self, *_exc: Any) -> None:
-        self.conn.close()
-
-
 def _delete_rowids(conn: sqlite3.Connection, table: str, ids: Iterable[Any]) -> int:
     ids = list(ids)
     for rowid in ids:
@@ -454,125 +491,197 @@ def _delete_rowids(conn: sqlite3.Connection, table: str, ids: Iterable[Any]) -> 
     return len(ids)
 
 
-def _purge_db(db: Path, work: Any) -> list[Finding]:
-    """Open ``db`` for writing with secure delete on, run ``work(conn)`` (which
-    returns findings for what it deleted), commit, truncate the WAL and give
-    every sidecar back to the file's owner."""
-    if not db.exists():
-        return []
-    owner = _owner(db)
-    conn = sqlite3.connect(str(db), timeout=30)
+#: The finding layer of each table's rows.
+_LAYER_OF = {
+    "peer_preferences": "per-sender memory (peer_preferences)",
+    "held_replies": "held replies (held_replies)",
+    "requests": "request index (requests)",
+    "replies": "request index (replies)",
+    **{t: f"help state ({t})" for t in _HELP_TABLES},
+}
+_RowsOf = Callable[[sqlite3.Connection, str], dict[str, list[Any]]]
+
+
+def _databases(targets: PurgeTargets) -> list[tuple[Path, str, _RowsOf]]:
+    """``(database, its layer when it cannot be examined, its row matcher)``."""
+    return [
+        (targets.agent_state_db, "per-sender memory (peer_preferences)", _peer_rows),
+        (targets.held_replies_db, "held replies (held_replies)", _held_rows),
+        (targets.request_index_db, "request index", _request_rows),
+        (targets.help_state_db, "help state", _help_rows),
+    ]
+
+
+# ---------------------------------------------------------------------------
+# SQLite: checked before it is opened, and opened only as its owner
+# ---------------------------------------------------------------------------
+
+_SIDECARS = ("-wal", "-shm", "-journal")
+
+#: Run the SQLite work in a forked child even when not root (a test seam: the
+#: child path is then exercised without the uid drop, which needs root).
+_ALWAYS_FORK = False
+
+
+def _plain_file(st: os.stat_result, shown: object) -> None:
+    require(st, shown, stat.S_ISREG, "a regular file")
+    if st.st_nlink != 1:
+        raise CannotExamine(shown, f"has {st.st_nlink} hard links; refused, not opened")
+
+
+def _db_check(vol: Volume, db: Path) -> os.stat_result | None:
+    """The database's ``lstat`` when it may be opened, ``None`` when absent.
+    Raises when the database, its directory or a sidecar is a link or not a
+    plain regular file: such a database is refused and never opened."""
+    with vol.dir(db.parent) as fd:
+        if fd is None:
+            return None
+        st = look(db.name, fd, db)
+        if st is None:
+            return None
+        _plain_file(st, db)
+        for suffix in _SIDECARS:
+            side = look(db.name + suffix, fd, f"{db}{suffix}")
+            if side is not None:
+                _plain_file(side, f"{db}{suffix}")
+        if os.geteuid() == 0 and st.st_uid == 0 and os.fstat(fd).st_uid != 0:
+            raise CannotExamine(db, "owned by root in a directory another uid controls; refused, not opened")
+        return st
+
+
+class _ChildFailed(Exception):
+    pass
+
+
+def _as_owner(st: os.stat_result, work: Callable[[], Any]) -> Any:
+    """``work()``'s JSON-able result, run as the database file's owner.
+
+    As root, a forked child drops to the file's uid and gid (``setgroups([])``,
+    ``setgid``, ``setuid``, the order the enrollment CLI's broker child uses),
+    so SQLite never opens, checkpoints or creates a sidecar of the database as
+    root. Not root, it runs here: this uid can reach nothing it could not
+    already."""
+    if os.geteuid() != 0 and not _ALWAYS_FORK:
+        return work()
+    read_fd, write_fd = os.pipe()
+    pid = os.fork()
+    if pid == 0:  # the child: the owner's uid, this one database, then exit at once
+        os.close(read_fd)
+        try:
+            if os.geteuid() == 0 and st.st_uid != 0:
+                os.setgroups([])
+                os.setgid(st.st_gid)
+                os.setuid(st.st_uid)
+            out: dict[str, Any] = {"ok": work()}
+        except BaseException as exc:  # noqa: BLE001 - reported to the parent, never raised
+            out = {"error": why(exc)}
+        with os.fdopen(write_fd, "wb") as pipe:
+            pipe.write(json.dumps(out).encode("utf-8"))
+        os._exit(0)
+    os.close(write_fd)
+    with os.fdopen(read_fd, "rb") as pipe:
+        data = pipe.read()
+    _, status = os.waitpid(pid, 0)
     try:
-        conn.execute("PRAGMA secure_delete = ON")
-        with conn:
-            removed = work(conn)
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        result = json.loads(data.decode("utf-8"))
+    except ValueError:
+        raise _ChildFailed(f"the database child exited ({status}) without a result") from None
+    if not isinstance(result, dict) or "ok" not in result:
+        raise _ChildFailed(str(result.get("error") if isinstance(result, dict) else result))
+    return result["ok"]
+
+
+def _db_work(db: Path, rows_of: _RowsOf, address: str, act: bool) -> Callable[[], list[list[Any]]]:
+    def read() -> list[list[Any]]:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=10)
+        try:
+            return [[t, len(ids)] for t, ids in rows_of(conn, address).items() if ids]
+        finally:
+            conn.close()
+
+    def delete() -> list[list[Any]]:
+        conn = sqlite3.connect(str(db), timeout=30)
+        try:
+            conn.execute("PRAGMA secure_delete = ON")
+            with conn:
+                done = [[t, _delete_rowids(conn, t, ids)] for t, ids in rows_of(conn, address).items() if ids]
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            return done
+        finally:
+            conn.close()
+
+    return delete if act else read
+
+
+def _sql(vol: Volume, targets: PurgeTargets, address: str, run: _Run) -> None:
+    for db, label, rows_of in _databases(targets):
+        try:
+            st = _db_check(vol, db)
+            if st is None:
+                continue
+            for table, n in _as_owner(st, _db_work(db, rows_of, address, run.act)):
+                run.hit(_LAYER_OF[_known(table)], db, n)
+        except (CannotExamine, _ChildFailed, sqlite3.Error, OSError) as exc:
+            run.cannot(label, exc, db)
+
+
+# ---------------------------------------------------------------------------
+# Probe (read-only), preflight and purge
+# ---------------------------------------------------------------------------
+
+
+def _survey(norm: str, targets: PurgeTargets, act: bool) -> _Run:
+    run = _Run(act=act)
+    if targets.config_error:
+        run.problems.append(Finding("the partitioned stores", "the seat config", 1, problem=targets.config_error))
+    try:
+        vol = Volume(targets.data_root)
+    except CannotExamine as exc:
+        run.cannot("the volume", exc)
+        return run
+    try:
+        _partitions(vol, targets, person_slug(norm), run)
+        _labelled_files(vol, norm, run)
+        _sql(vol, targets, norm, run)
     finally:
-        conn.close()
-        _restore_owner(db, owner)
-    return removed
+        vol.close()
+    return run
 
 
-def _purge_sql(targets: PurgeTargets, address: str) -> list[Finding]:
-    removed: list[Finding] = []
-
-    def peers(conn: sqlite3.Connection) -> list[Finding]:
-        n = _delete_rowids(conn, "peer_preferences", _peer_rows(conn, address))
-        return [Finding("per-sender memory (peer_preferences)", str(targets.agent_state_db), n)] if n else []
-
-    def held(conn: sqlite3.Connection) -> list[Finding]:
-        n = _delete_rowids(conn, "held_replies", _held_rows(conn, address))
-        return [Finding("held replies (held_replies)", str(targets.held_replies_db), n)] if n else []
-
-    def requests(conn: sqlite3.Connection) -> list[Finding]:
-        req, rep = _request_rows(conn, address)
-        out = []
-        if rep:
-            out.append(
-                Finding("request index (replies)", str(targets.request_index_db), _delete_rowids(conn, "replies", rep))
-            )
-        if req:
-            out.append(
-                Finding(
-                    "request index (requests)", str(targets.request_index_db), _delete_rowids(conn, "requests", req)
-                )
-            )
-        return out
-
-    def help_state(conn: sqlite3.Connection) -> list[Finding]:
-        return [
-            Finding(f"help state ({t})", str(targets.help_state_db), _delete_rowids(conn, t, ids))
-            for t, ids in _help_rows(conn, address).items()
-            if ids
-        ]
-
-    removed += _purge_db(targets.agent_state_db, peers)
-    removed += _purge_db(targets.held_replies_db, held)
-    removed += _purge_db(targets.request_index_db, requests)
-    removed += _purge_db(targets.help_state_db, help_state)
-    return removed
+def probe(address: str, targets: PurgeTargets) -> list[Finding]:
+    """Everything of ``address``'s the purge set covers that is on the volume
+    now, plus every location that could not be examined (``Finding.problem``
+    set). READ-ONLY. A location that cannot be examined is a finding, never an
+    absence: the probe can only report clean having looked everywhere."""
+    norm = normalize_person_address(address)
+    if norm is None:
+        return [Finding("refused", f"not a person's address: {address!r}", 1)]
+    run = _survey(norm, targets, act=False)
+    return run.problems + run.found
 
 
-def _rewrite_json(path: Path, payload: Any) -> None:
-    owner = _owner(path)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".purge-", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False)
-        os.chmod(tmp, path.stat().st_mode & 0o777)
-        if owner is not None and os.geteuid() == 0:
-            os.chown(tmp, *owner)
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
-
-
-def _purge_files(targets: PurgeTargets, address: str) -> list[Finding]:
-    removed: list[Finding] = []
-    for root in targets.partition_roots:
-        part = root / person_slug(address)
-        if part.is_symlink():
-            part.unlink()
-            removed.append(Finding("partitioned store directory (a link)", str(part), 1))
-        elif part.is_dir():
-            n = sum(1 for p in part.rglob("*") if p.is_file())
-            shutil.rmtree(part)
-            removed.append(Finding("partitioned store directory", str(part), n))
-    digest = recipient_digest(address)
-    for path in targets.sent_lines_files():
-        raw = _read_json(path)
-        if isinstance(raw, dict) and digest in (raw.get("to_sha256") or []):
-            path.unlink(missing_ok=True)
-            removed.append(Finding("sent-line labels", str(path), 1))
-    for path in targets.envelope_files():
-        raw = _read_json(path)
-        entries = raw.get("dispatches") if isinstance(raw, dict) else None
-        if not isinstance(entries, list):
-            continue
-        kept = [e for e in entries if not _envelope_mentions(e, address)]
-        if len(kept) == len(entries):
-            continue
-        if kept:
-            _rewrite_json(path, {**raw, "dispatches": kept})
-        else:
-            path.unlink(missing_ok=True)
-        removed.append(Finding("scheduled-send envelope", str(path), len(entries) - len(kept)))
-    return removed
+def preflight(address: str, targets: PurgeTargets) -> list[Finding]:
+    """The locations that could not be examined. A purge removes nothing,
+    the enrollment row included, unless this is empty."""
+    return [f for f in probe(address, targets) if f.problem or f.layer == "refused"]
 
 
 def purge(address: str, targets: PurgeTargets) -> PurgeReport:
     """Delete ``address``'s data in every purge-set location, then probe.
 
-    The report's ``remaining`` is a fresh read of the volume after the
-    deletes, never a restatement of them. An address that was never enrolled,
-    or was removed long ago, is purged the same way: orphan data is data."""
+    Nothing is deleted unless every location could first be examined. The
+    report's ``remaining`` is a fresh read of the volume after the deletes,
+    never a restatement of them, plus anything that could not be purged. An
+    address that was never enrolled, or was removed long ago, is purged the
+    same way: orphan data is data."""
     norm = normalize_person_address(address)
     if norm is None:
-        return PurgeReport([], [Finding("refused", f"not a person's address: {address!r}", 1)])
-    removed = _purge_files(targets, norm)
-    removed += _purge_sql(targets, norm)
-    return PurgeReport(removed=removed, remaining=probe(norm, targets))
+        return PurgeReport([], [Finding("refused", f"not a person's address: {address!r}", 1)], refused=True)
+    blocked = preflight(norm, targets)
+    if blocked:
+        return PurgeReport([], blocked, refused=True)
+    run = _survey(norm, targets, act=True)
+    return PurgeReport(removed=run.found, remaining=run.problems + probe(norm, targets))
 
 
 __all__ = [
@@ -581,6 +690,7 @@ __all__ = [
     "PurgeTargets",
     "normalize_person_address",
     "person_slug",
+    "preflight",
     "probe",
     "purge",
     "recipient_digest",
