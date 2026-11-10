@@ -148,3 +148,20 @@ def test_the_notice_promises_nothing_but_tomorrow(router) -> None:
     notice = mod.daily_limit.NOTICE
     assert "$" not in notice and "—" not in notice
     assert not any(ch.isdigit() for ch in notice)
+
+
+def test_the_demo_seat_is_unlimited_unless_it_authors_a_limit() -> None:
+    """``seat.kind: demo`` may switch enrollment on (ADR 0106 amendment); the
+    daily limit stays off there unless ``daily_limit`` is authored."""
+    from tests.conftest import load_plugin
+
+    daily = load_plugin("hermes-smd-webhook-router").daily_limit
+    demo = {"seat": {"kind": "demo", "product": "operator"}, "sender_enrollment": {"enabled": True}}
+    assert daily.authored_limit(demo) is None
+    demo["sender_enrollment"]["daily_limit"] = 12
+    assert daily.authored_limit(demo) == 12
+    client = {
+        "seat": {"kind": "customer"},
+        "sender_enrollment": {"enabled": True, "daily_limit": 12},
+    }
+    assert daily.authored_limit(client) is None

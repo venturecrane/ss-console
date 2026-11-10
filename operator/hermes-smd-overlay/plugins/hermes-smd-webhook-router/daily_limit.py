@@ -20,8 +20,10 @@ router, where the sender is already verified, and before any model turn:
 
 Administrators (``scope.admins``) are never limited. A day is a UTC calendar
 day. The shared inbound gate (``shared/gate_inbound_cap.py``) and the cost meter
-are not changed. A seat that does not author the key, or is not a guide seat
-with enrollment switched on, never reaches this module.
+are not changed. A seat that does not author the key never reaches this
+module: it is read only where enrollment is switched on (a guide seat or SMD's
+demo seat, ``shared/sender_enrollment.py`` ``enabled_in``), and even there it
+is off unless ``daily_limit`` itself is authored.
 
 THE STORE. ``/opt/data/smd/sender_daily.db`` (``SMD_SENDER_DAILY_DB_PATH``):
 one row per sender and day, keyed by ``sender_key`` (the sha256 of the address,
@@ -72,7 +74,8 @@ def db_path() -> Path:
 
 def authored_limit(raw_config: Any) -> int | None:
     """The authored limit, or ``None`` (no limit: today's behaviour). Read only
-    on a guide seat that switches enrollment on, the one block it lives in."""
+    where enrollment is switched on (a guide seat or the demo seat), the one
+    block it lives in; absent there, there is no limit."""
     from shared import sender_enrollment
 
     if not sender_enrollment.enabled_in(raw_config):
