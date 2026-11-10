@@ -46,7 +46,7 @@ Each customer seat gets its own Anthropic **workspace**; the workspace-scoped AP
 
 ### 5. Caps are authored in customer.yaml; the platform default stands
 
-`safety.sticky_stop.cost_cap_daily_cents` (default 5000 = $50/day, the module's built ladder: warn 80%, soft-stop 100%, hard-stop 200%) and `safety.sticky_stop.inbound_daily_cap` (default 200 routed wakes/day) are authored per seat in `customer.yaml`, read at runtime via the existing `CustomerConfig` volume read — no new env vars, no consumption-contract churn. **ADR 0035 compliance:** these are integrity controls protecting SMD's own spend, in the same class as the taint gate — not client entitlements — so a platform default is doctrine-consistent; unauthored means the default applies, not fail-open.
+`safety.sticky_stop.cost_cap_daily_cents` (default 5000 = $50/day, the module's built ladder: warn 80%, soft-stop 100%, hard-stop 200%) **[Amended 2026-11-09: the ladder has two states, `OK` and `HARD_STOP`, as the section 4 amendment of 2026-09-02 records. The warn and soft-stop rungs are gone; the hard stop is still at 200% of the daily cap (`cost_hard_stop_pct` in `operator/hermes-smd-overlay/shared/sticky_stop.py`).]** and `safety.sticky_stop.inbound_daily_cap` (default 200 routed wakes/day) are authored per seat in `customer.yaml`, read at runtime via the existing `CustomerConfig` volume read — no new env vars, no consumption-contract churn. **ADR 0035 compliance:** these are integrity controls protecting SMD's own spend, in the same class as the taint gate — not client entitlements — so a platform default is doctrine-consistent; unauthored means the default applies, not fail-open.
 
 ### 6. The fleet view shows breaker state
 

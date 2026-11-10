@@ -111,11 +111,16 @@ configuration. This is the heart of the bespoke work._
      templates, grouped by who they are written to (client / counterparty /
      expert / internal) — a few per group. Confirm they are the client's own
      writing, not earlier AI drafts.
-   - _Put_: into the client's voice library, tagged by recipient group.
-   - _Include_: each sample is reduced to a privacy-safe style fingerprint (never
-     the raw text); at draft time the Operator's client-facing work is held to
-     that fingerprint. Once connected, it keeps learning from the client's sent
-     mail the same way, so the voice stays current.
+   - _Put_: nowhere as samples. The documents are read where they are and
+     distilled into a written voice specification for each kind of output
+     (ADR 0083). There is no sample library.
+   - _Include_: the specification is the client's authored voice for that kind
+     of output, installed on the seat by the spec applier. Where a kind of
+     output has no declared voice specification, a send the Operator would
+     have made on its own to an outside party becomes a draft for review. The
+     voice changes when the specification is re-authored; nothing relearns it
+     from sent mail. (The sample-fingerprint mechanism this step once
+     described was removed on 2026-11-07.)
 
 5. **Decide the connections.** For each system in the process inventory, record
    in the **connection register**: is there a ready connector, or does one need

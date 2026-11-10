@@ -50,6 +50,8 @@ This replaces ADR 0025 §4's _"defaults to `draft_for_review`."_ It makes ADR 00
 
 The vertical-floor mechanism (`vertical_floors` + `_most_restrictive` in `trust_ceiling.py`) stands. A vertical pack or engagement MAY author a non-raisable pin for an action class (e.g., a regulated-legal pack pinning `EXTERNAL_SEND = draft_for_review` so customer config cannot raise it). This is a deliberate, authored configuration where compliance requires it — never a posture imposed on engagements that did not author it. A pin constrains; it does not default.
 
+> **Amendment (2026-11-09).** No pack authors a pin today. [ADR 0073](./0073-remove-law-external-send-floor.md) removed the only one, the law-firm external-send draft floor, and `VERTICAL_FLOORS` in `operator/hermes-smd-overlay/shared/action_classes.py` is empty. The mechanism remains for a future pack to declare one. On a seat the resolver is `resolve_ceiling` in `operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py`.
+
 ### 5. What is unchanged
 
 - **Enforced in code, not prompt** (ADR 0025 §5). The model can ask; the gate decides.
