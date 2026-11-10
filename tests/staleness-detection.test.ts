@@ -127,6 +127,8 @@ interface TreeOpts {
   lockNewer?: boolean
   /** Extra commits on origin/main beyond HEAD. */
   aheadBy?: number
+  /** Paths written in the baseline commit, so a later write is a change, not an add. */
+  basePaths?: string[]
   /** Paths the FIRST commit ahead on origin/main writes (default extra-0.txt). */
   aheadPaths?: string[]
   /** Paths a commit on HEAD's own side writes after the split (a branch's own edit). */
@@ -142,6 +144,7 @@ function makeTree(opts: TreeOpts = {}): string {
     lockNewer = false,
     aheadPaths,
     branchPaths,
+    basePaths,
   } = opts
   const aheadBy = opts.aheadBy ?? (aheadPaths ? 1 : 0)
 
@@ -166,6 +169,11 @@ function makeTree(opts: TreeOpts = {}): string {
         JSON.stringify({ lockfileVersion: 3, packages: pkgs(installed) }, null, 2)
       )
     }
+  }
+
+  for (const rel of basePaths ?? []) {
+    mkdirSync(join(root, rel, '..'), { recursive: true })
+    writeFileSync(join(root, rel), 'base')
   }
 
   git(root, 'init', '--quiet', '--initial-branch=main')
@@ -458,7 +466,19 @@ describe('signal: session tooling changed on main (Signal 1b)', () => {
     expect(res.out).toContain('changed 1 skill/hook/settings path(s)')
     expect(res.out).toContain(SKILL)
     expect(res.out).not.toContain('src/a.ts')
+    // The skill file is NEW on main here, so the line asks for a restart too.
+    expect(res.out).toContain('restart the session')
+    expect(res.out).toContain('(/wired)')
+  })
+
+  it('asks only for a merge when an existing skill changed, not a restart', () => {
+    const root = makeTree({ basePaths: [SKILL], aheadPaths: [SKILL] })
+    const tmp = mkdtempSync(join(tmpdir(), 'staleness-tool-'))
+    scratch.push(tmp)
+    const res = hookIn(root, tmp, 't1b')
+    expectLawsIntact(res)
     expect(res.out).toContain('merge origin/main to load them')
+    expect(res.out).not.toContain('restart the session')
   })
 
   it('names at most three paths and counts the rest', () => {
