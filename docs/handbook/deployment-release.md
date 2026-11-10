@@ -1100,7 +1100,13 @@ the new name and deletes.
    101 checks, 0 failed (92 if step 1's medchron config is missing). The
    staff-voice spec alert (`spec_control_broken:staff.voice`) is expected
    until the twin's own voice is established, as it was on A&P.
-8. **Smokeball consent, into SMD's staging tenant.** `infisical run --env=prod
+8. **Smokeball consent, into SMD's staging tenant.** First the Captain adds
+   `https://hermes-ap-staging.fly.dev/oauth/smokeball/callback` to the callback
+   URLs on the Staging tab of the SMD Operator app in the Smokeball Developer
+   Console (console.smokeball.com), and clicks Save, not Publish (Publish is a
+   review submission). Without it Smokeball's sign-in page shows only "An error
+   was encountered with the requested page" (observed 2026-11-10). Every new seat
+   that binds Smokeball needs its own callback registered the same way. Then: `infisical run --env=prod
    --path=/ss -- bin/connect-smokeball.sh ap-staging` prints the authorize URL
    for the staging app (it reads `environment: staging`); sign in to SMD's
    staging tenant, never A&P's, and Allow.
