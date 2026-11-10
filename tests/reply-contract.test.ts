@@ -217,6 +217,25 @@ describe('reply-contract: a cost is never weighed against the monthly fee', () =
   }
 })
 
+describe('reply-contract: a bounce never asks for the reply twice', () => {
+  // 124 content bounces in 14 days each printed the whole reply a second time
+  // (Captain, 2026-11-10: "duplicate output ... a waste of tokens").
+  it('a content bounce asks for one correction line, not a restatement', () => {
+    const r = runHook(payload('That run is a small fraction of the monthly fee.'))
+    expect(decision(r)).toBe('block')
+    const reason = reasonOf(r) ?? ''
+    expect(reason).toMatch(/Do NOT repeat or restate/)
+    expect(reason).toMatch(/Correction:/)
+    expect(reason).not.toMatch(/Restate the reply/)
+  })
+
+  it('a shape bounce asks for the header block only', () => {
+    const reason = reasonOf(runHook(payload(WALL))) ?? ''
+    expect(reason).toMatch(/Write only the header block/)
+    expect(reason).not.toMatch(/Restate/)
+  })
+})
+
 describe('reply-contract: advisory rules after the 2026-10-24 review', () => {
   it('the DECISION-NEEDED-without-pick advisory is gone (Captain directive)', () => {
     runHook(payload('STATUS: DECISION-NEEDED\nShort reply with no stakes and no pick.'))

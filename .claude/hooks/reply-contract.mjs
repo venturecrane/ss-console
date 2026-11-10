@@ -181,6 +181,19 @@ export function memoryReason(hits) {
     .join(' ')
 }
 
+/**
+ * What a content bounce asks for. It used to say "Restate the reply now", so
+ * every bounce printed the whole reply a second time: 124 content bounces in
+ * the 14 days to 2026-11-10 (reply-contract.log), each a duplicate the Captain
+ * read and paid for. The first reply is already on his screen, so the fix for
+ * one wrong sentence is one corrected sentence.
+ */
+export const CORRECTION_ONLY =
+  'The Captain has already read the reply above. Do NOT repeat or restate it. ' +
+  'Write only the correction: one line, "Correction:" followed by that sentence as it should have read, ' +
+  'or "Strike:" followed by a few words naming the sentence when it should simply be gone. ' +
+  'Nothing else: no apology, no mention of this check, no summary. This bounce happens at most once per reply.'
+
 export function blockReason(result) {
   const parts = []
   if (result.rules.includes('memory')) {
@@ -196,15 +209,15 @@ export function blockReason(result) {
   if (result.rules.includes('shape')) {
     parts.push(
       `[reply-contract] This reply has ${result.total} prose lines and is missing ${result.missing.join(' and ')}. ` +
-        `Lead with the header, keep at most ${FOLD_PROSE_LINES} prose lines above a "--- Detail" fold, ` +
-        `move detail below the fold or into the PR/issue and link it. Do NOT repeat the full text you already wrote. ` +
+        `Write only the header block now (MISSION:/STATUS:/DID:/NEXT:, at most ${FOLD_PROSE_LINES} prose lines), ` +
+        `and nothing else: the text you already wrote stands as the detail and the Captain has read it. Do NOT repeat it. ` +
         `Facts carry their source inline (command, file:line, or "inferring").`,
     )
   }
   const content = result.rules.includes('memory') || result.rules.includes('fee-comparison')
   parts.push(
     content
-      ? 'Restate the reply now without that sentence or its comparison. Do not apologize or mention this check. This bounce happens at most once per reply.'
+      ? CORRECTION_ONLY
       : 'This bounce happens at most once per reply.',
   )
   return parts.join(' ')
