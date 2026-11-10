@@ -497,9 +497,16 @@ def _clear_new_exhibit_grading(out: Path, ud: Path, dest: Path, top: int) -> int
     moved: list[str] = []
     for line in results.read_text(encoding="utf-8").splitlines():
         try:
-            ex = int(json.loads(line).get("exhibit"))
+            row = json.loads(line)
+        except ValueError:
+            keep.append(line)
+            continue
+        try:
+            ex = int(row.get("exhibit"))
         except (ValueError, TypeError, AttributeError):
-            ex = 0  # a row with no exhibit (a header or summary row) is kept
+            # No exhibit: a header or summary row stays; a keyed row (the
+            # repair loop's "trim" marker) would count its claim as verified.
+            ex = top + 1 if isinstance(row, dict) and "key" in row else 0
         (moved if ex > top else keep).append(line)
     if moved:
         (dest / "audit-results.jsonl").write_text("".join(f"{x}\n" for x in moved), encoding="utf-8")

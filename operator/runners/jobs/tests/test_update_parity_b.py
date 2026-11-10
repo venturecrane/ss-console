@@ -161,7 +161,12 @@ def test_a_redo_moves_an_earlier_attempts_new_exhibits_aside_before_numbering(tm
     # What the earlier attempt graded against those files, keyed by number.
     (out / "auditpages").mkdir()
     (out / "auditpages" / "ex2_p1.png").write_bytes(b"png")
-    rows = [{"key": "a", "exhibit": 1, "verdict": "SUPPORTED"}, {"key": "b", "exhibit": 3, "verdict": "UNSUPPORTED"}]
+    rows = [
+        {"key": "a", "exhibit": 1, "verdict": "SUPPORTED"},
+        {"key": "b", "exhibit": 3, "verdict": "UNSUPPORTED"},
+        {"key": "c", "kind": "trim", "exhibit": None},  # keyed, no exhibit: would read as verified
+        {"kind": "summary"},
+    ]
     (out / "audit-results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     (out / "repair-edits.jsonl").write_text("{}\n")
     (tmp_path / "runs" / "alpha" / "update" / "review_repair.json").write_text('{"status": "held"}')
@@ -172,9 +177,9 @@ def test_a_redo_moves_an_earlier_attempts_new_exhibits_aside_before_numbering(tm
     assert sorted(p.name for p in stale.glob("Exhibit *")) == [
         f"Exhibit {n} - Earlier Attempt {n}.pdf" for n in (2, 3, 4)
     ]
-    kept = [json.loads(x)["key"] for x in (out / "audit-results.jsonl").read_text().splitlines()]
-    assert kept == ["a"], "a delivered exhibit's row stays; the new exhibit's row is regraded"
-    assert [json.loads(x)["key"] for x in (stale / "audit-results.jsonl").read_text().splitlines()] == ["b"]
+    kept = [json.loads(x).get("key") for x in (out / "audit-results.jsonl").read_text().splitlines()]
+    assert kept == ["a", None], "a delivered exhibit's row and an unkeyed summary stay"
+    assert [json.loads(x)["key"] for x in (stale / "audit-results.jsonl").read_text().splitlines()] == ["b", "c"]
     assert not (out / "auditpages").exists() and (stale / "auditpages" / "ex2_p1.png").is_file()
     assert not (out / "repair-edits.jsonl").exists() and (stale / "review_repair.json").is_file()
 
