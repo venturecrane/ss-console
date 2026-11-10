@@ -141,13 +141,44 @@ def _redeem(r: Any, mark_c: str) -> dict[str, Any]:
     }
 
 
+def _fresh_day() -> None:
+    """Start each training email on a fresh day of the per-sender daily limit.
+
+    The rehearsal seat authors a limit of three emails a day, which the
+    foundation's turns spend on A and then prove (``a-over-the-limit``). A rep's
+    whole path is about twenty emails; on a seat it spans days. The router's
+    own store (``daily_limit.db_path``) is emptied before each training email,
+    a recorded departure like ``_drive.fresh_ladder``: the limit itself is
+    proven by the foundation's turns, not here."""
+    import sqlite3
+    import sys
+
+    module = next(
+        m for n, m in sys.modules.items() if n.endswith("daily_limit") and hasattr(m, "db_path")
+    )
+    path = module.db_path()
+    if not path.exists():
+        return
+    conn = sqlite3.connect(str(path))
+    try:
+        conn.execute("DELETE FROM sender_daily")
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def run_training(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, Any]:
     """Drive the training turns. Returns evidence for the parent's file."""
     rec = "training_record"
+
+    def turn(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        _fresh_day()
+        return r.turn(*args, **kwargs)
+
     out: dict[str, Any] = {}
 
-    r.turn("t-a-starts", [(rec, {"action": "status"})], sender=a, body=f"start training {a_mark}")
-    r.turn(
+    turn("t-a-starts", [(rec, {"action": "status"})], sender=a, body=f"start training {a_mark}")
+    turn(
         "t-a-lesson-1",
         [
             (rec, {"action": "complete_lesson", "lesson_id": "l03"}),
@@ -156,13 +187,13 @@ def run_training(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, 
         sender=a,
         body=f"The Operator is a worker SMD runs for one business. {a_mark}",
     )
-    r.turn(
+    turn(
         "t-a-lessons-2-to-8",
         [(rec, {"action": "complete_lesson", "lesson_id": f"l0{n}"}) for n in range(2, 9)],
         sender=a,
         body=f"Here are my answers to the exercises. {a_mark}",
     )
-    r.turn(
+    turn(
         "t-a-draft-with-misses",
         [("tone_check", {}), (rec, {"action": "complete_lesson", "lesson_id": "l09"})],
         sender=a,
@@ -170,7 +201,7 @@ def run_training(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, 
     )
     # No marker in this one email: the marker is a word in capitals, which the
     # tone rules count as a miss, and this draft is the clean one.
-    r.turn(
+    turn(
         "t-a-clean-draft",
         [("tone_check", {})],
         sender=a,
@@ -182,29 +213,29 @@ def run_training(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, 
             calls.insert(
                 0, (rec, {"action": "objection_answered", "scenario": "owner", "number": 3})
             )
-        r.turn(f"t-a-objection-{n}", calls, sender=a, body=f"{answer} {a_mark}")
-    r.turn(
+        turn(f"t-a-objection-{n}", calls, sender=a, body=f"{answer} {a_mark}")
+    turn(
         "t-a-lesson-10",
         [(rec, {"action": "complete_lesson", "lesson_id": "l10"})],
         sender=a,
         body=f"That was the whole pitch. {a_mark}",
     )
-    r.turn("t-a-asks-quiz", [(rec, {"action": "quiz"})], sender=a, body=f"quiz please {a_mark}")
-    r.turn(
+    turn("t-a-asks-quiz", [(rec, {"action": "quiz"})], sender=a, body=f"quiz please {a_mark}")
+    turn(
         "t-a-quiz-answers",
         [(rec, {"action": "grade_quiz"}), (rec, {"action": "status"})],
         sender=a,
         body=f"{A_QUIZ}\nThanks. {a_mark}",
     )
 
-    r.turn("t-b-starts", [(rec, {"action": "status"})], sender=b, body=f"start training {b_mark}")
-    r.turn(
+    turn("t-b-starts", [(rec, {"action": "status"})], sender=b, body=f"start training {b_mark}")
+    turn(
         "t-b-lesson-1",
         [(rec, {"action": "complete_lesson", "lesson_id": "l01"})],
         sender=b,
         body=f"It is a managed worker for one business. {b_mark}",
     )
-    r.turn(
+    turn(
         "t-b-quiz-answers",
         [(rec, {"action": "grade_quiz"}), (rec, {"action": "status"})],
         sender=b,
