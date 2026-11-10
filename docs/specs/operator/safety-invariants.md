@@ -12,7 +12,7 @@
 
 ## Invariant #6 - citation enforcement for fact-bearing fields
 
-Platform PRD §7.5 invariant #6 names a "citation-refusal layer." The law-firm vertical implements that as **refusal on fabricated legal citations** in any output (case names, reporter cites, statute references, court rules). That layer is `operator/safety_substrate/citation_filter.py`, shipped with PR #812 and exercised by `tests/test_invariant_6_no_citations.py`.
+Platform PRD §7.5 invariant #6 names a "citation-refusal layer." The law-firm vertical implements that as **refusal on fabricated legal citations** in any output (case names, reporter cites, statute references, court rules). That layer is `operator/hermes-smd-overlay/shared/citation_filter.py`, shipped with PR #812 and exercised by `tests/test_invariant_6_no_citations.py`.
 
 The complement shipped here is **citation enforcement on fact-bearing fields**. Every fact a skill renders into a declared fact-bearing field must carry a `Citation` attached to a real source. The two layers cover the two failure modes:
 

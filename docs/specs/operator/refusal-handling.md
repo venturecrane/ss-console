@@ -21,7 +21,7 @@ the skill MUST abort.
 - `operator/adapter/trust_ceiling.py` (`enforce()` decision tree)
 - `operator/safety_substrate/trust_ceiling_log.py` (sibling module
   from PR #953; canonical audit row writer this module delegates to)
-- `operator/safety_substrate/sticky_stop.py` (sibling module from
+- `operator/hermes-smd-overlay/shared/sticky_stop.py` (sibling module from
   PR #948; provides the per-state-machine refusal counter that the
   dispatch path may wire in for sticky-stop transition decisions)
 - `operator/adapter/audit_log.py` (PR #942): writer +

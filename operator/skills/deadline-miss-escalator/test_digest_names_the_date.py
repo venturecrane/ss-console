@@ -39,7 +39,7 @@ from pathlib import Path
 import yaml
 
 _SKILL = Path(__file__).resolve().parent
-_SUBSTRATE = _SKILL.parents[1] / "safety_substrate"
+_FILTERS = _SKILL.parents[1] / "hermes-smd-overlay" / "shared"  # the filters the gateway runs
 
 
 def _load(path: Path, name: str):
@@ -54,8 +54,8 @@ def _load(path: Path, name: str):
 _pre_run = _load(_SKILL / "pre_run.py", "escalator_pre_run_names")
 _items = _load(_SKILL / "digest_items.py", "escalator_digest_items_names")
 _cw = _load(_SKILL / "casework_ledger.py", "escalator_cw_ledger_names")
-_citations = _load(_SUBSTRATE / "citation_filter.py", "substrate_citation_filter_names")
-_identifiers = _load(_SUBSTRATE / "identifier_filter.py", "substrate_identifier_filter_names")
+_citations = _load(_FILTERS / "citation_filter.py", "substrate_citation_filter_names")
+_identifiers = _load(_FILTERS / "identifier_filter.py", "substrate_identifier_filter_names")
 
 TODAY = date(2026, 9, 28)
 NOW = datetime(2026, 9, 28, 14, 0, tzinfo=timezone.utc)

@@ -16,7 +16,7 @@ This is **B1** from ADR 0050's backlog. The receipts task itself is **B2** (proc
 - **V3 — delivery is standalone-capable.** `_deliver_result(job, content, adapters=None, loop=None)` (`cron/scheduler.py:489`) falls back to a standalone send when no live adapter is passed; managed mail (Gmail) routes through the broker (DWD).
 - **V4 — a long in-gateway job does not block the event loop _iff it is a thread_.** `run_conversation` is synchronous (`run_agent.py:12094`); the gateway runs cron on a separate `threading.Thread` (`gateway/run.py:16572,16991`) whose `tick()` dispatches via a `ThreadPoolExecutor` under a file lock (`cron/scheduler.py:1669-1743`), off the asyncio loop. Agent work is I/O-bound (GIL released on LLM/tool waits) — which is why cron already coexists with live traffic.
 - **B0 taint hole:** the gate keys on `session_id` (`enforce.py:877`) but `SESSION_TAINT.mark()` runs only at the two inbound chokepoints (`plugins/hermes-smd-inbound/__init__.py:83,217`). A worker session is a new unmarked origin.
-- **B3 cost breaker built-but-unwired:** `operator/safety_substrate/sticky_stop.py` (`record_cost_cents:608`, `record_runtime_seconds:565`, `assert_allowed:663`) has no live turn-path caller.
+- **B3 cost breaker built-but-unwired:** `operator/safety_substrate/sticky_stop.py` (`record_cost_cents:608`, `record_runtime_seconds:565`, `assert_allowed:663`; the then-path, since 2026-11-10 the one copy is `operator/hermes-smd-overlay/shared/sticky_stop.py`) has no live turn-path caller.
 - **Blueprint:** the broker-owned audit ledger (uid-gated socket, bind-mounted past `chmod 0700`) + the `entrypoint.sh` supervisor pattern.
 
 ## Architecture
@@ -53,7 +53,7 @@ intake (`start_background_job` → control row w/ identity, ticket <55s) → cla
 
 **Console (`ss-console`):** `operator/workspace_broker/job_ledger.py` (new) + verbs in `server.py` (epoch-fenced, on the existing audit DB); `operator/templates/entrypoint.sh` (broker respawn-supervisor; worker in-gateway, no new uid for MVP); `operator/migrations/00xx_operator_jobs.sql` (new); `operator/contracts/customer-yaml-blocks.yaml` (declare new blocks).
 
-**Reuse, do not reinvent:** audit-ledger + `SO_PEERCRED` (`operator/workspace_broker/`); supervisor/bind-mount (`operator/templates/entrypoint.sh`); taint register (`hermes-smd-overlay/shared/inbound.py:311,334`); cost breaker (`operator/safety_substrate/sticky_stop.py`); resume (`hermes_state.py:1686`). **Leverage:** Hermes' in-process `AIAgent`/`run_conversation` construction (the one `run_job` uses); `agent/usage_pricing.py`; `_deliver_result` (standalone fallback). **Do not:** fork the agent path into a separate replicated process; use the Hermes Runs API (in-memory); build an external durable-execution engine.
+**Reuse, do not reinvent:** audit-ledger + `SO_PEERCRED` (`operator/workspace_broker/`); supervisor/bind-mount (`operator/templates/entrypoint.sh`); taint register (`hermes-smd-overlay/shared/inbound.py:311,334`); cost breaker (`operator/hermes-smd-overlay/shared/sticky_stop.py`); resume (`hermes_state.py:1686`). **Leverage:** Hermes' in-process `AIAgent`/`run_conversation` construction (the one `run_job` uses); `agent/usage_pricing.py`; `_deliver_result` (standalone fallback). **Do not:** fork the agent path into a separate replicated process; use the Hermes Runs API (in-memory); build an external durable-execution engine.
 
 ## Verification
 

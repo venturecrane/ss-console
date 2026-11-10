@@ -1,4 +1,7 @@
-"""Tests for operator/safety_substrate/sticky_stop.py (issue #843).
+"""Tests for shared.sticky_stop, the overlay module the seat runs (issue #843).
+
+The module lives once, at operator/hermes-smd-overlay/shared/sticky_stop.py;
+this suite imports that copy, so it tests what the gateway's cost breaker uses.
 
 Covers the four AC conditions:
 
@@ -33,15 +36,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-# safety_substrate/ is on sys.path through the sticky_stop import below;
-# we use the same dash-named-directory trick the other invariant tests use.
-
 from adapter.audit_log import (
     AuditEvent,
     AuditLogWriter,
     SqliteExecutor,
 )
-from safety_substrate.sticky_stop import (
+from shared.sticky_stop import (
     DEFAULT_THRESHOLDS,
     SqliteStickyStopStore,
     StickyStopCondition,

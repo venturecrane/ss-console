@@ -9,10 +9,10 @@ contacts and returns it as a ``caption`` field so the harvester catches it.
 
 No live Smokeball calls: an ``httpx.MockTransport`` is injected so the real
 contact-resolution logic runs against scripted responses. A final test imports
-the byte-identical ``citation_filter`` twin and asserts the emitted string is
-BOTH catchable (the harvester will register it) AND exempting (a memo naming the
-matter by that caption is then allowed) — locking the emission form to the
-deployed allowlist contract.
+the deployed ``citation_filter`` (the overlay's shared/citation_filter.py, the
+one copy) and asserts the emitted string is BOTH catchable (the harvester will
+register it) AND exempting (a memo naming the matter by that caption is then
+allowed) — locking the emission form to the deployed allowlist contract.
 """
 
 from __future__ import annotations
@@ -168,11 +168,11 @@ def test_list_shared_contacts_dedupe() -> None:
     assert all(m["caption"] == "Alvarez v. Draper" for m in items)
 
 
-# ---- canonicalization proof vs the deployed citation-filter twin ----------
+# ---- canonicalization proof vs the deployed citation filter ----------
 
 
 def _load_citation_filter():
-    path = Path(__file__).resolve().parents[3] / "safety_substrate" / "citation_filter.py"
+    path = Path(__file__).resolve().parents[3] / "hermes-smd-overlay" / "shared" / "citation_filter.py"
     spec = importlib.util.spec_from_file_location("ss_citation_filter", path)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)

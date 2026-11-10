@@ -1,8 +1,9 @@
-# VENDORED from ss-console operator/safety_substrate/sticky_stop.py (ADR 0062,
-# ss-console #1661). Changes land there first, then re-vendor byte-identically
-# below this header. The module is self-contained by design (StickyStopAuditRecord
-# + StickyStopAuditSink Protocol) so no adapter imports are needed here; the
-# overlay-side sink adapter lives in shared/cost_breaker.py.
+# The one copy (ADR 0062, ss-console #1661). The gateway imports it as
+# shared.sticky_stop, and the seat's boot invariants and
+# operator/safety_substrate/tests import the same module, so what CI and the
+# boot gate prove is what the seat runs. The module is self-contained by design
+# (StickyStopAuditRecord + StickyStopAuditSink Protocol); the overlay-side sink
+# adapter lives in shared/cost_breaker.py.
 """Sticky-stop circuit breaker for runaway agent loops (issue #843).
 
 The platform PRD §7.5 invariant #4 says "don't act" instructions are sticky:

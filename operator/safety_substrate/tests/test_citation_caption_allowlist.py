@@ -12,7 +12,7 @@ session. Only bare case-name hits are exempt; fabricated-authority patterns
 from __future__ import annotations
 
 
-from safety_substrate.citation_filter import canonical_caption, contains_citation, scan
+from shared.citation_filter import canonical_caption, contains_citation, scan
 
 CAPTION = "Alvarez v. Draper"
 

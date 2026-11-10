@@ -360,7 +360,7 @@ cd operator && uv run --with pytest python -m pytest safety_substrate/tests/test
 
 ## Implementation notes
 
-- Module: `operator/safety_substrate/sticky_stop.py`
+- Module: `operator/hermes-smd-overlay/shared/sticky_stop.py` (the one copy; the gateway imports it)
 - Migration: `operator/migrations/0004_sticky_stop_state.sql`
 - Tests: `operator/safety_substrate/tests/test_sticky_stop.py`
 - The module follows the same pure-Python + injectable-store shape as

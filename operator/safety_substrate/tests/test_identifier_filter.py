@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 
 
-from safety_substrate.identifier_filter import (
+from shared.identifier_filter import (
     _CASE_RE,
     IdKind,
     Mode,

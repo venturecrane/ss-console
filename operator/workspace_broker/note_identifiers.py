@@ -36,8 +36,8 @@ spans of the structured hits above, must appear as a digit run in the anchor.
 That is stricter than the overlay on purpose: a refused note costs SMD one
 rewrite; a note about the wrong matter costs the firm's trust.
 
-Source of truth for the shapes: ``operator/safety_substrate/identifier_filter.py``
-(this repo) and its overlay copy ``shared/identifier_filter.py``. A shape change
+Source of truth for the shapes: the overlay's ``shared/identifier_filter.py``,
+the one copy, which the outbound gate runs. A shape change
 there is a change here; ``tests/test_note_verbs.py`` pins the parity.
 """
 

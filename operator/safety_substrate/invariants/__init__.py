@@ -13,7 +13,7 @@ holds the remaining two:
   of record, or a verbatim quote from the source). Output containing an
   unsourced fact in such a field blocks emission with a structured error.
 
-  This is distinct from ``safety_substrate/citation_filter.py``. That module
+  This is distinct from the overlay's ``shared/citation_filter.py``. That module
   detects FABRICATED legal citations (case names, reporter cites, statutory
   references) in any law-vertical output and refuses on detection - it is
   the law-firm-vertical implementation of invariant #6's refusal semantics.

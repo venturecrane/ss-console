@@ -43,8 +43,8 @@ report = pre_run._REPORT
 render = pre_run._RENDER
 pull = pre_run._PULL
 envelope_mod = pre_run._ENVELOPE
-citation_filter = _load("sw_citation_filter", _OPERATOR / "safety_substrate" / "citation_filter.py")
-identifier_filter = _load("sw_identifier_filter", _OPERATOR / "safety_substrate" / "identifier_filter.py")
+citation_filter = _load("sw_citation_filter", _OPERATOR / "hermes-smd-overlay" / "shared" / "citation_filter.py")
+identifier_filter = _load("sw_identifier_filter", _OPERATOR / "hermes-smd-overlay" / "shared" / "identifier_filter.py")
 
 TODAY = date(2026, 10, 1)
 RECIPIENT = "office@firm.test"

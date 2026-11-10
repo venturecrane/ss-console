@@ -278,15 +278,16 @@ _CORPUS = [
     "SSN 123-45-6789",
     "Case 1:24-cv-01234, No. 24-12345, 2026-PI-101, PI-2026-0001",
     "Dated 6/8/26, 06-08-2026, 2026-06-08T09:00:00Z, June 8, 2026, 8 June 2026, Jun. 8 2026",
+    "Due August 5th, 2026 and 5th August 2026, then Sept. 1st 2026",
 ]
 
 
 @pytest.mark.parametrize("text", _CORPUS)
 def test_the_structured_shapes_match_the_identifier_filter(text: str) -> None:
-    """FALSIFIER: drift a pattern here (or there) and this goes red. The
-    substrate copy predates the overlay's ordinal suffixes, so the corpus has
-    none; the ordinal forms are pinned below."""
-    from safety_substrate import identifier_filter as source
+    """FALSIFIER: drift a pattern here (or there) and this goes red. Compared
+    against shared.identifier_filter, the module the overlay gate runs, so the
+    ordinal day suffixes are in the corpus too."""
+    from shared import identifier_filter as source
 
     ours = sorted((h.kind, h.canonical) for h in note_identifiers.structured(text))
     theirs = sorted((h.kind.value, h.canonical) for h in source._extract(text, include_names=False))
