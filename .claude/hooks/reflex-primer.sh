@@ -232,12 +232,16 @@ staleness_block() {
   # hooks or settings, and a session that started before one of them runs
   # the old version for the rest of its life. Probed 2026-11-09 (headless,
   # one stream-json process): a running session re-reads a changed SKILL.md
-  # from its tree without a restart, so the remedy is a merge, not a restart.
+  # from its tree without a restart, so for a CHANGED skill the remedy is a
+  # merge. A skill NEW to the tree is different: on 2026-11-10 a session
+  # fast-forwarded onto the /auto-build and /critique forks still ran crane's
+  # copies of both, because its skill list was fixed at start. A new SKILL.md
+  # therefore asks for a merge AND a restart.
   # Three-dot diff: only what main changed since the merge base. A branch
   # that edits a skill itself is not "missing" anything and stays silent.
   # Speaks once per origin/main sha per session; no session id, no baseline,
   # silent rather than every turn.
-  local om tooling tool_file tool_n tool_names
+  local om tooling tool_file tool_n tool_names new_skills
   om=$(git -C "$root" rev-parse --verify -q origin/main 2>/dev/null)
   if [ -n "$om" ] && [ -n "$sid" ]; then
     tooling=$(git -C "$root" diff --name-only HEAD...origin/main -- .claude/skills .claude/hooks .claude/settings.json 2>/dev/null)
@@ -248,7 +252,12 @@ staleness_block() {
         tool_n=$(printf '%s\n' "$tooling" | wc -l | tr -d ' ')
         tool_names=$(printf '%s\n' "$tooling" | head -3 | paste -sd ',' - | sed 's/,/, /g')
         [ "$tool_n" -gt 3 ] 2>/dev/null && tool_names="${tool_names}, +$((tool_n - 3)) more"
-        echo "[doctrine] Law 10: origin/main changed ${tool_n} skill/hook/settings path(s) your tree does not have (${tool_names}). A running session reads these from its own tree: merge origin/main to load them."
+        new_skills=$(git -C "$root" diff --name-only --diff-filter=A HEAD...origin/main -- '.claude/skills/*/SKILL.md' 2>/dev/null | sed -E 's#^\.claude/skills/([^/]+)/SKILL\.md$#/\1#' | paste -sd ',' - | sed 's/,/, /g')
+        if [ -n "$new_skills" ]; then
+          echo "[doctrine] Law 10: origin/main changed ${tool_n} skill/hook/settings path(s) your tree does not have (${tool_names}). Merge origin/main, then restart the session: a skill new to the tree (${new_skills}) is not picked up by a running session."
+        else
+          echo "[doctrine] Law 10: origin/main changed ${tool_n} skill/hook/settings path(s) your tree does not have (${tool_names}). A running session reads these from its own tree: merge origin/main to load them."
+        fi
       fi
     fi
   fi
