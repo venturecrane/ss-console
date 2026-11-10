@@ -61,6 +61,19 @@ and never moves a record between spaces. An unresolved space lists, reads and
 writes nothing. The handlers repeat the judgement rather than trust hook order.
 Seats without ``people:`` keep the address fence exactly as it was.
 
+A STORE CAN BE WALLED PER PERSON (``partition: sender``, 2026-11-10). Each
+person's records live in their own directory under the store, named by code
+from the turn's verified sender. The wall is in the HANDLERS, keyed by the
+session id Hermes hands a handler and the strict per-turn verified sender
+(``bound_this_turn``), never in ``pre_tool_call``, which Hermes calls with no
+session id. List shows only the caller's own directory, read and write reach
+only it, and there is no cross-person read in these tools at all. A turn with
+no verified sender (a scheduled turn, a wake, a chat turn) or a sender not on
+the seat's roster at that moment is refused all three with one sentence
+(:data:`PARTITION_REFUSED`). A ``managed: true`` store refuses the model's
+write; code writes it (``shared.record_store.code_write``). The stores that
+authored neither key keep every rule above exactly as it was.
+
 Exception-safe is NOT the contract for the handlers (that rule governs
 hooks): a tool that cannot write must say so to the model, so these raise a
 reason Hermes surfaces. The hook IS exception-safe, and its failure mode is
@@ -166,9 +179,73 @@ def _policy(store: Any) -> record_store.StorePolicy:
     return policies[store]
 
 
+#: The one sentence a partitioned store answers when the turn has no person it
+#: can be shown to belong to. Same words for list, read and write, and for every
+#: cause (no email opened this turn, a scheduled turn, a chat turn, a sender who
+#: is no longer listed), so the refusal says nothing about anyone's records.
+PARTITION_REFUSED = (
+    "This store keeps each person's records privately, and this turn has no verified "
+    "sender listed on this seat, so nothing in it can be listed, read or changed."
+)
+#: The model-facing write on a store only code writes.
+MANAGED_REFUSED = (
+    "This store is kept by the seat itself; its records are written by the seat, not by this tool."
+)
+
+
+def _partition_person(session_id: Any) -> str:
+    """The person a partitioned store call belongs to, or a refusal.
+
+    THE WALL IS HERE, in the handler, keyed by the session id Hermes hands the
+    handler (``registry.dispatch`` passes it beside ``task_id``). Never in
+    ``pre_tool_call``: Hermes does not pass that hook a session id, and the
+    fallback resolver behind it is thread-local, which on a seat with two
+    people in flight is exactly the ambiguous case. Never a thread-local
+    fallback here either: no id, no person.
+
+    The person is the strict per-turn verified sender
+    (``SESSION_INBOUND_ORIGIN.bound_this_turn``): the email whose message id
+    this turn's own trusted prompt prefix carried, in a session handed exactly
+    one email. A scheduled turn, a wake, a chat turn or a session handed a
+    second email has none. Then the person must be on the seat's roster NOW
+    (authored, or enrolled on a guide seat), read fresh, so a removal takes
+    effect on the next call of a turn already running.
+    """
+    from shared.cron_attribution import parse_cron_session
+
+    sid = session_id if isinstance(session_id, str) else ""
+    if not sid or parse_cron_session(sid):
+        raise RuntimeError(PARTITION_REFUSED)
+    origin = SESSION_INBOUND_ORIGIN.bound_this_turn(sid)
+    address = (origin.sender_address if origin is not None else "") or ""
+    address = address.strip().lower()
+    if not address or not record_store.listed_on_seat(address):
+        raise RuntimeError(PARTITION_REFUSED)
+    return address
+
+
+def _partition_list(store: str, policy: record_store.StorePolicy, session_id: Any) -> str:
+    person = _partition_person(session_id)
+    try:
+        records = record_store.list_partition(policy, person, store)
+    except record_store.RecordStoreError as exc:
+        raise RuntimeError(str(exc)) from exc
+    return json.dumps(
+        {
+            "store": store,
+            "policy": {"partition": policy.partition, "managed": policy.managed},
+            "records": records,
+            "count": len(records),
+        },
+        ensure_ascii=False,
+    )
+
+
 def _list_handler(args: dict[str, Any], **kwargs: Any) -> str:
     try:
         policy = _policy(args.get("store"))
+        if policy.partitioned:
+            return _partition_list(str(args["store"]), policy, kwargs.get("session_id"))
         records = record_store.list_records(str(args.get("store") or ""), policy=policy)
     except record_store.RecordStoreError as exc:
         raise RuntimeError(str(exc)) from exc
@@ -201,7 +278,53 @@ _READ_MISS_HINT = (
 )
 
 
+def _authored_policy(store: Any) -> record_store.StorePolicy | None:
+    """The store's policy when it is authored, else ``None``. ``None`` also
+    when the block cannot be read: the existing path then refuses exactly as it
+    did before partitioned stores existed (a partitioned store's records are
+    never reachable on that path, because it reads only the store root)."""
+    if not isinstance(store, str):
+        return None
+    try:
+        return record_store.authored_policies().get(store)
+    except record_store.RecordStoreError:
+        return None
+
+
+def _partition_read(store: str, policy: record_store.StorePolicy, args: dict, sid: Any) -> str:
+    person = _partition_person(sid)
+    try:
+        text = record_store.read_partition(policy, person, str(args.get("name") or ""), store)
+    except record_store.RecordStoreError as exc:
+        raise RuntimeError(f"{exc}. {_READ_MISS_HINT}") from exc
+    return json.dumps(
+        {"store": store, "name": args.get("name"), "content": text}, ensure_ascii=False
+    )
+
+
+def _partition_write(store: str, policy: record_store.StorePolicy, args: dict, sid: Any) -> str:
+    person = _partition_person(sid)
+    content = args.get("content") if isinstance(args.get("content"), str) else ""
+    try:
+        receipt = record_store.write_partition(
+            policy,
+            person,
+            str(args.get("name") or ""),
+            content,
+            overwrite=bool(args.get("overwrite", False)),
+            store=store,
+        )
+    except record_store.PartitionRefused as exc:
+        raise RuntimeError(PARTITION_REFUSED) from exc
+    except record_store.RecordStoreError as exc:
+        raise RuntimeError(str(exc)) from exc
+    return json.dumps(receipt, ensure_ascii=False)
+
+
 def _read_handler(args: dict[str, Any], **kwargs: Any) -> str:
+    policy = _authored_policy(args.get("store"))
+    if policy is not None and policy.partitioned:
+        return _partition_read(str(args["store"]), policy, args, kwargs.get("session_id"))
     # Defense in depth: the pre_tool_call fence already judged this read; on a
     # shared seat the handler judges it again rather than trust hook order.
     problem = _space_fence_problem(TOOL_READ, args, kwargs.get("session_id"))
@@ -228,6 +351,11 @@ def _read_handler(args: dict[str, Any], **kwargs: Any) -> str:
 
 
 def _write_handler(args: dict[str, Any], **kwargs: Any) -> str:
+    policy = _authored_policy(args.get("store"))
+    if policy is not None and policy.managed:
+        raise RuntimeError(MANAGED_REFUSED)
+    if policy is not None and policy.partitioned:
+        return _partition_write(str(args["store"]), policy, args, kwargs.get("session_id"))
     problem = _space_fence_problem(TOOL_WRITE, args, kwargs.get("session_id"))
     if problem:
         raise RuntimeError(f"{TOOL_WRITE} refused: {problem}")

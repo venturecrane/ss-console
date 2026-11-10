@@ -165,23 +165,38 @@ def write_couples_seat(path: Path) -> Path:
     return path
 
 
-def build_seat_home(root: Path, *, model_base_url: str, extra_plugins: list[Path]) -> Path:
+def build_seat_home(
+    root: Path,
+    *,
+    model_base_url: str,
+    extra_plugins: list[Path],
+    customer_yaml_text: str | None = None,
+    hermes_root: Path | None = None,
+    persona: str = PERSONA_SLUG,
+) -> Path:
     """Translate the template into ``root/home`` and return the persona's
-    profile dir, which is the ``HERMES_HOME`` the persona's runtime reads."""
+    profile dir, which is the ``HERMES_HOME`` the persona's runtime reads.
+
+    ``customer_yaml_text``, ``hermes_root`` and ``persona`` let a rehearsal
+    build a different seat the same way (the guide rehearsal,
+    ``test_guide_rehearsal_run.py``, lays its profiles under a temp seat volume)."""
     from bootstrap.translate import translate_customer_yaml
 
     customer_yaml = root / "customer.yaml"
-    customer_yaml.write_text(with_every_lane(filled_template()), encoding="utf-8")
-    hermes_root = root / "home"
+    text = (
+        customer_yaml_text if customer_yaml_text is not None else with_every_lane(filled_template())
+    )
+    customer_yaml.write_text(text, encoding="utf-8")
+    hermes_root = hermes_root if hermes_root is not None else root / "home"
     slugs = translate_customer_yaml(
         str(customer_yaml),
         str(hermes_root),
         skills_dir=str(REPO_OPERATOR / "skills"),
         roles_dir=str(REPO_OPERATOR / "roles"),
     )
-    if slugs != [PERSONA_SLUG]:
-        raise AssertionError(f"template translated to personas {slugs}, expected [{PERSONA_SLUG}]")
-    profile = hermes_root / "profiles" / PERSONA_SLUG
+    if slugs != [persona]:
+        raise AssertionError(f"template translated to personas {slugs}, expected [{persona}]")
+    profile = hermes_root / "profiles" / persona
 
     plugins_dir = profile / "plugins"
     plugins_dir.mkdir(parents=True, exist_ok=True)
