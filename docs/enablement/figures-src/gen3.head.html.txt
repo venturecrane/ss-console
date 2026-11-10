@@ -1,0 +1,98 @@
+<title>How the Operator Works</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of numbered views; each view is a plain line figure with numbered text under it.
+   One visual system for every figure, and each figure carries a legend for the parts it uses:
+   tan fill = on the client's seat; plain fill = client-owned, outside the seat; clear fill with an ink bar = run by SMD;
+   clear fill with a grey outline = third party; orange = the product's own controls; green = allowed; red = refused or failed;
+   a dashed ink line or outline = waits for a person. */
+:root {
+  --bg: #f5f0e3; --panel: #fbf8f0; --seat: #efe5cc; --ink: #1a1512; --ink2: #4a423c; --muted: #7d7267;
+  --line: rgba(26,21,18,.18); --accent: #c5501e; --on-accent: #ffffff; --ok: #3f6335; --stop: #9c2a2a;
+  --display: 'Archivo', system-ui, sans-serif; --body: 'Archivo', system-ui, sans-serif;
+  --label: 'Archivo Narrow', 'Archivo', system-ui, sans-serif; --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #1a1512; --panel: #231c18; --seat: #4a3a26; --ink: #f5f0e3; --ink2: #d3cabb; --muted: #a2978a;
+  --line: rgba(245,240,227,.2); --accent: #e7783f; --on-accent: #1a1512; --ok: #9cc48a; --stop: #ef8f80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #1a1512; --panel: #231c18; --seat: #4a3a26; --ink: #f5f0e3; --ink2: #d3cabb; --muted: #a2978a;
+  --line: rgba(245,240,227,.2); --accent: #e7783f; --on-accent: #1a1512; --ok: #9cc48a; --stop: #ef8f80; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 1000px; margin: 0 auto; padding-block: 40px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { border-bottom: 3px solid var(--ink); padding-bottom: 20px; margin-bottom: 8px; }
+.eyebrow { font-family: var(--label); font-weight: 600; text-transform: uppercase; letter-spacing: .09em; font-size: 13px; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; margin: 6px 0 12px; text-wrap: balance; letter-spacing: -.01em; }
+.lede { font-size: 18px; max-width: 66ch; color: var(--ink2); margin: 0; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; padding-block: 12px; border-bottom: 1px solid var(--line); font-family: var(--label); font-size: 14px; letter-spacing: .03em; }
+nav.toc a { color: var(--ink2); text-decoration: none; border-bottom: 1px solid var(--line); }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+nav.toc span { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .07em; font-size: 13px; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 25px; line-height: 1.15; margin: 0 0 6px; text-wrap: balance; }
+h3 { font-family: var(--label); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; color: var(--muted); margin: 22px 0 8px; }
+p { margin: 0 0 12px; max-width: 68ch; }
+section.view { padding-block: 30px; border-bottom: 1px solid var(--line); scroll-margin-top: 12px; }
+.vnum { font-family: var(--label); font-weight: 600; letter-spacing: .09em; text-transform: uppercase; font-size: 13px; color: var(--accent); }
+.q { color: var(--ink2); font-size: 17px; margin-bottom: 16px; }
+.five { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; border: 1.5px solid var(--ink); margin: 18px 0 6px; }
+.five div { padding: 12px 14px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.five b { display: block; font-family: var(--label); text-transform: uppercase; letter-spacing: .07em; font-size: 13px; }
+.five span { font-size: 14px; color: var(--ink2); }
+.fig { overflow-x: auto; margin: 14px 0 16px; border: 1.5px solid var(--ink); background: var(--panel); }
+.fig svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--body); }
+ol.steps { margin: 0 0 14px; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px 28px; }
+ol.steps li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; font-size: 15px; min-width: 0; }
+ol.steps .n { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 13px; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+ol.steps b { font-weight: 600; }
+.tbl { overflow-x: auto; margin: 12px 0 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 620px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+thead th { font-family: var(--label); text-transform: uppercase; letter-spacing: .07em; font-size: 12.5px; color: var(--muted); border-bottom: 1.5px solid var(--ink); font-weight: 600; }
+tbody th { font-weight: 600; white-space: nowrap; }
+td.no { color: var(--stop); } td.yes { color: var(--ok); font-weight: 500; }
+.cols3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0; border: 1.5px solid var(--ink); margin: 12px 0; }
+.cols3 > div { padding: 14px 16px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.cols3 h4 { margin: 0 0 8px; font-family: var(--label); text-transform: uppercase; letter-spacing: .07em; font-size: 13px; }
+.cols3 ul, ul.plain { margin: 0; padding-left: 18px; font-size: 14.5px; display: grid; gap: 5px; }
+.k1 { color: var(--ok); } .k2 { color: var(--accent); } .k3 { color: var(--muted); } .k4 { color: var(--stop); }
+.note { font-size: 14px; color: var(--muted); max-width: 72ch; }
+footer { padding-top: 22px; font-size: 13px; color: var(--muted); }
+
+/* figure primitives: one family for every figure */
+svg .bx { fill: var(--bg); stroke: var(--ink); stroke-width: 1.5; }
+svg .seat { fill: var(--seat); stroke: var(--ink); stroke-width: 1.5; }
+svg .op { fill: var(--seat); stroke: var(--accent); stroke-width: 2.5; }
+svg .smd { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+svg .bar { fill: var(--ink); }
+svg .ext { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; }
+svg .pd { fill: var(--bg); stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .zone { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 5; }
+svg .gap { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 4; }
+svg .ln { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+svg .lp { fill: none; stroke: var(--ink); stroke-width: 2; stroke-dasharray: 5 4; }
+svg .lg { fill: none; stroke: var(--ok); stroke-width: 2; }
+svg .lo { fill: none; stroke: var(--accent); stroke-width: 2; }
+svg .lr { fill: none; stroke: var(--stop); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .lrs { fill: none; stroke: var(--stop); stroke-width: 2; }
+svg .hd { fill: var(--ink); } svg .hdg { fill: var(--ok); } svg .hdo { fill: var(--accent); } svg .hdr { fill: var(--stop); }
+svg .ft { fill: var(--ink); font-family: var(--label); font-size: 13px; font-weight: 600; letter-spacing: .09em; }
+svg .fv { fill: var(--muted); font-family: var(--label); font-size: 11.5px; letter-spacing: .05em; text-anchor: end; }
+svg .t { fill: var(--ink); font-size: 14px; font-weight: 600; }
+svg .s { fill: var(--ink2); font-size: 12px; }
+svg .sb { fill: var(--ink); font-weight: 600; }
+svg .mu { fill: var(--muted); font-size: 11.5px; }
+svg .lb { fill: var(--ink); font-size: 11.5px; font-weight: 500; paint-order: stroke; stroke: var(--panel); stroke-width: 5px; stroke-linejoin: round; }
+svg .zl { fill: var(--muted); font-family: var(--label); font-size: 12px; font-weight: 600; letter-spacing: .08em; }
+svg .tag { fill: var(--muted); font-family: var(--label); font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-anchor: end; }
+svg .pt { fill: var(--accent); font-family: var(--label); font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-anchor: middle; }
+svg .pt2 { fill: var(--accent); font-family: var(--label); font-size: 10.5px; font-weight: 600; letter-spacing: .08em; }
+svg .a { fill: var(--accent); font-size: 12.5px; font-weight: 600; }
+svg .x { fill: var(--stop); font-size: 12px; }
+svg .vg { fill: var(--ok); font-size: 12.5px; font-weight: 600; } svg .vi { fill: var(--ink); font-size: 12.5px; font-weight: 600; } svg .vx { fill: var(--stop); font-size: 12.5px; font-weight: 600; }
+svg .tg { fill: var(--ok); font-size: 14px; font-weight: 600; } svg .tx { fill: var(--stop); font-size: 14px; font-weight: 600; }
+svg .b { fill: var(--accent); }
+svg .bn { fill: var(--on-accent); font-size: 12px; font-weight: 700; text-anchor: middle; }
+svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
+</style>
