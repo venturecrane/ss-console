@@ -37,6 +37,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
+from ..lane_ref import lane_reference
 from . import body as B, entry_edits as EE, icd, providers as P
 
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
@@ -168,17 +169,15 @@ def provider_rows(entries: list[str], canon: Callable[[str], str], name_of: Call
     """Treatment Timeline rows exactly as build_doc computes them, from dates
     of service only: an entry dated by a records date (printed, released,
     faxed, received) is no visit."""
-    es = []
-    for e in (x for x in entries if B.is_service(x)):
-        c = B.CITE.search(e)
-        es.append({"iso": B.iso(e), "provider": name_of(e), "ref": c.group(0)[1:-1] if c else ""})
+    es = [{"iso": B.iso(e), "provider": name_of(e), "text": e} for e in entries if B.is_service(e)]
     es.sort(key=lambda x: x["iso"])
-    agg: dict[str, dict[str, Any]] = defaultdict(lambda: {"dates": [], "ref": ""})
+    agg: dict[str, dict[str, Any]] = defaultdict(lambda: {"dates": [], "texts": []})
     for e in es:
         a = agg[canon(e["provider"])]
         a["dates"].append(e["iso"])
-        if not a["ref"]:
-            a["ref"] = e["ref"]
+        a["texts"].append(e["text"])
+    for a in agg.values():
+        a["ref"] = lane_reference(a["texts"])
     rows = []
     for prov, a in agg.items():
         ds = sorted(a["dates"])
@@ -380,7 +379,7 @@ def assemble(
     exhibits), so a firm-numbered file the delivered list never named gets a
     row and may be cited. `provider_names`: {citation: composed name} of the
     provider-name claims; the audited spelling replaces the composed one."""
-    from .collect import folder_rows, with_rows
+    from .collect import folder_rows, folder_title, with_rows
 
     b = B.sections(base_md)
     pre, base_ents = B.split_body(b["## Medical Chronology"])
@@ -403,7 +402,7 @@ def assemble(
     filed = [r for r in new_exhibits if not r.get("reused") and not r.get("refiled")]
     retitled, uncited = exhibit_titles_for(filed, new_ents, name_of)
     firm = folder_rows(base_md, folder or [], taken)
-    firm += [f"| {r['exhibit']} | {r['reused']} |" for r in new_exhibits if r.get("reused")]
+    firm += [f"| {r['exhibit']} | {folder_title(str(r['reused']))} |" for r in new_exhibits if r.get("reused")]
     firm += [f"| {r['exhibit']} | {refiled_row(r)} |" for r in new_exhibits if r.get("refiled")]
     ex_sec = with_rows(b["## Exhibit List"], [f"| {n} | {t} |" for n, t in sorted(retitled.items())] + firm)
     rr = b.get(B.SECTIONS[4])

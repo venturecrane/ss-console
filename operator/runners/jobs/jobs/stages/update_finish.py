@@ -123,7 +123,8 @@ def update_note(sr: StageRun, ud: Path) -> Any:
         out = (
             f"Update of {today}: {filed['docs']} medical record document(s) filed on the matter after the earlier "
             f"delivery were reviewed. Of the {_pages(pages)} of new records, {_pages(c['read'])} were read. Visits "
-            f"they record that this chronology did not already list were added{when}, and they are cited as {names}."
+            f"they record that this chronology did not already list"
+            f"{f' (dated {when.lstrip(chr(44)).strip()})' if when else ''} were added and are cited as {names}."
         )
         if c["repeat"]:
             out += f" {_pages(c['repeat'])} repeat pages already read and were not read again."
@@ -149,10 +150,10 @@ def update_note(sr: StageRun, ud: Path) -> Any:
             out += f" {len(filed['unread'])} were not read: {'; '.join(filed['unread'])}."
         if filed.get("left_out"):
             n = len(filed["left_out"])
-            what = "document names" if n == 1 else "documents name"
+            what = "document carries" if n == 1 else "documents carry"
             out += (
-                f" {n} {what} a person other than the client, so {'it was' if n == 1 else 'they were'} left "
-                f"out of this chronology: {'; '.join(filed['left_out'])}."
+                f" {n} {what} a name or date of birth that is not the client's, so "
+                f"{'it was' if n == 1 else 'they were'} left out of this chronology: {'; '.join(filed['left_out'])}."
             )
         for why, names in sorted((filed.get("excluded") or {}).items()):
             n = len(names)
