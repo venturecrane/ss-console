@@ -41,6 +41,7 @@ from config_applier.applier import (
     atomic_write,
     config_key,
 )
+from shared import seat_layout
 from shared.audit_client import audit_client_from_env
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ _ENV_VOLUME = "SMD_APPLIER_VOLUME_PATH"
 _ENV_EPOCH_FILE = "SMD_APPLIER_EPOCH_FILE"
 _ENV_POLL_SECONDS = "SMD_APPLIER_POLL_SECONDS"
 
-_DEFAULT_VOLUME = "/opt/data/customer.yaml"
+_DEFAULT_VOLUME = seat_layout.VOLUME_CUSTOMER_YAML
 _DEFAULT_EPOCH_FILE = "/opt/data/.config-epoch"
 _DEFAULT_POLL_SECONDS = 15
 

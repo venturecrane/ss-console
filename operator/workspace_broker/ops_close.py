@@ -37,9 +37,10 @@ import socket
 import sys
 from typing import Any
 
-# The entrypoint's BROKER_SOCKET. Spelled in two pieces only so the file never
-# reads as a ``broker.<attr>`` access to test_broker_context.py's handler scan.
-DEFAULT_SOCKET = "/run/smd-workspace-broker/" + "broker" + ".sock"
+from . import seat_layout
+
+# The entrypoint's BROKER_SOCKET.
+DEFAULT_SOCKET = seat_layout.BROKER_SOCKET
 VERB = "ops_close_by_smd"
 
 

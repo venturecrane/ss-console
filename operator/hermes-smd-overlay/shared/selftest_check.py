@@ -50,11 +50,12 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
+from shared import seat_layout
 from shared.gateway_loop_check import _read_regular_tail
 
 logger = logging.getLogger(__name__)
 
-RESULTS_PATH = Path("/run/smd-selftest/results.json")
+RESULTS_PATH = Path(seat_layout.SELFTEST_RESULTS)
 STALE_SECONDS = 3 * 3600
 READ_CAP_BYTES = 256 * 1024
 MAX_IDS = 32

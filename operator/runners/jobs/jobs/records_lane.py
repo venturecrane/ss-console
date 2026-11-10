@@ -50,7 +50,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import resume as resume_mod, verdict as verdict_mod
+from . import resume as resume_mod, seat_layout, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
@@ -70,7 +70,7 @@ INDEX_ENV = "SMOKEBALL_PAGE_INDEX_DIR"
 MEMORY_ENV = "SMD_RECORDS_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 CUSTOMER_YAML_ENV = "SMD_CUSTOMER_YAML"
-DEFAULT_CUSTOMER_YAML = "/var/lib/smd-config/customer.yaml"
+DEFAULT_CUSTOMER_YAML = seat_layout.CUSTOMER_YAML
 CONFIG_BLOCK = "matter_file_delivery"
 #: The env the child gets beyond the daemon's allow-list.
 CHILD_ENV = (INPUTS_ENV, STATE_ENV, INDEX_ENV, "SMOKEBALL_PAGE_FINDER_MODEL", "SMOKEBALL_VISION_MODEL")

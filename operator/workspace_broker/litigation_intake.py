@@ -30,10 +30,12 @@ import re
 from pathlib import Path
 from typing import Any
 
+from . import seat_layout
+
 SKILL_NAME = "litigation-status"
 FIRM_FILE = "litigation-firm.yaml"
 FIRM_CONFIG_ENV = "SMD_LITIGATION_FIRM_CONFIG"
-DEFAULT_FIRM_CONFIG = "/var/lib/smd-config/litigation-broker-firm.yaml"
+DEFAULT_FIRM_CONFIG = seat_layout.LITIGATION_BROKER_FIRM_YAML
 #: The skill settings this lane reads (scalars, ADR 0075).
 FOLDER_KEY = "folder_name"
 FILE_TO_KEY = "file_to_matter_id"

@@ -69,10 +69,11 @@ from typing import Any
 
 import yaml
 
+from .. import seat_layout
 from ..firm_inputs import pin
 
 ENV_DIR = "JOBS_CASEFILE_INPUTS_DIR"
-DEFAULT_DIR = "/var/lib/smd-config/casefile"
+DEFAULT_DIR = seat_layout.CASEFILE_INPUTS
 CONFIG_NAME = "casefile-firm.yaml"
 PROMPTS = ("contract.md", "reader.md", "auditor.md")
 #: Every model role defaults to the read model, so a firm can tier one role at a time.

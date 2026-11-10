@@ -68,14 +68,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import note_lane
+from . import note_lane, seat_layout
 from .broker_client import BrokerClient, BrokerError
 from .daemon import CHILD_ENV_PASS, DEFAULT_RUN_DIR, RUN_DIR_ENV, SOCKET_ENV
 
 REQUEST_INDEX_ENV = "SMD_REQUEST_INDEX_DB_PATH"
 DEFAULT_REQUEST_INDEX = "/opt/data/requests.db"
 AUDIT_DB_ENV = "SMD_AUDIT_DB_PATH"
-DEFAULT_AUDIT_DB = "/run/smd-audit/audit.db"
+DEFAULT_AUDIT_DB = seat_layout.AUDIT_DB
 RECENT_DAYS = 14
 POLL_SECONDS = 15.0
 
