@@ -250,7 +250,7 @@ class CasefileLane(DraftingLane):
         reason = "config_missing: the case file inputs are not usable on this seat: " + str(exc).split(";")[0][:300]
         try:
             self.broker.record(job_id, "running", {})
-            cents = spend.recorded_cents(self.job_dir(job_id), 0)
+            cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, 0)
             self.broker.record(job_id, "failed", {"cents": cents, "reason": reason, "stage": "config"})
         except BrokerError as err:
             logger.error("could not record config_missing for %s: %s", job_id, err)
@@ -286,7 +286,7 @@ class CasefileLane(DraftingLane):
             }
         state = str(v["verdict"])
         fields = self.report_fields(v)
-        fields["cents"] = spend.recorded_cents(self.job_dir(job_id), fields["cents"])
+        fields["cents"] = spend.recorded_cents(self.job_dir(job_id), self.LANE, fields["cents"])
         state, fields = proof_watch.settle(self, job_id, [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)

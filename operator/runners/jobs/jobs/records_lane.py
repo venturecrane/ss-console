@@ -361,7 +361,7 @@ class RecordsLane(DraftingLane):
                     "verdict": "failed",
                     "reason": reason,
                     "stage": stage,
-                    "cents": spend.recorded_cents(self.job_dir(job_id), cents),
+                    "cents": spend.recorded_cents(self.job_dir(job_id), self.LANE, cents),
                 },
             )
         except BrokerError as exc:
@@ -410,7 +410,7 @@ class RecordsLane(DraftingLane):
         fields = {
             "verdict": verdict,
             "stage": v.get("stage"),
-            "cents": spend.recorded_cents(jd, int(v.get("cents") or 0)),
+            "cents": spend.recorded_cents(jd, self.LANE, int(v.get("cents") or 0)),
             "items": [i for i in v.get("items") or [] if isinstance(i, dict)],
             "delivery": {
                 "review_id": row["id"],

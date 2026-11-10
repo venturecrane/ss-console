@@ -176,7 +176,7 @@ def _negotiation(tmp_path: Path, monkeypatch: Any) -> tuple[Any, Any, Callable[[
                 "request_text": "negotiation watch",
                 "matter_statuses": ["Open"],
                 "negotiation_design": "",
-                "firm_words": ["ashton"],
+                "firm_words": ["example"],
                 "seed_saved_before": "",
                 "per_job_cap_usd": 8,
                 "monthly_budget_usd": 25,
@@ -245,7 +245,7 @@ def test_a_resumed_job_is_metered_against_the_month_once(tmp_path, monkeypatch, 
     assert verbs.handle(f"{lane_name}_job_resume", {"job_id": a, "reason": "fixed the gate"}, 0)["ok"]
     assert lane.tick() == "failed"
     seen = [int(x) for x in (lane.job_dir(a) / "month-seen.txt").read_text().split()]
-    own = spend.priced_cents(lane.job_dir(a))
+    own = spend.priced_cents(lane.job_dir(a), lane.LANE)
     assert own == OWN
     # Run 1 saw nothing spent yet; the resume sees every job's spend but its own.
     assert seen[0] == 0

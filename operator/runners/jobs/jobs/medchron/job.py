@@ -321,6 +321,22 @@ def _delivered_cited(raw: Any) -> dict[str, dict[str, str]]:
     return out
 
 
+#: A unit's usage ledger, under ``<data_root>/<slug>/runs/<unit>/``.
+USAGE_LEDGER = "usage-ledger.jsonl"
+#: The job-wide ledger for paid calls made before a unit is known.
+ORPHAN_LEDGER = "usage-ledger-orphan.jsonl"
+
+
+def usage_ledgers(job: Job) -> list[Path]:
+    """The usage ledgers this job's budget counts, and nothing else: one per
+    unit of the job plus the orphan ledger, under the job's own data_root. The
+    driver's cap and the spend a lane records (``jobs/spend.py``) both read
+    this list, so a copy of a ledger elsewhere under the job dir (a rehearsal's
+    ``rehearsal/<stamp>/data/``) is never the job's spend."""
+    slug_dir = job.data_root / job.slug
+    return [slug_dir / "runs" / u.unit / USAGE_LEDGER for u in job.units] + [job.data_root / ORPHAN_LEDGER]
+
+
 _JOB_ID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
 

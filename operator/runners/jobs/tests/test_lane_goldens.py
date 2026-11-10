@@ -107,6 +107,18 @@ def _medchron(tmp_path: Path, mp: Any) -> tuple[Any, Any]:
     return broker.records, d._daemon_state("01A")
 
 
+def _medchron_rehearsed(tmp_path: Path, mp: Any) -> tuple[Any, Any]:
+    """A chronology that spent $5.00, was rehearsed (the real ``rehearsal.prepare``
+    copies its usage ledger under the job dir), then resumed and spent $5.00
+    more: its delivered row records $10.00, never the rehearsal's copy too."""
+    import test_spend_rehearsal_once as r
+
+    d, broker, _ = r._rehearsed_after_one_run(tmp_path)
+    (d.queue / ".resume-01A.json").write_text(json.dumps({"job_id": "01A", "reason": "rehearsed", "redo": []}))
+    assert d.tick() == "delivered"
+    return broker.records, d._daemon_state("01A")
+
+
 CASES: dict[str, Callable[[Path, Any], tuple[Any, Any]]] = {
     "casefile": _casefile,
     "demand": _demand,
@@ -114,6 +126,7 @@ CASES: dict[str, Callable[[Path, Any], tuple[Any, Any]]] = {
     "litigation": _litigation,
     "litigation_held": lambda p, mp: _litigation(p, mp, held=True),
     "medchron": _medchron,
+    "medchron_rehearsed": _medchron_rehearsed,
     "negotiation": _negotiation,
     "records": _records,
 }

@@ -294,7 +294,7 @@ class LitigationLane(DraftingLane):
         except BrokerError as exc:
             logger.warning("broker could not meter %s's list allowance, deferring: %s", job_id, exc)
             return "deferred"
-        cents = spend.recorded_cents(self.job_dir(job_id), 0)  # a resumed job keeps what it spent
+        cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, 0)  # a resumed job keeps what it spent
         fields: dict[str, Any] = {"cents": cents, "reason": reason[:500], "stage": "allowance"}
         state, fields = proof_watch.settle(self, job_id, [], "held", fields)
         try:
@@ -319,7 +319,7 @@ class LitigationLane(DraftingLane):
         )
         try:
             self.broker.record(job_id, "running", {})
-            cents = spend.recorded_cents(self.job_dir(job_id), 0)
+            cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, 0)
             self.broker.record(job_id, "failed", {"cents": cents, "reason": reason, "stage": "config"})
         except BrokerError as err:
             logger.error("could not record config_missing for %s: %s", job_id, err)
@@ -342,7 +342,7 @@ class LitigationLane(DraftingLane):
         fields: dict[str, Any] = {k: v.get(k) for k in ("stage", "folder_id")}
         for k in ("cents", "matters_total", "matters_reread", "flags_new"):
             fields[k] = int(v.get(k) or 0)
-        fields["cents"] = spend.recorded_cents(self.job_dir(job_id), fields["cents"])
+        fields["cents"] = spend.recorded_cents(self.job_dir(job_id), self.LANE, fields["cents"])
         fields["files"] = [f for f in v.get("files") or [] if isinstance(f, dict)]
         if isinstance(v.get("counts"), dict):  # the deadlines report's named counts (integers only)
             fields["counts"] = {str(k): int(n) for k, n in v["counts"].items() if isinstance(n, int)}

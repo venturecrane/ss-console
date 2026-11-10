@@ -22,14 +22,17 @@ from jobs_testkit import PRICING
 # One million Opus input tokens at 500 cents per million: $5.00.
 ROW = {"model": "claude-opus-5", "in": 1_000_000, "out": 0, "stage": "draft"}
 
+#: Where each lane's runner writes the usage its budget counts (``spend.ledgers``):
+#: the chronology's per-unit ledger, every other lane's ``data/`` ledger.
+LEDGER_REL = {"medchron": "data/example/runs/alpha/usage-ledger.jsonl"}
 WRITE_ROW = """
 import json, os, pathlib, signal, sys
-jd = pathlib.Path(sys.argv[1])
-(jd / 'data').mkdir(exist_ok=True)
-(jd / 'data' / 'usage-ledger.jsonl').write_text(json.dumps(%s) + '\\n')
-""" % repr(ROW)
-CRASHED = WRITE_ROW + "sys.exit(1)\n"
-KILLED = WRITE_ROW + "os.kill(os.getpid(), signal.SIGTERM)\n"
+ledger = pathlib.Path(sys.argv[1]) / %r
+ledger.parent.mkdir(parents=True, exist_ok=True)
+ledger.write_text(json.dumps(%s) + '\\n')
+"""
+CRASHED = "sys.exit(1)\n"
+KILLED = "os.kill(os.getpid(), signal.SIGTERM)\n"
 
 
 @pytest.fixture(autouse=True)
@@ -121,7 +124,8 @@ LANES = {
 def test_a_job_that_ends_without_a_verdict_records_its_priced_usage(tmp_path, monkeypatch, lane_name, ending):
     """MUTATION: record the verdict's figure alone and every lane reads 0 here."""
     lane, cents = LANES[lane_name](tmp_path, monkeypatch)
-    _script(lane, CRASHED if ending == "crashed" else KILLED)
+    rel = LEDGER_REL.get(lane_name, "data/usage-ledger.jsonl")
+    _script(lane, WRITE_ROW % (rel, repr(ROW)) + (CRASHED if ending == "crashed" else KILLED))
     lane.tick()
     assert cents() == 500
 
@@ -141,8 +145,8 @@ def test_the_rule_takes_the_larger_figure_and_keeps_the_reported_one_without_pri
     jd = tmp_path / "job"
     (jd / "data").mkdir(parents=True)
     (jd / "data" / "usage-ledger.jsonl").write_text(json.dumps(ROW) + "\n")
-    assert spend.recorded_cents(jd, 0) == 500
-    assert spend.recorded_cents(jd, 1250) == 1250
+    assert spend.recorded_cents(jd, "drafting", 0) == 500
+    assert spend.recorded_cents(jd, "drafting", 1250) == 1250
     monkeypatch.setenv(budget.PRICING_ENV, str(tmp_path / "absent.json"))
-    assert spend.recorded_cents(jd, 1250) == 1250
-    assert spend.recorded_cents(jd, 0) == 0
+    assert spend.recorded_cents(jd, "drafting", 1250) == 1250
+    assert spend.recorded_cents(jd, "drafting", 0) == 0

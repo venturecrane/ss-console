@@ -199,7 +199,7 @@ class DemandLane(Daemon):
         else:
             state = {"delivered": "delivered", "held": "held"}.get(str(v.get("outcome")), "failed")
         reported = int(round(float(v.get("dollars") or 0) * 100))
-        fields: dict[str, Any] = {"cents": spend.recorded_cents(self.job_dir(job_id), reported)}
+        fields: dict[str, Any] = {"cents": spend.recorded_cents(self.job_dir(job_id), self.LANE, reported)}
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
         if state == "delivered":

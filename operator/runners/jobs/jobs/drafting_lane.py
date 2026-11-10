@@ -230,7 +230,7 @@ class DraftingLane(Daemon):
         a job that defers every hour and tells no one."""
         first = str(exc).split(";")[0][:300]
         reason = f"config_missing: the drafting firm inputs are not usable on this seat: {first}"
-        cents = spend.recorded_cents(self.job_dir(job_id), 0)
+        cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, 0)
         try:
             self.broker.record(job_id, "running", {})
             self.broker.record(
@@ -277,7 +277,7 @@ class DraftingLane(Daemon):
             state, v = "failed", {"reason": f"no_verdict: the runner exited {code} without a verdict", "stage": None}
         else:
             state = {"delivered": "delivered", "held": "held"}.get(str(v.get("outcome")), "failed")
-        cents = spend.recorded_cents(self.job_dir(job_id), int(round(float(v.get("dollars") or 0) * 100)))
+        cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, int(round(float(v.get("dollars") or 0) * 100)))
         fields: dict[str, Any] = {
             "cents": cents,
             "caption_discrepancies": list(v.get("caption_discrepancies") or []),

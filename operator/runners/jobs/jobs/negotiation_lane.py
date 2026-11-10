@@ -223,7 +223,7 @@ class NegotiationLane(DraftingLane):
                 "reason": f"no_verdict: the runner exited {code} without a verdict",
             }
         state = "delivered" if v["verdict"] == "delivered" else "failed"
-        cents = spend.recorded_cents(self.job_dir(job_id), int(v.get("cents") or 0))
+        cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, int(v.get("cents") or 0))
         fields: dict[str, Any] = {"stage": v.get("stage"), "cents": cents}
         for k in ("matters_total", "matters_seeded", "docs_read", "docs_failed"):
             fields[k] = int(v.get(k) or 0)

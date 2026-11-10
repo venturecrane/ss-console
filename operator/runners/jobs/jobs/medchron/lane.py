@@ -235,7 +235,7 @@ class MedchronLane(Daemon):
         # What the job spent (``spend.py``): a lost verdict still records its
         # usage, and adds no figure at all when there is none to add.
         reported = fields.get("cents")
-        cents = spend.recorded_cents(self.job_dir(job_id), reported if isinstance(reported, int) else None)
+        cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, reported if isinstance(reported, int) else None)
         if cents or "cents" in fields:
             fields["cents"] = cents
         # An infrastructure ending (network, model API, a slow index, a runner

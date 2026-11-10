@@ -152,7 +152,7 @@ def finish(d: Any, job_id: str, code: int, out: str) -> bool:
         return False
     from .broker_client import BrokerError
 
-    cents = spend.priced_cents(jd)
+    cents = spend.priced_cents(jd, d.LANE)
     recorded = True
     try:
         d.broker.record(job_id, "failed", _fields(req, cents))
@@ -281,7 +281,7 @@ def _record_unclaimed(d: Any, job_id: str, st: dict[str, Any]) -> bool:
 
     jd = d.job_dir(job_id)
     req = read(jd) or {"by": "unknown", "why": "unreadable stop request"}
-    cents = spend.priced_cents(jd)
+    cents = spend.priced_cents(jd, d.LANE)
     try:
         d.broker.record(job_id, "failed", _fields(req, cents))
         recorded = True

@@ -1,0 +1,56 @@
+{
+  "records": [
+    ["01A", "running", {}],
+    [
+      "01A",
+      "failed",
+      {
+        "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)"
+      }
+    ],
+    ["01A", "running", {}],
+    [
+      "01A",
+      "delivered",
+      {
+        "cents": 1000,
+        "delivery": {
+          "files": [
+            {
+              "bytes": 10,
+              "confirmed": true,
+              "name": "A.docx",
+              "sha256": "ab"
+            }
+          ]
+        },
+        "documents": 40,
+        "folder_id": "folder-9",
+        "pages": 300
+      }
+    ]
+  ],
+  "state": {
+    "attempts": 1,
+    "claimed": true,
+    "claimed_at": 1000000.0,
+    "finished_at": 1000000.0,
+    "held_paused": false,
+    "proof_alerts": {
+      "job_stopped:medchron_job:01A:1:failed": 1000000.0
+    },
+    "reason": null,
+    "resume_reason": "rehearsed",
+    "resume_redo": [],
+    "resume_release": false,
+    "resume_release_by": "",
+    "resume_release_held": false,
+    "resumes": 1,
+    "state": "delivered",
+    "wake": {
+      "attempts": 0,
+      "pending": true,
+      "task": "Run the medical-chronology-maintainer skill's DELIVER mode for chronology job 01A.\nLoad it first: your first call is read_file on medical-chronology-maintainer/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nOutcome: delivered. Matter number: 2026-PI-102.\nDocuments: 40; pages: 300; spend cents: 1000.\nDelivered folder id: folder-9.\nRequester: (none - a rehearsal submission; report in the memo, create no task, send nothing)."
+    }
+  }
+}
