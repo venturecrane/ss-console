@@ -928,7 +928,48 @@ suite never touches a client seat or a client-visible address
   before any release exists. It ends by running the boot smoke test. The repo
   is the single source of truth for `customer.yaml`; provisioning projects it
   to R2 unconditionally. `yes s |` answers "skip" to every secret paste prompt
-  (Machine secrets persist across deploy).
+  (Machine secrets persist across deploy). A seat with no Machine yet reads
+  as idle to the busy gate (`fleet busy` prints "no Machine yet"), so a first
+  provision needs no `FLEET_FORCE_MID_JOB=1`; a Machine listing that fails is
+  still a tooling error and still refuses.
+- **Before a new seat's first provision**, five things must already exist; when
+  they do not, they surface one failed run at a time (learned standing up a
+  seat end to end on 2026-11-10):
+  1. **The Fly app, authored.** `fly apps create hermes-<slug> --org personal`
+     (the same command provisioning step 4 runs; it has to exist first so its
+     deploy token can be minted), then a merged PR that sets `fly_app:` in
+     `operator/customers/<slug>/seat.yaml` and drops `unprovisioned_reason`,
+     with the registries regenerated (`npm run gen:seat-registries`:
+     `operator/fleet/rings.yaml` and the generated files under
+     `src/lib/operator/`; `tests/seat-inventory.test.ts` fails while one is
+     stale).
+  2. **The release tick can reach it.** The seat's option and its
+     `FLY_DEPLOY_TOKEN__<SLUG>` line in `.github/workflows/release-tick.yml`,
+     the token itself minted straight into the `fleet-release` environment
+     (piped, never printed), and the Fly token count under "Turning it on"
+     below updated. The conformance test fails until the workflow lines are
+     there.
+  3. **A first `customer_configs` row.** CI never creates one, and
+     provisioning refuses without it (`provision-customer.sh`, the
+     `machine_credentials` check). Emit it with `npx tsx
+     scripts/project-customer-config.ts <slug> <entity_id> --actor=<email>`,
+     then apply the file to remote D1 by hand (the script never writes
+     remote; its header gives the command). See
+     [Customer Lifecycle](/admin/playbook/customer-lifecycle).
+  4. **For a seat that binds the AgentMail adapter:** its inbox, that inbox's
+     webhook to `https://hermes-<slug>.fly.dev/webhooks/agentmail`, and in
+     Infisical `/ss` prod the per-seat `AGENTMAIL_API_KEY__<SLUG>` and
+     `AGENTMAIL_SEND_API_KEY__<SLUG>` (minted by
+     `operator/bin/mint-agentmail-keys.py`, never pasted) and
+     `WEBHOOK_SECRET_AGENTMAIL__<SLUG>`, the signing secret of that webhook.
+     The webhook secret has no fallback: provisioning refuses without it
+     (`operator/bin/lib/stage-agentmail.sh`).
+  5. **A clone of the engagements repository**, at `~/dev/engagements` or
+     wherever `SS_ENGAGEMENTS_DIR` points: provisioning refuses when it is
+     missing (`operator/bin/lib/firm-config-currency.sh`). Run
+     `reprovision.sh` from a clean checkout of current main; with `--build`,
+     a dirty tree or one behind origin/main is refused
+     (`operator/bin/lib/build-source-guard.sh`).
 - **Reprovisioning an existing seat** re-applies that seat's config and secrets
   on the image its Machine runs now (`fleet seat-image <slug>`, read from Fly).
   It never moves the seat's software and never depends on any other seat:

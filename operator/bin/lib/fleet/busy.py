@@ -21,6 +21,9 @@ BUSY means any of:
     the last few minutes (its turn may still be running in the gateway);
   * a store the probe needed could not be read (cannot evaluate is not idle).
 
+IDLE without a probe: the app has no Machine yet (a successful listing with zero
+Machines). A FAILED listing is a tooling error, never idle.
+
 QUEUED work is not busy: the queues live on the volume (/run/smd-jobs is a
 bind mount of it) and survive the restart.
 
@@ -73,6 +76,14 @@ POLL_S = 30.0
 # Anything else (the probe ran and answered nonsense, the marker was refused)
 # halts at once, and a failure that persists still halts.
 TRANSPORT_ATTEMPTS = 3
+
+
+# A seat whose app exists but has no Machine yet (a first provision, before its
+# first deploy) cannot be running anything: idle, not a tooling error (smd-guide,
+# 2026-11-10, needed FLEET_FORCE_MID_JOB=1 for its first provision). Only a
+# listing that SUCCEEDED with zero Machines reads this way: a listing that failed
+# (API, auth, timeout) raises from Fly.machines and stays a tooling error.
+NO_MACHINE_REASON = "no Machine yet; nothing can be running"
 
 
 class TransportFailure(ToolingError):
@@ -174,6 +185,8 @@ class BusyGate:
         self.probe_source = (HERE / "remote_busy_probe.py").read_text(encoding="utf-8")
 
     def probe(self, seat: str) -> Verdict:
+        if not self.fly.machines(ids.app_name(seat)):
+            return Verdict(False, [NO_MACHINE_REASON], {"machines": 0})
         res = self.fly.run_python(ids.app_name(seat), self.probe_source)
         if not res.ok and PROBE_MARK not in res.stdout:
             if looks_like_transport_failure(res):
@@ -198,6 +211,8 @@ class BusyGate:
 
     def clear_any_fleet(self, seat: str) -> str:
         """Remove a marker ANY fleet run left (reprovision clears after its deploy)."""
+        if not self.fly.machines(ids.app_name(seat)):
+            return "SMD_QUIESCE no Machine; no marker to clear"
         res = self.fly.run_python(ids.app_name(seat), quiesce_source("clear", self.holder, prefix=MARKER_PREFIX))
         return next((ln for ln in res.stdout.splitlines() if ln.startswith("SMD_QUIESCE")), "SMD_QUIESCE no answer")
 

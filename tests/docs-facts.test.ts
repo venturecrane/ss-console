@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const read = (p: string): string => readFileSync(resolve(p), 'utf8')
@@ -169,5 +169,33 @@ describe('README names the majors the repo declares', () => {
     const known = new Set(STATED.map(([label]) => label))
     const stated = [...stack.matchAll(/\b([A-Z][A-Za-z]+) (\d+)\b/g)].map((m) => m[1])
     expect(stated.filter((name) => !known.has(name))).toEqual([])
+  })
+})
+
+/**
+ * The overlay plug-in count the platform page states is the number of plug-in
+ * directories on disk. It said 29 on 2026-11-09; the enrollment plug-in (ADR
+ * 0106) made it 30 the next day and nothing noticed. A plug-in is a directory
+ * under operator/hermes-smd-overlay/plugins/ that carries its own plugin.yaml.
+ */
+describe('operator platform page states the real overlay plug-in count', () => {
+  const dir = 'operator/hermes-smd-overlay/plugins'
+  const onDisk = readdirSync(resolve(dir), { withFileTypes: true }).filter(
+    (d) => d.isDirectory() && existsSync(resolve(dir, d.name, 'plugin.yaml'))
+  ).length
+  const stated = read('docs/handbook/operator-platform.md').match(
+    /\((\d+) under `operator\/hermes-smd-overlay\/plugins\/`/
+  )
+
+  it('finds the sentence and a plausible tree (sanity: the check can fail)', () => {
+    expect(
+      stated,
+      'operator-platform.md must keep the "(N under `.../plugins/`" shape'
+    ).not.toBeNull()
+    expect(onDisk).toBeGreaterThan(10)
+  })
+
+  it('the stated count equals the plug-in directories on disk', () => {
+    expect(Number(stated![1])).toBe(onDisk)
   })
 })
