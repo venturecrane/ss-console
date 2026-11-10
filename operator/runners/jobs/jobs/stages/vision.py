@@ -60,6 +60,18 @@ REFUSED = "[page transcription refused]"
 HANDWRITING = re.compile(r"^\s*HANDWRITING:\s*(yes|no)\s*$", re.I | re.M)
 
 
+def split_handwriting_field(text: str) -> tuple[str | None, str]:
+    """(``yes``/``no`` or None when the reply carries no field, the reply with
+    the field line removed). The one reading of the field: the chronology
+    turns it into its page mark (:func:`handwriting_field`), and the demand
+    and drafting transcription only removes it (``demand/transcribe.py``), so
+    no drafter reads a system line as page text."""
+    m = HANDWRITING.search(text[:200]) if text else None
+    if m is None:
+        return None, text
+    return m.group(1).lower(), (text[: m.start()] + text[m.end() :]).strip("\n")
+
+
 def handwriting_field(text: str) -> str:
     """The transcription with its required HANDWRITING field turned into the
     page mark downstream reads (``update/handwritten.MARK`` first, or
@@ -67,13 +79,10 @@ def handwriting_field(text: str) -> str:
     required, a model that drops it was not asked an optional question, and
     an unmarked handwritten page is the defect this exists for (a flowsheet
     whose blood pressure read 102/102 for 142/102, 2026-10-13)."""
-    m = HANDWRITING.search(text[:200]) if text else None
     if text in (FAILED, REFUSED):
         return text
-    if m is None:
-        return "[handwritten]\n" + text
-    body = (text[: m.start()] + text[m.end() :]).strip("\n")
-    return ("[handwritten]\n" + body) if m.group(1).lower() == "yes" else body
+    answer, body = split_handwriting_field(text)
+    return body if answer == "no" else "[handwritten]\n" + body
 
 
 def load_partial(path: Path) -> dict[int, str]:

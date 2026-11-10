@@ -1,0 +1,11 @@
+{
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the captured goldens for an ORDINARY completed job, per golden file. The goldens were captured on origin/main f72a4d411 before the wave 0 money fixes (0.1 spend recorded on a killed job, 0.2 a resumed job metered once, 0.5 one cache write per audit pass, 0.6 the handwriting field out of demand and drafting source text, 0.10 the unrecorded-spend sweep). None of those changes what an ordinary job records, so every list is empty: any difference fails. A future intended change adds its path here, in the PR that makes it.",
+  "casefile": [],
+  "demand": [],
+  "drafting": [],
+  "litigation": [],
+  "litigation_held": [],
+  "medchron": [],
+  "negotiation": [],
+  "records": []
+}

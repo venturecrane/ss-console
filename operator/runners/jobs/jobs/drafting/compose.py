@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -422,8 +421,8 @@ class Drafter:
             cache.write_text(f"## AUDIT: {head}\n\n{text}\n", encoding="utf-8")
             return i, cache.read_text(encoding="utf-8")
 
-        with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            results = dict(ex.map(one, enumerate(secs)))
+        # The first section alone writes the cached system block the rest read.
+        results = dict(d.cache_first_map(one, list(enumerate(secs)), self.workers))
         body = "\n\n".join(results[i] for i in sorted(results))
         tallies = tally(body)
         nf = [f"- {c['quote']}" for c in mech["quotes"] if not c["found"]]

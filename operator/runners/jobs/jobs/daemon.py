@@ -46,7 +46,7 @@ from .broker_client import BrokerClient, BrokerError
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
-from . import resume as resume_mod, retention
+from . import resume as resume_mod, retention, spend
 from .proof import watch as proof_watch
 from . import seat_layout
 
@@ -436,7 +436,10 @@ class Daemon:
 
     def wipe_expired(self) -> list[str]:
         """Terminal jobs at `wipe_hours`, parked ones at `held_wipe_hours`
-        (`retention.py` carries the policy and why it is two windows)."""
+        (`retention.py` carries the policy and why it is two windows). The
+        hourly unrecorded-spend sweep (`spend.sweep`) runs first, before a
+        workdir whose usage it reads can go."""
+        spend.sweep(self)
         retention.prune_set_aside(self)
         return retention.wipe_expired(self, TERMINAL)
 

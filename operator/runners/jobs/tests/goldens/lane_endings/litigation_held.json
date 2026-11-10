@@ -1,0 +1,41 @@
+{
+  "records": [
+    ["01KTJ0BX0000000000000000AA", "running", {}],
+    [
+      "01KTJ0BX0000000000000000AA",
+      "held",
+      {
+        "cents": 900,
+        "files": [],
+        "flags_new": 0,
+        "folder_id": "",
+        "matters_reread": 1,
+        "matters_total": 4,
+        "reason": "parity_hold: 1 values changed for Gamma Example",
+        "stage": "parity"
+      }
+    ]
+  ],
+  "state": {
+    "attempts": 1,
+    "claimed": true,
+    "claimed_at": 1000000.0,
+    "deferrals": 0,
+    "finished_at": 1000000.0,
+    "held_paused": false,
+    "proof_alerts": {
+      "gate_held:1": 1000000.0
+    },
+    "reason": "parity_hold: 1 values changed for Gamma Example",
+    "resume_redo": [],
+    "resume_release": false,
+    "resume_release_held": false,
+    "retry_after": null,
+    "state": "held",
+    "wake": {
+      "attempts": 0,
+      "pending": true,
+      "task": "Run the litigation-status skill's DELIVER mode for litigation job 01KTJ0BX0000000000000000AA.\nLoad it first: your first call is read_file on litigation-status/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: litigation.\nTrigger: request.\nOutcome: held.\nMatters: 4; re-read this run: 1; new flags: 0.\nFolder id: none.\nFiles: none.\nRequested by: admin@firm.example.\nReason: stopped at parity.\nHold class: smd_finishing."
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "records": [
+    {
+      "action": "records_job_record",
+      "job_id": "01JRECXRDS0000000000000000",
+      "state": "running"
+    },
+    {
+      "action": "records_job_record",
+      "cents": 42,
+      "delivery": {
+        "decision": "approve",
+        "digest": "d53950f6430a6afb1dec022d60481b4568ea1dfa69f56fcc655a232a79b794d9",
+        "review_id": "e6daedb02046c97c020e1460"
+      },
+      "items": [
+        {
+          "files": 1,
+          "n": 1,
+          "outcome": "attached"
+        }
+      ],
+      "job_id": "01JRECXRDS0000000000000000",
+      "stage": "verdict",
+      "verdict": "delivered"
+    }
+  ],
+  "state": {
+    "attempts": 1,
+    "claimed": true,
+    "claimed_at": 1800000000.0,
+    "deferrals": 0,
+    "held_paused": false,
+    "reported": {
+      "verdict": {
+        "cents": 42,
+        "cuts": [
+          {
+            "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+            "k": 1,
+            "n": 1,
+            "page_count": 4,
+            "pages": "1-4",
+            "sha256": "648244b67cb953df7d23df15865d1d06a3a3ba5cf17642996109e44bc15d82c6",
+            "size": 5018
+          }
+        ],
+        "items": [
+          {
+            "files": 1,
+            "n": 1,
+            "outcome": "attached"
+          }
+        ],
+        "proof": {
+          "files": [
+            {
+              "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+              "name": "1-1.pdf",
+              "sha256": "648244b67cb953df7d23df15865d1d06a3a3ba5cf17642996109e44bc15d82c6",
+              "size": 5018
+            }
+          ],
+          "readback": "confirmed",
+          "review": "code_only",
+          "review_cents": 0,
+          "review_model": ""
+        },
+        "stage": "verdict",
+        "verdict": "delivered"
+      }
+    },
+    "resume_redo": [],
+    "resume_release": false,
+    "resume_release_held": false,
+    "retry_after": null,
+    "review_watch": {
+      "alerted": false,
+      "id": "e6daedb02046c97c020e1460",
+      "since": 1800000000.0
+    },
+    "row": {
+      "batches": [
+        [
+          {
+            "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+            "handle": "cfcd208495d565ef66e7dff9f98764da",
+            "name": "Clinic records pp. 1-4.pdf",
+            "page_count": 4,
+            "pages": "1-4",
+            "sha256": "648244b67cb953df7d23df15865d1d06a3a3ba5cf17642996109e44bc15d82c6",
+            "size": 5018
+          }
+        ]
+      ],
+      "created_at": 1800000000.0,
+      "digest": "d53950f6430a6afb1dec022d60481b4568ea1dfa69f56fcc655a232a79b794d9",
+      "html": "<p>x</p>",
+      "id": "e6daedb02046c97c020e1460",
+      "matter_id": "11111111-2222-3333-4444-555555555555",
+      "message_id": "AAMkAGraphMessageId0001",
+      "reason": "",
+      "session_id": "records:01JRECXRDS0000000000000000",
+      "status": "review",
+      "text": "Here is what we found.\n\nAttached:\n- a",
+      "to": "pat.lane@example-firm.test"
+    },
+    "spooled": {
+      "1-1": "cfcd208495d565ef66e7dff9f98764da"
+    },
+    "started": true,
+    "state": "review"
+  }
+}

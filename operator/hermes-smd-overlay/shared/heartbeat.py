@@ -809,6 +809,7 @@ DELIVERY_PROOF_CODES = frozenset(
         "job_stopped",
         "library_edit_refused",
         "layout_rule_unplaced",
+        "spend_unrecorded",
     }
 )
 

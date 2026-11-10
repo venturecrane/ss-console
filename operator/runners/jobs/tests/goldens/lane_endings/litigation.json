@@ -1,0 +1,45 @@
+{
+  "records": [
+    ["01KTJ0BX0000000000000000AA", "running", {}],
+    [
+      "01KTJ0BX0000000000000000AA",
+      "delivered",
+      {
+        "cents": 1234,
+        "files": [
+          {
+            "file_id": "up-1",
+            "name": "Litigation status 2026-10-07 (Operator 0000AA).xlsx",
+            "role": "workbook",
+            "sha256": "ab",
+            "size": 20480
+          }
+        ],
+        "flags_new": 2,
+        "folder_id": "folder-7",
+        "matters_reread": 3,
+        "matters_total": 12,
+        "stage": "report"
+      }
+    ]
+  ],
+  "state": {
+    "attempts": 1,
+    "claimed": true,
+    "claimed_at": 1000000.0,
+    "deferrals": 0,
+    "finished_at": 1000000.0,
+    "held_paused": false,
+    "reason": null,
+    "resume_redo": [],
+    "resume_release": false,
+    "resume_release_held": false,
+    "retry_after": null,
+    "state": "delivered",
+    "wake": {
+      "attempts": 0,
+      "pending": true,
+      "task": "Run the litigation-status skill's DELIVER mode for litigation job 01KTJ0BX0000000000000000AA.\nLoad it first: your first call is read_file on litigation-status/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: litigation.\nTrigger: request.\nOutcome: delivered.\nMatters: 12; re-read this run: 3; new flags: 2.\nFolder id: folder-7.\nFiles: workbook (20480 bytes).\nRequested by: admin@firm.example."
+    }
+  }
+}

@@ -108,6 +108,15 @@ paths:
     path: '{jobs_bundle}/.venv/bin/python'
   lanes_run:
     path: /run/smd-lanes
+  # The unrecorded-spend sweep's watermark (jobs/spend.py): the instant the
+  # sweep first ran on this seat, written once; jobs that ended before it are
+  # never flagged. A timestamp only, no client data. On the volume through the
+  # run dir's bind mount of jobs_data.
+  jobs_spend_watch:
+    path: '{jobs_run}/spend-watch.json'
+    expect: lazy
+    kind: file
+    when: lanes
 
   # ---- PR B: jobs family additions (W1) ----
   jobs_bin:

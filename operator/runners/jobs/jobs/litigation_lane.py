@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import job_notes, resume as resume_mod, verdict as verdict_mod
+from . import job_notes, resume as resume_mod, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
@@ -97,10 +97,14 @@ class LitigationBroker:
             raise BrokerError("litigation_job_status carried no list_allowance; the list cannot be metered")
         return v
 
-    def month_cents(self) -> int:
+    def month_cents(self, exclude_job_id: str) -> int:
         """This Pacific month's litigation spend. A missing value raises: the
-        lane defers rather than run unmetered."""
-        v = self.client._request({"action": "litigation_job_status"}).get("month_cents")
+        lane defers rather than run unmetered.
+        The job itself is left out (``exclude_job_id``): its child adds its
+        own spend, so a resumed job is counted once, not twice."""
+        v = self.client._request({"action": "litigation_job_status", "exclude_job_id": exclude_job_id}).get(
+            "month_cents"
+        )
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
             raise BrokerError("litigation_job_status carried no month_cents; the job cannot be metered")
         return v
@@ -172,7 +176,7 @@ class LitigationLane(DraftingLane):
             "job_id": job_id,
             "kind": "litigation",
             "slug": self.customer_slug,
-            "month_cents_used": self.broker.month_cents(),
+            "month_cents_used": self.broker.month_cents(job_id),
             "per_job_cap_usd": float(firm.data["per_job_cap_usd"]),
             "monthly_budget_usd": float(firm.data["monthly_budget_usd"]),
         }
@@ -290,7 +294,8 @@ class LitigationLane(DraftingLane):
         except BrokerError as exc:
             logger.warning("broker could not meter %s's list allowance, deferring: %s", job_id, exc)
             return "deferred"
-        fields: dict[str, Any] = {"cents": 0, "reason": reason[:500], "stage": "allowance"}
+        cents = spend.recorded_cents(self.job_dir(job_id), 0)  # a resumed job keeps what it spent
+        fields: dict[str, Any] = {"cents": cents, "reason": reason[:500], "stage": "allowance"}
         state, fields = proof_watch.settle(self, job_id, [], "held", fields)
         try:
             self.broker.record(job_id, state, fields)
@@ -314,7 +319,8 @@ class LitigationLane(DraftingLane):
         )
         try:
             self.broker.record(job_id, "running", {})
-            self.broker.record(job_id, "failed", {"cents": 0, "reason": reason, "stage": "config"})
+            cents = spend.recorded_cents(self.job_dir(job_id), 0)
+            self.broker.record(job_id, "failed", {"cents": cents, "reason": reason, "stage": "config"})
         except BrokerError as err:
             logger.error("could not record config_missing for %s: %s", job_id, err)
             return "deferred"
@@ -336,6 +342,7 @@ class LitigationLane(DraftingLane):
         fields: dict[str, Any] = {k: v.get(k) for k in ("stage", "folder_id")}
         for k in ("cents", "matters_total", "matters_reread", "flags_new"):
             fields[k] = int(v.get(k) or 0)
+        fields["cents"] = spend.recorded_cents(self.job_dir(job_id), fields["cents"])
         fields["files"] = [f for f in v.get("files") or [] if isinstance(f, dict)]
         if isinstance(v.get("counts"), dict):  # the deadlines report's named counts (integers only)
             fields["counts"] = {str(k): int(n) for k, n in v["counts"].items() if isinstance(n, int)}

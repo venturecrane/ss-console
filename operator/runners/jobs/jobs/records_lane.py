@@ -50,7 +50,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import resume as resume_mod, seat_layout, verdict as verdict_mod
+from . import resume as resume_mod, seat_layout, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
@@ -109,10 +109,12 @@ class RecordsBroker:
             body["state"] = state
         return self.client._request({"action": "records_job_record", "job_id": job_id, **body})
 
-    def month_cents(self) -> int:
+    def month_cents(self, exclude_job_id: str) -> int:
         """This Pacific month's records spend (root's status view). A missing
-        value raises: the lane defers rather than run unmetered."""
-        v = self.client._request({"action": "records_job_status"}).get("month_cents")
+        value raises: the lane defers rather than run unmetered.
+        The job itself is left out (``exclude_job_id``): its child adds its
+        own spend, so a resumed job is counted once, not twice."""
+        v = self.client._request({"action": "records_job_status", "exclude_job_id": exclude_job_id}).get("month_cents")
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
             raise BrokerError("records_job_status carried no month_cents; the job cannot be metered")
         return v
@@ -264,7 +266,7 @@ class RecordsLane(DraftingLane):
             "job_id": job_id,
             "kind": "records",
             "slug": self.customer_slug,
-            "month_cents_used": self.broker.month_cents(),
+            "month_cents_used": self.broker.month_cents(job_id),
             "per_job_cap_usd": firm.per_job_cap_usd,
             "monthly_budget_usd": firm.monthly_budget_usd,
         }
@@ -353,7 +355,14 @@ class RecordsLane(DraftingLane):
     def _fail(self, job_id: str, stage: str, reason: str, cents: int = 0) -> str:
         try:
             self.broker.record(
-                job_id, "failed", {"verdict": "failed", "reason": reason, "stage": stage, "cents": cents}
+                job_id,
+                "failed",
+                {
+                    "verdict": "failed",
+                    "reason": reason,
+                    "stage": stage,
+                    "cents": spend.recorded_cents(self.job_dir(job_id), cents),
+                },
             )
         except BrokerError as exc:
             logger.error("could not record failed for %s: %s", job_id, exc)
@@ -401,7 +410,7 @@ class RecordsLane(DraftingLane):
         fields = {
             "verdict": verdict,
             "stage": v.get("stage"),
-            "cents": int(v.get("cents") or 0),
+            "cents": spend.recorded_cents(jd, int(v.get("cents") or 0)),
             "items": [i for i in v.get("items") or [] if isinstance(i, dict)],
             "delivery": {
                 "review_id": row["id"],
