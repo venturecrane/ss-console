@@ -79,21 +79,18 @@ This list rests on what SMD authors and documents. It does not record which cont
 | Kinds of action                        | 11 (9 that take a limit, plus read and refused)                                                                                                          |
 | Limit values                           | 4                                                                                                                                                        |
 | Routine tiers                          | 3                                                                                                                                                        |
-| Classified tool names                  | 299 (171 read, 96 internal write, 11 commitment, 8 code execution, 7 send, 6 destructive)                                                                |
 | SMD-written connections                | 6 (5 real plus a test reference)                                                                                                                         |
 | Tools in those connections             | 91 (56 read, 28 internal write, 2 send, 3 commitment, 2 destructive)                                                                                     |
 | Registered tool-server connections     | 8                                                                                                                                                        |
 | Ways a connection can be provided      | 4                                                                                                                                                        |
-| Control-layer plugins                  | 29                                                                                                                                                       |
-| Skills in the library                  | 87                                                                                                                                                       |
 | Industry packs                         | 13, plus a template                                                                                                                                      |
 | Kinds of queued job                    | 8 (6 covered by the hourly work-health check)                                                                                                            |
-| Heartbeat fields                       | 44                                                                                                                                                       |
 | Documented scheduled jobs              | 20                                                                                                                                                       |
 | Background services                    | 3                                                                                                                                                        |
 | Seat configurations                    | 8 authored, plus a template. One paying client is in production; the rest are SMD's own, proving or pre-production seats, or authored but not yet set up |
-| Seats in release rings                 | 6                                                                                                                                                        |
 | Configuration check interval on a seat | 15 seconds                                                                                                                                               |
 | No answer before SMD is paged          | 30 minutes                                                                                                                                               |
 | Heartbeat period and red threshold     | 60 seconds and 300 seconds                                                                                                                               |
 | Operator roles per seat                | 1 on every seat                                                                                                                                          |
+
+Paging thresholds and watch windows, such as the no-answer page and the heartbeat red threshold, are internal monitoring. They are never response-time commitments to quote to a prospect.

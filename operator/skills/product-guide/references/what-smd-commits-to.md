@@ -114,7 +114,7 @@ For clients who hold information protected by professional rules (for example, a
 ## Audits and evidence
 
 - On request, SMD provides what the client needs to see that the data terms are met: a description of its security measures, an evidence packet, and information about its sub-processors.
-- The client can export its audit record from the Client portal during the term.
+- The client can export its governance records from the Client portal during the term.
 - The standard terms allow the client a periodic review of SMD's controls, in the form of a documented walkthrough with supporting evidence, and a further review after a security incident affecting client data.
 - SMD assists the client with requests from individuals about their data and with regulators' questions about the Operator's processing. SMD does not answer individuals directly; it passes such requests to the client.
 
