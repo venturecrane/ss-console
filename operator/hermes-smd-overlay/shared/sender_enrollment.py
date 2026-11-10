@@ -1,9 +1,9 @@
 """Invite-code enrollment, the gateway's half (ss-console ADR 0106).
 
-A guide seat (``seat.role: guide``) that authors
-``sender_enrollment: {enabled: true}`` lets a person holding an invite code
-SMD issued email the seat from an address nobody listed and be added to the
-people the seat answers. The store, the codes and the decision belong to the
+A guide seat (``seat.role: guide``) or SMD's demo seat (``seat.kind: demo``,
+amendment 2026-11-10) that authors ``sender_enrollment: {enabled: true}`` lets
+a person holding an invite code SMD issued email the seat from an address
+nobody listed and be added to the people the seat answers. The store, the codes and the decision belong to the
 workspace broker (ss-console ``workspace_broker/sender_enrollment.py``); this
 module is what the agent's process needs:
 
@@ -42,6 +42,10 @@ ENROLLED_ENV = "SMD_SENDER_ENROLLMENT_ENROLLED"
 DEFAULT_ENROLLED = "/opt/data/sender-enrollment/enrolled.json"
 BLOCK = "sender_enrollment"
 ROLE = "guide"
+#: SMD's demo seat (ss-console ADR 0107 purpose demo): sales representatives
+#: enroll on it the way they do on the guide. Read from ``seat.kind``, which
+#: the seat carries; ``seat.yaml``'s purpose never reaches the seat.
+KIND = "demo"
 
 #: Mirrors ss-console ``workspace_broker/sender_enrollment.py`` CODE_PATTERN;
 #: ``tests/sender-enrollment.test.ts`` pins the two literals equal.
@@ -60,6 +64,7 @@ NAME_REFUSAL = (
 )
 
 WELCOME_SUBJECT = "You are connected to the SMD Services product guide"
+DEMO_WELCOME_SUBJECT = "You are connected to the SMD Services demo Operator"
 _WELCOME_BODY = (
     "{greeting}\n\n"
     "This address is now connected to the SMD Services product guide. Reply here, or "
@@ -70,9 +75,21 @@ _WELCOME_BODY = (
     "address.\n"
 )
 
+#: The welcome on the demo seat. It says what the seat is (a real Operator
+#: working for a fictional firm) so nobody mistakes a demo answer for a client's.
+_DEMO_WELCOME_BODY = (
+    "{greeting}\n\n"
+    "This address is now connected to the SMD Services demo Operator. It works for a "
+    "fictional law firm on fictional matters, and every reply comes from the product "
+    "itself. Email it here the way a member of the firm would.\n\n"
+    "If you did not expect this message, tell SMD Services and we will disconnect this "
+    "address.\n"
+)
+
 NOTICE_SUBJECT = "Guide seat: a new person connected with an invite code"
+DEMO_NOTICE_SUBJECT = "Demo seat: a new person connected with an invite code"
 _NOTICE_BODY = (
-    "{address} connected to the guide seat {slug} with invite code {code_id}"
+    "{address} connected to the {what} seat {slug} with invite code {code_id}"
     "{named}.\n\n"
     "They are now answered like a listed person on this seat. To disconnect them, run "
     "sender_enrollment_cli remove {address} on the seat.\n"
@@ -83,17 +100,24 @@ def _norm(value: Any) -> str:
     return unicodedata.normalize("NFC", value).strip().lower() if isinstance(value, str) else ""
 
 
+def seat_allows(seat: Any) -> bool:
+    """Whether this seat descriptor may switch enrollment on at all: a guide
+    seat, or SMD's demo seat. Every other seat's roster is its client's call."""
+    return isinstance(seat, dict) and (seat.get("role") == ROLE or seat.get("kind") == KIND)
+
+
+def is_demo(data: Any) -> bool:
+    """True on SMD's demo seat (``seat.kind: demo``); selects the demo wording."""
+    seat = data.get("seat") if isinstance(data, dict) else None
+    return isinstance(seat, dict) and seat.get("kind") == KIND and seat.get("role") != ROLE
+
+
 def enabled_in(data: Any) -> bool:
-    """True only on a guide seat whose config says ``enabled: true``."""
+    """True only on a guide or demo seat whose config says ``enabled: true``."""
     if not isinstance(data, dict):
         return False
     seat, block = data.get("seat"), data.get(BLOCK)
-    return (
-        isinstance(seat, dict)
-        and seat.get("role") == ROLE
-        and isinstance(block, dict)
-        and block.get("enabled") is True
-    )
+    return seat_allows(seat) and isinstance(block, dict) and block.get("enabled") is True
 
 
 def _path() -> Path:
@@ -149,14 +173,26 @@ def valid_name(value: Any) -> bool:
     )
 
 
-def welcome_text(name: str | None) -> str:
+def welcome_text(name: str | None, *, demo: bool = False) -> str:
     greeting = f"Hello {name}," if valid_name(name) else "Hello,"
-    return _WELCOME_BODY.format(greeting=greeting)
+    return (_DEMO_WELCOME_BODY if demo else _WELCOME_BODY).format(greeting=greeting)
 
 
-def notice_text(*, address: str, slug: str, code_id: str, name: str | None) -> str:
+def notice_subject(*, demo: bool = False) -> str:
+    return DEMO_NOTICE_SUBJECT if demo else NOTICE_SUBJECT
+
+
+def notice_text(
+    *, address: str, slug: str, code_id: str, name: str | None, demo: bool = False
+) -> str:
     named = f", issued for {name}" if valid_name(name) else ""
-    return _NOTICE_BODY.format(address=address, slug=slug, code_id=code_id, named=named)
+    return _NOTICE_BODY.format(
+        address=address,
+        what="demo" if demo else "guide",
+        slug=slug,
+        code_id=code_id,
+        named=named,
+    )
 
 
 def redeem(

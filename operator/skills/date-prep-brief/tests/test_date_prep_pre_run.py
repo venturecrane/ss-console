@@ -733,12 +733,16 @@ def test_a_skipped_date_names_the_gate_that_held_it(seat, monkeypatch):
     assert beats == [("SUPPRESSED_WAKE", "no_briefable_date:unroutable")]
 
 
-def test_the_pilot_config_arms_the_job():
+def test_an_authored_config_arms_the_job():
+    """The A&P-shaped fixture (the old proving config, frozen in tests/fixtures)
+    authors case_manager.date_prep; the demo seat and the client seat do not."""
     import yaml
 
-    cfg = yaml.safe_load((_DIR.parents[1] / "customers" / "pilot-smokeball" / "customer.yaml").read_text())
-    prep = pre_run.date_prep_config(cfg)
+    fixture = _DIR.parents[2] / "tests" / "fixtures" / "ap-shaped-seat" / "customer.yaml"
+    prep = pre_run.date_prep_config(yaml.safe_load(fixture.read_text()))
     assert prep is not None and prep["window_days"] >= 7
+    demo = yaml.safe_load((_DIR.parents[1] / "customers" / "pilot-smokeball" / "customer.yaml").read_text())
+    assert pre_run.date_prep_config(demo) is None
     ap = yaml.safe_load((_DIR.parents[1] / "customers" / "ashton-price" / "customer.yaml").read_text())
     assert pre_run.date_prep_config(ap) is None
 

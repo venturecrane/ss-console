@@ -44,7 +44,7 @@ On the website, every path except the `/agent` page leads to one conversation, t
 ## Where the business stands (2026-10-21)
 
 - **One paying client, an Operator client.** A personal-injury law firm, seat `ashton-price`, started its paid service in the client portal on 2026-09-15 after a pilot (`operator/customers/ashton-price/customer.yaml`, the billing-cycle note). Everything we owe that client is in the [obligation register](/admin/playbook/obligation-register).
-- **The other seats.** Two self-serve seats are set up as client seats but paid for by SMD while they are proven (ADR 0090). The rest are SMD's own: a proving seat, the pre-production seat and an internal seat. The full list is in [Clients & Commitments](/admin/playbook/clients-and-commitments).
+- **The other seats.** Two self-serve seats are set up as client seats but paid for by SMD while they are proven (ADR 0090). The rest are SMD's own: the [demo seat](/admin/playbook/demo-seat) a sales representative shows the Operator on, the pre-production seats and internal seats. The full list is in [Clients & Commitments](/admin/playbook/clients-and-commitments).
 - **Acquisition is founder-run and law-first.** The automated lead-generation machine was retired on 2026-07-01 (ADR 0060); the Operator goes to market through law firms first (ADR 0040). See [Roadmap & Current Phase](/admin/playbook/roadmap).
 
 ## Who SMD serves

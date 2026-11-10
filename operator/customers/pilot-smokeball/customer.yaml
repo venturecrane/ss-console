@@ -1,249 +1,176 @@
 schema_version: 1
 
-# pilot-smokeball — the Smokeball STAGING build instance for the law-firm Operator
-# (the Ashton & Price pilot prep). This is bound to OUR OWN Smokeball staging
-# tenant (Partner-Program credentials), NOT a real client's production data. At
-# go-live the real firm gets its own slug bound to its firm-sponsored prod app.
+# pilot-smokeball: SMD's DEMO seat (ADR 0107 purpose demo; seat.yaml beside
+# this file). The real Operator, working for a FICTIONAL firm, Brannock &
+# Ferreira LLP, on fictional matters in SMD's own Smokeball staging tenant. A
+# sales representative emails it in front of a prospect and every reply comes
+# from the product itself. Nothing here is a client's: no client name, no client
+# setting, no client correspondence (Law 15). It gates no release (ADR 0107).
+#
+# Runbook: docs/handbook/demo-seat.md (what it is, how a representative
+# enrolls, the demo script by act, what not to show, how the tenant is reseeded,
+# and the follow-ups that need an outside act).
+#
+# Client changes are rehearsed on the client's release twin (ADR 0107), never
+# here. The slug and the Fly app keep their name; renaming means a new Fly app
+# (the runbook's follow-ups).
 #
 # Validate:  npx tsx scripts/validate-customer-yaml.ts \
 #              operator/customers/pilot-smokeball/customer.yaml
-#
-# GATES (Track 0 / Captain): the mcp:smokeball connector is net-new (overlay) and
-# its token_ref below is seeded once SMD's Smokeball staging credential lands.
-# The persona name/voice are a PROPOSED default — the firm authors the final
-# identity and writing voice (ADR 0035, no imposed defaults).
 
 # ---- IDENTITY ----
 customer_id: pilot-smokeball
-customer_name: 'Pilot Law (Smokeball Staging)'
+customer_name: 'Brannock & Ferreira LLP (SMD demo, fictional)'
 
 # ---- SEAT DESCRIPTOR ----
-# What this seat IS. Kind and product only; lifecycle state is DERIVED from
-# probes of the running system and is deliberately absent here — a state field
-# is a claim an agent can write, and a claim an agent can write is one that rots.
-# OUR OWN Smokeball staging tenant, fictional matters. The seat A&P work rehearses on.
+# demo: the seat-side twin of seat.yaml's purpose (the seat never reads
+# seat.yaml). It is what lets this seat take invite codes (sender_enrollment
+# below); the shadow firm may still drive it (operator/rehearsal/scope.py), never
+# during a scheduled demo. tests/demo-seat.test.ts pins the two declarations
+# together.
 seat:
-  kind: proving
+  kind: demo
   product: operator
 
 # ---- OUTPUT CLASSES (ADR 0083) ----
-# Which classes expect an authored spec. The specs themselves live in this
-# customer's vault object, never here (sections-output-classes.ts explains the
-# split); what is declared here is the commitment-shaped bit, and it is what
-# separates `the customer chose not to author` from `a control is broken`.
+# The fictional firm's approved voice is one artifact, the Delta Card at
+# seed/voice/spec/work_product.voice.md, derived from the firm's own thirteen
+# documents with zero sentences copied (seed/voice/README.md). It is the firm's
+# voice for its own documents (work_product) AND for its letters to people
+# outside the firm (outbound_external), which is where a demo shows it live: a
+# representative asks for a letter to opposing counsel or an adjuster, and the
+# Operator keeps it as a draft for a person to send, in the firm's voice.
 #
-# TWO CLASSES, DELIBERATELY, so a failed observation names its own half.
+# The spec reaches the seat through its vault object, never this file:
+#   operator/bin/publish-output-class-spec.py --slug pilot-smokeball \
+#     --class <work_product|outbound_external> --property voice \
+#     --body operator/customers/pilot-smokeball/seed/voice/spec/work_product.voice.md
+# (an R2 write, so an outside act; the runbook lists it). Until it lands the
+# seat raises spec_control_broken for each class, which is the honest state.
 #
-#   staff       — persona provenance. Needs no corpus, so it is authorable on
-#                 day one, and it is the same shape already proven on
-#                 smd-staging. If the chain is broken, this breaks too, and the
-#                 fault is delivery rather than distillation.
-#   work_product — firm provenance, and the actual target. This is the SAFEST
-#                 possible first firm-voice declaration: the class is
-#                 `external_send: forbidden` (operator/contracts/
-#                 output-classes.yaml), so declaring `expected` before a spec
-#                 exists cannot downgrade any autonomous send. There is no send
-#                 to downgrade. Every other firm-voice class is outbound, where
-#                 the same declaration would freeze real traffic.
-#
-# `format_spec: none` on both is an authored choice, not an omission — the
-# drafting lane's skeletons and the ten mechanical gates already own the shape
-# of work product, and restating it here would create a second authority over
-# one behaviour.
-#
-# ORDERING CONSEQUENCE — RESOLVED 2026-08-11 (#2234), and the history matters
-# because this block has now been wrong in both directions.
-#
-# #2094 declared `staff: expected` on the reasoning that the declaration and the
-# spec would "land close together". The spec never landed, and because a
-# declared-but-uninstalled spec refused every autonomous send, the seat stopped
-# emailing the Captain for a week (08-04 → 08-10) with no alert — the refusal
-# told the model to read a spec that did not exist (#2228). #2229 set this to
-# `none` as a stopgap: correct as first aid, wrong as an end state, since it
-# also deleted the only seat exhibiting the state the fix needed to prove.
-#
-# ss#2234 removed the reason for both. A declared-but-uninstalled spec is still
-# a BROKEN CONTROL and still recorded as one, but what it COSTS now depends on
-# who is waiting: `staff` PROCEEDS in the persona's own authored register (ADR
-# 0083's own "fails closed to the persona's own authored judgment"), outbound
-# routes to a human, and `work_product`/`record` still refuse. The seat raises
-# `spec_control_broken:staff.voice` on the heartbeat so the gap is visible
-# rather than silent.
-#
-# So `expected` is correct here again, and it is now SAFE: internal mail flows,
-# the alert stays open, and it resolves the moment a staff voice spec is
-# installed. That standing alert is the honest state of this seat — it declares
-# a control it does not have — and a proving seat is exactly where that should
-# be visible rather than papered over.
-#
-# `work_product` carries no such window. It is `external_send: forbidden`, so
-# there is no send for a missing spec to downgrade.
+# staff is `none`: replies to the firm's own people (the representative)
+# are in the persona's authored register below, which is the authored choice.
+# `format_spec: none` everywhere: no drafting lane runs on this seat.
 output_classes:
   staff:
-    voice_spec: expected
+    voice_spec: none
     format_spec: none
   work_product:
+    voice_spec: expected
+    format_spec: none
+  outbound_external:
     voice_spec: expected
     format_spec: none
 
 vertical: law-firm
 addons:
-  - law-firm/pi@0.3.0 # the CA PI-litigation lifecycle pack (19 routine skills + the 4-skill work-product drafting lane, v0.3.0 2026-07-28)
+  - law-firm/pi@0.3.0 # the CA PI-litigation pack; only the skills bound below are on
 practice_areas:
   - personal-injury-plaintiff
-fly_region: lax # Pacific — the pilot firm is California-based
+fly_region: lax # the fictional firm is in California
 
 # ---- RUNTIME ----
-# Light main, escalate up (ADR 0049): Sonnet runs the high-frequency volume —
-# conversation, inbox triage, simple replies — cheaply; genuinely heavy work
-# (matter-document-review et al., pre-weighted) escalates to Opus via the SOUL
-# instruction that translate.py renders when escalation_model is set.
-model: claude-sonnet-4-6
-# Opus 5.5 (2026-09-23): $4/$20 against 4.8's $5/$25; pilot proves the
-# delegated heavy-work path on 5.5 before A&P moves.
+# The production default (ADR 0049): Sonnet for the conversation, Opus for the
+# one heavy skill bound here (matter-document-review), the same pair a paying
+# law seat runs, so a prospect sees the product as a firm gets it.
+model: claude-sonnet-5-5
 escalation_model: claude-opus-5-5
 
+# One gateway and no job lanes (no skill below queues a job). 2048 MB is this
+# seat's floor, not a preference: the 2026-09-01 crash loop ran here at 1024
+# (docs/runbooks/operator/incidents/2026-09-01-gateway-startup-watchdog-collision.md).
+# Kept at the running Machine's size: the boot harness's large-store case is
+# rendered from the demo seat at exactly this guest (operator/bin/lib/
+# boot_harness/cli.py SIZES "4x-8192"), and a smaller seat is a reprovision.
 machine:
   size: shared-cpu-4x
-  # 2048 is this seat's FLOOR, not a preference. The 2026-09-01 crash loop
-  # (00:12-02:45 UTC) ran here: at 1024 the gateway's startup crawl -- the
-  # synchronous platform-plugin imports inside gateway/channel_directory.py's
-  # build_channel_directory, which runs as the event loop's first task -- took
-  # roughly four minutes, while hermes' own in-process loop watchdog
-  # (gateway/shutdown_watchdog.py start_loop_liveness_watchdog, armed at
-  # gateway/run.py:12186 BEFORE that crawl) hard-exits 75 after three missed
-  # probes, a budget of about two minutes. The loop wedged on its own startup:
-  # exit 75, container restart, colder caches, slower startup, repeat every
-  # ~15 minutes. oom_killed was false throughout, so memory pressure is not the
-  # proximate cause -- the extra GB buys page cache and import headroom that
-  # pulls startup back under the watchdog budget. `fly scale memory 2048` broke
-  # the loop instantly (beat age 3s, stable since).
-  #
-  # The live Machine was scaled to 2048 by hand during the incident. This line
-  # is what a reprovision reads, so leaving it at 1024 would silently shrink the
-  # seat back into the loop. Do not lower it without either raising hermes'
-  # watchdog budget (not configurable at this pin -- see
-  # docs/runbooks/operator/incidents/2026-09-01-gateway-startup-watchdog-collision.md) or
-  # making the platform-plugin import lazy.
   memory_mb: 8192
-  lane_memory_mb: { medchron: 4096, demand: 2048 }
-  # 8192, shared-cpu-4x and 4096/2048 lane caps: matches ashton-price, the client
-  # seat this one rehearses for (Captain decision 2026-10-13), so rehearsals run
-  # the same guest and the same caps. The seat runs a chronology and a litigation
-  # list at the same time by design (the lanes never wait on each other); the
-  # default caps (2560 + 1024) plus the 512 MiB gateway reserve summed to exactly
-  # 4096 with no swap. 4096 + 2048 = 6144 MiB fits 8192 - 512 = 7680 (boot smoke
-  # lane-memory-caps-leave-gateway-reserve). Fly's shared-cpu-2x cannot take 8192.
 
 # ---- HUMANS WITH PORTAL ACCESS ----
 users:
   - email: scott@smd.services
     role: principal
     full_name: Scott Durgan
-  # Staging-only admin probe identity (ss#2222 gate 3 / card R2) — authored as
-  # a user because scope.admins must be a subset of users[] (commitments gate
-  # j); it holds no portal seat in practice. Never copy to a client seat.
-  - email: ss-probe-admin@agentmail.to
-    role: staff
-    full_name: SS Probe Admin (staging rehearsal)
-  # The staging tenant's one Smokeball staff record (ba848ad4) carries this
-  # address, so matter_staff routing sends the deadline digest here. A reply
-  # closes a task only under an authored name (decided_by, ADR 0088 / the
-  # digest-close path, ss#3022); unauthored, "done with 1" is refused. Same
-  # human as scott@smd.services; role staff, not an admin.
-  - email: smdurgan@smdurgan.com
-    role: staff
-    full_name: Scott Durgan
 
 # ---- PERSONAS ----
-# One coordinator persona. Name/title/voice are a PROPOSED default — the firm
-# authors the final identity and tunes the writing voice from real samples.
-# Outside sends follow the authored external_send ceiling below (ADR 0035/0073;
-# the former non-raisable law draft floor is removed). The two committed
-# deliverables — matter-memo-on-update (internal supervision memo) and
-# matter-document-review (surface-only, never drafts) — write only internally.
+# One coordinator persona working for the fictional firm. The register below is
+# authored for Brannock & Ferreira from its approved voice (the Delta Card):
+# written fresh here, never a client's.
 personas:
   - slug: operator
     status: active
-    # Neutral display identity (Captain call 2026-07-02): SMD proposes no
-    # persona name. The firm authors a name at onboarding if it wants one at
-    # all (ADR 0035, no imposed defaults). The slug is internal plumbing only.
     name: Operator
-    title: AI Case Coordinator
-    # AUTHORED REGISTER (ADR 0083), carried from the client seat so rehearsals
-    # exercise the real persona rather than a placeholder — the same
-    # fixtures -> pilot-smokeball -> ashton-price order every other authored
-    # value follows. Full spec: ashton-price/persona-operator.md. Only this
-    # list reaches the seat today (overlay translate.py::_soul_body renders it
-    # under "## Tone"). Keep BYTE-IDENTICAL to the client seat's list: a
-    # rehearsal against a different register proves nothing about the seat it
-    # is rehearsing for.
+    title: Case Coordinator, Brannock & Ferreira LLP
     tone:
-      - 'Lead with the fact. Name the matter and the event in the first sentence. Never open with a pleasantry, a preamble, or "I hope this finds you well."'
-      - 'Say what you need, specifically. A closed question with a real answer ("Confirm August 28, or tell me the date you want"), never "please advise." One message, one purpose.'
-      - 'When unsure, do not guess and do not proceed: state what you found, what you need, and stop. A refusal is a normal outcome, never an apology. Bad news, including your own error, goes in the first sentence.'
-      - 'Numbers and dates bare, no hedging wrapped around them. No filler, no flattery, no announcing your own diligence. Never speculate about law, merits, strategy, or valuation. No em dashes.'
-      - "Use the firm's own words (matter, served, propounded, verification, lien), never software vocabulary. You are a case manager working every open file: you carry the work, the attorneys decide it, and you never confuse the two."
+      - 'Open with the fact or the answer: the matter, the date, the status. Never open with a greeting, a preamble or a restatement of the question.'
+      - 'Plain sentences, no em dashes, no semicolons, no exclamation points, no contractions. Numbers and dates exactly as the file has them.'
+      - 'When the file does not say, say so and stop. Never fill a gap from inference, and never speculate about law, merits, strategy or value.'
+      - 'Name who does what next. A thing you will not do on your own (a send outside the firm, anything an attorney decides) is said plainly, with what you did instead.'
     entitlements:
       exposure:
-        internal_write: autonomous
-        # ADR 0073 proved (merged #1843, live on this seat) that an authored
-        # autonomous outside send actually SENDS in the gateway. That proof is
-        # intentionally SUPERSEDED here by the Ashton & Price day-one grid posture
-        # (the 2026-07-09 commitment letter): every send starts at draft_for_review.
-        # Git history is the record of the autonomous proof; the letter grid
-        # (routine-grid.yaml) is the authority now. The content-sensitivity floor
-        # (ADR 0031) and taint gate still narrow further.
-        #   external_send          -> outside recipients (opposing counsel, court):
-        #                             the letter's permanent "a person sends it" cap.
-        #   external_send_client   -> the firm's own rostered client (verification
-        #                             chase): graduatable to autonomous by the firm.
-        #   external_send_vendor   -> the firm's own rostered records vendor (records
-        #                             chase): graduatable to autonomous by the firm.
-        # The two typed classes resolve via scope.outbound_roster below (ADR 0075).
-        external_send: draft_for_review
+        # A firm's default posture (the pi-law-firm preset): writes into the
+        # matter system execute and are recorded as draft-class in the audit
+        # record. Nothing here needs autonomous: the email reply path's own
+        # create_draft and invite_code_issue both run under draft_for_review
+        # (hermes-smd-trust enforce.py, INTERNAL_WRITE at draft_for_review is
+        # allowed and executes).
+        internal_write: draft_for_review
+        # Replies to the firm's own people: SMD's administrators and the
+        # representatives who enrolled with a code (sender_enrollment below).
         external_send_internal: autonomous
-        external_send_client: draft_for_review # day-one grid posture (graduation proven config-correct; see ADR 0075 + the send-delivery follow-on)
-        external_send_vendor: draft_for_review # day-one grid posture
-        # Deleting Smokeball calendar events as an admin-confirmed act
-        # (ss-console#2944, overlay#385): the gate withholds delete_events and an
-        # administrator's emailed yes to the [act ...] line performs it. It is
-        # the only destructive tool with an act shape; every other destructive
-        # tool (delete_file) refuses at confirm. Was `autonomous`, which still
-        # required a current-turn approval no email turn could supply.
-        # Captain-directed 2026-09-25 for the pilot proof; this seat only.
-        destructive: confirm
-        # The Operator's own internal matter (ss-console#2536), rehearsing the
-        # A&P posture: an admin-confirmed act proposal is the only path, never
-        # autonomous. No exposure_ceiling entry, so the entitlement dial cannot
-        # raise it.
-        commitment: confirm
-        # Captain-authorized 2026-08-21: an admin-confirmed act proposal is the only path, never autonomous. Requires overlay >= b782926c (validator accepts confirm on commitment).
-      # Letter-commitment bounds for the runtime entitlement dial (ss#2003
-      # Q7), mirroring the A&P seat (this seat rehearses that grid). Derived
-      # from routine-grid.yaml ceiling_tier per send class; the Machine clamps
-      # every portal-set override to these.
+        # Anyone else (opposing counsel, an adjuster, a court): the Operator
+        # never sends. It keeps the letter as a draft for a person. This is the
+        # demo's refusal-to-send act, live.
+        external_send: draft_for_review
+        # external_send_client, external_send_vendor, destructive, commitment
+        # and code_execution are unauthored, so refused (ADR 0035): the
+        # fictional firm has no listed clients or vendors, and a demo never
+        # deletes, commits or runs code.
       exposure_ceiling:
         external_send: draft_for_review
-        external_send_client: autonomous
-        external_send_vendor: autonomous
-        # code_execution stays UNAUTHORED (= refused) on this seat, and the
-        # custody guard (#1841, ADR 0044 Decision 8) enforces it: gateway-held
-        # credential surfaces exist (agentmail/brave/smokeball), executed code
-        # could read them from the env, and smokeball is a client-data
-        # connector — never custody-exception eligible. Consequence: the
-        # ADR 0021 Stream-A execute_code fetch skills are inert here by
-        # posture; their revival is #1917 (broker-mediated fetch or connector
-        # custody move), NOT this dial. Ledger writes stopped needing it in
-        # ss #1915 (escalation_append/escalation_state mediated tools).
     skills:
-      # spine
+      # Every email lands here and is handed to the skill it asks for.
       - name: matter-inbox-router
         version: pending
         initiation:
           manual: true
           scheduled: false
           webhook: true
+        enabled: true
+      # Demo act: "introduce yourself and tell me what you can see".
+      - name: operator-introduce
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      # Demo act: the employee manual ("how do we work together?"), read from
+      # this seat's own facts: what it does on its own and what it brings to a
+      # person first. On request only; the daily help review is not run here.
+      - name: operator-help
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+      # Keeps the Smokeball refresh token alive and pages SMD the hour it dies.
+      # Turn-free (the pre_run decides; no model call), so it costs nothing.
+      - name: connector-auth-check
+        version: pending
+        initiation:
+          manual: true
+          scheduled: true
+          webhook: false
+        enabled: true
+      # Demo act: "where are we on 2026-PI-102?"
+      - name: matter-status-responder
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
         enabled: true
       - name: matter-status-digest
         version: pending
@@ -252,161 +179,7 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
-      # product ops — the initiation card's Stage A (initiation-card.yaml).
-      # Person-invoked only; reply/report to the requester only. This seat is
-      # the rehearsal rig for the card: every card command runs green here
-      # before ashton-price (fixtures -> pilot -> client discipline).
-      - name: operator-introduce
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # How to work with me (#3423): answers "how do we work together?" from
-      # the seat's own facts and the SMD-authored guide. Read-only, one reply.
-      - name: operator-help
-        version: pending
-        initiation:
-          manual: true
-          scheduled: true # the daily help review (ss-console#3423 increment 3)
-          webhook: false
-        enabled: true
-        settings:
-          # The weekly help note goes to SMD only (ss-console#3423).
-          recipient: scott@smd.services
-      - name: operator-self-test
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # ops (ss#2148) — auth-plane liveness/keepalive probe. Calls auth_status
-      # only (no data endpoint); its failures are the connector-health ledger's
-      # signal, so a dead credential pages the same day. Vertical-neutral.
-      - name: connector-auth-check
-        version: pending
-        initiation:
-          manual: true
-          scheduled: true
-          webhook: false
-        enabled: true
-      # establishment (ADR 0085) — product skills, not pack skills: an Operator
-      # admin points the seat at the firm's own documents and the firm's voice
-      # or an output's shape is established from them. Conversational only:
-      # never scheduled, never webhook-fired, because establishment is an
-      # instructed act and an unattributed turn may not establish anything.
-      # Bound HERE, on the proving seat, because readiness means we perform the
-      # client's act in the client's role on the identical path; activation on a
-      # client seat is a Captain act.
-      - name: voice-establishment
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: shape-establishment
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: document-library-establishment
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # The initiation conductor (ss#2220 rescoped, Captain 2026-08-11): one
-      # admin request runs the seat's authored self_initiation.sequence, each
-      # act by its own skill body, each stopping at its own blessing gate.
-      # Person-initiated always — never scheduled, never webhook-fired, never
-      # automatic at connect; an unattributed turn may not initialize anything.
-      - name: operator-self-initiation
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # intake / conflict
-      - name: new-matter-intake
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: conflict-intake-router
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: consult-scheduler
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # keeping matters moving
-      - name: engagement-letter-chaser
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: trust-balance-nudge
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: matter-status-responder
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: document-receipt-logger
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: stalled-matter-nudge
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # committed deliverables
-      - name: matter-memo-on-update # Chris's named ask — webhook-driven internal supervision memo
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: true
-        enabled: true
-      - name: matter-document-review # surface/highlight only, never drafts work product
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # deadlines
+      # Demo act: what is due on a matter, read from the matter's own dates.
       - name: deadline-and-sol-tracker
         version: pending
         initiation:
@@ -414,457 +187,39 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
-      - name: deadline-miss-escalator
-        version: pending
-        initiation:
-          manual: true
-          scheduled: true
-          webhook: false
-        enabled: true
-      # ---- PI litigation lifecycle (law-firm/pi@0.2.0, staged 2026-07-02) ----
-      # The 19-skill CA PI pack, adversarially gated 2026-07-01. Initiation per
-      # skill: watch/chase/track skills run on the cron block below; assemblers
-      # are person-invoked; served-discovery capture and deficiency review are
-      # webhook-initiable via the matter-inbox-router spine (inbound mail is
-      # routed onward, not triggered directly). Exposure stays governed by the
-      # persona entitlements above.
-      # discovery (deepest — the firm's named slip area)
-      - name: discovery-served-watch # served discovery routed in by the spine
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: true
-        enabled: true
-      - name: discovery-response-tracker # deadline watch, both directions
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-      - name: client-verification-tracker # the firm's #1 slip; chase cadence
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-        # PLACEHOLDER(christa): the client-verification chase numbers await the
-        # firm's real answers (2026-07-09 letter, "What we need back from you" #1 +
-        # the per-matter cadence). These STAGING defaults let the chase behavior
-        # run on pilot-smokeball; the real client seat MUST replace them with
-        # Christa's numbers before go-live (enforced by tests/customer-commitments).
-        settings:
-          chase_cadence_days: 5 # PLACEHOLDER(christa): days between verification chases
-          escalate_after_attempts: 3 # PLACEHOLDER(christa): unanswered attempts before it escalates to a person
-      - name: separate-statement-assembler # CRC 3.1345 collation, person-invoked
+      # Demo act: read a document in the matter and surface what is in it,
+      # cited. Surface only, never drafts. Heavy (escalates to Opus), so the
+      # runbook points it at one short document, never a whole record set.
+      - name: matter-document-review
         version: pending
         initiation:
           manual: true
           scheduled: false
           webhook: false
         enabled: true
-      - name: opposing-response-deficiency-review # served responses routed in by the spine
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: true
-        enabled: true
-        settings:
-          # Rehearsal threshold for the read-volume gate (overlay#327) - small
-          # on purpose so an over-set fixture crosses cheaply. The client
-          # seat authors its contract value; this seat proves the control.
-          review_threshold_pages: 20
-      - name: meet-and-confer-drafter # drafted only; attorney decides + sends
+      # Demo act: the refusal to send. A letter to opposing counsel is drafted
+      # in the firm's voice and kept for a person to send (external_send above).
+      - name: meet-and-confer-drafter
         version: pending
         initiation:
           manual: true
           scheduled: false
           webhook: false
         enabled: true
-      - name: discovery-response-staging # person-invoked staging
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # case initiation + service
-      - name: matter-initiation-setup # person-invoked at matter open (a matter.created
-        # trigger is a future add once that Smokeball event type is verified live)
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: service-confirmation-watcher # watches InfoTrack confirmations posting to the matter
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-      # medical records + chronology
-      - name: medical-records-chaser # weekly chase of outstanding providers
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-        # PLACEHOLDER(christa): the chase cadence awaits the firm's answer. The
-        # 7 here is seed-authored, not invented: the pilot's roster-task note
-        # itself says "Chase cadence: weekly until the records land in the
-        # matter" (seed/seed_data.py, records-roster-alvarez). Unauthored is
-        # fail-closed: no cadence, no chase, a re-fired surface instead
-        # (ss #2404; same contract as client-verification-tracker's dials).
-        settings:
-          chase_cadence_days: 7 # PLACEHOLDER(christa): days between records chases
-      - name: medical-chronology-maintainer # routine 11: a run or an update, on request
-        version: pending
-        initiation:
-          manual: true
-          # false since 2026-09-17, mirroring the client seat: the weekday sweep that
-          # kept the retired running note current is removed from cron below.
-          scheduled: false
-          webhook: false
-        enabled: true
-        # PLACEHOLDER(christa): the treatment-gap flag length awaits the firm's
-        # answer (2026-07-09 letter, "What we need back from you" #2, e.g. 30 or 60
-        # days). This STAGING default lets gap-flagging run; the real client seat
-        # MUST replace it before go-live (enforced by tests/customer-commitments).
-        settings:
-          treatment_gap_flag_days: 45 # PLACEHOLDER(christa): flag treatment gaps beyond this many days
-          # Rehearsal-only value for the routine-11 package allowance (ADR 0087);
-          # the client seat authors the contract figure.
-          # The page allowance (2026-09-09). Small on purpose: the rehearsal
-          # seat's job is to prove the crossing, so a matter the sandbox
-          # actually holds must be able to exceed it.
-          chronology_package_page_allowance_per_month: 40
-          # The firm's billing-cycle day, so the allowance resets when the firm
-          # pays rather than on the 1st (ss#2618). Rehearsal value: the PROVING
-          # seat carries it first, and no client seat authors one until its own
-          # Exhibit A says "cycle" rather than "per calendar month".
-          #
-          # `effective_from` is not optional in practice: without it, authoring
-          # an anchor re-slices every row already in the ledger, because the
-          # debit rule keys on when a job was CREATED. With it the first cycle
-          # is simply short and nothing already metered moves.
-          chronology_package_cycle_anchor_day: 15
-          chronology_package_cycle_effective_from: '2026-09-11'
-      # motions
-      - name: motion-calendar-tracker # keeps motion deadlines/hearings current
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-      - name: motion-package-assembler # person-invoked assembly/staging
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # minor's compromise
-      - name: minors-compromise-packet # packet assembly manual; GAL/hearing/lien-figure tracking scheduled
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-      # trial preparation
-      - name: trial-binder-assembler # binder assembly manual; weekly trial-prep deadline sweep
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-      # mediation, settlement, liens
-      - name: mediation-settlement-tracker # weekly conference/998 deadline sweep
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-      - name: lien-ledger-tracker # weekly obligation sweep + provider chase
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false # on request since 2026-09-29 (no cron row)
-          webhook: false
-        enabled: true
-        settings:
-          # Which matter status means "settled, money still in trust" is a FIRM
-          # fact with no pack default: unauthored, the gate refuses and surfaces
-          # rather than guessing at a vendor-global enum value (ss #2455).
-          trigger_status: Pending # PLACEHOLDER(rehearsal) - staging sandbox value
-          # How often one provider may be contacted. Also a firm fact, also
-          # fail-closed: a cadence we picked is a commitment nobody made.
-          chase_cadence_days: 14 # PLACEHOLDER(rehearsal)
-          # How long an obligation may go quiet before it is flagged. NOT in the
-          # fail-closed class: unauthored, stall flags are simply withheld and
-          # the register says so, while tracking and chasing continue.
-          stall_days: 60 # PLACEHOLDER(rehearsal)
-          # How often the standing register is produced on its own. Also NOT
-          # fail-closed: unauthored, there is no periodic run and the register
-          # rides along with other wakes, saying so on its own face.
-          register_days: 7 # PLACEHOLDER(rehearsal)
-      - name: settlement-statement-feeder # person-invoked; figures from authored data only
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # firm-wide surface
-      - name: daily-needs-you-digest # one weekday-morning batched digest
-        version: pending
-        initiation:
-          manual: true
-          scheduled: true
-          webhook: false
-        enabled: true
-      # ---- case manager, not the alarm (docs/specs/operator/case-manager-deadline-work.md) ----
-      # Two scheduled routines that do what a case manager does with the task
-      # list and the calendar; each runs only at the levels the case_manager
-      # block below authors (absent block = both routines do nothing). No
-      # routine-grid row: a product rehearsal on the proving seat, not a
-      # routine any agreement names.
-      - name: task-list-keeper # weekly: the Operator's own tasks closed or handed over once; cleanup proposal per attorney
-        version: pending
-        initiation:
-          manual: true
-          scheduled: true
-          webhook: false
-        enabled: true
-      - name: date-prep-brief # a date entering its window starts the prep; one done-plus-decisions brief per matter
-        version: pending
-        initiation:
-          manual: true
-          scheduled: true
-          webhook: false
-        enabled: true
-      # ---- work-product drafting lane (law-firm/pi@0.3.0, staged 2026-07-28) ----
-      # ON-DEMAND, ATTORNEY-INITIATED ONLY: manual initiation, never scheduled,
-      # never webhook — no routine may produce work product (the routine lanes
-      # keep the assembly-no-argument floor; this lane exists because an
-      # attorney hands the Operator drafting work directly). Output is always a
-      # draft delivered internally for attorney review; never served, filed, or
-      # sent outside the firm by the Operator. Discipline + ten evidence-derived
-      # gates: operator/templates/drafting/drafting-discipline.md (prove-out:
-      # venturecrane/engagements ashton-price/prove-out/EVIDENCE.md). No draft
-      # surfaces without passing drafting_gate_check.py (execution point per the
-      # discipline doc — code_execution stays refused on this seat).
-      # STAGING REHEARSAL SEAT: this authoring is ours, for the fixture
-      # kill-test battery; a client seat activates this lane only when the firm
-      # authors it.
-      - name: discovery-response-drafter # responses to served sets; candidate objections only; coverage-diffed
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: follow-up-discovery-drafter # RFP/RFA/SROG sets + record-grounded discovery plan; premise-clean; SPROG lint
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: demand-letter-drafter # policy-limits demand vs skeleton; settlement authority always reserved
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      - name: mediation-brief-drafter # confidential mediation brief vs skeleton; three-layer quote gate
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # Vendor invoice intake, rehearsed HERE before any client seat: a
-      # rostered sender forwards a vendor's invoice and the router executes
-      # this skill in the same turn. Person-initiated (the forward is the
-      # request); never scheduled, never webhook-fired on its own. One write,
-      # an UNFINALIZED expense plus the PDF, under the internal_write
-      # entitlement above. No routine-grid row: this is a product rehearsal,
-      # not a routine the firm's agreement names. The seat authors no
-      # vendor_invoice_intake settings, so cost type, billable, activity code
-      # and staff are left to Smokeball's defaults and each reply says so.
-      - name: vendor-invoice-intake
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # Combined post intake, bound here so it can be rehearsed on a tenant that
-      # is not a client's. A rostered sender emails one scanned PDF holding
-      # several letters for several matters; the router executes this skill in
-      # the same turn, and it files each letter as its own page range on the
-      # matter that letter resolved to. Person-initiated (sending the scan is
-      # the request); never scheduled, never webhook-fired on its own. Its write
-      # is a matter file under the internal_write entitlement above, and the
-      # page range is the fence: a bundle filed whole would be several clients'
-      # letters sitting in one client's file. No routine-grid row: a rehearsal,
-      # not a routine any agreement names.
-      - name: combined-post-intake
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # The daily post list (2026-10-29), bound here first to prove the path
-      # before any client seat: combined post intake records each bundle and
-      # does NOT reply to it; this skill's pre-run sends one list of only what
-      # needs a person to the one recipient below. Authoring it (enabled, the
-      # recipient, AND the cron row) is what turns the per-bundle reply off.
-      - name: post-intake-daily-list
-        version: pending
-        initiation:
-          manual: false
-          scheduled: true
-          webhook: false
-        enabled: true
-        settings:
-          recipient: 'ss-probe-admin@agentmail.to'
-      # File work requests, bound for rehearsal (2026-10-05): the firm forms
-      # resolve from this seat's library (templates below) and the signer is
-      # left unauthored here, so a rehearsal letter shows the signer markers.
-      - name: file-work-requests
-        version: pending
-        initiation:
-          manual: true
-          scheduled: false
-          webhook: false
-        enabled: true
-      # SMD note, bound HERE first (2026-10-15): SMD has the Operator tell a
-      # firm colleague something in her own thread, in words SMD approved
-      # (operator/skills/smd-note, medchron/note_by_smd.py). Every initiation
-      # flag is false on purpose: no firm person, schedule or webhook starts
-      # it. The only start is the note's handoff wake, which SMD sends from the
-      # Machine as root after the broker recorded the note. Activated on the
-      # pilot to prove the path end to end before any client seat; activation
-      # on a client seat is a separate change after that proof.
-      - name: smd-note
-        version: pending
-        initiation:
-          manual: false
-          scheduled: false
-          webhook: false
-        enabled: true
-      # The Case File Manager (increment 1, 2026-10-26): bound on request only,
-      # the pilot proves the path (case-file-manager.full and .apply) before
-      # any client seat runs it. No cron row. The library matter is named by
-      # its number; the job resolves it to exactly one Open matter on this
-      # tenant before anything is paid, or holds library_unresolved.
-      # Scheduled (2026-10-28): lets the pilot prove case-file-manager.recheck
-      # through the real scheduled submit. No cron row: the pre_run is run by
-      # hand for the proof. The caseload is the tenant's one staff member, set
-      # as Person Assisting on the test matters for the proof.
-      - name: case-file-manager
-        version: pending
-        initiation:
-          manual: true
-          scheduled: true
-          webhook: false
-        enabled: true
-        settings:
-          folder_name: 'Case File Manager'
-          library_matter_number: '2026-OPS-LIBRARY'
-          scheduled_caseloads: 'Scott Durgan'
-          scheduled_recipients: 'ss-probe-admin@agentmail.to'
-    # Every entry is pre_run-gated (ADR 0021 Stream B, #1748). The escalator's
-    # bespoke pre_run decides whether a deadline needs the ladder; the other
-    # skills carry the shared empty-seat gate (operator/templates/pre_run_gate.py):
-    # zero open matters -> SUPPRESSED_WAKE heartbeat, no LLM turn. Any probe or
-    # heartbeat failure wakes (fail-open). Schedules stay staggered (never
-    # :00/:30) and weekday- or weekly-cadenced — a wake on a hydrated seat
-    # bills tokens, so the cadence matches how fast each item actually changes.
-    # All times are seat-local (business_hours.timezone -> HERMES_TIMEZONE):
-    # authored as Pacific.
-    # ---- CRON RESTORED 2026-07-13 (routine-grid rehearsal, ADR 0075) ----
-    # The 2026-07-08 pause ("rehearsal between test cycles") ends here: the
-    # litigation-lifecycle rework the pause was waiting on has landed (the
-    # 07-09 letter grid is authored above + routine-grid.yaml), and rehearsing
-    # it is exactly what these wakes are for. Cost posture vs the paused era:
-    # the two measured burn drivers are fixed (fabrication-gate churn #1831,
-    # redundant memo RTF #1836), every entry stays pre_run-gated and staggered,
-    # and the ADR 0073 */17 proof cadence is REMOVED (superseded: the authored
-    # autonomous send is now live-proven through the typed client/vendor
-    # classes — see ADR 0075 verification). Deeper zero-delta wake suppression
-    # stays a follow-on gated on verifying Smokeball's updated_since wire
-    # format at connect (see pre_run_gate.py docstring).
-    # 2026-09-29: nine trackers run on request until the output checklist is met on the pilot
+    # The one schedule on this seat, and it calls no model.
     cron:
-      - skill: deadline-miss-escalator
-        schedule: '0 7 * * *' # daily 0700 seat-local (America/Los_Angeles via business_hours; was silently UTC = midnight PT before HERMES_TIMEZONE landed)
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: daily-needs-you-digest
-        schedule: '23 6 * * 1-5' # weekday 0623 seat-local — the morning digest
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: task-list-keeper
-        schedule: '37 6 * * 1' # weekly Mon 0637 seat-local: staggered off :00, and ahead of the 0700 escalator so its "in Monday's task review" line points at a proposal already sent
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      # ss-console#3423 increment 3: the daily help review (the Operator may
-      # reorder SMD's own tips, at most 3 changes a week) and, on Mondays, the
-      # weekly note to SMD with what changed and how to undo it. SMD ops, not a
-      # firm routine: nothing reaches the firm.
-      - skill: operator-help
-        schedule: '17 14 * * *' # daily 1417 seat-local (off :13, the hourly auth check); the pre_run adds the note on Mondays
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      # The daily post list, HOURLY here on purpose (rehearsal value): each
-      # list covers only what was recorded since the last one and an empty run
-      # sends nothing, so a proof sees exactly one list per rehearsed bundle
-      # within the hour. A client seat authors one daily time.
-      - skill: post-intake-daily-list
-        schedule: '41 * * * *'
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: date-prep-brief
-        schedule: '5 8-11 * * 1-5' # weekdays at 0805, 0905, 1005, 1105 seat-local: one matter per tick (the matter-mixing fence), so up to four briefs a morning
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      # Hourly and turn-free since 2026-10-13 (was daily 0547 with a model turn,
-      # wake_policy: always): the pre_run makes the auth_status refresh grant
-      # itself and records connector_auth_ok/failed as the slot's wake row, which
-      # SMD's hourly work-health run reads and pages on (ss#2148 keepalive kept:
-      # every fire is still a real refresh grant).
       - skill: connector-auth-check
         schedule: '13 * * * *' # hourly at :13 seat-local
         pre_run: pre_run.py
         wake_policy: pre_run_decides
-    # Native Google/Himalaya mail skills disabled — the Operator's inbox is AgentMail.
+    # The Operator's inbox is AgentMail; the native mail skills stay off.
     skills_disabled:
       - google-workspace
       - himalaya
 
-# ---- MCP CONNECTOR (Operator ⇄ Claude) ----
-# Console-sole door (ADR 0057 amendment). Claude reaches this Operator ONLY
-# through the console (smd.services/api/operator/<slug>/mcp), which authenticates
-# the caller and enforces the ADR 0057 grant kill-switch per request, then proxies
-# the turn to the Machine's authenticated /mcp/turn endpoint. The Machine no longer
-# exposes a direct public MCP door (the shared stub bearer and the Clerk-direct
-# path are retired). The access[] entry below seeds console-side authorization
-# (authored principals for the grant check); it is read by the console, not the
-# Machine.
+# ---- MCP CONNECTOR (Operator <-> Claude) ----
+# Console-sole door (ADR 0057). SMD's administrator only; representatives use
+# email.
 mcp_connector:
   enabled: true
   data_posture: open
@@ -875,116 +230,39 @@ mcp_connector:
         - user_3EEs0aMBRgu6PRxBa4g5YhHjggD
         - user_3E1RPGrTMxkSqciXMTyybUNSJWu
 
-# ---- AUTHORITY (ADR 0041 dual-mode portal surfaces) ----
-# Both #2003 controls rehearse here before the client seat relies on them:
-# trust is client-operable so the entitlement-dial probes (Q7) exercise the
-# same portal path a Named Administrator uses, and runtime is client-operable
-# so the kill-switch probes (Q6: portal pause -> Machine gate -> governance
-# row) exercise the same path a firm principal uses. Neither flip cedes SMD
-# control: ADR 0041 authority switches grant client self-serve OVER SMD's
-# always-present full control. (runtime was managed until the 2026-08-09
-# portal-chain proof required the real route; the prior scoping note said the
-# A&P seat is the one that authors runtime: client — it still does.)
-authority:
-  default: managed
-  overrides:
-    trust: client
-    runtime: client
-
 # ---- CONNECTORS ----
 connectors:
-  # System of record — the net-new mcp:smokeball server (Track A), bound to SMD's
-  # Smokeball STAGING tenant. token_ref is seeded once the staging credential
-  # lands (Partner Program). The matter.updated webhook drives the memo skill.
+  # SMD's own Smokeball STAGING tenant, which holds only the fictional firm's
+  # matters (seeded by operator/bin/seed-staging-matter.py). Firm-delegated
+  # authorization_code app (ADR 0053); the refresh token lives on the seat
+  # volume and is kept alive by connector-auth-check above.
   PracticeManagement:
     adapter: smokeball
     backend: mcp:smokeball
     enabled: true
-    environment: staging # our own STAGING tenant
-    # auth_mode: authorization_code — pilot-smokeball is the firm-delegated rehearsal
-    # rig (ADR 0053). The refresh token is obtained at the connect step
-    # (bin/connect-smokeball.sh) and set as SMOKEBALL_REFRESH_TOKEN; until then the
-    # connector is unwired at boot (boot-before-token). Bound to the staging
-    # "SMD Operator (Auth Code)" app via SMOKEBALL_STAGING_* creds.
+    environment: staging
     auth_mode: authorization_code
     token_ref: 'infisical:/operator/pilot-smokeball/practice-management/smokeball-oauth'
+    # Kept so Smokeball deliveries still verify at the gate. No trigger below
+    # subscribes to a Smokeball event: a matter change wakes nothing here (the
+    # reconciler registers nothing with no event types, and never deletes).
     webhook_url: 'https://hermes-pilot-smokeball.fly.dev/webhooks/smokeball'
 
-  # The Operator's OWN inbox (default-on, toggleable). Anyone can email it; the
-  # inbound webhook routes to the spine. AGENTMAIL_API_KEY is a Fly secret.
+  # The Operator's own inbox. AgentMail for now; a mailbox in an M365 lab
+  # tenant is a follow-up (the runbook), because creating that user is an
+  # outside act. AGENTMAIL_API_KEY is a Fly secret.
   Email:
     adapter: agentmail
     backend: mcp:agentmail
     enabled: true
     webhook_url: 'https://hermes-pilot-smokeball.fly.dev/webhooks/agentmail'
 
-  # WebSearch (native:brave-free, ADR 0070) — bound here so the rehearsal rig
-  # exercises native web search before any paid seat (fixtures -> pilot-smokeball
-  # -> paid). Hermes' native brave-free provider (no MCP wrapper), reads
-  # BRAVE_SEARCH_API_KEY staged by provision-customer.sh. This is the
-  # live-verification binding for the ADR 0070 native go-live, not an Operator
-  # default (Operator = authored-per-engagement).
-  WebSearch:
-    adapter: brave
-    backend: native:brave-free
-    enabled: true
-
-  # NOTE: Calendar + DocumentStorage are added at provision once the firm's mail
-  # platform is confirmed (Google path shipped; M365 = Track E). Smokeball has no
-  # calendar API, so calendar always rides the mail binding. Documents ride the
-  # Smokeball Documents API (mcp:smokeball get_files_on_matter), not a separate
-  # store — pending the Track 0 doc-entitlement confirmation.
-
 # ---- WEBHOOK TRIGGERS ----
-# source must match a connector adapter that has a webhook_url above.
 webhook_triggers:
-  # The flagship: a Smokeball matter change drives the internal supervision memo.
-  - source: smokeball
-    event_type: matter.updated
-    skill: matter-memo-on-update
-    persona: operator
-    # Authored trigger exceptions (gate-enforced: 202 + WEBHOOK_SUPPRESSED audit
-    # row, no agent wake). The ops/digest-home matter is plumbing, not a case —
-    # the Operator must not write supervision memos about its own notepad.
-    # Actor exclusions (e.g. the supervising principal's own edits) are authored
-    # per firm at connect with the real vendor userId; NOT authored here because
-    # the rehearsal harness's App 1 PATCHes are the L2 trigger path.
-    exclude:
-      matters:
-        - 3c191bed-cdda-48b9-a6ed-a51a349f3f94 # 2026-OPS-001 (digest home)
-    # Per-(trigger, matter) cooldown (#1781): the seat's own create_memo echoes
-    # back as matter.updated (~12 min vendor latency, proven live 2026-07-06→07)
-    # and re-wakes this skill — a self-sustaining loop. The gate parks any
-    # delivery for a matter already inside the window (202 + WEBHOOK_SUPPRESSED,
-    # trigger-cooldown:<matter>), so the echo never wakes the agent and the
-    # chain terminates. 30 = the gate's platform default, authored explicitly
-    # here so the loop-break is visible in the seat's config, not implicit.
-    throttle:
-      cooldown_minutes: 30
-  # An inbound email to the Operator routes through the spine to the right skill.
   - source: agentmail
     event_type: message.received
     skill: matter-inbox-router
     persona: operator
-  # REHEARSAL ONLY (read-volume gate, overlay#327): a synthetic signed event
-  # drives the opposing-response review directly so the gate's webhook-route
-  # marking can be exercised; the real vendor never emits this event_type.
-  #
-  # `vendor_emitted: false` is what keeps that last sentence true at the egress
-  # boundary, and it is NOT optional. Without it the reconciler unions this
-  # event_type into the smokeball subscription beside matter.updated; Smokeball
-  # validates eventTypes as a set and rejects the whole POST /webhooks with
-  # HTTP 400 "Invalid EventTypes". That is exactly what happened between
-  # 2026-08-28 (when this trigger landed, #2622) and 2026-09-02: the changed
-  # intent hash set force_recreate, so the reconciler deleted the working
-  # matter.updated subscription and then failed to recreate it, and the seat
-  # ran with ZERO webhook subscriptions — no event feed for the flagship
-  # matter-memo-on-update skill — until the flag was added.
-  - source: smokeball
-    event_type: responses.served
-    skill: opposing-response-deficiency-review
-    persona: operator
-    vendor_emitted: false
 
 # ---- SCOPE ----
 scope:
@@ -994,194 +272,62 @@ scope:
   email_folders_blind: []
   email_keyword_blocks: []
   domain_blocks: []
-  # The organization roster (ADR 0055) — who the Operator may RESPOND to (not just
-  # draft) when they email its inbox. The reply is recipient-locked to the verified
-  # sender; this list authorizes the autonomous reply. Seeded to the SMD operator so
-  # the Captain's mail to pilot-smokeball@agentmail.to comes back as a real reply
-  # (the live test of the employee model). Empty roster = fail-closed (drafts only).
+  # Who the seat answers: SMD's administrators, written here, plus every
+  # representative who enrolled with an invite code (sender_enrollment below;
+  # the broker's store on the volume, never this file). A prospect is never
+  # listed: the demo is driven by the representative, and a prospect's own
+  # email gets no reply.
   inbound_allow_from:
     - scott@smd.services
-    - smdurgan@smdurgan.com
-    # Staging-only first-time senders for the quiet help pointer proof
-    # (ss-console#3423 increment 2). The pointer is due only to a rostered person
-    # with no request in the index, and every other address here has written
-    # within the month. Plus tags of the Captain's mailbox, so a reply lands with
-    # him and no account is created. Each is spent by its first email. Never
-    # copy to a client seat.
-    - scott+help-probe-1@smd.services
-    - scott+help-probe-2@smd.services
-    # Spares: probe 1 was spent 2026-10-25 by a reply the broker refused (its
-    # boot copy of this roster predated the tags).
-    - scott+help-probe-3@smd.services
-    - scott+help-probe-4@smd.services
-    # Added while the seat runs (image acef8d02, booted 2026-10-25 18:50Z) to
-    # prove the broker reads the live roster (#3495): a reply to it without a
-    # restart is the proof. Never copy to a client seat.
-    - scott+roster-live-probe@smd.services
-    # Staging-only probe channel (ADR 0075 verification). A rostered SMD-owned
-    # AgentMail sender so the probe ladder can drive clean-trust gateway turns
-    # programmatically (the CLI channel is PID-gated out of the audit broker).
-    # Never copy to a client seat.
-    - ss-probe-runner@agentmail.to
-    # Staging-only ADMIN probe channel (ss#2222 gate 3 / card R2). A second
-    # SMD-owned AgentMail sender that IS on scope.admins below, so the
-    # admin-classed initiation leg (skill fires) can be driven programmatically
-    # while ss-probe-runner keeps the rostered-non-admin decline leg testable.
-    # Establishment is email-only by authored design (the MCP door carries no
-    # sender identity), so admin-gated establishment proofs ride this channel
-    # too. Never copy to a client seat.
-    - ss-probe-admin@agentmail.to
-  # The Operator-admin allow list (ADR 0085 §2) — who may establish the firm's
-  # voice and output shapes by instructing the Operator, and who may promote a
-  # captured correction. Mirrors the shape authored on ashton-price (where the
-  # list is the two Named Administrators of letter 18), with the rehearsal
-  # admin standing in for them so the establishment path can be driven here
-  # before it touches the client seat.
-  #
-  # Deliberately NARROWER than the roster above: smdurgan@smdurgan.com and the
-  # probe runner are rostered (they get real replies) but are NOT admins, which
-  # is what makes the "a rostered non-admin is refused" leg testable on this
-  # seat. Person addresses only; a whole-@domain grant is refused.
-  #
-  # Empty = fail-closed. Changed only through a PR.
   admins:
     - scott@smd.services
-    # Staging-only admin probe (ss#2222 gate 3) — drivable admin-classed
-    # initiation for card rehearsals and establishment proofs (stage/analyze/
-    # install + the possession ceremony); mirrors A&P's two-admin shape. Never
-    # copy to a client seat.
-    - ss-probe-admin@agentmail.to
-  # TRAFFIC ROUTING ONLY (ss-console#2546) — who is EMAILED when a non-admin
-  # asks for a firm-level rule. Authority is unchanged: both admins above may
-  # still apply a rule.
-  #
-  # The probe admin alone, and scott@ deliberately left out, because that
-  # omission is what makes the routing leg falsifiable here: scott@ IS an admin,
-  # so if a rule request reaches him the split is decorative rather than real.
-  # Mirrors the A&P shape, where Chris is the admin who is not paged.
+  # A request for a firm-level rule from someone who is not an administrator
+  # is passed to SMD.
   rule_requests_to:
-    - ss-probe-admin@agentmail.to
-  # Whose reply ANSWERS an operations request (ss-console#2546). A routine, a
-  # schedule, a channel, a memory setting, an autonomy level, an on/off: ADR 0085
-  # as amended places all of those with SMD rather than with the firm, so when
-  # somebody here asks for one the Operator records it, emails SMD with an
-  # `[ops XXXX]` tag, and waits. A reply from one of these addresses quoting that
-  # tag resolves that row, and the person who asked is told once — set up,
-  # declined with SMD's reason, or lapsed unanswered after seven days.
-  #
-  # WHAT THIS GRANTS, exactly: a reply quoting an `[ops XXXX]` tag from this
-  # address resolves that row. Nothing else. It is NOT inbound trust — none of
-  # these addresses is on scope.inbound_allow_from, none of them is an admin, and
-  # mail from one of them quoting no tag is as untrusted as any other mail. In
-  # particular team@smd.services stays OFF inbound_allow_from, which is pinned by
-  # a test: being able to answer a question the Operator asked is a much smaller
-  # grant than being able to instruct it.
-  #
-  # The tag is the capability, and the spoof class is identical for all three: no
-  # seat gets an SPF or DKIM verdict on inbound mail (ADR 0085 §5), so naming
-  # scott@ rather than team@ buys nothing. What bounds the risk is the effect —
-  # one templated notice to the person who asked.
-  #
-  # smdurgan@smdurgan.com is here because team@smd.services is an alias of that
-  # mailbox, and a reply sent from the bare mailbox carries the bare address.
-  #
-  # Empty = no reply resolves anything and every request lapses at seven days.
+    - scott@smd.services
+  # Whose reply answers an [ops XXXX] request (a routine, a schedule, an
+  # on/off): SMD's. Grants nothing else; none of these is inbound trust beyond
+  # scott@ above.
   ops_reply_from:
     - scott@smd.services
     - team@smd.services
     - smdurgan@smdurgan.com
-  # Typed outbound roster (ADR 0075) — the firm's own client / records-vendor
-  # addresses, which resolve to the external_send_client / external_send_vendor
-  # action classes instead of the outside external_send ceiling. These two are
-  # the letter's only two outside-firm sends the "a person sends it" rule does
-  # NOT cover (the firm's own client and its own vendor), so they carry their own
-  # graduatable ceilings.
-  #
-  # STAGING STAND-INS: Ashton & Price's real client and records-vendor addresses
-  # do not exist on this staging seat. These are non-deliverable RFC-2606
-  # `.example` addresses on an SMD-labeled domain, so no mail can leave for a real
-  # third party regardless of send posture. Re-pointed 2026-07-13 to dedicated
-  # deliverable SMD-controlled AgentMail inboxes for the ADR 0075 live probes.
+  # SMD's operations desk, so an operations request can be passed on rather
+  # than held. Outbound classification only, never inbound trust.
   outbound_roster:
-    - address: ap-client-standin@agentmail.to
-      class: client
-      note: 'client stand-in inbox for the live send probes'
-    - address: ap-records-standin@agentmail.to
-      class: records_vendor
-      note: 'records vendor stand-in inbox for the live send probes'
-    # SMD's own operations desk (ss-console#2546), authored identically on
-    # ashton-price. An operations request (routine, schedule, channel, memory,
-    # autonomy, on/off) is SMD's to make, so the Operator has to be able to pass
-    # one on. This grants outbound CLASSIFICATION only: the send resolves as
-    # internal firm staff instead of falling to the outside external_send
-    # ceiling. It grants NO inbound trust — the address is deliberately absent
-    # from scope.inbound_allow_from above, so mail claiming to come from it does
-    # not untaint a turn and cannot instruct the seat. Cards are addressed to
-    # scott@smd.services since 2026-10-20: team@ is a Google Group that rewrites
-    # an agentmail.to From to itself, so an answer went to the Group and never
-    # reached the seat (the brokery [ops dbd3bf32] lapse).
     - address: scott@smd.services
       class: firm_staff
       note: 'SMD operations desk (cards are addressed here); outbound classification only, never inbound trust'
     - address: team@smd.services
       class: firm_staff
       note: 'SMD operations desk; outbound classification only, never inbound trust'
-  # External send (to anyone OUTSIDE the roster and NOT in outbound_roster) follows
-  # the authored external_send ceiling above — draft_for_review under the Ashton &
-  # Price day-one grid posture (2026-07-09 letter), the letter's permanent
-  # "a person sends it" cap for opposing counsel and the court. Recipient-locked
-  # replies to rostered senders are governed by inbound_allow_from above, and typed
-  # client / records-vendor sends by outbound_roster above, not by this ceiling
-  # (ADR 0055 §3 / ADR 0075).
-  #
-  # This is SMD's own STAGING TEST seat (not a client). The Operator manages its
-  # own sample matters for testing, so it gets full document-write autonomy here:
-  #   - internal_write (add_file save-back, create_memo, drafts) -> autonomous
-  #   - destructive   (delete_events as an admin-confirmed act)  -> confirm
-  # destructive stays taint-gated regardless of this ceiling, so an untrusted-fed
-  # turn can NEVER trigger a delete. A real client seat authors its own posture
-  # (a firm would typically leave destructive refused/draft).
 
-# ---- DIGEST HOME (#1742) ----
-# The authored destination for the daily needs-you digest: the internal
-# operations matter 2026-OPS-001 (seeded 2026-07-06, not a client matter).
-# translate.py materializes this into SOUL.md; unauthored seats stay
-# fail-closed (digest lives in session output + heartbeat only).
-digest:
-  home_matter_id: 3c191bed-cdda-48b9-a6ed-a51a349f3f94
+# ---- INVITE-CODE ENROLLMENT (ADR 0106, amended 2026-11-10 for demo seats) ----
+# A representative SMD invited emails this seat with the code; the seat checks
+# it in code before any model sees the message, answers them from then on like
+# a listed person (never an administrator), sends a fixed welcome and tells
+# SMD. An administrator gets a code by emailing "I need a code for <name>".
+sender_enrollment:
+  enabled: true
 
 # ---- BUSINESS HOURS ----
-# Sets the seat's IANA timezone. bootstrap.sh exports it as HERMES_TIMEZONE, so
-# Hermes' clock AND this seat's cron schedules run in this timezone (DST-correct
-# via ZoneInfo). Unauthored = UTC (the container clock). Hours/days are the
-# firm's working window for future business-hours-aware behavior; the timezone
-# is the load-bearing field today.
 business_hours:
   timezone: America/Los_Angeles
   days: [mon, tue, wed, thu, fri]
   start: '08:00'
   end: '18:00'
 
-# Reply-channel send policy (ss#2070). The Operator has to be usable the way a
-# person uses Claude on the web: someone at the firm emails it, gets an answer,
-# replies, gets another — for as long as the conversation lasts. The platform
-# default (3 replies per sender per 10 minutes, hardcoded until #2070) cut that
-# off at the fourth exchange and never resumed, which is exactly what the
-# 2026-07-30 burst rehearsal caught.
-#
-# So a rostered colleague is exempt from the per-sender window, and the bound
-# that remains is the reply backstop: 60 replies per hour across the whole
-# channel. No real conversation approaches that; a stuck loop hits it inside an
-# hour instead of mailing a client all day. Senders who are NOT on the roster
-# keep the tight default caps unchanged.
+# ---- SEND POLICY ----
+# A representative sends several requests in a row in a demo: rostered senders
+# are exempt from the per-sender window; the backstop bounds a runaway.
 send_policy:
   reply:
     internal_exempt: true
-    per_sender_max: 3 # non-roster senders: platform default, unchanged
+    per_sender_max: 3
     per_sender_window_seconds: 600
-    global_max: 20 # non-roster aggregate: platform default, unchanged
+    global_max: 20
     global_window_seconds: 3600
-    backstop_max: 60 # the runaway bound, all classes
+    backstop_max: 60
     backstop_window_seconds: 3600
   held_release:
     enabled: true
@@ -1191,262 +337,24 @@ escalation:
   red_flag_recipients:
     - scott@smd.services
   failure_recipients:
-    - scott@smd.services
-  # Deadline-miss-escalator re-fire policy (WP-A). These are PACK-DEFAULT
-  # rehearsal values, not client commitments: refire_days is legitimate
-  # pack-authored content (a repetitive deadline watcher beats a silent one),
-  # and ack_snooze_days keeps an acked-but-unresolved deadline from going
-  # permanently dark. read live from this file by the escalator's pre_run
-  # (SMD_CUSTOMER_YAML_PATH); absent => the same pack defaults.
-  refire_days: 3 # re-fire an unacked, still-open deadline only this many days after the last raise
-  ack_snooze_days: 7 # an acked-but-unresolved deadline re-surfaces this many days after the ack
-  # Rehearses A&P's per-matter routing posture (#2004, correspondence 09): case
-  # alerts resolve to the matter's assigned staff in the staging tenant. The
-  # authored fallback keeps the fallback leg exercisable in rehearsal (L2 can
-  # drive an unstaffed matter through resolution failure to a real delivery);
-  # the client seat deliberately authors NO fallback until the firm names one.
-  # Algorithm: operator/skills/deadline-miss-escalator/references/case-alert-routing.md
-  case_alert_routing:
-    mode: matter_staff
-    fallback_recipients:
-      - scott@smd.services
+    - team@smd.services
 
-# ---- CASE MANAGER (docs/specs/operator/case-manager-deadline-work.md) ----
-# The deadline jobs a case manager owns, each at the level the firm chose, in
-# the portal's tier language: surfaces (says so, does nothing), prepares (a
-# draft or a proposal a person approves), handles (does it). ABSENT BLOCK =
-# every job off and the escalator renders exactly as before; an absent
-# sub-block turns off that one job. Read at run time off this file by the
-# task-list-keeper, date-prep-brief and deadline-miss-escalator pre_runs.
-# Validated by src/lib/operator/customer-yaml/sections-case-manager.ts.
-# STAGING REHEARSAL VALUES: this seat proves the jobs; no client seat authors
-# the block until its agreement names the routines.
-case_manager:
-  own_tasks:
-    level: handles
-    # The Operator's own July rehearsal tasks, created before the [Operator]
-    # subject stamp existed (2026-08-01, 7d676b9a). A Smokeball task read never
-    # carries its creator (connector task_update.py: the read does not echo
-    # staffId), so this list is the only other signal. Each id is DERIVED, not
-    # recalled: the three open tasks due 2026-07-08 on 2026-PI-101 in the
-    # 2026-08-24 live pull (operator/skills/deadline-miss-escalator/tests/
-    # fixtures/live-pull-2026-08-24.json), whose ack tokens reproduce the codes
-    # the digest re-sent every three days (escalation_ledger.token_for).
-    legacy_task_ids:
-      # "Discovery scan: 7 served files need proof-of-service review..."; the
-      # DISC-1 run created it (grading run 2026-07-05-disc-1-run-01.md:24). ACK-DR8B8W.
-      - 1f5546c6-2e64-4879-b5c8-8fb7c09d0038
-      # "CONFIRM: Amended Special Interrogatories Set Two served by mail June 27..."
-      # (DISC-2's per-capture confirm tasks, 2026-07-06-l2-round-2.md:41). ACK-K96VZS.
-      - 1ec31561-1136-4986-9692-1457dae9513a
-      # "CONFIRM: Form Interrogatories Set One served by electronic service June 23..."
-      # (the same DISC-2 capture set). ACK-45ABZC.
-      - 95de85b8-7b9e-4d06-89f8-0ad88c8ce1ad
-  task_cleanup:
-    level: prepares # a proposal per attorney; nothing changes until a person approves
-    keep_quiet_days: 30
-    max_lines: 30
-  date_prep:
-    level: prepares
-    window_days: 14
-    # A received provider whose newest record on file is older than this is
-    # offered an updated-records request before the date. Unauthored = no such
-    # offer (how old is too old is the firm's call, no pack default).
-    records_stale_days: 60 # PLACEHOLDER(rehearsal): staging value; a client seat authors its own
-    steps:
-      binder_assemble: prepares
-      witness_list_finalize: prepares
-      exhibit_list_finalize: prepares
-      records_refresh: prepares
-      motion_calendar_refresh: prepares
-      discovery_status_refresh: prepares
-  quiet:
-    level: handles
+# ---- SAFETY ----
+# On SMD's key: the runaway guard, the same caps as smd-guide.
+safety:
+  sticky_stop:
+    cost_cap_daily_cents: 1000
+    inbound_daily_cap: 100
 
-# ---- ROUTINE NAMES (firm-legible; #2222) ----
-# Skill slug -> the routine's name in the FIRM'S language, exactly as the
-# routine-grid row (and the letter behind it) states it. Read at runtime by
-# operator-introduce from the seat's own config so an admin can ask "what are
-# your routines?" and hear the names the firm was actually promised — no
-# portal required. Drift-gated against routine-grid.yaml rows (verbatim) by
-# tests/routine-names-drift.test.ts. Materialization: none (no translate step);
-# a skill reads it off /var/lib/smd-config/customer.yaml directly.
-routine_names:
-  discovery-served-watch: 'Served discovery caught'
-  discovery-response-tracker: 'Response deadlines'
-  client-verification-tracker: 'Client verification'
-  separate-statement-assembler: 'Separate statement'
-  opposing-response-deficiency-review: 'Opposing responses reviewed'
-  meet-and-confer-drafter: 'Meet-and-confer letter'
-  discovery-response-staging: 'Response inputs staged'
-  matter-initiation-setup: 'New matter setup'
-  service-confirmation-watcher: 'Service confirmation'
-  medical-records-chaser: 'Records chase'
-  medical-chronology-maintainer: 'Medical chronology'
-  motion-calendar-tracker: 'Motion calendar'
-  motion-package-assembler: 'Motion package'
-  minors-compromise-packet: "Minor's compromise packet"
-  trial-binder-assembler: 'Trial binder'
-  mediation-settlement-tracker: 'Mediation and settlement'
-  lien-ledger-tracker: 'Lien ledger'
-  settlement-statement-feeder: 'Settlement statement'
-  daily-needs-you-digest: 'Daily "what needs you"'
-
-# ---- SELF-INITIATION (ss#2220 rescoped; Captain 2026-08-11) ----
-# The seat's authored initiation sequence: the acts one admin request
-# ("initialize yourself") runs, in order, each act by its own skill body and
-# each stopping at its own blessing gate. PERSON-INITIATED ALWAYS — nothing
-# here fires at connect, at boot, or on any schedule; an unattributed turn may
-# not initialize anything. Runtime consumer is the operator-self-initiation
-# skill, which reads this block off /var/lib/smd-config/customer.yaml at turn
-# time (the routine_names materialization shape). Drift-gated by
-# tests/self-initiation-sequence.test.ts (every act bound+enabled here).
-# document_library names the status-probe target: the ops matter the proven
-# library run filed into (2026-08-11, vfy_01KZS7HM8A67SWX9Y1BMQSWPZY).
-self_initiation:
-  sequence:
-    - operator-self-test
-    - voice-establishment
-    - document-library-establishment
-  document_library:
-    matter_hint: '2026-OPS-001 (the internal operations matter)'
-    folder_name: 'Document Library'
-    # The Smokeball connector's renderer resolves the firm's per-class Word
-    # template from here, deterministically, the same way every time (#2448):
-    # this matter (by its number) -> this folder -> the file named
-    # templates[<class>] or the convention "Template - <Class>.docx". Read off
-    # the live customer.yaml by the connector at render time (config-as-data;
-    # no translate step). Typography lives ONLY in those .docx files: a style
-    # edited in Word takes effect on the next draft.
-    matter_number: '2026-OPS-001'
-    templates:
-      demand_letter: 'Template - Demand Letter (Policy Limits)'
-      first_party_rep_letter: 'Form - 1st Party Rep Letter.docx'
-      third_party_rep_letter: 'Form - 3rd Party Rep Letter.docx'
-      discovery_response: 'Template - Discovery Responses (RFP and FROG Combined)'
-    # The Operator's OWN matter (ss-console#2536), for the rehearsal of the
-    # A&P path. The number is deliberately DIFFERENT from the probe matter that
-    # already exists on this sandbox tenant (OPS-OPERATOR-LIBRARY, created
-    # 2026-08-21 while pinning the vendor's wire shape), so the rehearsal
-    # exercises a real create rather than a dedupe refusal. matter_number above
-    # stays as it is: this seat's template library already lives on 2026-OPS-001
-    # and this feature does not move it.
-    operator_matter:
-      number: '2026-OPS-LIBRARY'
-      description: 'Operator Library (rehearsal)'
-      # This seat's own "SMD Operations" person contact.
-      client_contact_id: '7236214f-628e-412b-ad0e-099c61371cd4'
-      matter_type_id: '42cc724c-f046-451c-8452-4284f7a82b66_CA'
-      # The two names the read-back shows the administrator (read live
-      # 2026-08-21 from this tenant's contact and type catalog).
-      client_contact_name: 'SMD Operations'
-      matter_type_name: 'Personal Injury - Plaintiff'
-
-# ---- MEMORY (per-customer isolation invariants; must match customer_id) ----
+# ---- MEMORY (isolation invariants; must match customer_id) ----
+# Native memory is off: several representatives share this seat, and one
+# prospect's meeting must not surface in another's. A preference a
+# representative gives ("lead with open items when you answer me") is kept
+# per person by the learned-preference lane (hermes-smd-peer-memory), which is
+# the demo's preference act.
 memory:
   d1_namespace: pilot-smokeball
   r2_vault_path: 'vaults/pilot-smokeball/'
   vectorize_index: 'hermes-pilot-smokeball-vault'
-
-# smokeball_layouts.settlement_negotiations_design: the staging tenant's
-# Negotiation Details design, read 2026-10-29 from every PI matter here (each
-# carries one Plaintiff item of design f6719448-..._<suffix>, empty, so the
-# connector cannot find it by its values). The same guid the client tenant
-# carries; the daily-post rehearsal enters an offer on it.
-smokeball_layouts:
-  settlement_negotiations_design: f6719448-d924-4c59-9c1e-3bd2b76550ca
-
-# form_letters.forms: the form catalog this rehearsal seat was offered while it
-# was hardcoded in the Smokeball connector (A&P's toolbar letters, until ADR
-# 0100 W4 moved the catalog to each seat's config). Kept verbatim so the
-# rehearsal of the A&P path resolves the same forms it did; only the two rep
-# letters have templates in this tenant's library (self_initiation above).
-form_letters:
-  forms:
-    first_party_rep:
-      label: '1st party rep letter'
-      document_class: first_party_rep_letter
-      default_template: 'Form - 1st Party Rep Letter.docx'
-      file_name: '1st party letter.docx'
-      side: Plaintiffs
-      client_side: true
-      fax_label: 'VIA FAX: '
-      email_label: 'Email: '
-      paragraph_fields: [delivery_lines]
-      signer_name_from: authored
-      facts_kind: rep
-    third_party_rep:
-      label: '3rd party rep letter'
-      document_class: third_party_rep_letter
-      default_template: 'Form - 3rd Party Rep Letter.docx'
-      file_name: '3rd Party Letter.docx'
-      side: Defendants
-      client_side: false
-      fax_label: 'Via Fax: '
-      email_label: 'Via Email: '
-      paragraph_fields: [delivery_lines, carrier_address]
-      signer_name_from: staff
-      facts_kind: rep
-    health_blue_shield:
-      label: 'health insurer notice (Blue Shield)'
-      document_class: health_notice_blue_shield
-      default_template: 'Form - Med Ins Blue Shield.docx'
-      file_name: 'Med Ins Req. Blue Shield.docx'
-      side: Plaintiffs
-      client_side: true
-      fax_label: ''
-      email_label: ''
-      paragraph_fields: []
-      signer_name_from: preparer
-      facts_kind: health
-    dec_page_fax:
-      label: 'dec page request (fax cover)'
-      document_class: dec_page_fax
-      default_template: 'Form - Fax Dec Page.docx'
-      file_name: 'Fax Cover Sheet - Req Dec Page.docx'
-      side: Plaintiffs
-      client_side: true
-      fax_label: ''
-      email_label: ''
-      paragraph_fields: []
-      signer_name_from: preparer
-      facts_kind: fax
-    med_pay_fax:
-      label: 'med pay request (fax cover)'
-      document_class: med_pay_fax
-      default_template: 'Form - Fax Medpay.docx'
-      file_name: 'Fax Cover Sheet Medpay.docx'
-      side: Plaintiffs
-      client_side: true
-      fax_label: ''
-      email_label: ''
-      paragraph_fields: []
-      signer_name_from: preparer
-      facts_kind: fax
-    wage_loss:
-      label: 'wage loss letter'
-      document_class: wage_loss_letter
-      default_template: 'Form - Wage Loss Letter.docx'
-      file_name: 'Wage Loss Letter.docx'
-      side: Plaintiffs
-      client_side: true
-      fax_label: ''
-      email_label: ''
-      paragraph_fields: [employer_address]
-      signer_name_from: preparer
-      facts_kind: wage
-
-# ADR 0102: who may receive matter files on a reply (the rostered SMD test
-# senders). The AgentMail reply path for files is a follow-up; until it ships
-# the reply plugin refuses files on this seat with a plain reason.
-matter_file_delivery:
-  recipients:
-    - '@smd.services'
-
-# ---- LOGIC IN CODE (ADR 0104) ----
-# library_setup: "set up the document library" lists the firm's own documents of
-# every kind the drafting job makes and makes the library file from the one the
-# administrator chooses (operator/runners/jobs/jobs/library_setup/). On here first,
-# as every switch is proven on the pilot before a client seat.
-logic_in_code:
-  library_setup: enforce
+  memory_enabled: false
+  user_profile_enabled: false

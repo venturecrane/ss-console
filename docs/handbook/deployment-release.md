@@ -315,9 +315,9 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    client seat with a twin takes a release only after its twin is done on that
    same release, on a laptop run as in the controller: `--only <client>` is
    refused until `--only <twin>` is done, and a full run whose twin was held or
-   failed records the client `waiting_twin` and leaves it alone. The pilot
-   (`pilot-smokeball`, now `purpose: demo`) gates nothing and is not a step
-   before the client. Rings live in `operator/fleet/rings.yaml`: 0
+   failed records the client `waiting_twin` and leaves it alone. The demo seat
+   (`pilot-smokeball`, `purpose: demo`, [The Demo Seat](/admin/playbook/demo-seat))
+   gates nothing and is not a step before the client. Rings live in `operator/fleet/rings.yaml`: 0
    `smd-staging` (the twin of `ashton-price`), 1 `ashton-price`, 2
    `pilot-smokeball` `scott` `brokery` `captain-mark` `smd-guide` (the last ring
    always one at a time), with a `twins:` block naming each client's twin. The

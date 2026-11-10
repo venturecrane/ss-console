@@ -68,6 +68,10 @@ SCHEMA = 1
 #: refuse it elsewhere; this reader honours it only there too).
 BLOCK = "sender_enrollment"
 ROLE = "guide"
+#: SMD's demo seat (ADR 0107 purpose demo), read from ``seat.kind``: sales
+#: representatives enroll on it the way they do on the guide (ADR 0106
+#: amendment 2026-11-10). Mirrors the overlay's ``shared/sender_enrollment.py``.
+KIND = "demo"
 
 #: The code's shape. Mirrored by the overlay's ``shared/sender_enrollment.py``
 #: (the router's detector); ``tests/sender-enrollment.test.ts`` pins the two
@@ -222,7 +226,7 @@ def _digest(code: str, salt: bytes) -> bytes:
 
 
 def enabled_for(customer_path: Path) -> bool:
-    """Does this seat's own config switch enrollment on? Only on a guide seat.
+    """Does this seat's own config switch enrollment on? Only on a guide or demo seat.
 
     Fail closed: an unreadable config, another role, or anything but
     ``enabled: true`` is off."""
@@ -239,7 +243,10 @@ def enabled_in(data: Any) -> bool:
     seat = data.get("seat")
     block = data.get(BLOCK)
     return (
-        isinstance(seat, dict) and seat.get("role") == ROLE and isinstance(block, dict) and block.get("enabled") is True
+        isinstance(seat, dict)
+        and (seat.get("role") == ROLE or seat.get("kind") == KIND)
+        and isinstance(block, dict)
+        and block.get("enabled") is True
     )
 
 

@@ -23,9 +23,10 @@ import { parse } from 'yaml'
  *   * the stage call the body tells the model to make has exactly the
  *     connector's signature, so the two cannot drift apart silently.
  *
- * And the binding: rehearsed on pilot-smokeball only. No client seat carries
- * it, and no routine-grid row names it (a product rehearsal is not a routine
- * the firm's agreement names).
+ * And the binding: rehearsed on pilot-smokeball until 2026-11-10 (that seat is
+ * SMD's demo seat now and does not carry it); bound only on the client seats
+ * listed below, and no routine-grid row names it (a product rehearsal is not a
+ * routine the firm's agreement names).
  */
 
 const SKILL = 'operator/skills/vendor-invoice-intake/SKILL.md'
@@ -174,14 +175,6 @@ describe('vendor-invoice-intake: the resolution gate', () => {
 })
 
 describe('vendor-invoice-intake: where it is bound', () => {
-  it('is enabled on the pilot operator persona, person-initiated only', () => {
-    const skill = (personaSkills('pilot-smokeball').get('operator') ?? []).find(
-      (s) => s.name === 'vendor-invoice-intake'
-    )
-    expect(skill?.enabled).toBe(true)
-    expect(skill?.initiation).toEqual({ manual: true, scheduled: false, webhook: false })
-  })
-
   // The client seats that carry it, each person-initiated only, and why.
   // ashton-price: letter 62 asked for it, letter 64 reported the rehearsal,
   // the 2026-09-21 list told the firm the Smokeball permission is live, and
@@ -203,12 +196,12 @@ describe('vendor-invoice-intake: where it is bound', () => {
     const seats = readdirSync('operator/customers').filter(
       (d) => d !== '_template' && existsSync(`operator/customers/${d}/customer.yaml`)
     )
-    expect(seats).toContain('pilot-smokeball')
+    expect(seats).toContain('ashton-price')
     for (const seat of seats) {
       const grid = `operator/customers/${seat}/routine-grid.yaml`
       if (existsSync(grid))
         expect(readFileSync(grid, 'utf8')).not.toContain('vendor-invoice-intake')
-      if (seat === 'pilot-smokeball' || CLIENT_SEATS_BOUND.includes(seat)) continue
+      if (CLIENT_SEATS_BOUND.includes(seat)) continue
       for (const skills of personaSkills(seat).values()) {
         expect(
           skills.map((s) => s.name),

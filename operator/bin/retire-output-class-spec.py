@@ -47,10 +47,10 @@ def _assert_proving_seat(slug: str) -> None:
     text = path.read_text()
     block = re.search(r"^seat:\n((?:[ \t]+.*\n)+)", text, re.MULTILINE)
     kind = re.search(r"^\s+kind:\s*(\w+)", block.group(1), re.MULTILINE) if block else None
-    if not kind or kind.group(1) != "proving":
+    if not kind or kind.group(1) not in ("proving", "demo"):
         found = kind.group(1) if kind else "absent"
         sys.exit(
-            f"REFUSED: '{slug}' is seat.kind: {found}, not proving.\n"
+            f"REFUSED: '{slug}' is seat.kind: {found}, not proving or demo.\n"
             "Retiring a customer seat's spec is a portal act (ADR 0083)."
         )
 

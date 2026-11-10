@@ -38,18 +38,18 @@ Seats declared in the repository (`operator/customers/`). Whether each one is ru
 | `brokery` | client | hosted-agent | none | real-estate |
 | `captain-mark` | client | hosted-agent | couples | mixed |
 
-**SMD's own: proving**
-
-| Seat | Purpose | Product | Role | Vertical |
-|---|---|---|---|---|
-| `pilot-smokeball` | demo | operator | none | law-firm |
-
 **SMD's own: pre-production**
 
 | Seat | Purpose | Product | Role | Vertical |
 |---|---|---|---|---|
 | `ap-staging` | internal | operator | none | law-firm |
 | `smd-staging` | release-twin of `ashton-price` | operator | none | mixed |
+
+**SMD's own: demo**
+
+| Seat | Purpose | Product | Role | Vertical |
+|---|---|---|---|---|
+| `pilot-smokeball` | demo | operator | none | law-firm |
 
 **SMD's own: internal**
 

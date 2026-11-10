@@ -1,18 +1,23 @@
 /**
- * Commitments contract gate for the pilot-smokeball seat (ADR 0075).
+ * Commitments contract gate (ADR 0075): an A&P-shaped fixture, plus the client
+ * seat itself.
  *
  * The Ashton & Price 2026-07-09 letter makes per-routine autonomy commitments
  * (the routine-settings grid) and names permanent caps (deadline / money /
- * opposing counsel / court). Those commitments are authored across three
- * artifacts on this seat:
+ * opposing counsel / court). Until 2026-11-10 the pilot-smokeball seat mirrored
+ * that grid for rehearsal; it is now SMD's demo seat for a fictional firm, and
+ * the three artifacts it carried live on as a FROZEN fixture, so the contract
+ * machinery (the grid parser, the commitments pin, the traceability join) keeps
+ * a realistic input that no seat has to stay A&P-shaped to provide:
  *
- *   - operator/customers/pilot-smokeball/customer.yaml   (the live config)
- *   - operator/customers/pilot-smokeball/routine-grid.yaml (the traceability grid)
- *   - operator/customers/pilot-smokeball/commitments.json  (the pinned contract)
+ *   - tests/fixtures/ap-shaped-seat/customer.yaml    (the config as of 2026-11-10)
+ *   - tests/fixtures/ap-shaped-seat/routine-grid.yaml (the traceability grid)
+ *   - tests/fixtures/ap-shaped-seat/commitments.json  (the pinned contract)
  *
- * This suite parses the LIVE customer.yaml + routine-grid.yaml and asserts the
- * five commitment invariants below. It is deliberately hermetic (no network):
- * everything it checks is a file in this repo.
+ * The client seat's own invariants, (d) through (m), read ashton-price's live
+ * files; (l) and (m) also read the demo seat, which keeps the operations desk.
+ * Deliberately hermetic (no network): everything it checks is a file in this
+ * repo.
  *
  * The tool-to-action-class map that pins payments_* / trust-ledger / create_matter
  * as COMMITMENT-class lives OVERLAY-side (shared/action_classes.py), outside this
@@ -29,9 +34,10 @@ import { validate, type CustomerYaml } from '../src/lib/operator/customer-yaml'
 import { validateRoutineGrid, type RoutineGridRow } from '../src/lib/operator/routine-grid'
 import { isCeiling, restrictiveness } from '../src/lib/operator/vertical-floors'
 
-const SEAT_YAML_PATH = resolve('operator/customers/pilot-smokeball/customer.yaml')
-const GRID_YAML_PATH = resolve('operator/customers/pilot-smokeball/routine-grid.yaml')
-const COMMITMENTS_PATH = resolve('operator/customers/pilot-smokeball/commitments.json')
+const SEAT_YAML_PATH = resolve('tests/fixtures/ap-shaped-seat/customer.yaml')
+const GRID_YAML_PATH = resolve('tests/fixtures/ap-shaped-seat/routine-grid.yaml')
+const COMMITMENTS_PATH = resolve('tests/fixtures/ap-shaped-seat/commitments.json')
+const DEMO_YAML_PATH = resolve('operator/customers/pilot-smokeball/customer.yaml')
 const TRUST_CEILING_PY = resolve('operator/adapter/trust_ceiling.py')
 const AP_DIR = resolve('operator/customers/ashton-price')
 
@@ -94,8 +100,8 @@ function walkFiles(dir: string): string[] {
   return out
 }
 
-describe('pilot-smokeball commitments contract (ADR 0075)', () => {
-  it('the live customer.yaml still validates', () => {
+describe('commitments contract: the A&P-shaped fixture and the client seat (ADR 0075)', () => {
+  it('the fixture customer.yaml still validates', () => {
     expect(() => seatValue()).not.toThrow()
   })
 
@@ -438,14 +444,7 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
     ).toBe('autonomous')
   })
 
-  // (i) ADR 0083: the persona register is an AUTHORED artifact, and the proving
-  // seat must carry the client seat's register verbatim. A rehearsal run against
-  // a different persona proves nothing about the seat it rehearses for — the
-  // same fixtures -> pilot-smokeball -> ashton-price discipline every other
-  // authored value follows. This also catches the failure this gate was written
-  // after: both seats carried three generic adjectives copied from each other,
-  // describing no firm, no vertical, and no role.
-  it('(j) both seats author an Operator-admin list, narrower than the roster (ADR 0085 §2)', () => {
+  it('(j) the client seat authors an Operator-admin list, narrower than the roster (ADR 0085 §2)', () => {
     // Asserted structurally, never by literal address: client identities stay in
     // the authored config and out of tests (tests/client-identity-gate.test.ts).
     //
@@ -460,7 +459,6 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
     //     without the restriction being paper-only.
     const seats: Array<readonly [string, CustomerYaml]> = [
       ['ashton-price', validatedSeat(join(AP_DIR, 'customer.yaml'))],
-      ['pilot-smokeball', seatValue()],
     ]
 
     for (const [label, cfg] of seats) {
@@ -505,10 +503,9 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
   //   - a subset of the admin list, so a request can never be routed to somebody
   //     who could not act on it (the validator enforces this per-seat; asserted
   //     again here because the authored VALUES are what ship, not the schema).
-  it('(k) both seats route rule requests to a subset of their admins (ss#2546)', () => {
+  it('(k) the client seat routes rule requests to a subset of its admins (ss#2546)', () => {
     const seats: Array<readonly [string, CustomerYaml]> = [
       ['ashton-price', validatedSeat(join(AP_DIR, 'customer.yaml'))],
-      ['pilot-smokeball', seatValue()],
     ]
 
     for (const [label, cfg] of seats) {
@@ -551,7 +548,7 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
   it('(l) both seats can send to the SMD operations desk, and trust nothing from it', () => {
     const seats: Array<readonly [string, CustomerYaml]> = [
       ['ashton-price', validatedSeat(join(AP_DIR, 'customer.yaml'))],
-      ['pilot-smokeball', seatValue()],
+      ['pilot-smokeball', validatedSeat(DEMO_YAML_PATH)],
     ]
     const DESK = 'team@smd.services'
 
@@ -590,7 +587,7 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
   it('(m) both seats let SMD answer an operations request, and the desk stays untrusted', () => {
     const seats: Array<readonly [string, CustomerYaml]> = [
       ['ashton-price', validatedSeat(join(AP_DIR, 'customer.yaml'))],
-      ['pilot-smokeball', seatValue()],
+      ['pilot-smokeball', validatedSeat(DEMO_YAML_PATH)],
     ]
     const DESK = 'team@smd.services'
     const SMD_DOMAINS = ['smd.services', 'smdurgan.com']
@@ -624,38 +621,5 @@ describe('pilot-smokeball commitments contract (ADR 0075)', () => {
         `${label}: answering for SMD does not make the desk an administrator of the firm`
       ).toBe(false)
     }
-  })
-
-  it('(i) the authored persona register is real and identical across the client and proving seats', () => {
-    const seats = [AP_DIR, resolve('operator/customers/pilot-smokeball')]
-    const tones = seats.map((dir) => {
-      const raw = parseYaml(readFileSync(join(dir, 'customer.yaml'), 'utf-8')) as Record<
-        string,
-        unknown
-      >
-      const result = validate(raw)
-      if (!result.ok) throw new Error(`${dir} customer.yaml no longer validates`)
-      const operator = result.value.personas.find((p) => p.slug === 'operator')
-      expect(operator, `${dir}: operator persona must exist`).toBeDefined()
-      return operator!.tone
-    })
-
-    expect(
-      tones[0],
-      'the client seat and the proving seat must carry the SAME authored register'
-    ).toEqual(tones[1])
-
-    // A register is instructions, not adjectives. The retired value averaged 11
-    // characters per entry ("concise"); an authored rule states what to do.
-    for (const entry of tones[0]) {
-      expect(
-        entry.length,
-        `persona tone entry is too thin to be a register rule: ${JSON.stringify(entry)}`
-      ).toBeGreaterThan(40)
-    }
-    expect(
-      tones[0].some((t) => /never/i.test(t)),
-      'an authored register names what the persona never does, not only what it is'
-    ).toBe(true)
   })
 })

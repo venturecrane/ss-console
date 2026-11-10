@@ -497,3 +497,30 @@ def test_only_the_gateway_may_ask_for_a_code(tmp_path: Path, store_dir: Path) ->
     for pid, uid in ((9999, AGENT_UID), (9999, 0)):
         with pytest.raises(PermissionError):
             broker.handle(req, peer_pid=pid, peer_uid=uid)
+
+
+# -- the demo seat (ADR 0106 amendment 2026-11-10): seat.kind demo opts in too --
+
+DEMO_YAML = GUIDE_YAML.replace(
+    "  kind: internal\n  product: operator\n  role: guide", "  kind: demo\n  product: operator"
+)
+
+
+def test_the_demo_seat_enrolls_a_rep_and_no_other_kind_does(tmp_path: Path, store_dir: Path) -> None:
+    assert "kind: demo" in DEMO_YAML and "role:" not in DEMO_YAML
+    code, _ = _issue(store_dir)
+    assert _redeem(_broker(tmp_path, DEMO_YAML, FakeMail(REP, [code])), code)["outcome"] == "enrolled"
+    assert REP in se.EnrollmentStore(store_dir).enrolled_addresses()
+    for kind in ("customer", "proving", "preprod", "internal", "sandbox"):
+        other = tmp_path / f"{kind}.yaml"
+        other.write_text(DEMO_YAML.replace("kind: demo", f"kind: {kind}"), encoding="utf-8")
+        assert not se.enabled_for(other), kind
+
+
+def test_an_administrator_of_the_demo_seat_gets_a_code_in_neutral_words(tmp_path: Path, store_dir: Path) -> None:
+    mail = FakeMail(SMD, ["I need a code for Jane Smith"])
+    out = _issue_verb(_broker(tmp_path, DEMO_YAML, mail), name="Jane Smith")
+    assert out["sent"] is True
+    [reply] = mail.replies
+    text = json.dumps(reply)
+    assert "Jane Smith" in text and "The seat then welcomes" in text and "The guide" not in text

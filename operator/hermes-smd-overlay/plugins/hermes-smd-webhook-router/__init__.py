@@ -658,7 +658,7 @@ def _enrollment_attempt(source: str, payload: Any) -> dict | None:
     """An invite-code enrollment (ADR 0106), handled here and never by a model.
 
     Returns ``{"action": "skip"}`` when this delivery is an enrollment attempt:
-    an AgentMail email, on a guide seat that switches enrollment on, from a
+    an AgentMail email, on a guide or demo seat that switches enrollment on, from a
     sender who is neither listed (the authored roster or an earlier
     enrollment) nor an admin, carrying a code-shaped token in its subject or
     body. Every such delivery is dropped before dispatch, valid or not, so the
@@ -719,10 +719,11 @@ def _redeem_enrollment(cfg: Any, dto: Any, code: str) -> None:
     if not (isinstance(result, dict) and result.get("enrolled") is True):
         return
     name = result.get("name") if isinstance(result.get("name"), str) else None
+    demo = sender_enrollment.is_demo(cfg.raw)
     try:
         agentmail_broker.send_reply(
             dto.message_id,
-            text=sender_enrollment.welcome_text(name),
+            text=sender_enrollment.welcome_text(name, demo=demo),
             anchor=send_anchor.message_anchor(dto.message_id, "agentmail"),
         )
     except Exception as exc:  # noqa: BLE001 - the enrollment stands; SMD is told below
@@ -734,12 +735,13 @@ def _redeem_enrollment(cfg: Any, dto: Any, code: str) -> None:
         agentmail_broker.send_message(
             {
                 "to": smd,
-                "subject": sender_enrollment.NOTICE_SUBJECT,
+                "subject": sender_enrollment.notice_subject(demo=demo),
                 "text": sender_enrollment.notice_text(
                     address=dto.from_addr,
                     slug=cfg.slug,
                     code_id=str(result.get("code_id") or ""),
                     name=name,
+                    demo=demo,
                 ),
             }
         )

@@ -1,6 +1,6 @@
 """The invite-code redeem verb (ADR 0106): gateway-only, one attempt per call.
 
-The webhook router calls it when an unlisted sender's email on a guide seat
+The webhook router calls it when an unlisted sender's email on a guide or demo seat
 that switches enrollment on carries a code-shaped token, before any model sees
 the message. What the router may NOT decide, this verb re-derives:
 
@@ -46,7 +46,7 @@ _ISSUED_TEXT = (
     "Here is the invite code for {name}:\n\n"
     "{code}\n\n"
     "It works until {expires} UTC for {uses}. {name} connects by emailing {inbox} "
-    "from their own address with the code anywhere in that first message. The guide "
+    "from their own address with the code anywhere in that first message. The seat "
     "then welcomes {name} by name and answers them from then on.\n\n"
     "Give the code only to {name}. SMD keeps only a one-way fingerprint of it, so this "
     "email is the only copy. If it is lost or sent to the wrong person, ask SMD to "

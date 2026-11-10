@@ -10,6 +10,7 @@ enforced_by:
   - operator/hermes-smd-overlay/tests/test_sender_enrollment.py
   - tests/product-guide-library.test.ts
   - tests/guide-code-capability-not-disclosed.test.ts
+  - tests/demo-seat.test.ts
 ---
 
 # ADR 0106: Invite-code enrollment for guide seats
@@ -18,7 +19,7 @@ enforced_by:
 - **Decider:** Captain (the two contract sentences below, 2026-11-09); mechanism by the agent
 - **Amends:** ADR 0055 (the roster, authored as `scope.inbound_allow_from`, is the set of people the seat answers): on a guide seat that switches enrollment on, a person SMD invited joins that set by sending a code, without a reviewed change to `customer.yaml`
 - **Builds on:** ADR 0105 and ADR 0090 (the `guide` role, selected by `seat.role`), ADR 0072 (the roster classifier: a rostered recipient is internal), ADR 0094 (`customer.yaml` as built: one publisher, root-owned on the seat), ADR 0044 and ADR 0026 (the agent has no path to widen its own configuration), ADR 0035 (unauthored is fail-closed), ADR 0032 (the webhook router sees inbound mail before any model)
-- **Scope:** seats whose `seat.role` is `guide` and whose `customer.yaml` authors `sender_enrollment: {enabled: true}`. Today that is `smd-guide` only. No client seat changes, and no client seat can opt in.
+- **Scope:** seats whose `seat.role` is `guide`, or (amendment 2026-11-10) whose `seat.kind` is `demo`, and whose `customer.yaml` authors `sender_enrollment: {enabled: true}`. Today that is `smd-guide` and `pilot-smokeball`. No client seat changes, and no client seat can opt in.
 
 ## The contract
 
@@ -66,3 +67,14 @@ The owner's rule: the seat never tells a person who is not an administrator that
 - An administrator's request is unchanged: the code is emailed in their thread and the guide replies in one line.
 
 `tests/guide-code-capability-not-disclosed.test.ts` pins the sentence and fails if the tool, the skill, the library or its index again says who makes or issues codes.
+
+## Amendment (2026-11-10): the demo seat enrolls representatives the same way
+
+The owner's line: a sales representative emails SMD's demo Operator in front of a prospect and every reply comes from the real product working for a fictional firm (ADR 0107 purpose `demo`; runbook `docs/handbook/demo-seat.md`). Representatives reach that seat the way they reach the guide, so:
+
+- **Who may opt in.** `sender_enrollment` is accepted on a seat with `seat.role: guide` **or** `seat.kind: demo`, in both validators (`sections-sender-enrollment.ts` `enrollmentSeatAllowed`, `bootstrap/validate.py`) and in every runtime reader (`shared/sender_enrollment.py` `seat_allows`, the broker's `enabled_in`). The seat reads `seat.kind`, never `seat.yaml`'s purpose (which never reaches a seat); `tests/demo-seat.test.ts` fails unless the two agree on every seat. `seat.kind: demo` is new (`SEAT_KINDS`); `pilot-smokeball` is the one seat that authors it. Every other kind (customer, proving, preprod, internal, sandbox) without the guide role is still refused: on a client seat who is listed stays the client's own decision.
+- **What a representative gets.** Exactly decision 8: a rostered sender's standing, never an administrator's. On the demo seat that means the firm's staff: replies in their thread, and every send outside the firm kept as a draft for a person.
+- **The words.** The welcome says the address is connected to "the SMD Services demo Operator", a real Operator working for a fictional firm (`_DEMO_WELCOME_BODY`); SMD's notice names the demo seat (`DEMO_NOTICE_SUBJECT`); a non-administrator who asks about codes gets "Access to this Operator comes from SMD Services, at team@smd.services." (`DEMO_DECLINE`), which, like the guide's sentence, names no capability. The administrator's code email now says "The seat then welcomes" on both kinds.
+- **Unchanged.** The store, the codes, the lockouts, the audit rows, the heartbeat field and the command line; the guide's own wording; chat enrollment is still not built.
+
+`operator/hermes-smd-overlay/tests/test_sender_enrollment.py` and `operator/workspace_broker/tests/test_sender_enrollment.py` pin the demo seat's redeem, roster, wording and issue paths, and that no other kind opts in.
