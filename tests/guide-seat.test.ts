@@ -43,7 +43,7 @@ describe('smd-guide seat config (ADR 0105)', () => {
       .map((s: Doc) => s.name)
       .sort()
     expect(enabled).toEqual(role.skills.map((s: Doc) => s.name).sort())
-    expect(enabled).toEqual(['pitch-practice', 'product-guide', 'rep-training'])
+    expect(enabled).toEqual(['pitch-practice', 'product-guide', 'rep-desk', 'rep-training'])
   })
 
   it('routes every inbound email to product-guide, which hands practice to pitch-practice', () => {
@@ -87,9 +87,19 @@ describe('smd-guide seat config (ADR 0105)', () => {
     // records are never another's source, and none is open to the model's
     // write unless the procedure for it ships.
     const stores = (seat.record_stores ?? []) as Doc[]
-    expect(stores.map((s) => s.name)).toEqual(['rep-progress'])
+    expect(stores.map((s) => s.name)).toEqual([
+      'rep-progress',
+      'rep-notes',
+      'rep-leads',
+      'rep-reminders',
+    ])
     for (const s of stores) expect(s.partition).toBe('sender')
-    expect(stores[0].managed).toBe(true)
+    // Code alone writes progress and reminders; notes and leads are the two a
+    // representative dictates.
+    expect(stores.filter((s) => s.managed).map((s) => s.name)).toEqual([
+      'rep-progress',
+      'rep-reminders',
+    ])
     expect((seat.memory as Doc).peer_memory_enabled).toBe(false)
     expect((seat.escalation as Doc).request_card_text).toBe(false)
     expect(seat.memory.memory_enabled).toBe(false)

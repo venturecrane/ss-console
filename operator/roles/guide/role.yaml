@@ -48,6 +48,9 @@ skills:
   - name: pitch-practice
     built: true
     purpose: Plays an authored buyer scenario turn by turn, then gives rubric feedback cited to the library.
+  - name: rep-desk
+    built: true
+    purpose: Notes, leads and a pipeline view only the representative can read, dated reminders with a morning digest, a brief from their own records, a follow-up draft returned as text, critique and debrief.
   - name: rep-training
     built: true
     purpose: Guided lessons from the library with an exercise each, an open-book quiz graded in code, and readiness worked out by code; a weekly progress report to administrators.

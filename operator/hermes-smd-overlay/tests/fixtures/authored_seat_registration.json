@@ -2809,6 +2809,10 @@
    ],
    [
     "post_llm_call",
+    "hermes-smd-desk"
+   ],
+   [
+    "post_llm_call",
     "hermes-smd-hook-probe"
    ],
    [
@@ -3040,6 +3044,10 @@
    "record_store_write": {
     "plugin": "hermes-smd-record-store",
     "toolset": "record_store"
+   },
+   "reminder_set": {
+    "plugin": "hermes-smd-desk",
+    "toolset": "rep_desk"
    },
    "reply_bind": {
     "plugin": "hermes-smd-reply",

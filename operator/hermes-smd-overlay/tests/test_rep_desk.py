@@ -823,8 +823,9 @@ def test_a_key_off_the_closed_list_is_never_written(tmp_path) -> None:
 def test_the_guide_seat_gains_the_desk_only_when_it_authors_it(tmp_path) -> None:
     """``test_authored_seat_registration_unchanged`` pins every authored seat
     (the guide seat included) to its snapshot with this plugin in the manifest.
-    The falsifier: the guide seat with rep-desk and a reminder store authored
-    registers exactly ``reminder_set`` and one ``post_llm_call`` hook more."""
+    The guide seat authors the desk since its switch-on, so the falsifier runs
+    the other way: the same seat with rep-desk and its reminder store taken out
+    registers no ``reminder_set`` and one ``post_llm_call`` hook fewer."""
     import yaml
 
     from tests._registration_surface import authored_seats, collect
@@ -833,26 +834,18 @@ def test_the_guide_seat_gains_the_desk_only_when_it_authors_it(tmp_path) -> None
     snapshot = OVERLAY / "tests" / "fixtures" / "authored_seat_registration.json"
     expected = json.loads(snapshot.read_text(encoding="utf-8"))["smd-guide"]
     doc = yaml.safe_load(guide.read_text(encoding="utf-8"))
-    doc["record_stores"] = [
-        {"name": STORE, "path": "/opt/data/rep/reminders", "partition": "sender", "managed": True}
-    ]
-    doc["personas"][0]["skills"].append(
-        {
-            "name": "rep-desk",
-            "version": "pending",
-            "enabled": True,
-            "initiation": {"manual": True, "scheduled": True, "webhook": True},
-            "settings": {"reminder_store": STORE, "digest_hour": 7, "recipients": "roster"},
-        }
-    )
+    persona = doc["personas"][0]
+    persona["skills"] = [s for s in persona["skills"] if s["name"] != "rep-desk"]
+    persona["cron"] = [c for c in persona.get("cron", []) if c["skill"] != "rep-desk"]
+    doc["record_stores"] = [s for s in doc["record_stores"] if s["name"] != STORE]
     changed = tmp_path / "smd-guide" / "customer.yaml"
     changed.parent.mkdir()
     changed.write_text(yaml.safe_dump(doc), encoding="utf-8")
-    actual = collect(changed, load_plugin)
-    assert "reminder_set" not in expected["tools"]
-    assert actual["tools"]["reminder_set"] == {"plugin": "hermes-smd-desk", "toolset": "rep_desk"}
-    added = {tuple(h) for h in actual["hooks"]} - {tuple(h) for h in expected["hooks"]}
-    assert ("post_llm_call", "hermes-smd-desk") in added
+    without = collect(changed, load_plugin)
+    assert "reminder_set" not in without["tools"]
+    assert expected["tools"]["reminder_set"] == {"plugin": "hermes-smd-desk", "toolset": "rep_desk"}
+    gained = {tuple(h) for h in expected["hooks"]} - {tuple(h) for h in without["hooks"]}
+    assert ("post_llm_call", "hermes-smd-desk") in gained
 
 
 def _purge_cli():

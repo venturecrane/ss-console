@@ -310,6 +310,16 @@ skills:
       stamps do not apply; the cross-run invariants (one recipient) do.
 
   # ---- smd-guide cron rows ----
+  rep-desk:
+    render: templated
+    template: operator/hermes-smd-overlay/shared/person_digest.py
+    note: >-
+      The morning digest of what is due, one email per enrolled person, to that
+      person only. Code renders each body from that person's own reminder
+      records (person_digest.py) and the overlay's prerendered-dispatch hook
+      sends them out of turn; the model composes nothing, and the envelope's
+      in_turn declares the skeleton as the only body the woken turn may send.
+      Stamps: body_sha256 entries on EMITTED_WAKE (full and skeleton).
   rep-training:
     render: templated
     template: operator/hermes-smd-overlay/shared/training_report.py
