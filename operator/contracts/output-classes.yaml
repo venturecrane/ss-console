@@ -800,6 +800,14 @@ skill_bindings:
   operator-help:
     internal: []
     outbound: derived # reactive how-to reply to the requester, no one else
+  # The guide role (ADR 0105): both write nothing on the seat; their only output
+  # is the reply in the asker's own thread or chat.
+  product-guide:
+    internal: []
+    outbound: derived # reactive library answer to the requester, no one else
+  pitch-practice:
+    internal: []
+    outbound: derived # practice turns and feedback to the requester, no one else
   operator-self-test:
     internal:
       - { artifact: self_test_certificate, seam: smokeball_file, class: record }

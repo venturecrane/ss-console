@@ -556,6 +556,52 @@ def test_translate_marketing_role_disables_native_web(tmp_path, monkeypatch):
         assert ts not in disabled
 
 
+def test_translate_guide_role_disables_outside_sources(tmp_path, monkeypatch):
+    """A guide seat answers only from its skill's library (ss ADR 0105): the
+    native web toolset, the native memory toolset and the establishment toolset
+    come off its menu; reading the library (file, skills) stays."""
+    body = VALID_YAML.replace(
+        "customer_id:",
+        "seat:\n  kind: internal\n  product: operator\n  role: guide\ncustomer_id:",
+        1,
+    )
+    assert "role: guide" in body
+    monkeypatch.setenv("ROLES_DIR", str(Path(__file__).resolve().parents[2] / "roles"))
+    customer_yaml, skills_dir, hermes_home = _seed_repo(tmp_path, body)
+    translate_customer_yaml(
+        customer_yaml_path=str(customer_yaml),
+        hermes_home=str(hermes_home),
+        skills_dir=str(skills_dir),
+    )
+    profile = hermes_home / "profiles" / "marcus"
+    config = yaml.safe_load((profile / "config.yaml").read_text())
+    disabled = config["agent"]["disabled_toolsets"]
+    for ts in ("web", "memory", "establishment"):
+        assert ts in disabled
+    for ts in ("skills", "file", "todo", "escalation"):
+        assert ts not in disabled
+    # The role persona reaches SOUL.md verbatim, safety rules included.
+    soul = (profile / "SOUL.md").read_text()
+    assert "## Safety rules" in soul
+    assert "Answer only from the library." in soul
+
+
+def test_guide_seat_chat_allowlist_materializes_and_cannot_fail_open():
+    """The authored smd-guide seat (ss ADR 0105) wires chat with a non-empty
+    allowlist; the runtime materializer carries exactly those ids, and the same
+    block with the allowlist emptied raises instead of rendering an open bot."""
+    from bootstrap.translate import _materialize_telegram_platform
+
+    seat_path = Path(__file__).resolve().parents[2] / "customers" / "smd-guide" / "customer.yaml"
+    customer = yaml.safe_load(seat_path.read_text())
+    block = _materialize_telegram_platform(customer, token_present=True)
+    assert block["allow_from"] == customer["telegram"]["allow_from"]
+    assert block["allow_from"]
+    emptied = {**customer, "telegram": {**customer["telegram"], "allow_from": []}}
+    with pytest.raises(ValueError):
+        _materialize_telegram_platform(emptied, token_present=True)
+
+
 def test_translate_disables_code_toolsets_when_code_execution_unauthored(tmp_path):
     """VALID_YAML's persona authors no code_execution exposure, so every
     CODE_EXECUTION call is refused (ADR 0056). The toolsets come off the menu so
