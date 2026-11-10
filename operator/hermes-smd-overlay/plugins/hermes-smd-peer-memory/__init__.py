@@ -389,11 +389,24 @@ def register(ctx) -> None:
     """Plugin entry point. Wires four hooks + the capture tool (and, on a seat that
     authors ``people:``, the ``remember`` tool), then binds D1.
 
-    Always registers the hooks and the tool (so Hermes' contract holds), then
+    Registers the hooks and the tool (so Hermes' contract holds), then
     resolves the customer slug + agent-state binding and creates the table
     idempotently. If env is missing the plugin registers but stays INACTIVE and
     says so at WARNING — never a silent healthy-looking no-op.
+
+    THE SEAT CAN SWITCH IT OFF (``memory.peer_memory_enabled: false``,
+    2026-11-10). Then nothing at all is registered: no tool, no hook, nothing
+    added to any prompt, and no table created. A seat whose people must not
+    shape one another's answers (a guide seat, ADR 0105) authors it. Absent, or
+    a config this process cannot read, keeps the behaviour every seat had
+    before the switch existed.
     """
+    if not _peer_memory_enabled():
+        logger.info(
+            "hermes-smd-peer-memory: memory.peer_memory_enabled is false on this seat; "
+            "nothing registered"
+        )
+        return
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
     ctx.register_hook("pre_tool_call", on_pre_tool_call)
     ctx.register_hook("post_tool_call", on_post_tool_call)
@@ -457,6 +470,24 @@ def register(ctx) -> None:
         logger.error(
             "hermes-smd-peer-memory: store init failed; capture/inject will no-op: %s", exc
         )
+
+
+#: The authored switch, under ``memory:`` in customer.yaml.
+ENABLED_KEY = "peer_memory_enabled"
+
+
+def _peer_memory_enabled() -> bool:
+    """False only when the seat's config says ``memory.peer_memory_enabled:
+    false``. A config that cannot be read keeps the plugin on, exactly as it
+    was before the switch existed (the switch narrows; an unreadable config is
+    not an instruction to change a seat)."""
+    from shared.customer_config import CustomerConfig
+
+    try:
+        memory = CustomerConfig.from_volume().raw.get("memory")
+    except Exception:  # noqa: BLE001 - unreadable keeps today's behaviour
+        return True
+    return not (isinstance(memory, dict) and memory.get(ENABLED_KEY) is False)
 
 
 def _decide_space_mode() -> bool:

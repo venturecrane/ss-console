@@ -28,11 +28,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .. import seat_layout
 from .outcome import CasefileFailed
 from .rank import LABEL
 
 DASHES = ("—", "–")
-DEFAULT_BROWSERS = "/opt/hermes/.playwright"
+DEFAULT_BROWSERS = seat_layout.HERMES_PLAYWRIGHT
 _SHELLS = (
     "chromium_headless_shell-*/chrome-linux*/headless_shell",
     "chromium_headless_shell-*/*/chrome-headless-shell",

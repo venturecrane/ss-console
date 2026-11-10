@@ -39,7 +39,7 @@ from typing import Any
 
 import yaml
 
-from . import hold_class
+from . import hold_class, seat_layout
 from .broker_context import BrokerContext
 from .litigation_intake import initiation_allows
 from .litigation_verbs import month_window
@@ -67,7 +67,7 @@ AUDIT_TYPES = {
 }
 RESUME_AUDIT_TYPE = "RECORDS_JOB_RESUME_REQUESTED"
 FIRM_CONFIG_ENV = "SMD_RECORDS_FIRM_CONFIG"
-DEFAULT_FIRM_CONFIG = "/var/lib/smd-config/records-broker-firm.yaml"
+DEFAULT_FIRM_CONFIG = seat_layout.RECORDS_BROKER_FIRM_YAML
 #: Where root writes review decisions (records_contract.review_row; same env and default).
 DECISIONS_DIR_ENV = "SMD_MATTER_FILE_DECISIONS_DIR"
 DEFAULT_DECISIONS_DIR = "/var/lib/smd-review"

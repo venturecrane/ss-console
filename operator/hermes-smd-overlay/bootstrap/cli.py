@@ -20,10 +20,11 @@ import sys
 from pathlib import Path
 
 from bootstrap import translate
+from shared import seat_layout
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CUSTOMER_YAML = "/opt/data/customer.yaml"
+DEFAULT_CUSTOMER_YAML = seat_layout.VOLUME_CUSTOMER_YAML
 DEFAULT_SYNC_INTERVAL = 300
 
 

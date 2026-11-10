@@ -50,9 +50,11 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import NamedTuple
 
+from shared import seat_layout
+
 logger = logging.getLogger("hermes-smd-fleet-facts")
 
-DEFAULT_CONFIG_PATH = "/var/lib/smd-config/customer.yaml"
+DEFAULT_CONFIG_PATH = seat_layout.CUSTOMER_YAML
 DEFAULT_SKILLS_VERSION_PATH = "/var/lib/smd-skills/current/VERSION"
 DEFAULT_LANE_RUN_DIR = "/run/smd-jobs"
 DEFAULT_BUNDLE_STATE_DIR = "/run/smd-bundles"

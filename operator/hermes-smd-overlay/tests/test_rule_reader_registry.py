@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from shared import layout_rules, output_classes, rule_dispatch, spec_gate
+from shared import layout_rules, output_classes, rule_dispatch, seat_layout, spec_gate
 
 RULE = "7f3a2c1d"
 REQUESTER = "paralegal@firm.example"
@@ -31,14 +31,20 @@ ADMIN = "admin@firm.example"
 
 _JOBS_RUNNER = Path(__file__).resolve().parents[2] / "runners" / "jobs"
 
-#: Anything that would mean a lane reads the installed spec store.
+#: Anything that would mean a lane reads the installed spec store. A reader names
+#: the store either by its literal path or, since the seat-layout migration, by
+#: the generated constant ``seat_layout.SPECS``; both count.
 _SPEC_STORE_READS = re.compile(
     r"spec_manifest|spec_stamp|SMD_SPEC_DIR|specs/classes|output-classes\.json|"
-    r"ADJUSTMENTS_HEADING|entries_for_class|smd-config/specs|layout\.json|wording\.json"
+    r"ADJUSTMENTS_HEADING|entries_for_class|smd-config/specs|layout\.json|wording\.json|"
+    r"\bseat_layout\.SPECS\b"
 )
 
-#: The spec applier's install dir (``spec_applier/__main__.py``).
+#: The spec applier's install dir (``spec_applier/__main__.py``), as the seat
+#: layout declares it (operator/contracts/seat-layout.yaml ``specs``).
 _SPEC_DIR_DEFAULT = "/var/lib/smd-config/specs"
+#: How each reader spells its default since the seat-layout migration.
+_SPEC_DIR_CONSTANT = "seat_layout.SPECS"
 
 
 class _Recorder:
@@ -165,7 +171,7 @@ def test_the_jobs_runner_reads_the_spec_store_only_through_its_two_readers():
     assert 'SPEC_REL = "classes/work_product/format.md"' in times
     assert 'entry.get("sha256") != hashlib.sha256(blob).hexdigest()' in times
     wording = (_JOBS_RUNNER / "jobs" / "firm_wording.py").read_text("utf-8")
-    assert f'DEFAULT_DIR = "{_SPEC_DIR_DEFAULT}"' in wording
+    assert f"DEFAULT_DIR = {_SPEC_DIR_CONSTANT}" in wording
     assert "wording_rules_store.read(_spec_dir())" in wording
     twin = (_JOBS_RUNNER / "jobs" / "wording_rules_store.py").read_bytes()
     assert (
@@ -176,9 +182,21 @@ def test_the_jobs_runner_reads_the_spec_store_only_through_its_two_readers():
     for output_class in layout_rules.LAYOUT_RULE_CLASSES:
         assert f'RULE_CLASS = "{output_class}"' in reader
     assert 'LAYOUT_REL = f"classes/{RULE_CLASS}/layout.json"' in reader
-    assert f'DEFAULT_DIR = "{_SPEC_DIR_DEFAULT}"' in reader
+    assert f"DEFAULT_DIR = {_SPEC_DIR_CONSTANT}" in reader
     applier_main = Path(__file__).resolve().parents[1] / "spec_applier" / "__main__.py"
-    assert f'_DEFAULT_SPEC_DIR = "{_SPEC_DIR_DEFAULT}"' in applier_main.read_text("utf-8")
+    assert f"_DEFAULT_SPEC_DIR = {_SPEC_DIR_CONSTANT}" in applier_main.read_text("utf-8")
+    # The constant both sides name resolves to the one install dir, in each
+    # tree's generated copy (the jobs bundle and the overlay never share one).
+    for layout in (_JOBS_RUNNER / "jobs" / "seat_layout.py", Path(seat_layout.__file__)):
+        assert f'SPECS = "{_SPEC_DIR_DEFAULT}"' in layout.read_text("utf-8"), layout
+
+
+def test_the_spec_store_scan_sees_a_reader_that_names_only_the_constant():
+    """FALSIFIER for the scan above: a module whose only tie to the store is the
+    generated constant still reads as a spec-store reader."""
+    assert _SPEC_STORE_READS.search("DEFAULT_DIR = seat_layout.SPECS\n")
+    assert _SPEC_STORE_READS.search('DEFAULT_DIR = "/var/lib/smd-config/specs"\n')
+    assert not _SPEC_STORE_READS.search("DEFAULT_DIR = seat_layout.SPECS_ARCHIVE\n")
 
 
 def _layout(spec_dir: Path, rule_ids: list[str]) -> None:

@@ -13,14 +13,20 @@ from __future__ import annotations
 ATTACHMENT_SPOOL = "/opt/data/attachment-spool"
 AUDIT_DB = "/run/smd-audit/audit.db"
 AUDIT_RUN = "/run/smd-audit"
+AUDIT_VOLUME_DB = "/opt/data/audit/audit.db"
 BROKER_PYTHON = "/opt/workspace-broker/.venv/bin/python"
 BROKER_ROOT = "/opt/workspace-broker"
 BROKER_SOCKET = "/run/smd-workspace-broker/broker.sock"
+CASEFILE_BROKER_FIRM_YAML = "/var/lib/smd-config/casefile-broker-firm.yaml"
+CASEFILE_INPUTS = "/var/lib/smd-config/casefile"
 CASEWORK_LEDGER = "/opt/data/audit/casework-ledger.jsonl"
 CONNECTORS_ROOT = "/opt/connectors"
 CUSTOMER_YAML = "/var/lib/smd-config/customer.yaml"
 DATA = "/opt/data"
+DEMAND_INPUTS = "/var/lib/smd-config/demand"
+DRAFTING_INPUTS = "/var/lib/smd-config/drafting"
 ESCALATION_LEDGER = "/opt/data/audit/escalation-ledger.jsonl"
+HERMES_PLAYWRIGHT = "/opt/hermes/.playwright"
 HERMES_PYTHON = "/opt/hermes/.venv/bin/python"
 HERMES_PYTHON3 = "/opt/hermes/.venv/bin/python3"
 HERMES_ROOT = "/opt/hermes"
@@ -33,8 +39,14 @@ JOBS_PYTHON = "/opt/jobs/.venv/bin/python"
 JOBS_QUEUE = "/run/smd-jobs/queue"
 JOBS_RUN = "/run/smd-jobs"
 LANES_RUN = "/run/smd-lanes"
+LEGACY_AUDIT_DB = "/opt/data/audit.db"
+LITIGATION_BROKER_FIRM_YAML = "/var/lib/smd-config/litigation-broker-firm.yaml"
+LITIGATION_INPUTS = "/var/lib/smd-config/litigation"
 MARKETING_REGISTERS = "/var/lib/smd-config/marketing/marketing-firm.yaml"
+MEDCHRON_FIRM_YAML = "/var/lib/smd-config/medchron-firm.yaml"
 PROFILES = "/opt/data/profiles"
+RECORDS_BROKER_FIRM_YAML = "/var/lib/smd-config/records-broker-firm.yaml"
+RECORDS_INPUTS = "/var/lib/smd-config/records"
 REQUESTS_DB = "/opt/data/requests.db"
 SELFTEST_RESULTS = "/run/smd-selftest/results.json"
 SKILLS = "/opt/data/skills"
@@ -50,14 +62,20 @@ PATHS: dict[str, str] = {
     "attachment_spool": ATTACHMENT_SPOOL,
     "audit_db": AUDIT_DB,
     "audit_run": AUDIT_RUN,
+    "audit_volume_db": AUDIT_VOLUME_DB,
     "broker_python": BROKER_PYTHON,
     "broker_root": BROKER_ROOT,
     "broker_socket": BROKER_SOCKET,
+    "casefile_broker_firm_yaml": CASEFILE_BROKER_FIRM_YAML,
+    "casefile_inputs": CASEFILE_INPUTS,
     "casework_ledger": CASEWORK_LEDGER,
     "connectors_root": CONNECTORS_ROOT,
     "customer_yaml": CUSTOMER_YAML,
     "data": DATA,
+    "demand_inputs": DEMAND_INPUTS,
+    "drafting_inputs": DRAFTING_INPUTS,
     "escalation_ledger": ESCALATION_LEDGER,
+    "hermes_playwright": HERMES_PLAYWRIGHT,
     "hermes_python": HERMES_PYTHON,
     "hermes_python3": HERMES_PYTHON3,
     "hermes_root": HERMES_ROOT,
@@ -70,8 +88,14 @@ PATHS: dict[str, str] = {
     "jobs_queue": JOBS_QUEUE,
     "jobs_run": JOBS_RUN,
     "lanes_run": LANES_RUN,
+    "legacy_audit_db": LEGACY_AUDIT_DB,
+    "litigation_broker_firm_yaml": LITIGATION_BROKER_FIRM_YAML,
+    "litigation_inputs": LITIGATION_INPUTS,
     "marketing_registers": MARKETING_REGISTERS,
+    "medchron_firm_yaml": MEDCHRON_FIRM_YAML,
     "profiles": PROFILES,
+    "records_broker_firm_yaml": RECORDS_BROKER_FIRM_YAML,
+    "records_inputs": RECORDS_INPUTS,
     "requests_db": REQUESTS_DB,
     "selftest_results": SELFTEST_RESULTS,
     "skills": SKILLS,
