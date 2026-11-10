@@ -226,6 +226,16 @@ _DAY_MONTH = re.compile(
 )
 _WEEKDAY = re.compile(rf"\b(?:(next|this|on)\s+)?({_WEEKDAY_NAMES})\b")
 _IN_N = re.compile(r"\bin\s+(\d{1,3}|[a-z]+)\s+(day|days|week|weeks)\b")
+_ORDINAL_DAY = re.compile(r"\bthe\s+(\d{1,2})(?:st|nd|rd|th)\b")
+_END_OF_MONTH = re.compile(r"\bend\s+of\s+(?:the\s+|this\s+)?month\b")
+_NEXT_MONTH = re.compile(r"\bnext\s+month\b")
+_NEXT_WEEK = re.compile(r"\bnext\s+week\b")
+#: Words that may sit around a bare clock time ("at 4pm", "this afternoon at 4")
+#: without naming a day. Any other word left over refuses: it named a day the
+#: code did not recognise, and today is not a guess to make for it.
+_TIME_ONLY_FILLER = frozenset(
+    {"at", "on", "in", "the", "by", "around", "about", "this", "morning", "afternoon", "evening"}
+)
 
 
 @dataclass(frozen=True)
@@ -270,7 +280,13 @@ def _take_time(text: str) -> tuple[time | None, str]:
         return time(hour, minute), text[: m.start()] + " " + text[m.end() :]
     m = _TIME_24.search(text)
     if m:
-        return time(int(m.group(1)), int(m.group(2))), text[: m.start()] + " " + text[m.end() :]
+        # No AM or PM: business hours decide. 8:00 to 11:59 is the morning,
+        # 1:00 to 7:59 the afternoon (12:00 is noon), 13:00 and later are
+        # 24-hour. The receipt line shows AM or PM, so the person can correct it.
+        hour = int(m.group(1))
+        if 1 <= hour <= 7:
+            hour += 12
+        return time(hour, int(m.group(2))), text[: m.start()] + " " + text[m.end() :]
     m = _NOON.search(text)
     if m:
         return time(12, 0), text[: m.start()] + " " + text[m.end() :]
@@ -313,7 +329,7 @@ def _no_year(month: int, day: int, today: date) -> date:
     return _real_date(today.year + 1, month, day)
 
 
-def _take_day(text: str, today: date) -> date | None:
+def _take_day(text: str, today: date, later_today: bool = False) -> date | None:
     if re.search(r"\bday after tomorrow\b", text):
         return today + timedelta(days=2)
     if re.search(r"\b(today|tonight|this (morning|afternoon|evening))\b", text):
@@ -349,10 +365,46 @@ def _take_day(text: str, today: date) -> date | None:
             year = int(m.group(3))
             return _real_date(year + 2000 if year < 100 else year, month, day)
         return _no_year(_check_month(month), day, today)
-    m = _WEEKDAY.search(text)
+    return _take_relative_day(text, today, later_today)
+
+
+def _first_of_next_month(day: date) -> date:
+    return date(day.year + (day.month == 12), day.month % 12 + 1, 1)
+
+
+def _take_relative_day(text: str, today: date, later_today: bool) -> date | None:
+    """The forms named relative to the calendar: the end of this month, next
+    month (its first day), next week (its Monday, or the weekday named with
+    it), the Nth (its next occurrence), and a weekday. ``later_today`` is
+    whether the time given is still ahead today."""
+    if _END_OF_MONTH.search(text):
+        return _first_of_next_month(today) - timedelta(days=1)
+    if _NEXT_MONTH.search(text):
+        return _first_of_next_month(today)
+    weekday = _WEEKDAY.search(text)
+    if _NEXT_WEEK.search(text):
+        monday = today + timedelta(days=7 - today.weekday())
+        return monday + timedelta(days=_WEEKDAYS[weekday.group(2)] if weekday else 0)
+    m = _ORDINAL_DAY.search(text)
     if m:
-        wanted = _WEEKDAYS[m.group(2)]
-        ahead = (wanted - today.weekday()) % 7 or 7
+        wanted = int(m.group(1))
+        if not 1 <= wanted <= 31:
+            raise WhenError(f"there is no {m.group(1)} day of a month")
+        month = today.replace(day=1)
+        for _ in range(13):
+            try:
+                candidate = month.replace(day=wanted)
+            except ValueError:
+                candidate = None
+            if candidate is not None and candidate >= today:
+                return candidate
+            month = _first_of_next_month(month)
+        raise WhenError(f"there is no {m.group(1)} day of a month")
+    if weekday:
+        wanted = _WEEKDAYS[weekday.group(2)]
+        ahead = (wanted - today.weekday()) % 7
+        if ahead == 0 and (weekday.group(1) == "next" or not later_today):
+            ahead = 7
         return today + timedelta(days=ahead)
     return None
 
@@ -375,9 +427,15 @@ def resolve_when(words: str, now_local: datetime) -> When:
     text = " " + re.sub(r"\s+", " ", words.strip().lower().replace(",", " ")) + " "
     at, rest = _take_time(text)
     today = now_local.date()
-    day = _take_day(rest, today)
+    later_today = (
+        at is not None and datetime.combine(today, at, tzinfo=now_local.tzinfo) > now_local
+    )
+    day = _take_day(rest, today, later_today)
     if day is None:
-        if at is None:
+        # Only a time, with nothing but filler around it, means today. Any
+        # other word named a day this code does not read: refuse, never guess.
+        leftover = set(re.findall(r"[a-z0-9']+", rest)) - _TIME_ONLY_FILLER
+        if at is None or leftover:
             raise WhenError(
                 f"could not tell a date from {words.strip()!r}; ask the person for a date, "
                 "such as Thursday or November 12"
@@ -570,6 +628,14 @@ def person_reminders(store: str, person: str, *, config: Any = None) -> list[Rem
 # ---------------------------------------------------------------------------
 
 
+def listed_by_address(cfg: Any, address: str) -> bool:
+    """Whether ``address`` is on the roster as ITSELF (an exact authored entry,
+    or enrolled), not only through an ``@domain`` entry. The digest is sent to
+    exactly these people (``shared.person_digest.people``), so a reminder is
+    kept only for them: one kept for anyone else would never be told."""
+    return address.strip().lower() in {e for e in cfg.inbound_roster if not e.startswith("@")}
+
+
 def verified_person(session_id: Any, *, config: Any = None) -> str | None:
     """The turn's strict per-turn verified sender when they are on the seat's
     roster now, else None. Keyed by the handler's session id; a scheduled turn
@@ -604,6 +670,7 @@ __all__ = [
     "desk_settings",
     "is_reminder_record",
     "keep",
+    "listed_by_address",
     "local_now",
     "person_reminders",
     "plain_what",

@@ -84,6 +84,12 @@ TAINTED = (
     "it. Ask the person to send the reminder in a message of their own. Nothing was kept."
 )
 NO_STORE = "reminder_set refused: this seat keeps no reminders. Nothing was kept."
+#: A sender listed only through an ``@domain`` entry: the digest goes to people
+#: listed by their own address, so a reminder kept for them would never arrive.
+DOMAIN_ONLY = (
+    "reminder_set refused: reminders are kept only for people listed on this seat by "
+    "their own address, and this sender is not. Nothing was kept."
+)
 
 
 def _tainted(session_id: str) -> bool:
@@ -117,6 +123,8 @@ def _set_handler(args: dict[str, Any], **kwargs: Any) -> str:
     person = reminders.verified_person(sid, config=cfg)
     if person is None:
         raise RuntimeError(NO_PERSON)
+    if not reminders.listed_by_address(cfg, person):
+        raise RuntimeError(DOMAIN_ONLY)
     if _tainted(sid):
         raise RuntimeError(TAINTED)
     now_local = reminders.local_now(reminders.seat_zone(cfg))

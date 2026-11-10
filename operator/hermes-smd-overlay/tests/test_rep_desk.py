@@ -390,6 +390,44 @@ def test_words_that_name_no_real_date_are_refused(words: str) -> None:
         reminders.resolve_when(words, _LOCAL)
 
 
+#: Review findings (2026-11-10), at 8:00 AM on Tuesday, November 10, 2026.
+#: ``None`` means refused. Rows marked OLD were wrong before the fix: stored
+#: for today, read as AM, or refused.
+DATE_TABLE: list[tuple[str, str | None]] = [
+    ("next week at 10am", "Monday, November 16, 2026 at 10:00 AM"),  # OLD: today
+    ("next week", "Monday, November 16, 2026"),  # OLD: refused
+    ("Thursday next week", "Thursday, November 19, 2026"),  # OLD: this Thursday
+    ("the 15th at 2pm", "Sunday, November 15, 2026 at 2:00 PM"),  # OLD: today
+    ("on the 9th", "Wednesday, December 9, 2026"),  # OLD: refused
+    ("the 31st", "Thursday, December 31, 2026"),  # OLD: refused
+    ("next month at 9am", "Tuesday, December 1, 2026 at 9:00 AM"),  # OLD: today
+    ("end of the month at 3pm", "Monday, November 30, 2026 at 3:00 PM"),  # OLD: today
+    ("at 3:30", "Tuesday, November 10, 2026 at 3:30 PM"),  # OLD: 3:30 AM, refused as past
+    ("Thursday 2:15", "Thursday, November 12, 2026 at 2:15 PM"),  # OLD: 2:15 AM
+    ("9:45", "Tuesday, November 10, 2026 at 9:45 AM"),
+    ("tomorrow 14:30", "Wednesday, November 11, 2026 at 2:30 PM"),
+    ("Tuesday at 4pm", "Tuesday, November 10, 2026 at 4:00 PM"),  # OLD: a week out
+    ("this Tuesday at 4pm", "Tuesday, November 10, 2026 at 4:00 PM"),  # OLD: a week out
+    ("Tuesday", "Tuesday, November 17, 2026"),
+    ("Tuesday at 7am", "Tuesday, November 17, 2026 at 7:00 AM"),
+    ("next Tuesday at 4pm", "Tuesday, November 17, 2026 at 4:00 PM"),
+    ("this afternoon at 4:00", "Tuesday, November 10, 2026 at 4:00 PM"),
+    ("someday at 4pm", None),  # OLD: today
+    ("after the launch at 10am", None),  # OLD: today
+    ("the week after at 9am", None),  # OLD: today
+    ("the 32nd", None),
+]
+
+
+@pytest.mark.parametrize(("words", "expected"), DATE_TABLE)
+def test_the_review_date_table(words: str, expected: str | None) -> None:
+    if expected is None:
+        with pytest.raises(reminders.WhenError, match="could not tell a date|no 32"):
+            reminders.resolve_when(words, _LOCAL)
+    else:
+        assert reminders.resolve_when(words, _LOCAL).words() == expected
+
+
 @pytest.mark.parametrize(
     ("words", "expected"),
     [
@@ -711,6 +749,41 @@ def test_the_counter_holds_keys_and_counts_only(desk) -> None:
         assistant_response=_NOT,
     )
     assert gap_report.weekly_gap_counts() == {"integrations": 1}
+
+
+@pytest.mark.parametrize(
+    ("question", "topic"),
+    [
+        ("We run everything in Slack. Is that covered?", "other"),  # OLD: contracts (sla)
+        ("Could it translate my emails into French?", "other"),  # OLD: contracts (sla)
+        ("How rapid is the first week?", "other"),  # OLD: integrations (api)
+        ("We are a therapy practice, is that a fit?", "other"),
+        ("In terms of speed, how fast is a reply?", "other"),  # OLD: contracts (terms)
+        ("What SLA do you offer?", "contracts_and_terms"),
+        ("Where are your terms of service?", "contracts_and_terms"),
+        ("Does the API cover webhooks?", "integrations"),
+        ("Do you integrate with HubSpot?", "integrations"),
+        ("Is it SOC 2 audited?", "security_and_compliance"),
+        ("How does it compare vs ChatGPT?", "competition"),
+    ],
+)
+def test_topic_keys_match_whole_words(question: str, topic: str) -> None:
+    assert gap_report.topic_of(question) == topic
+
+
+def test_a_sender_listed_only_by_domain_keeps_no_reminder(desk) -> None:
+    """The digest goes to people listed by their own address; a reminder kept
+    for a sender listed only through ``@domain`` would never be told."""
+    desk["yaml"].write_text(
+        desk["yaml"]
+        .read_text(encoding="utf-8")
+        .replace(f"[{ADMIN}]", f"[{ADMIN}, '@partner.test']", 1),
+        encoding="utf-8",
+    )
+    _email_turn(desk, "rep-c@partner.test", SA, "<c-1@example.test>", "remind me tomorrow")
+    out = _set(desk, SA, "tomorrow", "call Acme")
+    assert "listed on this seat by their own address" in out.get("error", ""), out
+    assert not (desk["volume"] / "rep" / "reminders").exists()
 
 
 def test_a_key_off_the_closed_list_is_never_written(tmp_path) -> None:

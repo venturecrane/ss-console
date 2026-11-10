@@ -57,15 +57,27 @@ KEEP_DAYS = 120
 
 OTHER = "other"
 #: The closed list of topic keys and the words that select each, in order (the
-#: first match wins). Authored data: a new key is a reviewed change here.
+#: first match wins). Authored data: a new key is a reviewed change here. Each
+#: entry matches WHOLE WORDS ("sla" is not "Slack", "api" is not "rapid"); an
+#: entry ending in ``*`` is a word stem ("integrat*" is integrate, integration).
 TOPICS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "integrations",
-        ("integrat", "connect to", "connector", "crm", "api", "plug in", "plugin", "sync with"),
+        (
+            "integrat*",
+            "connect to",
+            "connector*",
+            "crm",
+            "api",
+            "apis",
+            "plug in",
+            "plugin*",
+            "sync with",
+        ),
     ),
     (
         "security_and_compliance",
-        ("secur", "complian", "hipaa", "soc 2", "soc2", "encrypt", "gdpr", "audit", "breach"),
+        ("secur*", "complian*", "hipaa", "soc 2", "soc2", "encrypt*", "gdpr", "audit*", "breach*"),
     ),
     (
         "data_and_privacy",
@@ -73,13 +85,13 @@ TOPICS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         "setup_and_onboarding",
-        ("onboard", "set up", "setup", "install", "get started", "go live", "launch"),
+        ("onboard*", "set up", "setup", "install*", "get started", "go live", "launch*"),
     ),
     (
         "industries",
         (
-            "industr",
-            "vertical",
+            "industr*",
+            "vertical*",
             "real estate",
             "healthcare",
             "dental",
@@ -89,16 +101,39 @@ TOPICS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         "competition",
-        ("competitor", "compared to", " versus ", " vs ", "chatgpt", "copilot", "alternative"),
+        ("competitor*", "compared to", "versus", "vs", "chatgpt", "copilot", "alternative*"),
     ),
-    ("contracts_and_terms", ("contract", "terms", "cancel", "agreement", "sla", "commitment")),
+    (
+        "contracts_and_terms",
+        (
+            "contract*",
+            "terms of service",
+            "terms and conditions",
+            "cancel*",
+            "agreement*",
+            "sla",
+            "slas",
+            "commitment*",
+        ),
+    ),
     (
         "languages_and_channels",
-        ("language", "spanish", "phone call", "voice", "text message", "sms", "whatsapp"),
+        ("language*", "spanish", "phone call*", "voice", "text message*", "sms", "whatsapp"),
     ),
-    ("capabilities", ("can it", "can the operator", "does it", "is it able", "feature", "capab")),
+    ("capabilities", ("can it", "can the operator", "does it", "is it able", "feature*", "capab*")),
 )
 TOPIC_KEYS: tuple[str, ...] = tuple(key for key, _ in TOPICS) + (OTHER,)
+
+
+def _word_pattern(entry: str) -> str:
+    stem = entry.endswith("*")
+    words = r"\s+".join(re.escape(w) for w in entry.rstrip("*").split())
+    return rf"\b{words}\w*\b" if stem else rf"\b{words}\b"
+
+
+_TOPIC_RES: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (key, re.compile("|".join(_word_pattern(w) for w in words), re.I)) for key, words in TOPICS
+)
 
 #: Tools whose use marks a turn as desk, practice or training work, not a
 #: product question.
@@ -124,9 +159,9 @@ _BODY_MARK = "--- untrusted email body below"
 
 def topic_of(question: str) -> str:
     """The topic key for ``question`` from the closed list, or ``other``."""
-    text = f" {question.lower()} " if isinstance(question, str) else ""
-    for key, words in TOPICS:
-        if any(word in text for word in words):
+    text = question if isinstance(question, str) else ""
+    for key, pattern in _TOPIC_RES:
+        if pattern.search(text):
             return key
     return OTHER
 
