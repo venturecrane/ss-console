@@ -158,11 +158,25 @@ def test_a_redo_moves_an_earlier_attempts_new_exhibits_aside_before_numbering(tm
     (out / "Exhibit 1 - Delivered Clinic.pdf").write_bytes(b"%PDF delivered")
     for n in (2, 3, 4):
         (out / f"Exhibit {n} - Earlier Attempt {n}.pdf").write_bytes(b"%PDF stale")
+    # What the earlier attempt graded against those files, keyed by number.
+    (out / "auditpages").mkdir()
+    (out / "auditpages" / "ex2_p1.png").write_bytes(b"png")
+    rows = [{"key": "a", "exhibit": 1, "verdict": "SUPPORTED"}, {"key": "b", "exhibit": 3, "verdict": "UNSUPPORTED"}]
+    (out / "audit-results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (out / "repair-edits.jsonl").write_text("{}\n")
+    (tmp_path / "runs" / "alpha" / "update" / "review_repair.json").write_text('{"status": "held"}')
     assert US.run(sr) == 0, sr.logged  # type: ignore[arg-type]
     assert duplicate_exhibits(out) == {}
     assert (out / "Exhibit 1 - Delivered Clinic.pdf").is_file(), "the delivered set is never touched"
     stale = tmp_path / "runs" / "alpha" / "update" / "stale"
-    assert sorted(p.name for p in stale.iterdir()) == [f"Exhibit {n} - Earlier Attempt {n}.pdf" for n in (2, 3, 4)]
+    assert sorted(p.name for p in stale.glob("Exhibit *")) == [
+        f"Exhibit {n} - Earlier Attempt {n}.pdf" for n in (2, 3, 4)
+    ]
+    kept = [json.loads(x)["key"] for x in (out / "audit-results.jsonl").read_text().splitlines()]
+    assert kept == ["a"], "a delivered exhibit's row stays; the new exhibit's row is regraded"
+    assert [json.loads(x)["key"] for x in (stale / "audit-results.jsonl").read_text().splitlines()] == ["b"]
+    assert not (out / "auditpages").exists() and (stale / "auditpages" / "ex2_p1.png").is_file()
+    assert not (out / "repair-edits.jsonl").exists() and (stale / "review_repair.json").is_file()
 
 
 def test_two_files_with_one_exhibit_number_hold_the_selection(tmp_path: Path) -> None:
