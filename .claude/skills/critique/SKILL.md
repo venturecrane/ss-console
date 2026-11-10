@@ -106,6 +106,7 @@ Select perspectives based on `AGENT_COUNT`. Always assign from the top of this l
 - **1 agent** gets "Devil's Advocate" (the comprehensive default - covers risks, gaps, AND simpler alternatives in one pass).
 - **2+ agents** each get a distinct perspective from the list above.
 - **If AGENT_COUNT exceeds 7**, wrap around and assign "Senior" variants (e.g., agent 8 = "Senior Devil's Advocate" with instruction to dig deeper than agent 1).
+- **The Devil's Advocate always also checks who owns each decision (Law 18).** Append this to its perspective description: "List every decision the plan leaves to a model: which files, how many passes, what a reply says, when to stop, what it costs, and any fact the client reads (a date, a coverage line, a default). For each one, say whether code should own it, with the model returning a value the code acts on. Any fact a firm or client will read that the model decides is an issue." This is the one root cause from the 2026-11-09 process review that no other step checks, and it costs no extra critic.
 
 ### Step 3: Spawn Critic Agents
 
