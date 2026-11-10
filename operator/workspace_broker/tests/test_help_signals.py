@@ -133,7 +133,7 @@ def _holdable_job_lanes() -> set[str]:
 
 
 def test_every_job_lane_that_can_hold_or_fail_is_read():
-    """FALSIFIER: a lane added without a statement here (records, 2026-11-03)
+    """FALSIFIER: a lane added without a statement here (the records lane was)
     reads as "nothing held" in the review, because it was never asked."""
     lanes = _holdable_job_lanes()
     assert {"demand", "medchron", "records", "library_setup"} <= lanes, lanes
