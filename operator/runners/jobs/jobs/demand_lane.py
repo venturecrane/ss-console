@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import firm_wording, resume as resume_mod, verdict as verdict_mod
+from . import firm_wording, resume as resume_mod, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .child import run_child
 from .firm_inputs import pin_env
@@ -198,7 +198,8 @@ class DemandLane(Daemon):
             state, v = "failed", {"reason": f"the runner exited {code} without a verdict", "stage": None}
         else:
             state = {"delivered": "delivered", "held": "held"}.get(str(v.get("outcome")), "failed")
-        fields: dict[str, Any] = {"cents": int(round(float(v.get("dollars") or 0) * 100))}
+        reported = int(round(float(v.get("dollars") or 0) * 100))
+        fields: dict[str, Any] = {"cents": spend.recorded_cents(self.job_dir(job_id), reported)}
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
         if state == "delivered":

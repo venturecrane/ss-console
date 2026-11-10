@@ -21,10 +21,13 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 from . import gapaudit
 from .summarize import sha
+
+T = TypeVar("T")
+R = TypeVar("R")
 
 AUDIT_MAX_TOKENS = 12_000
 CONTINUATIONS = 2
@@ -118,6 +121,20 @@ _FACTUAL = re.compile(
     r"\d|\b(january|february|march|april|may|june|july|august|september|october|november|december)\b", re.I
 )
 BLOCKING = ("INVENTED", "ARITHMETIC")
+
+
+def cache_first_map(fn: Callable[[T], R], items: list[T], workers: int) -> list[R]:
+    """``fn`` over ``items``, the first alone and the rest in parallel. Every
+    call of an audit pass carries one system block (the whole digest) marked
+    for the prompt cache; the first call writes it and the rest read it. All
+    at once, each of the first ``workers`` calls found no cache and paid to
+    write its own: four writes of the digest per audit pass on a live job
+    (demand, #3861; drafting, 2026-11-10)."""
+    if not items:
+        return []
+    first = [fn(items[0])]
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        return first + list(ex.map(fn, items[1:]))
 
 
 def auditable(sections_: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -369,14 +386,7 @@ class Drafter:
             cache.write_text(kept, encoding="utf-8")
             return i, cache.read_text(encoding="utf-8")
 
-        # The first section alone: its call writes the cache of the system
-        # block (the whole digest) that every other section then reads. All at
-        # once, each of the first ``workers`` calls found no cache and wrote
-        # its own: four writes of the digest per audit pass on a live job.
-        todo = list(enumerate(secs))
-        results = dict([one(todo[0])]) if todo else {}
-        with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            results.update(ex.map(one, todo[1:]))
+        results = dict(cache_first_map(one, list(enumerate(secs)), self.workers))
         body = "\n\n".join(results[i] for i in sorted(results))
         tallies = tally(body)
         nf = [c["quote"] for c in mech["quotes"] if not c["found"]]

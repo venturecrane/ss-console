@@ -1,0 +1,49 @@
+{
+ "records": [
+  [
+   "01KTJ0BX0000000000000000NG",
+   "running",
+   {}
+  ],
+  [
+   "01KTJ0BX0000000000000000NG",
+   "delivered",
+   {
+    "cents": 40,
+    "docs_failed": 0,
+    "docs_read": 2,
+    "matters_seeded": 0,
+    "matters_total": 9,
+    "notices": [
+     {
+      "matter_id": "m",
+      "matter_number": "1",
+      "status": "entered",
+      "text": "x"
+     },
+     {
+      "matter_id": "m",
+      "matter_number": "1",
+      "status": "entered",
+      "text": "x"
+     }
+    ],
+    "stage": "report"
+   }
+  ]
+ ],
+ "state": {
+  "attempts": 1,
+  "claimed": true,
+  "claimed_at": 1000000.0,
+  "deferrals": 0,
+  "finished_at": 1000000.0,
+  "held_paused": false,
+  "reason": null,
+  "resume_redo": [],
+  "resume_release": false,
+  "resume_release_held": false,
+  "retry_after": null,
+  "state": "delivered"
+ }
+}

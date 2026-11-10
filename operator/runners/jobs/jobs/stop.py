@@ -37,7 +37,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from . import resume as resume_mod, smd_stop
+from . import resume as resume_mod, smd_stop, spend
 from .daemon import DEFAULT_RUN_DIR, RUN_DIR_ENV, TERMINAL
 from .lane_proof_cli import QUEUES
 
@@ -72,7 +72,7 @@ def _spend(cents: int | None) -> str:
 def _say(label: str, jd: Path, st: dict) -> None:
     print(
         f"{label}: state={st.get('state') or 'unknown'} attempts={st.get('attempts', 0)} "
-        f"spend={_spend(smd_stop.spend_cents(jd))}"
+        f"spend={_spend(spend.priced_cents(jd))}"
     )
 
 
