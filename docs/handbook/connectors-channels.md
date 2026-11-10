@@ -32,8 +32,8 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/README.md
   - label: msgraph-mail manifest
     href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/msgraph-mail/manifest.toml
-  - label: msgraph-mail staff_mailboxes.py
-    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py
+  - label: msgraph-mail staff_mailbox_rule.py (the staff-read rule)
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailbox_rule.py
   - label: Smokeball manifest
     href: https://github.com/venturecrane/ss-console/blob/main/operator/connectors/smokeball/manifest.toml
   - label: wordpress manifest
@@ -84,7 +84,7 @@ Five vendor connectors live here today, plus a synthetic self-test (`_reference`
 
 #### Reading a staff member's mailbox
 
-A firm can let the Operator **read** a named staff member's mailbox, so it can find a letter that person received without their forwarding it. The two tools, `list_staff_messages` and `read_staff_message`, are the only msgraph-mail tools that take a mailbox, and they refuse, before any Graph call, every address not listed in the seat's `customer.yaml` `staff_mailbox_reads` block (`staff_mailboxes.py`). A missing, empty, or malformed block refuses everything. The firm must also add the mailbox to the read app's `ApplicationAccessPolicy` scope group; either one missing and the read fails. Nothing can send, draft, move, or delete in a staff mailbox. The permission is the firm's to give, so each address is authored in a reviewed change, never inferred.
+A firm can let the Operator **read** a named staff member's mailbox, so it can find a letter that person received without their forwarding it. The two tools, `list_staff_messages` and `read_staff_message`, are the only msgraph-mail tools that take a mailbox, and they refuse, before any Graph call, every address not listed in the seat's `customer.yaml` `staff_mailbox_reads` block. A missing, empty, or malformed block refuses everything. A person on `scope.staff_send_as` is refused even when listed, because their inbox holds the approve links for drafts sent in their name. Fetching a whole email from a staff mailbox to file it (`mail_spool_message`) runs the same rule: one file, `staff_mailbox_rule.py`, kept byte-identical in the connector and the overlay, with a test on each side that fails when they differ. The firm must also add the mailbox to the read app's `ApplicationAccessPolicy` scope group; either one missing and the read fails. Nothing can send, draft, move, or delete in a staff mailbox. The permission is the firm's to give, so each address is authored in a reviewed change, never inferred.
 
 A rostered sender can also ask the Operator to **file an email on a matter**: it spools the message as an `.eml`, resolves the matter from the sender's own words only (never from words inside the email), files it with `file_attachment_to_matter`, and replies once saying where it went. Smokeball's Emails tab cannot be written from outside its desktop app, so the filed `.eml` in Documents is the filed copy.
 

@@ -5,116 +5,85 @@ operator told the agent "don't act on this" in turn N; later, context
 compaction dropped that turn's content; in turn N+50 the agent took the
 forbidden action because it no longer "remembered" the constraint.
 
-Our mitigation: the Operator adapter maintains a sticky-slot table
-outside the compressible turn history. "Stop" / "don't act" instructions
-are pinned. Compaction does not touch pinned slots. The adapter consults
-pinned slots before every tool dispatch.
+Our mitigation, as the seat runs it: a stop is not held in the conversation at
+all. An operator pause pins HARD_STOP in the sticky-stop store on disk
+(``shared.cost_breaker.pin_hard_stops``, ADR 0062), and the trust plugin's
+``pre_tool_call`` hook reads that store and refuses every tool while it holds
+(the pause wall, ss#2003). Nothing in memory carries it, so compaction, a
+restart or a new session cannot drop it.
 
-This test simulates compaction by building a session with a pinned slot,
-forcing the turn-history to be cleared (the analog of full compaction),
-and verifying the pinned slot survives + enforce() reads it.
-
-Phase A.5 wiring: the actual pinned-slot table lives in trust_ceiling.py
-(extension pending). For Day 1 the test exercises the data structure
-contract: a `sticky_stops` collection persists across a simulated
-compaction and is consulted by enforce().
+This exercises those exact pieces: it pins a stop in a throwaway store, closes
+everything that wrote it, reads it back fresh, and asks the gateway's own hook
+to run a destructive tool with an approval attached. The hook must refuse with
+the pause, and must read a store with no stop as not paused, so the refusal is
+the store's doing and not a constant. No audit row is written: the pause wall
+returns before the audit path.
 """
 
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
+
+from safety_substrate.invariants import trust_plugin
+from shared import cost_breaker
+
+_ENV = "SMD_STICKY_STOP_DB_PATH"
 
 
-from adapter.trust_ceiling import ActionClass, Ceiling, enforce
-
-
-# Simulated session-state container the Operator adapter manages.
-# Phase A.5 lifts this into trust_ceiling.py as a proper class. For the
-# fixture we model the data structure contract: pinned slots are a separate
-# table from turn history, persist across a compaction event, and are
-# consulted by enforce() (extended below).
-class SessionState:
-    def __init__(self) -> None:
-        self.turn_history: list[str] = []  # compressible
-        self.sticky_stops: set[str] = set()  # NOT compressible
-
-    def add_turn(self, content: str) -> None:
-        self.turn_history.append(content)
-
-    def add_sticky_stop(self, instruction: str) -> None:
-        """Operator pinned a 'don't act' or 'stop' instruction."""
-        self.sticky_stops.add(instruction)
-
-    def compact(self) -> None:
-        """Simulate Hermes context compaction: turn history is cleared/summarized,
-        but pinned slots are untouched (this is the invariant)."""
-        self.turn_history = ["[compacted]"]
-        # sticky_stops MUST NOT be modified
-
-
-def enforce_with_session(
-    *,
-    session: SessionState,
-    ceiling: Ceiling,
-    action: ActionClass,
-    skill_name: str,
-    tool_name: str,
-    current_turn_approval: bool = False,
-) -> object:
-    """Phase A.5 stand-in: wraps enforce() with sticky-slot consultation.
-
-    Before calling the core enforcement, check whether any sticky stop
-    blocks this action/tool. If so, refuse regardless of ceiling.
-    """
-    if session.sticky_stops:
-        # In the real adapter this is a structured match (per-tool, per-skill,
-        # per-action-class). For the fixture, presence of ANY pinned stop
-        # means "no further actions in this session"; the operator said stop.
-        return type("R", (), {"allowed": False, "audit_action": "refuse", "reason": "pinned stop active"})()
-    return enforce(
-        ceiling=ceiling,
-        action=action,
-        skill_name=skill_name,
-        tool_name=tool_name,
-        current_turn_approval=current_turn_approval,
-    )
+def _reset_pause_cache(plugin) -> None:
+    # The hook caches the level for a couple of seconds; each probe below must
+    # read the store it names, not the previous probe's answer.
+    plugin._pause_cache.update(at=0.0, hard=False)
 
 
 def run() -> tuple[bool, str]:
-    session = SessionState()
-    # Turn 1: operator pins a stop
-    session.add_sticky_stop("Do not delete anything in my inbox today.")
-    session.add_turn("Operator: don't act on inbox cleanup today.")
-    session.add_turn("Agent: understood, holding.")
-    # Many turns of normal work
-    for i in range(50):
-        session.add_turn(f"turn {i}: misc work")
+    plugin = trust_plugin.load()
+    prior = os.environ.get(_ENV)
+    with tempfile.TemporaryDirectory(prefix="smd-invariant-4-") as tmp:
+        store = os.path.join(tmp, "sticky_stop.db")
+        try:
+            # Turn N: the operator pins a stop. The writer's connection closes here.
+            cost_breaker.pin_hard_stops(actor_id="invariant-4", reason="do not act on the inbox today", path=store)
 
-    # Compaction event: turn history clears but pinned slot must survive
-    session.compact()
+            # Compaction, restart, a new session: nothing in memory survives. The
+            # stop is read back from the store alone.
+            level = cost_breaker.read_level(store)
+            if level != "HARD_STOP":
+                return (False, f"FAIL: pinned stop did not survive in the store (level={level!r})")
 
-    if not session.sticky_stops:
-        return (False, "FAIL: sticky_stops was cleared by compaction (invariant violated)")
+            # Turn N+50: the gateway's own hook, a destructive tool, an approval attached.
+            os.environ[_ENV] = store
+            _reset_pause_cache(plugin)
+            result = plugin.on_pre_tool_call(
+                tool_name="gmail_delete",
+                args={"_current_turn_approval": True},
+                session_id="invariant-4",
+                tool_call_id="invariant-4",
+                customer_slug="invariant-4",
+            )
+            if not (isinstance(result, dict) and result.get("action") == "block"):
+                return (False, f"FAIL: pinned stop did not block a destructive tool call (result={result!r})")
+            if "sticky stop at HARD_STOP" not in str(result.get("message", "")):
+                return (False, f"FAIL: the call was blocked, but not by the stop (message={result.get('message')!r})")
 
-    # Now an autonomous skill tries to execute a destructive action WITH approval.
-    # In normal flow this would be allowed. But pinned stop should override.
-    decision = enforce_with_session(
-        session=session,
-        ceiling=Ceiling.AUTONOMOUS,
-        action=ActionClass.DESTRUCTIVE,
-        skill_name="inbox-cleanup",
-        tool_name="gmail.delete",
-        current_turn_approval=True,
-    )
-    if decision.allowed:
-        return (
-            False,
-            f"FAIL: pinned stop did not block destructive action after compaction (audit={decision.audit_action})",
-        )
+            # Control: the same hook reads a store holding no stop as not paused.
+            os.environ[_ENV] = os.path.join(tmp, "absent.db")
+            _reset_pause_cache(plugin)
+            if plugin._paused_hard():
+                return (False, "FAIL: the pause wall reads paused with no stop in the store (it cannot fail)")
+        finally:
+            if prior is None:
+                os.environ.pop(_ENV, None)
+            else:
+                os.environ[_ENV] = prior
+            _reset_pause_cache(plugin)
 
     return (
         True,
-        "PASS: invariant 4 holds — pinned stop survives compaction; enforce_with_session refuses despite approval",
+        "PASS: invariant 4 holds: a pinned stop survives in the store and the gateway's "
+        f"pre_tool_call refuses despite approval ({trust_plugin.source()})",
     )
 
 

@@ -20,7 +20,9 @@ A third tool (0.3.0, Microsoft 365 seats only) spools the WHOLE email:
 ``mail_spool_message`` leaves the message's own .eml in the same spool, so a
 firm can have an email itself filed on a matter. It reads the seat's own
 mailbox, or a staff mailbox the firm authored in ``staff_mailbox_reads``
-(``shared.staff_mailboxes``), and refuses any other before calling Graph.
+(``shared.staff_mailboxes``), and refuses any other before calling Graph. An
+approver on ``scope.staff_send_as`` is refused even when authored: the rule is
+the msgraph-mail connector's, byte for byte (``shared.staff_mailbox_rule``).
 
 TWO VENDORS, ONE PAIR OF NAMES (0.2.0). A seat authors its mail transport in
 ``connectors.Email.adapter``, and these tools dispatch on that: AgentMail

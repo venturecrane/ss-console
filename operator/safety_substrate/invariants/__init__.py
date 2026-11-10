@@ -3,9 +3,9 @@
 Each module in this package implements one runtime invariant from platform
 PRD §7.5. The base 5 invariants (no destructive without approval, no external
 send, no autonomous commitment, sticky stop, code-enforced trust ceilings) are
-exercised by the per-fixture tests under `safety_substrate/tests/` and routed
-through the trust-ceiling adapter and the sticky-stop machine. This package
-holds the remaining two:
+exercised by the per-fixture tests under `safety_substrate/tests/` against the
+gateway's own ``hermes-smd-trust`` plugin (``trust_plugin`` here loads it) and
+the sticky-stop store. This package holds the remaining two:
 
 - ``invariant_6``: citation enforcement for client-facing fact-bearing fields.
   Every fact in a skill's output that is rendered into a client-facing field

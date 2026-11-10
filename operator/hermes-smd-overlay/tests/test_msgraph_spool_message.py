@@ -152,3 +152,66 @@ def test_bad_message_id_is_refused_before_a_call(monkeypatch, tmp_path, authored
 def test_staff_list_normalizes_and_drops_unsafe_entries(authored):
     authored({"mailboxes": [" A@Firm.Example ", "bad/@firm.example", 7, "a@firm.example"]})
     assert staff_mailboxes.authored() == ("a@firm.example",)
+
+
+# ---- an approver's mailbox holds the approve links (ADR 0089 amendment 5a) --
+APPROVER = "paralegal@firm.example"
+
+
+@pytest.fixture
+def authored_seat(monkeypatch):
+    """Author the whole seat file: scope.staff_send_as and staff_mailbox_reads."""
+
+    def _author(data):
+        monkeypatch.setattr(
+            customer_config.CustomerConfig,
+            "from_volume",
+            classmethod(lambda cls, path=None: cls({"customer_id": "x", **data})),
+        )
+
+    return _author
+
+
+@pytest.mark.parametrize(
+    "send_as",
+    [
+        [{"address": APPROVER, "name": "Pat"}],
+        # second on the list, and written in another case with stray spaces
+        [{"address": "sam@firm.example", "name": "Sam"}, {"address": f" {APPROVER.upper()} "}],
+    ],
+)
+def test_a_send_as_approver_is_never_spooled_even_when_authored_for_reading(
+    monkeypatch, tmp_path, authored_seat, send_as
+):
+    """The overlap the console validator refuses, authored anyway. Only this
+    code stands between the model and the approver's inbox here."""
+    authored_seat(
+        {
+            "scope": {"staff_send_as": send_as},
+            "staff_mailbox_reads": {"mailboxes": [STAFF, APPROVER]},
+        }
+    )
+    opener = _install(monkeypatch, [], spool_dir=tmp_path)
+    with pytest.raises(MsGraphAttachmentError, match="approve links"):
+        msgraph_attachments.spool_message("AAMkMSG", APPROVER)
+    assert opener.calls == []
+    assert list(tmp_path.iterdir()) == []
+    # The same file still lets the non-approver through, so the refusal above
+    # is the approver rule and not a broken config.
+    opener = _install(monkeypatch, [_json(META), _Resp(200, EML)], spool_dir=tmp_path)
+    msgraph_attachments.spool_message("AAMkMSG", STAFF)
+    assert len(opener.calls) == 2
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [{"staff_send_as": APPROVER}, ["not", "a", "mapping"]],
+)
+def test_an_approver_list_that_cannot_be_read_refuses_every_staff_spool(
+    monkeypatch, tmp_path, authored_seat, scope
+):
+    authored_seat({"scope": scope, "staff_mailbox_reads": {"mailboxes": [STAFF]}})
+    opener = _install(monkeypatch, [], spool_dir=tmp_path)
+    with pytest.raises(MsGraphAttachmentError, match="approvers cannot be told apart"):
+        msgraph_attachments.spool_message("AAMkMSG", STAFF)
+    assert opener.calls == []

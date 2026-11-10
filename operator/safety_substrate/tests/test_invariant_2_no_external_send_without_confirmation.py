@@ -1,83 +1,71 @@
 """Invariant 2: external send is gated by the CONFIGURED ceiling and the
-vertical floor — and the agent can never exceed either.
+vertical floor, and the agent can never exceed either.
 
-Reshaped per ADR 0025, then ADR 0035. The old invariant asserted "no external
-send without current-turn confirmation" — a hardcoded refusal of every
-autonomous send. ADR 0025 makes exposure a configurable ceiling per action
+Reshaped per ADR 0025, then ADR 0035 and ADR 0056. The old invariant asserted
+"no external send without current-turn confirmation", a hardcoded refusal of
+every autonomous send. ADR 0025 makes exposure a configurable ceiling per action
 class; ADR 0035 removes the imposed default. The invariant is now:
 
-  - `external_send` is fail-closed when UNAUTHORED: no `action_ceilings` entry
-    means refused — no send, AND no draft (ADR 0035 — no imposed default
-    posture). An autonomous *skill scalar* does NOT grant external send, and a
-    draft_for_review skill scalar does NOT silently author a draft route; the
-    entitlement must be authored explicitly in `action_ceilings`.
-  - An AUTHORED `external_send = draft_for_review` routes to draft
-    (an authored draft_for_review value, never a default).
-  - An explicit autonomous override permits the send.
-  - A vertical-pack floor can only narrow: a floor of draft_for_review beats a
-    customer override of autonomous, so a regulated vertical (e.g. law) keeps
+  - Every send class (``external_send``, ``external_send_internal``,
+    ``external_send_client``, ``external_send_vendor``) is fail-closed when
+    UNAUTHORED: no exposure entry means refused, no send AND no draft (no
+    imposed default posture).
+  - An AUTHORED ``external_send = draft_for_review`` routes to draft.
+  - An authored autonomous exposure permits the send; an authored refused
+    blocks it.
+  - A vertical-pack floor can only narrow: a floor of draft_for_review beats an
+    authored autonomous, so a regulated vertical (e.g. law) keeps
     draft_for_review even if the customer tries to raise it.
-  - A skill whose scalar ceiling is `refused` runs nothing at all.
+  - ``confirm`` (ADR 0071) withholds without a current-turn approval, sends with
+    one, and is narrowed by a draft_for_review floor.
+
+The retired per-skill ``trust_ceiling`` scalar (ADR 0056) is not an input to the
+gateway at all, so there is nothing for it to grant.
 
 Failure mode this still protects against: a misconfigured prompt or
 compromised tool result causing a skill to fire an outbound message it was
 not configured to send autonomously. Authorization comes from authored config
 (customer.yaml + vertical floor), never from model claims or the in-turn
 approval flag (that flag governs the reversibility classes; see invariant 5).
+
+Exercised against the gateway's own decision: ``hermes-smd-trust``'s
+``enforce`` (``safety_substrate/invariants/trust_plugin.py``).
 """
 
 from __future__ import annotations
 
 import sys
 
-
-from adapter.trust_ceiling import ActionClass, Ceiling, enforce
+from safety_substrate.invariants import trust_plugin
 
 
 def run() -> tuple[bool, str]:
-    # Scenario A: UNAUTHORED external_send (no action_ceilings) is fail-closed —
-    # refused, no draft (ADR 0035: no imposed default posture).
-    decision = enforce(
-        ceiling=Ceiling.DRAFT_FOR_REVIEW,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="inbox-triage",
-        tool_name="gmail.send",
-        current_turn_approval=False,
-    )
-    if decision.allowed or decision.audit_action != "refuse":
-        return (
-            False,
-            f"FAIL: unauthored external_send must be fail-closed (refused), got "
-            f"allowed={decision.allowed} audit={decision.audit_action}",
+    t = trust_plugin.enforce_module()
+    A, C = t.ActionClass, t.Ceiling
+    send = A.EXTERNAL_SEND
+
+    def decide(exposure, *, approved=False, floors=None, action=send):
+        return t.enforce(
+            action=action,
+            exposure=exposure,
+            tool_name="gmail.send",
+            current_turn_approval=approved,
+            vertical_floors=floors,
         )
 
-    # Scenario B: an autonomous SKILL scalar does NOT auto-grant external send.
-    # With no action_ceilings entry, external_send is unauthored → refused.
-    decision = enforce(
-        ceiling=Ceiling.AUTONOMOUS,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="email-reply",
-        tool_name="gmail.send",
-        current_turn_approval=False,
-    )
-    if decision.allowed or decision.audit_action != "refuse":
-        return (
-            False,
-            f"FAIL: autonomous skill scalar must NOT silently grant external send; "
-            f"unauthored external_send is fail-closed, got allowed={decision.allowed} "
-            f"audit={decision.audit_action}",
-        )
+    # Scenario A: every UNAUTHORED send class is fail-closed: refused, no draft,
+    # even with an approval.
+    for action in (A.EXTERNAL_SEND, A.EXTERNAL_SEND_INTERNAL, A.EXTERNAL_SEND_CLIENT, A.EXTERNAL_SEND_VENDOR):
+        decision = decide(None, approved=True, action=action)
+        if decision.allowed or decision.audit_action != "refuse":
+            return (
+                False,
+                f"FAIL: unauthored {action.value} must be fail-closed (refused), got "
+                f"allowed={decision.allowed} audit={decision.audit_action}",
+            )
 
-    # Scenario B2: an AUTHORED external_send=draft_for_review routes to draft —
-    # draft_for_review is a value you author, distinct from unauthored=refused.
-    decision = enforce(
-        ceiling=Ceiling.AUTONOMOUS,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="email-reply",
-        tool_name="gmail.send",
-        current_turn_approval=False,
-        action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.DRAFT_FOR_REVIEW},
-    )
+    # Scenario B: an AUTHORED external_send=draft_for_review routes to draft.
+    decision = decide({send: C.DRAFT_FOR_REVIEW})
     if decision.allowed or decision.audit_action != "draft":
         return (
             False,
@@ -85,31 +73,17 @@ def run() -> tuple[bool, str]:
             f"allowed={decision.allowed} audit={decision.audit_action}",
         )
 
-    # Scenario C: explicit action_ceilings override permits autonomous send.
-    decision = enforce(
-        ceiling=Ceiling.DRAFT_FOR_REVIEW,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="email-reply",
-        tool_name="gmail.send",
-        current_turn_approval=False,
-        action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.AUTONOMOUS},
-    )
+    # Scenario C: an authored autonomous exposure permits the send.
+    decision = decide({send: C.AUTONOMOUS})
     if not decision.allowed or decision.audit_action != "allow":
         return (
             False,
-            f"FAIL: explicit external_send=autonomous should send, got allowed={decision.allowed} "
+            f"FAIL: authored external_send=autonomous should send, got allowed={decision.allowed} "
             f"audit={decision.audit_action} ({decision.reason})",
         )
 
-    # Scenario D: explicit external_send=refused blocks the send outright.
-    decision = enforce(
-        ceiling=Ceiling.AUTONOMOUS,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="email-reply",
-        tool_name="gmail.send",
-        current_turn_approval=False,
-        action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.REFUSED},
-    )
+    # Scenario D: an authored external_send=refused blocks the send outright.
+    decision = decide({send: C.REFUSED}, approved=True)
     if decision.allowed or decision.audit_action != "refuse":
         return (
             False,
@@ -117,49 +91,18 @@ def run() -> tuple[bool, str]:
         )
 
     # Scenario E: a vertical floor can only NARROW. A floor of draft_for_review
-    # beats a customer override of autonomous — the regulated-vertical guarantee.
-    decision = enforce(
-        ceiling=Ceiling.AUTONOMOUS,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="email-reply",
-        tool_name="gmail.send",
-        current_turn_approval=False,
-        action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.AUTONOMOUS},
-        vertical_floors={ActionClass.EXTERNAL_SEND: Ceiling.DRAFT_FOR_REVIEW},
-    )
+    # beats an authored autonomous: the regulated-vertical guarantee.
+    decision = decide({send: C.AUTONOMOUS}, floors={send: C.DRAFT_FOR_REVIEW})
     if decision.allowed or decision.audit_action != "draft":
         return (
             False,
-            f"FAIL: vertical floor draft_for_review must beat customer override autonomous; "
+            f"FAIL: vertical floor draft_for_review must beat authored autonomous; "
             f"expected draft, got allowed={decision.allowed} audit={decision.audit_action}",
         )
 
-    # Scenario F: a skill whose scalar ceiling is refused runs nothing — even an
-    # external_send=autonomous override cannot revive a disabled skill.
-    decision = enforce(
-        ceiling=Ceiling.REFUSED,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="never-runs",
-        tool_name="gmail.send",
-        current_turn_approval=True,
-        action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.AUTONOMOUS},
-    )
-    if decision.allowed:
-        return (
-            False,
-            f"FAIL: refused-scalar skill should never execute anything, got allowed ({decision.reason})",
-        )
-
-    # Scenario G (ADR 0071): authored external_send=confirm WITHOUT a current-turn
-    # approval is WITHHELD pending approval — not sent, not drafted, not refused.
-    decision = enforce(
-        ceiling=Ceiling.DRAFT_FOR_REVIEW,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="email-reply",
-        tool_name="gmail.send",
-        current_turn_approval=False,
-        action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.CONFIRM},
-    )
+    # Scenario F (ADR 0071): authored confirm WITHOUT a current-turn approval is
+    # WITHHELD pending approval: not sent, not drafted, not refused.
+    decision = decide({send: C.CONFIRM})
     if decision.allowed or decision.audit_action != "await_approval":
         return (
             False,
@@ -167,16 +110,8 @@ def run() -> tuple[bool, str]:
             f"allowed={decision.allowed} audit={decision.audit_action}",
         )
 
-    # Scenario H (ADR 0071): authored external_send=confirm WITH a current-turn
-    # approval sends — the one exposure value that consults the approval flag.
-    decision = enforce(
-        ceiling=Ceiling.DRAFT_FOR_REVIEW,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="email-reply",
-        tool_name="gmail.send",
-        current_turn_approval=True,
-        action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.CONFIRM},
-    )
+    # Scenario G (ADR 0071): authored confirm WITH a current-turn approval sends.
+    decision = decide({send: C.CONFIRM}, approved=True)
     if not decision.allowed or decision.audit_action != "allow":
         return (
             False,
@@ -184,18 +119,9 @@ def run() -> tuple[bool, str]:
             f"allowed={decision.allowed} audit={decision.audit_action} ({decision.reason})",
         )
 
-    # Scenario I (ADR 0071 ordering): a vertical floor of draft_for_review NARROWS an
-    # authored confirm (confirm < draft_for_review) — even with approval it drafts,
-    # never sends. The regulated-vertical guarantee holds against confirm too.
-    decision = enforce(
-        ceiling=Ceiling.DRAFT_FOR_REVIEW,
-        action=ActionClass.EXTERNAL_SEND,
-        skill_name="email-reply",
-        tool_name="gmail.send",
-        current_turn_approval=True,
-        action_ceilings={ActionClass.EXTERNAL_SEND: Ceiling.CONFIRM},
-        vertical_floors={ActionClass.EXTERNAL_SEND: Ceiling.DRAFT_FOR_REVIEW},
-    )
+    # Scenario H (ADR 0071 ordering): a draft_for_review floor NARROWS an authored
+    # confirm; even with approval it drafts, never sends.
+    decision = decide({send: C.CONFIRM}, approved=True, floors={send: C.DRAFT_FOR_REVIEW})
     if decision.allowed or decision.audit_action != "draft":
         return (
             False,
@@ -205,10 +131,9 @@ def run() -> tuple[bool, str]:
 
     return (
         True,
-        "PASS: invariant 2 holds — external send gated by configured ceiling; "
-        "autonomous skill scalar does not auto-grant send; explicit override sends; "
-        "vertical floor narrows; refused scalar blocks all; confirm withholds without "
-        "approval, sends with it, and is narrowed by a draft_for_review floor (ADR 0071)",
+        "PASS: invariant 2 holds: every unauthored send class is fail-closed; authored draft "
+        "drafts, autonomous sends, refused refuses; a vertical floor narrows; confirm withholds "
+        f"without approval, sends with it, and is narrowed by a draft_for_review floor ({trust_plugin.source()})",
     )
 
 

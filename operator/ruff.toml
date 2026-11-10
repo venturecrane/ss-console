@@ -129,6 +129,9 @@ exclude = [
     # The wording-rule reader twin (overlay shared/wording_rules_store.py), for
     # the same reason: one set of bytes at the overlay's line-length 100.
     "runners/jobs/jobs/wording_rules_store.py",
+    # The staff-mailbox read rule twin (overlay shared/staff_mailbox_rule.py,
+    # tests/test_staff_mailbox_rule_parity.py on both sides): one set of bytes at 100.
+    "connectors/msgraph-mail/msgraph_mail_connector/staff_mailbox_rule.py",
 ]
 quote-style = "double"
 indent-style = "space"
