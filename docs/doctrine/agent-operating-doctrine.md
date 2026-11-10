@@ -517,6 +517,9 @@ mechanisms:
     review: 2026-11-24
     on_failure: 'Demote or redesign. A mechanism that cannot be demoted is ceremony.'
     last_review: '2026-10-24, NOT MET. Saved Captain corrections by month (Aug/Sep/Oct, feedback_* memories by incident date, classified from description lines): Law 1 6/4/5, Law 3 3/5/3, Law 4 5/3/0, Law 8 1/5/3. Only Law 4 trends toward zero; ownership is flat and finish-or-say-why rose. Not demoted: the primer also carries fresh doctrine (Session Mechanics 4) and, since #3468, the skunkworks stance, which is the redesign aimed at Laws 1 and 8. Re-scored 2026-11-24 with skunkworks-default-stance. Caveat: counts are corrections someone chose to save, with no session denominator.'
+    replay: 'Signal 1b (skills, hooks or settings changed on origin/main, #3922): makeTree fixtures in tests/staleness-detection.test.ts fire on a skills commit, stay silent on a src-only commit and on the branch own skill edit (three-dot diff), and speak once per origin/main sha. A headless probe on 2026-11-10 showed a running session loads a changed SKILL.md without restart, so the line says merge, not restart. The context-size call is log-only.'
+    false_alarm_owner: 'The session that sees a wrong primer line fixes reflex-primer.sh in that session, with a fixture row.'
+    escape: 'None needed: the primer never blocks and exits 0 on any internal failure.'
   - id: reply-contract
     file: .claude/hooks/reply-contract.mjs
     hypothesis: 'A Stop hook that bounces long unstructured replies once forces the header+fold shape, so the Captain finds the reviewable item without reading the wall (Law 11 mechanized).'
@@ -601,6 +604,24 @@ mechanisms:
     replay: '1,630 PRs merged in 120 days: 0 past-date deferrals live. Replay mode (not met read as due at merge): 289 rows on 150 PRs, 266 on client surfaces, including the two client-lane rows of #3852. A CI-only PR citing #3852 does not clear them (#3920).'
     false_alarm_owner: 'The owner named in the row; a wrong parse is fixed in the lister with a test row.'
     escape: 'Close the row with a later client-surface PR that references the number and carries a met runtime row with a vfy_ id.'
+  - id: bash-log
+    file: .claude/hooks/bash-log.mjs
+    hypothesis: 'Two numbers the process review could not get without hand-mapping are written as they happen: which Bash calls kept an agent idle past the cache window, and which process (auto-build, /wired, plan mode, /critique) built each PR. The first decides whether a long-command deny is worth its misfires; the second lets npm run rework compare processes without a hand-built session map.'
+    success_criterion: 'By 2026-12-10: built-by.jsonl holds a row for at least 90% of PRs this machine opened since #3922 merged; long-cmd.log supports a yes or no on a deny rule, recorded here.'
+    review: 2026-12-10
+    on_failure: 'If rows are missing, the PR-URL parse or the transcript scan is wrong: fix with a test row. If nobody reads the logs by the review date, delete the hook.'
+    replay: 'Built-by over the local transcripts agreed with the hand session map on 522 of 522 PRs (#3922). A cold scan of the largest session took 768ms against a 30s timeout.'
+    false_alarm_owner: 'The lead of the dev-process line; the hook blocks nothing, so a wrong row costs a wrong statistic, fixed with a test row.'
+    escape: 'None needed: PostToolUse, no onFailure, always exits 0.'
+  - id: context-size-log
+    file: .claude/hooks/lib/context-size.mjs
+    hypothesis: 'Context size, not session length, drives quota (/usage, 2026-11-09). Logging each turn context size is the measurement any hand-off trigger must rest on.'
+    success_criterion: 'By 2026-12-10 a trigger rule (a rise within a session or once per session) is chosen from the log, with its fire rate stated, or the hand-off idea is dropped here with the reason.'
+    review: 2026-12-10
+    on_failure: 'If a log-only signal never becomes a rule, delete it rather than keep a measurement nobody uses.'
+    replay: 'Over 67 main transcripts (3,736 prompts) and 527 subagent transcripts, usage fields only: 80% of main prompts sat at 300K or more and 62% at 400K or more, so a fixed band would fire on most turns. Slowest single read 4ms (#3922).'
+    false_alarm_owner: 'The lead of the dev-process line.'
+    escape: 'None needed: log-only, nothing is said to the agent.'
   - id: runtime-ac-touch-rule
     file: scripts/runtime-ac-proof.mjs
     hypothesis: 'Classifying a PR by its changed paths (scripts/lib/touch-map.mjs: send-path, client-lane, seat, none) lets the merge gate see a client-surface PR that writes no (runtime) row, which a body-only gate cannot. Reporting that on every PR, and blocking only a bare n/a on such a PR, raises the share of client-surface PRs that name the act a client performs without teaching agents to type boilerplate deferrals.'
@@ -627,6 +648,7 @@ Settled at the approval of the wave-2 process plan, from the open questions of t
 - **Long commands.** A subagent never waits on CI, the merge queue or a long command: it returns the handle and the lead waits in the background. Foreground calls over 240 seconds are logged to `~/.claude/ss-board/long-cmd.log`; no command is denied until that log and a cache-cost comparison show a deny saves more than it misfires.
 - **New checks.** A check runs as a log or an annotation on real traffic before it may block, and its doctrine `mechanisms` entry carries `replay`, `false_alarm_owner` and `escape` (`tests/doctrine-integrity.test.ts`). The 2026-11-10 merge-gate replay is the model: the rule that would have blocked 81% of a week's client-surface PRs shipped as a warning.
 - **The review loop.** `/code-review` runs before any lane switches to `enforce` for a client, and on the existing `[SS] Code Review (ss)` cadence item, which `/sos` surfaces when due (`crane_schedule items`: last completed 2026-10-27, next due 2026-11-26). The loop lapsed after 10-27 with the item in place, so the enforce trigger, not the calendar, is the part that was missing.
+- **Client lanes on Fable.** No client lane routes to a Fable model without the Captain's decision. Fable 5.2 requires 30-day data retention for safety monitoring unless the account is zero-data-retention eligible (release notes, 2026-11-10), so a lane on it keeps a firm's matter content for 30 days. Development work in Claude Code is unaffected. A lane model table that names Fable matches the family from 5.1 on (`claude-fable-5-`), not one version, so a new version does not get a forced tool call it rejects (fixed in `operator/runners/jobs/jobs/medchron/config.py` and `demand/gapaudit.py` on 2026-11-10, after both named 5.1 only).
 - **Transcript retention.** 120 days (`cleanupPeriodDays`, user settings), so a retrospective can see a full quarter.
 
 ## Closure loop

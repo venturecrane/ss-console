@@ -362,6 +362,14 @@ const PINS: { skill: ForkedSkill; pin: string; holds: (body: string) => boolean 
   },
   {
     skill: 'auto-build',
+    pin: 'names an effort per role and never max',
+    holds: (b) =>
+      /\| `fable`\s*\| `high`; `xhigh` only for a multi-wave design/.test(b) &&
+      /\| `opus`\s*\| `high`/.test(b) &&
+      /Never `max`/.test(b),
+  },
+  {
+    skill: 'auto-build',
     pin: 'carries a required model field per workstream in the team YAML',
     holds: (b) =>
       /^ {6}model: opus # required/m.test(b) &&
