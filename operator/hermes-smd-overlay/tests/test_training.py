@@ -509,22 +509,18 @@ def test_a_person_removed_is_refused(seat) -> None:
 # ---------------------------------------------------------------------------
 
 
-PRIVACY = (
-    "SMD sees your progress and readiness. Your notes and leads are not shown to other "
-    "representatives and are not included in any report. SMD runs this service, and its "
-    "staff can reach stored data when fixing a fault."
-)
-
-
-def test_the_training_welcome_carries_the_path_and_the_approved_privacy_words() -> None:
+def test_the_training_welcome_is_the_guides_own_introduction() -> None:
+    """The Captain's text (2026-11-10): first person, the start-training path,
+    no privacy paragraph, nothing about codes, email or the library."""
     from shared import sender_enrollment as se
 
     text = se.welcome_text("Avery Example", training=True)
-    assert PRIVACY in text and se.PRIVACY_NOTICE == PRIVACY
-    assert '"start training"' in text and text.startswith("Hello Avery Example,")
+    assert text.startswith("Hi Avery,\n\nI'm the SMD Services guide.")
+    assert '"start training"' in text and not hasattr(se, "PRIVACY_NOTICE")
+    assert "SMD sees your progress" not in text
     # Every other seat's welcome is exactly what it was.
     plain = se.welcome_text("Avery Example")
-    assert PRIVACY not in plain and "training" not in plain
+    assert "training" not in plain
     assert plain == se._WELCOME_BODY.format(greeting="Hello Avery Example,")
 
 

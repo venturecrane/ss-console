@@ -87,26 +87,36 @@ _DEMO_WELCOME_BODY = (
 )
 
 #: On a guide seat that authors representative training (``shared.training``),
-#: the welcome also points the person at the learning path and says, in the
-#: owner's approved words (2026-11-10), who sees what. Fixed text, no model turn.
-PRIVACY_NOTICE = (
-    "SMD sees your progress and readiness. Your notes and leads are not shown to other "
-    "representatives and are not included in any report. SMD runs this service, and its "
-    "staff can reach stored data when fixing a fault."
-)
+#: the welcome introduces the guide in its own voice and says what the person
+#: can try. The Captain's approved text (2026-11-10), fixed, no model turn. It
+#: greets the person by the first name their access was issued for.
 _TRAINING_WELCOME_BODY = (
     "{greeting}\n\n"
-    "This address is now connected to the SMD Services product guide. Reply here, or "
-    "write a new email to this address, with any question about the Operator. Each "
-    "answer comes from the guide's product library and names the document and section "
-    "it came from.\n\n"
-    'To learn the product step by step, reply with "start training". The guide takes '
-    "you through short lessons, an open-book quiz and a practice pitch, one at a time, "
-    'and tells you where you stand whenever you ask "where am I".\n\n'
-    f"{PRIVACY_NOTICE}\n\n"
-    "If you did not expect this message, tell SMD Services and we will disconnect this "
-    "address.\n"
+    "I'm the SMD Services guide. I'm here to help you understand how the Operator works, "
+    "and to be useful to you while you're out talking to people about it.\n\n"
+    "There's nothing to learn about using me. Just talk to me the way you'd talk to a "
+    "colleague who knows the product well.\n\n"
+    "A few things you can try:\n\n"
+    "- Ask me anything about the Operator. What it does, how it fits into a business, how "
+    "to explain it to someone.\n"
+    '- Let me walk you through it. Say "start training" and I\'ll take you through it a '
+    "piece at a time, with a little practice along the way.\n"
+    "- Practice a conversation. I'll play a business owner with questions and doubts, then "
+    "tell you how it went.\n"
+    "- Keep your notes and leads with me. Tell me who you met and what they said, and ask "
+    "for it back whenever you need it.\n"
+    '- Have me remind you. "Remind me Thursday at 4 to call them back" is all it takes.\n'
+    "- Get ready for a meeting, or follow up after one. I'll pull together what you've told "
+    "me, or draft a follow-up for you to send.\n\n"
+    "Start wherever you like. If you're not sure, just say hello and tell me what you're "
+    "working on.\n"
 )
+
+
+def first_name(name: str | None) -> str | None:
+    """The first word of the name an invite was issued for, when it is valid."""
+    return name.split()[0] if valid_name(name) else None
+
 
 NOTICE_SUBJECT = "Guide seat: a new person connected with an invite code"
 DEMO_NOTICE_SUBJECT = "Demo seat: a new person connected with an invite code"
@@ -197,16 +207,16 @@ def valid_name(value: Any) -> bool:
 
 def welcome_text(name: str | None, *, demo: bool = False, training: bool = False) -> str:
     """The fixed welcome. ``demo`` is the demo seat's; ``training`` (a guide
-    seat that authors representative training) adds the learning path and
-    :data:`PRIVACY_NOTICE`. Every other seat's welcome is unchanged."""
-    greeting = f"Hello {name}," if valid_name(name) else "Hello,"
+    seat that authors representative training) is the guide's own introduction,
+    greeting the person by first name. Every other seat's welcome is unchanged."""
     if demo:
-        body = _DEMO_WELCOME_BODY
-    elif training:
-        body = _TRAINING_WELCOME_BODY
-    else:
-        body = _WELCOME_BODY
-    return body.format(greeting=greeting)
+        return _DEMO_WELCOME_BODY.format(
+            greeting=f"Hello {name}," if valid_name(name) else "Hello,"
+        )
+    if training:
+        first = first_name(name)
+        return _TRAINING_WELCOME_BODY.format(greeting=f"Hi {first}," if first else "Hi,")
+    return _WELCOME_BODY.format(greeting=f"Hello {name}," if valid_name(name) else "Hello,")
 
 
 def notice_subject(*, demo: bool = False) -> str:
@@ -271,11 +281,11 @@ __all__ = [
     "CODE_PATTERN",
     "NAME_PATTERN",
     "NAME_REFUSAL",
-    "PRIVACY_NOTICE",
     "enabled_in",
     "enrolled",
     "enrolled_addresses",
     "enrolled_name",
+    "first_name",
     "find_code",
     "issue",
     "notice_text",
