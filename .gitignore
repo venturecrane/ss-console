@@ -104,3 +104,7 @@ operator/hermes-smd-overlay/CUSTOMER_DB
 operator/hermes-smd-overlay/*.db
 operator/hermes-smd-overlay/build/
 operator/hermes-smd-overlay/.venv/
+
+# Sample medical record sets and their chronologies (python -m jobs.medchron.sample):
+# build output, tens of MB of PDFs, regenerated from the committed case specs.
+operator/customers/pilot-smokeball/seed/records/out/

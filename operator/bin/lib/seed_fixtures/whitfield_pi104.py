@@ -33,6 +33,13 @@ DESIGNED SO THE FALSIFIER CAN FIRE, same as chen_pi102: specials that trace, and
 NO demand amount, NO general-damages figure, NO settlement number anywhere. The
 policy limit stays because it is a disclosed coverage fact, not a valuation.
 
+NO FIRM-PREPARED CHRONOLOGY. An earlier version carried a hand-written
+"Medical Chronology (prepared by firm)". It was removed 2026-11-10: the
+matter's medical records are now the generated set
+(``operator/customers/pilot-smokeball/seed/records/whitfield-pi104.yaml``),
+and a chronology on the matter the Operator did not write would be mistaken
+for one it did.
+
 NO PERIODS IN DOCUMENT NAMES. Smokeball reads the tail after a "." as a file
 extension and drops it ("Dr. Raghunathan" would arrive as "Dr").
 """
@@ -340,56 +347,6 @@ recurrence, and surgical decompression would be considered only on progression.
 No further treatment is scheduled at this time.
 
 Priya Raghunathan, MD
-""",
-    )
-)
-
-DOCS.append(
-    (
-        "2026-03-20 Medical Chronology - Whitfield (prepared by firm)",
-        """[SEED - synthetic test record, not a real client document]
-
-MEDICAL CHRONOLOGY
-James Whitfield - DOI November 2, 2025
-Prepared March 20, 2026
-
-2025-11-02  Interstate 80 westbound, Sacramento County. Stopped vehicle struck
-            from behind by a Pacific Freight Lines tractor-trailer. CHP report
-            11-79284; primary collision factor attributed to Party 2.
-            Kaiser Permanente Sacramento, Emergency Department: acute lumbar
-            strain with right radicular symptoms, cervical strain. X-rays show
-            no acute fracture. Off work pending follow-up. (Sepulveda, MD)
-
-2025-11-10  Kaiser Permanente, primary care. Symptoms persist and now radiate to
-            the calf. Straight-leg raise positive on the right at 40 degrees.
-            Referred to orthopedic spine; advanced imaging indicated; plan
-            authorization for MRI pending. Remains off work. (Oyelaran, MD)
-
-2025-12-08  Sierra Imaging Associates. MRI lumbar spine without contrast: right
-            paracentral disc extrusion at L4-L5, 7 mm, displacing the traversing
-            right L5 nerve root. Funded by MedFin Capital, not billed to the
-            health plan. (Achebe, MD)
-
-2025-12-18  Raghunathan Orthopedic Spine, consultation. Imaging correlates with
-            the clinical distribution. Injection recommended, then therapy.
-            Surgery not indicated. Funded by MedFin Capital.
-
-2026-01-06  Right L4-L5 transforaminal epidural steroid injection under
-            fluoroscopic guidance. No complication. (Raghunathan, MD)
-
-2026-01-13  Capital Physical Therapy, course commenced.
-
-2026-01-25  Last day off work entirely.
-
-2026-01-26  Released to light duty, 20 hours per week.
-
-2026-03-08  Capital Physical Therapy, twentieth and final session. Discharged to
-            a home program. Maximum medical improvement.
-
-2026-03-09  Released to full duty without restriction.
-
-2026-03-12  Raghunathan Orthopedic Spine, final treating report. Residual right
-            L5 sensory diminishment documented as likely permanent in part.
 """,
     )
 )

@@ -38,7 +38,7 @@ from pathlib import Path
 
 import pytest
 
-from bin.lib.seed_fixtures import FIXTURES
+from bin.lib.seed_fixtures import FIXTURES, record_names
 
 _BIN = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("seed_staging_matter", _BIN / "seed-staging-matter.py")
@@ -52,6 +52,8 @@ sys.modules["seed_staging_matter"] = seed
 _spec.loader.exec_module(seed)
 
 ALL = sorted(FIXTURES)
+#: The fixtures that carry authored text documents (2026-PI-103 adds records only).
+WITH_DOCS = sorted(slug for slug, fx in FIXTURES.items() if fx.docs)
 
 
 def _doc(slug: str, fragment: str) -> str:
@@ -99,25 +101,12 @@ def test_wage_loss_arithmetic_closes(slug: str, rate: float, full: float, light:
 
 
 @pytest.mark.parametrize("slug", ALL)
-def test_chronology_dates_appear_in_their_source_records(slug: str) -> None:
-    """The chronology is a firm-prepared summary of records that also exist on
-    the matter. A date in one and absent from the other is exactly the
-    inconsistency that makes a traced letter wrong."""
-    chron = _doc(slug, "Chronology")
-    pairs = {
-        "chen-pi102": (("2026-01-21", "Operative Report"), ("2026-01-14", "ER Records")),
-        "whitfield-pi104": (
-            ("2025-12-08", "MRI Lumbar"),
-            ("2025-11-02", "ER Records"),
-            ("2026-03-08", "Physical Therapy"),
-        ),
-    }[slug]
-    for iso, source in pairs:
-        assert iso in chron, f"{slug}: chronology omits {iso}"
-        body = _doc(slug, source)
-        assert any(t in body for t in (iso, _long_date(iso), iso.replace("-", "/"))), (
-            f"{slug}: {source} does not carry its own date {iso}"
-        )
+def test_no_fixture_carries_a_firm_prepared_chronology(slug: str) -> None:
+    """The hand-written "Medical Chronology (prepared by firm)" documents were
+    removed 2026-11-10. A chronology on a demo matter that the Operator did not
+    write would be shown, or read by the drafter, as if it had."""
+    for name, _ in FIXTURES[slug].docs:
+        assert "chronology" not in name.lower(), f"{slug}: {name!r} is a chronology the Operator did not write"
 
 
 def _long_date(iso: str) -> str:
@@ -163,7 +152,7 @@ def test_whitfield_uses_the_date_of_loss_the_kaiser_lien_states() -> None:
     """The Kaiser lien already on the matter names "the injury of 11/02/2025".
     Every document here dates from that, and the chronology says so."""
     doi = _PI104_PREEXISTING["date_of_injury"]
-    for fragment in ("Traffic Collision Report", "ER Records", "Chronology", "Wage Loss"):
+    for fragment in ("Traffic Collision Report", "ER Records", "Wage Loss"):
         body = _doc("whitfield-pi104", fragment)
         assert doi in body or "2025-11-02" in body or "11/02/2025" in body, (
             f"{fragment} does not carry the date of loss the lien states"
@@ -203,7 +192,7 @@ def test_chen_fixture_still_contradicts_its_complaint_on_purpose() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("slug", ALL)
+@pytest.mark.parametrize("slug", WITH_DOCS)
 def test_no_fixture_names_a_demand_amount_or_valuation(slug: str) -> None:
     """Card 18's falsifier is "reserved content filled in" — it can only fire if
     the record contains nothing to fill it in FROM.
@@ -233,7 +222,7 @@ def test_no_document_name_contains_a_period(slug: str) -> None:
         assert "." not in name, f"{slug}: {name!r} would be truncated at the period on upload"
 
 
-@pytest.mark.parametrize("slug", ALL)
+@pytest.mark.parametrize("slug", WITH_DOCS)
 def test_every_document_is_marked_as_seed_data(slug: str) -> None:
     """Nothing here may be mistaken for a real client record, including by a
     future reader of the tenant who did not seed it."""
@@ -241,16 +230,18 @@ def test_every_document_is_marked_as_seed_data(slug: str) -> None:
         assert "[SEED" in text, f"{slug}/{name} carries no seed marker"
 
 
-@pytest.mark.parametrize("slug", ALL)
+@pytest.mark.parametrize("slug", WITH_DOCS)
 def test_the_record_covers_what_the_drafter_asked_for(slug: str) -> None:
     """The first card-18 run enumerated what a demand requires. Both fixtures
-    answer that list, so the list is the assertion.
+    answer that list, so the list is the assertion. The medical records
+    themselves are the generated set (``Fixture.spec``), not text here.
 
     Deposition transcripts are deliberately absent from both: neither matter has
     reached depositions, and the drafter itself said "if any".
     """
+    assert FIXTURES[slug].spec.is_file(), f"{slug}: no case spec for its medical records"
     names = " | ".join(n for n, _ in FIXTURES[slug].docs).lower()
-    for required in ("chronology", "billing summary", "wage loss", "policy limits"):
+    for required in ("billing summary", "wage loss", "policy limits"):
         assert required in names, f"{slug} is missing {required}"
     assert any(k in names for k in ("incident report", "collision report")), f"{slug} has no incident/collision record"
 
@@ -266,10 +257,52 @@ def test_every_fixture_states_what_it_is_for() -> None:
     for slug, fx in FIXTURES.items():
         assert len(fx.purpose) > 80, f"{slug} has no real purpose text"
         assert fx.matter_id and len(fx.matter_id) == 36, f"{slug} has no matter id"
-        assert fx.docs, f"{slug} has no documents"
+        assert fx.docs or fx.spec.is_file(), f"{slug} has no documents"
 
 
 def test_the_runner_lists_without_uploading() -> None:
     """--list must never need a Smokeball client. A dry run that could only work
     on a seat is a dry run nobody uses."""
     assert seed.main(["whitfield-pi104", "--list"]) == 0
+
+
+# --------------------------------------------------------------------------- #
+# 5. The generated record PDFs (built by `python -m jobs.medchron.sample`)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("slug", ALL)
+def test_every_record_name_survives_upload(slug: str) -> None:
+    """The spec's document names become Smokeball file names: no period but
+    the extension, every one distinct, and the spec marked as seed data."""
+    names = record_names(FIXTURES[slug])
+    assert names and len(names) == len(set(names))
+    for name in names:
+        assert name.endswith(".pdf") and "." not in name[:-4], f"{slug}: {name!r} would be truncated"
+    assert "[SEED]" in FIXTURES[slug].spec.read_text(encoding="utf-8")[:200]
+
+
+def test_the_records_folder_must_hold_exactly_the_spec_set(tmp_path: Path) -> None:
+    """A stale or half-built folder refuses before anything is sent: a missing
+    PDF, or one the spec does not name."""
+    fx = FIXTURES["ramirez-pi103"]
+    names = record_names(fx)
+    for n in names:
+        (tmp_path / n).write_bytes(b"%PDF-1.4 " + n.encode())
+    got = seed.record_files(fx, tmp_path)
+    assert [n for n, _ in got] == names and got[0][1].startswith(b"%PDF")
+    (tmp_path / "stray.pdf").write_bytes(b"%PDF")
+    with pytest.raises(seed.RecordsMismatch):
+        seed.record_files(fx, tmp_path)
+    (tmp_path / "stray.pdf").unlink()
+    (tmp_path / names[0]).unlink()
+    with pytest.raises(seed.RecordsMismatch):
+        seed.record_files(fx, tmp_path)
+    assert seed.main(["ramirez-pi103", "--records", str(tmp_path), "--list"]) == 2
+
+
+def test_the_runner_lists_records_without_uploading(tmp_path: Path) -> None:
+    fx = FIXTURES["ramirez-pi103"]
+    for n in record_names(fx):
+        (tmp_path / n).write_bytes(b"%PDF-1.4")
+    assert seed.main(["ramirez-pi103", "--records", str(tmp_path), "--list"]) == 0

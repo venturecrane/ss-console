@@ -1,0 +1,1261 @@
+# [SEED] Case spec: Whitfield v. Pacific Freight Lines, staging matter 2026-PI-104
+# (MVA against a commercial carrier, three lienholders).
+#
+# FICTIONAL. Every person, provider, number and address below is invented for
+# SMD's own demo tenant (Brannock & Ferreira LLP, a fictional firm). Nothing is
+# drawn from any client's records. Facility names are used only as fictional
+# settings, with fictional addresses and 555 numbers.
+#
+# Consistent with what is already seeded on the matter
+# (bin/lib/seed_fixtures/whitfield_pi104.py and the lien documents in
+# seed/seed_data.py):
+#   * date of loss 11/02/2025, I-80 westbound, struck from behind by a
+#     Pacific Freight Lines tractor-trailer; Kaiser ED 11/02, PCP 11/10, MRI
+#     12/08, consult 12/18, injection 01/06, PT 20 sessions 01/13 to 03/08,
+#     final report 03/12; MMI 03/08; off work 11/03 to 01/25, light duty to
+#     03/08, full duty 03/09.
+#   * billed: Kaiser ED $6,240.00 + PCP $1,890.00 (one Kaiser account,
+#     $8,130.00), Capital PT $4,800.00, Sierra MRI $3,150.00, Raghunathan
+#     $9,350.00. Total $25,430.00, the firm's billing summary.
+#   * MedFin advanced exactly $12,500.00 for the MRI and the orthopedic care;
+#     Kaiser's lien is $9,310.02 (what it paid, itemized here claim by claim);
+#     DHCS asserts $18,762.44 subject to revision.
+#
+# DELIBERATE DEFECTS (the answer key lists them under `defects`):
+#   * the ambulance company's bill is not in the production: the billing
+#     worksheet must mark itself incomplete for that provider;
+#   * the PT re-evaluation note is dated 02/10/2026 and its claim form and
+#     ledger line bill it on 02/11/2026;
+#   * one faxed ED nursing page is illegible;
+#   * a prior lumbar strain (2019) is mentioned in the PCP note;
+#   * about a fifth of the pages arrive twice, re-sent by fax.
+#
+# How to read this file: operator/runners/jobs/jobs/medchron/sample/spec.py.
+
+matter:
+  slug: whitfield-pi104
+  unit: whitfield
+  number: 2026-PI-104
+  matter_id: cd710b6b-a7ae-44b0-bb8a-be79e8c5d351
+  title: Whitfield v. Pacific Freight Lines
+  seed: 104
+  target_pages: 1500
+  scan_rate: 0.6
+  incident_date: '2025-11-02'
+  injuries: lumbar disc extrusion at L4-L5 with right L5 radiculopathy; cervical strain
+  firm: Brannock & Ferreira LLP
+  firm_fax: (562) 555-0179
+  date_stamp: 04-02-26
+
+patient:
+  name: James Whitfield
+  last: Whitfield
+  dob: 06/14/1986
+  sex: M
+  mrn:
+    kaiser: KP-4471209
+    sierra: SIA-118204
+    ragh: ROS-20931
+    capital: CPT-55120
+    ems: PCR-25-118803
+
+headings:
+  - HPI & Prior Medical History
+  - Patient Complaints & Limitations
+  - Physical Examination
+  - Diagnostic Studies
+  - Medical Diagnoses
+  - Procedures
+  - Medications
+  - Treatment Recommendations
+  - Work Status
+
+icd:
+  S39.012A: Strain of muscle, fascia and tendon of lower back, initial encounter
+  S16.1XXA: Strain of muscle, fascia and tendon at neck level, initial encounter
+  V54.5XXA: Car driver injured in collision with heavy transport vehicle or bus in traffic accident, initial encounter
+  M54.16: Radiculopathy, lumbar region
+  M51.26: Other intervertebral disc displacement, lumbar region
+  Z87.828: Personal history of other (healed) physical injury and trauma
+
+providers:
+  ems:
+    facility: Sacramento Metropolitan Fire District
+    address: 10545 Armstrong Avenue, Mather, CA 95655
+    phone: (916) 555-0110
+    fax: (916) 555-0111
+    match: ochoa|metro fire
+    custodian: Kendra Lowe
+    style: { face: helv, accent: [0.70, 0.10, 0.10], layout: rule }
+  kaiser:
+    facility: Kaiser Permanente Sacramento
+    address: 6100 Alhambra Boulevard, Sacramento, CA 95819
+    phone: (916) 555-0180
+    fax: (916) 555-0182
+    match: kaiser|sepulveda|oyelaran|mensah
+    custodian: Marisol Duenas
+    style: { face: helv, accent: [0.0, 0.33, 0.62], layout: band }
+  sierra:
+    facility: Sierra Imaging Associates
+    address: 2440 Capitol Avenue, Suite 300, Sacramento, CA 95816
+    phone: (916) 555-0150
+    fax: (916) 555-0151
+    match: sierra imaging|achebe
+    custodian: Tom Ridley
+    style: { face: tiro, accent: [0.25, 0.25, 0.25], layout: rule, size: 10 }
+  ragh:
+    facility: Raghunathan Orthopedic Spine
+    address: 1919 J Street, Suite 210, Sacramento, CA 95811
+    phone: (916) 555-0193
+    fax: (916) 555-0194
+    match: raghunathan
+    custodian: Priscilla Navarro
+    style: { face: tiro, accent: [0.10, 0.30, 0.20], layout: box, size: 10 }
+  capital:
+    facility: Capital Physical Therapy
+    address: 5150 Folsom Boulevard, Sacramento, CA 95819
+    phone: (916) 555-0126
+    fax: (916) 555-0127
+    match: capital physical|mbeki
+    custodian: Jared Funk
+    style: { face: helv, accent: [0.85, 0.45, 0.05], layout: band }
+  kfhp:
+    facility: Kaiser Foundation Health Plan
+    address: Third Party Liability Unit, P.O. Box 5500, Oakland, CA 94604
+    phone: (510) 555-0101
+    fax: (510) 555-0102
+    custodian: TPL Unit
+    style: { face: helv, accent: [0.0, 0.33, 0.62], layout: rule }
+  dhcs:
+    facility: California Department of Health Care Services
+    address: Personal Injury Program, P.O. Box 997425, Sacramento, CA 95899
+    phone: (916) 555-0140
+    fax: (916) 555-0141
+    custodian: Personal Injury Program
+    style: { face: cour, accent: [0.1, 0.1, 0.1], layout: rule }
+  medfin:
+    facility: MedFin Capital LLC
+    address: 400 Capitol Mall, Suite 900, Sacramento, CA 95814
+    phone: (916) 555-0170
+    fax: (916) 555-0171
+    custodian: Account Services
+    style: { face: helv, accent: [0.30, 0.10, 0.50], layout: box }
+
+series:
+  pt:
+    provider: capital
+    signer: Adaeze Mbeki, PT, DPT
+    region: low back pain with right leg symptoms
+    objective: Lumbar AROM measured, neural tension tested, gait observed. See flowsheet.
+    treatment: Therapeutic exercise (97110) 2 units, manual therapy (97140) 1 unit, neuromuscular re-education (97112) 1 unit.
+    treatment_summary: Therapeutic exercise, manual therapy and neuromuscular re-education.
+    flowsheets: 9
+    icd: [M54.16, M51.26]
+    dates:
+      [
+        '2026-01-13',
+        '2026-01-15',
+        '2026-01-17',
+        '2026-01-20',
+        '2026-01-22',
+        '2026-01-27',
+        '2026-01-29',
+        '2026-02-03',
+        '2026-02-05',
+        '2026-02-10',
+        '2026-02-12',
+        '2026-02-17',
+        '2026-02-19',
+        '2026-02-24',
+        '2026-02-26',
+        '2026-03-01',
+        '2026-03-03',
+        '2026-03-05',
+        '2026-03-07',
+        '2026-03-08',
+      ]
+    pain: [6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 3, 3, 2, 2, 2]
+    authored: ['2026-01-13', '2026-02-10', '2026-03-08']
+    cpt:
+      - ['97110', 'Therapeutic exercise x2', 120.00]
+      - ['97140', 'Manual therapy', 60.00]
+      - ['97112', 'Neuromuscular re-ed', 60.00]
+    cpt_by_date:
+      '2026-01-13': [['97163', 'PT evaluation, high', 240.00]]
+      '2026-02-10': [['97164', 'PT re-evaluation', 240.00]]
+    dos_shift: { '2026-02-10': '2026-02-11' }
+
+documents:
+  - id: ems
+    name: 2025-11-02 Sacramento Metropolitan Fire District - Patient Care Report
+    provider: ems
+    pages:
+      - id: ems-1
+        title: Patient Care Report
+        date: '2025-11-02'
+        body: |
+          Incident no.: 25-118803   Date: 11/02/2025   Unit: Medic 61
+          Dispatched 16:55   On scene 17:03   Transport 17:19   At hospital 17:36
+          Location: Interstate 80 westbound, east of Madison Avenue
+
+          NARRATIVE
+          Medic 61 dispatched to a rear-end collision. Found a 39-year-old male, restrained
+          driver of a pickup struck from behind by a tractor-trailer, ambulatory at scene and
+          standing beside his vehicle. Patient complains of low back pain 7/10 and neck pain.
+          Denies head strike and loss of consciousness. Airbags not deployed.
+          No midline cervical tenderness; spinal motion restriction criteria not met.
+          Transported non-emergent to Kaiser Permanente Sacramento, position of comfort.
+
+          Luis Ochoa, Paramedic
+      - id: ems-2
+        title: Assessment and Vitals
+        date: '2025-11-02'
+        body: |
+          Time    BP        HR    RR    SpO2   GCS   Pain
+          17:06   148/92    98    18    98%    15    7/10
+          17:20   142/88    94    16    99%    15    7/10
+          17:33   138/86    90    16    99%    15    7/10
+
+          Secondary assessment: lumbar paraspinal tenderness, right more than left.
+          Moves all extremities. Grip strong and equal. Pedal pulses present.
+          Treatment: ice pack to lower back. No medications given.
+      - kind: intake_form
+        date: '2025-11-02'
+        heading: 'PATIENT ACKNOWLEDGMENT AND SIGNATURE'
+        fields:
+          Patient signature: James Whitfield
+          Date: 11/2/25
+          Receiving facility: Kaiser Sac ED
+      - { kind: vitals, count: 1, date: '2025-11-02', start: '17:00' }
+      - { kind: blank, count: 1 }
+      - { kind: custodian_cert, date: '2026-01-09', span: '11/02/2025' }
+
+  - id: kaiser-ed
+    name: 2025-11-24 Kaiser Permanente Sacramento - Emergency Department Records
+    provider: kaiser
+    fax: { sent: '2025-11-24 09:14', from_name: KP Release of Information }
+    pages:
+      - { kind: fax_cover, date: '2025-11-24', re: 'Emergency department records, 11/02/2025' }
+      - { kind: custodian_cert, date: '2025-11-24', span: '11/02/2025' }
+      - id: ked-triage
+        title: Triage Note
+        date: '2025-11-02'
+        body: |
+          Arrival: 11/02/2025 17:41 by ambulance (Medic 61)   Triage: 17:48   ESI level 3
+          Chief complaint: low back and neck pain after motor vehicle collision.
+          Pain score 7/10, low back, radiating to right buttock.
+          BP 140/88   HR 92   RR 16   Temp 98.6 F   SpO2 99% on room air
+          Allergies: no known drug allergies. Medications: none.
+          Triage RN: K. Alvarado, RN
+      - id: ked-1
+        title: ED Provider Note
+        date: '2025-11-02'
+        body: |
+          Date of service: 11/02/2025   Seen: 18:05   Provider: Ana Sepulveda, MD, Emergency Medicine
+
+          CHIEF COMPLAINT
+          Lower back and neck pain following a rear-end motor vehicle collision.
+
+          HISTORY OF PRESENT ILLNESS
+          39-year-old male, restrained driver of a pickup truck stopped in freeway traffic,
+          struck from behind by a tractor-trailer. Airbags did not deploy. Ambulatory at the
+          scene. Reports immediate lower back pain rated 7/10 radiating into the right buttock
+          and posterior thigh, and neck stiffness rated 4/10. Denies head strike, denies loss of
+          consciousness, denies bowel or bladder symptoms.
+
+          PAST HISTORY
+          Per patient, no current back treatment. No surgeries. No daily medications.
+      - id: ked-2
+        title: ED Provider Note (continued)
+        date: '2025-11-02'
+        body: |
+          PHYSICAL EXAMINATION
+          Cervical spine: paraspinal tenderness, no midline step-off, full but painful range of
+          motion.
+          Lumbar spine: paraspinal tenderness L4 through S1, right greater than left.
+          Straight-leg raise positive on the right at 45 degrees, negative on the left.
+          Strength 5/5 throughout. Sensation intact. Reflexes symmetric.
+
+          ED COURSE
+          Ketorolac 30 mg IM at 18:20. Cyclobenzaprine 10 mg PO at 18:22. Ice to lower back.
+          Pain reassessed at 19:10, now 5/10. X-rays of cervical and lumbar spine obtained.
+      - id: ked-3
+        title: ED Provider Note (continued)
+        date: '2025-11-02'
+        body: |
+          ASSESSMENT
+          1. Acute lumbar strain with right lower extremity radicular symptoms
+          2. Cervical strain
+
+          PLAN
+          Discharged with analgesia and activity modification. Ibuprofen 600 mg every 6 hours
+          as needed and cyclobenzaprine 10 mg at bedtime as needed, 10 tablets.
+          Advised to follow up with primary care in one week and sooner for any progressive
+          weakness. Return precautions given. Off work pending follow-up.
+
+          Discharged 22:18 in stable condition, ambulatory.
+          Ana Sepulveda, MD   Electronically signed 11/02/2025 23:02
+      - id: ked-xray
+        title: Radiology Report
+        date: '2025-11-02'
+        body: |
+          Exams: XR cervical spine 3 views; XR lumbar spine 2 views   Date: 11/02/2025 19:24
+          Indication: rear-end collision, neck and low back pain.
+
+          CERVICAL SPINE: Alignment maintained. No acute fracture or listhesis. Prevertebral
+          soft tissues normal.
+          LUMBAR SPINE: No acute fracture. Vertebral body heights maintained. Disc space
+          narrowing at L4-L5.
+
+          IMPRESSION
+          1. No acute fracture or listhesis of the cervical or lumbar spine.
+          2. Disc space narrowing at L4-L5.
+          Harold Mensah, MD, Radiology   Signed 11/02/2025 20:11
+      - id: ked-illegible
+        title: Nursing Note (faxed copy)
+        date: '2025-11-02'
+        illegible: true
+        body: |
+          21:40 Patient reports pain unchanged after reassessment, requests work note.
+          Discharge teaching started with patient. Questions answered.
+          K. Alvarado, RN
+      - id: ked-dc
+        title: Discharge Instructions
+        date: '2025-11-02'
+        body: |
+          Diagnosis: back strain with nerve symptoms; neck strain.
+          Follow up with your primary care doctor in 1 week.
+          Work: do not return to work until seen by your primary care doctor.
+          Medicines: ibuprofen 600 mg every 6 hours as needed with food;
+          cyclobenzaprine 10 mg at bedtime as needed. Do not drive after taking it.
+          Return right away for leg weakness, numbness in the groin, or loss of bladder control.
+          Patient signature on file.
+      - { kind: nursing_notes, count: 110, date: '2025-11-02', start: '17:50' }
+      - { kind: vitals, count: 80, date: '2025-11-02', start: '17:45' }
+      - {
+          kind: mar,
+          count: 18,
+          date: '2025-11-02',
+          meds: ['Ketorolac 30 mg IM', 'Cyclobenzaprine 10 mg PO', 'Ice pack, topical'],
+        }
+      - { kind: orders, count: 34, date: '2025-11-02', start: '17:52' }
+      - { kind: education, count: 50, topic: 'Back Strain and Sciatica' }
+      - { kind: lab_results, count: 12, as_of: '2025-11-20', dates: ['11/02/2025'] }
+      - kind: intake_form
+        date: '2025-11-02'
+        heading: 'EMERGENCY DEPARTMENT REGISTRATION (completed by patient)'
+        fields:
+          Name: James Whitfield
+          Date of birth: 6/14/86
+          Reason for visit: car accident, back + neck
+          Employer: Foothill Electric
+          Insurance: Kaiser
+      - { kind: access_log, count: 6, date: '2025-11-03' }
+      - { kind: blank, count: 6 }
+
+  - id: kaiser-pcp
+    name: 2025-12-02 Kaiser Permanente Sacramento - Primary Care Records
+    provider: kaiser
+    fax: { sent: '2025-12-02 15:31', from_name: KP Release of Information }
+    pages:
+      - {
+          kind: fax_cover,
+          date: '2025-12-02',
+          re: 'Primary care records, 11/10/2025, and chart summary',
+        }
+      - { kind: custodian_cert, date: '2025-12-02', span: '11/10/2025' }
+      - id: kpcp-1
+        title: Office Visit
+        date: '2025-11-10'
+        body: |
+          Date of service: 11/10/2025   Provider: Nathaniel Oyelaran, MD, Family Medicine
+
+          INTERVAL HISTORY
+          Eight days after the November 2, 2025 motor vehicle collision. Lower back pain
+          persists at 6/10 with continued radiation into the right posterior thigh and now
+          into the calf. Neck pain has improved to 2/10. Reports difficulty standing for more
+          than fifteen minutes and inability to lift.
+
+          PAST HISTORY
+          Lumbar strain in 2019 after lifting at work, treated with six physical therapy
+          visits, resolved. No back care or complaints between 2019 and this collision.
+      - id: kpcp-2
+        title: Office Visit (continued)
+        date: '2025-11-10'
+        body: |
+          EXAMINATION
+          Lumbar paraspinal tenderness persists. Straight-leg raise remains positive on the
+          right at 40 degrees. Mild sensory diminishment along the right L5 distribution.
+          Motor strength remains 5/5.
+
+          ASSESSMENT
+          Lumbar radiculopathy, persistent, right L5 distribution, following the November 2,
+          2025 collision. Failure of initial conservative management.
+
+          PLAN
+          Referral to orthopedic spine for evaluation. Advanced imaging indicated. Patient
+          advised that MRI authorization through the plan is pending and may take several
+          weeks. Remains off work. Return in four weeks or sooner as needed.
+          Nathaniel Oyelaran, MD
+      - id: kpcp-ref
+        title: Referral
+        date: '2025-11-10'
+        body: |
+          Referral to: Orthopedic spine (outside, Priya Raghunathan, MD)
+          Reason: persistent right L5 radiculopathy after MVC 11/02/2025, MRI lumbar spine.
+          Priority: routine. Authorization status: pending review.
+          Ordering provider: Nathaniel Oyelaran, MD
+      - { kind: education, count: 14, topic: 'After Visit Summary: Sciatica' }
+      - kind: health_summary
+        count: 180
+        as_of: '2025-12-01'
+        problems:
+          [
+            'Lumbar radiculopathy, right (11/10/2025)',
+            'Cervical strain (11/02/2025)',
+            'Lumbar strain, resolved (2019)',
+          ]
+        meds:
+          [
+            'Ibuprofen 600 mg PO every 6 hours as needed',
+            'Cyclobenzaprine 10 mg PO at bedtime as needed',
+          ]
+      - {
+          kind: lab_results,
+          count: 140,
+          as_of: '2025-12-01',
+          dates: ['11/02/2025', '08/14/2024', '07/02/2023'],
+        }
+      - { kind: access_log, count: 10, date: '2025-11-11' }
+      - { kind: blank, count: 16 }
+
+  - id: kaiser-rx
+    name: 2025-12-02 Kaiser Permanente Sacramento - Pharmacy Dispensing History
+    provider: kaiser
+    pages:
+      - kind: pharmacy_log
+        fills:
+          - ['2025-11-02', 'Ibuprofen 600 mg tab', '40', '10', 'A Sepulveda']
+          - ['2025-11-02', 'Cyclobenzaprine 10 mg tab', '10', '10', 'A Sepulveda']
+          - ['2025-11-10', 'Gabapentin 300 mg cap', '30', '30', 'N Oyelaran']
+          - ['2025-11-10', 'Ibuprofen 600 mg tab', '60', '15', 'N Oyelaran']
+          - ['2025-12-09', 'Gabapentin 300 mg cap', '30', '30', 'N Oyelaran']
+          - ['2026-01-08', 'Gabapentin 300 mg cap', '30', '30', 'N Oyelaran']
+      - { kind: custodian_cert, date: '2025-12-02', span: '11/02/2025 through 12/02/2025' }
+
+  - id: sierra
+    name: 2026-01-09 Sierra Imaging Associates - MRI Records
+    provider: sierra
+    fax: { sent: '2026-01-09 11:02', from_name: Sierra Imaging Records }
+    pages:
+      - { kind: fax_cover, date: '2026-01-09', re: 'MRI lumbar spine, 12/08/2025' }
+      - kind: intake_form
+        id: sierra-screen
+        date: '2025-12-08'
+        heading: 'MRI SAFETY SCREENING (completed by patient)'
+        fields:
+          Pacemaker or implant: no
+          Metal in eyes or body: no
+          Prior surgery: none
+          Reason for exam: back pain down right leg since car accident
+      - id: sierra-mri-1
+        title: MRI Lumbar Spine Without Contrast
+        date: '2025-12-08'
+        body: |
+          Date of service: 12/08/2025   Referring: Priya Raghunathan, MD
+          Payment: third-party medical funding (MedFin Capital LLC, account W-2211).
+          Not billed to the patient's health plan.
+
+          CLINICAL HISTORY
+          Motor vehicle collision November 2, 2025. Persistent right L5 radicular symptoms
+          with positive straight-leg raise. Failed conservative management.
+
+          FINDINGS
+          L3-L4: Mild disc desiccation. No herniation. No stenosis.
+          L4-L5: Right paracentral disc extrusion measuring 7 mm in AP dimension, contacting
+          and displacing the traversing right L5 nerve root. Moderate right lateral recess
+          stenosis. No central canal stenosis.
+          L5-S1: Mild disc bulge without neural contact.
+          Vertebral body heights are maintained. No marrow edema. Conus terminates at L1 and
+          is normal in signal.
+      - id: sierra-mri-2
+        title: MRI Lumbar Spine Without Contrast (continued)
+        date: '2025-12-08'
+        body: |
+          IMPRESSION
+          1. Right paracentral disc extrusion at L4-L5 with displacement of the traversing
+             right L5 nerve root, correlating with the reported clinical distribution.
+          2. No acute osseous injury.
+
+          Interpreting radiologist: Wendell Achebe, MD   Signed 12/08/2025 16:40
+      - { kind: key_images, count: 16, date: '2025-12-08' }
+      - { kind: education, count: 4, topic: 'Your MRI Results' }
+      - { kind: custodian_cert, date: '2026-01-09', span: '12/08/2025' }
+
+  - id: ragh
+    name: 2026-03-16 Raghunathan Orthopedic Spine - Medical Records
+    provider: ragh
+    fax: { sent: '2026-03-16 13:48', from_name: ROS Medical Records }
+    pages:
+      - { kind: fax_cover, date: '2026-03-16', re: 'Records 12/18/2025 through 03/12/2026' }
+      - { kind: custodian_cert, date: '2026-03-16', span: '12/18/2025 through 03/12/2026' }
+      - kind: intake_form
+        date: '2025-12-18'
+        heading: 'NEW PATIENT QUESTIONNAIRE (completed by patient)'
+        fields:
+          Main problem: low back pain + R leg pain, numb top of foot
+          When did it start: 11/2/25 truck hit me on I-80
+          Pain now (0-10): 6
+          Worse with: sitting, lifting, bending
+          Prior back problems: strained back 2019, fine after PT
+          Work: electrician, off work since accident
+      - id: ragh-c1
+        title: Consultation
+        date: '2025-12-18'
+        body: |
+          Date of service: 12/18/2025   Priya Raghunathan, MD, Orthopedic Spine Surgery
+          Payment: third-party medical funding (MedFin Capital LLC, account W-2211).
+
+          HISTORY
+          Mr Whitfield presents on referral for right lower extremity radicular pain following
+          a rear-end motor vehicle collision on November 2, 2025 in which his stopped vehicle
+          was struck by a tractor-trailer. Prior lumbar strain in 2019 resolved with therapy,
+          with no symptoms in the years before this collision.
+
+          IMAGING
+          MRI of December 8, 2025 demonstrates a right paracentral disc extrusion at L4-L5
+          displacing the traversing right L5 nerve root. Findings correlate with the
+          clinical examination.
+      - id: ragh-c2
+        title: Consultation (continued)
+        date: '2025-12-18'
+        body: |
+          EXAMINATION
+          Positive straight-leg raise on the right at 40 degrees, sensory diminishment in the
+          right L5 distribution, and 5/5 motor strength throughout. No cauda equina signs.
+
+          ASSESSMENT
+          Right L4-L5 disc extrusion with right L5 radiculopathy.
+
+          RECOMMENDATION
+          Transforaminal epidural steroid injection at right L4-L5, followed by a structured
+          physical therapy course. Surgical intervention is not indicated at this time and
+          would be considered only on progression or failure of conservative care. Risks,
+          benefits and alternatives discussed.
+
+          WORK STATUS
+          Remain off work.
+          Priya Raghunathan, MD
+      - id: ragh-p1
+        title: Procedure Note
+        date: '2026-01-06'
+        body: |
+          Date of service: 01/06/2026   Surgeon: Priya Raghunathan, MD
+          Procedure: right L4-L5 transforaminal epidural steroid injection under fluoroscopic
+          guidance.
+          Medications: methylprednisolone 80 mg and lidocaine 1% 2 mL.
+
+          TECHNIQUE
+          Prone position, sterile preparation. Under fluoroscopic guidance a 22-gauge spinal
+          needle was advanced to the right L4-L5 neural foramen. Contrast confirmed
+          appropriate epidural spread without vascular uptake. Medication injected.
+          No immediate complication. Patient discharged in stable condition and referred to
+          physical therapy.
+      - id: ragh-p2
+        title: Work Status Report
+        date: '2026-01-06'
+        body: |
+          Date: 01/06/2026   Patient: James Whitfield
+          Status: remain off work. Anticipate release to light duty, 20 hours per week, from
+          01/26/2026 if therapy is tolerated.
+          Priya Raghunathan, MD
+      - id: ragh-f1
+        title: Final Treating Report
+        date: '2026-03-12'
+        body: |
+          Date: 03/12/2026   Injury: November 2, 2025, motor vehicle collision
+
+          STATUS
+          Mr Whitfield completed twenty sessions of physical therapy following the January 6,
+          2026 injection and was discharged from therapy on March 8, 2026. Radicular pain has
+          improved from 6/10 to an intermittent 2/10. Straight-leg raise is negative. Sensory
+          diminishment in the right L5 distribution persists.
+
+          MAXIMUM MEDICAL IMPROVEMENT
+          Reached March 8, 2026.
+
+          WORK STATUS
+          Held off work entirely from November 3, 2025 through January 25, 2026, and released
+          to light duty limited to 20 hours per week from January 26, 2026 through March 8,
+          2026. Released to full duty without restriction effective March 9, 2026.
+      - id: ragh-f2
+        title: Final Treating Report (continued)
+        date: '2026-03-12'
+        body: |
+          PROGNOSIS
+          The L4-L5 extrusion remains present on imaging. Residual sensory diminishment is
+          likely permanent to some degree. Future care may include repeat injection on
+          recurrence, and surgical decompression would be considered only on progression.
+          No further treatment is scheduled at this time.
+
+          Priya Raghunathan, MD
+      - kind: note
+        title: Procedure Consent
+        date: '2026-01-06'
+        scan: true
+        body: |
+          I consent to a right L4-L5 transforaminal epidural steroid injection. The risks,
+          including infection, bleeding, nerve injury and headache, were explained to me.
+          ~James Whitfield
+          Patient signature                                    Date: 01/06/2026
+      - { kind: vitals, count: 8, date: '2026-01-06', start: '08:10' }
+      - { kind: nursing_notes, count: 8, date: '2026-01-06', start: '08:05' }
+      - { kind: orders, count: 4, date: '2026-01-06', start: '08:00' }
+      - { kind: education, count: 14, topic: 'After Your Spinal Injection' }
+      - {
+          kind: health_summary,
+          count: 12,
+          as_of: '2026-03-12',
+          problems: ['L4-L5 disc extrusion, right', 'Right L5 radiculopathy'],
+          meds: ['Gabapentin 300 mg PO at bedtime'],
+        }
+      - { kind: access_log, count: 2, date: '2026-03-13' }
+
+  - id: capital
+    name: 2026-03-18 Capital Physical Therapy - Treatment Records
+    provider: capital
+    fax: { sent: '2026-03-18 10:26', from_name: Capital PT Front Desk }
+    pages:
+      - { kind: fax_cover, date: '2026-03-18', re: 'Therapy records 01/13/2026 through 03/08/2026' }
+      - { kind: custodian_cert, date: '2026-03-18', span: '01/13/2026 through 03/08/2026' }
+      - kind: intake_form
+        id: pt-intake
+        date: '2026-01-13'
+        heading: 'PHYSICAL THERAPY INTAKE (completed by patient)'
+        fields:
+          Referred by: Dr Raghunathan
+          What brings you in: back + right leg pain after car crash
+          Pain today (0-10): 6
+          Hardest activity: lifting, climbing ladders at work
+          Goal: get back to full duty as electrician
+      - id: pt-eval-1
+        title: Initial Evaluation
+        date: '2026-01-13'
+        body: |
+          Date of service: 01/13/2026   Visit 1 of 20   Therapist: Adaeze Mbeki, PT, DPT
+          Referral: Priya Raghunathan, MD. Diagnosis: L4-L5 disc extrusion, right L5
+          radiculopathy, status post right L4-L5 injection 01/06/2026.
+
+          SUBJECTIVE
+          Low back pain with right leg symptoms at 6/10 today. Licensed electrician, job demand
+          lifting to 75 pounds, ladders, overhead work and kneeling. Off work since the
+          collision of 11/02/2025.
+
+          OBJECTIVE
+          Lumbar flexion 40 degrees with reproduction of right leg symptoms. Straight-leg raise
+          positive on the right at 45 degrees. Sensory diminishment right L5. Lifting tolerance
+          15 pounds floor to waist. Oswestry Disability Index 46%.
+      - id: pt-eval-2
+        title: Initial Evaluation (continued)
+        date: '2026-01-13'
+        body: |
+          ASSESSMENT
+          Lumbar radiculopathy limiting lifting, sitting and work tasks. Good rehabilitation
+          potential.
+
+          PLAN OF CARE
+          Lumbar stabilization, nerve glides, progressive strengthening and lift training,
+          2 to 3 times per week for 8 weeks, 20 visits. Home exercise program issued.
+          Goals: lifting tolerance 50 pounds or more, Oswestry below 20%, return to work.
+
+          Adaeze Mbeki, PT, DPT
+      - { kind: series_notes, series: pt, from: '2026-01-14', to: '2026-02-09' }
+      - id: pt-reeval
+        title: Re-Evaluation and Progress Report
+        date: '2026-02-10'
+        body: |
+          Date of service: 02/10/2026   Visit 10 of 20   Therapist: Adaeze Mbeki, PT, DPT
+
+          SUBJECTIVE
+          Low back pain with right leg symptoms at 4/10 today. Started light duty planning with
+          employer; released to light duty 20 hours per week from 01/26/2026 per physician.
+
+          OBJECTIVE
+          Lumbar flexion 55 degrees. Straight-leg raise positive on the right at 60 degrees.
+          Lifting tolerance 25 pounds floor to waist. Oswestry Disability Index 32%.
+
+          ASSESSMENT
+          Progressing toward goals. Continue the plan of care. Progress report faxed to
+          Dr Raghunathan.
+          Adaeze Mbeki, PT, DPT
+      - { kind: series_notes, series: pt, from: '2026-02-11', to: '2026-03-07' }
+      - id: pt-dc
+        title: Discharge Summary
+        date: '2026-03-08'
+        body: |
+          Date of service: 03/08/2026   Visit 20 of 20   Therapist: Adaeze Mbeki, PT, DPT
+          Course: January 13, 2026 through March 8, 2026, 20 sessions. The patient attended
+          all twenty scheduled sessions.
+
+          STATUS AT DISCHARGE
+          Radicular pain reduced from 6/10 at intake to 2/10, described as intermittent and
+          activity dependent. Straight-leg raise negative on the right at discharge. Lumbar
+          flexion improved from 40 to 65 degrees. Sensory diminishment in the right L5
+          distribution persists on examination.
+          Lifting tolerance measured at 35 pounds occasional, against a pre-injury job demand
+          of 75 pounds occasional. Overhead work and sustained kneeling continue to provoke
+          symptoms.
+
+          RECOMMENDATION
+          Discharged to an independent home program. No further supervised therapy
+          recommended at this time.
+      - { kind: hep, count: 70 }
+      - { kind: education, count: 24, topic: 'Lifting and Body Mechanics at Work' }
+      - { kind: access_log, count: 4, date: '2026-01-13' }
+
+  # ---- billing ---------------------------------------------------------------
+  - id: kaiser-bill
+    name: 2026-01-15 Kaiser Permanente Sacramento - Itemized Statement and Claim Forms
+    provider: kaiser
+    pages:
+      - kind: statement
+        lines:
+          - ['2025-11-02', '0450', 'Emergency department, level 4, facility', 2980.00]
+          - ['2025-11-02', '99284', 'Emergency physician services', 1850.00]
+          - ['2025-11-02', '72040', 'XR cervical spine 3 views', 620.00]
+          - ['2025-11-02', '72100', 'XR lumbar spine 2 views', 560.00]
+          - ['2025-11-02', 'J1885', 'Ketorolac 30 mg injection', 95.00]
+          - ['2025-11-02', '0250', 'Pharmacy, cyclobenzaprine', 45.00]
+          - ['2025-11-02', '0270', 'Medical supplies', 90.00]
+          - ['2025-11-10', '99215', 'Office visit, established, high', 640.00]
+          - ['2025-11-10', '99358', 'Prolonged service, non-face-to-face', 300.00]
+          - ['2025-11-10', '80053', 'Comprehensive metabolic panel', 320.00]
+          - ['2025-11-10', '85025', 'Complete blood count', 185.00]
+          - ['2025-11-10', 'J1885', 'Ketorolac 30 mg injection', 95.00]
+          - ['2025-11-10', '96372', 'Injection administration', 110.00]
+          - ['2025-11-10', '99080', 'Work status report', 95.00]
+          - ['2025-11-10', '81003', 'Urinalysis', 55.00]
+          - ['2025-11-10', '36415', 'Venipuncture', 45.00]
+          - ['2025-11-10', 'G2211', 'Visit complexity add-on', 45.00]
+        payments:
+          - ['2025-12-19', 'Kaiser Foundation Health Plan payment', 5814.00]
+      - kind: ub04
+        lines:
+          - ['2025-11-02', '0450', '99284', 'Emergency room', 2980.00]
+          - ['2025-11-02', '0320', '72040', 'X-ray cervical', 620.00]
+          - ['2025-11-02', '0320', '72100', 'X-ray lumbar', 560.00]
+          - ['2025-11-02', '0636', 'J1885', 'Drugs, detail code', 95.00]
+          - ['2025-11-02', '0250', '', 'Pharmacy', 45.00]
+          - ['2025-11-02', '0270', '', 'Supplies', 90.00]
+      - kind: cms1500
+        icd: [S39.012A, S16.1XXA, V54.5XXA]
+        claims:
+          - [['2025-11-02', '99284', 'ED physician', 1850.00]]
+      - kind: cms1500
+        icd: [M54.16, Z87.828]
+        claims:
+          - [
+              ['2025-11-10', '99215', 'Office visit', 640.00],
+              ['2025-11-10', '99358', 'Prolonged service', 300.00],
+              ['2025-11-10', '80053', 'CMP', 320.00],
+              ['2025-11-10', '85025', 'CBC', 185.00],
+              ['2025-11-10', 'J1885', 'Ketorolac', 95.00],
+              ['2025-11-10', '96372', 'Inj admin', 110.00],
+            ]
+          - [
+              ['2025-11-10', '99080', 'Work status report', 95.00],
+              ['2025-11-10', '81003', 'Urinalysis', 55.00],
+              ['2025-11-10', '36415', 'Venipuncture', 45.00],
+              ['2025-11-10', 'G2211', 'Complexity add-on', 45.00],
+            ]
+
+  - id: sierra-bill
+    name: 2026-01-09 Sierra Imaging Associates - Itemized Statement
+    provider: sierra
+    pages:
+      - kind: statement
+        lines:
+          - ['2025-12-08', '72148', 'MRI lumbar spine without contrast', 2650.00]
+          - ['2025-12-08', '72148-26', 'Professional interpretation', 500.00]
+        payments: []
+      - kind: cms1500
+        icd: [M54.16, M51.26]
+        claims:
+          - [
+              ['2025-12-08', '72148', 'MRI lumbar w/o contrast', 2650.00],
+              ['2025-12-08', '72148-26', 'Interpretation', 500.00],
+            ]
+
+  - id: ragh-bill
+    name: 2026-03-16 Raghunathan Orthopedic Spine - Itemized Statement
+    provider: ragh
+    pages:
+      - kind: statement
+        lines:
+          - ['2025-12-18', '99205', 'New patient consultation, high', 850.00]
+          - ['2026-01-06', '64483', 'Transforaminal epidural injection, L4-L5', 4950.00]
+          - ['2026-01-06', '0490', 'Procedure suite facility fee', 3200.00]
+          - ['2026-01-06', 'J1040', 'Methylprednisolone 80 mg', 95.00]
+          - ['2026-01-06', 'J2001', 'Lidocaine', 45.00]
+          - ['2026-01-06', '99152', 'Moderate sedation', 210.00]
+        payments: []
+      - kind: cms1500
+        icd: [M51.26, M54.16]
+        claims:
+          - [['2025-12-18', '99205', 'New patient consult', 850.00]]
+          - [
+              ['2026-01-06', '64483', 'TFESI L4-L5', 4950.00],
+              ['2026-01-06', '0490', 'Facility fee', 3200.00],
+              ['2026-01-06', 'J1040', 'Methylprednisolone', 95.00],
+              ['2026-01-06', 'J2001', 'Lidocaine', 45.00],
+              ['2026-01-06', '99152', 'Moderate sedation', 210.00],
+            ]
+
+  - id: capital-bill
+    name: 2026-03-18 Capital Physical Therapy - Ledger and Claim Forms
+    provider: capital
+    pages:
+      - kind: statement
+        lines:
+          - ['2026-01-13', '97163', 'PT evaluation', 240.00]
+          - ['2026-01-15', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-01-17', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-01-20', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-01-22', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-01-27', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-01-29', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-03', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-05', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-11', '97164', 'PT re-evaluation', 240.00]
+          - ['2026-02-12', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-17', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-19', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-24', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-26', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-01', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-03', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-05', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-07', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-08', 'PTV', 'Therapy visit', 240.00]
+        payments:
+          - ['2026-03-31', 'Kaiser Foundation Health Plan payments', 3496.02]
+      - { kind: series_claims, series: pt, icd: [M54.16, M51.26] }
+
+  - id: kaiser-eob
+    name: 2026-03-31 Kaiser Foundation Health Plan - EOB Statements
+    provider: kaiser
+    pages:
+      - kind: eob
+        payer: Kaiser Foundation Health Plan
+        claims:
+          - [['2025-11-02', 'Emergency department visit', 6240.00, 5850.00, 4680.00]]
+          - [['2025-11-10', 'Office visit and labs', 1890.00, 1417.50, 1134.00]]
+
+  - id: capital-eob
+    name: 2026-03-31 Kaiser Foundation Health Plan - EOB Statements - Capital Physical Therapy
+    provider: capital
+    pages:
+      - kind: eob
+        payer: Kaiser Foundation Health Plan
+        claims:
+          - [['2026-01-13', 'PT evaluation', 240.00, 218.50, 174.80]]
+          - [['2026-01-15', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-01-17', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-01-20', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-01-22', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-01-27', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-01-29', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-02-03', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-02-05', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-02-11', 'PT re-evaluation', 240.00, 218.50, 174.80]]
+          - [['2026-02-12', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-02-17', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-02-19', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-02-24', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-02-26', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-03-01', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-03-03', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-03-05', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-03-07', 'Therapy visit', 240.00, 218.50, 174.80]]
+          - [['2026-03-08', 'Therapy visit', 240.00, 218.50, 174.82]]
+
+  - id: kfhp-lien
+    name: 2026-05-28 Kaiser Foundation Health Plan - Lien Itemization
+    provider: kfhp
+    pages:
+      - kind: lien_itemization
+        heading: THIRD PARTY LIABILITY ITEMIZATION OF BENEFITS PAID
+        lienholder: Kaiser Foundation Health Plan
+        note: Injury of 11/02/2025. Amount as of the date of this statement.
+        rows:
+          - ['2025-11-02', 'Kaiser Permanente Sacramento, emergency', 4680.00]
+          - ['2025-11-10', 'Kaiser Permanente Sacramento, primary care', 1134.00]
+          - ['2026-01-13', 'Capital Physical Therapy, 20 visits 01/13 to 03/08/2026', 3496.02]
+
+  - id: dhcs-lien
+    name: 2026-05-19 DHCS - Lien Itemization of Services Paid
+    provider: dhcs
+    pages:
+      - kind: lien_itemization
+        heading: MEDI-CAL PERSONAL INJURY PROGRAM - ITEMIZATION OF SERVICES PAID
+        lienholder: California Department of Health Care Services
+        note: This figure is subject to revision until a final itemization is issued.
+        n: 52
+        total: 18762.44
+        start: '2025-11-02'
+        end: '2026-03-08'
+        providers:
+          [
+            'Kaiser Foundation Hospitals',
+            'Capital Physical Therapy',
+            'Sacramento Metropolitan Fire District',
+            'Medi-Cal Rx',
+          ]
+
+  - id: medfin-lien
+    name: 2026-06-02 MedFin Capital LLC - Funding Lien Statement
+    provider: medfin
+    pages:
+      - kind: lien_itemization
+        heading: MEDICAL FUNDING STATEMENT, ACCOUNT W-2211
+        lienholder: MedFin Capital LLC
+        note: Funds advanced for MRI and orthopedic consultation. Payoff valid through 07/31/2026.
+        rows:
+          - ['2025-12-08', 'Sierra Imaging Associates, MRI lumbar spine', 3150.00]
+          - ['2025-12-18', 'Raghunathan Orthopedic Spine, consultation', 850.00]
+          - ['2026-01-06', 'Raghunathan Orthopedic Spine, injection', 8500.00]
+
+resends:
+  - id: kaiser-ed-resend
+    of: kaiser-ed
+    name: 2026-02-03 Kaiser Permanente Sacramento - Emergency Department Records (re-sent)
+    pages: [3, 170]
+    fax: { sent: '2026-02-03 08:51', from_name: KP Release of Information }
+  - id: capital-resend
+    of: capital
+    name: 2026-03-25 Capital Physical Therapy - Treatment Records (re-sent)
+    pages: [3, 150]
+    fax: { sent: '2026-03-25 16:02', from_name: Capital PT Front Desk }
+  - id: ragh-resend
+    of: ragh
+    name: 2026-03-20 Raghunathan Orthopedic Spine - Medical Records (re-sent)
+    pages: [3, 40]
+    fax: { sent: '2026-03-20 12:30', from_name: ROS Medical Records }
+
+conflicts:
+  - 'Capital Physical Therapy re-evaluation: the note is dated 02/10/2026 (FILE: 2026-03-18 Capital Physical Therapy - Treatment Records.pdf) and the claim form and ledger bill it on 02/11/2026 (FILE: 2026-03-18 Capital Physical Therapy - Ledger and Claim Forms.pdf).'
+  - 'Sacramento Metropolitan Fire District transported the patient on 11/02/2025; no bill from the ambulance company is in the file.'
+
+defects:
+  missing_bill: { provider: Sacramento Metropolitan Fire District }
+  dos_conflict: { note: '2026-02-10', billed: '2026-02-11', provider: Capital Physical Therapy }
+  illegible: [ked-illegible]
+  prior_injury: { page: kpcp-1, phrase: 'Lumbar strain in 2019' }
+  duplicates: [kaiser-ed-resend, capital-resend, ragh-resend]
+  handwritten: [pt-intake, sierra-screen]
+
+encounters:
+  - date: '2025-11-02'
+    provider: ems
+    signer: Luis Ochoa, Paramedic
+    icd: []
+    paras:
+      - [
+          HPI & Prior Medical History,
+          ems-1,
+          'restrained driver of a pickup struck from behind by a tractor-trailer',
+          'EMS found the patient, the restrained driver of a pickup struck from behind by a tractor-trailer on Interstate 80, ambulatory at the scene. He denied head strike and loss of consciousness; airbags had not deployed.',
+        ]
+      - [
+          Patient Complaints & Limitations,
+          ems-1,
+          'low back pain 7/10 and neck pain',
+          'Complained of low back pain at 7/10 and neck pain.',
+        ]
+      - [
+          Physical Examination,
+          ems-2,
+          'lumbar paraspinal tenderness, right more than left',
+          'Initial vital signs BP 148/92, HR 98, SpO2 98%, GCS 15. Lumbar paraspinal tenderness, right more than left; moving all extremities with strong, equal grip.',
+        ]
+      - [
+          Treatment Recommendations,
+          ems-1,
+          'Transported non-emergent to Kaiser Permanente Sacramento',
+          'No midline cervical tenderness and spinal motion restriction criteria not met; ice pack applied and transported non-emergent to the Kaiser emergency department in position of comfort.',
+        ]
+  - date: '2025-11-02'
+    provider: kaiser
+    signer: Ana Sepulveda, MD
+    icd: [S39.012A, S16.1XXA, V54.5XXA]
+    paras:
+      - [
+          HPI & Prior Medical History,
+          ked-1,
+          'struck from behind by a tractor-trailer. Airbags did not deploy',
+          'Restrained driver of a pickup truck stopped in freeway traffic and struck from behind by a tractor-trailer in {{WORDING:SUBJECT_INCIDENT}}; airbags did not deploy and he was ambulatory at the scene. He denied head strike, loss of consciousness, and bowel or bladder symptoms.',
+        ]
+      - [
+          Patient Complaints & Limitations,
+          ked-1,
+          'lower back pain rated 7/10 radiating into the right buttock',
+          'Lower back pain rated 7/10 radiating into the right buttock and posterior thigh, and neck stiffness rated 4/10.',
+        ]
+      - [
+          Patient Complaints & Limitations,
+          ked-illegible,
+          '[illegible]',
+          '{{WORDING:NTD_ILLEGIBLE}}',
+        ]
+      - [
+          Physical Examination,
+          ked-2,
+          'Straight-leg raise positive on the right at 45 degrees',
+          'Cervical paraspinal tenderness with full but painful motion. Lumbar paraspinal tenderness from L4 through S1, right greater than left; straight-leg raise positive on the right at 45 degrees and negative on the left; strength 5/5, sensation intact, reflexes symmetric.',
+        ]
+      - [
+          Medical Diagnoses,
+          ked-3,
+          'Acute lumbar strain with right lower extremity radicular symptoms',
+          'Acute lumbar strain with right lower extremity radicular symptoms; cervical strain.',
+        ]
+      - [
+          Medications,
+          ked-2,
+          'Ketorolac 30 mg IM at 18:20',
+          'Ketorolac 30 mg intramuscular and cyclobenzaprine 10 mg by mouth given in the department; pain reassessed at 5/10.',
+        ]
+      - [
+          Treatment Recommendations,
+          ked-3,
+          'follow up with primary care in one week',
+          'Discharged with ibuprofen and cyclobenzaprine as needed and activity modification; follow up with primary care in one week, with return precautions for progressive weakness.',
+        ]
+      - [Work Status, ked-3, 'Off work pending follow-up', 'Off work pending follow-up.']
+  - date: '2025-11-02'
+    provider: kaiser
+    signer: Harold Mensah, MD
+    icd: []
+    paras:
+      - [
+          Diagnostic Studies,
+          ked-xray,
+          'Disc space narrowing at L4-L5',
+          'X-rays of the cervical spine (3 views) and lumbar spine (2 views): no acute fracture or listhesis of either; disc space narrowing at L4-L5.',
+        ]
+  - date: '2025-11-10'
+    provider: kaiser
+    signer: Nathaniel Oyelaran, MD
+    icd: [M54.16, Z87.828]
+    paras:
+      - [
+          HPI & Prior Medical History,
+          kpcp-1,
+          'Lumbar strain in 2019 after lifting at work',
+          'Seen eight days after {{WORDING:SUBJECT_INCIDENT}}. The record states a lumbar strain in 2019 after lifting at work, treated with six physical therapy visits and resolved, with no back care or complaints between 2019 and the collision.',
+        ]
+      - [
+          Patient Complaints & Limitations,
+          kpcp-1,
+          'now into the calf',
+          'Lower back pain at 6/10 radiating into the right posterior thigh and now into the calf; neck pain improved to 2/10. Unable to stand more than fifteen minutes or to lift.',
+        ]
+      - [
+          Physical Examination,
+          kpcp-2,
+          'Mild sensory diminishment along the right L5 distribution',
+          'Straight-leg raise positive on the right at 40 degrees, mild sensory diminishment along the right L5 distribution, motor strength 5/5.',
+        ]
+      - [
+          Medical Diagnoses,
+          kpcp-2,
+          'Lumbar radiculopathy, persistent, right L5 distribution',
+          'Persistent right L5 lumbar radiculopathy following the collision, with failure of initial conservative management.',
+        ]
+      - [
+          Treatment Recommendations,
+          kpcp-2,
+          'Referral to orthopedic spine for evaluation',
+          'Referral to orthopedic spine; advanced imaging indicated, with MRI authorization through the plan pending; return in four weeks.',
+        ]
+      - [Work Status, kpcp-2, 'Remains off work', 'Remains off work.']
+  - date: '2025-12-08'
+    provider: sierra
+    signer: Wendell Achebe, MD
+    icd: [M51.26, M54.16]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          sierra-screen,
+          'back pain down right leg since car accident',
+          'On the MRI safety screening form the patient wrote the reason for the exam as back pain down the right leg since the car accident.',
+        ]
+      - [
+          Diagnostic Studies,
+          sierra-mri-1,
+          'Right paracentral disc extrusion measuring 7 mm',
+          'MRI of the lumbar spine without contrast: right paracentral disc extrusion at L4-L5 measuring 7 mm, contacting and displacing the traversing right L5 nerve root, with moderate right lateral recess stenosis; mild desiccation at L3-L4 and a mild bulge at L5-S1 without neural contact.',
+        ]
+      - [
+          Diagnostic Studies,
+          sierra-mri-2,
+          'correlating with the reported clinical distribution',
+          'Impression: right paracentral disc extrusion at L4-L5 displacing the traversing right L5 nerve root, correlating with the reported clinical distribution; no acute osseous injury.',
+        ]
+  - date: '2025-12-18'
+    provider: ragh
+    signer: Priya Raghunathan, MD
+    icd: [M51.26, M54.16]
+    paras:
+      - [
+          HPI & Prior Medical History,
+          ragh-c1,
+          'Prior lumbar strain in 2019 resolved with therapy',
+          'Referred for right lower extremity radicular pain after {{WORDING:SUBJECT_INCIDENT}}. Prior lumbar strain in 2019 resolved with therapy, with no symptoms in the years before the collision.',
+        ]
+      - [
+          Physical Examination,
+          ragh-c2,
+          'No cauda equina signs',
+          'Straight-leg raise positive on the right at 40 degrees, sensory diminishment in the right L5 distribution, motor strength 5/5, no cauda equina signs.',
+        ]
+      - [
+          Medical Diagnoses,
+          ragh-c2,
+          'Right L4-L5 disc extrusion with right L5 radiculopathy',
+          'Right L4-L5 disc extrusion with right L5 radiculopathy, correlating with the MRI of 12/08/2025.',
+        ]
+      - [
+          Treatment Recommendations,
+          ragh-c2,
+          'Surgical intervention is not indicated at this time',
+          'Transforaminal epidural steroid injection at right L4-L5 followed by structured physical therapy; surgical intervention not indicated at this time.',
+        ]
+      - [Work Status, ragh-c2, 'Remain off work', 'Remain off work.']
+  - date: '2026-01-06'
+    provider: ragh
+    signer: Priya Raghunathan, MD
+    icd: [M51.26, M54.16]
+    paras:
+      - [
+          Procedures,
+          ragh-p1,
+          'Contrast confirmed appropriate epidural spread',
+          'Right L4-L5 transforaminal epidural steroid injection under fluoroscopic guidance; contrast confirmed epidural spread without vascular uptake; no immediate complication.',
+        ]
+      - [
+          Medications,
+          ragh-p1,
+          'methylprednisolone 80 mg and lidocaine 1% 2 mL',
+          'Methylprednisolone 80 mg and lidocaine 1% 2 mL injected.',
+        ]
+      - [
+          Work Status,
+          ragh-p2,
+          'Anticipate release to light duty, 20 hours per week',
+          'Remain off work; release to light duty at 20 hours per week anticipated from 01/26/2026 if therapy is tolerated.',
+        ]
+  - date: '2026-01-13'
+    provider: capital
+    signer: Adaeze Mbeki, PT, DPT
+    icd: [M54.16, M51.26]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          pt-eval-1,
+          'Low back pain with right leg symptoms at 6/10 today',
+          'Low back pain with right leg symptoms at 6/10; works as a licensed electrician with a job demand of lifting to 75 pounds, ladders, overhead work and kneeling; off work since the collision.',
+        ]
+      - [
+          Physical Examination,
+          pt-eval-1,
+          'Oswestry Disability Index 46%',
+          'Lumbar flexion 40 degrees reproducing right leg symptoms, straight-leg raise positive on the right at 45 degrees, lifting tolerance 15 pounds, Oswestry Disability Index 46%.',
+        ]
+      - [
+          Treatment Recommendations,
+          pt-eval-2,
+          '2 to 3 times per week for 8 weeks, 20 visits',
+          'Lumbar stabilization, nerve glides, strengthening and lift training 2 to 3 times per week for 8 weeks, 20 visits; home program issued; goals of lifting 50 pounds or more and return to work.',
+        ]
+  - date: '2026-02-10'
+    provider: capital
+    signer: Adaeze Mbeki, PT, DPT
+    icd: [M54.16, M51.26]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          pt-reeval,
+          'Low back pain with right leg symptoms at 4/10 today',
+          'Re-evaluation: low back pain with right leg symptoms at 4/10.',
+        ]
+      - [
+          Physical Examination,
+          pt-reeval,
+          'Lifting tolerance 25 pounds floor to waist',
+          'Lumbar flexion 55 degrees, straight-leg raise positive on the right at 60 degrees, lifting tolerance 25 pounds, Oswestry Disability Index 32%.',
+        ]
+      - [
+          Work Status,
+          pt-reeval,
+          'released to light duty 20 hours per week from 01/26/2026',
+          'The note records release to light duty at 20 hours per week from 01/26/2026 per the physician.',
+        ]
+  - date: '2026-03-08'
+    provider: capital
+    signer: Adaeze Mbeki, PT, DPT
+    icd: [M54.16, M51.26]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          pt-dc,
+          'described as intermittent and activity dependent',
+          'Radicular pain reduced from 6/10 at intake to an intermittent, activity-dependent 2/10; overhead work and sustained kneeling continue to provoke symptoms.',
+        ]
+      - [
+          Physical Examination,
+          pt-dc,
+          'Lifting tolerance measured at 35 pounds occasional',
+          'Straight-leg raise negative on the right; lumbar flexion improved from 40 to 65 degrees; right L5 sensory diminishment persists; lifting tolerance 35 pounds occasional against a pre-injury job demand of 75 pounds.',
+        ]
+      - [
+          Treatment Recommendations,
+          pt-dc,
+          'Discharged to an independent home program',
+          'Twentieth and final session; discharged to an independent home program with no further supervised therapy recommended.',
+        ]
+  - date: '2026-03-12'
+    provider: ragh
+    signer: Priya Raghunathan, MD
+    icd: [M51.26, M54.16]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          ragh-f1,
+          'improved from 6/10 to an intermittent 2/10',
+          'Radicular pain improved from 6/10 to an intermittent 2/10 after twenty therapy sessions completed 03/08/2026.',
+        ]
+      - [
+          Physical Examination,
+          ragh-f1,
+          'Straight-leg raise is negative',
+          'Straight-leg raise negative; sensory diminishment in the right L5 distribution persists.',
+        ]
+      - [
+          Medical Diagnoses,
+          ragh-f1,
+          'Reached March 8, 2026',
+          'Maximum medical improvement reached 03/08/2026.',
+        ]
+      - [
+          Treatment Recommendations,
+          ragh-f2,
+          'Future care may include repeat injection on recurrence',
+          'The L4-L5 extrusion remains on imaging and residual sensory diminishment is stated to be likely permanent to some degree; future care may include repeat injection on recurrence, with surgical decompression considered only on progression. No further treatment scheduled.',
+        ]
+      - [
+          Work Status,
+          ragh-f1,
+          'Released to full duty without restriction effective March 9, 2026',
+          'Off work 11/03/2025 through 01/25/2026; light duty at 20 hours per week 01/26/2026 through 03/08/2026; released to full duty without restriction effective 03/09/2026.',
+        ]
