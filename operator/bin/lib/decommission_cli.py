@@ -66,7 +66,7 @@ backend unwired and the ``--live`` gate armed):
 
 * ``CLOUDFLARE_API_TOKEN`` + ``CLOUDFLARE_ACCOUNT_ID`` (or the provisioning
   script's ``CF_API_TOKEN`` / ``CF_ACCOUNT_ID``) — R2 prefix deletion; the
-  ``CLOUDFLARE_`` names also drive wrangler for Vectorize and D1.
+  ``CLOUDFLARE_`` names also drive wrangler for D1.
 * ``AGENTMAIL_API_KEY`` — the org key; deletes the seat's inbox.
 * ``FLY_API_TOKEN`` — ``fly apps destroy``.
 * ``HEALTHCHECKS_API_KEY`` — deletes the seat's healthchecks.io check.
@@ -303,7 +303,6 @@ def _preflight(customers_root: Path, slug: str, *, live: bool = True) -> tuple[b
 #: Pipeline attribute -> report name, for the survey and the live read-back.
 _SURVEYED = (
     ("r2_deleter", "r2"),
-    ("vectorize_deleter", "vectorize"),
     ("agentmail", "agentmail"),
     ("fly", "fly"),
     ("observability", "console"),

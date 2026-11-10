@@ -24,10 +24,11 @@ what the account actually holds (listed read-only 2026-09-10):
   ``<slug>/`` inside ``ss-ai-employee-smd-skills``, which is the smd seat's
   pre-rename bucket, and never removed the per-seat bucket at all. The names
   now come from ``decommission_inventory``, the one list of what a seat is.
-* **Vectorize**: the two indexes the naming spec reserves per customer
-  (``hermes-<slug>-vault``, ``hermes-<slug>-corrections``). None exist in the
-  account today; the deleter lists first and reports ``indexes_already_absent``
-  rather than failing on a name that was never created.
+* **Vectorize**: no backend. Nothing ever creates a Vectorize index for a
+  seat, and neither the vaulted ``CLOUDFLARE_API_TOKEN`` nor a wrangler login
+  can reach the Vectorize API (auth error 10000), so the former
+  ``WranglerVectorizeIndexDeleter`` only made every ``--live`` run refuse. It
+  was removed with pipeline step 04.
 * **AgentMail**: the seat's own inbox, resolved the way the workspace broker
   resolves it (authored ``connectors.Email.inbox_address`` or the
   ``<slug>@agentmail.to`` convention), found in the account listing, then
@@ -86,7 +87,6 @@ from bin.lib.decommission_inventory import (
     SHARED_CONFIG_BUCKET,
     ops_sweep_github_names,
     seat_skills_buckets,
-    seat_vectorize_indexes,
     seat_webhook_host,
     shared_config_prefixes,
 )
@@ -299,59 +299,6 @@ class CloudflareR2NamespaceDeleter:
         if resp.status == 404:
             return False
         raise RuntimeError(f"r2 delete {bucket}/{key} failed: HTTP {resp.status}")
-
-
-# ---------------------------------------------------------------------------
-# Vectorize
-# ---------------------------------------------------------------------------
-
-
-customer_vectorize_indexes = seat_vectorize_indexes
-
-
-@dataclass
-class WranglerVectorizeIndexDeleter:
-    """``wrangler vectorize list --json`` then ``wrangler vectorize delete``
-    for each of the seat's two indexes that actually exists."""
-
-    runner: Runner = run_subprocess
-
-    def _existing(self) -> set[str]:
-        proc = self.runner(["npx", "wrangler", "vectorize", "list", "--json"])
-        if proc.returncode != 0:
-            raise RuntimeError(f"vectorize list failed: {proc.stderr.strip() or proc.stdout.strip()}")
-        try:
-            payload = json.loads(proc.stdout)
-        except ValueError as exc:
-            raise RuntimeError("vectorize list returned non-JSON") from exc
-        names: set[str] = set()
-        for entry in payload if isinstance(payload, list) else []:
-            if isinstance(entry, dict) and isinstance(entry.get("name"), str):
-                names.add(entry["name"])
-        return names
-
-    def survey(self, customer_slug: str) -> dict:
-        existing = self._existing()
-        found = {name: name in existing for name in customer_vectorize_indexes(customer_slug)}
-        return {"present": any(found.values()), "indexes": found}
-
-    async def delete_indexes(self, customer_slug: str) -> dict:
-        wanted = customer_vectorize_indexes(customer_slug)
-        existing = self._existing()
-        deleted: list[str] = []
-        for name in wanted:
-            if name not in existing:
-                continue
-            proc = self.runner(["npx", "wrangler", "vectorize", "delete", name])
-            if proc.returncode != 0:
-                raise RuntimeError(f"vectorize delete {name} failed: {proc.stderr.strip() or proc.stdout.strip()}")
-            deleted.append(name)
-        if deleted and (left := [n for n in wanted if n in self._existing()]):
-            raise RuntimeError(f"vectorize index(es) still listed after delete: {left}")
-        manifest: dict = {"indexes_deleted": len(deleted), "indexes": deleted}
-        if not deleted:
-            manifest.update({"skipped": True, "reason": "indexes_already_absent", "checked": wanted})
-        return manifest
 
 
 # ---------------------------------------------------------------------------
@@ -587,7 +534,6 @@ class FlyAppDestroyer:
 #: Captain sees exactly which credential is missing, never a bare "unwired".
 BACKEND_REQUIREMENTS: dict[str, str] = {
     "r2_deleter": "CLOUDFLARE_API_TOKEN (or CF_API_TOKEN) + CLOUDFLARE_ACCOUNT_ID (or CF_ACCOUNT_ID)",
-    "vectorize_deleter": "CLOUDFLARE_API_TOKEN (wrangler reads it)",
     "agentmail": "AGENTMAIL_API_KEY (the org key, not a seat key)",
     "fly": (
         "FLY_API_TOKEN (a staged token; a logged-in `fly` CLI does not count) + an authenticated `gh` "
@@ -684,9 +630,6 @@ def backends_from_env(
     if cf_token and cf_account:
         kwargs["r2_deleter"] = CloudflareR2NamespaceDeleter(cf_account, cf_token, http=http)
         wired["r2_deleter"] = True
-    if wrangler_token:
-        kwargs["vectorize_deleter"] = WranglerVectorizeIndexDeleter(runner=runner)
-        wired["vectorize_deleter"] = True
     agentmail_key = env.get("AGENTMAIL_API_KEY")
     if agentmail_key:
         kwargs["agentmail"] = AgentMailInboxDeprovisioner(agentmail_key, customers_root, http=http)
@@ -726,10 +669,8 @@ __all__ = [
     "FlyAppDestroyer",
     "HealthchecksAndFleetStatusCleanup",
     "HttpResponse",
-    "WranglerVectorizeIndexDeleter",
     "backends_from_env",
     "customer_r2_prefixes",
-    "customer_vectorize_indexes",
     "fly_app_name",
     "ops_workspace_app_name",
     "healthchecks_check_name",
