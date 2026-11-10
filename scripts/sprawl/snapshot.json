@@ -1,22 +1,22 @@
 {
-  "measuredAt": "2026-11-10T18:59:47.932Z",
-  "commit": "4fd91edd538316d103ea7d69de75691cf4a17408",
+  "measuredAt": "2026-11-10T20:50:53.420Z",
+  "commit": "ac5ccf6cd006a21bd1c78538391ae09ce3638c34",
   "instruments": {
     "jscpd": "jscpd@4.3.0",
     "vulture": "vulture==2.14",
     "couplingWindow": "6.months",
-    "commits": 2325
+    "commits": 2336
   },
   "clones": {
-    "duplicatedPct": 4.25,
-    "copiedFiles": 64,
-    "copiedLines": 32881,
-    "partialClones": 239,
-    "partialLines": 5078,
+    "duplicatedPct": 3.51,
+    "copiedFiles": 48,
+    "copiedLines": 25818,
+    "partialClones": 230,
+    "partialLines": 4662,
     "byArea": [
       {
         "area": "operator/safety_substrate",
-        "lines": 893
+        "lines": 889
       },
       {
         "area": "operator/runners",
@@ -24,19 +24,15 @@
       },
       {
         "area": "operator/workspace_broker",
-        "lines": 670
+        "lines": 698
       },
       {
         "area": "operator/hermes-smd-overlay",
-        "lines": 506
+        "lines": 443
       },
       {
         "area": "src/pages",
         "lines": 335
-      },
-      {
-        "area": "operator/adapter",
-        "lines": 296
       },
       {
         "area": "src/lib",
@@ -51,8 +47,8 @@
         "lines": 213
       },
       {
-        "area": "operator/skills/medical-records-chaser",
-        "lines": 93
+        "area": "operator/skills/deadline-miss-escalator",
+        "lines": 117
       },
       {
         "area": "src/scripts",
@@ -75,52 +71,31 @@
         "lines": 54
       },
       {
-        "area": "operator/skills/date-prep-brief",
-        "lines": 54
+        "area": "operator/skills/litigation-status",
+        "lines": 33
       },
       {
         "area": "operator/skills/records-order-chase",
-        "lines": 34
-      },
-      {
-        "area": "operator/skills/task-list-keeper",
-        "lines": 33
-      },
-      {
-        "area": "operator/skills/litigation-status",
-        "lines": 33
+        "lines": 31
       },
       {
         "area": "operator/bin",
         "lines": 23
       },
       {
-        "area": "operator/skills/statute-watch",
-        "lines": 22
-      },
-      {
         "area": "operator/skills/case-file-manager",
         "lines": 20
       },
       {
-        "area": "operator/assessment-eval",
-        "lines": 18
+        "area": "operator/adapter",
+        "lines": 15
+      },
+      {
+        "area": "operator/skills/medical-records-chaser",
+        "lines": 10
       }
     ],
     "largest": [
-      {
-        "lines": 210,
-        "a": {
-          "name": "operator/adapter/recipient_classifier.py",
-          "start": 71,
-          "end": 280
-        },
-        "b": {
-          "name": "operator/hermes-smd-overlay/shared/recipient_classifier.py",
-          "start": 85,
-          "end": 294
-        }
-      },
       {
         "lines": 193,
         "a": {
@@ -164,26 +139,26 @@
         "lines": 137,
         "a": {
           "name": "operator/safety_substrate/identifier_filter.py",
-          "start": 573,
-          "end": 709
+          "start": 569,
+          "end": 705
         },
         "b": {
           "name": "operator/hermes-smd-overlay/shared/identifier_filter.py",
-          "start": 725,
-          "end": 861
+          "start": 720,
+          "end": 856
         }
       },
       {
-        "lines": 104,
+        "lines": 100,
         "a": {
           "name": "operator/safety_substrate/identifier_filter.py",
           "start": 470,
-          "end": 573
+          "end": 569
         },
         "b": {
           "name": "operator/hermes-smd-overlay/shared/identifier_filter.py",
           "start": 559,
-          "end": 645
+          "end": 640
         }
       },
       {
@@ -215,14 +190,14 @@
       {
         "lines": 60,
         "a": {
+          "name": "operator/skills/deadline-miss-escalator/broker_writer.py",
+          "start": 72,
+          "end": 131
+        },
+        "b": {
           "name": "operator/skills/medical-records-chaser/pre_run.py",
           "start": 820,
           "end": 879
-        },
-        "b": {
-          "name": "operator/skills/task-list-keeper/broker_writer.py",
-          "start": 72,
-          "end": 131
         }
       },
       {
@@ -302,6 +277,19 @@
           "start": 63,
           "end": 110
         }
+      },
+      {
+        "lines": 47,
+        "a": {
+          "name": "operator/safety_substrate/citation_filter.py",
+          "start": 135,
+          "end": 181
+        },
+        "b": {
+          "name": "operator/hermes-smd-overlay/shared/citation_filter.py",
+          "start": 135,
+          "end": 181
+        }
       }
     ]
   },
@@ -309,15 +297,15 @@
     {
       "literal": "CUSTOMER_SLUG",
       "kind": "env",
-      "files": 87,
-      "testFiles": 20,
+      "files": 82,
+      "testFiles": 22,
       "languages": [
         "config",
         "python",
         "shell",
         "ts/js"
       ],
-      "areas": 31,
+      "areas": 29,
       "sample": [
         "bin/connect-smokeball.sh",
         "bin/reauth-connector.sh",
@@ -329,7 +317,7 @@
     {
       "literal": "/opt/data",
       "kind": "path",
-      "files": 80,
+      "files": 76,
       "testFiles": 23,
       "languages": [
         "config",
@@ -337,7 +325,7 @@
         "shell",
         "ts/js"
       ],
-      "areas": 25,
+      "areas": 23,
       "sample": [
         "operator/bin/lib/boot_harness/__init__.py",
         "operator/bin/lib/boot_harness/cli.py",
@@ -349,7 +337,7 @@
     {
       "literal": "HERMES_HOME",
       "kind": "env",
-      "files": 78,
+      "files": 73,
       "testFiles": 58,
       "languages": [
         "config",
@@ -357,7 +345,7 @@
         "shell",
         "ts/js"
       ],
-      "areas": 22,
+      "areas": 20,
       "sample": [
         "operator/bin/lib/boot_harness/cli.py",
         "operator/bin/lib/boot_harness/collect.py",
@@ -369,14 +357,14 @@
     {
       "literal": "SMD_WORKSPACE_BROKER_SOCKET",
       "kind": "env",
-      "files": 70,
-      "testFiles": 16,
+      "files": 66,
+      "testFiles": 17,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 26,
+      "areas": 24,
       "sample": [
         "operator/bin/medchron-backfill-covered.py",
         "operator/hermes-smd-overlay/contracts/consumes.yaml",
@@ -388,14 +376,14 @@
     {
       "literal": "SMD_CUSTOMER_YAML_PATH",
       "kind": "env",
-      "files": 44,
-      "testFiles": 67,
+      "files": 42,
+      "testFiles": 73,
       "languages": [
         "config",
         "python",
         "shell"
       ],
-      "areas": 22,
+      "areas": 20,
       "sample": [
         "operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py",
         "operator/connectors/smokeball/smokeball_connector/library.py",
@@ -421,43 +409,6 @@
         "operator/bin/audit-chain-watch.py",
         "operator/bin/lib/boot_harness/cli.py",
         "operator/bin/lib/decommission_inventory.py"
-      ]
-    },
-    {
-      "literal": "SMD_AUDIT_BROKER_SOCKET",
-      "kind": "env",
-      "files": 40,
-      "testFiles": 12,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 26,
-      "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/connectors/smokeball/smokeball_connector/write_record.py",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/shared/audit_client.py",
-        "operator/hermes-smd-overlay/shared/audit_failure_counter.py"
-      ]
-    },
-    {
-      "literal": "SMD_CUSTOMER_SLUG",
-      "kind": "env",
-      "files": 40,
-      "testFiles": 27,
-      "languages": [
-        "config",
-        "python"
-      ],
-      "areas": 4,
-      "sample": [
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/plugin.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-calendar/__init__.py"
       ]
     },
     {
@@ -499,6 +450,43 @@
       ]
     },
     {
+      "literal": "SMD_AUDIT_BROKER_SOCKET",
+      "kind": "env",
+      "files": 36,
+      "testFiles": 12,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 24,
+      "sample": [
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/connectors/smokeball/smokeball_connector/write_record.py",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/shared/audit_client.py",
+        "operator/hermes-smd-overlay/shared/audit_failure_counter.py"
+      ]
+    },
+    {
+      "literal": "SMD_CUSTOMER_SLUG",
+      "kind": "env",
+      "files": 36,
+      "testFiles": 29,
+      "languages": [
+        "config",
+        "python"
+      ],
+      "areas": 4,
+      "sample": [
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/__init__.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-audit/plugin.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-calendar/__init__.py"
+      ]
+    },
+    {
       "literal": "R2_ENDPOINT_URL",
       "kind": "env",
       "files": 35,
@@ -518,29 +506,10 @@
       ]
     },
     {
-      "literal": "REPO_ROOT",
-      "kind": "env",
-      "files": 32,
-      "testFiles": 54,
-      "languages": [
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 11,
-      "sample": [
-        "bin/connect-smokeball.sh",
-        "bin/reauth-connector.sh",
-        "operator/bin/control-probes.py",
-        "operator/bin/decommission-customer.sh",
-        "operator/bin/generate-evidence-packet.sh"
-      ]
-    },
-    {
       "literal": "RESEND_API_KEY",
       "kind": "env",
       "files": 32,
-      "testFiles": 16,
+      "testFiles": 17,
       "languages": [
         "config",
         "python",
@@ -557,28 +526,29 @@
       ]
     },
     {
-      "literal": "/opt/data/skills",
-      "kind": "path",
-      "files": 26,
-      "testFiles": 3,
+      "literal": "REPO_ROOT",
+      "kind": "env",
+      "files": 31,
+      "testFiles": 54,
       "languages": [
         "python",
-        "shell"
+        "shell",
+        "ts/js"
       ],
-      "areas": 13,
+      "areas": 11,
       "sample": [
-        "operator/bin/lib/fleet/remote_selftest_plant.py",
-        "operator/hermes-smd-overlay/bootstrap/translate.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-initiation/skill_fence.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-record-store/path_fence.py",
-        "operator/skills/client-verification-tracker/pre_run.py"
+        "bin/connect-smokeball.sh",
+        "bin/reauth-connector.sh",
+        "operator/bin/control-probes.py",
+        "operator/bin/decommission-customer.sh",
+        "operator/bin/generate-evidence-packet.sh"
       ]
     },
     {
       "literal": "SMD_D1_AUDIT_BINDING",
       "kind": "env",
       "files": 25,
-      "testFiles": 18,
+      "testFiles": 20,
       "languages": [
         "config",
         "python",
@@ -597,7 +567,7 @@
       "literal": "SMD_SPEC_DIR",
       "kind": "env",
       "files": 25,
-      "testFiles": 13,
+      "testFiles": 14,
       "languages": [
         "config",
         "python",
@@ -614,39 +584,21 @@
       ]
     },
     {
-      "literal": "SMD_CONNECTOR_VENV_PYTHON",
-      "kind": "env",
-      "files": 24,
-      "testFiles": 5,
-      "languages": [
-        "python",
-        "shell"
-      ],
-      "areas": 18,
-      "sample": [
-        "docs/reviews/claims-2026-10-17.probe.sh",
-        "docs/reviews/claims-2026-10-27.probe.sh",
-        "operator/skills/client-verification-tracker/pre_run.py",
-        "operator/skills/client-verification-tracker/role_snapshot.py",
-        "operator/skills/client-verification-tracker/routing.py"
-      ]
-    },
-    {
-      "literal": "/opt/connectors/smokeball/.venv/bin/python",
+      "literal": "/opt/data/skills",
       "kind": "path",
-      "files": 23,
-      "testFiles": 5,
+      "files": 22,
+      "testFiles": 3,
       "languages": [
         "python",
         "shell"
       ],
-      "areas": 17,
+      "areas": 11,
       "sample": [
-        "operator/skills/client-verification-tracker/pre_run.py",
-        "operator/skills/client-verification-tracker/role_snapshot.py",
-        "operator/skills/client-verification-tracker/routing.py",
-        "operator/skills/connector-auth-check/pre_run.py",
-        "operator/skills/daily-needs-you-digest/pre_run.py"
+        "operator/bin/lib/fleet/remote_selftest_plant.py",
+        "operator/hermes-smd-overlay/bootstrap/translate.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-initiation/skill_fence.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-record-store/path_fence.py",
+        "operator/skills/client-verification-tracker/pre_run.py"
       ]
     },
     {
@@ -689,10 +641,46 @@
       ]
     },
     {
+      "literal": "SMD_CONNECTOR_VENV_PYTHON",
+      "kind": "env",
+      "files": 20,
+      "testFiles": 5,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 16,
+      "sample": [
+        "docs/reviews/claims-2026-10-17.probe.sh",
+        "docs/reviews/claims-2026-10-27.probe.sh",
+        "operator/skills/client-verification-tracker/pre_run.py",
+        "operator/skills/client-verification-tracker/role_snapshot.py",
+        "operator/skills/client-verification-tracker/routing.py"
+      ]
+    },
+    {
+      "literal": "/opt/connectors/smokeball/.venv/bin/python",
+      "kind": "path",
+      "files": 19,
+      "testFiles": 5,
+      "languages": [
+        "python",
+        "shell"
+      ],
+      "areas": 15,
+      "sample": [
+        "operator/skills/client-verification-tracker/pre_run.py",
+        "operator/skills/client-verification-tracker/role_snapshot.py",
+        "operator/skills/client-verification-tracker/routing.py",
+        "operator/skills/connector-auth-check/pre_run.py",
+        "operator/skills/daily-needs-you-digest/pre_run.py"
+      ]
+    },
+    {
       "literal": "ANTHROPIC_API_KEY",
       "kind": "env",
       "files": 18,
-      "testFiles": 21,
+      "testFiles": 22,
       "languages": [
         "config",
         "python",
@@ -727,25 +715,6 @@
       ]
     },
     {
-      "literal": "MSGRAPH_CLIENT_SECRET",
-      "kind": "env",
-      "files": 16,
-      "testFiles": 9,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 6,
-      "sample": [
-        "operator/bin/killtest-msgraph-send.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/bin/rehearse-card.py",
-        "operator/connectors/msgraph-mail/manifest.toml"
-      ]
-    },
-    {
       "literal": "JOBS_DATA_DIR",
       "kind": "env",
       "files": 15,
@@ -761,6 +730,25 @@
         "operator/runners/jobs/jobs/daemon.py",
         "operator/runners/jobs/jobs/litigation/manifest.py",
         "operator/runners/jobs/jobs/litigation/textcache.py"
+      ]
+    },
+    {
+      "literal": "MSGRAPH_CLIENT_SECRET",
+      "kind": "env",
+      "files": 15,
+      "testFiles": 8,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 6,
+      "sample": [
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "operator/bin/rehearse-card.py",
+        "operator/connectors/msgraph-mail/manifest.toml",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py"
       ]
     },
     {
@@ -840,24 +828,6 @@
       ]
     },
     {
-      "literal": "SMD_ESCALATION_LEDGER_PATH",
-      "kind": "env",
-      "files": 13,
-      "testFiles": 6,
-      "languages": [
-        "config",
-        "python"
-      ],
-      "areas": 9,
-      "sample": [
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/__init__.py",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/casework_reply.py",
-        "operator/hermes-smd-overlay/shared/escalation_ledger.py",
-        "operator/skills/client-verification-tracker/escalation_ledger.py"
-      ]
-    },
-    {
       "literal": "ALERT_TO_EMAIL",
       "kind": "env",
       "files": 12,
@@ -895,24 +865,6 @@
       ]
     },
     {
-      "literal": "/opt/data/audit/escalation-ledger.jsonl",
-      "kind": "path",
-      "files": 11,
-      "testFiles": 2,
-      "languages": [
-        "config",
-        "python"
-      ],
-      "areas": 9,
-      "sample": [
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/__init__.py",
-        "operator/hermes-smd-overlay/shared/escalation_ledger.py",
-        "operator/skills/client-verification-tracker/escalation_ledger.py",
-        "operator/skills/daily-needs-you-digest/escalation_ledger.py"
-      ]
-    },
-    {
       "literal": "/var/lib/smd-config/customer.yaml",
       "kind": "path",
       "files": 11,
@@ -928,6 +880,24 @@
         "operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailboxes.py",
         "operator/connectors/smokeball/smokeball_connector/library.py",
         "operator/connectors/smokeball/smokeball_connector/logic_in_code.py"
+      ]
+    },
+    {
+      "literal": "SMD_ESCALATION_LEDGER_PATH",
+      "kind": "env",
+      "files": 11,
+      "testFiles": 6,
+      "languages": [
+        "config",
+        "python"
+      ],
+      "areas": 7,
+      "sample": [
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/__init__.py",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/casework_reply.py",
+        "operator/hermes-smd-overlay/shared/escalation_ledger.py",
+        "operator/skills/client-verification-tracker/escalation_ledger.py"
       ]
     },
     {
@@ -1039,25 +1009,6 @@
       ]
     },
     {
-      "literal": "MSGRAPH_CLIENT_ID",
-      "kind": "env",
-      "files": 10,
-      "testFiles": 5,
-      "languages": [
-        "config",
-        "python",
-        "shell"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/bin/killtest-msgraph-send.py",
-        "operator/bin/lib/secret_custody.py",
-        "operator/bin/provision-customer.sh",
-        "operator/connectors/msgraph-mail/manifest.toml",
-        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py"
-      ]
-    },
-    {
       "literal": "MSGRAPH_MAILBOX",
       "kind": "env",
       "files": 10,
@@ -1115,10 +1066,28 @@
       ]
     },
     {
+      "literal": "/opt/data/audit/escalation-ledger.jsonl",
+      "kind": "path",
+      "files": 9,
+      "testFiles": 2,
+      "languages": [
+        "config",
+        "python"
+      ],
+      "areas": 7,
+      "sample": [
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/__init__.py",
+        "operator/hermes-smd-overlay/shared/escalation_ledger.py",
+        "operator/skills/client-verification-tracker/escalation_ledger.py",
+        "operator/skills/daily-needs-you-digest/escalation_ledger.py"
+      ]
+    },
+    {
       "literal": "/opt/data/profiles",
       "kind": "path",
       "files": 9,
-      "testFiles": 5,
+      "testFiles": 6,
       "languages": [
         "python",
         "shell"
@@ -1169,10 +1138,29 @@
       ]
     },
     {
+      "literal": "MSGRAPH_CLIENT_ID",
+      "kind": "env",
+      "files": 9,
+      "testFiles": 4,
+      "languages": [
+        "config",
+        "python",
+        "shell"
+      ],
+      "areas": 5,
+      "sample": [
+        "operator/bin/lib/secret_custody.py",
+        "operator/bin/provision-customer.sh",
+        "operator/connectors/msgraph-mail/manifest.toml",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/client.py",
+        "operator/hermes-smd-overlay/bootstrap/mcp_registry.py"
+      ]
+    },
+    {
       "literal": "SMD_D1_AGENT_STATE_BINDING",
       "kind": "env",
       "files": 9,
-      "testFiles": 3,
+      "testFiles": 7,
       "languages": [
         "config",
         "python"
@@ -1355,7 +1343,7 @@
       "literal": "/opt/connectors/smokeball",
       "kind": "path",
       "files": 7,
-      "testFiles": 3,
+      "testFiles": 4,
       "languages": [
         "python",
         "shell"
@@ -1555,28 +1543,10 @@
       ]
     },
     {
-      "literal": "SMD_CASEWORK_LEDGER_PATH",
-      "kind": "env",
-      "files": 7,
-      "testFiles": 5,
-      "languages": [
-        "config",
-        "python"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/casework_rules.py",
-        "operator/hermes-smd-overlay/shared/casework_ledger.py",
-        "operator/skills/date-prep-brief/casework_ledger.py",
-        "operator/skills/deadline-miss-escalator/casework_ledger.py"
-      ]
-    },
-    {
       "literal": "SMD_DRAFTING_QUEUE_DIR",
       "kind": "env",
       "files": 7,
-      "testFiles": 3,
+      "testFiles": 4,
       "languages": [
         "python",
         "shell"
@@ -1594,7 +1564,7 @@
       "literal": "SMD_LITIGATION_QUEUE_DIR",
       "kind": "env",
       "files": 7,
-      "testFiles": 1,
+      "testFiles": 2,
       "languages": [
         "python",
         "shell"
@@ -1612,7 +1582,7 @@
       "literal": "SMD_NEGOTIATION_QUEUE_DIR",
       "kind": "env",
       "files": 7,
-      "testFiles": 1,
+      "testFiles": 2,
       "languages": [
         "python",
         "shell"
@@ -1721,24 +1691,6 @@
       ]
     },
     {
-      "literal": "/opt/data/audit/casework-ledger.jsonl",
-      "kind": "path",
-      "files": 6,
-      "testFiles": 2,
-      "languages": [
-        "config",
-        "python"
-      ],
-      "areas": 5,
-      "sample": [
-        "operator/hermes-smd-overlay/contracts/consumes.yaml",
-        "operator/hermes-smd-overlay/shared/casework_ledger.py",
-        "operator/skills/date-prep-brief/casework_ledger.py",
-        "operator/skills/deadline-miss-escalator/casework_ledger.py",
-        "operator/skills/task-list-keeper/casework_ledger.py"
-      ]
-    },
-    {
       "literal": "/opt/data/customer.yaml",
       "kind": "path",
       "files": 6,
@@ -1760,7 +1712,7 @@
       "literal": "/opt/data/medchron",
       "kind": "path",
       "files": 6,
-      "testFiles": 4,
+      "testFiles": 5,
       "languages": [
         "python",
         "shell",
@@ -1871,7 +1823,7 @@
       "literal": "SMD_CASEFILE_QUEUE_DIR",
       "kind": "env",
       "files": 6,
-      "testFiles": 2,
+      "testFiles": 3,
       "languages": [
         "python",
         "shell"
@@ -1907,7 +1859,7 @@
       "literal": "SMD_DEMAND_QUEUE_DIR",
       "kind": "env",
       "files": 6,
-      "testFiles": 2,
+      "testFiles": 3,
       "languages": [
         "python",
         "shell"
@@ -2015,7 +1967,7 @@
       "literal": "/opt/data/attachment-spool",
       "kind": "path",
       "files": 5,
-      "testFiles": 2,
+      "testFiles": 3,
       "languages": [
         "config",
         "python"
@@ -2104,7 +2056,7 @@
       "literal": "/opt/jobs",
       "kind": "path",
       "files": 5,
-      "testFiles": 6,
+      "testFiles": 7,
       "languages": [
         "python",
         "shell"
@@ -2427,6 +2379,24 @@
       ]
     },
     {
+      "literal": "SMD_CASEWORK_LEDGER_PATH",
+      "kind": "env",
+      "files": 5,
+      "testFiles": 3,
+      "languages": [
+        "config",
+        "python"
+      ],
+      "areas": 3,
+      "sample": [
+        "operator/hermes-smd-overlay/contracts/consumes.yaml",
+        "operator/hermes-smd-overlay/plugins/hermes-smd-escalation/casework_rules.py",
+        "operator/hermes-smd-overlay/shared/casework_ledger.py",
+        "operator/skills/deadline-miss-escalator/casework_ledger.py",
+        "operator/workspace_broker/casework_ledger.py"
+      ]
+    },
+    {
       "literal": "SMD_MSGRAPH_CREDENTIAL_PATH",
       "kind": "env",
       "files": 5,
@@ -2638,8 +2608,8 @@
     {
       "a": "operator/contracts/output-classes.yaml",
       "b": "src/lib/portal/operator/facets/skills/skill-summaries.ts",
-      "shared": 22,
-      "degree": 76
+      "shared": 23,
+      "degree": 77
     },
     {
       "a": "operator/contracts/audit-action-type-producers.json",
@@ -2679,15 +2649,9 @@
     },
     {
       "a": "docs/handbook/connectors-channels.md",
-      "b": "operator/connectors/smokeball/manifest.toml",
-      "shared": 13,
-      "degree": 51
-    },
-    {
-      "a": "docs/handbook/connectors-channels.md",
       "b": "operator/connectors/smokeball/smokeball_connector/attachment_tools.py",
       "shared": 12,
-      "degree": 69
+      "degree": 63
     },
     {
       "a": "src/lib/admin/fleet-status.ts",
@@ -2700,12 +2664,6 @@
       "b": "operator/skills/deadline-miss-escalator/pre_run.py",
       "shared": 9,
       "degree": 53
-    },
-    {
-      "a": "docs/handbook/connectors-channels.md",
-      "b": "operator/skills/file-work-requests/SKILL.md",
-      "shared": 9,
-      "degree": 51
     },
     {
       "a": "operator/skills/daily-needs-you-digest/escalation_ledger.py",
@@ -3104,12 +3062,6 @@
       "degree": 56
     },
     {
-      "a": "scripts/request-cards.ts",
-      "b": "src/lib/operator/request-card.ts",
-      "shared": 5,
-      "degree": 56
-    },
-    {
       "a": "operator/skills/discovery-response-tracker/SKILL.md",
       "b": "operator/skills/medical-records-chaser/SKILL.md",
       "shared": 5,
@@ -3120,12 +3072,6 @@
       "b": "src/pages/api/intake/send.ts",
       "shared": 5,
       "degree": 56
-    },
-    {
-      "a": "docs/handbook/ops-machine.md",
-      "b": "operator/ops-machine/bin/ops-start",
-      "shared": 5,
-      "degree": 53
     },
     {
       "a": "src/lib/db/subscriptions.ts",
@@ -3140,6 +3086,18 @@
       "degree": 50
     },
     {
+      "a": "scripts/request-cards.ts",
+      "b": "src/lib/operator/request-card.ts",
+      "shared": 5,
+      "degree": 50
+    },
+    {
+      "a": "docs/handbook/ops-machine.md",
+      "b": "operator/ops-machine/bin/ops-start",
+      "shared": 5,
+      "degree": 50
+    },
+    {
       "a": "operator/skills/medical-records-chaser/SKILL.md",
       "b": "operator/skills/motion-calendar-tracker/SKILL.md",
       "shared": 5,
@@ -3147,14 +3105,13 @@
     }
   ],
   "dead": {
-    "candidates": 541,
+    "candidates": 524,
     "byKind": {
-      "variable": 131,
+      "variable": 140,
       "property": 4,
-      "method": 110,
-      "attribute": 112,
-      "function": 178,
-      "class": 6
+      "method": 89,
+      "attribute": 129,
+      "function": 162
     }
   }
 }
