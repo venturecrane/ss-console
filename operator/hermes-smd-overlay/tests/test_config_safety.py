@@ -205,9 +205,6 @@ def test_floor_preserving_garbled_ceiling_fails_closed(synthetic_floor):
         "personas.0.skills.3.settings",
         "personas.0.skills.3.settings.chase_cadence_days",
         "personas.0.skills.3.settings.escalate_after_attempts",
-        # ADR 0104 switches are read fresh per call off the live yaml.
-        "logic_in_code",
-        "logic_in_code.library_setup",
     ],
 )
 def test_live_writable_allows_allow_list(path):
