@@ -1,6 +1,6 @@
 {
   "_comment": "pyright errors per file at adoption, generated and enforced by bin/pyright-ratchet.py. Do not hand-edit. Regenerate with `pyright --outputjson > r.json; python3 bin/pyright-ratchet.py r.json --update`. A file leaves this list by reaching zero; no count may grow.",
-  "total": 80,
+  "total": 79,
   "files": {
     "bin/control-probes.py": 5,
     "bin/lib/chain_rehearsal.py": 1,
@@ -15,7 +15,6 @@
     "bin/reconcile-wakes.py": 3,
     "bin/rehearse-card.py": 6,
     "bin/seat-readiness.py": 1,
-    "bin/seed-staging-matter.py": 1,
     "bin/substrate-paths-changed.py": 1,
     "bin/voice_profile.py": 1,
     "rehearsal/drivers.py": 3,

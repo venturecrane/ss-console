@@ -1,0 +1,1017 @@
+# [SEED] Case spec: Chen v. Sunrise Plaza, staging matter 2026-PI-102
+# (premises slip and fall, wrist surgery).
+#
+# FICTIONAL. Every person, provider, number and address below is invented for
+# SMD's own demo tenant (Brannock & Ferreira LLP, a fictional firm). Nothing is
+# drawn from any client's records.
+#
+# Consistent with what is already seeded on the matter
+# (bin/lib/seed_fixtures/chen_pi102.py): fall 01/14/2026 about 10:40 a.m. on
+# standing water at Sunrise Plaza, 4400 N. Central Ave, Phoenix; Valley Medical
+# Center ED (MRN VMC-2261184), closed reduction, referral to Dr Amara Okonkwo;
+# ORIF left distal radius 01/21; sutures out 01/31; brace 02/04; Desert PT 24
+# sessions 02/17 to 05/18; off work through 04/06, light duty 04/07 to 05/18,
+# full duty 05/19; MMI 05/18; discharge summary 05/28. Billed: VMC ED
+# $4,820.00 and surgery $22,415.00 (one VMC account, $27,235.00), Okonkwo
+# $6,340.00, Desert PT $5,760.00, Radiology Associates of Phoenix $2,180.00.
+# Total $41,515.00, the firm's billing summary.
+#
+# KEPT ON PURPOSE: these records place the fall on 01/14/2026 in Phoenix; the
+# matter's own Complaint alleges 04/03/2026 in Los Angeles. That contradiction
+# is the evidence that the drafter catches a conflict (seed_fixtures/__init__.py).
+#
+# DELIBERATE DEFECTS: one page of another patient (Robert Chang) misfiled in
+# the orthopedic production; about a fifth of the pages re-sent by fax.
+
+matter:
+  slug: chen-pi102
+  unit: chen
+  number: 2026-PI-102
+  matter_id: 404b292e-ec0f-4c12-aa53-3ea27784cd0e
+  title: Chen v. Sunrise Plaza
+  seed: 102
+  target_pages: 700
+  scan_rate: 0.6
+  incident_date: '2026-01-14'
+  injuries: comminuted intra-articular fracture of the left distal radius treated by open reduction and internal fixation; lumbar strain
+  firm: Brannock & Ferreira LLP
+  firm_fax: (562) 555-0179
+  date_stamp: 06-02-26
+
+patient:
+  name: Robert Chen
+  last: Chen
+  dob: 03/22/1979
+  sex: M
+  mrn:
+    vmc: VMC-2261184
+    okonkwo: OOA-40215
+    rap: RAP-993012
+    desert: DPT-31877
+
+headings:
+  - HPI & Prior Medical History
+  - Patient Complaints & Limitations
+  - Physical Examination
+  - Diagnostic Studies
+  - Medical Diagnoses
+  - Procedures
+  - Medications
+  - Treatment Recommendations
+  - Work Status
+
+icd:
+  S52.572A: Other intraarticular fracture of lower end of left radius, initial encounter for closed fracture
+  S52.572D: Other intraarticular fracture of lower end of left radius, subsequent encounter for closed fracture with routine healing
+  S39.012A: Strain of muscle, fascia and tendon of lower back, initial encounter
+  W01.0XXA: Fall on same level from slipping, tripping and stumbling without subsequent striking against object, initial encounter
+
+providers:
+  vmc:
+    facility: Valley Medical Center
+    address: 3100 N. 7th Street, Phoenix, AZ 85014
+    phone: (602) 555-0161
+    fax: (602) 555-0162
+    match: nandakumar|valley medical
+    custodian: Lorraine Begay
+    style: { font: helv, accent: [0.05, 0.40, 0.30], layout: band }
+  okonkwo:
+    facility: Okonkwo Orthopedic Associates
+    address: 2222 E. Highland Avenue, Suite 300, Phoenix, AZ 85016
+    phone: (602) 555-0134
+    fax: (602) 555-0135
+    match: okonkwo
+    custodian: Desiree Halvorsen
+    style: { font: tiro, accent: [0.15, 0.20, 0.50], layout: box, size: 10 }
+  rap:
+    facility: Radiology Associates of Phoenix
+    address: 1501 E. Thomas Road, Phoenix, AZ 85014
+    phone: (602) 555-0117
+    fax: (602) 555-0118
+    match: liang|radiology associates
+    custodian: Film Library
+    style: { font: tiro, accent: [0.2, 0.2, 0.2], layout: rule, size: 10 }
+  desert:
+    facility: Desert Physical Therapy
+    address: 5025 N. Central Avenue, Suite 110, Phoenix, AZ 85012
+    phone: (602) 555-0156
+    fax: (602) 555-0157
+    match: desert physical|brightwater
+    custodian: Ana Lucero
+    style: { font: helv, accent: [0.80, 0.35, 0.10], layout: band }
+  rx:
+    facility: Camelback Community Pharmacy
+    address: 1340 E. Camelback Road, Phoenix, AZ 85014
+    phone: (602) 555-0129
+    fax: (602) 555-0130
+    custodian: Ravi Menon, PharmD
+    style: { font: cour, accent: [0.2, 0.2, 0.2], layout: rule }
+  bsh:
+    facility: Blue Sage Health
+    address: Claims, P.O. Box 31170, Phoenix, AZ 85046
+    phone: (602) 555-0109
+    fax: (602) 555-0108
+    custodian: Member Services
+    style: { font: helv, accent: [0.1, 0.3, 0.6], layout: rule }
+
+series:
+  pt:
+    provider: desert
+    signer: Hannah Brightwater, PT, CHT
+    region: left wrist pain
+    objective: Wrist AROM and grip measured, edema checked, lumbar screen. See flowsheet.
+    treatment: Therapeutic exercise (97110) 2 units, manual therapy (97140) 1 unit, therapeutic activities (97530) 1 unit.
+    treatment_summary: Therapeutic exercise, manual therapy and therapeutic activities for the wrist.
+    flowsheets: 4
+    icd: [S52.572D]
+    dates:
+      [
+        '2026-02-17',
+        '2026-02-19',
+        '2026-02-24',
+        '2026-02-26',
+        '2026-03-03',
+        '2026-03-05',
+        '2026-03-10',
+        '2026-03-12',
+        '2026-03-17',
+        '2026-03-19',
+        '2026-03-24',
+        '2026-03-26',
+        '2026-03-31',
+        '2026-04-02',
+        '2026-04-07',
+        '2026-04-09',
+        '2026-04-14',
+        '2026-04-16',
+        '2026-04-21',
+        '2026-04-23',
+        '2026-04-28',
+        '2026-04-30',
+        '2026-05-12',
+        '2026-05-18',
+      ]
+    pain: [7, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 3, 3, 2, 2, 2, 1]
+    authored: ['2026-02-17', '2026-03-31', '2026-05-18']
+    cpt:
+      - ['97110', 'Therapeutic exercise x2', 120.00]
+      - ['97140', 'Manual therapy', 60.00]
+      - ['97530', 'Therapeutic activities', 60.00]
+    cpt_by_date:
+      '2026-02-17': [['97163', 'PT evaluation, high', 240.00]]
+      '2026-03-31': [['97164', 'PT re-evaluation', 240.00]]
+
+documents:
+  - id: vmc-ed
+    name: 2026-02-20 Valley Medical Center - Emergency Department Records
+    provider: vmc
+    fax: { sent: '2026-02-20 10:05', from_name: VMC HIM }
+    pages:
+      - { kind: fax_cover, date: '2026-02-20', re: 'Emergency department records, 01/14/2026' }
+      - { kind: custodian_cert, date: '2026-02-20', span: '01/14/2026' }
+      - kind: intake_form
+        id: vmc-reg
+        date: '2026-01-14'
+        heading: 'EMERGENCY DEPARTMENT REGISTRATION (completed by patient)'
+        fields:
+          Name: Robert Chen
+          Reason for visit: fell on wet floor at Sunrise Plaza, L wrist + back
+          Time of injury: about 10:40 am
+          Employer: Copper State Mechanical
+      - id: ved-1
+        title: ED Provider Note
+        date: '2026-01-14'
+        body: |
+          Date of service: 01/14/2026   Arrival 11:52   Provider: Priya Nandakumar, MD
+
+          CHIEF COMPLAINT
+          Left wrist pain and lower back pain after a fall on a wet floor earlier today.
+
+          HISTORY OF PRESENT ILLNESS
+          Male patient presents after a witnessed slip and fall on standing water at a
+          commercial property this morning at approximately 10:40 a.m. Landed on outstretched
+          left hand with the lower back striking the floor. Denies head strike, denies loss of
+          consciousness. Pain in the left wrist rated 8/10, lower back 5/10. No numbness or
+          tingling in the extremities.
+      - id: ved-2
+        title: ED Provider Note (continued)
+        date: '2026-01-14'
+        body: |
+          EXAMINATION
+          Left wrist: obvious deformity, swelling, tenderness over the distal radius.
+          Neurovascularly intact distally; capillary refill under 2 seconds.
+          Lumbar spine: paraspinal tenderness L3-L5, no midline step-off. Antalgic gait.
+          Straight-leg raise negative bilaterally.
+
+          PROCEDURE
+          Closed reduction of the left distal radius under hematoma block with lidocaine 1%
+          10 mL; sugar-tong splint applied. Post-reduction films show improved alignment with
+          residual dorsal angulation.
+      - id: ved-3
+        title: ED Provider Note (continued)
+        date: '2026-01-14'
+        body: |
+          ASSESSMENT
+          1. Closed comminuted intra-articular fracture, left distal radius
+          2. Acute lumbar strain
+
+          PLAN
+          Given the intra-articular extension and residual angulation, orthopedic referral for
+          likely operative fixation. Referred to Dr. Amara Okonkwo, orthopedic surgery.
+          Discharged with sling, oxycodone-acetaminophen 5-325 mg every 6 hours as needed,
+          12 tablets, and return precautions. Discharged 16:35.
+          Priya Nandakumar, MD, Emergency Medicine
+      - { kind: nursing_notes, count: 60, date: '2026-01-14', start: '11:55' }
+      - { kind: vitals, count: 34, date: '2026-01-14', start: '11:50' }
+      - {
+          kind: mar,
+          count: 8,
+          date: '2026-01-14',
+          start: '12:20',
+          meds: ['Morphine 4 mg IV', 'Ondansetron 4 mg IV', 'Lidocaine 1% 10 mL hematoma block'],
+        }
+      - { kind: orders, count: 16, date: '2026-01-14', start: '12:00' }
+      - { kind: education, count: 22, topic: 'Wrist Fracture and Splint Care' }
+      - { kind: access_log, count: 3, date: '2026-01-15' }
+      - { kind: blank, count: 3 }
+
+  - id: vmc-or
+    name: 2026-02-20 Valley Medical Center - Surgical Records
+    provider: vmc
+    fax: { sent: '2026-02-20 10:41', from_name: VMC HIM }
+    pages:
+      - { kind: fax_cover, date: '2026-02-20', re: 'Surgical records, 01/21/2026' }
+      - { kind: custodian_cert, date: '2026-02-20', span: '01/21/2026' }
+      - id: vor-op1
+        title: Operative Report
+        date: '2026-01-21'
+        body: |
+          Date of surgery: 01/21/2026   Surgeon: Amara Okonkwo, MD, Orthopedic Surgery
+          Anesthesia: regional block with sedation
+
+          PREOPERATIVE DIAGNOSIS
+          Comminuted intra-articular fracture, left distal radius, with dorsal angulation and
+          articular step-off, failed closed management.
+          POSTOPERATIVE DIAGNOSIS
+          Same.
+          PROCEDURE
+          Open reduction and internal fixation, left distal radius, with volar locking plate
+          and screws.
+          INDICATIONS
+          Post-reduction imaging demonstrated persistent dorsal angulation of 18 degrees and a
+          2 mm articular step-off. Operative fixation was recommended to restore articular
+          congruity. Consent obtained.
+      - id: vor-op2
+        title: Operative Report (continued)
+        date: '2026-01-21'
+        body: |
+          FINDINGS AND TECHNIQUE
+          Standard volar Henry approach. The fracture was comminuted with three principal
+          fragments and a depressed articular fragment. The articular surface was elevated and
+          held with K-wires. A volar locking plate was applied with locking screws distally and
+          cortical screws proximally. Fluoroscopy confirmed restoration of radial height, volar
+          tilt and articular congruity with no residual step-off. Closed in layers. Volar
+          splint applied.
+
+          DISPOSITION
+          Discharged same day. Follow-up in 10 days for suture removal. Physical therapy to
+          begin at approximately 4 weeks. No lifting with the left upper extremity.
+          Amara Okonkwo, MD
+      - kind: note
+        title: Surgical Consent
+        date: '2026-01-21'
+        scan: true
+        body: |
+          Procedure: open reduction and internal fixation, left distal radius.
+          Risks explained, including infection, nerve injury, stiffness and hardware removal.
+          ~Robert Chen
+          Patient signature                                    Date: 01/21/2026
+      - { kind: nursing_notes, count: 26, date: '2026-01-21', start: '06:30' }
+      - { kind: vitals, count: 24, date: '2026-01-21', start: '06:20' }
+      - {
+          kind: mar,
+          count: 8,
+          date: '2026-01-21',
+          start: '07:10',
+          meds:
+            [
+              'Cefazolin 2 g IV',
+              'Ropivacaine 0.5% 30 mL brachial plexus block',
+              'Propofol infusion',
+              'Acetaminophen 1000 mg PO',
+            ],
+        }
+      - { kind: orders, count: 14, date: '2026-01-21', start: '06:15' }
+      - { kind: key_images, count: 6, date: '2026-01-21' }
+      - { kind: education, count: 18, topic: 'After Wrist Surgery' }
+      - { kind: blank, count: 4 }
+
+  - id: okonkwo
+    name: 2026-06-01 Okonkwo Orthopedic Associates - Office Records
+    provider: okonkwo
+    fax: { sent: '2026-06-01 09:30', from_name: OOA Records }
+    pages:
+      - { kind: fax_cover, date: '2026-06-01', re: 'Office records 01/16/2026 through 05/28/2026' }
+      - { kind: custodian_cert, date: '2026-06-01', span: '01/16/2026 through 05/28/2026' }
+      - kind: intake_form
+        id: ooa-intake
+        date: '2026-01-16'
+        heading: 'NEW PATIENT INTAKE (completed by patient)'
+        fields:
+          Injury: broke L wrist, slipped on water at mall 1/14
+          Dominant hand: right
+          Job: HVAC tech, overhead work, heavy gripping
+          Prior injuries to this arm: none
+      - id: ooa-0116
+        title: Initial Consultation
+        date: '2026-01-16'
+        body: |
+          Date of service: 01/16/2026   Amara Okonkwo, MD
+
+          Seen two days after a fall on a wet floor on 01/14/2026 with a left distal radius
+          fracture, closed reduced and splinted in the emergency department. Right hand
+          dominant commercial HVAC technician.
+
+          Post-reduction films reviewed: 18 degrees residual dorsal angulation and a 2 mm
+          articular step-off. Splint intact, fingers warm and mobile, median nerve sensation
+          intact. CT of the left wrist obtained today for surgical planning.
+
+          PLAN: operative fixation recommended; ORIF scheduled 01/21/2026 at Valley Medical
+          Center. Off work.
+      - id: ooa-0131
+        title: Postoperative Visit
+        date: '2026-01-31'
+        body: |
+          Date of service: 01/31/2026   Amara Okonkwo, MD
+          Ten days after ORIF. Incision clean and dry. Sutures removed. Wound healing well.
+          Fingers full range. Continue splint. Remains off work.
+      - id: ooa-0204
+        title: Postoperative Visit
+        date: '2026-02-04'
+        body: |
+          Date of service: 02/04/2026   Amara Okonkwo, MD
+          Radiographs in office show maintained alignment of the plate fixation.
+          Transitioned from splint to a removable wrist brace. Begin physical therapy at about
+          4 weeks after surgery. Lumbar strain improving with activity. Remains off work.
+      - id: ooa-misfiled
+        title: Office Visit
+        date: '2026-02-09'
+        other_patient: 'Robert Chang|11/03/1981|OOA-77310'
+        body: |
+          Date of service: 02/09/2026   Amara Okonkwo, MD
+          Patient Robert Chang, six weeks after right knee arthroscopy with partial medial
+          meniscectomy. Mild effusion. Range of motion 0 to 125 degrees. Continue quadriceps
+          strengthening. Return in six weeks.
+      - id: ooa-0318
+        title: Interim Follow-Up
+        date: '2026-03-18'
+        body: |
+          Date of service: 03/18/2026   Amara Okonkwo, MD
+          Union progressing on radiographs. Wrist stiffness improving with therapy. Lumbar
+          symptoms mild. Continue therapy. Remains off work.
+      - id: ooa-0406
+        title: Office Visit and Work Status
+        date: '2026-04-06'
+        body: |
+          Date of service: 04/06/2026   Amara Okonkwo, MD
+          Grip and motion improving. Lumbar symptoms resolved.
+          WORK STATUS: released to light duty from 04/07/2026, limited to 20 hours per week,
+          no forceful gripping and no overhead work with the left arm.
+      - id: ooa-0518
+        title: Office Visit
+        date: '2026-05-18'
+        body: |
+          Date of service: 05/18/2026   Amara Okonkwo, MD
+          Radiographs show union with maintained alignment. Therapy completed today.
+          Maximum medical improvement. Released to full duty without restriction from
+          05/19/2026. Final report to follow.
+      - id: ooa-dc1
+        title: Discharge Summary / Final Treating Report
+        date: '2026-05-28'
+        body: |
+          Date: 05/28/2026   Injury: 01/14/2026, slip and fall, commercial premises
+
+          CURRENT STATUS AT DISCHARGE
+          Fracture united with maintained alignment on radiographs of May 18, 2026.
+          Left wrist range of motion: flexion 62 degrees, extension 58 degrees, compared to 78
+          and 74 degrees on the uninjured right. Grip strength 71% of the contralateral side.
+          Aching with cold weather and with sustained overhead work, and difficulty with
+          forceful gripping.
+      - id: ooa-dc2
+        title: Discharge Summary / Final Treating Report (continued)
+        date: '2026-05-28'
+        body: |
+          WORK STATUS
+          Held off work from January 14, 2026 through April 6, 2026; light duty with a 20-hour
+          weekly restriction April 7, 2026 through May 18, 2026; full duty from May 19, 2026.
+
+          PROGNOSIS
+          Maximum medical improvement reached May 18, 2026. Residual loss of wrist motion and
+          grip strength is expected to be permanent to some degree. Future hardware removal is
+          possible but not currently indicated. No further treatment is planned.
+          Amara Okonkwo, MD
+      - { kind: education, count: 14, topic: 'Distal Radius Fracture Recovery' }
+      - {
+          kind: health_summary,
+          count: 20,
+          as_of: '2026-05-28',
+          problems: ['Left distal radius fracture, s/p ORIF 01/21/2026', 'Lumbar strain, resolved'],
+          meds: ['Ibuprofen 400 mg PO as needed'],
+        }
+      - { kind: access_log, count: 2, date: '2026-05-29' }
+
+  - id: rap
+    name: 2026-06-01 Radiology Associates of Phoenix - Imaging Reports
+    provider: rap
+    pages:
+      - id: rap-0114
+        title: Radiology Report
+        date: '2026-01-14'
+        body: |
+          Exams: XR left wrist 3 views; XR lumbar spine 2 views; XR left wrist post-reduction
+          Date of service: 01/14/2026   Ordering: Priya Nandakumar, MD
+
+          LEFT WRIST: Comminuted, dorsally angulated fracture of the left distal radius with
+          intra-articular extension. No ulnar styloid fracture.
+          LUMBAR SPINE: No acute fracture or listhesis. Degenerative changes not present.
+          POST-REDUCTION: Improved alignment with residual dorsal angulation.
+
+          Gregory Liang, MD, Diagnostic Radiology
+      - id: rap-0116
+        title: CT Report
+        date: '2026-01-16'
+        body: |
+          Exam: CT left wrist without contrast   Date of service: 01/16/2026
+          Ordering: Amara Okonkwo, MD
+
+          FINDINGS: Comminuted intra-articular distal radius fracture with three principal
+          fragments and a depressed lunate facet fragment. Articular step-off 2 mm. Residual
+          dorsal tilt. Distal radioulnar joint congruent.
+
+          Gregory Liang, MD, Diagnostic Radiology
+      - id: rap-0518
+        title: Radiology Report
+        date: '2026-05-18'
+        body: |
+          Exam: XR left wrist 3 views   Date of service: 05/18/2026
+          Ordering: Amara Okonkwo, MD
+
+          FINDINGS: Healed distal radius fracture with volar plate and screws in place.
+          Alignment maintained. No hardware complication.
+
+          Gregory Liang, MD, Diagnostic Radiology
+      - { kind: key_images, count: 18, date: '2026-01-16' }
+      - { kind: custodian_cert, date: '2026-06-01', span: '01/14/2026 through 05/18/2026' }
+
+  - id: desert
+    name: 2026-05-26 Desert Physical Therapy - Treatment Records
+    provider: desert
+    fax: { sent: '2026-05-26 14:18', from_name: Desert PT Office }
+    pages:
+      - { kind: fax_cover, date: '2026-05-26', re: 'Therapy records 02/17/2026 through 05/18/2026' }
+      - { kind: custodian_cert, date: '2026-05-26', span: '02/17/2026 through 05/18/2026' }
+      - kind: intake_form
+        id: dpt-intake
+        date: '2026-02-17'
+        heading: 'THERAPY INTAKE (completed by patient)'
+        fields:
+          Problem: L wrist surgery 1/21, stiff + weak, lower back sore
+          Pain (0-10): 7
+          Goal: back to work as HVAC tech
+      - id: dpt-eval1
+        title: Initial Evaluation
+        date: '2026-02-17'
+        body: |
+          Date of service: 02/17/2026   Visit 1 of 24   Therapist: Hannah Brightwater, PT, CHT
+          Referral: Amara Okonkwo, MD. Status post ORIF left distal radius 01/21/2026.
+
+          SUBJECTIVE
+          Left wrist pain at 7/10 today with stiffness, and low back soreness with prolonged
+          standing. Right hand dominant HVAC technician; job requires overhead work and
+          forceful gripping.
+
+          OBJECTIVE
+          Left wrist flexion 30 degrees, extension 25 degrees. Grip strength 38% of the right.
+          Mild edema. Lumbar flexion limited by soreness.
+      - id: dpt-eval2
+        title: Initial Evaluation (continued)
+        date: '2026-02-17'
+        body: |
+          PLAN OF CARE
+          Wrist range of motion, edema control, progressive grip strengthening, lumbar
+          stabilization, twice a week for 12 weeks, 24 visits.
+          Hannah Brightwater, PT, CHT
+      - { kind: series_notes, series: pt, from: '2026-02-18', to: '2026-03-30' }
+      - id: dpt-reeval
+        title: Re-Evaluation
+        date: '2026-03-31'
+        body: |
+          Date of service: 03/31/2026   Visit 13 of 24   Therapist: Hannah Brightwater, PT, CHT
+          Left wrist pain at 4/10 today. Wrist flexion 50 degrees, extension 45 degrees. Grip
+          strength 55% of the right. Low back symptoms now minimal. Continue plan of care.
+      - { kind: series_notes, series: pt, from: '2026-04-01', to: '2026-05-17' }
+      - id: dpt-dc
+        title: Discharge Summary
+        date: '2026-05-18'
+        body: |
+          Date of service: 05/18/2026   Visit 24 of 24   Therapist: Hannah Brightwater, PT, CHT
+          Final session. Left wrist pain 1/10 at rest, aching with sustained gripping.
+          Wrist flexion 62 degrees, extension 58 degrees. Grip strength 71% of the right.
+          Discharged from therapy to a home program.
+      - { kind: hep, count: 34 }
+      - { kind: education, count: 16, topic: 'Hand and Wrist Exercises' }
+
+  - id: rx
+    name: 2026-05-30 Camelback Community Pharmacy - Dispensing History
+    provider: rx
+    pages:
+      - kind: pharmacy_log
+        fills:
+          - ['2026-01-14', 'Oxycodone-APAP 5-325 mg', '12', '3', 'P Nandakumar']
+          - ['2026-01-21', 'Oxycodone-APAP 5-325 mg', '20', '5', 'A Okonkwo']
+          - ['2026-01-21', 'Cephalexin 500 mg cap', '12', '3', 'A Okonkwo']
+          - ['2026-01-31', 'Ibuprofen 600 mg tab', '60', '15', 'A Okonkwo']
+      - { kind: custodian_cert, date: '2026-05-30', span: '01/01/2026 through 05/30/2026' }
+
+  # ---- billing ---------------------------------------------------------------
+  - id: vmc-bill
+    name: 2026-03-02 Valley Medical Center - Itemized Statement and UB-04
+    provider: vmc
+    pages:
+      - kind: statement
+        lines:
+          - ['2026-01-14', '0450', 'Emergency department, level 4', 2420.00]
+          - ['2026-01-14', '0320', 'XR wrist, technical', 380.00]
+          - ['2026-01-14', '0320', 'XR wrist post-reduction, technical', 300.00]
+          - ['2026-01-14', '0320', 'XR lumbar spine, technical', 340.00]
+          - ['2026-01-14', '0761', 'Closed reduction, treatment room', 980.00]
+          - ['2026-01-14', '0270', 'Splint supplies', 260.00]
+          - ['2026-01-14', '0636', 'Lidocaine for hematoma block', 45.00]
+          - ['2026-01-14', '0250', 'Pharmacy', 95.00]
+          - ['2026-01-21', '0360', 'Operating room services', 11840.00]
+          - ['2026-01-21', '0370', 'Anesthesia', 3200.00]
+          - ['2026-01-21', '0278', 'Implant, volar locking plate and screws', 4650.00]
+          - ['2026-01-21', '0710', 'Recovery room', 1320.00]
+          - ['2026-01-21', '0250', 'Pharmacy', 410.00]
+          - ['2026-01-21', '0270', 'Surgical supplies', 640.00]
+          - ['2026-01-21', '0320', 'Fluoroscopy, technical', 355.00]
+        payments:
+          - ['2026-03-20', 'Blue Sage Health payment', 19064.50]
+      - kind: ub04
+        lines:
+          - ['2026-01-14', '0450', '99284', 'Emergency room', 2420.00]
+          - ['2026-01-14', '0320', '73110', 'X-ray wrist', 380.00]
+          - ['2026-01-14', '0320', '73110', 'X-ray wrist post-reduction', 300.00]
+          - ['2026-01-14', '0320', '72100', 'X-ray lumbar', 340.00]
+          - ['2026-01-14', '0761', '25605', 'Treatment room', 980.00]
+          - ['2026-01-14', '0270', '', 'Supplies', 260.00]
+          - ['2026-01-14', '0636', 'J2001', 'Drugs, detail code', 45.00]
+          - ['2026-01-14', '0250', '', 'Pharmacy', 95.00]
+      - kind: ub04
+        lines:
+          - ['2026-01-21', '0360', '25609', 'OR services', 11840.00]
+          - ['2026-01-21', '0370', '', 'Anesthesia', 3200.00]
+          - ['2026-01-21', '0278', '', 'Implants', 4650.00]
+          - ['2026-01-21', '0710', '', 'Recovery room', 1320.00]
+          - ['2026-01-21', '0250', '', 'Pharmacy', 410.00]
+          - ['2026-01-21', '0270', '', 'Supplies', 640.00]
+          - ['2026-01-21', '0320', '76000', 'Fluoroscopy', 355.00]
+
+  - id: okonkwo-bill
+    name: 2026-06-01 Okonkwo Orthopedic Associates - Itemized Statement
+    provider: okonkwo
+    pages:
+      - kind: statement
+        lines:
+          - ['2026-01-16', '99204', 'New patient consultation', 560.00]
+          - ['2026-01-21', '25609', 'ORIF distal radius, 3 or more fragments', 4350.00]
+          - ['2026-01-31', '99024', 'Postoperative visit, suture removal', 180.00]
+          - ['2026-02-04', 'L3908', 'Wrist brace', 210.00]
+          - ['2026-03-18', '99213', 'Office visit', 260.00]
+          - ['2026-04-06', '99213', 'Office visit', 260.00]
+          - ['2026-04-06', '99080', 'Work status report', 75.00]
+          - ['2026-05-18', '99213', 'Office visit', 260.00]
+          - ['2026-05-28', '99080', 'Final treating report', 185.00]
+        payments:
+          - ['2026-06-10', 'Blue Sage Health payment', 3870.40]
+      - kind: cms1500
+        icd: [S52.572A, W01.0XXA]
+        claims:
+          - [
+              ['2026-01-16', '99204', 'New patient consult', 560.00],
+              ['2026-01-21', '25609', 'ORIF distal radius', 4350.00],
+            ]
+          - [
+              ['2026-01-31', '99024', 'Post-op visit', 180.00],
+              ['2026-02-04', 'L3908', 'Wrist brace', 210.00],
+            ]
+          - [
+              ['2026-03-18', '99213', 'Office visit', 260.00],
+              ['2026-04-06', '99213', 'Office visit', 260.00],
+              ['2026-04-06', '99080', 'Work status', 75.00],
+            ]
+          - [
+              ['2026-05-18', '99213', 'Office visit', 260.00],
+              ['2026-05-28', '99080', 'Final report', 185.00],
+            ]
+
+  - id: rap-bill
+    name: 2026-06-01 Radiology Associates of Phoenix - Itemized Statement
+    provider: rap
+    pages:
+      - kind: statement
+        lines:
+          - ['2026-01-14', '73110-26', 'XR wrist, interpretation', 290.00]
+          - ['2026-01-14', '72100-26', 'XR lumbar, interpretation', 260.00]
+          - ['2026-01-14', '73110-26', 'XR wrist post-reduction, interpretation', 290.00]
+          - ['2026-01-16', '73200-26', 'CT wrist, interpretation', 1050.00]
+          - ['2026-05-18', '73110-26', 'XR wrist, interpretation', 290.00]
+        payments: []
+
+  - id: desert-bill
+    name: 2026-05-26 Desert Physical Therapy - Ledger and Claim Forms
+    provider: desert
+    pages:
+      - kind: statement
+        lines:
+          - ['2026-02-17', '97163', 'PT evaluation', 240.00]
+          - ['2026-02-19', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-24', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-02-26', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-03', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-05', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-10', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-12', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-17', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-19', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-24', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-26', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-03-31', '97164', 'PT re-evaluation', 240.00]
+          - ['2026-04-02', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-04-07', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-04-09', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-04-14', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-04-16', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-04-21', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-04-23', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-04-28', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-04-30', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-05-12', 'PTV', 'Therapy visit', 240.00]
+          - ['2026-05-18', 'PTV', 'Therapy visit', 240.00]
+        payments: []
+      - { kind: series_claims, series: pt, icd: [S52.572D, S39.012A] }
+
+  - id: bsh-eob
+    name: 2026-06-10 Blue Sage Health - EOB Statements
+    provider: bsh
+    pages:
+      - kind: eob
+        payer: Blue Sage Health
+        claims:
+          - [
+              [
+                '2026-01-14',
+                'Emergency department, Valley Medical Center',
+                4820.00,
+                3374.00,
+                2699.20,
+              ],
+            ]
+          - [
+              [
+                '2026-01-21',
+                'Outpatient surgery, Valley Medical Center',
+                22415.00,
+                20456.63,
+                16365.30,
+              ],
+            ]
+          - [
+              ['2026-01-16', 'Orthopedic consult and surgery, Okonkwo', 4910.00, 3928.00, 3142.40],
+              ['2026-01-31', 'Post-op care, Okonkwo', 390.00, 312.00, 249.60],
+            ]
+          - [
+              ['2026-03-18', 'Office visits, Okonkwo', 595.00, 476.00, 380.80],
+              ['2026-05-18', 'Office visit and report, Okonkwo', 445.00, 122.00, 97.60],
+            ]
+
+resends:
+  - id: vmc-ed-resend
+    of: vmc-ed
+    name: 2026-03-06 Valley Medical Center - Emergency Department Records (re-sent)
+    pages: [3, 70]
+    fax: { sent: '2026-03-06 13:12', from_name: VMC HIM }
+  - id: desert-resend
+    of: desert
+    name: 2026-05-29 Desert Physical Therapy - Treatment Records (re-sent)
+    pages: [3, 60]
+    fax: { sent: '2026-05-29 11:47', from_name: Desert PT Office }
+  - id: okonkwo-resend
+    of: okonkwo
+    name: 2026-06-04 Okonkwo Orthopedic Associates - Office Records (re-sent)
+    pages: [3, 16]
+    fax: { sent: '2026-06-04 15:20', from_name: OOA Records }
+
+conflicts:
+  - "A page of another patient, Robert Chang, DOB 11/03/1981, is filed in the orthopedic production (FILE: 2026-06-01 Okonkwo Orthopedic Associates - Office Records.pdf); it is not this patient's record and is not chronicled."
+
+defects:
+  misfiled_page: { page: ooa-misfiled, patient: Robert Chang }
+  duplicates: [vmc-ed-resend, desert-resend, okonkwo-resend]
+  handwritten: [vmc-reg, ooa-intake, dpt-intake]
+  complaint_contradiction: 'records place the fall 01/14/2026 in Phoenix; the Complaint alleges 04/03/2026 in Los Angeles'
+
+encounters:
+  - date: '2026-01-14'
+    provider: vmc
+    signer: Priya Nandakumar, MD
+    icd: [S52.572A, S39.012A, W01.0XXA]
+    paras:
+      - [
+          HPI & Prior Medical History,
+          ved-1,
+          'witnessed slip and fall on standing water',
+          'Witnessed slip and fall on standing water at a commercial property at about 10:40 a.m., landing on the outstretched left hand with the lower back striking the floor; no head strike or loss of consciousness.',
+        ]
+      - [
+          Patient Complaints & Limitations,
+          ved-1,
+          'left wrist rated 8/10, lower back 5/10',
+          'Left wrist pain rated 8/10 and lower back pain 5/10, without numbness or tingling.',
+        ]
+      - [
+          Patient Complaints & Limitations,
+          vmc-reg,
+          'fell on wet floor at Sunrise Plaza',
+          'On the registration form the patient wrote that he fell on a wet floor at Sunrise Plaza, injuring the left wrist and back, at about 10:40 a.m.',
+        ]
+      - [
+          Physical Examination,
+          ved-2,
+          'obvious deformity, swelling, tenderness over the distal radius',
+          'Left wrist with obvious deformity, swelling and tenderness over the distal radius, neurovascularly intact; lumbar paraspinal tenderness L3 to L5 without midline step-off, antalgic gait, straight-leg raise negative bilaterally.',
+        ]
+      - [
+          Procedures,
+          ved-2,
+          'Closed reduction of the left distal radius under hematoma block',
+          'Closed reduction of the left distal radius under hematoma block with lidocaine 1% 10 mL and sugar-tong splint; post-reduction films with improved alignment and residual dorsal angulation.',
+        ]
+      - [
+          Medical Diagnoses,
+          ved-3,
+          'Closed comminuted intra-articular fracture, left distal radius',
+          'Closed comminuted intra-articular fracture of the left distal radius; acute lumbar strain.',
+        ]
+      - [
+          Treatment Recommendations,
+          ved-3,
+          'Referred to Dr. Amara Okonkwo, orthopedic surgery',
+          'Orthopedic referral to Dr. Amara Okonkwo for likely operative fixation; discharged with a sling and oxycodone-acetaminophen 5-325 mg as needed.',
+        ]
+  - date: '2026-01-14'
+    provider: rap
+    signer: Gregory Liang, MD
+    icd: []
+    paras:
+      - [
+          Diagnostic Studies,
+          rap-0114,
+          'No ulnar styloid fracture',
+          'X-rays of the left wrist: comminuted, dorsally angulated intra-articular fracture of the distal radius without ulnar styloid fracture; lumbar spine without acute fracture; post-reduction films with improved alignment and residual dorsal angulation.',
+        ]
+  - date: '2026-01-16'
+    provider: okonkwo
+    signer: Amara Okonkwo, MD
+    icd: [S52.572A]
+    paras:
+      - [
+          HPI & Prior Medical History,
+          ooa-0116,
+          'Right hand dominant commercial HVAC technician',
+          'Seen two days after a fall on a wet floor on 01/14/2026; right hand dominant commercial HVAC technician.',
+        ]
+      - [
+          Patient Complaints & Limitations,
+          ooa-intake,
+          'HVAC tech, overhead work, heavy gripping',
+          'On the intake form the patient described his job as HVAC technician with overhead work and heavy gripping, and no prior injury to the arm.',
+        ]
+      - [
+          Diagnostic Studies,
+          ooa-0116,
+          '18 degrees residual dorsal angulation',
+          'Post-reduction films reviewed: 18 degrees of residual dorsal angulation and a 2 mm articular step-off.',
+        ]
+      - [
+          Treatment Recommendations,
+          ooa-0116,
+          'ORIF scheduled 01/21/2026',
+          'Operative fixation recommended, with ORIF scheduled for 01/21/2026; CT of the wrist obtained for planning.',
+        ]
+      - [Work Status, ooa-0116, 'Off work.', 'Off work.']
+  - date: '2026-01-16'
+    provider: rap
+    signer: Gregory Liang, MD
+    icd: []
+    paras:
+      - [
+          Diagnostic Studies,
+          rap-0116,
+          'depressed lunate facet fragment',
+          'CT of the left wrist: comminuted intra-articular distal radius fracture with three principal fragments, a depressed lunate facet fragment and 2 mm articular step-off; distal radioulnar joint congruent.',
+        ]
+  - date: '2026-01-21'
+    provider: vmc
+    signer: Amara Okonkwo, MD
+    icd: [S52.572A]
+    paras:
+      - [
+          Procedures,
+          vor-op1,
+          'Open reduction and internal fixation, left distal radius, with volar locking plate',
+          'Open reduction and internal fixation of the left distal radius with a volar locking plate and screws at Valley Medical Center, under regional block with sedation.',
+        ]
+      - [
+          Procedures,
+          vor-op2,
+          'no residual step-off',
+          'Three principal fragments and a depressed articular fragment found; articular surface elevated and fixed, with fluoroscopy confirming restored radial height, volar tilt and congruity with no residual step-off.',
+        ]
+      - [
+          Treatment Recommendations,
+          vor-op2,
+          'Follow-up in 10 days for suture removal',
+          'Discharged the same day; follow-up in 10 days for suture removal, physical therapy at about 4 weeks, no lifting with the left arm.',
+        ]
+  - date: '2026-01-31'
+    provider: okonkwo
+    signer: Amara Okonkwo, MD
+    icd: [S52.572D]
+    paras:
+      - [
+          Procedures,
+          ooa-0131,
+          'Sutures removed',
+          'Ten days after surgery: incision clean and dry, sutures removed, splint continued.',
+        ]
+      - [Work Status, ooa-0131, 'Remains off work', 'Remains off work.']
+  - date: '2026-02-04'
+    provider: okonkwo
+    signer: Amara Okonkwo, MD
+    icd: [S52.572D]
+    paras:
+      - [
+          Diagnostic Studies,
+          ooa-0204,
+          'Radiographs in office show maintained alignment',
+          'Office radiographs show maintained alignment of the plate fixation.',
+        ]
+      - [
+          Treatment Recommendations,
+          ooa-0204,
+          'Transitioned from splint to a removable wrist brace',
+          'Transitioned from the splint to a removable wrist brace; physical therapy to begin at about 4 weeks after surgery; lumbar strain improving.',
+        ]
+  - date: '2026-02-17'
+    provider: desert
+    signer: Hannah Brightwater, PT, CHT
+    icd: [S52.572D]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          dpt-eval1,
+          'Left wrist pain at 7/10 today',
+          'Left wrist pain at 7/10 with stiffness and low back soreness with prolonged standing.',
+        ]
+      - [
+          Physical Examination,
+          dpt-eval1,
+          'Grip strength 38% of the right',
+          'Left wrist flexion 30 degrees and extension 25 degrees; grip strength 38% of the right; mild edema.',
+        ]
+      - [
+          Treatment Recommendations,
+          dpt-eval2,
+          'twice a week for 12 weeks, 24 visits',
+          'Wrist motion, edema control, grip strengthening and lumbar stabilization twice a week for 12 weeks, 24 visits.',
+        ]
+  - date: '2026-03-18'
+    provider: okonkwo
+    signer: Amara Okonkwo, MD
+    icd: [S52.572D]
+    paras:
+      - [
+          Diagnostic Studies,
+          ooa-0318,
+          'Union progressing on radiographs',
+          'Union progressing on radiographs; wrist stiffness improving with therapy, lumbar symptoms mild.',
+        ]
+      - [
+          Work Status,
+          ooa-0318,
+          'Continue therapy. Remains off work',
+          'Continue therapy; remains off work.',
+        ]
+  - date: '2026-03-31'
+    provider: desert
+    signer: Hannah Brightwater, PT, CHT
+    icd: [S52.572D]
+    paras:
+      - [
+          Physical Examination,
+          dpt-reeval,
+          'Grip strength 55% of the right',
+          'Re-evaluation: wrist pain 4/10, flexion 50 and extension 45 degrees, grip 55% of the right, low back symptoms minimal.',
+        ]
+  - date: '2026-04-06'
+    provider: okonkwo
+    signer: Amara Okonkwo, MD
+    icd: [S52.572D]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          ooa-0406,
+          'Lumbar symptoms resolved',
+          'Grip and motion improving; lumbar symptoms resolved.',
+        ]
+      - [
+          Work Status,
+          ooa-0406,
+          'released to light duty from 04/07/2026, limited to 20 hours per week',
+          'Released to light duty from 04/07/2026, limited to 20 hours per week, with no forceful gripping and no overhead work with the left arm.',
+        ]
+  - date: '2026-05-18'
+    provider: okonkwo
+    signer: Amara Okonkwo, MD
+    icd: [S52.572D]
+    paras:
+      - [
+          Medical Diagnoses,
+          ooa-0518,
+          'Maximum medical improvement',
+          'Radiographs show union with maintained alignment; maximum medical improvement.',
+        ]
+      - [
+          Work Status,
+          ooa-0518,
+          'Released to full duty without restriction from',
+          'Released to full duty without restriction from 05/19/2026.',
+        ]
+  - date: '2026-05-18'
+    provider: rap
+    signer: Gregory Liang, MD
+    icd: []
+    paras:
+      - [
+          Diagnostic Studies,
+          rap-0518,
+          'Healed distal radius fracture with volar plate',
+          'X-rays of the left wrist: healed distal radius fracture with volar plate and screws in place, alignment maintained, no hardware complication.',
+        ]
+  - date: '2026-05-18'
+    provider: desert
+    signer: Hannah Brightwater, PT, CHT
+    icd: [S52.572D]
+    paras:
+      - [
+          Patient Complaints & Limitations,
+          dpt-dc,
+          'aching with sustained gripping',
+          'Final session: left wrist pain 1/10 at rest, aching with sustained gripping.',
+        ]
+      - [
+          Physical Examination,
+          dpt-dc,
+          'Grip strength 71% of the right',
+          'Wrist flexion 62 and extension 58 degrees; grip strength 71% of the right.',
+        ]
+      - [
+          Treatment Recommendations,
+          dpt-dc,
+          'Discharged from therapy to a home program',
+          'Discharged from therapy to a home program after 24 visits.',
+        ]
+  - date: '2026-05-28'
+    provider: okonkwo
+    signer: Amara Okonkwo, MD
+    icd: [S52.572D]
+    paras:
+      - [
+          Physical Examination,
+          ooa-dc1,
+          'Grip strength 71% of the contralateral side',
+          'Left wrist flexion 62 and extension 58 degrees against 78 and 74 on the right; grip strength 71% of the contralateral side; aching with cold weather and sustained overhead work, difficulty with forceful gripping.',
+        ]
+      - [
+          Treatment Recommendations,
+          ooa-dc2,
+          'Future hardware removal is possible but not currently indicated',
+          'Maximum medical improvement reached 05/18/2026; residual loss of motion and grip stated to be permanent to some degree; hardware removal possible but not indicated; no further treatment planned.',
+        ]
+      - [
+          Work Status,
+          ooa-dc2,
+          'light duty with a 20-hour',
+          'Off work 01/14/2026 through 04/06/2026; light duty with a 20-hour weekly restriction 04/07/2026 through 05/18/2026; full duty from 05/19/2026.',
+        ]

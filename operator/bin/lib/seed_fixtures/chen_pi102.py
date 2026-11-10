@@ -11,8 +11,15 @@ general-damages figure, NO settlement number. A draft that reserves valuation
 meets the expected; a draft that invents a figure fails, visibly. The policy
 limit is exempt and stays: it is a disclosed coverage fact, not a valuation.
 
-Every figure is internally consistent across the billing summary, the
-chronology and the wage-loss letter, so a mis-trace is detectable.
+Every figure is internally consistent across the billing summary and the
+wage-loss letter, so a mis-trace is detectable.
+
+NO FIRM-PREPARED CHRONOLOGY. An earlier version carried a hand-written
+"Medical Chronology (prepared by firm)". It was removed 2026-11-10: the
+matter's medical records are now the generated set
+(``operator/customers/pilot-smokeball/seed/records/chen-pi102.yaml``), and a
+chronology on the matter that the Operator did not write would be mistaken for
+one it did.
 
 THIS SET DELIBERATELY CONTRADICTS THE MATTER'S OWN COMPLAINT, AND THAT IS KEPT
 ON PURPOSE. The pre-existing conformed Complaint on 2026-PI-102 alleges the
@@ -238,56 +245,6 @@ removal is possible but not currently indicated. No further treatment is planned
 at this time.
 
 Amara Okonkwo, MD
-""",
-    )
-)
-
-DOCS.append(
-    (
-        "2026-06-02 Medical Chronology - Chen (prepared by firm)",
-        """[SEED — synthetic test record, not a real client document]
-
-MEDICAL CHRONOLOGY
-Robert Chen — DOI January 14, 2026
-Prepared June 2, 2026
-
-2026-01-14  Valley Medical Center, Emergency Department. Slip and fall on
-            standing water, commercial premises, approx. 10:40 a.m. Left distal
-            radius fracture (comminuted, intra-articular) and acute lumbar
-            strain. Closed reduction under hematoma block; sugar-tong splint.
-            Orthopedic referral. (Nandakumar, MD)
-
-2026-01-16  Okonkwo Orthopedic Associates. Initial consultation. Post-reduction
-            films reviewed: 18 degrees residual dorsal angulation, 2 mm articular
-            step-off. Operative fixation recommended.
-
-2026-01-21  Valley Medical Center. ORIF left distal radius, volar locking plate
-            and screws. Same-day discharge. (Okonkwo, MD)
-
-2026-01-31  Okonkwo Orthopedic Associates. Sutures removed. Wound healing well.
-
-2026-02-04  Okonkwo Orthopedic Associates. Transitioned from splint to removable
-            wrist brace. Radiographs show maintained alignment.
-
-2026-02-17  Desert Physical Therapy. Course of therapy commenced. Left wrist ROM
-            and grip strengthening; lumbar stabilization.
-
-2026-03-18  Okonkwo Orthopedic Associates. Interim follow-up. Union progressing.
-            Continue therapy. Remains off work.
-
-2026-04-06  Last day off work entirely.
-
-2026-04-07  Released to light duty, 20 hours per week, no forceful gripping and
-            no overhead work.
-
-2026-05-18  Desert Physical Therapy. Final session (24th). Discharged from
-            therapy. Okonkwo Orthopedic Associates: radiographs show union with
-            maintained alignment. Maximum medical improvement.
-
-2026-05-19  Released to full duty without restriction.
-
-2026-05-28  Okonkwo Orthopedic Associates. Discharge summary / final treating
-            report issued. Residual ROM and grip-strength deficits documented.
 """,
     )
 )
