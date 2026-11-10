@@ -26,7 +26,7 @@ Every tool the Operator can call belongs to exactly one kind of action (internal
 | `code_execution`         | Running arbitrary code, a shell, or a sub-agent                               | Execute code, author a new skill                                       |
 | `refused`                | Any tool that is not registered. Terminal                                     | Not applicable                                                         |
 
-The registry classifies 299 tool names today. A tool that is not in the registry is refused.
+The registry classifies every tool name the Operator can call. A tool that is not in the registry is refused.
 
 ## The banned list
 

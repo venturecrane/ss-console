@@ -158,4 +158,5 @@ rest of the message, if any, is answered from the library as usual.
 - **Not covered.** When no document in the index covers the question: "The
   product library doesn't cover that. SMD can answer it at team@smd.services."
   Do not guess, do not fill the gap from general knowledge, and do not say you
-  will pass it on yourself.
+  will pass it on yourself. When the library covers only part of a question,
+  answer that part with its source and say the rest is not covered.

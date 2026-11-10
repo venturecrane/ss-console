@@ -44,7 +44,7 @@ The SMD-written connections together hold 91 tools. Many other systems appear in
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | Hosted per-seat inbox                                                      | A signed notification brings each email in; SMD's controlled path sends replies.                                                               | In production on SMD-run seats                 |
 | A mailbox in the client's own Microsoft 365 tenant                         | Two separate app registrations: a read app with no send permission for the agent, and a send app whose send credentials only the broker holds. | In production                                  |
-| A mailbox in the client's own Google Workspace; generic IMAP and SMTP mail | Further adapters, to be built when a client needs them.                                                                                        | Specified, not built                           |
+| A mailbox in the client's own Google Workspace; generic IMAP and SMTP mail | Specified, not built.                                                                                                                          | Specified, not built                           |
 | Sending as a staff member on approval                                      | The Operator proposes; the named staff member approves by replying; the controlled path sends from that person's address.                      | Built and authored on the paying client's seat |
 
 ## Other channels

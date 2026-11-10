@@ -35,22 +35,22 @@ Explainer view: #context
 
 View 2, system context. The client's systems stay the systems of record. Each client gets its own machine, its seat. SMD runs the service from outside it. Figure 2 shows four zones:
 
-1. **The client's environment (client-owned, outside the seat):** administrators (named by the client); the Operator's mailbox (in the client's own mail tenant); staff (the people the client has listed); the system of record (where the client keeps its work); and other connected systems (each one granted by the client).
+1. **The client's environment (client-owned, outside the seat):** administrators (named by the client); the Operator's mailbox (in the client's own mail tenant where the client has one, otherwise a mailbox SMD hosts); staff (the people the client has listed); the system of record (where the client keeps its work); and other connected systems (each one granted by the client).
 2. **The Operator, one seat per client:** a front door (verifies every inbound message); the agent (does the work, and cannot send on its own keys); a broker (holds the send credentials and checks recipients); the audit record (one entry per action, append-only, chained); memory and configuration (what it has learned, and configuration it cannot edit); and a jobs runner (queued jobs: cost-limited, reviewed, proven).
 3. **SMD Services (run by SMD):** the Client portal (pause, activity, limit settings); the pager and hourly triage (watches every seat); releases and configuration (by reviewed change only); and a per-client ops workspace (one per client, with access logged).
 4. **The model provider (third party):** AI processing, which does not train on client content. Some seats also use a speech-to-text service and a web-search service.
 
 Nine numbered connections link the zones:
 
-1. **Staff ask by email.** A request is an email to the Operator's own mailbox, which sits in the client's mail tenant. Only people on the client's staff list are answered.
+1. **Staff ask by email.** A request is an email to the Operator's own mailbox, which sits in the client's mail tenant where the client has one, otherwise in a mailbox SMD hosts. Only people on the client's staff list are answered.
 2. **Mail is pulled in and verified.** The seat pulls new mail from that mailbox, and the front door verifies every inbound message before any work starts.
 3. **It works in the client's systems.** It reads what the task needs and writes results back, where granted. SMD does not warehouse copies of the client's files. Work SMD staff must look at stays in that client's own ops workspace and is deleted after 30 days.
 4. **Sending is held apart.** The agent cannot send on its own keys. A separate broker holds the send credentials, checks every recipient, and is the sole writer of the audit record, with one entry for each action.
-5. **The portal directs, it does not hold data.** Administrators see what the Operator is set up to do and the audit record of what it did, move limit settings up to the agreed ceiling, and pause it.
+5. **The portal directs, it does not hold data.** Administrators see what the Operator is set up to do and the audit record of what it did, move limit settings up to the agreed ceiling (built, not yet proven in client use), and pause it.
 6. **The seat reports out.** A health signal every minute, the newest audit entry's fingerprint, and a notice for each staff request.
 7. **Changes come in one way.** Configuration is written by SMD as a reviewed change and published to the seat. The agent cannot edit its own limits.
 8. **SMD's access is fenced too.** When a person at SMD must look at a client's work, it is from a workspace that reaches that one seat, and the access is logged.
-9. **The model provider processes, and does not keep.** Task content is sent for processing under terms that bar training on it. Changing the provider takes 30 days' notice to the client. Some seats also use a speech-to-text service and a web-search service.
+9. **The model provider processes the task and does not train on it.** Task content is sent for processing under terms that bar training on it. The standard agreement states 30 days' notice before the provider changes. Some seats also use a speech-to-text service and a web-search service.
 
 ## The life of a request
 
@@ -61,7 +61,7 @@ View 3, one request start to finish. Every request passes the same checkpoints, 
 1. **Arrive** (front door). Email, system event or schedule. The signature is verified. If it fails: a bad or stale signature is rejected before any work.
 2. **Sender check** (front door). Matched to the client's staff list. If it fails: an unknown sender's content is fenced, with no reply, and no send, commitment or delete on that turn.
 3. **Skill and sender's authority** (agent). The matching skill loads. The agent is told who is asking. If it fails: a skill not enabled on this seat is declined.
-4. **Tool lookup** (agent). Each of 299 tools has one fixed kind of action. If it fails: a tool not in the registry never runs.
+4. **Tool lookup** (agent). Every tool has one fixed kind of action. If it fails: a tool not in the registry never runs.
 5. **Limit check** (agent). The kind of action is checked against the client's written limit. If it fails: when no limit is written for it, it is refused. That is the default.
 6. **Content checks** (agent). Numbers and dates must trace to something it read. If it fails: a reference number or date that cannot be traced to something read blocks the action, and money or contract content is routed to a draft for a person.
 7. **Act** (agent and broker). The tool runs in the client's system, and one audit entry is written for that tool call. Long or costly work is not done here: it becomes a queued job, as in the queued jobs view. If it fails: a check that cannot run blocks the tool call.
@@ -73,7 +73,7 @@ Notes on the steps:
 - **Nothing unsigned gets in (step 1).** Email arrives through the Operator's mailbox; system events and schedules arrive by their own doors. A bad or stale signature is rejected before any work.
 - **Outside content is fenced (step 2).** Text from an unlisted sender is quarantined so that instructions hidden in it cannot drive actions. A turn that read untrusted content cannot send, commit or delete.
 - **Skills guide, the checks enforce (step 3).** A skill tells the agent how to do a kind of work. It is not the control. The control is at every tool call, in steps 4 to 6.
-- **Every tool is classified once (step 4).** Each of the 299 tools has one fixed kind of action. A tool that is not in the registry never runs.
+- **Every tool is classified once (step 4).** Each tool has one fixed kind of action. A tool that is not in the registry never runs.
 - **Unwritten means refused (step 5).** The kind of action is checked against the limit the client wrote for it. Where no limit is written, the call is refused.
 - **Content is checked before it leaves (step 6).** A reference number or date that cannot be traced to something the agent read blocks the action. Money or contract content going outside the client's staff becomes a draft for a person.
 - **The action and its audit entry go together (step 7).** The tool runs in the client's system and the broker writes one audit entry for that tool call. A check that cannot run blocks the call.
@@ -109,7 +109,7 @@ Unwritten means refused. The Operator cannot change its own limits.
 - **Sends are split by recipient:** the client's own staff, the client's customers, its vendors, and everyone else. Each has its own limit.
 - **Some things are banned outright,** whatever the client writes: moving money, and sending from a principal's own mailbox. Sending in a staff member's name happens only when that person approves the exact draft.
 - **The portal shows each limit as one of three plain settings per routine:** "Surfaces it," "Prepares it for you," "Handles it." Each routine has a starting setting and a ceiling taken from the agreement.
-- **Ceilings hold.** An administrator can raise a routine up to its ceiling. Nobody, including SMD and the Operator, can go above it without changing the agreement.
+- **Ceilings hold.** An administrator can raise a routine up to its ceiling. Built, not yet proven in client use. Nobody, including SMD and the Operator, can go above it without changing the agreement.
 - **Said accurately:** "Surfaces it" rests on the skill's instructions and is checked in the audit record. The hard enforcement is at each tool call, as in the life of a request.
 
 ## Queued jobs: big jobs run as queued work
@@ -147,7 +147,7 @@ View 6, isolation. Is one client's data mixed with another's? No. Each client's 
 5. **Below the seats, one SMD Services layer,** shared across clients: the Client portal, SMD's console, the pager and hourly triage, releases and configuration, and the audit archive, each kept apart by client.
 6. **The caption:** no two clients share a machine, a storage volume, connection credentials, memory or an audit record.
 
-- **Never shared:** the machine, its storage volume, connection credentials, memory, the audit record, and the Operator's mailbox (which lives in the client's own mail tenant).
+- **Never shared:** the machine, its storage volume, connection credentials, memory, the audit record, and the Operator's mailbox (in the client's own mail tenant where the client has one, otherwise a mailbox SMD hosts for that seat alone).
 - **Shared, and kept apart by client:** the Client portal, SMD's console, the pager and hourly triage, releases and configuration, and the daily audit archive.
 - **What one client's Operator learns never benefits another client.** That is a term of the service agreement and a property of the layout.
 
@@ -163,14 +163,14 @@ View 7, data and audit record: where the data lives, and what the audit record i
 4. **The whole record is checked daily.** A daily verifier pulls each seat's audit record once a day.
 5. **The check has an outside anchor.** The last fingerprint held in SMD's console must be present in the audit record that was pulled. A break pages SMD.
 6. **A dated copy is kept.** The verifier writes each day's copy to the daily audit archive, which refuses overwrites.
-7. **SMD reads a notice per request.** Request notices land in SMD's operations mailbox, one per staff request, and SMD operations is paged when a reply is missing. Each notice carries who asked, the subject, and the opening of the reply.
+7. **SMD reads a notice per request.** Request notices land in SMD's operations mailbox, one per staff request, and SMD operations is paged when a reply is missing. Each notice carries who asked, the subject, the request's own words and the first reply.
 
 Tamper-evident, not tamper-proof: entries are chained, not signed. Every read SMD's console makes of a seat is itself logged.
 
 | Kind of data                        | Where it lives                                                                                                                                     |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The client's business files         | In the client's own systems. Read through granted connections while a task runs. SMD does not warehouse copies.                                    |
-| The Operator's email                | In the client's own mail tenant, under the client's retention and controls.                                                                        |
+| The Operator's email                | In the client's own mail tenant where the client has one, under the client's retention and controls; otherwise a mailbox SMD hosts for that seat.  |
 | Memory                              | On the client's dedicated machine. Owned by the client. Exported on exit.                                                                          |
 | Audit record                        | On the client's dedicated machine, viewable in the portal. A fingerprint of its newest entry leaves the machine every minute and is checked daily. |
 | Connection credentials              | On the client's machine only. The ones that can send are held by the broker, where the agent cannot read them.                                     |
@@ -188,12 +188,12 @@ Tamper-evident, not tamper-proof: entries are chained, not signed. Every read SM
 ### What SMD can see
 
 - Health, settings, and the audit record of actions.
-- A notice per staff request: who asked, the subject, and the opening of the reply.
+- A notice per staff request: who asked, the subject, the request's own words and the first reply.
 - Client work itself only from a per-client ops workspace, with access logged. Work SMD staff must look at sits there for up to 30 days.
 
 ### What never happens
 
-- The client's files are not copied into SMD's systems. SMD does not warehouse copies of the client's files.
+- SMD does not warehouse copies of the client's files. Work SMD staff must look at sits in that client's own ops workspace for up to 30 days.
 - Send credentials never reach the agent.
 - Client content is not used to train models.
 - The Operator does not send from a principal's own mailbox.
@@ -213,12 +213,12 @@ Explainer view: #service
 
 The service around the Operator runs in four stages.
 
-| Stage   | What happens                                                                                                                                                                   | What must be true to move on                                                     |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| Explore | A working session on how the business runs. The client sets the limit for each kind of action.                                                                                 | A written configuration the client has signed off.                               |
-| Build   | SMD builds missing skills and connections, sets up the client's machine, and rehearses on practice data it owns, including hostile cases.                                      | A rehearsal with no limit broken.                                                |
-| Go live | The client grants access to each real system. Areas of work come on one at a time.                                                                                             | The client confirms each area on its own work.                                   |
-| Run     | Health checked every minute, work checked every hour, releases rolled out seat by seat with a rollback point. Staff correct the Operator directly and it keeps the correction. | Billing starts only after SMD says testing is complete and the client starts it. |
+| Stage   | What happens                                                                                                                                                                    | What must be true to move on                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Explore | A working session on how the business runs. The client sets the limit for each kind of action.                                                                                  | A written configuration the client has signed off.                               |
+| Build   | SMD builds missing skills and connections, sets up the client's machine, and rehearses on practice data it owns, including hostile cases.                                       | A rehearsal with no limit broken.                                                |
+| Go live | The client grants access to each real system. Areas of work come on one at a time.                                                                                              | The client confirms each area on its own work.                                   |
+| Run     | Health checked every minute, work checked every hour, releases rolled out seat by seat with a rollback point. Staff state how they like work done and it keeps that preference. | Billing starts only after SMD says testing is complete and the client starts it. |
 
 - **Usage is included.** Work whose cost grows with volume carries a stated allowance. Beyond it, SMD quotes first and starts only on written acceptance.
 - **New kinds of work have a path.** SMD may do the first instances as a trial, measures them, then proposes terms in writing.
@@ -274,4 +274,4 @@ Industry packs are starting configurations for onboarding. The running product i
 
 Explainer view: #example
 
-The first Operator runs for a personal-injury law firm. The system of record is the firm's practice-management system. Staff email requests, and the queued jobs produce medical chronologies and first drafts for an attorney to judge, every chronology entry cited to the page it came from. Communications to a court or to opposing counsel are always prepared for a person to send, and nothing touching deadlines or money runs on its own. Swap the system of record, the skills and the limits, and the seven views above describe any other business.
+The first industry delivered in depth is a law practice. The system of record is the firm's practice-management system. Staff email requests, and the queued jobs produce medical chronologies and first drafts for an attorney to judge, every chronology entry cited to the page it came from. Communications to a court or to opposing counsel are always prepared for a person to send, and nothing touching deadlines or money runs on its own. Swap the system of record, the skills and the limits, and the seven views above describe any other business.

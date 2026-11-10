@@ -73,10 +73,15 @@ scenarios:
             section: From request to delivery
           - document: jobs.md
             section: What the client hears when a job stops
+      # The right answer: pausing belongs to a principal, and only where the
+      # agreement hands that area to the client; otherwise the client asks SMD.
+      # An office administrator is not a principal by role.
       - says: 'Can I switch it off myself if something looks wrong on a busy day?'
         answer:
           - document: client-controls.md
             section: Direct
+          - document: client-controls.md
+            section: Managed and client-operated controls
           - document: permission-model.md
             section: 'Pause, stop and safety'
       - says: 'Can I just message it from my phone in our team chat?'
@@ -131,6 +136,8 @@ scenarios:
     objections:
       - says: 'So this is here to replace me.'
         answer:
+          - document: how-the-operator-works.md
+            section: 'One worker, configured for one business'
           - document: how-the-operator-works.md
             section: 'Before and after: what changes for the business'
       - says: 'It will make mistakes, and I will be the one blamed for them.'

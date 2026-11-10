@@ -75,7 +75,7 @@ The design allows the Operator to author new skills for itself. In practice the 
 ## Ownership, export and visibility
 
 - The per-client memory belongs to the client.
-- At offboarding, the memory and the audit record are exported to the client within 14 days of termination.
+- The standard agreement states that at offboarding, the memory and the audit record are exported to the client within 14 days of termination.
 - SMD can read the authored and learned lanes on a read-only administrative page. Each read is logged.
 - A client-facing memory view is not built. The earlier plan for a single client-owned memory artifact with its own client view was superseded; its principles were kept, but no client view exists today.
 - There is no client-facing way to delete a single learned preference. A preference changes when the person restates it.
