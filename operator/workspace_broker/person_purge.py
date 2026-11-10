@@ -27,7 +27,13 @@ person's address:
   recipients include them;
 * every scheduled-send envelope (``.smd/pre_run/*.dispatch*.json``, pending or
   consumed) that names them as a recipient: the entries addressed to them are
-  removed, and a file left with none is deleted.
+  removed, and a file left with none is deleted;
+* their rows in the per-sender daily count ``smd/sender_daily.db`` on the
+  volume (``sender_enrollment.daily_limit``), keyed by the sha256 of their
+  address (:func:`sender_hash`).
+
+``person_orphans.py`` lists the walled-store directories that belong to nobody
+listed now, by slug and count, through the same no-follow helpers.
 
 Rows are deleted with ``PRAGMA secure_delete`` on and the write-ahead log
 truncated afterwards, so the bytes are overwritten rather than left on a free
@@ -98,6 +104,7 @@ import json
 import os
 import sqlite3
 import stat
+import unicodedata
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from email.utils import parseaddr
@@ -193,6 +200,11 @@ class PurgeTargets:
     @property
     def help_state_db(self) -> Path:
         return self.data_root / "smd" / "help_state.db"
+
+    @property
+    def sender_daily_db(self) -> Path:
+        """The per-sender daily count (``sender_enrollment.daily_limit``)."""
+        return self.data_root / "smd" / "sender_daily.db"
 
 
 @dataclass
@@ -386,6 +398,7 @@ KNOWN_TABLES: frozenset[str] = frozenset(
         "help_senders",
         "help_threads",
         "help_events",
+        "sender_daily",
     }
 )
 #: Every statement key this module runs (a table, or a table's older shape).
@@ -416,6 +429,7 @@ _SELECT = {
     "help_senders": "SELECT rowid FROM help_senders WHERE sender_hash = ?",
     "help_threads": "SELECT rowid FROM help_threads WHERE sender_hash = ?",
     "help_events": "SELECT rowid FROM help_events WHERE sender_hash = ?",
+    "sender_daily": "SELECT rowid FROM sender_daily WHERE sender_hash = ?",
 }
 _DELETE = {
     "peer_preferences": "DELETE FROM peer_preferences WHERE rowid = ?",
@@ -425,6 +439,7 @@ _DELETE = {
     "help_senders": "DELETE FROM help_senders WHERE rowid = ?",
     "help_threads": "DELETE FROM help_threads WHERE rowid = ?",
     "help_events": "DELETE FROM help_events WHERE rowid = ?",
+    "sender_daily": "DELETE FROM sender_daily WHERE rowid = ?",
 }
 
 
@@ -485,6 +500,20 @@ def _help_rows(conn: sqlite3.Connection, address: str) -> dict[str, list[Any]]:
     return {t: [r[0] for r in conn.execute(_SELECT[_known(t)], (key,))] for t in _HELP_TABLES if t in present}
 
 
+def sender_hash(address: str) -> str:
+    """The overlay's ``shared/audit_contract.py`` ``sender_key``: sha256 of the
+    NFC-normalized, stripped, lower-cased address. The daily count keys on it."""
+    canonical = unicodedata.normalize("NFC", address).strip().lower()
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _daily_rows(conn: sqlite3.Connection, address: str) -> dict[str, list[Any]]:
+    if "sender_daily" not in _tables(conn):
+        return {}
+    ids = [r[0] for r in conn.execute(_SELECT[_known("sender_daily")], (sender_hash(address),))]
+    return {"sender_daily": ids}
+
+
 def _delete_rowids(conn: sqlite3.Connection, table: str, ids: Iterable[Any]) -> int:
     ids = list(ids)
     for rowid in ids:
@@ -499,6 +528,7 @@ _LAYER_OF = {
     "requests": "request index (requests)",
     "replies": "request index (replies)",
     **{t: f"help state ({t})" for t in _HELP_TABLES},
+    "sender_daily": "per-sender daily count (sender_daily)",
 }
 _RowsOf = Callable[[sqlite3.Connection, str], dict[str, list[Any]]]
 
@@ -510,6 +540,7 @@ def _databases(targets: PurgeTargets) -> list[tuple[Path, str, _RowsOf]]:
         (targets.held_replies_db, "held replies (held_replies)", _held_rows),
         (targets.request_index_db, "request index", _request_rows),
         (targets.help_state_db, "help state", _help_rows),
+        (targets.sender_daily_db, "per-sender daily count (sender_daily)", _daily_rows),
     ]
 
 
@@ -695,4 +726,5 @@ __all__ = [
     "probe",
     "purge",
     "recipient_digest",
+    "sender_hash",
 ]

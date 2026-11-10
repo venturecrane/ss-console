@@ -16,6 +16,11 @@ enforced_by:
   - operator/workspace_broker/tests/test_person_purge.py
   - operator/hermes-smd-overlay/tests_e2e/test_guide_rehearsal.py
   - tests/demo-seat.test.ts
+  - operator/hermes-smd-overlay/tests/test_reply_held_notice.py
+  - operator/hermes-smd-overlay/tests/test_router_daily_limit.py
+  - operator/hermes-smd-overlay/tests/test_request_cards_withheld.py
+  - operator/hermes-smd-overlay/tests/test_authored_seat_switches_off.py
+  - tests/operator-request-card-withheld.test.ts
 ---
 
 # ADR 0106: Invite-code enrollment for guide seats
@@ -94,3 +99,13 @@ The owner's line: a sales representative emails SMD's demo Operator in front of 
 - **Unchanged.** The store, the codes, the lockouts, the audit rows, the heartbeat field and the command line; the guide's own wording; chat enrollment is still not built.
 
 `operator/hermes-smd-overlay/tests/test_sender_enrollment.py` and `operator/workspace_broker/tests/test_sender_enrollment.py` pin the demo seat's redeem, roster, wording and issue paths, and that no other kind opts in.
+
+## Amendment (2026-11-10, third): a person's reply arrives, or they are told plainly it did not
+
+Three per-seat keys, each off unless authored, so no other seat changes (`operator/hermes-smd-overlay/tests/test_authored_seat_switches_off.py` reads each through the function the runtime uses, for every authored seat). Every message they cause is fixed text sent by code through the broker's recipient-checked reply, never a model's words.
+
+1. **`send_policy.reply.held_notice: true`** (`plugins/hermes-smd-reply/held_notice.py`). When a turn ends and its email got no reply but at least one reply was held (not counting one queued for automatic release), the sender gets one line, once per email: "We could not answer this message. Please send it again." No figure, no time, nothing from the held reply. A held draft is redrafted at most `send_policy.reply.max_redrafts` times (0 to 10, default 2); the next draft for that email is refused without relaying, with reason `redraft_limit`, and the model is told to stop. Built for the AgentMail reply transport; on a Graph seat the key changes nothing and SMD is paged as before.
+2. **`sender_enrollment.daily_limit: N`** (only where `sender_enrollment` is accepted, a guide seat or the demo seat, and off unless authored there; `plugins/hermes-smd-webhook-router/daily_limit.py`). In the webhook router, after the sender is verified and before any model turn, a listed, authenticated sender who is not an administrator is answered at most N emails a UTC day. Past that the delivery is dropped (no turn, no request card), an `INBOUND_RECEIVED` row and a `REPLY_HELD` row with reason `sender_daily_limit` are written so the hourly work-health triage raises it, and the sender gets one notice that day: "You have reached today's limit of messages to this address. Please write again tomorrow." Later emails that day get nothing. The count lives in `/opt/data/smd/sender_daily.db` (a sha256 of the address, the count, whether the notice went; three days kept), and a person's purge deletes their rows. The shared inbound gate and the cost meter are unchanged. An unauthenticated From is not counted as the person.
+3. **`escalation.request_card_text: false`** (`shared/request_cards.py`; console `src/lib/operator/request-card-email.ts`). The seat posts every request card with the subject, the request's and the reply's words and the matter emptied, and `text_withheld: true`; the console renders such a card as who and what happened, and withholds the words itself when the seat's projected `escalation_json` says so, whatever an older seat image sends.
+
+Also: a read from a walled store records the stored text as that turn's provenance, keyed by the handler's session id, and hands the model dollar figures in words, so a reply that repeats a person's own lead value or follow-up date is not held as invented, while a figure nobody read still is. `sender_enrollment_cli orphans` lists walled-store directories that belong to nobody listed, by count and slug. The rehearsal (`tests_e2e/test_guide_rehearsal.py`) drives a held reply (the fixed line arrives), a limited sender (one notice, then silence), cards with no words (the inventory finds no marker in them), and feeds the run's own ledger rows to `operator/bin/lib/work_health.py`, which raises an item for the held reply and for each limited email.

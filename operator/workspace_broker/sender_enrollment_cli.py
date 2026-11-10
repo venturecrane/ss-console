@@ -32,6 +32,9 @@ Commands:
 * ``purge ADDRESS``: the same, for an address that may no longer be (or never
   was) enrolled, so data a removal left behind can be cleared. Exits 0 only
   when the probe examined every place and found nothing.
+* ``orphans``: read-only. The directories in the seat's walled stores that
+  belong to nobody listed now, as counts and slugs (never content); exits 3
+  when there are any, 2 when it could not examine a store or who is listed.
 * ``purge --probe ADDRESS``: read-only. Lists what of theirs is on the volume
   (and whether they are still enrolled) and exits 3 if anything is, or if any
   place could not be examined ("could not examine ..."; never "found nothing").
@@ -59,7 +62,7 @@ from pathlib import Path
 
 import yaml
 
-from . import person_purge
+from . import person_orphans, person_purge
 from .logic_in_code import DEFAULT_PATH as DEFAULT_CONFIG
 from .logic_in_code import PATH_ENVS as CONFIG_ENVS
 from .sender_enrollment import EnrollmentError, EnrollmentStore
@@ -105,7 +108,8 @@ def _parser() -> argparse.ArgumentParser:
     purge = sub.add_parser("purge", help="purge one address's data, enrolled or not")
     purge.add_argument("address")
     purge.add_argument("--probe", action="store_true", help="read-only: list what remains")
-    for command in (remove, purge):
+    orphans = sub.add_parser("orphans", help="read-only: walled-store directories that belong to nobody listed")
+    for command in (remove, purge, orphans):
         command.add_argument("--data-root", default=DATA_ROOT)
         command.add_argument("--config", default=None)
     return parser
@@ -140,6 +144,47 @@ def partition_roots(config: Path) -> tuple[list[Path], str]:
         and entry["path"].startswith("/")
     ]
     return roots, ""
+
+
+def listed_addresses(config: Path, store: EnrollmentStore | None) -> tuple[list[str], bool]:
+    """``(addresses, has_domain_grant)``: the seat's people now, its authored
+    roster's exact addresses, its administrators and its enrolled list. Raises
+    when the config or the enrolled list cannot be read: an orphan count that
+    could not look must not read as none."""
+    doc = yaml.safe_load(config.read_text(encoding="utf-8"))
+    scope = doc.get("scope") if isinstance(doc, dict) else None
+    scope = scope if isinstance(scope, dict) else {}
+    entries = [e for e in (scope.get("inbound_allow_from") or []) if isinstance(e, str)]
+    entries += [e for e in (scope.get("admins") or []) if isinstance(e, str)]
+    exact = [e.strip().lower() for e in entries if not e.strip().startswith("@")]
+    domain_grant = any(e.strip().startswith("@") for e in entries)
+    exact += sorted((store or EnrollmentStore()).enrolled_addresses())
+    return exact, domain_grant
+
+
+def _orphans_command(args: argparse.Namespace, store: EnrollmentStore | None) -> int:
+    """Counts and slugs of directories in the seat's walled stores that belong
+    to nobody listed (``person_orphans``). Exits 3 when there are any, 2 when
+    it could not look."""
+    targets = targets_for(args.data_root, args.config)
+    try:
+        listed, domain_grant = listed_addresses(_config_path(args.config), store)
+    except (OSError, yaml.YAMLError, EnrollmentError) as exc:
+        print(f"refused: could not read who is listed ({type(exc).__name__})", file=sys.stderr)
+        return EXIT_REFUSED
+    result = person_orphans.orphan_partitions(targets, listed)
+    if result.problems:
+        for problem in result.problems:
+            print(f"refused: could not examine {problem}", file=sys.stderr)
+        return EXIT_REFUSED
+    if not result.found:
+        print("no walled-store directory belongs to nobody listed")
+        return 0
+    for root, slugs in result.found.items():
+        print(f"{root}: {len(slugs)} with no listed owner: {', '.join(slugs)}")
+    if domain_grant:
+        print("note: this seat's roster grants a whole domain; a person at it has no slug here")
+    return EXIT_REMAINS
 
 
 def targets_for(data_root: str, config: str | None) -> person_purge.PurgeTargets:
@@ -282,6 +327,8 @@ def main(
     them, and ``remove`` purges."""
     args = _parser().parse_args(argv)
     purging = args.command == "purge" or (args.command == "remove" and (store is None or purge_targets is not None))
+    if args.command == "orphans":
+        return _orphans_command(args, store)
     if purging:
         return _purge_command(args, store, purge_targets, isolate)
     if store is None:

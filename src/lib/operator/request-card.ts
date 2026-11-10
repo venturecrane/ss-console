@@ -183,6 +183,12 @@ export interface RequestCard {
   couldNot: CouldNotCode | null
   job: CardJob | null
   lane: CardLane | null
+  /**
+   * The seat authors `escalation.request_card_text: false`: it sent no words
+   * (subject, request, reply, matter), and the email must carry none. False on
+   * every card a seat posted before the switch existed.
+   */
+  textWithheld: boolean
 }
 
 export type ParseResult = { ok: true; card: RequestCard } | { ok: false; field: string }
@@ -436,6 +442,10 @@ export function parseRequestCard(body: Record<string, unknown>): ParseResult {
   }
   const kindFields = parseKindFields(body, id)
   if ('field' in kindFields) return { ok: false, field: kindFields.field }
+  const withheld = body.text_withheld
+  if (withheld !== undefined && withheld !== null && typeof withheld !== 'boolean') {
+    return { ok: false, field: 'text_withheld' }
+  }
   const { couldNot, job, lane } = kindFields
   const { laneKey: _laneKey, ...identity } = id
   return {
@@ -451,6 +461,7 @@ export function parseRequestCard(body: Record<string, unknown>): ParseResult {
       couldNot,
       job,
       lane,
+      textWithheld: withheld === true,
     },
   }
 }

@@ -44,6 +44,10 @@ _REPLY_KEYS = frozenset(
         "global_window_seconds",
         "backstop_max",
         "backstop_window_seconds",
+        # Read by the reply plugin's held_notice (2026-11-10), not by this
+        # resolver: accepted here so a seat that authors them keeps its policy.
+        "held_notice",
+        "max_redrafts",
     }
 )
 _HELD_RELEASE_KEYS = frozenset({"enabled", "ttl_seconds"})

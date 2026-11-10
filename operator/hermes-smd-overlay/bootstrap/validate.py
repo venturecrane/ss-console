@@ -260,6 +260,7 @@ def validate_customer_yaml(customer_yaml: Path) -> list[str]:
     _validate_connectors(cfg, errors)
     _validate_email_seam(cfg, errors)
     _validate_memory(cfg, errors)
+    _validate_request_card_text(cfg, errors)
     _validate_retired_fields(cfg, errors)
     _validate_custody_guard(cfg, errors)
     _validate_logic_in_code(cfg, errors)
@@ -811,6 +812,8 @@ _SEND_POLICY_REPLY_KEYS = frozenset(
         "global_window_seconds",
         "backstop_max",
         "backstop_window_seconds",
+        "held_notice",
+        "max_redrafts",
     }
 )
 _SEND_POLICY_HELD_KEYS = frozenset({"enabled", "ttl_seconds"})
@@ -842,9 +845,15 @@ def _validate_send_policy(cfg: dict[str, Any], errors: list[str]) -> None:
         else:
             for key in sorted(set(reply) - _SEND_POLICY_REPLY_KEYS):
                 _err(f"send_policy.reply.{key}: unknown key", errors)
-            v = reply.get("internal_exempt")
-            if v is not None and not isinstance(v, bool):
-                _err("send_policy.reply.internal_exempt: must be a boolean", errors)
+            for key in ("internal_exempt", "held_notice"):
+                v = reply.get(key)
+                if v is not None and not isinstance(v, bool):
+                    _err(f"send_policy.reply.{key}: must be a boolean", errors)
+            v = reply.get("max_redrafts")
+            if v is not None and (
+                isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= 10
+            ):
+                _err("send_policy.reply.max_redrafts: must be a whole number from 0 to 10", errors)
             for key in ("per_sender_max", "global_max", "backstop_max"):
                 v = reply.get(key)
                 if v is not None and (isinstance(v, bool) or not isinstance(v, int) or v < 0):
@@ -1493,13 +1502,20 @@ def _validate_sender_enrollment(cfg: dict[str, Any], errors: list[str]) -> None:
         _err(f"sender_enrollment: must be a mapping; got {type(block).__name__}", errors)
         return
     for key in block:
-        if key != "enabled":
+        if key not in ("enabled", "daily_limit"):
             _err(
-                f"sender_enrollment.{key}: unknown key; sender_enrollment takes only enabled",
+                f"sender_enrollment.{key}: unknown key; sender_enrollment takes only enabled "
+                "and daily_limit",
                 errors,
             )
     if not isinstance(block.get("enabled"), bool):
         _err("sender_enrollment.enabled: must be true or false", errors)
+    # The per-sender daily limit (plugins/hermes-smd-webhook-router/daily_limit.py).
+    limit = block.get("daily_limit")
+    if "daily_limit" in block and (
+        isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000
+    ):
+        _err("sender_enrollment.daily_limit: must be a whole number from 1 to 1000", errors)
     seat = cfg.get("seat")
     if not isinstance(seat, dict) or (seat.get("role") != "guide" and seat.get("kind") != "demo"):
         _err(
@@ -1720,6 +1736,16 @@ def _validate_email_seam(cfg: dict[str, Any], errors: list[str]) -> None:
             "that cannot be fenced cannot be bound (ADR 0078 D3)",
             errors,
         )
+
+
+def _validate_request_card_text(cfg: dict[str, Any], errors: list[str]) -> None:
+    """``escalation.request_card_text`` (shared/request_cards.py): optional
+    boolean. ``false`` sends request cards with who and what happened only.
+    Mirrors the console's ``checkRequestCardText``."""
+    block = cfg.get("escalation")
+    if isinstance(block, dict) and "request_card_text" in block:
+        if not isinstance(block["request_card_text"], bool):
+            _err("escalation.request_card_text: must be true or false", errors)
 
 
 def _validate_memory(cfg: dict[str, Any], errors: list[str]) -> None:

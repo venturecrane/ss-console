@@ -761,6 +761,36 @@ def write_partition(
     return receipt
 
 
+#: A dollar figure as a person writes one: ``$40,000``, ``$ 12.50``, ``$40k``,
+#: ``$1.5M``, ``$2 million``.
+_DOLLARS_RE = re.compile(
+    r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(\.\d{1,2})?(?:\s?(k|K|m|M|thousand|million)\b)?"
+)
+_SCALE_WORDS = {"k": "thousand", "m": "million", "thousand": "thousand", "million": "million"}
+
+
+def amounts_in_words(text: str) -> str:
+    """``text`` with every dollar figure written as words: ``$40,000`` becomes
+    ``40,000 dollars`` and ``$40k`` becomes ``40 thousand dollars``.
+
+    WHY (ss-console #3946). A representative's lead carries their own deal
+    value, and the reply checks hold any ``$`` followed by a digit in a reply
+    (``fabrication_markers.json``, ``specific-dollar-amount``) unless the exact
+    figure was read this session. Reading the record seeds the figure (the
+    handler records the stored text, ``$`` and all, as this turn's provenance),
+    and handing the model the figure in words means a reply that repeats it
+    in its own phrasing ("about 40 thousand dollars") does not trip a marker
+    meant for invented prices. The figure itself is never changed.
+    """
+
+    def words(m: re.Match) -> str:
+        number = m.group(1) + (m.group(2) or "")
+        scale = m.group(3)
+        return f"{number} {_SCALE_WORDS[scale.lower()]} dollars" if scale else f"{number} dollars"
+
+    return _DOLLARS_RE.sub(words, text)
+
+
 def _code_policy(store: str, config: CustomerConfig | None) -> StorePolicy:
     policies = authored_policies(config)
     if store not in policies:
