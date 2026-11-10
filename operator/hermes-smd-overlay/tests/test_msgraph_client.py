@@ -115,6 +115,36 @@ def test_401_triggers_single_remint_then_succeeds():
     assert len(token_calls) == 2
 
 
+def _throttled(retry_after: str | None) -> urllib.error.HTTPError:
+    headers = {"Retry-After": retry_after} if retry_after is not None else {}
+    return urllib.error.HTTPError("https://graph", 429, "throttled", headers, io.BytesIO(b""))
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "slept"),
+    [("7", 7.0), (None, 1.0), ("600", 30.0), ("Wed, 21 Oct 2026 07:28:00 GMT", 1.0)],
+)
+def test_429_waits_as_long_as_graph_says_capped(monkeypatch, retry_after, slept):
+    """Graph names the back-off in Retry-After; a retry before then is throttled
+    again. A number of seconds is honored up to the cap; anything else backs off
+    exponentially from one second."""
+    waits: list[float] = []
+    monkeypatch.setattr(msgraph_client.time, "sleep", waits.append)
+    opener = _Opener(graph_script=[_throttled(retry_after), _Resp(200, b'{"id":"m1"}')])
+    assert _client(opener).get_message("m1") == {"id": "m1"}
+    assert waits == [slept]
+
+
+def test_a_429_that_never_clears_raises_after_the_attempts(monkeypatch):
+    waits: list[float] = []
+    monkeypatch.setattr(msgraph_client.time, "sleep", waits.append)
+    opener = _Opener(graph_script=[_throttled("2") for _ in range(msgraph_client._MAX_ATTEMPTS)])
+    with pytest.raises(MsGraphApiError) as exc:
+        _client(opener).get_message("m1")
+    assert exc.value.status == 429
+    assert waits == [2.0] * (msgraph_client._MAX_ATTEMPTS - 1)
+
+
 def test_persistent_4xx_raises_api_error_with_status():
     opener = _Opener(graph_script=[_http_error(403, b"forbidden")])
     client = _client(opener)
