@@ -61,16 +61,18 @@ export function checkMemory(
 }
 
 /**
- * Hermes native memory switches (passthrough to the profile `config.memory`).
- * Optional booleans; a space-mode seat must author both false, which is a
+ * Hermes native memory switches (passthrough to the profile `config.memory`),
+ * and the overlay's per-sender memory switch (`peer_memory_enabled`: absent is
+ * on, as on every seat before it existed; false registers nothing). Optional
+ * booleans; a space-mode seat must author the first two false, which is a
  * cross-field rule in sections-people.ts (ADR 0091).
  */
 function checkMemorySwitches(
   raw: Record<string, unknown>,
   errors: ValidationError[]
-): Pick<Memory, 'memory_enabled' | 'user_profile_enabled'> {
-  const out: Pick<Memory, 'memory_enabled' | 'user_profile_enabled'> = {}
-  for (const key of ['memory_enabled', 'user_profile_enabled'] as const) {
+): Pick<Memory, 'memory_enabled' | 'user_profile_enabled' | 'peer_memory_enabled'> {
+  const out: Pick<Memory, 'memory_enabled' | 'user_profile_enabled' | 'peer_memory_enabled'> = {}
+  for (const key of ['memory_enabled', 'user_profile_enabled', 'peer_memory_enabled'] as const) {
     const v = raw[key]
     if (v === undefined || v === null) continue
     if (typeof v !== 'boolean') {

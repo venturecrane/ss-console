@@ -1733,6 +1733,10 @@ def _validate_memory(cfg: dict[str, Any], errors: list[str]) -> None:
     for field in ("d1_namespace", "r2_vault_path", "vectorize_index"):
         if field not in memory:
             _err(f"memory.{field}: missing", errors)
+    # The per-sender memory switch (plugins/hermes-smd-peer-memory): absent is
+    # on, as on every seat before it existed; false registers nothing.
+    if "peer_memory_enabled" in memory and not isinstance(memory["peer_memory_enabled"], bool):
+        _err("memory.peer_memory_enabled must be a boolean", errors)
 
     customer_id = cfg.get("customer_id")
     if customer_id:

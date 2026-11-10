@@ -1175,6 +1175,12 @@ export interface Memory {
    */
   memory_enabled?: boolean
   user_profile_enabled?: boolean
+  /**
+   * The overlay's per-sender memory (`hermes-smd-peer-memory`). Absent is on,
+   * as on every seat before the switch existed; `false` registers no tool, no
+   * hook and nothing in the prompt.
+   */
+  peer_memory_enabled?: boolean
 }
 
 /**
