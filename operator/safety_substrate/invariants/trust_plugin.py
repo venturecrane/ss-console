@@ -8,10 +8,9 @@ ceiling resolution the gateway's ``pre_tool_call`` hook calls, and its
 
 WHERE IT IS LOADED FROM, in order, the first that exists:
 
-1. ``$HERMES_HOME/plugins/hermes-smd-overlay`` and
-   ``/opt/data/plugins/hermes-smd-overlay``: the volume copy the gateway loads
-   on a seat (bootstrap.sh refreshes it from the image's pack before the
-   invariants run; invariant 8 looks in the same two places).
+1. :func:`overlay_dirs`: the volume copy the gateway loads on a seat
+   (bootstrap.sh refreshes it from the image's pack before the invariants
+   run; invariant 8 finds the overlay through the same function).
 2. Beside the installed ``shared`` package: the overlay as pip-installed into
    the Hermes venv on a seat, or the source tree in CI and on a laptop.
 
@@ -25,7 +24,6 @@ from __future__ import annotations
 
 import functools
 import importlib.util
-import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -34,13 +32,20 @@ PLUGIN = "hermes-smd-trust"
 _MODULE_NAME = "smd_substrate_trust_plugin"
 
 
+def overlay_dirs() -> list[Path]:
+    """Where a seat's gateway loads the overlay from, in order: the seat's Hermes
+    home (the volume on a seat), then a user install. Invariant 8 looks in the
+    same places."""
+    from shared.audit_failure_counter import seat_home
+
+    return [
+        seat_home() / "plugins" / "hermes-smd-overlay",
+        Path.home() / ".hermes" / "plugins" / "hermes-smd-overlay",
+    ]
+
+
 def _candidates() -> list[Path]:
-    overlays: list[Path] = []
-    home = os.environ.get("HERMES_HOME")
-    if home:
-        overlays.append(Path(home) / "plugins" / "hermes-smd-overlay")
-    overlays.append(Path("/opt/data/plugins/hermes-smd-overlay"))
-    out = [o / "plugins" / PLUGIN for o in overlays]
+    out = [o / "plugins" / PLUGIN for o in overlay_dirs()]
     import shared  # the package the gateway imports; required on every seat
 
     if shared.__file__:

@@ -56,6 +56,8 @@ import sys
 import types
 from pathlib import Path
 
+from safety_substrate.invariants.trust_plugin import overlay_dirs
+
 # The five functional plugins whose activation IS the governance guarantee. The
 # inbound quarantine joined on 2026-11-07, when the sample-transform voice plugin
 # that had owned pre_llm_call here was removed (ss ADR 0083 decision 6).
@@ -85,13 +87,8 @@ _BANNED_PROBE_TOOL = "email_send"
 
 
 def _overlay_dirs() -> list[Path]:
-    dirs = []
-    home = os.environ.get("HERMES_HOME")
-    if home:
-        dirs.append(Path(home) / "plugins" / "hermes-smd-overlay")
-    dirs.append(Path("/opt/data/plugins/hermes-smd-overlay"))
-    dirs.append(Path.home() / ".hermes" / "plugins" / "hermes-smd-overlay")
-    return dirs
+    # One list of where the gateway's overlay lives, shared with invariants 1-5.
+    return overlay_dirs()
 
 
 def _find_overlay() -> Path | None:
