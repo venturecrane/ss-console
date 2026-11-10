@@ -1,0 +1,380 @@
+<title>How the Operator Works</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of numbered views; each view is a plain line figure with numbered text beside or under it. Sign-shop register: flat, high contrast, one accent. */
+:root {
+  --bg: #f5f0e3; --panel: #fbf8f0; --seat: #efe5cc; --ink: #1a1512; --ink2: #4a423c; --muted: #7d7267;
+  --line: rgba(26,21,18,.18); --accent: #c5501e; --on-accent: #ffffff; --ok: #3f6335; --stop: #9c2a2a;
+  --display: 'Archivo', system-ui, sans-serif; --body: 'Archivo', system-ui, sans-serif;
+  --label: 'Archivo Narrow', 'Archivo', system-ui, sans-serif; --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #1a1512; --panel: #231c18; --seat: #33291f; --ink: #f5f0e3; --ink2: #d3cabb; --muted: #a2978a;
+  --line: rgba(245,240,227,.2); --accent: #e7783f; --on-accent: #1a1512; --ok: #9cc48a; --stop: #ef8f80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #1a1512; --panel: #231c18; --seat: #33291f; --ink: #f5f0e3; --ink2: #d3cabb; --muted: #a2978a;
+  --line: rgba(245,240,227,.2); --accent: #e7783f; --on-accent: #1a1512; --ok: #9cc48a; --stop: #ef8f80; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 1000px; margin: 0 auto; padding-block: 40px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { border-bottom: 3px solid var(--ink); padding-bottom: 20px; margin-bottom: 28px; }
+.eyebrow { font-family: var(--label); font-weight: 600; text-transform: uppercase; letter-spacing: .09em; font-size: 13px; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; margin: 6px 0 12px; text-wrap: balance; letter-spacing: -.01em; }
+.lede { font-size: 18px; max-width: 66ch; color: var(--ink2); margin: 0; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 25px; line-height: 1.15; margin: 0 0 6px; text-wrap: balance; }
+h3 { font-family: var(--label); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; font-size: 13px; color: var(--muted); margin: 22px 0 8px; }
+p { margin: 0 0 12px; max-width: 68ch; }
+section.view { padding-block: 30px; border-bottom: 1px solid var(--line); }
+.vnum { font-family: var(--label); font-weight: 600; letter-spacing: .09em; text-transform: uppercase; font-size: 13px; color: var(--accent); }
+.q { color: var(--ink2); font-size: 17px; margin-bottom: 16px; }
+.five { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0; border: 1.5px solid var(--ink); margin: 18px 0 6px; }
+.five div { padding: 12px 14px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.five b { display: block; font-family: var(--label); text-transform: uppercase; letter-spacing: .07em; font-size: 13px; }
+.five span { font-size: 14px; color: var(--ink2); }
+.fig { overflow-x: auto; margin: 14px 0 16px; border: 1.5px solid var(--ink); background: var(--panel); }
+.fig svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--body); }
+ol.steps { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px 28px; }
+ol.steps li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; font-size: 15px; min-width: 0; }
+ol.steps .n { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 13px; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+ol.steps b { font-weight: 600; }
+.stop { color: var(--stop); }
+.tbl { overflow-x: auto; margin: 12px 0 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 620px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+thead th { font-family: var(--label); text-transform: uppercase; letter-spacing: .07em; font-size: 12.5px; color: var(--muted); border-bottom: 1.5px solid var(--ink); font-weight: 600; }
+tbody th { font-weight: 600; white-space: nowrap; }
+td.no { color: var(--stop); } td.yes { color: var(--ok); font-weight: 500; }
+.rule { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 0; border: 1.5px solid var(--ink); margin: 12px 0 16px; }
+.rule > div { padding: 14px 16px; min-width: 0; }
+.rule > div + div { border-left: 1px solid var(--line); }
+.rule pre { margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; overflow-x: auto; color: var(--ink); }
+.rule .c { color: var(--muted); }
+.fx { list-style: none; margin: 0; padding: 0; font-size: 14.5px; display: grid; gap: 8px; }
+.fx li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+.fx .y { color: var(--ok); font-weight: 700; } .fx .n { color: var(--stop); font-weight: 700; } .fx .h { color: var(--accent); font-weight: 700; }
+@media (max-width: 640px) { .rule { grid-template-columns: 1fr; } .rule > div + div { border-left: 0; border-top: 1px solid var(--line); } }
+.cols3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0; border: 1.5px solid var(--ink); margin: 12px 0; }
+.cols3 > div { padding: 14px 16px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+.cols3 h4 { margin: 0 0 8px; font-family: var(--label); text-transform: uppercase; letter-spacing: .07em; font-size: 13px; }
+.cols3 ul, ul.plain { margin: 0; padding-left: 18px; font-size: 14.5px; display: grid; gap: 5px; }
+.k1 { color: var(--ok); } .k2 { color: var(--accent); } .k3 { color: var(--muted); }
+.note { font-size: 14px; color: var(--muted); max-width: 72ch; }
+footer { padding-top: 22px; font-size: 13px; color: var(--muted); }
+
+/* figure primitives */
+svg .bx { fill: var(--bg); stroke: var(--ink); stroke-width: 1.5; }
+svg .seat { fill: var(--seat); stroke: var(--ink); stroke-width: 1.5; }
+svg .op { fill: var(--seat); stroke: var(--accent); stroke-width: 2.5; }
+svg .zone { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 5; }
+svg .gap { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 4; }
+svg .ln { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+svg .hd { fill: var(--ink); }
+svg .t { fill: var(--ink); font-size: 14px; font-weight: 600; }
+svg .s { fill: var(--ink2); font-size: 12px; }
+svg .zl { fill: var(--muted); font-family: var(--label); font-size: 12px; font-weight: 600; letter-spacing: .08em; }
+svg .a { fill: var(--accent); font-size: 12.5px; font-weight: 600; }
+svg .x { fill: var(--stop); font-size: 12px; }
+svg .g { fill: var(--ok); font-size: 12px; font-weight: 600; }
+svg .b { fill: var(--accent); }
+svg .bn { fill: var(--on-accent); font-size: 12px; font-weight: 700; text-anchor: middle; }
+svg .m { text-anchor: middle; }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">SMD Services · sales enablement · version 1</div>
+  <h1>How the Operator Works</h1>
+  <p class="lede">The Operator is a managed worker that SMD builds for one business and runs for it. It does the connecting work between that business's people and its systems, inside limits the business writes down, and it keeps a record of every action. This page explains the product in six views, from the idea to the mechanism.</p>
+</header>
+
+<section class="view">
+  <div class="vnum">Start here</div>
+  <h2>One worker, configured for one business</h2>
+  <p class="q">The Operator has no fixed job. Five things are written down for each client, and anything not written down is refused.</p>
+  <div class="five">
+    <div><b>Skills</b><span>The kinds of work it knows how to do, and what sets each one off.</span></div>
+    <div><b>Limits</b><span>How far it may go for each kind of action, set by the client.</span></div>
+    <div><b>Voice</b><span>How the business writes, by type of document.</span></div>
+    <div><b>Connections</b><span>The client's systems it may reach, each one granted.</span></div>
+    <div><b>Memory</b><span>What it knows about how this business works. It belongs to the client.</span></div>
+  </div>
+  <p class="note">It is sold against the next hire, a coordinator or an assistant, and never against software. The client's existing systems are things it connects to.</p>
+</section>
+
+<section class="view">
+  <div class="vnum">View 1 · the idea</div>
+  <h2>Before and after</h2>
+  <p class="q">What changes for the business?</p>
+  <div class="fig"><svg viewBox="0 0 960 285" role="img" aria-label="Today, people connect their systems by hand. With an Operator, a governed worker does that connecting work.">
+    <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="hd"/></marker></defs>
+    <text x="20" y="28" class="zl">TODAY</text>
+    <rect x="20" y="44" width="140" height="170" class="bx"/>
+    <text x="90" y="118" class="t m">Your people</text><text x="90" y="138" class="s m">owners, managers,</text><text x="90" y="154" class="s m">staff</text>
+    <rect x="172" y="44" width="126" height="170" class="gap"/>
+    <text x="235" y="72" class="s m">read the email</text><text x="235" y="94" class="s m">update the record</text><text x="235" y="116" class="s m">chase the document</text><text x="235" y="138" class="s m">log it</text><text x="235" y="160" class="s m">book the follow-up</text>
+    <text x="235" y="196" class="a m">done by hand</text>
+    <rect x="310" y="44" width="140" height="170" class="bx"/>
+    <text x="380" y="118" class="t m">Your systems</text><text x="380" y="138" class="s m">email, records,</text><text x="380" y="154" class="s m">calendar, documents</text>
+    <text x="20" y="246" class="s">The connecting work lives in people's heads and inboxes.</text>
+    <text x="20" y="264" class="s">It stops when someone is out, and it leaves when they do.</text>
+    <line x1="478" y1="14" x2="478" y2="272" class="zone"/>
+    <text x="506" y="28" class="zl">WITH AN OPERATOR</text>
+    <rect x="506" y="44" width="124" height="170" class="bx"/>
+    <text x="568" y="118" class="t m">Your people</text><text x="568" y="138" class="s m">ask it, direct it,</text><text x="568" y="154" class="s m">judge its work</text>
+    <line x1="634" y1="129" x2="664" y2="129" class="ln" marker-end="url(#a1)" marker-start="url(#a1)"/>
+    <rect x="668" y="44" width="136" height="170" class="op"/>
+    <text x="736" y="78" class="t m">The Operator</text><text x="736" y="100" class="s m">does the connecting</text><text x="736" y="116" class="s m">work, in your systems</text>
+    <text x="736" y="160" class="a m">limits you write</text><text x="736" y="180" class="g m">every action recorded</text>
+    <line x1="808" y1="129" x2="838" y2="129" class="ln" marker-end="url(#a1)" marker-start="url(#a1)"/>
+    <rect x="842" y="44" width="108" height="170" class="bx"/>
+    <text x="896" y="118" class="t m">Your systems</text><text x="896" y="138" class="s m">unchanged, still</text><text x="896" y="154" class="s m">the record</text>
+    <text x="506" y="246" class="s">Built around how the business already runs, then run by SMD.</text>
+    <text x="506" y="264" class="s">Nothing new for staff to log in to: they email it like a colleague.</text>
+  </svg></div>
+</section>
+
+<section class="view">
+  <div class="vnum">View 2 · system context</div>
+  <h2>What it touches, and who runs what</h2>
+  <p class="q">Three zones. The client's systems stay the systems of record. Each client gets its own machine. SMD runs the service from outside it.</p>
+  <div class="fig"><svg viewBox="0 0 960 470" role="img" aria-label="System context: the client's environment, the client's dedicated seat, and SMD Services, with seven numbered connections.">
+    <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="hd"/></marker></defs>
+    <rect x="10" y="34" width="270" height="426" class="zone"/><text x="24" y="56" class="zl">CLIENT'S ENVIRONMENT</text>
+    <rect x="30" y="70" width="230" height="52" class="bx"/><text x="44" y="92" class="t">Staff</text><text x="44" y="110" class="s">the people the client has listed</text>
+    <rect x="30" y="138" width="230" height="52" class="bx"/><text x="44" y="160" class="t">System of record</text><text x="44" y="178" class="s">where the business keeps its work</text>
+    <rect x="30" y="218" width="230" height="52" class="bx"/><text x="44" y="240" class="t">The Operator's mailbox</text><text x="44" y="258" class="s">inside the client's own mail tenant</text>
+    <rect x="30" y="298" width="230" height="52" class="bx"/><text x="44" y="320" class="t">Other connected systems</text><text x="44" y="338" class="s">each one granted by the client</text>
+    <rect x="30" y="378" width="230" height="52" class="bx"/><text x="44" y="400" class="t">Administrators</text><text x="44" y="418" class="s">named by the client; use the portal</text>
+
+    <rect x="330" y="34" width="330" height="426" class="zone"/><text x="344" y="56" class="zl">CLIENT'S SEAT · ONE MACHINE, ONE CLIENT</text>
+    <rect x="350" y="70" width="290" height="52" class="seat"/><text x="364" y="92" class="t">Front door</text><text x="364" y="110" class="s">verifies every inbound message</text>
+    <rect x="350" y="138" width="290" height="52" class="seat"/><text x="364" y="160" class="t">Agent</text><text x="364" y="178" class="s">does the work; holds read-only keys</text>
+    <rect x="350" y="218" width="290" height="52" class="seat"/><text x="364" y="240" class="t">Broker</text><text x="364" y="258" class="s">holds send credentials; only writer of the record</text>
+    <rect x="350" y="298" width="290" height="52" class="seat"/><text x="364" y="320" class="t">Jobs runner</text><text x="364" y="338" class="s">long work: cost-limited, reviewed, proven</text>
+    <rect x="350" y="378" width="138" height="52" class="seat"/><text x="362" y="400" class="t">Audit record</text><text x="362" y="418" class="s">append-only, chained</text>
+    <rect x="502" y="378" width="138" height="52" class="seat"/><text x="514" y="400" class="t">Memory + config</text><text x="514" y="418" class="s">config is read-only</text>
+
+    <rect x="710" y="34" width="240" height="426" class="zone"/><text x="724" y="56" class="zl">SMD SERVICES</text>
+    <rect x="726" y="70" width="208" height="52" class="bx"/><text x="738" y="92" class="t">Client portal</text><text x="738" y="110" class="s">levels, pause, activity</text>
+    <rect x="726" y="160" width="208" height="52" class="bx"/><text x="738" y="182" class="t">Pager + hourly triage</text><text x="738" y="200" class="s">watches every seat</text>
+    <rect x="726" y="250" width="208" height="52" class="bx"/><text x="738" y="272" class="t">Releases + changes</text><text x="738" y="290" class="s">by reviewed change only</text>
+    <rect x="726" y="340" width="208" height="52" class="bx"/><text x="738" y="362" class="t">Per-client ops workspace</text><text x="738" y="380" class="s">reaches one seat; access logged</text>
+
+    <line x1="264" y1="96" x2="346" y2="96" class="ln" marker-end="url(#a2)"/><circle cx="305" cy="96" r="11" class="b"/><text x="305" y="100" class="bn">1</text>
+    <line x1="264" y1="164" x2="346" y2="164" class="ln" marker-end="url(#a2)" marker-start="url(#a2)"/><circle cx="305" cy="164" r="11" class="b"/><text x="305" y="168" class="bn">2</text>
+    <line x1="346" y1="244" x2="264" y2="244" class="ln" marker-end="url(#a2)"/><circle cx="305" cy="244" r="11" class="b"/><text x="305" y="248" class="bn">3</text>
+    <line x1="722" y1="96" x2="644" y2="96" class="ln" marker-end="url(#a2)"/><circle cx="685" cy="96" r="11" class="b"/><text x="685" y="100" class="bn">4</text>
+    <line x1="664" y1="186" x2="722" y2="186" class="ln" marker-end="url(#a2)"/><circle cx="691" cy="186" r="11" class="b"/><text x="691" y="190" class="bn">5</text>
+    <line x1="722" y1="276" x2="664" y2="276" class="ln" marker-end="url(#a2)"/><circle cx="691" cy="276" r="11" class="b"/><text x="691" y="280" class="bn">6</text>
+    <line x1="722" y1="366" x2="664" y2="366" class="ln" marker-end="url(#a2)"/><circle cx="691" cy="366" r="11" class="b"/><text x="691" y="370" class="bn">7</text>
+  </svg></div>
+  <ol class="steps">
+    <li><span class="n">1</span><span><b>Staff ask by email.</b> Requests arrive in the Operator's own mailbox. Only people on the client's list are answered.</span></li>
+    <li><span class="n">2</span><span><b>It works in the client's systems.</b> It reads what the task needs and writes results back. SMD keeps no copy of the client's files.</span></li>
+    <li><span class="n">3</span><span><b>Sending is held apart.</b> The agent cannot send on its own keys. A separate broker holds the send credentials and checks every recipient.</span></li>
+    <li><span class="n">4</span><span><b>The portal directs, it does not hold data.</b> Administrators see what the Operator is set up to do and the record of what it did, move levels up to the agreed ceiling, and pause it.</span></li>
+    <li><span class="n">5</span><span><b>The seat reports out.</b> A health signal every minute, the newest audit entry's fingerprint, and a notice for each staff request.</span></li>
+    <li><span class="n">6</span><span><b>Changes come in one way.</b> Configuration is written by SMD as a reviewed change and published to the seat. The agent cannot edit its own limits.</span></li>
+    <li><span class="n">7</span><span><b>SMD's access is fenced too.</b> When a person at SMD must look at a client's work, it is from a workspace that reaches that one seat, and the access is logged.</span></li>
+  </ol>
+</section>
+
+<section class="view">
+  <div class="vnum">View 3 · one request, start to finish</div>
+  <h2>The life of a request</h2>
+  <p class="q">Every request passes the same checkpoints, in this order. Each one names what happens when it fails. This is condensed from 15 control points enforced in code.</p>
+  <div class="fig"><svg viewBox="0 0 960 400" role="img" aria-label="Eight numbered steps from arrival to record, each with its refusal outcome.">
+    <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="hd"/></marker></defs>
+    <text x="720" y="24" class="a">Steps 4 to 6 repeat for every tool call</text>
+    <g>
+      <rect x="15" y="36" width="205" height="84" class="bx"/><circle cx="35" cy="58" r="11" class="b"/><text x="35" y="62" class="bn">1</text><text x="54" y="63" class="t">Arrive</text>
+      <text x="29" y="88" class="s">Email, system event or schedule.</text><text x="29" y="104" class="s">The signature is verified.</text>
+      <text x="29" y="140" class="x">Bad signature: rejected.</text>
+      <line x1="222" y1="78" x2="247" y2="78" class="ln" marker-end="url(#a3)"/>
+      <rect x="250" y="36" width="205" height="84" class="bx"/><circle cx="270" cy="58" r="11" class="b"/><text x="270" y="62" class="bn">2</text><text x="289" y="63" class="t">Sender check</text>
+      <text x="264" y="88" class="s">Matched to the client's own</text><text x="264" y="104" class="s">list of people.</text>
+      <text x="264" y="140" class="x">Unknown sender: content fenced,</text><text x="264" y="156" class="x">no reply sent.</text>
+      <line x1="457" y1="78" x2="482" y2="78" class="ln" marker-end="url(#a3)"/>
+      <rect x="485" y="36" width="205" height="84" class="bx"/><circle cx="505" cy="58" r="11" class="b"/><text x="505" y="62" class="bn">3</text><text x="524" y="63" class="t">Skill and standing</text>
+      <text x="499" y="88" class="s">The matching skill loads. Who</text><text x="499" y="104" class="s">is asking is stated to the agent.</text>
+      <text x="499" y="140" class="x">Skill not enabled: declined.</text>
+      <line x1="692" y1="78" x2="717" y2="78" class="ln" marker-end="url(#a3)"/>
+      <rect x="720" y="36" width="205" height="84" class="seat"/><circle cx="740" cy="58" r="11" class="b"/><text x="740" y="62" class="bn">4</text><text x="759" y="63" class="t">Tool lookup</text>
+      <text x="734" y="88" class="s">Each tool is found in a registry</text><text x="734" y="104" class="s">of 299 classified tools.</text>
+      <text x="734" y="140" class="x">Not in the registry: never runs.</text>
+    </g>
+    <path d="M927,78 H945 V268 H929" class="ln" marker-end="url(#a3)"/>
+    <g>
+      <rect x="720" y="226" width="205" height="84" class="seat"/><circle cx="740" cy="248" r="11" class="b"/><text x="740" y="252" class="bn">5</text><text x="759" y="253" class="t">Limit check</text>
+      <text x="734" y="278" class="s">The kind of action is checked</text><text x="734" y="294" class="s">against the client's limit for it.</text>
+      <text x="734" y="330" class="x">Nothing written for it: refused.</text>
+      <line x1="718" y1="268" x2="693" y2="268" class="ln" marker-end="url(#a3)"/>
+      <rect x="485" y="226" width="205" height="84" class="seat"/><circle cx="505" cy="248" r="11" class="b"/><text x="505" y="252" class="bn">6</text><text x="524" y="253" class="t">Content checks</text>
+      <text x="499" y="278" class="s">Reference numbers and dates must</text><text x="499" y="294" class="s">trace to something it read.</text>
+      <text x="499" y="330" class="x">Unsupported, or about money or</text><text x="499" y="346" class="x">contracts: goes to a person.</text>
+      <line x1="483" y1="268" x2="458" y2="268" class="ln" marker-end="url(#a3)"/>
+      <rect x="250" y="226" width="205" height="84" class="bx"/><circle cx="270" cy="248" r="11" class="b"/><text x="270" y="252" class="bn">7</text><text x="289" y="253" class="t">Deliver</text>
+      <text x="264" y="278" class="s">Reply in the thread, a draft for</text><text x="264" y="294" class="s">a person, or ask first.</text>
+      <text x="264" y="330" class="x">Recipient not on the thread or</text><text x="264" y="346" class="x">the list: blocked, SMD told.</text>
+      <line x1="248" y1="268" x2="223" y2="268" class="ln" marker-end="url(#a3)"/>
+      <rect x="15" y="226" width="205" height="84" class="bx"/><circle cx="35" cy="248" r="11" class="b"/><text x="35" y="252" class="bn">8</text><text x="54" y="253" class="t">Record and report</text>
+      <text x="29" y="278" class="s">One audit entry per action. A</text><text x="29" y="294" class="s">request notice goes to SMD.</text>
+      <text x="29" y="330" class="x">No answer in 30 minutes:</text><text x="29" y="346" class="x">alarm to SMD.</text>
+    </g>
+  </svg></div>
+  <ol class="steps">
+    <li><span class="n">2</span><span><b>Outside content is fenced.</b> Text from an unlisted sender is quarantined so that instructions hidden in it cannot drive actions. A turn that read untrusted content cannot send, commit or delete.</span></li>
+    <li><span class="n">3</span><span><b>Skills guide, the checks enforce.</b> A skill tells the agent how to do a kind of work. It is not the control. The control is at every tool call, in steps 4 to 6.</span></li>
+    <li><span class="n">7</span><span><b>Approvals cannot be faked by the agent.</b> A yes counts only from an administrator, or from the named person whose approval is needed, through their own channel.</span></li>
+    <li><span class="n">8</span><span><b>Silence is a failure.</b> If a listed person's request has no sent reply, no queued job and no held reply after 30 minutes, SMD is alarmed. An hourly check catches it again.</span></li>
+  </ol>
+</section>
+
+<section class="view">
+  <div class="vnum">View 4 · the permission model</div>
+  <h2>The client writes the limits. Unwritten means no.</h2>
+  <p class="q">Every action the Operator can take belongs to a kind, and the client sets a limit for each kind. Here is a rule set and what it does.</p>
+  <div class="rule">
+    <div><h3 style="margin-top:0">What the client authored (illustrative)</h3>
+<pre>exposure:
+  internal_write:          autonomous
+  external_send_internal:  autonomous        <span class="c"># own staff</span>
+  external_send_client:    draft_for_review  <span class="c"># customers</span>
+  commitment:              confirm
+  <span class="c"># external_send (outside parties): nothing written</span></pre></div>
+    <div><h3 style="margin-top:0">What happens</h3>
+      <ul class="fx">
+        <li><span class="y">✓</span><span>Files a note in the system of record. <b>Runs.</b></span></li>
+        <li><span class="y">✓</span><span>Emails a status digest to staff. <b>Sends.</b></span></li>
+        <li><span class="h">→</span><span>Emails a customer. <b>Becomes a draft</b> a person sends.</span></li>
+        <li><span class="h">→</span><span>Accepts a vendor's terms. <b>Held</b> until an administrator says yes.</span></li>
+        <li><span class="n">✕</span><span>Emails an outside party. <b>Refused:</b> nothing was written for it.</span></li>
+        <li><span class="n">✕</span><span>Calls a tool nobody classified. <b>Never runs.</b></span></li>
+      </ul></div>
+  </div>
+  <h3>Kinds of action, by limit</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Kind of action</th><th>Acts on its own</th><th>Asks first</th><th>Drafts for a person</th><th>Nothing written</th></tr></thead>
+    <tbody>
+      <tr><th>Sends (four kinds, by who receives)</th><td class="yes">Sends</td><td>Held until approved in the conversation</td><td>Becomes a draft a person sends</td><td class="no">Refused</td></tr>
+      <tr><th>Internal writes</th><td class="yes">Runs</td><td>Not offered</td><td class="yes">Runs</td><td class="no">Refused</td></tr>
+      <tr><th>Commitments</th><td>Still needs a yes in the moment</td><td>Held for an administrator</td><td class="no">Blocked</td><td class="no">Refused</td></tr>
+      <tr><th>Destructive actions</th><td>Still needs a yes in the moment</td><td>One narrow case only</td><td class="no">Refused</td><td class="no">Refused</td></tr>
+      <tr><th>Reading</th><td class="yes" colspan="4">Always allowed inside the systems the client connected. It is the only thing that needs no grant.</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="plain">
+    <li><b>Sends are split by recipient:</b> the client's own staff, the client's customers, its vendors, and everyone else. Each has its own limit.</li>
+    <li><b>Some things are banned outright,</b> whatever the client writes: moving money, and sending from a principal's own mailbox. Sending in a staff member's name happens only when that person approves the exact draft.</li>
+    <li><b>The client sees three plain levels per routine:</b> "Surfaces it," "Prepares it for you," "Handles it." Each routine has a starting level and a ceiling taken from the agreement.</li>
+    <li><b>Ceilings hold.</b> An administrator can raise a routine up to its ceiling. Nobody, including SMD and the Operator, can go above it without changing the agreement.</li>
+    <li><b>Said accurately:</b> "Surfaces it" rests on the skill's instructions and is checked in the audit record. The hard enforcement is at each tool call, as in View 3.</li>
+  </ul>
+</section>
+
+<section class="view">
+  <div class="vnum">View 5 · long work</div>
+  <h2>Big jobs run as queued work, with proof at both ends</h2>
+  <p class="q">Work that takes many steps or real cost does not run in a chat reply. It runs as a job with fixed stages written in code.</p>
+  <div class="fig"><svg viewBox="0 0 960 170" role="img" aria-label="Eight stages of a queued job: submit, proof gate, estimate, run, review, file, read back, reply.">
+    <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="hd"/></marker></defs>
+    <g>
+      <rect x="12" y="20" width="104" height="52" class="bx"/><text x="64" y="51" class="t m">1 Submit</text>
+      <text x="64" y="96" class="s m">requester and</text><text x="64" y="112" class="s m">allowance checked</text>
+      <line x1="117" y1="46" x2="128" y2="46" class="ln" marker-end="url(#a5)"/>
+      <rect x="130" y="20" width="104" height="52" class="op"/><text x="182" y="51" class="t m">2 Proof gate</text>
+      <text x="182" y="96" class="s m">a new kind of work</text><text x="182" y="112" class="s m">waits for a proof run</text><text x="182" y="128" class="s m">and a person's yes</text>
+      <line x1="235" y1="46" x2="246" y2="46" class="ln" marker-end="url(#a5)"/>
+      <rect x="248" y="20" width="104" height="52" class="bx"/><text x="300" y="51" class="t m">3 Estimate</text>
+      <text x="300" y="96" class="s m">cost projected;</text><text x="300" y="112" class="s m">over the cap, it holds</text>
+      <line x1="353" y1="46" x2="364" y2="46" class="ln" marker-end="url(#a5)"/>
+      <rect x="366" y="20" width="104" height="52" class="bx"/><text x="418" y="51" class="t m">4 Run</text>
+      <text x="418" y="96" class="s m">cost checked</text><text x="418" y="112" class="s m">before every</text><text x="418" y="128" class="s m">paid step</text>
+      <line x1="471" y1="46" x2="482" y2="46" class="ln" marker-end="url(#a5)"/>
+      <rect x="484" y="20" width="104" height="52" class="bx"/><text x="536" y="51" class="t m">5 Review</text>
+      <text x="536" y="96" class="s m">checked against</text><text x="536" y="112" class="s m">its sources; a</text><text x="536" y="128" class="s m">must-fix means hold</text>
+      <line x1="589" y1="46" x2="600" y2="46" class="ln" marker-end="url(#a5)"/>
+      <rect x="602" y="20" width="104" height="52" class="bx"/><text x="654" y="51" class="t m">6 File</text>
+      <text x="654" y="96" class="s m">written to the</text><text x="654" y="112" class="s m">client's system</text><text x="654" y="128" class="s m">of record</text>
+      <line x1="707" y1="46" x2="718" y2="46" class="ln" marker-end="url(#a5)"/>
+      <rect x="720" y="20" width="104" height="52" class="op"/><text x="772" y="51" class="t m">7 Read back</text>
+      <text x="772" y="96" class="s m">the filed file is</text><text x="772" y="112" class="s m">fetched and compared</text><text x="772" y="128" class="s m">with what was built</text>
+      <line x1="825" y1="46" x2="836" y2="46" class="ln" marker-end="url(#a5)"/>
+      <rect x="838" y="20" width="110" height="52" class="bx"/><text x="893" y="51" class="t m">8 Reply</text>
+      <text x="893" y="96" class="s m">to the original</text><text x="893" y="112" class="s m">requester only</text>
+    </g>
+  </svg></div>
+  <ul class="plain">
+    <li><b>Proof before first use.</b> A kind of work never done for this client does not run on a real request. It waits while SMD runs it on that client's own data, stopped before anything is written, and a person accepts the result.</li>
+    <li><b>Delivery is proven, not assumed.</b> A job counts as delivered only when the filed file has been fetched from the client's system and matches what was built.</li>
+    <li><b>Cost has a ceiling.</b> A per-job limit and a monthly limit are checked before every paid step. Over the limit, the job holds and SMD is told.</li>
+    <li><b>If the reply does not go out,</b> SMD is paged after 20 minutes.</li>
+  </ul>
+</section>
+
+<section class="view">
+  <div class="vnum">View 6 · trust</div>
+  <h2>Where the data lives, and what the record is</h2>
+  <p class="q">These are the statements our service agreement makes. They are worded to be exactly true.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Kind of data</th><th>Where it lives</th></tr></thead>
+    <tbody>
+      <tr><th>The client's business files</th><td>In the client's own systems. Read through granted connections while a task runs. SMD does not warehouse copies.</td></tr>
+      <tr><th>The Operator's email</th><td>In the client's own mail tenant, under the client's retention and controls.</td></tr>
+      <tr><th>Working memory</th><td>On the client's dedicated machine. Owned by the client. Exported on exit.</td></tr>
+      <tr><th>Audit record</th><td>On the client's dedicated machine, viewable in the portal. A fingerprint of its newest entry leaves the machine every minute and is checked daily.</td></tr>
+      <tr><th>Connection credentials</th><td>On the client's machine only. The ones that can send are held by the broker, where the agent cannot read them.</td></tr>
+      <tr><th>Settings, staff names, billing</th><td>SMD's console and its listed sub-processors.</td></tr>
+      <tr><th>Task content sent for AI processing</th><td>Processed by the model provider for the task and not used to train models.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="cols3">
+    <div><h4>The audit record</h4><ul><li>One entry per action.</li><li>Each entry is chained to the one before it, so a change shows.</li><li>The agent can read it and cannot rewrite it.</li><li>Say "tamper-evident." Do not say "tamper-proof."</li></ul></div>
+    <div><h4>What SMD can see</h4><ul><li>Health, settings, and the record of actions.</li><li>A notice per staff request: who asked, the subject, and the opening of the reply.</li><li>Client work itself only from a per-client workspace, with access logged.</li></ul></div>
+    <div><h4>Standard terms</h4><ul><li>Security incident notice within 24 hours.</li><li>On exit: record and memory exported in 14 days, everything destroyed in 30, confirmed in writing.</li><li>30 days' notice before a sub-processor changes.</li><li>No uptime percentage, no service credits.</li><li>SMD holds no SOC 2 or ISO 27001 of its own, and says so.</li></ul></div>
+  </div>
+</section>
+
+<section class="view">
+  <div class="vnum">The service around it</div>
+  <h2>What "managed" means</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Stage</th><th>What happens</th><th>What must be true to move on</th></tr></thead>
+    <tbody>
+      <tr><th>Explore</th><td>A working session on how the business runs. The client sets the limit for each kind of work.</td><td>A written configuration the client has signed off.</td></tr>
+      <tr><th>Build</th><td>SMD builds missing skills and connections, sets up the client's machine, and rehearses on practice data it owns, including hostile cases.</td><td>A rehearsal with no limit broken.</td></tr>
+      <tr><th>Go live</th><td>The client grants access to each real system. Areas of work come on one at a time.</td><td>The client confirms each area on its own work.</td></tr>
+      <tr><th>Run</th><td>Health checked every minute, work checked every hour, releases rolled out seat by seat with a rollback point. Staff correct the Operator directly and it keeps the correction.</td><td>Billing starts only after SMD says testing is complete and the client starts it.</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="plain">
+    <li><b>Usage is included.</b> Work whose cost grows with volume carries a stated allowance. Beyond it, SMD quotes first and starts only on written acceptance.</li>
+    <li><b>New kinds of work have a path.</b> SMD may do the first instances as a trial, measures them, then proposes terms in writing.</li>
+    <li><b>The client can always stop it:</b> pause in the portal, or cut its access in the client's own systems.</li>
+    <li><b>AI output can be wrong.</b> The client's people review it before relying on it. The product is built so that review is the normal path.</li>
+  </ul>
+</section>
+
+<section class="view">
+  <div class="vnum">Know the edges</div>
+  <h2>Proven, built, planned</h2>
+  <p class="q">A technical buyer will test these. Present each thing as what it is.</p>
+  <div class="cols3">
+    <div><h4 class="k1">In production with a paying client</h4><ul>
+      <li>One isolated machine per client</li><li>Limits enforced at every tool call; unwritten means refused</li><li>Drafts for a person, and sends to listed staff, customers and vendors</li><li>Chained audit record with daily verification</li><li>Email through a mailbox in the client's own tenant</li><li>Queued jobs with proof gate, review and read-back</li><li>Pause in the portal</li><li>Pager, hourly work check, request notices</li><li>One industry delivered in depth</li></ul></div>
+    <div><h4 class="k2">Built, not yet proven in client use</h4><ul>
+      <li>"Ask first" approvals on sends</li><li>The level dial in the portal</li><li>Client-run connections, team access and compliance view</li><li>Chat and voice-note channels</li><li>The connector that lets staff reach it from their AI assistant</li><li>Self-serve purchase</li><li>More than one persona per seat</li></ul></div>
+    <div><h4 class="k3">Planned, not built</h4><ul>
+      <li>Memory inferred from behavior (today it remembers what it is told and shown)</li><li>Industry-specific skills for the other packs</li><li>A memory view for the client</li><li>Mailboxes in other mail systems</li><li>SMS, Slack and Teams</li><li>Signed audit entries</li></ul></div>
+  </div>
+  <p class="note">Industry packs are starting configurations for onboarding. The running product is the same for every business: nothing in it branches on industry.</p>
+</section>
+
+<section class="view" style="border-bottom:0">
+  <div class="vnum">One example</div>
+  <h2>The same model, in one industry</h2>
+  <p>The first Operator runs for a personal-injury law firm. The system of record is the firm's practice-management system. Staff email requests, and the queued jobs produce medical chronologies and first drafts for an attorney to judge. So far: 18 chronologies from 29,000+ pages of records, every entry cited to the page it came from. Communications to a court or to opposing counsel are always prepared for a person to send, and nothing touching deadlines or money runs on its own. Swap the system of record, the skills and the limits, and the six views above describe any other business.</p>
+  <footer>Version 1, 2026-11-09. Built from the product's code, its decision records and SMD's service agreement. Counts are as of this date.</footer>
+</section>
+</div>
