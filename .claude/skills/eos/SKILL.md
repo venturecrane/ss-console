@@ -185,6 +185,24 @@ Do it for every row the letter hands over, not just the first. A consolidated as
 
 **Known blind spot, stated rather than discovered.** `read-tracker.mjs` is PostToolUse on matcher `Read` only. A letter opened with Bash `cat`/`grep`, reached via Grep or Glob, or pasted into the prompt leaves no trace. So a positive signal here is trustworthy and a negative one means nothing: absence of a flagged slug is not evidence that nothing was promised. Do not report it as such.
 
+**J. What this session shipped to a client surface, and whether it is READY. (SMD, added 2026-11-09, wave 2.)**
+
+The merge gate's touch rule only REPORTS a client-surface PR that carries no `(runtime)` row (`scripts/runtime-ac-proof.mjs`, `checkTouchRule`); it does not block, because at merge time a block bought boilerplate deferrals. This check is where that half is enforced: at close, with the whole session in view.
+
+**Detection.** Run it with this session's id, the `session_...` part of the `Claude-Session:` trailer this session puts on its commits:
+
+```bash
+node scripts/eos-ready.mjs --session <session_id>
+# fallback when the trailer is absent: PRs you merged since the session began
+node scripts/eos-ready.mjs --since <session start, ISO date>
+```
+
+It lists the PRs the session merged, keeps those whose changed paths touch a client surface (`scripts/lib/touch-map.mjs`: send-path, client-lane, seat), and prints each one's runtime rows. A client-surface PR is READY only when it carries at least one `(runtime)` row and every runtime row is `met` (the merge gate already resolved each `met` against the verify ledger). Anything else, no row or a row deferred, n/a or unmet, is printed under **"Shipped, not READY"**.
+
+**Completion action.** Copy the "Shipped, not READY" block into the handoff's **Blocked** section, **verbatim**, under the heading `Shipped, not READY`. Do not reword it, summarize it, or drop a line because the work "is fine". When the script prints `Shipped, not READY: none`, write that line. When it prints `COULD NOT EVALUATE`, write that line: an unread check is never reported as a clean one.
+
+**This check NEVER blocks the close.** It is not a Ship Gate item and never becomes an external blocker; the script always exits 0. A PR that is not READY is real, unfinished client work, and the handoff is where the next session finds it. Making READY the session's job happens by naming it, not by holding the session open.
+
 **Defensive note on `gh` JSON schema.** Fields like `mergeStateStatus` and `statusCheckRollup` have stable names but nested shape changes across `gh` minor versions. Wrap each jq call at the shell level: unexpected output formats should log a warning like `[eos:check-X] gh output unexpected, skipping this check` and proceed to the next check. Do NOT crash the skill on schema drift.
 
 #### Anti-Fabrication Gate
@@ -260,6 +278,7 @@ If **≤4 items pass the gate**, present them in ONE consolidated prompt using `
 | G                             | `gh issue close <N> --comment "Verified resolved during session {session_id}. See handoff."`                                            | Deferral disallowed. In-session verification that isn't carried through to closure is the same incomplete-work pattern Check D catches on PRs.                                            |
 | H                             | Rewrite the handoff diagnostic section to cite the matching memory filename, or add "no matching memory found (candidate for new one)". | Forces the check to run. "Root cause unknown" with no memory check is rejected.                                                                                                           |
 | I                             | `.claude/bin/register add …` for what was promised, or `register add --kind none --client <slug> --why "…"` to record a considered pass; `register deliver` / `register await` for rows a letter kept or handed to the client. | RECORDS, never blocks. Never a Ship Gate item and never an external blocker — client obligations legitimately span sessions. Cannot fabricate: the quote must match the source file.      |
+| J                             | Copy the "Shipped, not READY" block from `node scripts/eos-ready.mjs --session <session_id>` into the handoff's Blocked section, verbatim. | NEVER blocks and is never a loose end for the close-out prompt: it is carried, not completed. `COULD NOT EVALUATE` is carried too, never written as none. |
 
 #### Post-Action Verification
 
@@ -319,6 +338,7 @@ Using conversation history and gathered context, the agent generates a summary c
 - Questions for PM
 - Decisions needed
 - External dependencies
+- **Shipped, not READY:** the block Check J printed, verbatim (or its `none` / `COULD NOT EVALUATE` line).
 - **Unwired seams:** any producer→consumer seam this session touched that is not READY (CLAUDE.md, "Done means the client can do it": built and merged, rehearsed at $0 on real inputs against an answer key, running on the seat, every gate probed open on the seat, watched by the hourly work-health triage). A seam that is READY is done even though no real client request has run through it yet; the first real run is the triage's to watch, so it never holds this session open. Per the Definition of Done ("Done means wired", `crane_doc('global', 'team-workflow.md')`), these are NOT done: name the seam and use `status:blocked` rather than implying completion. The EOS verify-coverage gate (Layer 4c) enforces this mechanically when `status=done`; see `docs/instructions/eos-gate.md`.
 
 **Next Session:** Recommended focus - write as an ordered action plan

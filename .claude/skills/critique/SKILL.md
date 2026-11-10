@@ -29,6 +29,17 @@ status: stable
 >    named probe (VERDICT section 5, PREV-16, 2026-11-09). Measure critic use
 >    against Fable's weekly limit; each critic carries the full session
 >    baseline.
+> 2. **Critics are kept, and what was overruled leads the plan** (wave 2,
+>    PREV-3, 2026-11-09). When a plan file is in use, each critic's raw output
+>    is saved beside it in `<plan file without .md>.critics/<perspective>.md`,
+>    and the revised plan's FIRST section is `## Critic findings not adopted`,
+>    carrying each critic's own Verdict line and top issue titles with the
+>    reply beside each. The document-library plan of 2026-11-06 overruled its
+>    critique in a list inside a revision-history section
+>    (`docs/plans/document-library/design-2026-11-06.md:124`), where nobody
+>    approving the plan looked. `.claude/hooks/plan-premise-gate.mjs` denies
+>    the plan-mode exit when the critics directory exists and the section is
+>    missing or leaves a critic out.
 
 > **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "critique")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
@@ -146,6 +157,18 @@ CONSTRAINTS:
 
 Wait for all agents to complete.
 
+### Step 3b: Keep the Critics Beside the Plan File
+
+**When a plan file is in use** (plan mode names one, `~/.claude/plans/<name>.md`, or the plan under critique is a file in the repo), save each critic's final response, verbatim and unedited, to:
+
+```
+<plan file path without .md>.critics/<perspective>.md
+```
+
+`<perspective>` is the perspective name in lowercase with hyphens: `devils-advocate.md`, `simplifier.md`, `pragmatist.md`, `senior-devils-advocate.md`. One file per critic, written by you (the critics themselves write nothing). A second round of `/critique` on the same plan replaces the files of the perspectives it re-ran and leaves the others.
+
+The files are what the plan gate reads. They are the critics' own words, so the plan cannot quietly drop a finding it chose not to act on. When no plan file is in use (a plan stated only in conversation), skip this step and Step 5's section is part of the revised plan in conversation instead.
+
 ### Step 4: Synthesize (if AGENT_COUNT > 1)
 
 If multiple critics ran, synthesize their output before revising:
@@ -200,6 +223,29 @@ Present the revised plan clearly:
 1. {What was raised, why it wasn't adopted}
 ```
 
+**When a plan file is in use, write the not-adopted findings into the plan file as its FIRST section** (directly under the title), in this shape:
+
+```
+## Critic findings not adopted
+
+| Critic | Verdict (the critic's own line) | Top issues | Not adopted, and why |
+|---|---|---|---|
+| Devil's Advocate | Proceed with fixes | 1. {issue title} 2. {issue title} | {issue}: {the reply} |
+| Simplifier | Reconsider approach | 1. {issue title} | (all adopted) |
+```
+
+- **One row per file in `<plan>.critics/`.** Name the critic by its perspective, as the file is named.
+- **The Verdict cell is the critic's own Verdict line, copied, not summarized.** "Proceed with fixes" stays "Proceed with fixes"; it is never rewritten as "Revise" or "Fine with changes".
+- **Top issues are the critic's own titles**, at most three, in its order.
+- **The last cell holds every finding you did not adopt, each with its reply**, or `(all adopted)`.
+- **When every finding of every critic was adopted**, write instead the exact line:
+
+```
+Critic findings not adopted: none
+```
+
+The plan gate (`.claude/hooks/plan-premise-gate.mjs`) denies leaving plan mode while `<plan>.critics/` exists and the plan has neither this section naming every critic, with the critic's verdict where it gave one of the three, nor the none line.
+
 ### Step 6: Done
 
 After presenting the revised plan, ask:
@@ -212,7 +258,7 @@ Do NOT automatically start implementing. Wait for the user.
 
 ## Notes
 
-- **No files written**: Critique and revision happen in conversation, not on disk. The plan isn't a file - it's the working approach.
+- **Files written only beside a plan file**: when a plan file is in use, the critics' raw output goes to `<plan>.critics/` and the not-adopted section into the plan file (Step 3b, Step 5). Otherwise critique and revision happen in conversation, not on disk.
 - **Context-dependent**: The quality of critique depends on how much context is in the conversation. A vague "I'll fix the bug" produces vague critique. A detailed technical plan produces detailed critique.
 - **Fast by default**: 1 agent, no confirmation step, auto-revise. The whole flow should complete in one shot.
 - **Agent type and model**: All critic agents use `subagent_type: general-purpose` with `model: "fable"` via the Agent tool.

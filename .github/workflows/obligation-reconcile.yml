@@ -51,6 +51,8 @@ on:
       - 'tests/obligation-reconcile.test.ts'
       - 'src/lib/db/obligations.ts'
       - '.github/workflows/obligation-reconcile.yml'
+      - 'scripts/ci-reconcile-deferrals.mjs'
+      - 'tests/ci-reconcile-deferrals.test.ts'
 
 permissions:
   contents: read
@@ -88,7 +90,7 @@ jobs:
       # The unit tests gate the scheduled run: a reconciler whose detection is
       # broken must not be trusted to report the world converged.
       - name: Test the reconciler
-        run: npx vitest run tests/obligation-reconcile.test.ts
+        run: npx vitest run tests/obligation-reconcile.test.ts tests/ci-reconcile-deferrals.test.ts
 
       # On pull_request there are no secrets and no live D1 — the test above is
       # the whole job.
@@ -164,4 +166,68 @@ jobs:
               --title "Obligation register: overdue or unverifiable work" \
               --label prio:P1 --label type:bug \
               --body-file body.md
+          fi
+
+      # Overdue runtime deferrals (wave 2, 2026-11-09). The merge gate accepts a
+      # (runtime) row `deferred` with `owner:` and `enforce_by:`, and after merge
+      # nothing reads that date again. This lists every deferral whose date has
+      # passed and that no later merged PR discharged with a met row, into ONE
+      # rolling issue under its own label. Never the `client` label: the
+      # register imports client-labelled issues, and most of these are process
+      # items. Runs even when the obligation step found work (`!cancelled()`),
+      # because the two controls are independent.
+      - name: List overdue runtime deferrals
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        id: deferrals
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -u
+          STATUS=0
+          node scripts/ci-reconcile-deferrals.mjs > deferrals.txt 2>&1 || STATUS=$?
+          cat deferrals.txt
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+          # 2 is a finding (next step). 1 is the control unable to evaluate.
+          if [ "${STATUS}" -ne 0 ] && [ "${STATUS}" -ne 2 ]; then exit "${STATUS}"; fi
+
+      - name: Update the rolling deferrals issue
+        # A dry_run dispatch writes nothing, the same as the obligation step.
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && !github.event.inputs.dry_run && (steps.deferrals.outputs.status == '2' || steps.deferrals.outputs.status == '0') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          STATUS: ${{ steps.deferrals.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -u
+          MARKER="reconcile-series: runtime-deferrals"
+          LABEL="process-deferral"
+          gh label create "${LABEL}" --color BFD4F2 \
+            --description "A runtime AC deferral past its enforce_by (scripts/ci-reconcile-deferrals.mjs)" \
+            2>/dev/null || true
+          EXISTING=$(gh issue list --state open --label "${LABEL}" --limit 50 \
+            --json number,body \
+            --jq "[.[] | select(.body | contains(\"${MARKER}\"))] | .[0].number // empty")
+          if [ "${STATUS}" = "0" ]; then
+            if [ -n "${EXISTING}" ]; then
+              gh issue close "${EXISTING}" --comment "No runtime deferral is past its enforce_by as of ${RUN_URL}."
+            fi
+            exit 0
+          fi
+          {
+            echo '```'
+            cat deferrals.txt
+            echo '```'
+            echo
+            echo "Run: ${RUN_URL}"
+            echo
+            echo "<!-- ${MARKER} -->"
+          } > deferrals-body.md
+          if [ -n "${EXISTING}" ]; then
+            gh issue edit "${EXISTING}" --body-file deferrals-body.md
+            echo "updated issue #${EXISTING}"
+          else
+            gh issue create --title "Runtime deferrals past their enforce_by" \
+              --label "${LABEL}" --body-file deferrals-body.md
           fi

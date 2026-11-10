@@ -251,6 +251,17 @@ describe('the skunkworks stance is the default (folded 2026-10-24)', () => {
     expect(body).toMatch(/\[review\] past due/)
   })
 
+  it('/eos Check J carries "Shipped, not READY" verbatim and never blocks', () => {
+    const body = skillBody('eos')
+    expect(body).toMatch(/\*\*J\. What this session shipped to a client surface/)
+    expect(body).toContain('node scripts/eos-ready.mjs --session <session_id>')
+    expect(body).toMatch(/into the handoff's \*\*Blocked\*\* section, \*\*verbatim\*\*/)
+    expect(body).toMatch(/\*\*This check NEVER blocks the close\.\*\*/)
+    expect(body).toMatch(/^\| J {2,}\|/m)
+    expect(body).toMatch(/^- \*\*Shipped, not READY:\*\* the block Check J printed, verbatim/m)
+    expect(existsSync(resolve(ROOT, 'scripts/eos-ready.mjs'))).toBe(true)
+  })
+
   it('/eos grades the session against its mission, with a citation', () => {
     const body = skillBody('eos')
     expect(body).toMatch(/\*\*Against the mission:\*\*/)
@@ -328,6 +339,16 @@ const PINS: { skill: ForkedSkill; pin: string; holds: (body: string) => boolean 
     },
   },
   {
+    skill: 'critique',
+    pin: 'keeps each critic beside the plan file and leads the plan with the findings not adopted',
+    holds: (b) =>
+      b.includes('<plan file path without .md>.critics/<perspective>.md') &&
+      /write the not-adopted findings into the plan file as its FIRST section/.test(b) &&
+      /^## Critic findings not adopted$/m.test(b) &&
+      /^Critic findings not adopted: none$/m.test(b) &&
+      /The Verdict cell is the critic's own Verdict line, copied, not summarized/.test(b),
+  },
+  {
     skill: 'auto-build',
     pin: 'names a model per role: Fable plans and critiques, Opus builds, Sonnet or Haiku search',
     holds: (b) =>
@@ -369,6 +390,21 @@ describe('/wired, /critique and /auto-build carry READY and a model per role (fo
       expect(holds(skillBody(skill))).toBe(true)
     })
   }
+
+  it('/critique writes what the plan gate reads: the same directory, heading and none line', async () => {
+    const gate = await import('../.claude/hooks/plan-premise-gate.mjs')
+    const body = skillBody('critique')
+    const none = body.match(/^Critic findings not adopted: none$/m)?.[0] ?? ''
+    const section = body.match(/^## Critic findings not adopted\n\n(\|.*\n)+/m)?.[0] ?? ''
+    const critics = [
+      { name: 'devils-advocate', title: "Devil's Advocate", verdict: 'proceed with fixes' },
+      { name: 'simplifier', title: 'Simplifier', verdict: 'reconsider approach' },
+    ]
+    expect(gate.criticsDirFor('/p/plans/x.md')).toBe('/p/plans/x.critics')
+    expect(gate.criticFindingsOk(none, critics).ok).toBe(true)
+    expect(gate.criticFindingsOk(section, critics).ok).toBe(true)
+    expect(gate.criticFindingsOk('## Something else\n', critics).ok).toBe(false)
+  })
 
   it('wired-contract.md no longer lets the crane skill win a disagreement', () => {
     const page = readFileSync(WIRED_CONTRACT, 'utf8')
