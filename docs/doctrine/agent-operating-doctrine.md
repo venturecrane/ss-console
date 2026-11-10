@@ -448,7 +448,7 @@ It is `primer` rather than `gate` because no hook can see that a path was proven
 
 So, before a plan for a client-facing job is approved, at least one premise is a measurement taken on the real request and the real inputs: the client's own words parsed the way the build will parse them, and the real file set counted (files, sizes, pages already indexed, what a search returns, a cost projection against the authored cap). It runs read-only, on the seat or in the client's ops workspace (Law 15), and the number goes in the evidence cell. A plan whose premises are all mechanics is not approvable, however many there are. And a builder's list of risks is evidence about the premises: it goes to the critique and to the Captain, never held by the orchestrator, because a risk one agent saw and the reviewers did not is exactly how this one shipped.
 
-The plan-premise gate carries the mechanical half: when a plan reads as client work (it names a seat, a client, a matter, a lane, the Operator, `customer.yaml`, or a client slug), it bounces unless a Premises row holds both a number with a unit (pages, files, records, bytes, seconds, dollars, a count) and the probe that produced it (a command, `seat-probe`, `ops-handoff`, `fleet status`, a `vfy_` id, or the word "measured"). The gate checks the shape; whether the number came from the real inputs is still the agent's honesty, which is why this stays a primer law.
+The plan-premise gate carries the mechanical half: when a plan reads as client work (it names a seat, a client, a matter, a lane, the Operator, `customer.yaml`, or a client slug), it bounces unless a Premises row holds both a number with a unit (pages, files, records, bytes, seconds, dollars, a count, and since 2026-11-10 PRs, commits, transcripts, tokens, calls, messages) and the probe that produced it (a command, `seat-probe`, `ops-handoff`, `fleet status`, a `vfy_` id, or the word "measured"). The gate checks the shape; whether the number came from the real inputs is still the agent's honesty, which is why this stays a primer law.
 
 ---
 
@@ -565,7 +565,7 @@ mechanisms:
   - id: skunkworks-default-stance
     file: .claude/hooks/lib/board.mjs
     hypothesis: 'Carrying the skunkworks stance on the per-turn mission line (board.mjs STANCE), and asking for a winning line at SessionStart, makes the owner stance the default, so the Captain stops typing /skunkworks to reset agents (Laws 1 and 11). Folded into SMD /sos 2026-10-24 from crane-console skunkworks @ 6e2af4c8.'
-    success_criterion: 'At most 1 ss-console session between 2026-10-25 and 2026-11-24 in which the Captain typed /skunkworks, against a baseline of 4 sessions between 2026-09-24 and 2026-10-23 (2026-10-01, 10-07, 10-09 x2). Measured as the count of transcript files matching the typed-command tag: grep -l "<command-name>/skunkworks</command-name>" ~/.claude/projects/-Users-scottdurgan-dev-ss-console*/*.jsonl, bucketed by file mtime. Model-invoked uses ("skill":"skunkworks" tool calls) do not count; crane skill telemetry is not venture-scoped and cannot answer this. The review date sits inside the 30-day transcript cleanup on purpose: later, the evidence is gone.'
+    success_criterion: 'At most 1 ss-console session between 2026-10-25 and 2026-11-24 in which the Captain typed /skunkworks, against a baseline of 4 sessions between 2026-09-24 and 2026-10-23 (2026-10-01, 10-07, 10-09 x2). Measured as the count of transcript files matching the typed-command tag: grep -l "<command-name>/skunkworks</command-name>" ~/.claude/projects/-Users-scottdurgan-dev-ss-console*/*.jsonl, bucketed by file mtime. Model-invoked uses ("skill":"skunkworks" tool calls) do not count; crane skill telemetry is not venture-scoped and cannot answer this. The review date sat inside the 30-day transcript cleanup on purpose; retention was raised to 120 days on 2026-11-10 (`cleanupPeriodDays` in the user settings), so a later review can still read it.'
     review: 2026-11-24
     on_failure: 'The suffix alone does not move behavior. Redesign rather than repeat: promote the stance to a numbered law with a primer_line, or find the drift point (long sessions, post-/compact) and put the reminder there. If the Captain still types /skunkworks mid-session as a deliberate re-anchor rather than a correction, record that and judge on corrections instead.'
   - id: runtime-ac-touch-rule
@@ -578,6 +578,23 @@ mechanisms:
     false_alarm_owner: 'The lead of the session that owns the merge gate (wave 2 PR 1 lead); a misclassified path is fixed in touch-map.mjs with a replay fixture row in the same PR.'
     escape: 'A bare n/a is fixed by writing `n/a: <why>` in the row and editing the PR body (the check re-runs on `edited`). No label or bypass exists; a wrong classification is fixed in scripts/lib/touch-map.mjs.'
 ```
+
+## Process decisions (2026-11-10)
+
+Settled at the approval of the wave-2 process plan, from the open questions of the development-process retrospective of 2026-11-09 (kept outside the repo, with the plan). None adds a law or a primer line. Each names its one home; a disagreement between this section and a skill, an ADR or a memory is a bug fixed in both places in one PR.
+
+- **Pace (one live path first).** All of a feature's work is done in the session, in waves. Before parallel builders start, one real path runs end to end at $0. "Do it all now" and "tracer bullet first" are the same rule in that order.
+- **Endings.** Every lane's `/wired` contract lists each way a job can end (delivered, held, failed, stopped by a check), who resolves each, and what the firm is told in its own thread. Decided before the build, not discovered on the seat.
+- **Concurrent sessions.** No cap. The planning step reads the board; one session owns releases at a time; no platform restructuring while a paid client job is running.
+- **Order of authority.** Doctrine, then an ADR, then a skill, then a memory. A conflict is not resolved by precedence at read time: it is a bug, fixed in both homes in one PR (`docs/doctrine/wired-contract.md` says the same for the contract and its skill).
+- **Logic the model still holds.** Move to code only what the firm reads as a fact (a coverage line, a default the firm relies on). Sites ADR 0104 measured at zero harm stay. The code belongs to the lane's owning session.
+- **Answer keys.** Built in order of client volume and money at risk, drafting first. No rehearsal score gates a lane that has no key.
+- **Platform changes.** Recorded as a programme, not built here: fakes recorded from the real tool's output, a matrix of seat shapes, an image boot before merge, and every live setting authored in the repo.
+- **Hand-off by context size.** Measured first: `.claude/hooks/lib/context-size.mjs` logs each turn's context to `~/.claude/ss-board/context-size.log`, log-only. The bands under review are 300K (finish the step, start nothing new) and 400K (run /eos and start fresh). Nothing is said to the agent until the log shows the fire rate.
+- **Long commands.** A subagent never waits on CI, the merge queue or a long command: it returns the handle and the lead waits in the background. Foreground calls over 240 seconds are logged to `~/.claude/ss-board/long-cmd.log`; no command is denied until that log and a cache-cost comparison show a deny saves more than it misfires.
+- **New checks.** A check runs as a log or an annotation on real traffic before it may block, and its doctrine `mechanisms` entry carries `replay`, `false_alarm_owner` and `escape` (`tests/doctrine-integrity.test.ts`). The 2026-11-10 merge-gate replay is the model: the rule that would have blocked 81% of a week's client-surface PRs shipped as a warning.
+- **The review loop.** `/code-review` runs before any lane switches to `enforce` for a client, and on the existing `[SS] Code Review (ss)` cadence item, which `/sos` surfaces when due (`crane_schedule items`: last completed 2026-10-27, next due 2026-11-26). The loop lapsed after 10-27 with the item in place, so the enforce trigger, not the calendar, is the part that was missing.
+- **Transcript retention.** 120 days (`cleanupPeriodDays`, user settings), so a retrospective can see a full quarter.
 
 ## Closure loop
 
