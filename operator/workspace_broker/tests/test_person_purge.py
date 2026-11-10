@@ -379,6 +379,25 @@ def test_a_partition_root_that_is_a_link_is_not_followed(seat: dict, capsys, tmp
     assert (seat["notes"] / person_purge.person_slug(A)).is_dir(), "a refused run removed something"
 
 
+def test_a_delete_that_fails_is_reported_not_raised(seat: dict, monkeypatch) -> None:
+    """An OSError while deleting (here: unlinking a sent-line file) is a
+    "could not purge" finding, and the run is never clean."""
+    _leave_traces(seat, A, A_MARK)
+    real_unlink = os.unlink
+
+    def refuse(path, *args, **kwargs):
+        if str(path).endswith(".json"):
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", refuse)
+    report = person_purge.purge(A, seat["targets"])
+    assert not report.clean
+    assert any(f.line().startswith("could not purge sent-line labels") for f in report.remaining), [
+        f.line() for f in report.remaining
+    ]
+
+
 def test_the_database_work_runs_in_the_owner_child(seat: dict, monkeypatch) -> None:
     """The forked child path (a uid drop needs root; here the child keeps this
     uid) purges exactly as in-process does."""

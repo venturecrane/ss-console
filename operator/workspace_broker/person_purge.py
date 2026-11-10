@@ -247,10 +247,10 @@ class _Run:
 
     def cannot(self, layer: str, exc: BaseException, location: object = "") -> None:
         if isinstance(exc, CannotExamine):
-            where, why = exc.location, exc.why
+            where, reason = exc.location, exc.why
         else:
-            where, why = str(location), why(exc)
-        self.problems.append(Finding(layer, where, 1, problem=why, action="purge" if self.act else "examine"))
+            where, reason = str(location), why(exc)
+        self.problems.append(Finding(layer, where, 1, problem=reason, action="purge" if self.act else "examine"))
 
 
 # ---------------------------------------------------------------------------
@@ -341,8 +341,9 @@ def _labelled_files(vol: Volume, address: str, run: _Run) -> None:
             where = home / ".smd" / sub
             try:
                 with vol.dir(where) as fd:
-                    names = [e.name for e in scan(fd, where)] if fd is not None else []
-                    for name in (n for n in names if fnmatch.fnmatchcase(n, pattern)):
+                    if fd is None:
+                        continue
+                    for name in (e.name for e in scan(fd, where) if fnmatch.fnmatchcase(e.name, pattern)):
                         try:
                             handle(fd, name, where / name, address, run)
                         except (CannotExamine, OSError) as exc:
