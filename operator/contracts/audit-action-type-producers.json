@@ -63,17 +63,17 @@
     },
     "MEMORY_RULE_ADDED": {
       "side": "overlay",
-      "overlayProducer": "plugins/hermes-smd-memory-mirror / runtime memory add path",
+      "overlayProducer": "none since 2026-11-10: named hermes-smd-memory-mirror, removed unused (Honcho Phase 2 deferred), which never wrote this type; no overlay code emits it",
       "reason": "The portal teach-a-rule producer (teach-marcus) was removed per ADR 0052 (no portal work-actions; the operator learns via its own runtime loop / the conversational channel). Memory rules are now added on the per-customer Machine, like MEMORY_RULE_EDITED."
     },
     "MEMORY_RULE_EDITED": {
       "side": "overlay",
-      "overlayProducer": "plugins/hermes-smd-memory-mirror / runtime memory edit path",
+      "overlayProducer": "none since 2026-11-10: named hermes-smd-memory-mirror, removed unused (Honcho Phase 2 deferred), which never wrote this type; no overlay code emits it",
       "reason": "rule edits land in the per-customer memory store on the Machine; ss-console has no edit producer today."
     },
     "MEMORY_RULE_DELETED": {
       "side": "overlay",
-      "overlayProducer": "plugins/hermes-smd-memory-mirror / runtime memory delete path",
+      "overlayProducer": "none since 2026-11-10: named hermes-smd-memory-mirror, removed unused (Honcho Phase 2 deferred), which never wrote this type; no overlay code emits it",
       "reason": "rule deletes land in the per-customer memory store on the Machine; ss-console has no delete producer today."
     },
     "TRUST_PROMOTED": {
@@ -244,8 +244,8 @@
     },
     "HONCHO_CONCLUSION_DISMISSED": {
       "side": "overlay",
-      "overlayProducer": "plugins/hermes-smd-memory-mirror (Captain dismissal path)",
-      "reason": "emitted on Captain dismissal in the admin portal via the memory-mirror plugin; the paired physical Honcho DELETE is Machine-side."
+      "overlayProducer": "none since 2026-11-10: named hermes-smd-memory-mirror, removed unused (Honcho Phase 2 deferred), which never wrote this type; no overlay code emits it",
+      "reason": "would be emitted on Captain dismissal of a Honcho conclusion; Honcho is deferred to Phase 2 and the mirror plugin that would have written it was removed 2026-11-10, so nothing emits it today."
     },
     "AGENT_SKILL_CREATED": {
       "side": "overlay",

@@ -35,7 +35,7 @@ Load these ADRs before any Operator architectural work:
 - **ADR 0044**: Live reconfiguration, **partially reverted**: the root `config_applier` (Decision 5) and the OP-P2-1 key strip are live; R2-as-source-of-truth, reprovision-reads-R2 and the R2-to-git reconciler were ripped 2026-07-14. Read its "Status by decision" table, not its 2026-07-14 banner
 - **ADR 0015** — Hermes fork posture (pin-only fork, plugin-only overlay; its separate-repo half superseded by ADR 0095)
 - **ADR 0095**: One repository for the seat runtime: the overlay is built from `operator/hermes-smd-overlay/` in this tree, the version a seat reports is the ss-console commit, and there is no overlay pin
-- **ADR 0016** — Honcho disposition (revised 2026-05-30: **deferred to Phase 2, demand-gated** — Phase 1 = flat-file memory core, no Honcho on any seat; the mirror/dismiss/TTL machinery is the Phase-2 shape)
+- **ADR 0016** — Honcho disposition (revised 2026-05-30: **deferred to Phase 2, demand-gated** — Phase 1 = flat-file memory core, no Honcho on any seat; the mirror/dismiss/TTL design is the Phase-2 shape, and its first plugin, `hermes-smd-memory-mirror`, was removed unused 2026-11-10, to be rebuilt with Phase 2)
 - **ADR 0017** — Skill Curator disposition (disable autonomous curator per-customer; keep in-conversation `skill_manage`; mirror to the seat's local SQLite inventory, which the ADR calls D1; supervised `--dry-run` consolidation only)
 - **ADR 0019** — customer.yaml → per-profile config translation
 - **ADR 0020** — Connector strategy (MCP-first; BUILD only where no acceptable MCP)

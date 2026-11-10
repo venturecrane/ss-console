@@ -1,5 +1,7 @@
 # Voice Quality Gate — Failure Fallback
 
+Status: **Runner removed 2026-11-10** (Captain-approved, code audit of that day). The blind-test harness this spec names as its runner (`operator/voice-gate/`, `bin/run-voice-gate.sh`) was never wired into a workflow, a package script or a seat, and was deleted. The live runtime voice gate (the trust plugin's per-class downgrade, ADR 0083) is a different thing and stays. This file is kept as the record of the design.
+
 **Spec for issue #797.** Three-state fallback (Pass / Near-pass / Fail) extending the §9.6 blind-test gate. Target Customer named this existential: a single "did you write this?" disclosure incident kills the relationship. The fallback path is the operational doctrine for the most likely beta-1 awkward moment.
 
 ## Contract

@@ -271,19 +271,19 @@ The specialist does not need this. It maps each phase's technical artifacts to t
 specs and decisions that govern them, so the build agent and engineers can go
 deep.
 
-| Mechanic                                                      | Where it lives                                                                          |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Master configuration (`customer.yaml`) schema + validation    | `src/lib/operator/customer-yaml/`; ADR 0012, 0019                                       |
-| Persona = Hermes profile (identity file = `SOUL.md`)          | ADR 0011; overlay bootstrap                                                             |
-| Voice library + privacy-safe fingerprints + recipient cohorts | `docs/specs/operator/voice-ingestion.md`, `voice-gate-fallback.md`; ADR 0028; #855/#856 |
-| Entitlement dial (initiation × exposure), fail-closed         | `operator/templates/ENTITLEMENTS.template.md`; ADR 0056                                 |
-| Provisioning the isolated Operator + smoke tests              | `operator/templates/README.md`, `bin/provision-customer.sh`; ADR 0007, 0010             |
-| Cost limits + breaker                                         | ADR 0062                                                                                |
-| Connectors (ready / build)                                    | ADR 0020, 0053; `operator/connectors/`                                                  |
-| Rehearsal setup, grading rubric, run records                  | `operator/customers/<slug>/TEST-PLAN.md`, `operator/grading/`                           |
-| Change pipeline (rehearsal → staging → seat)                  | `operator/customers/<slug>/IMPLEMENTATION-PLAN.md` change-flow rule                     |
-| Enable check before widening autonomy                         | `docs/runbooks/operator/enable-gate-checklist.md`                                       |
-| Activity mirror / audit record                                | overlay audit ledger                                                                    |
+| Mechanic                                                      | Where it lives                                                              |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Master configuration (`customer.yaml`) schema + validation    | `src/lib/operator/customer-yaml/`; ADR 0012, 0019                           |
+| Persona = Hermes profile (identity file = `SOUL.md`)          | ADR 0011; overlay bootstrap                                                 |
+| Voice library + privacy-safe fingerprints + recipient cohorts | `docs/specs/operator/voice-ingestion.md`; ADR 0028, 0083; #855/#856         |
+| Entitlement dial (initiation × exposure), fail-closed         | `operator/templates/ENTITLEMENTS.template.md`; ADR 0056                     |
+| Provisioning the isolated Operator + smoke tests              | `operator/templates/README.md`, `bin/provision-customer.sh`; ADR 0007, 0010 |
+| Cost limits + breaker                                         | ADR 0062                                                                    |
+| Connectors (ready / build)                                    | ADR 0020, 0053; `operator/connectors/`                                      |
+| Rehearsal setup, grading rubric, run records                  | `operator/customers/<slug>/TEST-PLAN.md`, `operator/grading/`               |
+| Change pipeline (rehearsal → staging → seat)                  | `operator/customers/<slug>/IMPLEMENTATION-PLAN.md` change-flow rule         |
+| Enable check before widening autonomy                         | `docs/runbooks/operator/enable-gate-checklist.md`                           |
+| Activity mirror / audit record                                | overlay audit ledger                                                        |
 
 **Governance and adoption frameworks this is built on:** the phase-gate lifecycle
 follows the enterprise-implementation methodologies (SAP Activate, Microsoft Sure

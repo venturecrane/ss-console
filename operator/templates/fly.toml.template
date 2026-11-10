@@ -57,7 +57,7 @@ kill_timeout = 300
   # Hermes runtime
   HERMES_HOME = "/opt/data"
   CUSTOMER_SLUG = "{{CUSTOMER_SLUG}}"
-  # The SMD overlay plugins (audit, webhook-router, trust, memory-mirror)
+  # The SMD overlay plugins (audit, webhook-router, trust)
   # resolve the per-customer namespace via require("SMD_CUSTOMER_SLUG", ...). It
   # was never set here — only CUSTOMER_SLUG was — so every one of those plugins
   # bailed to its degraded no-op branch on customer-zero: audit emission never
@@ -81,8 +81,8 @@ kill_timeout = 300
 
   # Per-customer SQLite paths. The hermes-smd-audit plugin resolves the audit
   # binding to an absolute file path under the mounted volume. The observations
-  # binding (hermes-smd-memory-mirror) is set only when Honcho is wired in
-  # Phase 2 (ADR 0016 revised); Phase 1 boots without it.
+  # binding is set only when Honcho is wired in Phase 2 (ADR 0016 revised; its
+  # first mirror plugin was removed unused 2026-11-10); Phase 1 boots without it.
   #
   # OP-P1-4: the immutable ledger is /opt/data/audit/audit.db, owned by the
   # broker uid (the agent reads it via the audit-readers group but cannot write

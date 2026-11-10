@@ -3,10 +3,9 @@
 Per the 2026-05-24 architectural realignment (ADRs 0015, 0016, 0017
 rewrites), the runtime Hermes integration moved to the separate plugin
 overlay at `venturecrane/hermes-smd-overlay`. The plugins there
-(`hermes-smd-audit`, `hermes-smd-trust`, `hermes-smd-memory-mirror`,
-`hermes-smd-hook-probe`) own everything that runs inside the customer
-Machine: trust-ceiling enforcement, audit emission, memory mirroring,
-and hook probing.
+(`hermes-smd-audit`, `hermes-smd-trust`, `hermes-smd-hook-probe`, and
+the rest) own everything that runs inside the customer Machine:
+trust-ceiling enforcement, audit emission and hook probing.
 
 What survives in this package is the control-plane substrate —
 modules used by operator-side tools (`bin/lib/decommission.py`,

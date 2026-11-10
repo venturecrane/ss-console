@@ -10,7 +10,7 @@ related-adr: 0022-vertical-pack-architecture.md, 0037-operator-thesis.md, 0005-e
 
 The brief that drives the Law pack's manifest, N=0 proof, marketing surface, and delivery SOP, and the worked reference the other packs are skinned from. Per [ADR 0037](../../adr/0037-operator-thesis.md), the Operator competes with a **hire**, not with software; the firm's practice-management suite is a **connection target, not a competitor**.
 
-The substance of the pack is here: the domain read, the personas, the twelve specified skills, and the connector map. The manifest (`operator/verticals/law-firm/vertical.yaml`) declares the identifiers; the runtime skill bodies are built from this spec in `hermes-smd-overlay`.
+The substance of the pack is here: the domain read, the personas, the nine specified skills (twelve until three were removed unused on 2026-11-10), and the connector map. The manifest (`operator/verticals/law-firm/vertical.yaml`) declares the identifiers; the runtime skill bodies are built from this spec in `hermes-smd-overlay`.
 
 ## The law-firm coordinator's world
 
@@ -26,7 +26,7 @@ It is the same chain whether the firm does immigration, estate, family, or small
 
 ## Skill catalog
 
-Twelve law-specific skills plus two spine skills reused as-is. Format per skill: **what** | trigger | reads -> writes | connectors | trust posture | guardrail. Trust posture follows [ADR 0025](../../adr/0025-autonomy-ceilings-configurable-exposure-vs-initiation.md); external send follows the engagement's authored `external_send` ceiling (fail-closed when unauthored).
+Nine law-specific skills plus two spine skills reused as-is. Format per skill: **what** | trigger | reads -> writes | connectors | trust posture | guardrail. Trust posture follows [ADR 0025](../../adr/0025-autonomy-ceilings-configurable-exposure-vs-initiation.md); external send follows the engagement's authored `external_send` ceiling (fail-closed when unauthored).
 
 ### Intake
 
@@ -50,13 +50,9 @@ Twelve law-specific skills plus two spine skills reused as-is. Format per skill:
 
 **`deadline-and-sol-tracker`** | tracks the deadlines and statute dates the firm has entered and surfaces what is approaching. | _trigger:_ scheduled | _reads_ the matter's deadline and statute-of-limitations fields -> _writes_ an approaching-deadline digest and calendar reminders | PracticeManagement, Calendar | surfacing autonomous | tracks the dates the firm authored; it never computes a limitations period itself, which is legal judgment.
 
-### Proactive
+### Proactive (removed)
 
-**`client-matter-digest`** | a proactive "here is where your matter stands" on the cadence the firm sets. | _trigger:_ scheduled per matter | _reads_ status, recent activity, next step -> _writes_ a digest draft | PracticeManagement, Email | send draft-for-review | status only.
-
-**`referral-source-acknowledgment`** | thanks the referrer and tracks the source on the matter. | _trigger:_ new matter with a referral source | _reads_ the source and contact -> _writes_ a thank-you draft, logs the source | PracticeManagement, Email | send draft-for-review | respects privilege; no matter detail to a referrer without consent.
-
-**`intake-to-system-sync`** | keeps the intake CRM and the practice-management system in agreement so nothing falls between them. | _trigger:_ intake-CRM change or new lead | _reads_ the CRM lead and the PM record -> _writes_ the synced record, flags disagreements | IntakeCRM, PracticeManagement | sync autonomous within the mapping, conflicts flagged | never overwrites a human-edited field without flagging it.
+The three proactive skills specified here (`client-matter-digest`, `referral-source-acknowledgment`, `intake-to-system-sync`) were built as catalog entries, enabled on no seat, and removed 2026-11-10.
 
 ### Spine (reused as-is)
 

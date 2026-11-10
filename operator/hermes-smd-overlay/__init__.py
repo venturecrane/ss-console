@@ -7,7 +7,7 @@ not: Hermes' plugin contract is "a plugin is a directory with ``plugin.yaml`` +
 ``__init__.py`` exposing ``register(ctx)``", and its manifest parser has no
 ``plugins:`` (aggregation) field — so the list was silently ignored, this
 umbrella loaded as a manifest-only plugin with no ``register()``, and **none of
-the functional plugins (audit, trust, voice, webhook-router, memory-mirror at the time)
+the functional plugins (audit, trust, voice, webhook-router)
 ever registered** on a live gateway. The overlay was inert: no audit, and —
 worse — no trust/ceiling enforcement. (ss-console#1285.)
 

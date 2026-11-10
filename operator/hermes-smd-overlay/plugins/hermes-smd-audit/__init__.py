@@ -7,8 +7,8 @@ Attaches to two hooks at the pinned Hermes ref (v2026.5.16):
   refusal row (defense-in-depth, the trust plugin should have caught the
   invocation pre-call).
 - ``post_llm_call`` (run_agent.py:15901-15910) — one D1 row per completed
-  turn. Interrupted turns do NOT fire this hook; cross-correlation by
-  ``session_id`` against the on_session_end memory-mirror hook captures them.
+  turn. Interrupted turns do NOT fire this hook, and no overlay plugin
+  captures them today (Hermes's on_session_end carries ``interrupted=True``).
 
 Hook callbacks are exception-safe. The Hermes dispatcher wraps each
 callback in its own try/except, but a noisy callback creates log spam.

@@ -299,7 +299,7 @@ def _audit_db_path() -> str | None:
 
 
 def _observations_db_path() -> str | None:
-    """ADR-0016 persona_observations DB path (memory-mirror's binding)."""
+    """ADR-0016 persona_observations DB path (its Phase-2 writer is not built)."""
     return _db_path_from_binding("SMD_D1_OBSERVATIONS_BINDING")
 
 
