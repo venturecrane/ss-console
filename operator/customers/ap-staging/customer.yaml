@@ -524,25 +524,13 @@ personas:
         enabled: true
         settings:
           scheduled_recipients: ScottDurgan@smdopslab.onmicrosoft.com
+    # Scheduled jobs that call a model are OFF on the twin (Captain, 2026-11-10:
+    # no model spend he has not approved). The one row kept is the hourly
+    # Smokeball sign-in check, which never wakes a model (its pre_run is
+    # wakeAgent: false always) and is required on every Smokeball seat.
     cron:
-      - skill: statute-watch
-        schedule: 7 12 1 * *
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: post-intake-daily-list
-        schedule: 47 16 * * 1-5
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: negotiation-watch
-        schedule: 7 8,12,16 * * 1-5
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
       - skill: connector-auth-check
         schedule: 13 * * * *
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-      - skill: operator-help
-        schedule: 17 14 * * *
         pre_run: pre_run.py
         wake_policy: pre_run_decides
     skills_disabled:
