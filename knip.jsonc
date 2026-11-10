@@ -93,6 +93,13 @@
         // A dev entry (no `!`): production mode neither counts it as an
         // importer nor reports it as an unused file.
         "src/lib/portal/operator/facet-registry.ts",
+
+        // The ap-staging twin drift gate's logic. Its one caller is
+        // tests/twin-drift.test.ts, which IS the gate (operator/customers/
+        // ap-staging/twin.yaml names both). A dev entry for the same reason
+        // as the facet registry: production mode would otherwise report a
+        // live CI gate as an unused file.
+        "scripts/lib/twin-drift.ts",
       ],
       "project": [
         "src/**/*.{ts,tsx,astro,mjs,css}!",

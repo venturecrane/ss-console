@@ -26,10 +26,6 @@ SIGNWELL_API_KEY=""
 SIGNWELL_WEBHOOK_SECRET=""
 STRIPE_API_KEY=""
 STRIPE_WEBHOOK_SECRET=""
-# HMAC key for public live-assessment session tokens (/api/assessment/turn).
-# Base64 raw bytes — generate with: openssl rand -base64 32
-# Gates the per-session turn/cost ceiling. See src/lib/assessment/session.ts.
-ASSESSMENT_SESSION_SIGNING_KEY=""
 
 # ---------- Clerk auth (portal.smd.services) ----------
 # Identity layer for the portal — users, organizations, memberships,

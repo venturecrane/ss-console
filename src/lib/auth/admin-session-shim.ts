@@ -119,8 +119,8 @@ export async function resolveAdminSessionFromClerk(
 
 // An explicit invalidateAdminSessionCache(clerkUserId, kv) helper existed
 // here but had zero production call sites — no admin route mutates a user's
-// role or email today (resend-invitation only touches role='client' rows,
-// which never enter this cache). Deleted 2026-08-14 (code review); the 120s
+// role or email today (the client-row mutation that existed then,
+// resend-invitation, was removed 2026-11-10). Deleted 2026-08-14 (code review); the 120s
 // TTL above IS the invalidation story. If a role/email mutation surface is
 // ever built, reintroduce the helper (a kv.delete of the admin-session:<id>
 // key) and call it from that mutation path.

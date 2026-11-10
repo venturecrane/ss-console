@@ -117,12 +117,10 @@ bucket_name = "smd-customer-config"
 binding = "SESSIONS"
 id = "4570dcc1e154476f889bc9fcfc28b2b9"
 
-# ---------- Workers KV (rate-limit + session ceilings) ----------
-# Used by /api/booking/reserve for IP-based rate limiting, and by
-# /api/assessment/turn for the per-session turn/cost ceiling that gates the
-# public live assessment (see src/lib/assessment/session.ts). No new namespace
-# is needed for assessment hardening — it reuses this bucket with `as:turns:*`
-# keys. No slot cache in v1 (see plan §No availability cache in v1).
+# ---------- Workers KV (rate limit) ----------
+# Per-IP rate limiting for the public routes (src/lib/booking/rate-limit.ts):
+# booking, intake, contact, events, magic-link. No slot cache in v1 (see plan
+# §No availability cache in v1).
 [[kv_namespaces]]
 binding = "BOOKING_CACHE"
 id = "daf6a3220f8f42f28f3da7e82f663088"

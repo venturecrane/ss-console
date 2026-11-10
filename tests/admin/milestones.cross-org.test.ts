@@ -23,8 +23,7 @@
  *
  * Architecture note: SS uses Astro APIRoute handlers, not raw worker.fetch().
  * The harness's invoke() assumes the latter, so this test constructs the Astro
- * context ({ request, locals }) by hand — the same pattern used in
- * tests/admin/resend-invitation.cross-org.test.ts.
+ * context ({ request, locals }) by hand.
  *
  * Schema notes (as of migration 0022):
  *   - engagements uses entity_id (client_id was dropped in migration 0010)

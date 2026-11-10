@@ -19,7 +19,6 @@ export const EXCLUDED_PATH_PREFIXES = [
   '/api',
   '/dev',
   '/design-preview',
-  '/assessment', // flag-gated, 404 in prod (ENABLE_ASSESSMENT_PREVIEW)
   '/patterns', // flag-gated, 404 in prod (ENABLE_PUBLIC_PATTERNS)
   '/book/manage', // guest token surface, not a landing page
   '/get-started', // post-booking only; cold visits 301 to /

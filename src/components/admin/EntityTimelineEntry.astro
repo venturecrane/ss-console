@@ -19,7 +19,6 @@ function formatStage(value: unknown): string | null {
 }
 
 function entryHeadline(current: ContextEntry, _metadata: Record<string, unknown> | null): string {
-  if (current.type === 'enrichment') return 'Enrichment run completed'
   if (current.type === 'signal') return 'Pipeline signal qualified'
   if (current.type === 'stage_change') return 'Stage changed'
   if (isReplyLog) return 'Reply logged'
@@ -35,22 +34,6 @@ function signalDetail(
     current.source,
     typeof metadata?.vertical === 'string' ? `vertical: ${metadata.vertical}` : null,
     typeof metadata?.outreach_timing === 'string' ? `timing: ${metadata.outreach_timing}` : null,
-  ].filter((part): part is string => !!part)
-  return parts.length > 0 ? parts.join(' | ') : null
-}
-
-function enrichmentDetail(
-  current: ContextEntry,
-  metadata: Record<string, unknown> | null
-): string | null {
-  const succeeded = typeof metadata?.succeeded === 'number' ? metadata.succeeded : null
-  const noData = typeof metadata?.no_data === 'number' ? metadata.no_data : null
-  const skipped = typeof metadata?.skipped === 'number' ? metadata.skipped : null
-  const parts = [
-    current.source ? `${current.source}` : null,
-    succeeded !== null ? `${succeeded} succeeded` : null,
-    noData !== null ? `${noData} no_data` : null,
-    skipped !== null ? `${skipped} skipped` : null,
   ].filter((part): part is string => !!part)
   return parts.length > 0 ? parts.join(' | ') : null
 }
@@ -88,7 +71,6 @@ function intakeDetail(current: ContextEntry, metadata: Record<string, unknown> |
 
 function entryDetail(current: ContextEntry, metadata: Record<string, unknown> | null): string {
   if (current.type === 'signal') return signalDetail(current, metadata) ?? current.content
-  if (current.type === 'enrichment') return enrichmentDetail(current, metadata) ?? current.content
   if (current.type === 'stage_change') return stageChangeDetail(metadata) ?? current.content
   if (current.type === 'intake') return intakeDetail(current, metadata)
   if (isReplyLog) return replyLogDetail(metadata) ?? current.content

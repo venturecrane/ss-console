@@ -5,21 +5,13 @@ interface Props {
   entity: Entity
   actorRole: 'business' | 'contractor' | 'unknown'
   actorRoleConfidence: 'high' | 'medium' | 'low'
-  signalEvidence: string | null
   signalSourceLabel: string | null
   daysInStage: number
   structuralFlags: string[]
 }
 
-const {
-  entity,
-  actorRole,
-  actorRoleConfidence,
-  signalEvidence,
-  signalSourceLabel,
-  daysInStage,
-  structuralFlags,
-} = Astro.props
+const { entity, actorRole, actorRoleConfidence, signalSourceLabel, daysInStage, structuralFlags } =
+  Astro.props
 
 const stageLabel =
   ENTITY_STAGES.find((stage) => stage.value === entity.stage)?.label ?? entity.stage
@@ -110,13 +102,6 @@ const chipClass =
       {stageLabel}
     </span>
   </div>
-  {
-    signalEvidence && (
-      <div class="text-[15px] font-medium leading-6 text-[color:var(--ss-color-text-primary)]">
-        {signalEvidence}
-      </div>
-    )
-  }
   <div class="mt-2 text-sm text-[color:var(--ss-color-text-secondary)]">
     <span>{stageAgeLabel(daysInStage)}</span>
     <span class="px-2 text-[color:var(--ss-color-text-muted)]">|</span>

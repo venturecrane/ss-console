@@ -50,10 +50,9 @@ This is the inventory of external services the platform touches and what each is
 
 | Service | Used for | Grounded in |
 |---|---|---|
-| **Anthropic (Claude)** | The LLM behind the live assessment and assessment extraction (`src/lib/claude/*`). The Operator plane also runs on Claude via the per-Machine Anthropic key. | `ANTHROPIC_API_KEY` in `wrangler.toml` secrets; `src/lib/claude/*`, `src/lib/llm/models.ts`. Default to the latest, most capable Claude models. |
+| **Anthropic (Claude)** | The LLM behind assessment extraction (`src/lib/claude/*`). The Operator plane also runs on Claude via the per-Machine Anthropic key. | `ANTHROPIC_API_KEY` in `wrangler.toml` secrets; `src/lib/claude/*`, `src/lib/llm/models.ts`. Default to the latest, most capable Claude models. |
 | **Groq** | Speech-to-text for voice notes on Operator seats, through Hermes' Groq Whisper provider; one shared SMD key across the seats that use it. | `GROQ_API_KEY` in `operator/bin/lib/secret_custody.py`. |
 | **Brave Search** | Web search for a seat that authors a `WebSearch` connector, as the native Hermes provider `native:brave-free` on Brave's free tier; the self-serve preset enables it. | ADR 0070; `docs/specs/operator/customer-yaml-schema.md`. |
-| **ElevenLabs** | The voice agent for the public live assessment (ADR 0039). The browser talks to ElevenLabs (`@elevenlabs/client`, with a token from `/api/assessment/voice-token`), and ElevenLabs calls back to `/api/assessment/llm`, so Claude, not ElevenLabs, writes the replies. Secrets: `ELEVENLABS_API_KEY`, `ELEVENLABS_ASSESSMENT_AGENT_ID`, `ELEVENLABS_LLM_SECRET`. | `@elevenlabs/client` in `package.json`; `src/lib/claude/assessment-llm.ts`, `src/scripts/assessment-voice.ts`, `src/env.d.ts`. |
 
 ## Billing, documents, and email
 

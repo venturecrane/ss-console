@@ -1,5 +1,5 @@
 /**
- * Email templates for magic link, portal invitation, and booking confirmations.
+ * Email templates for magic link, portal, and booking confirmations.
  *
  * All templates produce self-contained HTML emails with inline styles.
  * No external CSS or image dependencies.
@@ -159,25 +159,6 @@ export function paymentConfirmationEmailHtml(clientName: string, amount: string)
       paragraph(`We've received your payment of ${escapeEmailHtml(amount)}. Thank you!`),
       paragraph('If you have any questions about your engagement, our team is here to help.'),
       mutedParagraph('If you have any questions, reply directly to this email.'),
-    ].join('\n')
-  )
-}
-
-export function portalInvitationEmailHtml(clientName: string, magicLinkUrl: string): string {
-  return portalDocument(
-    [
-      paragraph(greeting(clientName), '0 0 8px'),
-      paragraph(
-        "We've prepared a proposal for you. Your client portal is ready — click below to sign in and review it.",
-        '0 0 8px'
-      ),
-      paragraph(
-        "Your portal is where you'll find your proposal, project updates, and everything related to our work together."
-      ),
-      actionButton(magicLinkUrl, 'View Your Proposal'),
-      mutedParagraph(
-        'This link expires in 15 minutes. You can request a new link anytime from the portal login page.'
-      ),
     ].join('\n')
   )
 }

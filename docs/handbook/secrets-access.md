@@ -100,7 +100,7 @@ against a fake environ holding a canary secret.
 
 | Store | Holds | Notes |
 |---|---|---|
-| **Infisical** (`/ss` path, `prod` env) | The canonical source for SMD secrets - Clerk, Anthropic, ElevenLabs, AgentMail, Google, billing, and the rest | Rotate here first, then push to the runtime store |
+| **Infisical** (`/ss` path, `prod` env) | The canonical source for SMD secrets - Clerk, Anthropic, AgentMail, Google, billing, and the rest | Rotate here first, then push to the runtime store |
 | **Cloudflare Workers secrets** | The web app's runtime secrets, bound to the `ss-web` Worker | On Workers, secrets persist across `wrangler deploy` runs (unlike the old Pages `[vars]` trap). The expected names are listed in the secrets comment block of `wrangler.toml`. Set one key at a time; never bulk-export the `/ss` path into `wrangler secret bulk` (see [Deployment & Release](/admin/playbook/deployment-release)) |
 | **Fly.io Machine secrets / volume** | Per-customer Operator secrets (staged by `operator/bin/provision-customer.sh`, plus the per-seat `MACHINE_HEARTBEAT_KEY`) and OAuth tokens (ADR 0010) | Per-customer isolation. Tokens stored on the Fly volume; a stale volume copy is a known failure mode (see [Disaster Recovery & Runbooks](/admin/playbook/disaster-recovery)) |
 | **GitHub Actions secrets, `venturecrane/engagements`** | The storage key (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT_URL`) that repo's publish-on-merge workflow writes the seats' vaults with | The same three values Infisical holds, placed there on 2026-11-05; not a separate key. Place them again after a rotation |
