@@ -1,0 +1,301 @@
+# Single-owner registry: every ADR that decides "this capability lives only in X".
+#
+# Enforced by tests/single-owner-registry.test.ts, which scans every tracked
+# TypeScript, JavaScript, Python and shell file (tests, fixtures and migrations
+# excepted) and fails when an entry's SIGNATURE appears outside its ALLOWED
+# paths. The signature describes the capability, not the files we know about:
+# a call, a prompt line, a config key it reads, an import it needs. A new copy
+# of the capability matches it whatever the new file is called. Each entry's
+# `new_copy` is the shape a second copy would take, and the test proves the
+# signature catches it.
+#
+# Adding a decision. An ADR that says a capability lives "only in X", "nowhere
+# else", in "one place", has "one writer" or "one reader" adds an entry here in
+# the same PR. The test reads every ADR for that phrasing (`phrasing` below)
+# and fails on an ADR that is in neither `entries` nor `reviewed_not_code`.
+#
+# known_violation. A copy that already existed when its entry was written. It
+# is recorded, not fixed, and the test fails when one of them stops matching,
+# so the list only shrinks: remove the row in the PR that removes the copy.
+#
+# Fields: signature.match is any-of, per line (full-line comments ignored);
+# signature.requires is all-of, per file; paths are globs (`**` crosses
+# directories, `*` does not).
+
+phrasing: '\b(nowhere else|only (place|home|path|(authoring )?source)|single source|the only (way|path|place)|one place|single place|sole (owner|path|source|writer|reader)|one writer|one reader|only (automated )?writer|its one reader)\b|\bone public[^.]*door'
+
+entries:
+  - id: word-format-lives-in-the-firm-template
+    adr: docs/adr/0083-authorship-model-output-classes.md
+    decision: >-
+      Amendment 2026-08-19: the authored Word format of a drafted document lives
+      in the firm's own Word template, in its Document Library, "and nowhere
+      else". The renderer opens that template as the base; config carries the
+      library location only, "never a font or a spacing".
+    signature:
+      match:
+        # python-docx typography written in code
+        - '\.font\.(name|size)\s*=[^=]'
+        - '\.(line_spacing|space_before|space_after|first_line_indent|left_indent|right_indent)\s*=[^=]'
+        # the renderer's firm-override object, built from somewhere other than the template
+        - '\bHouseStyle\('
+        # typography read from, or declared in, a config file
+        - '[''"](font|font_name|font_size|size_pt|line_spacing|body_line_spacing|line_pitch_pt)[''"]\s*:'
+        - '\.get\(\s*[''"](font|font_name|font_size|size_pt|line_spacing|body_line_spacing|line_pitch_pt)[''"]'
+    allowed:
+      - path: operator/connectors/smokeball/smokeball_connector/docx_*.py
+        why: the renderer, which opens the firm's template and applies a class's product default where a named style is missing
+      - path: operator/connectors/smokeball/smokeball_connector/letterhead.py
+        why: the renderer's letterhead step, same module
+      - path: operator/runners/jobs/jobs/medchron/audit/page_text.py
+        why: reads the font of a PDF text span to judge extraction; sets no style
+    known_violation:
+      - path: operator/hermes-smd-overlay/shared/layout_rules.py
+        why: a firm's layout rule compiled to the drafting lane's spacing keys, not into the firm's template
+      - path: operator/runners/jobs/jobs/drafting/briefpage.py
+        why: "the drafting lane's own typography path (#3093 onward): yaml format and layout keys laid over the template, not the template alone"
+      - path: operator/runners/jobs/jobs/drafting/firm.py
+        why: declares format.font, format.size_pt and layout spacing keys in drafting-firm.yaml
+      - path: operator/runners/jobs/jobs/drafting/firm_rules.py
+        why: "the drafting lane's own typography path (#3093 onward): yaml format and layout keys laid over the template, not the template alone"
+      - path: operator/runners/jobs/jobs/drafting/house.py
+        why: builds the renderer's HouseStyle from drafting-firm.yaml (#3093)
+      - path: operator/runners/jobs/jobs/drafting/pleading.py
+        why: "the drafting lane's own typography path (#3093 onward): yaml format and layout keys laid over the template, not the template alone"
+      - path: operator/runners/jobs/jobs/drafting/revise/checklist.py
+        why: the drafting revise step sets spacing and size in code from the lane's layout keys
+      - path: operator/runners/jobs/jobs/drafting/revise/filed.py
+        why: the drafting revise step sets spacing and size in code from the lane's layout keys
+      - path: operator/runners/jobs/jobs/drafting/revise/inplace.py
+        why: the drafting revise step sets spacing and size in code from the lane's layout keys
+      - path: operator/runners/jobs/jobs/drafting/revise/rehearse.py
+        why: the drafting revise step sets spacing and size in code from the lane's layout keys
+      - path: operator/runners/jobs/jobs/drafting/revise/run.py
+        why: the drafting revise step sets spacing and size in code from the lane's layout keys
+      - path: operator/runners/jobs/jobs/medchron/config.py
+        why: declares format.font in the chronology firm config; the chronology lane sets its own typography in code; ADR 0083 does not say whether the chronology is in its scope
+      - path: operator/runners/jobs/jobs/medchron/docx_style.py
+        why: the chronology lane sets its own typography in code; ADR 0083 does not say whether the chronology is in its scope
+      - path: operator/runners/jobs/jobs/medchron/probes.py
+        why: the chronology lane sets its own typography in code; ADR 0083 does not say whether the chronology is in its scope
+      - path: operator/runners/jobs/jobs/stages/billing_docx.py
+        why: the chronology lane sets its own typography in code; ADR 0083 does not say whether the chronology is in its scope
+      - path: operator/runners/jobs/jobs/stages/render.py
+        why: the chronology lane sets its own typography in code; ADR 0083 does not say whether the chronology is in its scope
+    new_copy:
+      path: operator/runners/jobs/jobs/newlane/house.py
+      code: |
+        def house_style(firm):
+            fmt = firm["format"]
+            return HouseStyle(font=fmt["font"], size_pt=fmt["size_pt"])
+
+  - id: one-public-claude-door
+    adr: docs/adr/0057-operator-claude-connector-access-model.md
+    decision: >-
+      Amendment 2026-07-02: there is one public Claude door, the console, which
+      reads the grant kill switch per request; the Machine's direct /mcp door is
+      retired. "The kill switch is now the only path."
+    signature:
+      match:
+        - '[''"]tools/call[''"]'
+        - '^\s*(from|import) mcp\.server'
+        - '@modelcontextprotocol/sdk/server'
+    allowed:
+      - path: src/lib/operator/mcp/**
+        why: the console door, which authenticates and reads the grant
+      - path: operator/hermes-smd-overlay/webhook_gate.py
+        why: the Machine's /mcp/turn endpoint behind the console-proxy bearer; its direct /mcp answers 410
+      - path: operator/connectors/_sdk/**
+        why: the stdio server every author-built connector runs inside the seat; no public route
+    new_copy:
+      path: operator/hermes-smd-overlay/plugins/hermes-smd-newdoor/server.py
+      code: |
+        if body.get("method") == "tools/call":
+            return run_turn(body["params"])
+
+  - id: one-writer-of-the-seat-customer-yaml
+    adr: docs/adr/0094-customer-configuration-as-built.md
+    decision: >-
+      Amendment (Wave 2 W4), point 1: scripts/ci-publish-customer-configs.sh
+      "is the only automated writer of vaults/<slug>/customer.yaml";
+      provisioning uploads through the seat-spec compiler (point 6).
+    signature:
+      match:
+        - 's3 (cp|sync|mv)\s+(?!["'']?s3://)\S+\s+["'']?s3://'
+        - 'put_object\('
+        - 's3api put-object'
+        - '(bucket|BUCKET|R2_[A-Z_]*|r2)\.put\('
+      requires:
+        # the object's key named in the file: vaults/<slug>/customer.yaml
+        - 'vaults/\S*customer\\?\.yaml'
+    allowed:
+      - path: scripts/ci-publish-customer-configs.sh
+        why: the one writer
+      - path: operator/bin/provision-customer.sh
+        why: provisioning, which uploads through the compiler (point 6)
+      - path: operator/bin/lib/stage-seat-spec.sh
+        why: the provisioning step that does that upload
+    new_copy:
+      path: scripts/sync-one-seat.sh
+      code: |
+        aws s3 cp "operator/customers/${SLUG}/customer.yaml" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/customer.yaml"
+
+  - id: one-writer-of-firm-inputs
+    adr: docs/adr/0094-customer-configuration-as-built.md
+    decision: >-
+      Amendment 2026-11-05, point 1: operator/bin/lib/publish-firm-inputs.sh
+      "is the only code that writes vaults/<slug>/<lane>/ (and
+      vaults/<slug>/medchron-firm.yaml)".
+    signature:
+      match:
+        - 's3 (cp|sync|mv)\s+(?!["'']?s3://)\S+\s+["'']?s3://'
+        - 'put_object\('
+        - 's3api put-object'
+        - '(bucket|BUCKET|R2_[A-Z_]*|r2)\.put\('
+      requires:
+        - '(demand|drafting|litigation|casefile|records|medchron)-firm\.yaml|vaults/[^\s"'']*/(demand|drafting|litigation|casefile|records|attorneys)/'
+    allowed:
+      - path: operator/bin/lib/publish-firm-inputs.sh
+        why: the one writer
+    new_copy:
+      path: operator/bin/lib/stage-newlane-inputs.sh
+      code: |
+        aws s3 sync "${SRC}/" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/drafting/" --delete
+
+  - id: one-reader-of-the-attorney-roster
+    adr: docs/adr/0094-customer-configuration-as-built.md
+    decision: >-
+      Amendment 2026-11-07, point 1: one attorneys.json per firm, read by "its
+      one reader" operator/connectors/_sdk/operator_connector_sdk/library/roster.py,
+      with the runner's byte-for-byte copy for the publish validator.
+    signature:
+      match:
+        - 'attorneys\.json'
+    allowed:
+      - path: operator/connectors/_sdk/operator_connector_sdk/library/roster.py
+        why: the one reader
+      - path: operator/runners/jobs/jobs/attorneys/roster.py
+        why: the runner's byte-for-byte copy the ADR names
+      - path: operator/runners/jobs/jobs/attorneys/firm.py
+        why: the publish validator, which reads through that copy
+      - path: operator/bin/lib/publish-firm-inputs.sh
+        why: the publisher, which moves the bytes and never parses them
+      - path: operator/hermes-smd-overlay/firm_inputs_applier/applier.py
+        why: the seat's installer, which moves the bytes and never parses them
+      - path: operator/runners/jobs/tools/draft_attorney_roster.py
+        why: the tool that drafts a roster for review in the engagements repo
+    new_copy:
+      path: operator/runners/jobs/jobs/newlane/signers.py
+      code: |
+        roster = json.loads(Path("/var/lib/smd-config/attorneys/attorneys.json").read_text())
+
+  - id: no-console-path-writes-customer-configs
+    adr: docs/adr/0094-customer-configuration-as-built.md
+    decision: >-
+      Decision 1: "No portal or admin path writes the file or its replicas
+      ... the only INSERT INTO customer_configs in src/ and scripts/ is the
+      projection's generated SQL." (ADR 0044's revert says the same.)
+    signature:
+      flags: i
+      match:
+        - '(insert\s+(or\s+\w+\s+)?into|update|delete\s+from|replace\s+into)\s+customer_configs\b'
+    allowed:
+      - path: src/lib/portal/customer-config-projection.ts
+        why: the projection's generated SQL
+    new_copy:
+      path: src/pages/api/admin/operator/flip.ts
+      code: |
+        await env.DB.prepare('UPDATE customer_configs SET authority_json = ? WHERE slug = ?').bind(a, s).run()
+
+  - id: partner-message-attribution-in-shape
+    adr: docs/adr/0097-partner-messages-through-the-couples-agent.md
+    decision: >-
+      Decision 5: shape(text, sender, mode) "is the one place between what the
+      sender said and what is delivered"; the attribution line is composed
+      there in code.
+    signature:
+      match:
+        - 'asked me to pass this along'
+        - '\bShaped\('
+    allowed:
+      - path: operator/hermes-smd-overlay/shared/partner_messages.py
+        why: shape()
+    new_copy:
+      path: operator/hermes-smd-overlay/plugins/hermes-smd-relay/tools.py
+      code: |
+        text = f"{sender} asked me to pass this along: {said}"
+
+  - id: schedules-come-from-customer-yaml
+    adr: docs/adr/0047-operator-scheduled-jobs-mechanism.md
+    decision: >-
+      "The authored customer.yaml is the single source of truth for the
+      schedule": cron jobs are registered by the bootstrap materialization
+      step from persona.cron[], never created elsewhere.
+    signature:
+      match:
+        - '\.create_job\('
+        - '\bcron create\b'
+        - '^\s*from cron import jobs|^\s*import cron\.jobs'
+    allowed:
+      - path: operator/hermes-smd-overlay/bootstrap/cron_materialize.py
+        why: the materialization step
+      - path: operator/hermes-smd-overlay/bootstrap/translate.py
+        why: builds the real Hermes cron store the step writes through
+    known_violation:
+      - path: operator/bin/lib/boot_harness/collect.py
+        why: the boot harness plants a probe cron job of its own on the seat
+      - path: operator/hermes-smd-overlay/shared/staged_send.py
+        why: an SMD-staged send prints a one-off cron create command for root to run; not from customer.yaml
+    new_copy:
+      path: operator/hermes-smd-overlay/plugins/hermes-smd-newplugin/schedule.py
+      code: |
+        store.create_job(prompt=prompt, schedule="0 9 * * *", name=name)
+
+  - id: the-send-floor-lives-in-the-overlay
+    adr: docs/adr/0031-content-sensitivity-send-floor.md
+    decision: >-
+      Point 5, "Overlay-only home": the money / contract / scope / legal floor
+      that holds a live send lives in the overlay's shared/content_floor.py,
+      not the adapter.
+    signature:
+      match:
+        - '^\s*[''"]money[''"]\s*:'
+      requires:
+        - '[''"]contract[''"]\s*:'
+        - '[''"]legal[''"]\s*:'
+    allowed:
+      - path: operator/hermes-smd-overlay/shared/content_floor.py
+        why: the floor
+    new_copy:
+      path: operator/adapter/send_floor.py
+      code: |
+        CATEGORIES = {
+            "money": (r"\binvoice\b",),
+            "contract": (r"\bagreement\b",),
+            "legal": (r"\blegal\b",),
+        }
+
+# ADRs the phrasing finds that make no single-owner decision about code.
+reviewed_not_code:
+  - adr: docs/adr/0002-outside-view-unified-diagnostic.md
+    why: 'Superseded product; "one place" describes an admin view, not a code owner.'
+  - adr: docs/adr/0010-per-customer-oauth-token-storage.md
+    why: '"rotate everything from one place" is the rejected temptation, quoted as prose.'
+  - adr: docs/adr/0012-customer-yaml-storage.md
+    why: 'Superseded by 0094; its git-first rule is enforced by one-writer-of-the-seat-customer-yaml and no-console-path-writes-customer-configs.'
+  - adr: docs/adr/0019-customer-yaml-to-profile-config-translation.md
+    why: '"lives in one place" is the reason an option was picked, not an exclusivity rule a second copy could break.'
+  - adr: docs/adr/0030-control-plane-human-principal-surface.md
+    why: "A product statement about the principal's one surface (UI), not a code owner."
+  - adr: docs/adr/0044-r2-authoritative-live-reconfig.md
+    why: 'Reverted; "git is the only authoring source" is enforced by the two customer-yaml entries under 0094.'
+  - adr: docs/adr/0053-author-built-mcp-connectors-per-customer-installed.md
+    why: '"the only way" observes a vendor gap; it assigns no owner.'
+  - adr: docs/adr/0069-operator-legibility-progressive-configurability.md
+    why: '"the one place anyone can see" is a page goal (UI), not a code owner.'
+  - adr: docs/adr/0085-conversational-establishment-voice-output-shape.md
+    why: '"the only way" narrates the situation before a key existed.'
+  - adr: docs/adr/0087-chronology-package-content-control.md
+    why: '"the only place a limit can bind" explains why batch mode needs a hook; it is not an exclusivity rule.'
+  - adr: docs/adr/0093-seat-policy-profiles.md
+    why: 'The seat x gate matrix is a reviewed document already pinned by tests/policy-matrix.test.ts.'
