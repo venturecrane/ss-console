@@ -191,3 +191,32 @@ def test_an_unreadable_watermark_starts_again_from_now(tmp_path):
     (tmp_path / spend.WATERMARK).write_text("not json", encoding="utf-8")
     assert spend.watermark(tmp_path, 42.0) == 42.0
     assert spend.watermark(tmp_path, 99.0) == 42.0
+
+
+def test_a_broker_older_than_the_bundle_refuses_the_code_and_the_job_is_untouched(tmp_path, monkeypatch):
+    """Release skew: the bundle that raises ``spend_unrecorded`` reaching a seat
+    whose image's broker predates the code. The fleet's ordering rule keeps that
+    pairing from happening (a bundle reaches a seat only once its image descends
+    from base(S), operator/bin/lib/fleet/ordering.py); this is the failure mode
+    if it ever did. The broker refuses the alert, the lane keeps running and the
+    job's row is unchanged, the ending stays unchecked, and the next hourly sweep
+    on the newer broker raises the one alert.
+
+    MUTATION: write ``spend_checked`` when the alert is refused and the alert
+    never lands after the image arrives; let the refusal raise out of the sweep
+    and ``tick`` fails."""
+    from workspace_broker import delivery_proof
+
+    seat = Seat(tmp_path)
+    jid = seat.run_one(1)
+    seat.plant_zero(jid)
+    monkeypatch.setattr(delivery_proof, "CODES", delivery_proof.CODES - {spend.ALERT_CODE})
+    seat.hour()
+    seat.hour()
+    assert seat.alerts() == []
+    assert seat.ledger.read(jid)["state"] == "failed"
+    assert seat.ledger.read(jid)["cents"] == 0
+    assert "spend_checked" not in seat.lane._daemon_state(jid)
+    monkeypatch.setattr(delivery_proof, "CODES", delivery_proof.CODES | {spend.ALERT_CODE})
+    seat.hour()
+    assert [a["job_id"] for a in seat.alerts()] == [jid]
