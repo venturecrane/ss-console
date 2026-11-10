@@ -146,7 +146,23 @@ def test_the_report_is_rendered_from_progress_and_no_note_or_lead_reaches_it(
     body = dispatch["full_body"]
     assert "Avery Example (rep-a@example.test)" in body and "Readiness: ready" in body
     assert "rep-b@example.test\n- No progress recorded yet." in body
+    assert "Best quiz result 10 of 10 correct, 8 needed, 1 attempt (met)" in body
     assert A_MARK not in json.dumps(envelope) and "Acme" not in json.dumps(envelope)
+    # The people the words name, as exact digests the purge can match.
+    from shared.sent_lines import recipient_digest
+
+    assert dispatch[training_report.NAMED_FIELD] == sorted(
+        {recipient_digest(A), recipient_digest(B)}
+    )
+
+
+def test_the_named_field_is_the_one_the_purge_reads() -> None:
+    purge = (
+        Path(__file__).resolve().parents[2] / "workspace_broker" / "person_purge.py"
+    ).read_text()
+    assert (
+        re.search(r'^NAMED_FIELD = "([^"]+)"$', purge, re.M).group(1) == training_report.NAMED_FIELD
+    )
 
 
 def test_the_report_module_opens_no_store_but_the_progress_store() -> None:
@@ -327,6 +343,7 @@ def test_a_rendered_report_with_realistic_values_clears_the_reply_checks(name) -
     )
     assert _held(body) == [] and _held(training_report.SKELETON) == []
     assert "1 ready" in body and "3 people enrolled" in body
+    assert "Best quiz result 7 of 10 correct, 8 needed, 3 attempts" in body
 
 
 def test_the_partition_slug_is_the_one_the_purge_uses(tmp_path, monkeypatch) -> None:

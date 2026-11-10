@@ -248,19 +248,57 @@ def test_the_progress_store_named_in_the_curriculum_is_the_one_code_writes() -> 
 # ---------------------------------------------------------------------------
 
 
+KEY = "BCADACBCDA"
+ALL = {i + 1: x for i, x in enumerate(KEY)}
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        (A_QUIZ, {1: "B", 2: "C", 3: "A", 4: "D", 5: "A", 6: "C", 7: "B", 8: "C", 9: "B", 10: "A"}),
-        ("b, c, a, d, a, c, b, c, d, a", {i + 1: x for i, x in enumerate("BCADACBCDA")}),
+        (A_QUIZ, {**ALL, 9: "B"}),
+        # Many numbered answers on one line (each graded as only {1: B} before).
+        (" ".join(f"{i}-{x}" for i, x in ALL.items()), ALL),
+        (", ".join(f"{i}. {x}" for i, x in ALL.items()), ALL),
+        ("Q1: B Q2: C", {1: "B", 2: "C"}),
+        ("1 B 2 C 3 A", {1: "B", 2: "C", 3: "A"}),
+        # Letters alone, with or without a sign-off around them.
+        ("b, c, a, d, a, c, b, c, d, a", ALL),
+        ("b, c, a, d, a, c, b, c, d, a\nThanks, Sam", ALL),
+        ("Hi,\nB C A D A\nC B C D A\n\nThanks, Sam", ALL),
         ("B C A", {}),  # letters alone, but not one per question
-        ("1 B\n1 C\n2 A", {2: "A"}),  # a number answered twice two ways is not answered
-        ("I think 1 is B and 2 is C", {}),  # prose is not parsed
-        ("1 Because it is refused", {}),  # a word starting with a letter is not a letter
+        # The last answer for a number wins.
+        ("1 B\n1 C\n2 A", {1: "C", 2: "A"}),
+        # Prose: the word "a" is never answer A, and no number is guessed.
+        ("2 a lot of thought went into this one, C", {}),
+        ("I think 1 is B and 2 is C", {}),
+        ("1 Because it is refused", {}),
+        ("Question 11 - B and 0) C", {}),  # numbers outside 1..10
     ],
 )
-def test_quiz_letters_are_parsed_in_two_shapes_only(text: str, expected: dict) -> None:
+def test_quiz_answers_are_parsed_by_code(text: str, expected: dict) -> None:
     assert training.parse_answers(text, 10) == expected
+
+
+def test_a_quiz_with_answers_missing_is_not_graded_and_names_what_is_missing() -> None:
+    cur = _cur()
+    p = training.new_progress()
+    result = training.grade_quiz(cur, p, "1-B 2-C 3-A\nThanks, Sam")
+    assert result is not None and not result.complete
+    assert result.missing == (4, 5, 6, 7, 8, 9, 10)
+    assert p["quiz"] == training.new_progress()["quiz"], "nothing is recorded"
+    assert training.missing_sentence(result.missing).startswith(
+        "This email does not answer questions 4, 5, 6, 7, 8, 9, 10, so the quiz was not graded"
+    )
+
+
+def test_every_attempt_is_counted_and_readiness_uses_the_best() -> None:
+    cur = _cur()
+    p = training.new_progress()
+    for letters in ("A" * 10, KEY[:8] + "BB", "A" * 10):
+        training.grade_quiz(cur, p, ", ".join(letters))
+    assert p["quiz"] == {"attempts": 3, "best_correct": 8, "last_correct": 3}
+    quiz = next(c for c in training.readiness(cur, p)[1] if c.id == "quiz")
+    assert quiz.met and quiz.value == "best quiz result 8 of 10 correct, 8 needed, 3 attempts"
 
 
 def test_lessons_go_in_order_and_requirements_are_code_checked() -> None:
@@ -433,6 +471,10 @@ def test_the_grade_comes_from_the_email_never_from_the_model(seat) -> None:
     s = _email(seat, B, "I am not sure yet, can we talk about it?")
     out = _call(seat, "training_record", {"action": "grade_quiz", "number": 10}, s)
     assert out["ok"] is False and "No quiz answers" in out["say"]
+    assert not (seat["progress"] / person_slug(B)).exists()
+    s = _email(seat, B, "1-B 2-C\nThanks, Sam")
+    out = _call(seat, "training_record", {"action": "grade_quiz"}, s)
+    assert out == {"ok": False, "say": training.missing_sentence((3, 4, 5, 6, 7, 8, 9, 10))}
     assert not (seat["progress"] / person_slug(B)).exists()
 
 

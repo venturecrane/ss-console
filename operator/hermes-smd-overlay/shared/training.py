@@ -579,35 +579,57 @@ def complete_lesson(cur: Curriculum, progress: dict[str, Any], lesson_id: str) -
     return True, f"Lesson {lesson.id} is complete."
 
 
-# "3 B", "3. b", "3) B", "Q3: B", "question 3 - B", "3-B"
+#: One numbered answer anywhere in the text: an optional "q"/"question", the
+#: number, then the letter. With an explicit separator (``.`` ``)`` ``:`` ``-``)
+#: the letter must stand alone (not the start of a word): "1-B", "2. c",
+#: "Q3: A", "4) D". With only spaces between, the letter must also end the
+#: answer (end of line, a comma or semicolon, a full stop, or the next number),
+#: so the prose word "a" in "2 a lot of thought" is never answer A.
 _NUMBERED = re.compile(
-    r"(?im)^\s*(?:q(?:uestion)?\s*)?(\d{1,2})\s*[.):\-]?\s*([A-D])\b(?![A-Za-z'])"
+    r"(?<![A-Za-z0-9])(?:q(?:uestion)?\s*)?(\d{1,2})"
+    r"(?:\s*[.):\-]\s*([A-Da-d])(?![A-Za-z0-9'])"
+    r"|[ \t]+([A-Da-d])(?=[ \t]*(?:$|[,;.]|\d)))",
+    re.IGNORECASE | re.MULTILINE,
 )
-_BARE = re.compile(r"^[\sA-Da-d,;./]+$")
+#: A line holding only standalone letters A to D and separators.
+_LETTERS_LINE = re.compile(r"^[\s,;./]*[A-Da-d](?:[\s,;./]+[A-Da-d])*[\s,;./]*$")
+
+
+def _numbered(text: str, total: int) -> dict[int, str]:
+    found: dict[int, str] = {}
+    for m in _NUMBERED.finditer(text):
+        n = int(m.group(1))
+        letter = m.group(2) or m.group(3)
+        if 1 <= n <= total and letter:
+            found[n] = letter.upper()  # the last answer for a number wins
+    return dict(sorted(found.items()))
+
+
+def _letters_only(text: str, total: int) -> dict[int, str]:
+    """The first run of consecutive letters-only lines carrying exactly
+    ``total`` letters, in question order; any other line (a greeting, a
+    sign-off) ends a run and is ignored."""
+    run: list[str] = []
+    for line in [*text.splitlines(), ""]:
+        if line.strip() and _LETTERS_LINE.match(line):
+            run.extend(re.findall(r"[A-Da-d]", line))
+            continue
+        if len(run) == total:
+            return {i + 1: x.upper() for i, x in enumerate(run)}
+        run = []
+    return {}
 
 
 def parse_answers(text: str, total: int) -> dict[int, str]:
     """Question number -> letter, parsed from the representative's own words.
 
-    Two shapes, nothing else: one numbered answer per line ("1 B", "2. c",
-    "Q3: A"), or the letters alone in question order ("B, C, A, D ...") when
-    the whole message is letters and separators and there are exactly
-    ``total`` of them. A number answered twice with different letters is not
-    answered (no guessing which one was meant)."""
+    Two shapes. Numbered answers anywhere in the text, one per line or many on
+    one line ("1-B 2-C", "1. B, 2. C", "Q3: A"); the last answer for a number
+    wins. Or, when there are no numbered answers, the letters alone in question
+    order ("b, c, a, d ...") on one line or consecutive lines, exactly
+    ``total`` of them, whatever else the email says around them."""
     text = text or ""
-    found: dict[int, set[str]] = {}
-    for m in _NUMBERED.finditer(text):
-        n = int(m.group(1))
-        if 1 <= n <= total:
-            found.setdefault(n, set()).add(m.group(2).upper())
-    if found:
-        return {n: next(iter(v)) for n, v in sorted(found.items()) if len(v) == 1}
-    stripped = text.strip()
-    if stripped and _BARE.match(stripped):
-        letters = re.findall(r"[A-Da-d]", stripped)
-        if len(letters) == total:
-            return {i + 1: x.upper() for i, x in enumerate(letters)}
-    return {}
+    return _numbered(text, total) or _letters_only(text, total)
 
 
 @dataclass(frozen=True)
@@ -617,37 +639,43 @@ class QuizResult:
     total: int
     passed: bool
     missed: tuple[Question, ...]
-    unanswered: tuple[Question, ...]
+    #: Question numbers this email did not answer. A quiz is graded only when
+    #: every question is answered; otherwise nothing is recorded.
+    missing: tuple[int, ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        return not self.missing
 
 
 def grade_quiz(cur: Curriculum, progress: dict[str, Any], reply_text: str) -> QuizResult | None:
-    """Grade the letters in ``reply_text`` and record the attempt. None (and
-    nothing recorded) when no answer could be parsed at all."""
-    answers = parse_answers(reply_text, len(cur.questions))
+    """Grade the letters in ``reply_text`` and record the attempt. None when no
+    answer could be parsed; an incomplete result (``missing``) when some
+    questions were not answered. Neither records anything."""
+    total = len(cur.questions)
+    answers = parse_answers(reply_text, total)
     if not answers:
         return None
-    missed: list[Question] = []
-    unanswered: list[Question] = []
-    correct = 0
-    for i, q in enumerate(cur.questions, start=1):
-        given = answers.get(i)
-        if given is None:
-            unanswered.append(q)
-        elif given == q.answer:
-            correct += 1
-        else:
-            missed.append(q)
+    missing = tuple(n for n in range(1, total + 1) if n not in answers)
+    if missing:
+        return QuizResult(len(answers), 0, total, False, (), missing)
+    missed = tuple(q for i, q in enumerate(cur.questions, start=1) if answers[i] != q.answer)
+    correct = total - len(missed)
     quiz = progress["quiz"]
     quiz["attempts"] += 1
     quiz["last_correct"] = correct
     quiz["best_correct"] = max(quiz["best_correct"], correct)
-    return QuizResult(
-        answered=len(answers),
-        correct=correct,
-        total=len(cur.questions),
-        passed=correct >= cur.pass_correct,
-        missed=tuple(missed),
-        unanswered=tuple(unanswered),
+    return QuizResult(total, correct, total, correct >= cur.pass_correct, missed)
+
+
+def missing_sentence(missing: tuple[int, ...]) -> str:
+    """The fixed reply when a quiz email does not answer every question."""
+    numbers = ", ".join(str(n) for n in missing)
+    which = "question" if len(missing) == 1 else "questions"
+    return (
+        f"This email does not answer {which} {numbers}, so the quiz was not graded and "
+        "nothing was recorded. Please send every answer, one per question: the number, "
+        "then the letter."
     )
 
 
@@ -711,7 +739,8 @@ def readiness(cur: Curriculum, progress: dict[str, Any]) -> tuple[bool, tuple[Cr
             quiz["best_correct"] >= cur.pass_correct,
             (
                 f"best quiz result {quiz['best_correct']} of {len(cur.questions)} correct, "
-                f"{cur.pass_correct} needed"
+                f"{cur.pass_correct} needed, {quiz['attempts']} "
+                f"{'attempt' if quiz['attempts'] == 1 else 'attempts'}"
                 if quiz["attempts"]
                 else "quiz not taken"
             ),
@@ -786,6 +815,7 @@ __all__ = [
     "grade_quiz",
     "load_curriculum",
     "load_tone_rules",
+    "missing_sentence",
     "new_progress",
     "next_lesson",
     "parse_answers",

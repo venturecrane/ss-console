@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from shared import sender_enrollment, training
+from shared import sender_enrollment, training, training_report
 from tests_e2e._training_turns import C_MARK, C
 from tests_e2e.test_guide_rehearsal import _person_purge, guide_rehearsal
 from tests_e2e.test_guide_rehearsal_run import A_MARK, ADMIN, B_MARK, A, B
@@ -167,6 +167,10 @@ def test_the_report_is_rendered_by_code_and_sent_through_the_gate_to_the_adminis
     assert f"{A}\n- Readiness: ready" in body
     assert f"{B}\n- Readiness: not ready yet" in body
     assert f"Casey Example ({C})" in body
+    from shared.sent_lines import recipient_digest
+
+    named = envelope["dispatches"][0][training_report.NAMED_FIELD]
+    assert named == sorted({recipient_digest(x) for x in (A, B, C)})
 
 
 def test_no_marker_note_or_lead_reaches_the_report(rehearsal) -> None:

@@ -104,8 +104,19 @@ def gather(
     ]
 
 
-def build_envelope(recipients: list[str], body: str, started_at: str) -> dict[str, Any]:
+#: The entry's machine list of the people its words name, as recipient
+#: digests (``shared.sent_lines.recipient_digest``). The purge
+#: (``workspace_broker/person_purge.py``, ``NAMED_FIELD``) removes an entry when
+#: the removed person's digest is here, exact match only, and never searches
+#: words. A test pins the two names equal.
+NAMED_FIELD = "named_sha256"
+
+
+def build_envelope(
+    recipients: list[str], body: str, started_at: str, named: list[str] | None = None
+) -> dict[str, Any]:
     from shared.prerendered_dispatch import canonical_body_sha256
+    from shared.sent_lines import recipient_digest
 
     dispatch = {
         "recipients": list(recipients),
@@ -117,6 +128,7 @@ def build_envelope(recipients: list[str], body: str, started_at: str) -> dict[st
         "body_sha256_full": canonical_body_sha256(body),
         "body_sha256_skeleton": canonical_body_sha256(SKELETON),
         "appends": [],
+        NAMED_FIELD: sorted({recipient_digest(a) for a in named or []}),
     }
     return {
         "skill": SKILL,
@@ -200,7 +212,9 @@ def run(
     body = render(cur, people)
     now = clock() if callable(clock) else datetime.now(timezone.utc)
     stamp = now.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    envelope = build_envelope(admins, body, stamp)
+    from shared import sender_enrollment
+
+    envelope = build_envelope(admins, body, stamp, sender_enrollment.enrolled_addresses())
     write_envelope(envelope)
     ready = sum(1 for _, p in people if p is not None and training.readiness(cur, p)[0])
     counts = {"people": len(people), "ready": ready, "dispatch_count": 1}
@@ -221,6 +235,7 @@ def main() -> int:
 
 
 __all__ = [
+    "NAMED_FIELD",
     "INTRO",
     "SKELETON",
     "SUBJECT",

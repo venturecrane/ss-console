@@ -165,6 +165,8 @@ def record_handler(args: dict[str, Any], **kwargs: Any) -> str:
                 "No quiz answers were found in this email. Answers are one line per question: "
                 "the number, then the letter."
             )
+        if not result.complete:
+            return _refused(training.missing_sentence(result.missing))
         changed = True
         out = {
             **_status(cur, progress),
@@ -180,7 +182,8 @@ def record_handler(args: dict[str, Any], **kwargs: Any) -> str:
                     }
                     for q in result.missed
                 ],
-                "unanswered": [cur.questions.index(q) + 1 for q in result.unanswered],
+                "attempts": progress["quiz"]["attempts"],
+                "best_correct": progress["quiz"]["best_correct"],
             },
         }
     else:  # objection_answered

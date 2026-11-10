@@ -490,32 +490,50 @@ def test_orphans_never_reads_a_planted_link_as_a_store(seat: dict) -> None:
     assert not result.clean and result.problems
 
 
-@pytest.mark.parametrize(
-    ("words", "names_a"),
-    [
-        (f"Avery Example ({A})\n- Readiness: ready", True),
-        (f"Progress for {A}.", True),
-        ("Progress for REP-A@Example.Test today", True),
-        (f"Progress for x{A}", False),
-        (f"Progress for b{A}", False),
-        (f"Progress for {A}ing", False),
-        (f"Progress for {A}.au", False),
-        (f"Progress for {A}-old", False),
-        ("Progress for rep-a@example.tester", False),
-    ],
-)
-def test_an_entry_names_a_person_only_by_their_whole_address(words: str, names_a: bool) -> None:
-    """``a@x.com`` is never ``aa@x.com``, ``data@x.com`` or ``a@x.com.au``: an
-    envelope entry is purged for A only when its words carry A's whole address."""
-    entry = {"recipients": ["admin@example.test"], "subject": "Representative progress", "full_body": words}
-    assert person_purge._envelope_mentions(entry, A) is names_a
+AA = "aa@example.test"
+DATA = "data@example.test"
+SHORT = "a@example.test"
+
+
+def _named(*people: str) -> list[str]:
+    return sorted(person_purge.recipient_digest(p) for p in people)
+
+
+def test_an_entry_names_a_person_only_by_their_exact_digest() -> None:
+    """Removing ``a@x.com`` matches only its own digest: an entry naming
+    ``aa@x.com`` or ``data@x.com`` is not theirs, and words are never searched,
+    so an entry with no named list is untouched by a body that mentions them."""
+    admin = ["admin@example.test"]
+    assert person_purge._envelope_mentions({"recipients": admin, "named_sha256": _named(SHORT)}, SHORT)
+    for other in (AA, DATA):
+        entry = {"recipients": admin, "full_body": f"Progress for {other}", "named_sha256": _named(other)}
+        assert not person_purge._envelope_mentions(entry, SHORT), other
+    body_only = {"recipients": admin, "subject": f"About {SHORT}", "full_body": f"Progress for {SHORT}."}
+    assert not person_purge._envelope_mentions(body_only, SHORT)
+    assert not person_purge._envelope_mentions({"recipients": admin, "named_sha256": SHORT}, SHORT)
+
+
+def test_purge_of_one_address_leaves_entries_naming_lookalikes(seat: dict) -> None:
+    envelope = seat["home"] / ".smd" / "pre_run" / "client-digest.dispatch.json"
+    envelope.parent.mkdir(parents=True, exist_ok=True)
+    entries = [
+        {"recipients": ["admin@example.test"], "full_body": f"{AA} is due", "named_sha256": _named(AA)},
+        {"recipients": ["admin@example.test"], "full_body": f"{DATA} is due", "named_sha256": _named(DATA)},
+        {"recipients": ["admin@example.test"], "subject": f"{SHORT} today", "full_body": f"{SHORT} is due"},
+    ]
+    envelope.write_text(json.dumps({"skill": "client-digest", "dispatches": entries}), encoding="utf-8")
+    targets = person_purge.PurgeTargets(data_root=seat["data"], partition_roots=[])
+    assert person_purge.purge(SHORT, targets).clean
+    assert json.loads(envelope.read_text(encoding="utf-8"))["dispatches"] == entries
 
 
 def test_purge_clears_a_representatives_progress_and_the_report_that_names_them(seat: dict) -> None:
     """Training (ss-console #3946): a representative's progress record lives in
     a store walled per person (``rep-progress``), and the weekly report to SMD's
-    administrators names each representative in its BODY, never as a recipient.
-    Purging A removes A's progress directory and every report entry naming A;
+    administrators names each representative in its body and lists their
+    digests in ``named_sha256``, never as a recipient. Purging A removes A's
+    progress directory and every report entry listing A (the pending or
+    consumed envelope on the seat; the email already sent is retained by design);
     B's progress stays, and the probe reads both before and after."""
     progress = seat["data"] / "rep" / "progress"
     for person in (A, B):
@@ -528,8 +546,9 @@ def test_purge_clears_a_representatives_progress_and_the_report_that_names_them(
         "subject": "Representative progress and readiness",
         "full_body": f"Hello,\n\nAvery Example ({A})\n- Readiness: ready\n\n{B}\n- Readiness: not ready yet",
         "skeleton_body": "Hello,\n\nThis week's representative progress report could not be sent in full.",
+        "named_sha256": _named(A, B),
     }
-    other = {**report, "full_body": f"{B}\n- Readiness: not ready yet"}
+    other = {**report, "full_body": f"{B}\n- Readiness: not ready yet", "named_sha256": _named(B)}
     envelope = seat["home"] / ".smd" / "pre_run" / "rep-training.dispatch.consumed.json"
     envelope.parent.mkdir(parents=True, exist_ok=True)
     envelope.write_text(json.dumps({"skill": "rep-training", "dispatches": [report, other]}), encoding="utf-8")

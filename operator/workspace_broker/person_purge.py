@@ -26,10 +26,10 @@ person's address:
 * every sent-line label file (``.smd/sent_lines/<ref>.json``) whose recorded
   recipients include them;
 * every scheduled-send envelope (``.smd/pre_run/*.dispatch*.json``, pending or
-  consumed) that names them as a recipient or in its words (the weekly
-  representative progress report to SMD's administrators names each
-  representative in its body): those entries are removed, and a file left
-  with none is deleted;
+  consumed) that names them as a recipient, or in its ``named_sha256`` list
+  (the weekly representative progress report to SMD's administrators lists
+  each representative it names there): those entries are removed, exact
+  digest match only, and a file left with none is deleted;
 * their progress record in the training progress store (``rep-progress``),
   which is a store walled per person and so is covered by the first item;
 * their rows in the per-sender daily count ``smd/sender_daily.db`` on the
@@ -106,7 +106,6 @@ import fnmatch
 import hashlib
 import json
 import os
-import re
 import sqlite3
 import stat
 import unicodedata
@@ -369,12 +368,14 @@ def _labelled_files(vol: Volume, address: str, run: _Run) -> None:
                 run.cannot(layer, exc, where)
 
 
-#: The fields of a scheduled-send entry that carry its words. An entry whose
-#: words name the person is theirs to purge too: the weekly representative
-#: progress report (overlay ``shared/training_report.py``) goes to SMD's
-#: administrators and names each representative in its body, so a recipient
-#: match alone would leave the removed person's address in it.
-_ENVELOPE_TEXT_FIELDS = ("subject", "full_body", "skeleton_body", "body_without_attachment")
+#: A scheduled-send entry's machine list of the people its WORDS name, as the
+#: recipient digests below (sha256 of the lower-cased address, the function
+#: ``shared/sent_lines.py`` uses). The weekly representative progress report
+#: (overlay ``shared/training_report.py``) goes to SMD's administrators and
+#: names each representative in its body, so it lists them here. Only this
+#: field and the recipients are matched, both exactly: words are never searched,
+#: so removing one person can never touch another person's send on any seat.
+NAMED_FIELD = "named_sha256"
 
 
 def _envelope_mentions(entry: Any, address: str) -> bool:
@@ -389,18 +390,8 @@ def _envelope_mentions(entry: Any, address: str) -> bool:
             people.append(value)
     if any(_bare(p) == address for p in people):
         return True
-    named = _address_in_words(address)
-    return any(isinstance(entry.get(key), str) and named.search(entry[key]) for key in _ENVELOPE_TEXT_FIELDS)
-
-
-def _address_in_words(address: str) -> re.Pattern[str]:
-    """The whole address as a token in prose: ``a@x.com`` matches "(a@x.com)" and
-    "a@x.com." at a sentence end, never "aa@x.com", "data@x.com" or
-    "a@x.com.au". Case-insensitive, as addresses are compared everywhere here."""
-    return re.compile(
-        r"(?<![a-z0-9._%+\-])" + re.escape(address) + r"(?![a-z0-9\-]|\.[a-z0-9])",
-        re.IGNORECASE,
-    )
+    named = entry.get(NAMED_FIELD)
+    return isinstance(named, list) and recipient_digest(address) in named
 
 
 # ---------------------------------------------------------------------------
