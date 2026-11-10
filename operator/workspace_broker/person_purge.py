@@ -106,6 +106,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import stat
 import unicodedata
@@ -388,7 +389,18 @@ def _envelope_mentions(entry: Any, address: str) -> bool:
             people.append(value)
     if any(_bare(p) == address for p in people):
         return True
-    return any(isinstance(entry.get(key), str) and address in entry[key].lower() for key in _ENVELOPE_TEXT_FIELDS)
+    named = _address_in_words(address)
+    return any(isinstance(entry.get(key), str) and named.search(entry[key]) for key in _ENVELOPE_TEXT_FIELDS)
+
+
+def _address_in_words(address: str) -> re.Pattern[str]:
+    """The whole address as a token in prose: ``a@x.com`` matches "(a@x.com)" and
+    "a@x.com." at a sentence end, never "aa@x.com", "data@x.com" or
+    "a@x.com.au". Case-insensitive, as addresses are compared everywhere here."""
+    return re.compile(
+        r"(?<![a-z0-9._%+\-])" + re.escape(address) + r"(?![a-z0-9\-]|\.[a-z0-9])",
+        re.IGNORECASE,
+    )
 
 
 # ---------------------------------------------------------------------------

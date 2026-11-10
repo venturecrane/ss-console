@@ -490,6 +490,27 @@ def test_orphans_never_reads_a_planted_link_as_a_store(seat: dict) -> None:
     assert not result.clean and result.problems
 
 
+@pytest.mark.parametrize(
+    ("words", "names_a"),
+    [
+        (f"Avery Example ({A})\n- Readiness: ready", True),
+        (f"Progress for {A}.", True),
+        ("Progress for REP-A@Example.Test today", True),
+        (f"Progress for x{A}", False),
+        (f"Progress for b{A}", False),
+        (f"Progress for {A}ing", False),
+        (f"Progress for {A}.au", False),
+        (f"Progress for {A}-old", False),
+        ("Progress for rep-a@example.tester", False),
+    ],
+)
+def test_an_entry_names_a_person_only_by_their_whole_address(words: str, names_a: bool) -> None:
+    """``a@x.com`` is never ``aa@x.com``, ``data@x.com`` or ``a@x.com.au``: an
+    envelope entry is purged for A only when its words carry A's whole address."""
+    entry = {"recipients": ["admin@example.test"], "subject": "Representative progress", "full_body": words}
+    assert person_purge._envelope_mentions(entry, A) is names_a
+
+
 def test_purge_clears_a_representatives_progress_and_the_report_that_names_them(seat: dict) -> None:
     """Training (ss-console #3946): a representative's progress record lives in
     a store walled per person (``rep-progress``), and the weekly report to SMD's

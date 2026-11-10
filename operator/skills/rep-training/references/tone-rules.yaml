@@ -76,5 +76,7 @@ rules:
   - id: no-shouting
     kind: regex
     case: sensitive
-    pattern: '\b[A-Z]{5,}\b'
+    # Shouting is a run of capitalized words. One acronym alone (HIPAA, OSHA,
+    # SMD) is ordinary writing and never a miss.
+    pattern: '\b[A-Z]{2,}(?:[ \t]+[A-Z]{2,})+\b'
     fix: Do not write words in capitals for emphasis.

@@ -351,7 +351,7 @@ def test_every_tone_rule_fires_on_a_planted_draft_and_a_clean_draft_has_none() -
         "no-guarantee": "We guarantee results.",
         "no-long-dash": "Fast — and safe.",
         "no-exclamation": "Great news!",
-        "no-shouting": "This is AMAZING.",
+        "no-shouting": "This is TRULY AMAZING.",
     }
     assert set(planted) == {r.id for r in rules}, "every authored rule has a planted case"
     for rule_id, text in planted.items():
@@ -361,6 +361,21 @@ def test_every_tone_rule_fires_on_a_planted_draft_and_a_clean_draft_has_none() -
         "We work alongside you and figure out the right solution together, twice a day if need be."
     )
     assert training.tone_misses(clean, rules) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "shouts"),
+    [
+        ("We follow HIPAA and OSHA rules, and SMD runs it.", False),
+        ("Ask about the CRM or the ERP integration.", False),
+        ("Our team keeps a FAQ.\nOSHA training is separate.", False),
+        ("This is a GAME CHANGER for you.", True),
+        ("PLEASE READ THIS before the call.", True),
+    ],
+)
+def test_shouting_is_a_run_of_capitals_never_one_acronym(text: str, shouts: bool) -> None:
+    rules = training.load_tone_rules(TRAINING_DIR)
+    assert ("no-shouting" in {m.rule for m in training.tone_misses(text, rules)}) is shouts
 
 
 # ---------------------------------------------------------------------------
