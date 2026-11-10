@@ -832,7 +832,9 @@ form_letters:
         - 300 Heights Square
         - Lab Heights, CA 95002
       channel: email
-      route: test-adjuster@smdopslab.onmicrosoft.com
+      # An SMD AgentMail stand-in OUTSIDE the lab domain, so a send to the
+      # agency classifies as outside mail here exactly as it does on A&P.
+      route: ap-records-standin@agentmail.to
       match:
         - lab heights police
         - lab heights pd

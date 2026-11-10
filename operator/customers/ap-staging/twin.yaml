@@ -89,4 +89,4 @@ differences:
   - path: form_letters.firm
     why: the fictional firm's name and mailing lines
   - path: form_letters.police_agencies
-    why: fictional agencies in the same shape (one email route, to a lab mailbox), so a rehearsal never writes to a real police department
+    why: fictional agencies in the same shape (the one email route is an SMD AgentMail stand-in outside the lab domain, so it classifies as outside mail as A&P's does), so a rehearsal never writes to a real police department
