@@ -3,7 +3,7 @@
 #
 # Preserves the seat's Machine-local ledger and memory, then removes what
 # provision-customer.sh created (R2 config prefixes and the per-seat skills
-# bucket, Vectorize indexes, the AgentMail inbox and webhook, the Fly apps and
+# bucket, the AgentMail inbox and webhook, the Fly apps and
 # the ops workspace's sweep secrets, healthchecks.io checks, every console D1
 # projection row including customer_configs), archives the signed compliance
 # packet, and tombstones customers/<slug>/. The inventory is

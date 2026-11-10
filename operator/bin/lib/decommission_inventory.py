@@ -76,10 +76,6 @@ def seat_fly_apps(slug: str) -> list[str]:
     return [f"hermes-{slug}", f"ops-{slug}"]
 
 
-def seat_vectorize_indexes(slug: str) -> list[str]:
-    return [f"hermes-{slug}-vault", f"hermes-{slug}-corrections"]
-
-
 def secret_suffix(slug: str) -> str:
     """``NAME__<SUFFIX>`` as provisioning and ops-workspace derive it."""
     return re.sub(r"[^A-Z0-9_]", "", slug.upper().replace("-", "_"))
@@ -325,7 +321,6 @@ __all__ = [
     "residue_report",
     "seat_fly_apps",
     "seat_skills_buckets",
-    "seat_vectorize_indexes",
     "seat_webhook_host",
     "secret_suffix",
     "shared_config_prefixes",

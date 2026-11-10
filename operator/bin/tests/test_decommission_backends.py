@@ -1,6 +1,6 @@
 """The decommission backends' transport, environment wiring and archiver.
 
-The per-layer deleters (R2, Vectorize, AgentMail, Fly, the console) are
+The per-layer deleters (R2, AgentMail, Fly, the console) are
 exercised against stateful fake vendors in ``test_decommission_layers.py``,
 where every removal is followed by a re-read that asserts absence. This file
 keeps what is not a layer: the https-only transport, the environment wiring
@@ -97,7 +97,6 @@ def test_backends_from_env_wires_nothing_without_credentials(tmp_path):
     )
     assert set(pipeline.unwired_destructive_backends()) >= {
         "r2_deleter",
-        "vectorize_deleter",
         "agentmail",
         "fly",
         "observability",
@@ -116,7 +115,7 @@ def test_backends_from_env_wires_all_six_with_credentials(tmp_path):
     kwargs, wired = backends_from_env(
         "acme", tmp_path, env, runner=_FakeRunner({}), http=_FakeHttp({}), archive_root=tmp_path / "archive"
     )
-    assert set(kwargs) == {"r2_deleter", "vectorize_deleter", "agentmail", "fly", "observability", "archiver"}
+    assert set(kwargs) == {"r2_deleter", "agentmail", "fly", "observability", "archiver"}
     assert all(wired.values())
     assert isinstance(kwargs["r2_deleter"], CloudflareR2NamespaceDeleter)
     assert isinstance(kwargs["fly"], FlyAppDestroyer)
@@ -136,7 +135,6 @@ def test_backends_from_env_accepts_the_provisioning_scripts_cf_aliases(tmp_path)
     kwargs, wired = backends_from_env("acme", tmp_path, env, runner=runner, http=_FakeHttp({}))
     assert wired["r2_deleter"] is True
     # wrangler only reads CLOUDFLARE_API_TOKEN, so the wrangler-backed ones stay unwired.
-    assert wired["vectorize_deleter"] is False
     assert wired["observability"] is False
 
 

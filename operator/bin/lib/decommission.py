@@ -3,7 +3,7 @@
 Full off-boarding pipeline for a single customer. Preserves the LIVE
 Machine-local data (audit ledger + ADR-0016 memory) through the ADR-0043
 runtime-read seam, then runs the substrate-deletion steps owned by ops
-(R2 bucket, Vectorize indexes, AgentMail identity, Fly Machine), archives
+(R2 bucket, AgentMail identity, Fly Machine), archives
 the compliance packet, and tombstones the customer config directory.
 
 Data-plane doctrine (#1355)
@@ -24,8 +24,15 @@ destruction mechanism for all of it. Two consequences:
   that was never provisioned (no ``AIE_D1_DATABASE_ID`` exists anywhere in
   provisioning) and that the live runtime never wrote. The sweep was a
   silent no-op against an empty store and was removed with the rest of the
-  ADR-0008 plane. R2 (step 03) and Vectorize (step 04) remain real
-  control-plane substrates and keep their deletion steps.
+  ADR-0008 plane. R2 (step 03) remains a real control-plane substrate and
+  keeps its deletion step.
+* **There is no Vectorize step.** Step 04 deleted ``hermes-{slug}-vault``
+  and ``hermes-{slug}-corrections`` indexes, but nothing ever creates a
+  Vectorize index for a seat (the ``vectorize_index`` name in customer.yaml
+  is read by no runtime), and no vaulted credential can reach the Vectorize
+  API, so the step only made every ``--live`` run refuse. It was removed;
+  the step names after it keep their numbers because they are persisted in
+  audit-row metadata and cited by the specs.
 
 Design notes
 ------------
@@ -37,7 +44,7 @@ Design notes
   ``failed`` row before raising :class:`DecommissionStepFailed`.
 
 * **External services behind Protocols.** Every destructive service
-  (R2, Vectorize, AgentMail, Fly, observability) and the compliance
+  (R2, AgentMail, Fly, observability) and the compliance
   archiver is a ``Protocol`` with a real implementation in
   ``bin/lib/decommission_backends.py`` (#2735) and a :class:`NoOpStub`
   that the pipeline defaults to. The CLI wires each real backend from a
@@ -78,7 +85,7 @@ The steps:
      delete its own ``ss-operator-{slug}-skills`` bucket (never the
      decommission-archive subtree). Targets come from
      ``bin.lib.decommission_inventory``, the one list of what a seat is.
-  4. Vectorize: delete the per-customer vault + corrections indexes.
+  4. (retired: was Vectorize; no seat has an index. Numbering kept.)
   5. AgentMail: delete the seat's inbox and its webhook
      (``AgentMailInboxDeprovisioner``).
   6. Fly Machine: ``fly apps destroy`` for ``hermes-{slug}`` and the client's
@@ -118,7 +125,6 @@ from bin.lib.decommission_inventory import (
     SEAT_PROJECTION_TABLES,
     r2_targets as _r2_targets,
     seat_fly_apps,
-    seat_vectorize_indexes,
     seat_webhook_host,
 )
 
@@ -297,12 +303,6 @@ class R2NamespaceDeleter(Protocol):
     """
 
     async def delete_namespace(self, customer_slug: str) -> dict: ...
-
-
-class VectorizeIndexDeleter(Protocol):
-    """Deletes ``hermes-{slug}-vault`` and ``hermes-{slug}-corrections``."""
-
-    async def delete_indexes(self, customer_slug: str) -> dict: ...
 
 
 class ComplianceArchiver(Protocol):
@@ -659,7 +659,6 @@ class DecommissionPipeline:
 
     drain: object = field(default_factory=DefaultDrainCoordinator)
     r2_deleter: Optional[R2NamespaceDeleter] = None
-    vectorize_deleter: Optional[VectorizeIndexDeleter] = None
     agentmail: AgentMailProvisioner = field(default_factory=NoOpAgentMailStub)
     fly: FlyMachineManager = field(default_factory=NoOpFlyStub)
     observability: ObservabilityCleanup = field(default_factory=NoOpObservabilityCleanupStub)
@@ -691,7 +690,7 @@ class DecommissionPipeline:
 
         The CLI calls this to fail closed before a ``--live`` run: better
         to refuse than to tombstone the customer dir and exit ``OK`` while
-        D1 rows, R2 objects, Vectorize indexes, the Fly Machine, its
+        D1 rows, R2 objects, the Fly Machine, its
         secrets, and the inbox all remain. Pure inspection — no I/O, no
         side effects.
         """
@@ -703,8 +702,6 @@ class DecommissionPipeline:
             unwired.append("audit_log_preserver")
         if self.r2_deleter is None:
             unwired.append("r2_deleter")
-        if self.vectorize_deleter is None:
-            unwired.append("vectorize_deleter")
         if isinstance(self.agentmail, NoOpAgentMailStub):
             unwired.append("agentmail")
         if isinstance(self.fly, NoOpFlyStub):
@@ -752,14 +749,6 @@ class DecommissionPipeline:
                 name="03_r2_namespace",
                 status=StepStatus.PLANNED,
                 detail={**_r2_targets(self.customer_slug), "deleter_wired": self.r2_deleter is not None},
-            ),
-            StepResult(
-                name="04_vectorize_indexes",
-                status=StepStatus.PLANNED,
-                detail={
-                    "indexes": seat_vectorize_indexes(self.customer_slug),
-                    "deleter_wired": self.vectorize_deleter is not None,
-                },
             ),
             StepResult(
                 name="05_agentmail",
@@ -825,10 +814,10 @@ class DecommissionPipeline:
             )
         )
 
-        # Steps 3 to 6: R2, Vectorize, AgentMail, Fly. Each target list comes
-        # from bin.lib.decommission_inventory.
+        # Steps 3, 5, 6: R2, AgentMail, Fly. Each target list comes from
+        # bin.lib.decommission_inventory. There is no step 04 (Vectorize was
+        # retired; later names keep their numbers, see module docstring).
         results.append(await self._run_step("03_r2_namespace", self._step_r2_namespace))
-        results.append(await self._run_step("04_vectorize_indexes", self._step_vectorize_indexes))
         results.append(await self._run_step("05_agentmail", self._step_agentmail))
         results.append(await self._run_step("06_fly_machine", self._step_fly_machine))
 
@@ -944,13 +933,6 @@ class DecommissionPipeline:
         manifest = await self.r2_deleter.delete_namespace(self.customer_slug)
         return {**_r2_targets(self.customer_slug), **manifest}
 
-    async def _step_vectorize_indexes(self) -> dict:
-        if self.vectorize_deleter is None:
-            idx = seat_vectorize_indexes(self.customer_slug)
-            return {"skipped": True, "reason": "no vectorize_deleter wired", "indexes": idx}
-        manifest = await self.vectorize_deleter.delete_indexes(self.customer_slug)
-        return manifest
-
     async def _step_agentmail(self) -> dict:
         return await self.agentmail.deprovision(self.customer_slug)
 
@@ -1029,7 +1011,6 @@ __all__ = [
     "R2NamespaceDeleter",
     "StepResult",
     "StepStatus",
-    "VectorizeIndexDeleter",
     "VERTICAL_AUDIT_LOG_DAYS_DEFAULTS",
     "resolve_audit_log_days",
 ]

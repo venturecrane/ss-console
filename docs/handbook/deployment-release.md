@@ -1140,7 +1140,7 @@ the new name and deletes.
     negative probe per runtime layer, each recorded with `crane_verify`:
     `fly apps list` has no `hermes-smd-staging`; R2 lists nothing under
     `vaults/smd-staging/` and no `ss-operator-smd-staging-skills` bucket;
-    Vectorize has no `hermes-smd-staging-vault`; D1 `customer_configs`,
+    D1 `customer_configs`,
     `fleet_holds` and the other slug-keyed tables return no `smd-staging` row;
     `crane_secret_check` on `/ss` prod finds no `__SMD_STAGING` name
     (after the `MSGRAPH_*__SMD_STAGING` names are deleted; their values live on

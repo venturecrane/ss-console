@@ -42,7 +42,6 @@ from bin.lib.decommission_backends import (  # noqa: E402 - the import needs the
     FlyAppDestroyer,
     HealthchecksAndFleetStatusCleanup,
     HttpResponse,
-    WranglerVectorizeIndexDeleter,
     seat_inbox_address,
 )
 from bin.lib.decommission_inventory import (  # noqa: E402 - the import needs the sys.path shim above it (packaging follow-up named in pyproject.toml)
@@ -209,58 +208,6 @@ def test_r2_already_gone_is_a_clean_skip():
 def test_r2_list_error_surfaces():
     with pytest.raises(RuntimeError, match="r2 list"):
         _run(CloudflareR2NamespaceDeleter("acct", "tok", http=_r2_world(list_status=403)).delete_namespace("acme"))
-
-
-# ---------------------------------------------------------------------------
-# Vectorize
-# ---------------------------------------------------------------------------
-
-
-class FakeVectorize:
-    def __init__(self, names, *, sticky=(), fail_delete=False):
-        self.names = set(names)
-        self.sticky = set(sticky)
-        self.fail_delete = fail_delete
-
-    def __call__(self, cmd):
-        if cmd[:4] == ["npx", "wrangler", "vectorize", "list"]:
-            return subprocess.CompletedProcess(cmd, 0, json.dumps([{"name": n} for n in sorted(self.names)]), "")
-        if cmd[:4] == ["npx", "wrangler", "vectorize", "delete"]:
-            if self.fail_delete:
-                return subprocess.CompletedProcess(cmd, 1, "", "boom")
-            if cmd[4] not in self.sticky:
-                self.names.discard(cmd[4])
-            return subprocess.CompletedProcess(cmd, 0, "", "")
-        raise AssertionError(f"unexpected command {cmd}")
-
-
-def test_vectorize_removes_the_seat_indexes_and_reads_them_back_absent():
-    fake = FakeVectorize({"hermes-acme-vault", "hermes-acme-corrections", "hermes-other-vault"})
-    deleter = WranglerVectorizeIndexDeleter(runner=fake)
-    manifest = _run(deleter.delete_indexes("acme"))
-    assert manifest["indexes_deleted"] == 2
-    assert deleter.survey("acme") == {
-        "present": False,
-        "indexes": {"hermes-acme-vault": False, "hermes-acme-corrections": False},
-    }
-    assert fake.names == {"hermes-other-vault"}
-
-
-def test_vectorize_index_kept_after_a_clean_exit_raises():
-    fake = FakeVectorize({"hermes-acme-vault"}, sticky={"hermes-acme-vault"})
-    with pytest.raises(RuntimeError, match="still listed"):
-        _run(WranglerVectorizeIndexDeleter(runner=fake).delete_indexes("acme"))
-
-
-def test_vectorize_absent_is_a_skip_and_failure_surfaces():
-    manifest = _run(WranglerVectorizeIndexDeleter(runner=FakeVectorize(set())).delete_indexes("acme"))
-    assert manifest["skipped"] is True and manifest["checked"] == ["hermes-acme-vault", "hermes-acme-corrections"]
-    with pytest.raises(RuntimeError, match="vectorize delete"):
-        _run(
-            WranglerVectorizeIndexDeleter(runner=FakeVectorize({"hermes-acme-vault"}, fail_delete=True)).delete_indexes(
-                "acme"
-            )
-        )
 
 
 # ---------------------------------------------------------------------------
