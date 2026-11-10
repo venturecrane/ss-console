@@ -25,10 +25,11 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { execFileSync } from 'child_process'
+import { homedir } from 'os'
 import { resolve } from 'path'
 
 const ROOT = process.cwd()
-const SKILLS = ['sos', 'eos', 'code-review'] as const
+const SKILLS = ['sos', 'eos', 'code-review', 'wired', 'critique', 'auto-build'] as const
 
 /** Literal paths, not composed ones: the set is closed and the scanner is right
  * to distrust a path built from a variable. */
@@ -36,6 +37,9 @@ const SKILL_PATHS: Record<(typeof SKILLS)[number], string> = {
   sos: resolve(ROOT, '.claude/skills/sos/SKILL.md'),
   eos: resolve(ROOT, '.claude/skills/eos/SKILL.md'),
   'code-review': resolve(ROOT, '.claude/skills/code-review/SKILL.md'),
+  wired: resolve(ROOT, '.claude/skills/wired/SKILL.md'),
+  critique: resolve(ROOT, '.claude/skills/critique/SKILL.md'),
+  'auto-build': resolve(ROOT, '.claude/skills/auto-build/SKILL.md'),
 }
 
 function skillPath(name: (typeof SKILLS)[number]): string {
@@ -253,3 +257,133 @@ describe('the skunkworks stance is the default (folded 2026-10-24)', () => {
     expect(body).toMatch(/An uncited verdict is written as \*\*not shown\*\*/)
   })
 })
+
+/**
+ * /wired, /critique and /auto-build (fork, 2026-11-09).
+ *
+ * Each pin below is a predicate over a skill body. The fork must satisfy it,
+ * and crane's unmodified copy must NOT: a pin that also holds on the copy we
+ * forked from measures nothing (Law 12). The second half runs only where a
+ * crane-console checkout sits at ~/dev/crane-console (the Captain's machine and
+ * agent sessions, not CI); CI still runs the first half on every PR.
+ */
+type ForkedSkill = 'wired' | 'critique' | 'auto-build'
+
+/** Literal paths to crane's copies at the fork point. */
+const CRANE_PATHS: Record<ForkedSkill, string> = {
+  wired: resolve(homedir(), 'dev/crane-console/.agents/skills/wired/SKILL.md'),
+  critique: resolve(homedir(), 'dev/crane-console/.agents/skills/critique/SKILL.md'),
+  'auto-build': resolve(homedir(), 'dev/crane-console/.agents/skills/auto-build/SKILL.md'),
+}
+
+const WIRED_CONTRACT = resolve(ROOT, 'docs/doctrine/wired-contract.md')
+
+/** The READY bullet, which the skill and the doctrine page carry word for word. */
+function readyBullet(body: string): string | null {
+  const m = body.match(/^- \*\*READY\*\* - .+$/m)
+  return m ? m[0] : null
+}
+
+const PINS: { skill: ForkedSkill; pin: string; holds: (body: string) => boolean }[] = [
+  {
+    skill: 'wired',
+    pin: 'defines done as READY, word for word with docs/doctrine/wired-contract.md',
+    holds: (b) => {
+      const ready = readyBullet(b)
+      return ready !== null && ready === readyBullet(readFileSync(WIRED_CONTRACT, 'utf8'))
+    },
+  },
+  {
+    skill: 'wired',
+    pin: 'no longer defines done as the act performed as the client ("Tested")',
+    holds: (b) => !/^- \*\*Tested\*\* - /m.test(b) && !/Run the act, capture the output/.test(b),
+  },
+  {
+    skill: 'wired',
+    pin: 'closes the session at READY instead of holding it open for a real request',
+    holds: (b) =>
+      /## Step 8: Close at READY/.test(b) &&
+      /does not stay open waiting for a real client request/.test(b),
+  },
+  {
+    skill: 'wired',
+    pin: 'looks up what the client was told, before the gate chain, cited and never pasted',
+    holds: (b) => {
+      const told = b.indexOf('## Step 3: What the client was told')
+      const chain = b.indexOf('## Step 4: The gate chain')
+      return (
+        told !== -1 &&
+        chain > told &&
+        b.includes('.claude/bin/register list --client <slug>') &&
+        /Never paste the client's text into this repo/.test(b)
+      )
+    },
+  },
+  {
+    skill: 'critique',
+    pin: 'spawns every critic on Fable',
+    holds: (b) => {
+      const spawns = [...b.matchAll(/`subagent_type: general-purpose`[^\n]*/g)].map((m) => m[0])
+      return spawns.length > 0 && spawns.every((line) => line.includes('`model: "fable"`'))
+    },
+  },
+  {
+    skill: 'auto-build',
+    pin: 'names a model per role: Fable plans and critiques, Opus builds, Sonnet or Haiku search',
+    holds: (b) =>
+      /\| Plan and design agents \(Step 4 Phase 2\), every critic\s*\| `fable`/.test(b) &&
+      /\| Builders [^|]*\| `opus`/.test(b) &&
+      /\| Explore\/search, and agents that only re-run a named probe\s*\| `sonnet` or `haiku`/.test(
+        b
+      ) &&
+      /Explore subagents[^\n]*`model: "sonnet"`/.test(b) &&
+      /Plan subagents[^\n]*`model: "fable"`/.test(b),
+  },
+  {
+    skill: 'auto-build',
+    pin: 'carries a required model field per workstream in the team YAML',
+    holds: (b) =>
+      /^ {6}model: opus # required/m.test(b) &&
+      /required fields \(`name`, `subagent_type`, `scope`, `model`\)/.test(b),
+  },
+  {
+    skill: 'auto-build',
+    pin: "calls SMD's own /wired at Step 2 and /critique at Step 5",
+    holds: (b) =>
+      /invoke SMD's `\/wired` \(`\.claude\/skills\/wired\/SKILL\.md`\)/.test(b) &&
+      /Call SMD's `\/critique` skill \(`\.claude\/skills\/critique\/SKILL\.md`\)/.test(b),
+  },
+  {
+    skill: 'auto-build',
+    pin: 'finishes at READY, not at a green PR',
+    holds: (b) =>
+      /ends at READY, not at "PR open, CI green\."/.test(b) &&
+      !/ends at "PR opened, CI green, ready to merge\."/.test(b) &&
+      !/ends at "PR open, CI green", so this informs/.test(b),
+  },
+]
+
+describe('/wired, /critique and /auto-build carry READY and a model per role (fork, 2026-11-09)', () => {
+  for (const { skill, pin, holds } of PINS) {
+    it(`${skill} ${pin}`, () => {
+      expect(holds(skillBody(skill))).toBe(true)
+    })
+  }
+
+  it('wired-contract.md no longer lets the crane skill win a disagreement', () => {
+    const page = readFileSync(WIRED_CONTRACT, 'utf8')
+    expect(page).not.toMatch(/the skill wins/)
+    expect(page).toMatch(/\.claude\/skills\/wired\/SKILL\.md/)
+  })
+})
+
+describe.skipIf(!existsSync(CRANE_PATHS.wired))(
+  "each pin fails against crane's unmodified copy",
+  () => {
+    for (const { skill, pin, holds } of PINS) {
+      it(`crane's ${skill} does not satisfy: ${pin}`, () => {
+        expect(holds(readFileSync(CRANE_PATHS[skill], 'utf8'))).toBe(false)
+      })
+    }
+  }
+)

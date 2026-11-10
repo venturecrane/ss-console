@@ -1,8 +1,8 @@
 ---
 name: wired
 description: Convert an ask into a reachability contract before planning. Names the act the client performs, the terminal seam the change must land on, and every gate in between, so a feature cannot be reported done while a real client still cannot use it.
-version: 1.0.0
-scope: enterprise
+version: 2.0.0
+scope: venture:ss
 owner: captain
 status: stable
 depends_on:
@@ -11,7 +11,37 @@ depends_on:
     - crane_verify
 ---
 
-# /wired - Reachability Contract
+# /wired - Reachability Contract (SMD Services)
+
+> **Forked from crane-console on 2026-11-09.** This is SMD's own copy and no
+> longer receives enterprise updates; improvements originate here.
+> The fork point is commit `31c759f5`
+> (crane `.agents/skills/wired/SKILL.md`, the last
+> commit to touch it; unchanged at crane `origin/main` `55c766a6`); everything
+> after it is ours. It lives in `.claude/skills/` for the same reason `/sos`,
+> `/eos` and `/code-review` do: `crane ss` re-syncs `.claude/commands/` on every
+> launch, and nothing in the crane toolchain writes here.
+>
+> **Load order, settled empirically 2026-11-09** (Claude Code 2.1.321, headless,
+> in a scratch project holding a same-named skill in each place): a skill in the
+> project's `.claude/skills/` wins over a same-named `.claude/commands/<name>.md`
+> (crane's synced copy) and over `.agents/skills/<name>/`. Claude Code reads
+> neither `.agents/skills/` nor `~/.agents/skills/` at all, and
+> `~/.claude/commands/` does not exist on this machine. No `skillOverrides`
+> entry is needed. If `/wired` ever runs crane's copy instead, follow the
+> fallback ladder in `.claude/skills/sos/SKILL.md`.
+>
+> **Changes since the fork:**
+>
+> 1. **READY replaces Tested** as the definition of done, word for word with
+>    CLAUDE.md "Done means the client can do it" and
+>    `docs/doctrine/wired-contract.md` (doctrine #3900, 2026-11-09). A session
+>    closes at READY and never stays open waiting for a real request.
+> 2. **Step 3, what the client was told,** comes before the gate chain. A
+>    feature built for a client starts from the client's letter or the
+>    obligation register, cited by path, never pasted here.
+> 3. Gate-table rows, the example ACs and Step 8 (close) are rewritten against
+>    READY.
 
 > **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "wired")`. This is non-blocking; if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
@@ -29,7 +59,9 @@ Three terms, used precisely:
 
 - **Built** - the code exists and its own tests pass. The weakest of the three and the easiest to mistake for done, because it produces the most visible evidence.
 - **Wired** - every gate between a real client's finger and the effect is open **on the deployment that client uses**. Not "would work once configured." Configured. Secrets and config authoring are part of the deliverable, not prerequisites belonging to someone else.
-- **Tested** - someone performed the act **as the client, on the real deployment**, and observed the far end change. A green unit test against a fake token is not this.
+- **READY** - all five hold, each with evidence (a probe output, a `file:line`, or a `vfy_` id): (1) built and merged, its own tests passing; (2) rehearsed on real saved inputs, through the same code path the seat runs, against an answer key, at $0; (3) running on the seat, which reports the release that contains it; (4) ready to fire, every gate between the client's email and the job (config, secrets, switches, firm files) open on that seat by a probe of the seat; (5) watched by code, not by a session: the hourly work-health triage on smd-ops (`operator/ops-machine/bin/ops-triage`, `operator/bin/work-health.py`) reads job outcomes and flags a run that failed, held or stalled. A green unit test against a fake token is none of these.
+
+When all five hold, the session writes its handoff and closes, however long it is until the first real request. A session never stays open waiting for a real request; the first real run is watched by the hourly triage. READY replaced "Tested" (the act performed as the client on the real seat) on 2026-11-09 (CLAUDE.md, "Done means the client can do it"; doctrine Law 9).
 
 ## When it applies
 
@@ -41,11 +73,12 @@ Skipped for internal refactors, test-only changes, and documentation. Do not gro
 
 1. **The sentence** - the act a named person performs, and what they observe.
 2. **The terminal seam** - the last place the change must land for that sentence to be true.
-3. **The gate chain** - every gate between the finger and the effect, enumerated backwards from the seam.
-4. **The feasibility probe** - close-now yes or no per gate, before any code, escalating what cannot be closed.
-5. **Emit the contract** - the chain becomes the issue's layer-tagged acceptance criteria.
-6. **Hand off to planning** - plan against the contract, then `/critique` against the chain.
-7. **Close against the contract** - each runtime row needs a `crane_verify` observation, not an artifact.
+3. **What the client was told** - when the act serves a client, the promise, cited by path from the client's letter or the obligation register.
+4. **The gate chain** - every gate between the finger and the effect, enumerated backwards from the seam.
+5. **The feasibility probe** - close-now yes or no per gate, before any code, escalating what cannot be closed.
+6. **Emit the contract** - the chain becomes the issue's layer-tagged acceptance criteria.
+7. **Hand off to planning** - plan against the contract, then `/critique` against the chain.
+8. **Close at READY** - each runtime row needs an observation, not an artifact; the session closes when all five READY conditions hold.
 
 ## Step 1: The sentence
 
@@ -67,7 +100,22 @@ Name the **last place the change must land** for the sentence to be true.
 
 Not a merged PR. Not a green test. Not a row in a ledger. Whoever takes the work owns the entire distance to that seam.
 
-## Step 3: The gate chain
+## Step 3: What the client was told
+
+When the act serves a client, quote what the client was told **before** enumerating a single gate. A feature built for a client starts from the client's own words, not from the agent's reading of the ask (Captain, 2026-11-09).
+
+Two sources, both read under Law 2 (the dossier first, `operator/customers/<slug>/dossier.md` in `venturecrane/engagements`):
+
+- **The client's letter**, in `venturecrane/engagements` under `operator/customers/<slug>/`.
+- **The obligation register**: `.claude/bin/register list --client <slug>`. A promise made in a letter is recorded there with a verbatim quote (ADR 0088).
+
+**Quote it by citing, never by pasting.** Cite the file path and line, or the register row's key. Never paste the client's text into this repo, the contract issue, or a PR body: ss-console is public, and client material lives in `venturecrane/engagements` (Law 2, ADR 0081).
+
+Then hold the sentence from Step 1 against the promise. If they differ, the promise wins: rewrite the sentence, or surface the mismatch to the Captain in one line. A promise is not a question: do not ask whether to build what the client was already told they would get.
+
+A product feature that serves no specific client says so in one line and skips this step. Product work never names a client.
+
+## Step 4: The gate chain
 
 Enumerate every gate between the finger and the effect, **working backwards from the seam**.
 
@@ -98,11 +146,14 @@ Emit the chain as a table:
 | 5   | Secret deployed                               | runtime          | agent            | probe         |       |
 | 6   | Transport reachable                           | runtime          | agent            | probe         |       |
 | 7   | Running process adopts the change             | runtime          | agent            | probe         |       |
-| 8   | Act performed as the client, far end observed | runtime          | agent            | probe         |       |
+| 8   | Rehearsed at $0 on real saved inputs          | repo / workspace | agent            | yes           |       |
+| 9   | Seat reports the release that contains it     | runtime          | agent            | probe         |       |
+| 10  | Every gate to the job open, probed on the seat | runtime         | agent            | probe         |       |
+| 11  | Outcome watched by the hourly triage code     | runtime          | agent            | probe         |       |
 
 **Owner** is resolved per the ownership law: agents own execution, the Captain owns strategy, spend, and external commitments, the client owns their own posture (entitlements, autonomy tiers, risk acceptance). A gate whose owner is not the executing agent is not thereby out of scope. It is a gate you must surface, not silently skip.
 
-## Step 4: The feasibility probe
+## Step 5: The feasibility probe
 
 This is the load-bearing step, and the one an agent will want to skip because it feels like stalling before the real work.
 
@@ -114,7 +165,7 @@ Then apply the stop clause, pre-registered here so it does not have to be rememb
 
 Not "build my slice and note the rest as unbuilt." That sentence is what turns an honest agent into a producer of honest slices that never reach the client. An unclosable gate is an escalation, and it is due at the top of the work, not at the end.
 
-## Step 5: Emit the contract
+## Step 6: Emit the contract
 
 Write the gate chain into the tracking issue as acceptance criteria, one per gate, each tagged with its layer:
 
@@ -125,7 +176,10 @@ Write the gate chain into the tracking issue as acceptance criteria, one per gat
 - [ ] (runtime) Level write persists and survives re-projection
 - [ ] (runtime) Authority authored on the customer's seat
 - [ ] (runtime) Running Operator adopts the new level without a reprovision
-- [ ] (runtime) Level raised and lowered as the client on the real seat, next action observed honoring it
+- [ ] (repo) Level change rehearsed at $0 on saved inputs through the seat's code path, against an answer key
+- [ ] (runtime) Seat reports the release that contains the change
+- [ ] (runtime) Every gate between the client's request and the effect probed open on the seat
+- [ ] (runtime) The hourly work-health triage reads the outcome and flags a failed, held or stalled run
 ```
 
 The tags are load-bearing, not decoration. In ventures carrying the gate (ss-console today, via `.github/workflows/runtime-ac-proof.yml`), a PR that marks a `(runtime)` AC met without a `crane_verify` ID in the Evidence column is blocked. Elsewhere the tags still tell a reviewer which claims need an observation rather than a file:line.
@@ -134,15 +188,17 @@ That gate exists because the acceptance-criteria machinery otherwise certifies t
 
 Record the contract's sentence and terminal seam in the issue body above the ACs, so the next agent to pick it up inherits the definition rather than re-deriving one.
 
-## Step 6: Hand off to planning
+## Step 7: Hand off to planning
 
 State the contract, then write the plan against it, then run `/critique`. Critique carries one mandatory added dimension when a contract exists:
 
 > Does this plan close every row of the gate chain, or does it silently defer some? Name any row the plan does not reach.
 
-## Step 7: Close against the contract
+## Step 8: Close at READY
 
-At completion, each runtime row needs an observation, not an artifact. Run the act, capture the output, record it with `crane_verify`, and put the returned ID in the row's Proof cell. A row without one is not closed, and reporting it as closed is the failure this skill exists to prevent.
+At completion, each runtime row needs an observation, not an artifact. Probe the seat, capture the output, record it with `crane_verify`, and put the returned ID in the row's Proof cell. A row without one is not closed, and reporting it as closed is the failure this skill exists to prevent.
+
+The work is done when it is READY: all five conditions in "Three terms" hold, each with evidence. Then the session writes its handoff and closes. It does not stay open waiting for a real client request to arrive, and it does not ask for a paid proving run; the first real run is watched by the hourly triage code, not by a session.
 
 Handoffs and status reports lead with mission-level readiness: what the customer can now do, and what they still cannot. "End-to-end" is banned unless the end is customer-visible.
 

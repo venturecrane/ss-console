@@ -1,13 +1,34 @@
 ---
 name: critique
 description: Plan Critique & Auto-Revision
-version: 1.1.0
-scope: enterprise
+version: 2.0.0
+scope: venture:ss
 owner: captain
 status: stable
 ---
 
-# /critique - Plan Critique & Auto-Revision
+# /critique - Plan Critique & Auto-Revision (SMD Services)
+
+> **Forked from crane-console on 2026-11-09.** This is SMD's own copy and no
+> longer receives enterprise updates; improvements originate here.
+> The fork point is commit `ec197443`
+> (crane `.agents/skills/critique/SKILL.md`, the
+> last commit to touch it; unchanged at crane `origin/main` `55c766a6`);
+> everything after it is ours. It lives in `.claude/skills/` for the reason
+> `/sos` does, and the load order is the one recorded in
+> `.claude/skills/wired/SKILL.md`: this project skill wins over crane's synced
+> `.claude/commands/critique.md`. If `/critique` runs crane's copy instead,
+> follow the fallback ladder in `.claude/skills/sos/SKILL.md`.
+>
+> **Changes since the fork:**
+>
+> 1. **Every critic runs on Fable** (`model: "fable"` on each Agent call).
+>    Crane's copy spawned critics with no model, so they inherited the
+>    session's model, whatever it was. The venture's routing rule: Fable plans,
+>    designs and critiques; Opus builds; Sonnet or Haiku only search or re-run a
+>    named probe (VERDICT section 5, PREV-16, 2026-11-09). Measure critic use
+>    against Fable's weekly limit; each critic carries the full session
+>    baseline.
 
 > **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "critique")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
 
@@ -77,7 +98,7 @@ Select perspectives based on `AGENT_COUNT`. Always assign from the top of this l
 
 ### Step 3: Spawn Critic Agents
 
-Launch `AGENT_COUNT` agents **in a single message** using the Agent tool (`subagent_type: general-purpose`). In a harness without subagent support, run each perspective sequentially yourself and label each critique section.
+Launch `AGENT_COUNT` agents **in a single message** using the Agent tool (`subagent_type: general-purpose`, `model: "fable"`). Every critic gets `model: "fable"`, whatever model the session runs on; a critic spawned without it inherits the session's model, which is the defect this fork exists to fix. In a harness without subagent support, run each perspective sequentially yourself and label each critique section.
 
 **CRITICAL**: All Agent tool calls MUST be in a single message to run in true parallel.
 
@@ -194,6 +215,6 @@ Do NOT automatically start implementing. Wait for the user.
 - **No files written**: Critique and revision happen in conversation, not on disk. The plan isn't a file - it's the working approach.
 - **Context-dependent**: The quality of critique depends on how much context is in the conversation. A vague "I'll fix the bug" produces vague critique. A detailed technical plan produces detailed critique.
 - **Fast by default**: 1 agent, no confirmation step, auto-revise. The whole flow should complete in one shot.
-- **Agent type**: All critic agents use `subagent_type: general-purpose` via the Agent tool.
+- **Agent type and model**: All critic agents use `subagent_type: general-purpose` with `model: "fable"` via the Agent tool.
 - **Parallelism**: All agents launch in a single message for true parallel execution.
 - **No rounds**: Unlike `/prd-review` and `/design-brief`, critique is single-pass by design. If the user wants another round, they run `/critique` again - the revised plan is now the conversation context.
