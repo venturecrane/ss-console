@@ -1014,7 +1014,12 @@ mailbox, a person, a vault, never a behaviour), held there by
 `tests/twin-drift.test.ts`. It is authored `purpose: internal` with
 `fly_app: null` because a client has at most one release twin (ADR 0107), and
 `smd-staging` stays the twin until `ap-staging` is provisioned and green. Every
-step below is the Captain's act and names the probe that shows it held. Values
+step below is an agent's work, done end to end the way `smd-guide` was stood up
+on 2026-11-10, and names the probe that shows it held. The one act only the
+Captain can do is step 8's sign-in to SMD's Smokeball staging tenant (an agent
+never enters a password). Steps 3 to 7 write to Fly, D1 and the secret stores,
+which an agent session in auto mode may be refused; a refused step is surfaced
+to the Captain with the exact action, never worked around. Values
 never pass through a terminal or a transcript: each copy below reads one
 Infisical name into a file that `crane_secret_set` (source `file`) writes under
 the new name and deletes.
