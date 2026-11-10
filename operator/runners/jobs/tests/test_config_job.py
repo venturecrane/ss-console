@@ -44,7 +44,10 @@ def test_audit_is_never_batchable(tmp_path: Path) -> None:
         config_mod.load(str(p))
 
 
-@pytest.mark.parametrize("model", ["claude-opus-5-5", "claude-fable-5-1"])
+@pytest.mark.parametrize(
+    "model",
+    ["claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-fable-5-2", "claude-mythos-5-2"],
+)
 def test_audit_tier_refuses_a_model_that_rejects_forced_tool_use(model: str) -> None:
     """The audit forces its verdict tool; on these models that is an HTTP 400 on
     every claim, so the gate would fail every chronology."""
@@ -52,6 +55,13 @@ def test_audit_tier_refuses_a_model_that_rejects_forced_tool_use(model: str) -> 
     data["models"]["tiers"]["audit"] = model
     problems = config_mod.validate(data)
     assert any("models.tiers.audit" in p and "forced tool_choice" in p for p in problems)
+
+
+def test_fable_5_0_still_takes_a_forced_tool_so_the_audit_tier_accepts_it() -> None:
+    """The family match starts at 5.1: bare claude-fable-5 accepts a forced call."""
+    data = copy.deepcopy(FIRM_CONFIG)
+    data["models"]["tiers"]["audit"] = "claude-fable-5"
+    assert not [p for p in config_mod.validate(data) if "forced tool_choice" in p]
 
 
 def test_opus_5_5_is_accepted_on_the_tiers_that_do_not_force_a_tool() -> None:
