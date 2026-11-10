@@ -44,6 +44,7 @@ OUTPUT_MAX = {
     "claude-sonnet-5-5": 128_000,
     "claude-sonnet-5": 128_000,
     "claude-fable-5-1": 128_000,
+    "claude-fable-5-2": 128_000,
 }
 #: Documents per gap-audit batch. The 2026-10-06 file had 202 documents in 37
 #: folders, the largest folder 30; at this size it is seven or eight calls.

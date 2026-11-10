@@ -155,8 +155,12 @@ DEFAULT_AUDIT_WORKERS = 4
 MAX_AUDIT_WORKERS = 12
 DOS_CHECK_MODES = {"report", "hold"}
 # Models that return HTTP 400 on tool_choice {"type": "any"|"tool"} (Anthropic
-# migration notes for Claude Fable 5.1 and Claude Opus 5.5). Prefix-matched.
-NO_FORCED_TOOL_MODELS = ("claude-opus-5-5", "claude-fable-5-1", "claude-mythos-5-1")
+# migration notes: Claude Fable 5.1 and 5.2, the Mythos counterparts, Claude
+# Opus 5.5 and Claude Sonnet 5.5). Prefix-matched. Fable and Mythos match by
+# family from 5.1 on ("claude-fable-5-"), so a new point release is covered
+# without an edit; bare "claude-fable-5" (5.0) accepts a forced call and does
+# not match. The 5.1-only list missed Fable 5.2 (released 2026-11-10).
+NO_FORCED_TOOL_MODELS = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-", "claude-mythos-5-")
 PRE_INCIDENT_ITEMIZE_ALL = "itemize_all"
 PRE_INCIDENT_POLICIES = {"include", "summarize_only", PRE_INCIDENT_ITEMIZE_ALL}
 
