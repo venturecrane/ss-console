@@ -17,6 +17,12 @@
 #   operator/workspace_broker/seat_layout.py       the workspace broker
 #   operator/hermes-smd-overlay/shared/seat_layout.py  the overlay (gateway, appliers)
 #   operator/bin/lib/seat_layout.py                fleet tools on the laptop and in CI
+#   src/lib/operator/seat-layout.generated.ts      the console (the record-store fence)
+#
+# Shell reads a path as ${SMD_LAYOUT_<ID>} after sourcing the generated file
+# (each script sources it itself; operator/templates/tests/test_seat_layout_shell_names.py
+# holds that). A path may hold only [A-Za-z0-9/._-]: every output quotes it
+# verbatim, and the shell may expand it unquoted.
 #
 # THE SEAT PROVES IT. seat-checks.sh runs seat-layout-probe.py at boot and every
 # hour: each path with an `expect` holds on the live seat, every tree's generated
@@ -102,6 +108,35 @@ paths:
     path: '{jobs_bundle}/.venv/bin/python'
   lanes_run:
     path: /run/smd-lanes
+
+  # ---- PR B: jobs family additions (W1) ----
+  jobs_bin:
+    path: '{jobs_bundle}/.venv/bin/jobs'
+  jobs_pricing:
+    path: '{jobs_bundle}/anthropic_pricing.json'
+  # Each lane's queue default. The broker reads SMD_<LANE>_QUEUE_DIR first
+  # (entrypoint-lanes.sh sets it, empty when the lane is off); no `env` here,
+  # because the probe asserts env equality and these were not measured as such.
+  demand_queue:
+    path: '{jobs_run}/demand-queue'
+  drafting_queue:
+    path: '{jobs_run}/drafting-queue'
+  litigation_queue:
+    path: '{jobs_run}/litigation-queue'
+  negotiation_queue:
+    path: '{jobs_run}/negotiation-queue'
+  casefile_queue:
+    path: '{jobs_run}/casefile-queue'
+  records_queue:
+    path: '{jobs_run}/records-queue'
+  # The same records queue through the volume path (the run dir is a bind
+  # mount of jobs_data): the broker's default (workspace_broker/records_store.py).
+  records_queue_volume:
+    path: '{jobs_data}/records-queue'
+    volume: true
+  records_state:
+    path: '{jobs_data}/records-state'
+    volume: true
 
   # ---- root-owned config (the 2026-06-15 keystone) ----
   smd_config:
@@ -214,6 +249,12 @@ restated:
   - file: operator/templates/seat-layout-probe.py
     ids: [hermes_python3, jobs_python, broker_python, broker_root]
     why: the boot smoke sends this file over ssh, so it cannot import a tree's module
+  - file: operator/templates/Dockerfile
+    ids: [jobs_bundle]
+    why: an image RUN line that makes the bundle's mount target, in a layer built before the one that COPYs the generated file
+  - file: operator/contracts/runtime-control-probes.yaml
+    ids: [jobs_bin]
+    why: data, not code; the four gate probes' seat_command argv is read by bin/control-probes.py and run on the seat as written
 
 # Seat paths the sprawl census finds in five or more files that are deliberately
 # NOT declared, each with the reason. The generation test fails when a path in

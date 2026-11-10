@@ -43,6 +43,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from shared import seat_layout
 from skills_applier.manifest import (
     ManifestError,
     Pointer,
@@ -95,7 +96,7 @@ class BundleSpec:
 JOBS = BundleSpec(
     name="jobs",
     mounts=(
-        ("jobs", "/opt/jobs"),
+        ("jobs", seat_layout.JOBS_BUNDLE),
         ("connectors/smokeball", "/opt/connectors/smokeball"),
     ),
     required=(

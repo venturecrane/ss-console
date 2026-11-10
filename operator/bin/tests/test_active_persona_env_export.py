@@ -32,12 +32,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from bin.lib.seat_layout_gen import expand_shell
+
 _OP = Path(__file__).resolve().parents[2]
 _BOOTSTRAP = _OP / "templates" / "bootstrap.sh"
 
 
 def _text() -> str:
-    return _BOOTSTRAP.read_text(encoding="utf-8")
+    # The seat layout's paths expanded: the text as the seat runs it.
+    return expand_shell(_BOOTSTRAP.read_text(encoding="utf-8"))
 
 
 def test_bootstrap_exports_active_persona_env() -> None:

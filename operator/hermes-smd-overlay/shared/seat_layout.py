@@ -19,12 +19,15 @@ BROKER_ROOT = "/opt/workspace-broker"
 BROKER_SOCKET = "/run/smd-workspace-broker/broker.sock"
 CASEFILE_BROKER_FIRM_YAML = "/var/lib/smd-config/casefile-broker-firm.yaml"
 CASEFILE_INPUTS = "/var/lib/smd-config/casefile"
+CASEFILE_QUEUE = "/run/smd-jobs/casefile-queue"
 CASEWORK_LEDGER = "/opt/data/audit/casework-ledger.jsonl"
 CONNECTORS_ROOT = "/opt/connectors"
 CUSTOMER_YAML = "/var/lib/smd-config/customer.yaml"
 DATA = "/opt/data"
 DEMAND_INPUTS = "/var/lib/smd-config/demand"
+DEMAND_QUEUE = "/run/smd-jobs/demand-queue"
 DRAFTING_INPUTS = "/var/lib/smd-config/drafting"
+DRAFTING_QUEUE = "/run/smd-jobs/drafting-queue"
 ESCALATION_LEDGER = "/opt/data/audit/escalation-ledger.jsonl"
 HERMES_PLAYWRIGHT = "/opt/hermes/.playwright"
 HERMES_PYTHON = "/opt/hermes/.venv/bin/python"
@@ -33,8 +36,10 @@ HERMES_ROOT = "/opt/hermes"
 HERMES_SHA = "/opt/hermes/HERMES_SHA"
 HERMES_VENV = "/opt/hermes/.venv"
 INSTALLS = "/opt/data/installs"
+JOBS_BIN = "/opt/jobs/.venv/bin/jobs"
 JOBS_BUNDLE = "/opt/jobs"
 JOBS_DATA = "/opt/data/jobs"
+JOBS_PRICING = "/opt/jobs/anthropic_pricing.json"
 JOBS_PYTHON = "/opt/jobs/.venv/bin/python"
 JOBS_QUEUE = "/run/smd-jobs/queue"
 JOBS_RUN = "/run/smd-jobs"
@@ -42,11 +47,16 @@ LANES_RUN = "/run/smd-lanes"
 LEGACY_AUDIT_DB = "/opt/data/audit.db"
 LITIGATION_BROKER_FIRM_YAML = "/var/lib/smd-config/litigation-broker-firm.yaml"
 LITIGATION_INPUTS = "/var/lib/smd-config/litigation"
+LITIGATION_QUEUE = "/run/smd-jobs/litigation-queue"
 MARKETING_REGISTERS = "/var/lib/smd-config/marketing/marketing-firm.yaml"
 MEDCHRON_FIRM_YAML = "/var/lib/smd-config/medchron-firm.yaml"
+NEGOTIATION_QUEUE = "/run/smd-jobs/negotiation-queue"
 PROFILES = "/opt/data/profiles"
 RECORDS_BROKER_FIRM_YAML = "/var/lib/smd-config/records-broker-firm.yaml"
 RECORDS_INPUTS = "/var/lib/smd-config/records"
+RECORDS_QUEUE = "/run/smd-jobs/records-queue"
+RECORDS_QUEUE_VOLUME = "/opt/data/jobs/records-queue"
+RECORDS_STATE = "/opt/data/jobs/records-state"
 REQUESTS_DB = "/opt/data/requests.db"
 SELFTEST_RESULTS = "/run/smd-selftest/results.json"
 SKILLS = "/opt/data/skills"
@@ -68,12 +78,15 @@ PATHS: dict[str, str] = {
     "broker_socket": BROKER_SOCKET,
     "casefile_broker_firm_yaml": CASEFILE_BROKER_FIRM_YAML,
     "casefile_inputs": CASEFILE_INPUTS,
+    "casefile_queue": CASEFILE_QUEUE,
     "casework_ledger": CASEWORK_LEDGER,
     "connectors_root": CONNECTORS_ROOT,
     "customer_yaml": CUSTOMER_YAML,
     "data": DATA,
     "demand_inputs": DEMAND_INPUTS,
+    "demand_queue": DEMAND_QUEUE,
     "drafting_inputs": DRAFTING_INPUTS,
+    "drafting_queue": DRAFTING_QUEUE,
     "escalation_ledger": ESCALATION_LEDGER,
     "hermes_playwright": HERMES_PLAYWRIGHT,
     "hermes_python": HERMES_PYTHON,
@@ -82,8 +95,10 @@ PATHS: dict[str, str] = {
     "hermes_sha": HERMES_SHA,
     "hermes_venv": HERMES_VENV,
     "installs": INSTALLS,
+    "jobs_bin": JOBS_BIN,
     "jobs_bundle": JOBS_BUNDLE,
     "jobs_data": JOBS_DATA,
+    "jobs_pricing": JOBS_PRICING,
     "jobs_python": JOBS_PYTHON,
     "jobs_queue": JOBS_QUEUE,
     "jobs_run": JOBS_RUN,
@@ -91,11 +106,16 @@ PATHS: dict[str, str] = {
     "legacy_audit_db": LEGACY_AUDIT_DB,
     "litigation_broker_firm_yaml": LITIGATION_BROKER_FIRM_YAML,
     "litigation_inputs": LITIGATION_INPUTS,
+    "litigation_queue": LITIGATION_QUEUE,
     "marketing_registers": MARKETING_REGISTERS,
     "medchron_firm_yaml": MEDCHRON_FIRM_YAML,
+    "negotiation_queue": NEGOTIATION_QUEUE,
     "profiles": PROFILES,
     "records_broker_firm_yaml": RECORDS_BROKER_FIRM_YAML,
     "records_inputs": RECORDS_INPUTS,
+    "records_queue": RECORDS_QUEUE,
+    "records_queue_volume": RECORDS_QUEUE_VOLUME,
+    "records_state": RECORDS_STATE,
     "requests_db": REQUESTS_DB,
     "selftest_results": SELFTEST_RESULTS,
     "skills": SKILLS,

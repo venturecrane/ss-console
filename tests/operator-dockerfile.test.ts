@@ -24,9 +24,10 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { readSeatScript } from './_support/seat-layout'
 
 const DOCKERFILE = readFileSync(resolve('operator/templates/Dockerfile'), 'utf8')
-const BOOTSTRAP = readFileSync(resolve('operator/templates/bootstrap.sh'), 'utf8')
+const BOOTSTRAP = readSeatScript('operator/templates/bootstrap.sh')
 
 // Strip `#`-comment lines so NEGATIVE assertions (e.g. "no honcho.server")
 // match executable content only — the Honcho-deferral comments deliberately

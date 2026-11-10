@@ -42,6 +42,12 @@
 # is where seat-checks.sh lives, and the timing and uid knobs below.
 set -uo pipefail
 
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated beside
+# this file): the SMD_LAYOUT_* paths below. No layout, no self-test: one loud line.
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh" \
+  || { echo "selftest: no seat layout beside $0; nothing can be checked" >&2; exit 2; }
+
 SEAT_ROOT="${SMD_SELFTEST_ROOT:-}"
 case "${SEAT_ROOT}" in *[!A-Za-z0-9/._-]*) echo "selftest: unsafe SMD_SELFTEST_ROOT" >&2; exit 2 ;; esac
 CHECKS_DIR="${SMD_SELFTEST_CHECKS_DIR:-/app}"
@@ -152,7 +158,7 @@ check_lever() {
 ENABLED_SKILLS=""
 ENABLED_READ=0
 read_enabled_skills() {
-  ENABLED_SKILLS="$("${SEAT_ROOT}/opt/hermes/.venv/bin/python3" -I - "${SEAT_ROOT}/var/lib/smd-config/customer.yaml" <<'PY' 2>/dev/null
+  ENABLED_SKILLS="$("${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3}" -I - "${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML}" <<'PY' 2>/dev/null
 import sys, yaml
 doc = yaml.safe_load(open(sys.argv[1])) or {}
 for p in doc.get("personas") or []:
@@ -201,7 +207,7 @@ PY
 RUNNING_LANES=""
 RUNNING_READ=0
 read_running_lanes() {
-  RUNNING_LANES="$("${SEAT_ROOT}/opt/hermes/.venv/bin/python3" -I -m shared.capabilities lanes "${SEAT_ROOT}/var/lib/smd-config/customer.yaml" 2>/dev/null)" && RUNNING_READ=1
+  RUNNING_LANES="$("${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3}" -I -m shared.capabilities lanes "${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML}" 2>/dev/null)" && RUNNING_READ=1
 }
 lane_runs() {
   [ "${RUNNING_READ}" = 1 ] || return 0
@@ -224,7 +230,7 @@ write_results() { # <started_at> <finished_at>
   local tmp
   tmp="$(mktemp "${RUN_DIR}/.results.XXXXXX")" || return 1
   if SELFTEST_RECORDS="${RECORDS}" SELFTEST_PREVIOUS="${RESULTS}" SELFTEST_RUN_KIND="${RUN_KIND}" \
-     SELFTEST_STARTED="$1" SELFTEST_FINISHED="$2" SELFTEST_HERMES_FILE="${SEAT_ROOT}/opt/hermes/HERMES_SHA" \
+     SELFTEST_STARTED="$1" SELFTEST_FINISHED="$2" SELFTEST_HERMES_FILE="${SEAT_ROOT}${SMD_LAYOUT_HERMES_SHA}" \
      SELFTEST_VERSION="${SMD_OVERLAY_REF:-}" SELFTEST_IMAGE_REF="${FLY_IMAGE_REF:-}" \
      SELFTEST_EXPECTED_HERMES="${EXPECTED_HERMES_SHA}" "${PY}" -I -B - > "${tmp}" <<'PY'
 import json, os, re

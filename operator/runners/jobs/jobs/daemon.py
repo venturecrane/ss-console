@@ -48,11 +48,12 @@ from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
 from . import resume as resume_mod, retention
 from .proof import watch as proof_watch
+from . import seat_layout
 
 logger = logging.getLogger("jobs.daemon")
 
 RUN_DIR_ENV = "SMD_JOBS_RUN_DIR"
-DEFAULT_RUN_DIR = "/run/smd-jobs"
+DEFAULT_RUN_DIR = seat_layout.JOBS_RUN
 SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
 STICKY_DB_ENV = "SMD_STICKY_STOP_DB_PATH"
 DEFAULT_STICKY_DB = "/opt/data/smd/sticky_stop.db"
@@ -60,7 +61,7 @@ POLL_ENV = "SMD_JOBS_POLL_SECONDS"
 DEFAULT_MEMORY_MAX = 2560 * 1024 * 1024
 WIPE_HOURS_ENV = "SMD_JOBS_WIPE_HOURS"
 DEFAULT_WIPE_HOURS = 72
-RUNNER_BIN = "/opt/jobs/.venv/bin/jobs"
+RUNNER_BIN = seat_layout.JOBS_BIN
 GATE_URL_ENV = "SMD_JOBS_GATE_URL"
 DEFAULT_GATE_URL = "http://127.0.0.1:8643"
 WAKE_SECRET_ENV = "WEBHOOK_SECRET_MCP"

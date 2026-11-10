@@ -35,10 +35,11 @@ from typing import Any
 
 from . import seedcheck, vocab
 from .firm import LitigationFirm
+from .. import seat_layout
 
 STATE_ENV = "JOBS_LITIGATION_STATE_DIR"
 DATA_ENV = "JOBS_DATA_DIR"
-DEFAULT_DATA_DIR = "/opt/data/jobs"
+DEFAULT_DATA_DIR = seat_layout.JOBS_DATA
 EMAIL_EXTS = (".msg", ".eml")
 #: Per-matter fetch caps (``fetch_caps`` in the firm config overrides any).
 FETCH_CAPS = {"court": 120, "server": 15, "discovery": 30, "email": 25, "settlement": 10, "total": 180}

@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+import { readSeatScript } from './_support/seat-layout'
 
 const dockerfile = readFileSync(resolve('operator/templates/Dockerfile'), 'utf8')
-const entrypoint = readFileSync(resolve('operator/templates/entrypoint.sh'), 'utf8')
+const entrypoint = readSeatScript('operator/templates/entrypoint.sh')
 // The gateway's privilege drop lives in the supervisor the entrypoint sources.
 const supervisor = readFileSync(
   resolve('operator/runners/supervisor/entrypoint-supervisor.sh'),
   'utf8'
 )
-const bootstrap = readFileSync(resolve('operator/templates/bootstrap.sh'), 'utf8')
+const bootstrap = readSeatScript('operator/templates/bootstrap.sh')
 // The seat check list (both the laptop smoke and the in-image self-test run it).
-const bootSmoke = readFileSync(resolve('operator/templates/seat-checks.sh'), 'utf8')
+const bootSmoke = readSeatScript('operator/templates/seat-checks.sh')
 const workspaceSkill = readFileSync(resolve('operator/skills/workspace/SKILL.md'), 'utf8')
 const inboxTriageSkill = readFileSync(resolve('operator/skills/inbox-triage/SKILL.md'), 'utf8')
 const emailReplySkill = readFileSync(resolve('operator/skills/email-reply/SKILL.md'), 'utf8')

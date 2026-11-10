@@ -15,7 +15,6 @@ Run::
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import re
@@ -33,16 +32,58 @@ LAYOUT = gen.load(ROOT / gen.CONTRACT_REL)
 # The ADR 0103 pairing. A volume path lives on the Fly volume, so moving it needs
 # operator/fleet/volume-epoch bumped (the rollout then refuses a lower epoch); a
 # bundle mount is baked into the bundle's venvs, so moving it needs
-# BundleSpec.layout bumped. Change a path, bump the number, then update the pin.
+# BundleSpec.layout bumped. Each pin maps an id to the path it had at that
+# number. A NEW id is an addition, not a move: it passes and belongs in the pin.
+# A pinned id whose path changed, or that left the yaml, fails until the number
+# is bumped (then re-pin every id at the new number).
 PINNED = {
-    "volume": {"epoch": "2", "paths": "93ef6c85040787f2"},
-    "bundle_mount": {"layout": "2", "paths": "a73e2c5f59fafb65"},
+    "volume": {
+        "number": "2",
+        "paths": {
+            "attachment_spool": "/opt/data/attachment-spool",
+            "casework_ledger": "/opt/data/audit/casework-ledger.jsonl",
+            "data": "/opt/data",
+            "escalation_ledger": "/opt/data/audit/escalation-ledger.jsonl",
+            "installs": "/opt/data/installs",
+            "jobs_data": "/opt/data/jobs",
+            "profiles": "/opt/data/profiles",
+            "records_queue_volume": "/opt/data/jobs/records-queue",
+            "records_state": "/opt/data/jobs/records-state",
+            "requests_db": "/opt/data/requests.db",
+            "skills": "/opt/data/skills",
+            "smokeball_extract_cache": "/opt/data/smokeball-extract-cache",
+            "smokeball_refresh_token": "/opt/data/.smokeball-mcp/refresh_token",
+        },
+    },
+    "bundle_mount": {
+        "number": "2",
+        "paths": {"jobs_bundle": "/opt/jobs", "smokeball_bundle": "/opt/connectors/smokeball"},
+    },
 }
 
 
-def _fingerprint(flag: str) -> str:
-    paths = sorted(e.path for e in LAYOUT.entries.values() if getattr(e, flag))
-    return hashlib.sha256("\n".join(paths).encode()).hexdigest()[:16]
+def _moved(flag: str, number: str, layout: gen.Layout = LAYOUT) -> list[str]:
+    """Pinned ids of ``flag`` that moved or vanished while the number stood still."""
+    pin = PINNED[flag]
+    if number != pin["number"]:
+        return [f"the number is {number}, the pin says {pin['number']}: re-pin every {flag} id at it"]
+    now = {k: e.path for k, e in layout.entries.items() if getattr(e, flag)}
+    return [
+        f"{pid}: pinned {path}, now {now.get(pid, 'gone')}"
+        for pid, path in sorted(pin["paths"].items())
+        if now.get(pid) != path
+    ]
+
+
+def _unpinned(flag: str) -> list[str]:
+    return sorted(k for k, e in LAYOUT.entries.items() if getattr(e, flag) and k not in PINNED[flag]["paths"])
+
+
+def _bundle_layout() -> str:
+    manifest = (ROOT / "operator/hermes-smd-overlay/bundle_installer/manifest.py").read_text(encoding="utf-8")
+    found = re.search(r"^\s+layout: int = (\d+)$", manifest, re.MULTILINE)
+    assert found, "BundleSpec.layout not found in bundle_installer/manifest.py"
+    return found.group(1)
 
 
 def test_every_generated_output_is_in_sync() -> None:
@@ -56,7 +97,7 @@ def test_every_generated_output_is_in_sync() -> None:
 
 def test_check_mode_fails_on_a_stale_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # FALSIFIER for the test above: a copy of the tree with one output edited.
-    for rel in (gen.CONTRACT_REL, gen.SHELL_REL, gen.JSON_REL, *gen.PYTHON_RELS):
+    for rel in (gen.CONTRACT_REL, gen.SHELL_REL, gen.JSON_REL, gen.TS_REL, *gen.PYTHON_RELS):
         dst = tmp_path / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text((ROOT / rel).read_text(encoding="utf-8"), encoding="utf-8")
@@ -95,10 +136,13 @@ def test_the_shell_file_assigns_and_exports_nothing() -> None:
 
 @pytest.mark.parametrize("row", LAYOUT.restated, ids=lambda r: r["file"])
 def test_a_restated_file_spells_the_declared_path(row: dict) -> None:
+    # The whole path as one token (quoted in code, bare in a Dockerfile RUN line):
+    # /opt/jobs is not spelled by /opt/jobs/.venv/bin/python nor by /opt/jobsx.
     text = (ROOT / row["file"]).read_text(encoding="utf-8")
     for pid in row["ids"]:
         path = LAYOUT.entries[pid].path
-        assert re.search(rf"[\"']{re.escape(path)}[\"']", text), f"{row['file']} no longer spells {pid} = {path}"
+        token = rf"(?<![\w./-]){re.escape(path)}(?![\w./-])"
+        assert re.search(token, text), f"{row['file']} no longer spells {pid} = {path}"
 
 
 def test_every_seat_path_the_census_finds_is_declared_or_left_out() -> None:
@@ -111,16 +155,35 @@ def test_every_seat_path_the_census_finds_is_declared_or_left_out() -> None:
 
 def test_a_volume_path_moves_only_with_the_epoch() -> None:
     epoch = (ROOT / "operator/fleet/volume-epoch").read_text(encoding="utf-8").strip()
-    now = {"epoch": epoch, "paths": _fingerprint("volume")}
-    assert now == PINNED["volume"], f"volume paths or epoch changed together? pin {now} after bumping the epoch"
+    assert _moved("volume", epoch) == [], "a volume path moved without a bump of operator/fleet/volume-epoch"
+    assert _unpinned("volume") == [], "a new volume id: add it to PINNED['volume'] with its path"
 
 
 def test_a_bundle_mount_moves_only_with_the_bundle_layout() -> None:
-    manifest = (ROOT / "operator/hermes-smd-overlay/bundle_installer/manifest.py").read_text(encoding="utf-8")
-    found = re.search(r"^\s+layout: int = (\d+)$", manifest, re.MULTILINE)
-    assert found, "BundleSpec.layout not found in bundle_installer/manifest.py"
-    now = {"layout": found.group(1), "paths": _fingerprint("bundle_mount")}
-    assert now == PINNED["bundle_mount"], f"bundle mounts or layout changed? pin {now} after bumping BundleSpec.layout"
+    assert _moved("bundle_mount", _bundle_layout()) == [], "a bundle mount moved without a bump of BundleSpec.layout"
+    assert _unpinned("bundle_mount") == [], "a new bundle mount id: add it to PINNED['bundle_mount'] with its path"
+
+
+def test_the_pin_fails_on_a_moved_or_vanished_id_and_passes_an_addition(tmp_path: Path) -> None:
+    # FALSIFIER for the two tests above, on a copy of the yaml.
+    text = (ROOT / gen.CONTRACT_REL).read_text(encoding="utf-8")
+    cases = {
+        "moved": text.replace("path: '{data}/jobs'", "path: '{data}/jobs2'", 1),
+        "vanished": text.replace("  records_state:\n    path: '{jobs_data}/records-state'\n    volume: true\n", "", 1),
+        "added": text.replace(
+            "paths:\n", "paths:\n  extra_on_volume:\n    path: '{data}/extra'\n    volume: true\n", 1
+        ),
+    }
+    found = {}
+    for name, body in cases.items():
+        assert body != text, f"the {name} mutation did not apply"
+        mutated = tmp_path / f"{name}.yaml"
+        mutated.write_text(body, encoding="utf-8")
+        found[name] = _moved("volume", PINNED["volume"]["number"], gen.load(mutated))
+    assert found["moved"] and "jobs_data" in found["moved"][0]
+    assert found["vanished"] and "records_state" in found["vanished"][0]
+    assert found["added"] == []
+    assert _moved("volume", "3") != [], "a bumped number must make the pin stale"
 
 
 def test_a_bad_layout_is_refused(tmp_path: Path) -> None:

@@ -40,12 +40,18 @@
 
 set -euo pipefail
 
+# The seat's folder layout (operator/contracts/seat-layout.yaml, generated and
+# COPY'd beside this file, like _env-arrays.generated.sh below): the
+# SMD_LAYOUT_* paths this script names. A missing file fails here (set -e).
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_seat-layout.generated.sh"
+
 # Activate the Hermes venv for the whole entrypoint. The overlay CLI
 # (hermes-smd) and the hermes gateway are installed ONLY in /opt/hermes/.venv;
 # bootstrap.sh invokes `hermes-smd` and `hermes` as bare commands. Without the
 # venv on PATH, a bare `hermes`/`hermes-smd` would not resolve and the Machine
 # would crash at step 7 / step 11.
-export PATH="/opt/hermes/.venv/bin:${PATH}"
+export PATH="${SMD_LAYOUT_HERMES_VENV}/bin:${PATH}"
 
 log() {
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [bootstrap] $*"
@@ -84,7 +90,7 @@ CUSTOMER_SLUG="${CUSTOMER_SLUG:-}"
 [ -n "${CUSTOMER_SLUG}" ] || die "CUSTOMER_SLUG env var is unset"
 
 log "Starting bootstrap for customer: ${CUSTOMER_SLUG}"
-log "Hermes SHA: $(cat /opt/hermes/HERMES_SHA 2>/dev/null || echo unknown)"
+log "Hermes SHA: $(cat ${SMD_LAYOUT_HERMES_SHA} 2>/dev/null || echo unknown)"
 
 # ============================================================================
 # Step 1: validate required env vars
@@ -136,7 +142,7 @@ done
 # ceiling (the self-loopback hole). bootstrap only READS it to materialize the
 # per-profile config; the root applier (ADR 0044) propagates live edits with no
 # restart.
-CUSTOMER_YAML="${SMD_CUSTOMER_YAML_PATH:-/opt/data/customer.yaml}"
+CUSTOMER_YAML="${SMD_CUSTOMER_YAML_PATH:-${SMD_LAYOUT_VOLUME_CUSTOMER_YAML}}"
 [ -f "${CUSTOMER_YAML}" ] \
   || die "customer.yaml not present at ${CUSTOMER_YAML} (the root entrypoint fetches it before the hermes drop)"
 log "Using root-owned customer.yaml: ${CUSTOMER_YAML}"
@@ -152,7 +158,7 @@ log "Using root-owned customer.yaml: ${CUSTOMER_YAML}"
   || die "SMD_WORKSPACE_BROKER_SOCKET is unset; refusing ambient Workspace auth"
 [ -S "${SMD_WORKSPACE_BROKER_SOCKET}" ] \
   || die "Workspace broker socket missing: ${SMD_WORKSPACE_BROKER_SOCKET}"
-if ! /opt/hermes/.venv/bin/python3 - \
+if ! ${SMD_LAYOUT_HERMES_PYTHON3} - \
   "${SMD_WORKSPACE_BROKER_SOCKET}" "${CUSTOMER_YAML}" \
   "${SMD_AUDIT_BROKER_SOCKET:-}" "${SMD_D1_AUDIT_BINDING:-}" <<'PY'
 import json
@@ -203,7 +209,7 @@ log "Workspace broker ready; gateway environment is credential-free"
 # clobber a refreshed token on the persistent volume. The client_id/secret +
 # ENCRYPTION_KEY reach the subprocess via the materialized mcp_servers env block
 # (ENCRYPTION_KEY <- CLIO_ENCRYPTION_KEY remap), not from here.
-CLIO_ENABLED="$(/opt/hermes/.venv/bin/python3 - "${CUSTOMER_YAML}" <<'PY'
+CLIO_ENABLED="$(${SMD_LAYOUT_HERMES_PYTHON3} - "${CUSTOMER_YAML}" <<'PY'
 import sys
 import yaml
 
@@ -310,12 +316,12 @@ fi
 _skills_release=/var/lib/smd-skills/current
 _skills_from_release=0
 if [ -d "${_skills_release}" ] \
-   && /opt/hermes/.venv/bin/python3 -c "import skills_applier.sync" 2>/dev/null; then
+   && ${SMD_LAYOUT_HERMES_PYTHON3} -c "import skills_applier.sync" 2>/dev/null; then
   # The release keeps its skill dirs under skills/, beside its own retired.txt
   # (the manifest's retired names); sync refuses a symlinked --source, so the
   # pointer is resolved first.
   _skills_release_dir="$(readlink -f "${_skills_release}")"
-  if /opt/hermes/.venv/bin/python3 -m skills_applier.sync \
+  if ${SMD_LAYOUT_HERMES_PYTHON3} -m skills_applier.sync \
        --source "${_skills_release_dir}/skills" \
        --dest "${HERMES_HOME}/skills" \
        --retired-file /app/retired-skills.txt \
@@ -433,7 +439,7 @@ fi
 # boot-smoke-test.sh step 6e asserts the absence on the seat.
 # omitted-skill-prune:begin (tests/operator-skill-deploy.test.ts runs this block)
 _omit_app_skills=/app/skills
-_omit_py=/opt/hermes/.venv/bin/python3
+_omit_py=${SMD_LAYOUT_HERMES_PYTHON3}
 _enabled_read=0
 _enabled_names="$("${_omit_py}" - "${CUSTOMER_YAML}" <<'OMITTED_SKILLS_PY' 2>/dev/null
 import sys
@@ -490,7 +496,7 @@ fi # the image-catalog prunes, skipped when the release sync ran
 # UTC-computed first fire: the gateway then fired it at the UTC-interpreted
 # time AND at the correct seat-local time after advance_next_run recomputed —
 # the 2026-07-04 escalator double-fire (midnight PT + 7:00 AM PT).
-SEAT_TIMEZONE="$(/opt/hermes/.venv/bin/python3 - "${CUSTOMER_YAML}" <<'PY'
+SEAT_TIMEZONE="$(${SMD_LAYOUT_HERMES_PYTHON3} - "${CUSTOMER_YAML}" <<'PY'
 import sys
 import yaml
 
@@ -512,7 +518,7 @@ fi
 # in either partner's chat with a "No home channel is set ... type /sethome"
 # notice (seen by Scott on captain-mark, 2026-10-27). Every couples routine
 # names its own delivery chat, so nothing private is routed by this.
-SHARED_TELEGRAM_CHAT="$(/opt/hermes/.venv/bin/python3 - "${CUSTOMER_YAML}" <<'PY'
+SHARED_TELEGRAM_CHAT="$(${SMD_LAYOUT_HERMES_PYTHON3} - "${CUSTOMER_YAML}" <<'PY'
 import sys
 import yaml
 
@@ -547,7 +553,7 @@ log "Profile config(s) generated under ${HERMES_HOME}/profiles/"
 # authored customer Workspace identity and connector path to answer identity
 # questions correctly over Telegram.
 log "Writing customer-owned operator identity facts into SOUL.md..."
-/opt/hermes/.venv/bin/python3 /app/ensure-operator-identity.py "${CUSTOMER_YAML}" "${HERMES_HOME}" \
+${SMD_LAYOUT_HERMES_PYTHON3} /app/ensure-operator-identity.py "${CUSTOMER_YAML}" "${HERMES_HOME}" \
   || die "Failed to write operator identity facts into SOUL.md"
 log "Operator identity facts written"
 
@@ -570,7 +576,7 @@ log "Operator identity facts written"
 # translation; this entrypoint guard is the belt that holds even if the overlay
 # has not yet shipped the same flag. Idempotent.
 log "Disabling Hermes curator in profile configs (ADR 0017)..."
-/opt/hermes/.venv/bin/python3 /app/ensure-curator-disabled.py "${HERMES_HOME}" \
+${SMD_LAYOUT_HERMES_PYTHON3} /app/ensure-curator-disabled.py "${HERMES_HOME}" \
   || die "Failed to disable curator in profile configs (ADR 0017)"
 log "Curator disabled in profile config(s)"
 
@@ -580,7 +586,7 @@ log "Curator disabled in profile config(s)"
 # profile skill tree and prompt snapshot, before the gateway can expose a
 # disabled connector path to the model.
 log "Removing customer-disabled bundled skills from profile catalogs..."
-/opt/hermes/.venv/bin/python3 /app/ensure-disabled-skills.py "${CUSTOMER_YAML}" "${HERMES_HOME}" \
+${SMD_LAYOUT_HERMES_PYTHON3} /app/ensure-disabled-skills.py "${CUSTOMER_YAML}" "${HERMES_HOME}" \
   || die "Failed to enforce persona skills_disabled entries"
 log "Disabled skill guard passed"
 
@@ -598,7 +604,7 @@ log "Disabled skill guard passed"
 # or a profile config's telegram.allow_from (authored via customer.yaml). No-op
 # when TELEGRAM_BOT_TOKEN is unset.
 log "Verifying Telegram allowlist (fail-closed, ADR 0033)..."
-/opt/hermes/.venv/bin/python3 /app/ensure-telegram-allowlist.py "${HERMES_HOME}" \
+${SMD_LAYOUT_HERMES_PYTHON3} /app/ensure-telegram-allowlist.py "${HERMES_HOME}" \
   || die "Telegram allowlist guard failed (ADR 0033): refusing to launch an unrestricted bot"
 log "Telegram allowlist guard passed"
 
@@ -668,7 +674,7 @@ fi
 # persona). Phase 1 customers run a single active persona, so one gateway. The
 # multi-active-persona case (one gateway per persona) is an ADR 0011 Phase-2
 # concern; until then we launch the single active persona's gateway.
-ACTIVE_PROFILE="$(/opt/hermes/.venv/bin/python3 - "${CUSTOMER_YAML}" <<'PY'
+ACTIVE_PROFILE="$(${SMD_LAYOUT_HERMES_PYTHON3} - "${CUSTOMER_YAML}" <<'PY'
 import sys
 import yaml
 
@@ -765,7 +771,7 @@ replace_dir_tolerant "${OVERLAY_PACK}" "${OVERLAY_PLUGIN_DIR}"
 # a seat needs (plugins.enabled, the allow_tool_override: false grant) plus
 # security.allow_lazy_installs: false, idempotently, and re-reads the file; a
 # failure is a boot failure, not a `|| true`.
-/opt/hermes/.venv/bin/python3 -m bootstrap.plugin_selection "${HERMES_HOME}/config.yaml" \
+${SMD_LAYOUT_HERMES_PYTHON3} -m bootstrap.plugin_selection "${HERMES_HOME}/config.yaml" \
   || die "failed to select hermes-smd-overlay in the root Hermes home config — refusing to launch an ungoverned gateway"
 [ -f "${OVERLAY_PLUGIN_DIR}/__init__.py" ] \
   || die "overlay fan-out __init__.py missing after refresh — refusing to launch an ungoverned gateway"
@@ -783,7 +789,7 @@ replace_dir_tolerant "${OVERLAY_PACK}" "${PROFILE_OVERLAY_PLUGIN_DIR}"
   || die "profile overlay fan-out missing (${PROFILE_OVERLAY_PLUGIN_DIR}) — refusing to launch an ungoverned gateway"
 # translate already wrote the selection into every persona config; this re-reads
 # the active one and fails the boot unless it holds (no `plugins enable`, above).
-/opt/hermes/.venv/bin/python3 -m bootstrap.plugin_selection "${PROFILE_HERMES_HOME}/config.yaml" \
+${SMD_LAYOUT_HERMES_PYTHON3} -m bootstrap.plugin_selection "${PROFILE_HERMES_HOME}/config.yaml" \
   || die "failed to select hermes-smd-overlay in active profile ${ACTIVE_PROFILE}"
 log "Overlay materialized + selected in active profile"
 
@@ -794,7 +800,7 @@ log "Overlay materialized + selected in active profile"
 # already equal and writes nothing; it stays as the guard that a wider surface
 # on an untrusted inbound turn never ships (shared/webhook_read_surface.py,
 # ss-console#2145), whatever touched the file.
-/opt/hermes/.venv/bin/python3 -m bootstrap.webhook_toolsets "${CUSTOMER_YAML}" "${PROFILE_HERMES_HOME}/config.yaml" \
+${SMD_LAYOUT_HERMES_PYTHON3} -m bootstrap.webhook_toolsets "${CUSTOMER_YAML}" "${PROFILE_HERMES_HOME}/config.yaml" \
   || die "platform_toolsets.webhook in ${ACTIVE_PROFILE} does not equal the authored list — refusing to launch"
 log "Webhook tool surface equals the authored list"
 
@@ -853,7 +859,7 @@ fi
 # prompt injection, and ceiling-escalation attempts; re-run every boot so a
 # Hermes SHA bump can't regress the floor (OpenClaw mitigation).
 log "Running safety substrate invariant checks (Phase A.5 gate)..."
-if ! PYTHONPATH=/app /opt/hermes/.venv/bin/python3 /app/safety_substrate/run_invariants.py \
+if ! PYTHONPATH=/app ${SMD_LAYOUT_HERMES_PYTHON3} /app/safety_substrate/run_invariants.py \
        --customer "${CUSTOMER_SLUG}" \
        --fixtures /app/safety_substrate/tests \
        --strict ; then
@@ -871,7 +877,7 @@ log "Safety substrate invariants PASSED"
 # a baked connector's tools — fails the boot rather than shipping a governance
 # disagreement.
 log "Running connector classification probe (ADR 0053)..."
-if ! /opt/hermes/.venv/bin/python3 /app/connector-classification-probe.py /app/connectors; then
+if ! ${SMD_LAYOUT_HERMES_PYTHON3} /app/connector-classification-probe.py /app/connectors; then
   die "Connector classification probe FAILED — a baked author-built connector's \
 manifest disagrees with the overlay action-class map (see stderr above). Agent \
 will not start."
@@ -909,7 +915,7 @@ unset R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY
 # reconcile hiccup never blocks the gateway from coming up. Runs after the R2 strip
 # (it needs only customer.yaml + the vendor secrets, never the account-wide key).
 log "Reconciling egress webhook subscriptions (boot backstop)..."
-/opt/hermes/.venv/bin/python3 /app/webhook_reconcile.py "${CUSTOMER_YAML}" --trigger boot \
+${SMD_LAYOUT_HERMES_PYTHON3} /app/webhook_reconcile.py "${CUSTOMER_YAML}" --trigger boot \
   || log "WARN: egress webhook reconcile non-fatal failure (retries at connect / next boot)"
 
 # Front-door gate (overlay `hermes-smd-webhook-gate`). It binds the public port
@@ -980,9 +986,9 @@ unset OPERATOR_RUNTIME_READ_KEY MACHINE_HEARTBEAT_KEY HEALTHCHECKS_PING_URL
 # overlay. Remove exactly that state, logging each path, then assert none is
 # left: a gateway that would swap environments is not one we launch.
 # seat-checks.sh hermes-pm-state-clean asserts the same after boot.
-/opt/hermes/.venv/bin/python3 -m bootstrap.pm_state purge "${HERMES_HOME}" \
+${SMD_LAYOUT_HERMES_PYTHON3} -m bootstrap.pm_state purge "${HERMES_HOME}" \
   || die "failed to remove a recorded Hermes dependency environment under ${HERMES_HOME}"
-/opt/hermes/.venv/bin/python3 -m bootstrap.pm_state check "${HERMES_HOME}" \
+${SMD_LAYOUT_HERMES_PYTHON3} -m bootstrap.pm_state check "${HERMES_HOME}" \
   || die "a Hermes dependency environment is still recorded under ${HERMES_HOME} — refusing to launch a gateway that would run off the image venv"
 
 # ---------- The first open of each state.db happens here, not in the gateway (#3564) ----------
@@ -999,7 +1005,7 @@ unset OPERATOR_RUNTIME_READ_KEY MACHINE_HEARTBEAT_KEY HEALTHCHECKS_PING_URL
 # skipped: Hermes creates it at the current schema, where there is no race.
 for _state_db in "${HERMES_HOME}"/profiles/*/state.db "${HERMES_HOME}/state.db"; do
   [ -f "${_state_db}" ] || continue
-  HERMES_HOME="$(dirname "${_state_db}")" /opt/hermes/.venv/bin/python3 -I -m bootstrap.state_db_open "${_state_db}" \
+  HERMES_HOME="$(dirname "${_state_db}")" ${SMD_LAYOUT_HERMES_PYTHON3} -I -m bootstrap.state_db_open "${_state_db}" \
     || die "Hermes could not open ${_state_db} at the image's schema — refusing to launch a gateway whose job worker would fail on it"
 done
 unset _state_db
@@ -1085,4 +1091,4 @@ unset _SKILLS_CONVERGE_MARK
 
 log "Launching Hermes gateway for profile '${ACTIVE_PROFILE}' (overlay plugins selected)..."
 
-exec /opt/hermes/.venv/bin/hermes -p "${ACTIVE_PROFILE}" gateway run
+exec ${SMD_LAYOUT_HERMES_VENV}/bin/hermes -p "${ACTIVE_PROFILE}" gateway run

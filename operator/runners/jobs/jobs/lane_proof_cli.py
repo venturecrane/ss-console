@@ -34,9 +34,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import lane_proof, proof_run
+from . import lane_proof, proof_run, seat_layout
 
-DEFAULT_RUN_DIR = "/run/smd-jobs"
+DEFAULT_RUN_DIR = seat_layout.JOBS_RUN
 #: Each daemon lane's queue under the run dir (the entrypoints' exports).
 QUEUES = {
     "medchron": "queue",

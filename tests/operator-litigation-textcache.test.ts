@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { readSeatScript } from './_support/seat-layout'
 
 /**
  * The litigation text cache can be written on a real seat (2026-10-24 review
@@ -13,7 +14,7 @@ import { resolve } from 'node:path'
  * that env var to the child, and the boot smoke checks the dir's owner/mode.
  */
 const entry = readFileSync(resolve('operator/templates/entrypoint-litigation.sh'), 'utf8')
-const checks = readFileSync(resolve('operator/templates/seat-checks.sh'), 'utf8')
+const checks = readSeatScript('operator/templates/seat-checks.sh')
 const lane = readFileSync(resolve('operator/runners/jobs/jobs/litigation_lane.py'), 'utf8')
 const cache = readFileSync(resolve('operator/runners/jobs/jobs/litigation/textcache.py'), 'utf8')
 

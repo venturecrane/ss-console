@@ -57,6 +57,7 @@ from .firm_inputs import pin_env
 from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon
 from .drafting_lane import DraftingLane
 from .proof import holds as proof_holds, watch as proof_watch
+from . import seat_layout
 
 logger = logging.getLogger("jobs.records")
 
@@ -213,7 +214,7 @@ def _gateway_ids(name: str = GATEWAY_USER) -> tuple[int, int]:
 
 @dataclass
 class RecordsLane(DraftingLane):
-    queue_dir: Path = field(default_factory=lambda: Path("/run/smd-jobs/records-queue"))
+    queue_dir: Path = field(default_factory=lambda: Path(seat_layout.RECORDS_QUEUE))
     inputs_dir: str | None = None
     state_dir: str | None = None
     index_dir: str | None = None

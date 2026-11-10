@@ -2,7 +2,8 @@
 
 The yaml is the one place a seat path is declared. This module resolves it
 (``{parent}/child`` derivations, cycle and shape checks) and renders each
-committed output: a shell file, a JSON file for the seat probe, and one Python
+committed output: a shell file, a JSON file for the seat probe, a TypeScript
+module for the console (src/), and one Python
 module per install tree that cannot import another tree's code (the jobs
 bundle, the workspace broker, the overlay, the laptop fleet tools). The trees
 are separate on a seat and the jobs bundle is built at a different commit from
@@ -27,6 +28,7 @@ CONTRACT_REL = "operator/contracts/seat-layout.yaml"
 
 SHELL_REL = "operator/templates/_seat-layout.generated.sh"
 JSON_REL = "operator/templates/seat-layout.generated.json"
+TS_REL = "src/lib/operator/seat-layout.generated.ts"
 PYTHON_RELS = (
     "operator/runners/jobs/jobs/seat_layout.py",
     "operator/workspace_broker/seat_layout.py",
@@ -37,6 +39,9 @@ PYTHON_RELS = (
 _ID = re.compile(r"\A[a-z][a-z0-9_]*\Z")
 _ENV = re.compile(r"\A[A-Z][A-Z0-9_]*\Z")
 _REF = re.compile(r"\{([a-z][a-z0-9_]*)\}")
+# Every output quotes a path verbatim (shell single quotes, Python and TS string
+# literals), so a path is limited to characters none of them needs to escape.
+_PATH_CHARS = re.compile(r"\A[A-Za-z0-9/._-]+\Z")
 _FIELDS = {"path", "env", "expect", "kind", "when", "volume", "bundle_mount"}
 _EXPECT = {"present", "absent", "lazy"}
 _KIND = {"dir", "file"}
@@ -77,6 +82,8 @@ def _resolve(raw: dict[str, dict], key: str, seen: tuple[str, ...]) -> str:
     if not isinstance(path, str) or not path:
         raise ValueError(f"seat layout: {key} has no path")
     resolved = _REF.sub(lambda m: _resolve(raw, m.group(1), (*seen, key)), path)
+    if not _PATH_CHARS.match(resolved):
+        raise ValueError(f"seat layout: {key} resolves to {resolved!r}, which holds a character no output can quote")
     if not resolved.startswith("/") or "//" in resolved or resolved.endswith("/"):
         raise ValueError(f"seat layout: {key} resolves to {resolved!r}, not a clean absolute path")
     return resolved
@@ -191,10 +198,43 @@ def render_python(layout: Layout) -> str:
     return "\n".join(lines)
 
 
+def render_ts(layout: Layout) -> str:
+    """The console's copy (src/), prettier-stable: one exported const."""
+    body = "".join(f"  {e.id}: '{e.path}',\n" for e in layout.entries.values())
+    return (
+        f"{_header('//')}\n"
+        "/** Seat paths, generated from operator/contracts/seat-layout.yaml. */\n"
+        f"export const SEAT_LAYOUT = {{\n{body}}} as const\n"
+    )
+
+
+_SHELL_REF = re.compile(r"\$\{SMD_LAYOUT_([A-Z0-9_]+)\}")
+
+
+def expand_shell(text: str, root: Path | None = None) -> str:
+    """A shell script's text as the seat runs it: each ``${SMD_LAYOUT_<ID>}``
+    replaced by the value the generated shell file assigns. For tests that
+    assert on (or extract and run) a boot script's text. An unassigned id
+    raises: under ``set -u`` it would kill the boot."""
+    shell = ((root or repo_root()) / SHELL_REL).read_text(encoding="utf-8")
+    values = dict(re.findall(r"^SMD_LAYOUT_([A-Z0-9_]+)='([^']*)'$", shell, re.M))
+
+    def value(m: re.Match[str]) -> str:
+        if m.group(1) not in values:
+            raise KeyError(f"SMD_LAYOUT_{m.group(1)} is not assigned in {SHELL_REL}")
+        return values[m.group(1)]
+
+    return _SHELL_REF.sub(value, text)
+
+
 def outputs(root: Path) -> dict[Path, str]:
     """Every generated file and the text it must hold."""
     layout = load(root / CONTRACT_REL)
     py = render_python(layout)
-    out = {root / SHELL_REL: render_shell(layout), root / JSON_REL: render_json(layout)}
+    out = {
+        root / SHELL_REL: render_shell(layout),
+        root / JSON_REL: render_json(layout),
+        root / TS_REL: render_ts(layout),
+    }
     out.update({root / rel: py for rel in PYTHON_RELS})
     return out

@@ -29,9 +29,10 @@ from .records_ledger import (
     resolve,
     validate_envelope,
 )
+from . import seat_layout
 
 QUEUE_DIR_ENV = "SMD_RECORDS_QUEUE_DIR"
-DEFAULT_QUEUE_DIR = "/opt/data/jobs/records-queue"
+DEFAULT_QUEUE_DIR = seat_layout.RECORDS_QUEUE_VOLUME
 #: The open SMD review cards: a job whose reply row waits in the review dir.
 #: The overlay's ``request_cards`` reads the same statement (it cannot import
 #: this module); a card closes when the row leaves ``review``.
