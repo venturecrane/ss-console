@@ -568,6 +568,15 @@ mechanisms:
     success_criterion: 'At most 1 ss-console session between 2026-10-25 and 2026-11-24 in which the Captain typed /skunkworks, against a baseline of 4 sessions between 2026-09-24 and 2026-10-23 (2026-10-01, 10-07, 10-09 x2). Measured as the count of transcript files matching the typed-command tag: grep -l "<command-name>/skunkworks</command-name>" ~/.claude/projects/-Users-scottdurgan-dev-ss-console*/*.jsonl, bucketed by file mtime. Model-invoked uses ("skill":"skunkworks" tool calls) do not count; crane skill telemetry is not venture-scoped and cannot answer this. The review date sits inside the 30-day transcript cleanup on purpose: later, the evidence is gone.'
     review: 2026-11-24
     on_failure: 'The suffix alone does not move behavior. Redesign rather than repeat: promote the stance to a numbered law with a primer_line, or find the drift point (long sessions, post-/compact) and put the reminder there. If the Captain still types /skunkworks mid-session as a deliberate re-anchor rather than a correction, record that and judge on corrections instead.'
+  - id: runtime-ac-touch-rule
+    file: scripts/runtime-ac-proof.mjs
+    hypothesis: 'Classifying a PR by its changed paths (scripts/lib/touch-map.mjs: send-path, client-lane, seat, none) lets the merge gate see a client-surface PR that writes no (runtime) row, which a body-only gate cannot. Reporting that on every PR, and blocking only a bare n/a on such a PR, raises the share of client-surface PRs that name the act a client performs without teaching agents to type boilerplate deferrals.'
+    success_criterion: 'Between 2026-11-10 and 2026-12-10: the share of merged client-surface PRs carrying at least one (runtime) row rises from the replay baseline (19%: 26 of 138 in 2026-11-02..11-09); the bare-n/a block fires on fewer than 1 in 20 client-surface PRs, and every fire is a real bare n/a when read by hand.'
+    review: 2026-12-10
+    on_failure: 'If the share does not rise, the warning is being skimmed: rely on /eos check J, which reads the same classifications at session close, and delete the warning rather than make it block. If the bare-n/a block misfires (a reason the parser missed), widen naReason or demote it to a warning.'
+    replay: "1,120 PRs merged 2026-09-01..11-09, fetched in five half-month windows (each under the 1000-result cap): 69.7% client-surface (send-path 85, client-lane 509, seat 187, none 339). Last 50 merged: 27 client-surface, 12 with no runtime row (warning), 0 bare n/a (would block). Derived fixture, paths and booleans only: tests/fixtures/touch-map/replay.json. The no-runtime-row half stays a warning because at 81% of last week's client-surface PRs a block would produce boilerplate, not proof."
+    false_alarm_owner: 'The lead of the session that owns the merge gate (wave 2 PR 1 lead); a misclassified path is fixed in touch-map.mjs with a replay fixture row in the same PR.'
+    escape: 'A bare n/a is fixed by writing `n/a: <why>` in the row and editing the PR body (the check re-runs on `edited`). No label or bypass exists; a wrong classification is fixed in scripts/lib/touch-map.mjs.'
 ```
 
 ## Closure loop

@@ -41,6 +41,11 @@ not the same claim. If the gate is not actually closed, mark the AC
 "not yet" are not accepted. `.github/workflows/runtime-ac-proof.yml` blocks the
 PR otherwise, reading any table with a Status column under any heading. See
 `docs/doctrine/wired-contract.md` and Law 9.
+
+CLIENT SURFACE. When the diff touches a client lane, a seat or the send path
+(`scripts/lib/touch-map.mjs`), add at least one `(runtime)` row naming the act
+a client performs; the check warns when there is none. An `n/a` on such a PR
+says why: `n/a: <why it does not apply>`. A bare `n/a` there fails the check.
 -->
 
 | AC (verbatim from issue) | Status               | Evidence                         |

@@ -14,6 +14,8 @@ import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import {
   checkRuntimeAcProof,
+  checkTouchRule,
+  naReason,
   findUnprovenRuntimeAcs,
   formatViolations,
   LOOKUP_BATCH,
@@ -474,5 +476,82 @@ describe('runtime AC proof: the 20 most recent merged PRs with a runtime row', (
       expect(result.ledgerError, `#${n}`).toBeNull()
     }
     expect(ids.size).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * The touch rule (wave 2 PR 1): the diff side of the gate. A client-surface PR
+ * with no runtime row is reported only; a bare n/a on one blocks.
+ */
+describe('runtime AC proof: the touch rule reads the changed paths', () => {
+  const LANE = ['operator/runners/medchron/medchron/records/run.py']
+  const DOCS = ['docs/handbook/x.md', 'tests/foo.test.ts']
+
+  it('reports, and does not block, a client-surface PR with no runtime row', () => {
+    const r = checkTouchRule(pr('| repo thing (repo) | met | src/x.ts:1 |'), LANE)
+    expect(r.clientSurface).toBe(true)
+    expect(r.cls).toBe('client-lane')
+    expect(r.hasRuntimeRow).toBe(false)
+    expect(r.warnings).toHaveLength(1)
+    expect(r.warnings[0]).toMatch(/client-lane: operator\/runners/)
+    expect(r.blocking).toEqual([])
+  })
+
+  it('blocks a bare n/a runtime row on a client-surface PR', () => {
+    for (const status of ['n/a', 'N/A', '**n/a**', 'not applicable']) {
+      const r = checkTouchRule(pr(`| (runtime) Seat sends it | ${status} | |`), LANE)
+      expect(r.blocking, status).toHaveLength(1)
+      expect(r.blocking[0]).toMatch(/n\/a with no reason/)
+    }
+  })
+
+  it('a bare n/a with only a placeholder in Evidence is still bare', () => {
+    const r = checkTouchRule(pr('| (runtime) Seat sends it | n/a | - |'), LANE)
+    expect(r.blocking).toHaveLength(1)
+  })
+
+  it('passes an n/a that says why, in the status or the Evidence cell', () => {
+    for (const row of [
+      '| (runtime) Seat sends it | n/a: no seat runs this lane yet | |',
+      '| (runtime) Seat sends it | n/a | the lane is not enabled on any seat |',
+    ]) {
+      const r = checkTouchRule(pr(row), LANE)
+      expect(r.blocking, row).toEqual([])
+      expect(r.warnings, row).toEqual([])
+    }
+  })
+
+  it('leaves a bare n/a alone on a PR that touches no client surface', () => {
+    const r = checkTouchRule(pr('| (runtime) Seat sends it | n/a | |'), DOCS)
+    expect(r.clientSurface).toBe(false)
+    expect(r.blocking).toEqual([])
+    expect(r.warnings).toEqual([])
+  })
+
+  it('says nothing about a non-client PR with no runtime row', () => {
+    const r = checkTouchRule('Just a docs change.', DOCS)
+    expect(r).toMatchObject({ cls: 'none', warnings: [], blocking: [] })
+  })
+
+  it('naReason ignores the AC text when the table has no Evidence column', () => {
+    expect(
+      naReason({ status: 'n/a', evidence: 'long AC text here', evidenceColumn: false })
+    ).toBeNull()
+    expect(naReason({ status: 'n/a', evidence: '', evidenceColumn: true })).toBeNull()
+    expect(
+      naReason({ status: 'n/a: repo-only', evidence: '', evidenceColumn: true })
+    ).not.toBeNull()
+  })
+
+  it('the workflow lists the PR files, warns on the report half, and fails only on blocking', () => {
+    const workflow = readFileSync(
+      resolve(__dirname, '../.github/workflows/runtime-ac-proof.yml'),
+      'utf8'
+    )
+    expect(workflow).toContain('github.paginate(github.rest.pulls.listFiles')
+    expect(workflow).toContain('checkTouchRule(body, paths)')
+    expect(workflow).toMatch(/for \(const w of touch\.warnings\) core\.warning\(w\)/)
+    expect(workflow).toContain('failures.push(...touch.blocking)')
+    expect(workflow).not.toMatch(/failures\.push\(\.\.\.touch\.warnings\)/)
   })
 })
