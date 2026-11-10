@@ -307,6 +307,8 @@ The governing constraint: the Captain cannot see any artifact a run produces, so
 
 **`/code-review` is SMD's own too, forked 2026-10-17** (`.claude/skills/code-review/SKILL.md`, same test). The inherited skill reviewed only the repo it ran in, so the overlay (the Operator's runtime on every seat) had never been reviewed, and it ended in a list of recommendations. The fork reviews ss-console and the overlay, fixes every finding in the same session, and counts a fix done only when the seats run it.
 
+**`/wired`, `/critique` and `/auto-build` are SMD's own too, forked 2026-11-09** (`.claude/skills/{wired,critique,auto-build}/SKILL.md`, same test). `/wired` defines done as READY (above), not the act performed on the real seat, and starts a client feature from what the client was told, cited by path from the letter or `.claude/bin/register list --client <slug>`. `/critique` spawns every critic on Fable. `/auto-build` names a model per role (Fable plans, designs and critiques; Opus builds; Sonnet or Haiku search and re-run named probes), calls the forked `/wired` and `/critique`, and finishes at READY rather than at a green PR. Load order was settled empirically and is recorded in the `/wired` fork header: the project skill wins over crane's synced `.claude/commands/` copy, and Claude Code reads no `.agents/skills/` directory at all.
+
 Note the directory is load-bearing. `.claude/commands/` is written by TWO crane mechanisms — `syncClaudeAssets` on every `crane ss` launch, and `sync-commands.sh`, which also deletes anything crane does not have — and is gitignored here, so a fork placed there would be silently overwritten with no diff to notice. Nothing in the crane toolchain writes `.claude/skills/`.
 
 ## Venture Handbook

@@ -43,7 +43,7 @@ Load these ADRs before any Operator architectural work:
 
 Decided since, and shaping code that exists today (load the ones your change touches):
 
-- **ADR 0050**: Task-execution framework: six execution classes (N/C/R/D/A/O) and `execution_class` frontmatter; decides how any new job runs and what it may cost
+- **ADR 0050**: Task-execution framework: six execution classes (N/C/R/D/A/O); decides how any new job runs and what it may cost. Its `execution_class` skill frontmatter and the merge-gate lint that reads it (build item B5) are decided, not built: no skill under `operator/skills/` carries the field (0 of 87, 2026-11-09), and no lint checks it
 - **ADR 0052**: The client portal is a management console (Direct / Account / Administer), never a data surface; no portal action touches client work
 - **ADR 0053**: Author-built connectors are MCP servers in `operator/connectors/`, installed per customer; the overlay stays substrate-only
 - **ADR 0056**: Persona exposure plus skill initiation replace `trust_ceiling` and the other scalar ceilings; the entitlement model every gate reads
