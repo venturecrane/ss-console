@@ -262,3 +262,60 @@ export function linkFixes(prs: PrRecord[]): { links: FixLink[]; kinds: Map<numbe
   }
   return { links: [...ctx.links.values()], kinds: ctx.kinds }
 }
+
+/**
+ * One line of `~/.claude/ss-board/built-by.jsonl`, written by the PostToolUse
+ * hook `.claude/hooks/bash-log.mjs` when `gh pr create` succeeds. Each flag
+ * was read from the session's transcripts at that moment, not from anyone's
+ * account of the work. It is the per-PR process record the retrospective
+ * found missing: the --sessions map is built after the fact, by hand, outside
+ * this repo.
+ */
+export interface BuiltByRecord {
+  pr: number
+  repo: string | null
+  session_id: string | null
+  auto_build: boolean
+  wired: boolean
+  plan: boolean
+  critique: boolean
+}
+
+/**
+ * Parse built-by.jsonl. A line that is not a JSON object with an integer `pr`
+ * is skipped and counted, never cast: a log written by a hook across versions
+ * must not take the measure down, and must not hide what it dropped.
+ */
+export function parseBuiltBy(text: string): { records: BuiltByRecord[]; skipped: number } {
+  const records: BuiltByRecord[] = []
+  let skipped = 0
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue
+    let o: unknown
+    try {
+      o = JSON.parse(line)
+    } catch {
+      skipped++
+      continue
+    }
+    if (typeof o !== 'object' || o === null || Array.isArray(o)) {
+      skipped++
+      continue
+    }
+    const r = o as Record<string, unknown>
+    if (typeof r.pr !== 'number' || !Number.isInteger(r.pr)) {
+      skipped++
+      continue
+    }
+    records.push({
+      pr: r.pr,
+      repo: typeof r.repo === 'string' ? r.repo : null,
+      session_id: typeof r.session_id === 'string' ? r.session_id : null,
+      auto_build: r.auto_build === true,
+      wired: r.wired === true,
+      plan: r.plan === true,
+      critique: r.critique === true,
+    })
+  }
+  return { records, skipped }
+}

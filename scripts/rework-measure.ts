@@ -18,19 +18,33 @@
  *   npm run rework -- --snapshot out.json              # keep the raw snapshot
  *   npm run rework -- --from snap.json                 # re-measure, no network
  *   npm run rework -- --from snap.json --sessions map.json
+ *   npm run rework -- --built-by path/to/built-by.jsonl
  *
  * `--sessions` takes a JSON object of feature PR number -> session type (for
  * example "auto-build" or "other") and adds a per-session-type table. That map
  * is built from local Claude Code transcripts by a local-only tool; transcript
  * access deliberately does not live in this repo.
  *
+ * `--built-by` (default `~/.claude/ss-board/built-by.jsonl`, skipped when the
+ * file is absent) is the per-PR record the PostToolUse hook
+ * `.claude/hooks/bash-log.mjs` writes on every `gh pr create`. A PR it names
+ * is labelled from it; any other PR falls back to `--sessions`.
+ *
  * Blame runs against `origin/main` in the local clone, so `git fetch` first.
  */
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { kindOf, type PrRecord, type Snapshot } from './rework/link'
-import { measure, renderReport } from './rework/report'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import {
+  kindOf,
+  parseBuiltBy,
+  type BuiltByRecord,
+  type PrRecord,
+  type Snapshot,
+} from './rework/link'
+import { measure, processLabels, renderReport } from './rework/report'
 
 const REPO = process.env.REWORK_REPO ?? 'venturecrane/ss-console'
 const DEFAULT_SINCE = '2026-09-01'
@@ -236,6 +250,17 @@ function loadSessions(path: string): Map<number, string> {
   return new Map(Object.entries(o).map(([k, v]) => [Number(k), str(v, `sessions[${k}]`)]))
 }
 
+const DEFAULT_BUILT_BY = join(homedir(), '.claude', 'ss-board', 'built-by.jsonl')
+
+/** The built-by records, or null when the file is absent (nothing recorded yet). */
+function loadBuiltBy(path: string): BuiltByRecord[] | null {
+  if (!existsSync(path)) return null
+  const { records, skipped } = parseBuiltBy(readFileSync(path, 'utf8'))
+  if (skipped > 0)
+    process.stderr.write(`built-by: skipped ${skipped} malformed line(s) in ${path}\n`)
+  return records
+}
+
 function flag(argv: string[], name: string): string | null {
   const i = argv.indexOf(name)
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : null
@@ -251,10 +276,12 @@ function main(): void {
   if (out) writeFileSync(out, JSON.stringify(snapshot, null, 2))
   const since = flag(argv, '--since')
   const sessionsPath = flag(argv, '--sessions')
-  const m = measure(
-    since && from ? { ...snapshot, since } : snapshot,
-    sessionsPath ? loadSessions(sessionsPath) : null
+  const labels = processLabels(
+    loadBuiltBy(flag(argv, '--built-by') ?? DEFAULT_BUILT_BY),
+    sessionsPath ? loadSessions(sessionsPath) : null,
+    snapshot.repo
   )
+  const m = measure(since && from ? { ...snapshot, since } : snapshot, labels)
   process.stdout.write(
     argv.includes('--json') ? `${JSON.stringify(m, null, 2)}\n` : `${renderReport(m)}\n`
   )

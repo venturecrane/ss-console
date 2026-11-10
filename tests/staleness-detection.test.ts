@@ -127,6 +127,10 @@ interface TreeOpts {
   lockNewer?: boolean
   /** Extra commits on origin/main beyond HEAD. */
   aheadBy?: number
+  /** Paths the FIRST commit ahead on origin/main writes (default extra-0.txt). */
+  aheadPaths?: string[]
+  /** Paths a commit on HEAD's own side writes after the split (a branch's own edit). */
+  branchPaths?: string[]
 }
 
 function makeTree(opts: TreeOpts = {}): string {
@@ -136,8 +140,10 @@ function makeTree(opts: TreeOpts = {}): string {
     nodeModules = true,
     lockfile = true,
     lockNewer = false,
-    aheadBy = 0,
+    aheadPaths,
+    branchPaths,
   } = opts
+  const aheadBy = opts.aheadBy ?? (aheadPaths ? 1 : 0)
 
   const root = mkdtempSync(join(tmpdir(), 'staleness-'))
   scratch.push(root)
@@ -169,8 +175,14 @@ function makeTree(opts: TreeOpts = {}): string {
   git(root, 'commit', '--quiet', '-m', 'baseline')
   git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
 
+  const writePaths = (paths: string[], body: string) => {
+    for (const rel of paths) {
+      mkdirSync(join(root, rel, '..'), { recursive: true })
+      writeFileSync(join(root, rel), body)
+    }
+  }
   for (let i = 0; i < aheadBy; i++) {
-    writeFileSync(join(root, `extra-${i}.txt`), 'x')
+    writePaths(i === 0 && aheadPaths ? aheadPaths : [`extra-${i}.txt`], `ahead ${i}`)
     git(root, 'add', '-A')
     git(root, 'commit', '--quiet', '-m', `ahead ${i}`)
   }
@@ -178,6 +190,12 @@ function makeTree(opts: TreeOpts = {}): string {
     // origin/main carries the extra commits; HEAD is moved back behind them.
     git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
     git(root, 'reset', '--hard', '--quiet', `HEAD~${aheadBy}`)
+  }
+
+  if (branchPaths) {
+    writePaths(branchPaths, 'branch edit')
+    git(root, 'add', '-A')
+    git(root, 'commit', '--quiet', '-m', 'branch edit')
   }
 
   if (lockNewer && lockfile) {
@@ -191,6 +209,7 @@ interface Payload {
   prompt?: string
   cwd?: string
   session_id?: string
+  transcript_path?: string
 }
 
 function runHook(
@@ -420,5 +439,104 @@ describe('signal: the working tree moved since you were briefed', () => {
     runHook({ prompt: 'hi', cwd: root, session_id: 'w3' }, { env: { TMPDIR: tmp } })
     const res = runHook({ prompt: 'hi', cwd: root, session_id: 'w3' }, { env: { TMPDIR: tmp } })
     expect(res.out).not.toContain('working tree changed')
+  })
+})
+
+describe('signal: session tooling changed on main (Signal 1b)', () => {
+  const SKILL = '.claude/skills/wired/SKILL.md'
+
+  function hookIn(root: string, tmp: string, sid: string) {
+    return runHook({ prompt: 'hi', cwd: root, session_id: sid }, { env: { TMPDIR: tmp } })
+  }
+
+  it('names a skills commit on origin/main that HEAD does not have', () => {
+    const root = makeTree({ aheadPaths: [SKILL, 'src/a.ts'] })
+    const tmp = mkdtempSync(join(tmpdir(), 'staleness-tool-'))
+    scratch.push(tmp)
+    const res = hookIn(root, tmp, 't1')
+    expectLawsIntact(res)
+    expect(res.out).toContain('changed 1 skill/hook/settings path(s)')
+    expect(res.out).toContain(SKILL)
+    expect(res.out).not.toContain('src/a.ts')
+    expect(res.out).toContain('merge origin/main to load them')
+  })
+
+  it('names at most three paths and counts the rest', () => {
+    const paths = ['a', 'b', 'c', 'd', 'e'].map((n) => `.claude/hooks/${n}.mjs`)
+    const res = hookIn(
+      makeTree({ aheadPaths: [...paths, '.claude/settings.json'] }),
+      mkdtempSync(join(tmpdir(), 'staleness-tool-')),
+      't2'
+    )
+    expect(res.out).toContain('changed 6 skill/hook/settings path(s)')
+    expect(res.out).toContain('+3 more')
+    expect(res.out).not.toContain('d.mjs')
+  })
+
+  it('stays silent when origin/main is ahead only in src/', () => {
+    const res = hookIn(
+      makeTree({ aheadPaths: ['src/lib/x.ts'] }),
+      mkdtempSync(join(tmpdir(), 'staleness-tool-')),
+      't3'
+    )
+    expect(res.out).toContain('origin/main is 1 commit(s) ahead')
+    expect(res.out).not.toContain('skill/hook/settings')
+  })
+
+  it("stays silent on the branch's OWN skill edit (three-dot diff, not two-dot)", () => {
+    const res = hookIn(
+      makeTree({ branchPaths: [SKILL] }),
+      mkdtempSync(join(tmpdir(), 'staleness-tool-')),
+      't4'
+    )
+    expect(res.out).not.toContain('skill/hook/settings')
+  })
+
+  it('speaks once per origin/main sha in a session, then again when main moves', () => {
+    const root = makeTree({ aheadPaths: [SKILL] })
+    const tmp = mkdtempSync(join(tmpdir(), 'staleness-tool-'))
+    scratch.push(tmp)
+    expect(hookIn(root, tmp, 't5').out).toContain('skill/hook/settings')
+    expect(hookIn(root, tmp, 't5').out).not.toContain('skill/hook/settings')
+    // A second session in the same tree has its own baseline.
+    expect(hookIn(root, tmp, 't6').out).toContain('skill/hook/settings')
+    // main moves again: the line returns once for the new sha.
+    git(root, 'checkout', '--quiet', '-b', 'mainline', 'origin/main')
+    writeFileSync(join(root, 'later.txt'), 'x')
+    git(root, 'add', '-A')
+    git(root, 'commit', '--quiet', '-m', 'later')
+    git(root, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+    git(root, 'checkout', '--quiet', 'main')
+    expect(hookIn(root, tmp, 't5').out).toContain('skill/hook/settings')
+    // Four primer runs plus git: over the 5s default under a full verify's load.
+  }, 30_000)
+
+  it('stays silent without a session id (no baseline to speak once against)', () => {
+    const res = runHook({ prompt: 'hi', cwd: makeTree({ aheadPaths: [SKILL] }) })
+    expectLawsIntact(res)
+    expect(res.out).not.toContain('skill/hook/settings')
+  })
+})
+
+describe('context size: logged, never printed', () => {
+  it('appends one line to the board log and adds nothing to the primer output', () => {
+    const board = mkdtempSync(join(tmpdir(), 'staleness-board-'))
+    scratch.push(board)
+    const t = join(board, 't.jsonl')
+    writeFileSync(
+      t,
+      JSON.stringify({
+        type: 'assistant',
+        message: { usage: { input_tokens: 1, cache_read_input_tokens: 412_000 } },
+      }) + '\n'
+    )
+    const res = runHook(
+      { prompt: 'hi', cwd: makeTree(), session_id: 'c1', transcript_path: t },
+      { env: { SS_BOARD_DIR: board } }
+    )
+    expectLawsIntact(res)
+    expect(res.out).not.toContain('412001')
+    const row = JSON.parse(readFileSync(join(board, 'context-size.log'), 'utf8').trim())
+    expect(row).toMatchObject({ session_id: 'c1', tokens: 412_001, outcome: 'ok' })
   })
 })

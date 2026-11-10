@@ -86,6 +86,24 @@ describe('.claude/hooks registration', () => {
     }
   })
 
+  it('the log-only hooks never block (no onFailure: "block") and sit on the right event', () => {
+    // bash-log.mjs only measures (long calls, what built each PR). A log that
+    // fails, times out or cannot start must cost the session nothing, so it is
+    // registered without onFailure: "block", on PostToolUse for Bash only.
+    const settings = JSON.parse(settingsText) as {
+      hooks: Record<
+        string,
+        { matcher?: string; hooks: { command?: string; onFailure?: string }[] }[]
+      >
+    }
+    const groups = settings.hooks.PostToolUse ?? []
+    const group = groups.find((g) => g.hooks.some((h) => h.command?.includes('bash-log.mjs')))
+    expect(group, 'bash-log.mjs must be a PostToolUse hook').toBeDefined()
+    expect(group?.matcher).toBe('Bash')
+    const handler = group?.hooks.find((h) => h.command?.includes('bash-log.mjs'))
+    expect(handler?.onFailure, 'bash-log.mjs is log-only; it must never block').toBeUndefined()
+  })
+
   it('the scan sees the hooks that matter', () => {
     const names = hookScripts()
     expect(names).toContain('worktree-guard.mjs')
