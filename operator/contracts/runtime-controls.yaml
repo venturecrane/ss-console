@@ -693,6 +693,41 @@ controls:
       arm are pinned by overlay tests (test_exposure_override.py) pending the
       live exercise.
 
+  # ---- invite-code enrollment (ADR 0106): who a guide seat answers ----
+  sender_enrollment_gate:
+    control: sender_enrollment_gate
+    class: dispatch-guard
+    substrate_module: workspace_broker/sender_enrollment.py
+    wired_via: 'pre_gateway_dispatch / hermes-smd-webhook-router'
+    live_probe: ''
+    probe_surface: ''
+    status: unprobed
+    owner: SMDurgan
+    tracking: 'https://github.com/venturecrane/ss-console/blob/main/docs/adr/0106-invite-code-enrollment-for-guide-seats.md'
+    candidate_probe: sender_enrollment_wrong_code_enrolls_nothing
+    risk_review: >-
+      2026-11-09 (ADR 0106): the local probe runs nightly against the broker's
+      own store and redeem (a wrong code and an unauthenticated valid code
+      enroll nothing and consume nothing; a store that enrolls anyway is caught
+      by the falsifier). Unproven: that the live router hands every code-shaped
+      message from an unlisted sender to the broker and drops it before
+      dispatch on the provisioned guide seat. Until a seat driver exists, a
+      regression there would show as an unexpected enrolled address in the
+      heartbeat's sender_enrollment field, not as a probe failure.
+    note: >-
+      The webhook router (overlay plugins/hermes-smd-webhook-router
+      _enrollment_attempt) decides an invite-code message from an unlisted
+      sender before any model turn, on a guide seat that authors
+      sender_enrollment.enabled, and asks the broker's gateway-only verb
+      sender_enrollment_redeem (workspace_broker/enrollment_verbs.py), which
+      re-reads the message, re-checks the opt-in and the roster, and redeems
+      in workspace_broker/sender_enrollment.py (salted scrypt hashes, expiry,
+      uses, per-sender and seat-wide lockouts). PROMOTION PATH: on the
+      provisioned smd-guide seat, email a wrong code from an outside address
+      and observe silence, no enrolled address and one SENDER_ENROLLMENT_ATTEMPT
+      row with outcome wrong_code; then a real code, and observe the welcome
+      and SMD's notice; record crane_verify ids and author a seat driver.
+
   # ---- routine 11 chronology package: the runner's gates ARE the content ----
   # control (ADR 0087, ss#2611). The package is built by the SMD runner and
   # filed through the connector out of band of any agent turn, so the trust

@@ -299,3 +299,5 @@ reviewed_not_code:
     why: '"the only place a limit can bind" explains why batch mode needs a hook; it is not an exclusivity rule.'
   - adr: docs/adr/0093-seat-policy-profiles.md
     why: 'The seat x gate matrix is a reviewed document already pinned by tests/policy-matrix.test.ts.'
+  - adr: docs/adr/0106-invite-code-enrollment-for-guide-seats.md
+    why: '"the broker uid is the sole writer" is a file-ownership rule (owner, group and mode of the store on the volume), so a second writer is refused by the operating system, not by where code lives.'

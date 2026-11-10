@@ -48,9 +48,10 @@
  *     "wakes_pending":           <integer>         // optional (0129 busy gate)
  *     "bundles":                 <map name → version, <=8> // optional (0144, ADR 0100)
  *     "firm_inputs":             <map lane → {etag8, verdict, applied_at}> // optional (0149)
+ *     "sender_enrollment":       {enrolled, failed_24h, locked} // optional (0151, ADR 0106)
  *   }
  *
- * The six 0129 fields, `bundles` (0144) and `firm_inputs` (0149) overwrite every beat, absent included: the overlay omits
+ * The six 0129 fields, `bundles` (0144), `firm_inputs` (0149) and `sender_enrollment` (0151) overwrite every beat, absent included: the overlay omits
  * what it does not know, so absent stores NULL = unknown. 0 = none.
  *
  * `audit_head` / `audit_rows` are the one pair here that does NOT land only in

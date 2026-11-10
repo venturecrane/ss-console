@@ -260,6 +260,11 @@ export const SUPPRESSED_ACTION_REASONS: Readonly<Record<string, string>> = {
     'INTERNAL. Proven delivery: a job whose delivery could not be proven (its review held it, its read-back failed, or the requester reply was not seen in Sent Items). It pages SMD to act; the job itself shows on this feed through its own held or failed line.',
   DELIVERY_PROVEN:
     'INTERNAL. Proven delivery: the evidence a delivered job rests on (files re-read by id, size and hash; the review status and its cost). The delivery shows on this feed through its own delivered line.',
+  // Invite-code enrollment (ADR 0106): guide seats only, which are SMD's own.
+  SENDER_ENROLLMENT_ATTEMPT:
+    'INTERNAL. An invite-code attempt on a guide seat, accepted or refused, with its outcome. Guide seats are SMD-run seats with no client feed; the welcome itself shows through its sent line. Complete in the audit record.',
+  SENDER_ENROLLMENT_CODE_ISSUED:
+    "INTERNAL. An invite code sent to a guide seat's administrator, by id and terms. The message itself shows through its sent line. Complete in the audit record.",
   // Record-before-send (2026-10-20), the email twin of SMOKEBALL_WRITE.
   CONFIRM_SEND_INTENT:
     'INTERNAL. Written before every message the Operator sends, so a send can never happen without a record. The message itself shows on this feed through its sent or failed line; an intent alone is a send in flight, or one SMD is paged to look at. Complete in the audit record and its export.',

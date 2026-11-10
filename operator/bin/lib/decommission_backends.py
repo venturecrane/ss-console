@@ -35,8 +35,10 @@ what the account actually holds (listed read-only 2026-09-10):
   The seat's webhook (an org-level object delivering to
   ``hermes-<slug>.fly.dev``) does not go with the inbox, so it is deleted too.
 * **Fly**: ``fly apps destroy hermes-<slug> --yes``, which takes the Machine,
-  its volume (``/opt/data``: profile homes, cron stores, the extraction cache)
-  and its secrets in one act; then the same for the client's ops workspace and
+  its volume (``/opt/data``: profile homes, cron stores, the extraction cache,
+  and on a guide seat the invite-code enrollment store
+  ``/opt/data/sender-enrollment``, ADR 0106, whose enrolled addresses and names
+  go with it) and its secrets in one act; then the same for the client's ops workspace and
   its GitHub sweep secrets. ``fly apps list --json`` first, so a re-run on an
   already-destroyed seat is a clean skip, and again after, so the manifest
   reports what is observed gone. Volume snapshots outlive the app until their

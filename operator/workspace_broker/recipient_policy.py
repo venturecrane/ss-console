@@ -316,12 +316,17 @@ def split_device_replies(entries: Any) -> tuple[tuple[str, str], ...]:
     return tuple(out)
 
 
-def _scope(customer_path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(customer_path.read_text(encoding="utf-8")) or {}
+def _load(customer_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    loaded = yaml.safe_load(customer_path.read_text(encoding="utf-8")) or {}
+    data: dict[str, Any] = loaded if isinstance(loaded, dict) else {}
     scope = data.get("scope") or {}
     if not isinstance(scope, dict):
         raise RuntimeError("customer.yaml scope must be an object")
-    return scope
+    return data, scope
+
+
+def _scope(customer_path: Path) -> dict[str, Any]:
+    return _load(customer_path)[1]
 
 
 def authored_policy(customer_path: Path) -> RecipientPolicy:
@@ -342,9 +347,15 @@ def authored_policy(customer_path: Path) -> RecipientPolicy:
     through ``split_authored``, so an authored bare-domain block silently fenced
     nobody.
     """
-    scope = _scope(customer_path)
+    data, scope = _load(customer_path)
     roster_exact, roster_domains = split_authored(scope.get("outbound_roster"))
     inbound_exact, inbound_domains = split_authored(scope.get("inbound_allow_from"))
+    # ADR 0106: on a guide seat that switches enrollment on, a person who
+    # redeemed an invite code stands exactly where an authored roster address
+    # stands, here and in the participant fence. Nobody on any other seat.
+    from .sender_enrollment import enrolled_for_policy  # local: it imports this module
+
+    inbound_exact |= enrolled_for_policy(data)
     admin_exact, admin_domains = split_authored(scope.get("admins"))
     return RecipientPolicy(
         exact=frozenset(roster_exact | inbound_exact | admin_exact),

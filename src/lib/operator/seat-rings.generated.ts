@@ -15,5 +15,6 @@ export const SEAT_RINGS: Readonly<Record<string, number>> = Object.freeze({
   'captain-mark': 2,
   'pilot-smokeball': 2,
   scott: 2,
+  'smd-guide': 2,
   'smd-staging': 0,
 })

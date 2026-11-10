@@ -27,6 +27,8 @@ describe('what still emails on a customer seat', () => {
     'connector_down:smokeball',
     'connector_token_expiring:smokeball',
     'tool_failing:mcp_msgraph_mail_read',
+    // Someone guessing a guide seat's invite codes is ours to act on (revoke).
+    'enrollment_guessing',
     'a_condition_nobody_has_classified_yet',
   ])('%s', (condition) => {
     expect(conditionIsQuiet(condition)).toBe(false)

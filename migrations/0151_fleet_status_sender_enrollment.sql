@@ -1,0 +1,28 @@
+-- 0151: a guide seat's invite-code enrollment reaches fleet_status
+--
+-- A guide seat that switches invite-code enrollment on (ADR 0106,
+-- `sender_enrollment: {enabled: true}`) lets a person holding a code SMD issued
+-- email it from an unlisted address and be added to the people it answers. The
+-- workspace broker writes one SENDER_ENROLLMENT_ATTEMPT audit row per attempt.
+-- The seat ships what those rows add up to on every heartbeat as
+-- `sender_enrollment` (overlay shared/heartbeat.py read_sender_enrollment):
+--
+--   sender_enrollment_json  {"enrolled": <int>, "failed_24h": <int>,
+--                           "locked": <bool>}: the enrolled count, the attempts
+--                           in the trailing day whose outcome is a failure (the
+--                           broker's FAILURES set), and whether the trailing
+--                           hour holds the broker's seat-wide lockout limit.
+--                           Validated whole by parseSenderEnrollment, else
+--                           NULL. Plain overwrite at ingest, INCLUDING back to
+--                           NULL: the seat omits the field when enrollment is
+--                           off or its ledger cannot be read, and the pager
+--                           holds on NULL.
+--
+-- The fleet-alerts worker pages `enrollment_guessing` from it (0152).
+--
+-- Deploy ordering is safe by construction: deploy.yml applies migrations
+-- before the Workers deploy, and only the new code names the column.
+--
+-- Manual-only rollback at migrations/rollbacks/0151_fleet_status_sender_enrollment_down.sql.
+
+ALTER TABLE fleet_status ADD COLUMN sender_enrollment_json TEXT;

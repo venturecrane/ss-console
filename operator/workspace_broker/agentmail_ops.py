@@ -281,6 +281,23 @@ class AgentMailOps:
             "subject": str(found.get("subject") or ""),
         }
 
+    def enrollment_source(self, message_id: str) -> dict[str, Any]:
+        """The sender and the text of one received message, for an invite-code
+        redeem (sender_enrollment, ADR 0106). Read from the mailbox itself, so
+        the broker checks the code arrived in that message from that sender
+        rather than taking either from the caller. RAISES on any failure."""
+        wanted = str(message_id or "").strip()
+        if not wanted:
+            raise AgentMailRefused("no message id to read")
+        found = self._request(self._path("messages", wanted), "GET", None)
+        sender = normalize_address(found.get("from") or found.get("from_"))
+        if not sender:
+            raise AgentMailRefused("that message names no sender")
+        if sender == normalize_address(self.inbox_id()):
+            raise AgentMailRefused("that message was sent by this inbox itself, not to it")
+        texts = [found.get(k) for k in ("subject", "text", "extracted_text", "preview", "html")]
+        return {"sender": sender, "texts": [t for t in texts if isinstance(t, str) and t]}
+
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Fence every recipient, then transmit from this seat's pinned inbox."""
         files = _files(payload)

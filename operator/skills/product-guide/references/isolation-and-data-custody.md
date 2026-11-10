@@ -68,8 +68,8 @@ The record is tamper-evident, not tamper-proof. Its stated limits:
 
 ## Retention and offboarding
 
-- The audit record and the memory are returned to the client within 14 days of termination.
-- Return and destruction are completed within 30 days of termination.
+- The standard agreement states that the audit record and the memory are returned to the client within 14 days of termination.
+- The standard agreement states that return and destruction are completed within 30 days of termination.
 - Only legal, tax, accounting and audit records are kept, and the offboarding states which and why.
 
 ## Model and provider posture

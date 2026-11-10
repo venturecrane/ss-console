@@ -478,3 +478,22 @@ probes:
       The gate explains files by name pattern as well as ownership, and a real
       record with a vendor-shaped name can be wrongly explained; that is a
       known limit of the explained list, not something this probe measures.
+
+  sender_enrollment_wrong_code_enrolls_nothing:
+    probe: sender_enrollment_wrong_code_enrolls_nothing
+    control: sender_enrollment_gate
+    kind: local
+    violation: >-
+      Issue one real invite code in a throwaway store, then redeem a wrong code
+      from an authenticated sender and the real code from an unauthenticated
+      one.
+    expect: refuse
+    runner: sender_enrollment_wrong_code
+    proves: >-
+      The broker's redeem refuses a wrong code and an unauthenticated valid
+      code, enrolls no address, and consumes no use. A store that enrolls
+      whatever it is handed (the falsifier) is caught here, in CI and nightly.
+    limits: >-
+      Local only: says nothing about whether the live router hands an
+      invite-code message to the broker and drops it before dispatch. That half
+      is the seat promotion path in runtime-controls.yaml.

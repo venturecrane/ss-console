@@ -260,6 +260,10 @@ def seat_facts(customer_path: Path) -> SeatFacts:
         if isinstance(e, dict) and isinstance(e.get("address"), str) and isinstance(e.get("class"), str)
     )
     inbound_exact, inbound_domains = split_authored(scope.get("inbound_allow_from"))
+    # ADR 0106: an enrolled sender is where an authored roster address is.
+    from .sender_enrollment import enrolled_for_policy  # local: it imports recipient_policy
+
+    inbound_exact |= enrolled_for_policy(data)
     admins, _ = split_authored(scope.get("admins"))
     routing, _ = split_authored(scope.get("rule_requests_to"))
     staff, _ = split_authored(scope.get("staff_send_as"))

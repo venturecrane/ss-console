@@ -8,7 +8,7 @@ Maturity labels used here: **In production** (built and used on a paying client'
 
 Each client seat is its own dedicated machine. There is no shared runtime between clients. In production.
 
-- **Size.** The seat configuration sets the machine's region and size. Seats today use one of three memory tiers: 2 GB, 4 GB or 8 GB, with one, two or four shared processor cores. A seat that runs heavy queued jobs can also set a separate memory limit for each kind of job.
+- **Size.** The seat configuration sets the machine's region and size. Seats today use one of three memory tiers: 2 GB, 4 GB or 8 GB, on shared processor cores. A seat that runs heavy queued jobs can also set a separate memory limit for each kind of job.
 - **Storage.** Each seat has one 10 GB storage volume of its own.
 - **Region.** Set per seat in its configuration.
 - **Who changes it.** SMD, by a reviewed change followed by a rebuild of the seat.
@@ -36,7 +36,7 @@ Three separate system users run on each seat: one for the agent, one for the cap
 
 ## The control layer by capability group
 
-The control layer has 29 plug-ins. They fall into five groups.
+The control layer is a set of plug-ins. They fall into five groups.
 
 | Group                 | What it does                                                                                                                                                                                                                                                                                                                                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -88,9 +88,9 @@ Settings that can change live include: what each routine may do on its own; whet
 ## Secrets and monitoring
 
 - **Infrastructure secrets.** SMD keeps them in a secrets vault and places them on the seat when it is provisioned. Each secret is classified as SMD's or the client's. An unclassified secret stops provisioning.
-- **Send credentials.** These are available only at start-up. They are handed to the broker in files only the broker can read, then removed before any agent process starts. The agent holds read-only connection credentials.
+- **Send credentials.** These are available only at start-up. They are handed to the broker in files only the broker can read, then removed before any agent process starts. The agent's own mail credentials cannot send. A delegated sign-in for a system of record is readable by the agent's account; see isolation-and-data-custody.md, Credential custody.
 - **Credentials never sit in a configuration file.** The client can provide a connection credential through a write-only field.
-- **Heartbeat.** Every 60 seconds the seat reports 44 health fields to SMD's console. It also checks in with an outside service that pages SMD if the seat goes silent. A seat that has not reported for 5 minutes shows red.
+- **Heartbeat.** Every 60 seconds the seat reports its health to SMD's console. It also checks in with an outside service that pages SMD if the seat goes silent. A seat that has not reported for 5 minutes shows red.
 - **Pager.** A background service reviews heartbeats every 2 minutes and pages SMD, by email to its operations address, when something is wrong.
 
 ## What SMD authors for each client

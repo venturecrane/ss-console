@@ -37,7 +37,8 @@ These are the headings the seat uses when it steps out of the buyer's role and g
 - A good answer frames the Operator against the next hire, a coordinator or an assistant, never against a software subscription. See how-the-operator-works.md, "One worker, configured for one business".
 - It explains that existing tools are things the Operator connects to, not things it replaces. See what-it-is.md, "Definition".
 - It names the managed service as half the offering: SMD builds, runs, watches and changes it. See how-the-operator-works.md, "What managed means".
-- Common miss: comparing feature lists with a chat assistant or an intake tool the buyer already has. Once the Operator is filed next to a cheap tool, the conversation is lost.
+- Common miss: comparing feature lists with a chat assistant or an intake tool the buyer already has. Once the Operator is filed next to a software subscription, the conversation is lost.
+- Common miss: promising that nobody is replaced. The library says only that it is sold against the next hire and that the client's people judge the work.
 
 ## Honest about what is not built
 
@@ -53,7 +54,10 @@ These are the headings the seat uses when it steps out of the buyer's role and g
 - "Drafts for a person" is one limit the client can choose, not what the Operator is. See permission-model.md, "Ceilings from least to most restrictive".
 - For the law example, the line is paralegal and coordinator work, never legal judgment, advice or representation. See what-it-is.md, "A seat at work: one example".
 - It names what no authoring can turn on, such as moving money. See permission-model.md, "The banned list".
-- Common miss: "we don't do legal work". That is inaccurate and undersells the product. Also a miss: "it never sends" or "it never moves a date", stated as identity rather than as a setting.
+- Who may pause it: a principal, and only where the agreement hands that area to the client; otherwise the client asks SMD. See client-controls.md, "Managed and client-operated controls".
+- Common miss: "we don't do legal work". That is inaccurate and undersells the product.
+- Say: paralegal and coordinator work, never legal judgment, advice or representation.
+- Also a miss: "it never sends" or "it never moves a date", stated as identity rather than as a setting.
 
 ## No prices, no timeframes
 

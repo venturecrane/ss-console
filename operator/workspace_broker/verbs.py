@@ -47,7 +47,15 @@ from typing import Any, Callable
 
 from .broker_context import BrokerContext
 from . import audit_verbs, casework_verbs, establish_verbs, job_verbs, send_as_acts, transmit_verbs, workspace_verbs
-from . import demand_verbs, drafting_verbs, litigation_verbs, medchron_verbs, negotiation_verbs, reply_binding
+from . import (
+    demand_verbs,
+    drafting_verbs,
+    enrollment_verbs,
+    litigation_verbs,
+    medchron_verbs,
+    negotiation_verbs,
+    reply_binding,
+)
 from . import library_edit_verbs, library_setup_verbs
 from . import (
     attachment_intake,
@@ -319,6 +327,13 @@ VERBS: tuple[Verb, ...] = (
     # amendment 5a). The verb carries no approver field for the same reason: the
     # row's approver is the only person a click can ever act as.
     Verb("send_as_decide_link", GATEWAY_OR_AGENT, send_as_acts.decide_link_verb),
+    # ADR 0106 invite-code enrollment: the webhook router, before any model
+    # turn, asks the broker to redeem a code an unlisted sender emailed.
+    # Gateway-only: no cron child, execute_code turn or root shell redeems.
+    Verb("sender_enrollment_redeem", _only(GATEWAY), enrollment_verbs.redeem_verb),
+    # ...and an administrator's request for a code (the guide's tool): the
+    # broker mints it and sends it to that administrator; the turn sees an id.
+    Verb("sender_enrollment_issue", _only(GATEWAY), enrollment_verbs.issue_verb),
     Verb("job_create", _only(GATEWAY), job_verbs.job_create),
     Verb("job_list_claimable", _only(GATEWAY), job_verbs.job_list_claimable),
     Verb("job_list", _only(GATEWAY), job_verbs.job_list),

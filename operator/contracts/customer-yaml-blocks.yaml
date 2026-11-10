@@ -499,6 +499,16 @@ top_level:
       Fail-closed: overlay reads the block at webhook dispatch time; without the
       endpoint, pushes are ignored rather than crashing. Not a silent drop — declared
       inert until the overlay ships.
+  sender_enrollment:
+    status: implemented
+    materializer: >-
+      overlay shared/sender_enrollment.py enabled_in (read live by the webhook router's
+      _enrollment_attempt, CustomerConfig.inbound_roster and plugins/hermes-smd-enrollment)
+      + workspace_broker/sender_enrollment.py enabled_for (the broker's redeem and issue
+      verbs, recipient_policy and participant_fence)
+    note: >-
+      ADR 0106 invite-code enrollment, guide seats only (both validators refuse it on any
+      other role). No boot materialization: every reader asks the live config per call.
   memory:
     status: implemented
     materializer: translate _persona_config (config.yaml memory block)

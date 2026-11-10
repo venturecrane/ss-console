@@ -394,7 +394,10 @@ crane_handoff(summary: "Added /ship skill, command sync...", status: "done", ven
 
 ```
 Handoff saved to D1. Next session will see this via crane_sos.
+Run /clear before the next task in this window: a new task should start with fresh context.
 ```
+
+The second line is there because a task carried into an old window brings that window's context with it, re-read every turn (`/usage`, 2026-11-10: "start fresh when you switch tasks" ranked first), and stale context is also a quality risk.
 
 ## Key Principle
 

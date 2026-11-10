@@ -587,13 +587,18 @@ def test_translate_guide_role_disables_outside_sources(tmp_path, monkeypatch):
 
 
 def test_guide_seat_chat_allowlist_materializes_and_cannot_fail_open():
-    """The authored smd-guide seat (ss ADR 0105) wires chat with a non-empty
-    allowlist; the runtime materializer carries exactly those ids, and the same
-    block with the allowlist emptied raises instead of rendering an open bot."""
+    """The authored smd-guide seat (ss ADR 0105) authors a non-empty chat
+    allowlist. Chat is authored OFF for first boot, so the seat as written
+    renders no chat block at all; switched on, the runtime materializer carries
+    exactly the authored ids, and the same block with the allowlist emptied
+    raises instead of rendering an open bot."""
     from bootstrap.translate import _materialize_telegram_platform
 
     seat_path = Path(__file__).resolve().parents[2] / "customers" / "smd-guide" / "customer.yaml"
-    customer = yaml.safe_load(seat_path.read_text())
+    authored = yaml.safe_load(seat_path.read_text())
+    if not authored["telegram"].get("enabled"):
+        assert _materialize_telegram_platform(authored, token_present=True) == {}
+    customer = {**authored, "telegram": {**authored["telegram"], "enabled": True}}
     block = _materialize_telegram_platform(customer, token_present=True)
     assert block["allow_from"] == customer["telegram"]["allow_from"]
     assert block["allow_from"]

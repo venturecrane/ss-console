@@ -2936,3 +2936,176 @@ def test_a_lane_review_row_joins_its_request_through_the_job():
     assert hb._reply_join("<m1>", "records:01JOB") == ("message", "<m1>")
     assert hb._reply_join(None, "sess-1") == ("message", None)
     assert hb._reply_join(None, "records:") == ("message", None)
+
+
+# ---------------------------------------------------------------------------
+# sender_enrollment (ADR 0106): the enrolled count and the failed attempts, so
+# the pager sees a guessing run against a guide seat's invite codes. Present
+# only on a seat that switches enrollment on.
+# ---------------------------------------------------------------------------
+
+_GUIDE_YAML = """
+customer_id: smd-guide
+seat:
+  kind: internal
+  product: operator
+  role: guide
+sender_enrollment:
+  enabled: true
+scope:
+  inbound_allow_from: [scott@smd.services]
+  admins: [scott@smd.services]
+"""
+
+_GUIDE = {"seat": {"role": "guide"}, "sender_enrollment": {"enabled": True}}
+
+
+def _attempt(led, ts, outcome):
+    led.add(ts, hb.SENDER_ENROLLMENT_ACTION, {"outcome": outcome, "sender_key": "k"})
+
+
+def _enrollment(directory, build, *, config=_GUIDE, enrolled=2):
+    directory.mkdir(parents=True, exist_ok=True)
+    db = directory / "audit.db"
+    led = _Ledger(db)
+    build(led)
+    led.conn.close()
+    return hb.read_sender_enrollment(
+        str(db), config=config, enrolled_count=lambda: enrolled, now=_NOW
+    )
+
+
+def test_enrollment_counts_failures_in_the_day_and_nothing_else(tmp_path):
+    def build(led):
+        _attempt(led, _ts(1), "wrong_code")
+        _attempt(led, _ts(2), "unauthenticated")
+        _attempt(led, _ts(23), "expired")
+        _attempt(led, _ts(25), "wrong_code")  # outside the day
+        _attempt(led, _ts(1), "enrolled")
+        _attempt(led, _ts(1), "already_listed")
+        _attempt(led, _ts(1), "sender_locked")  # a lockout refusal is not a guess
+        _attempt(led, _ts(1), "seat_locked")
+        _attempt(led, _ts(1), "disabled")
+        led.add(_ts(1), "TOOL_CALL_COMPLETED", {"outcome": "wrong_code"})
+
+    assert _enrollment(tmp_path, build) == {"enrolled": 2, "failed_24h": 3, "locked": False}
+
+
+def test_enrollment_zero_failures_is_reported_not_omitted(tmp_path):
+    out = _enrollment(tmp_path, lambda led: None, enrolled=0)
+    assert out == {"enrolled": 0, "failed_24h": 0, "locked": False}
+    payload = hb.build_payload(
+        heartbeat_ts="t",
+        last_audit_ts=None,
+        last_skill_ts=None,
+        uptime_seconds=None,
+        version=None,
+        sender_enrollment=out,
+    )
+    assert payload["sender_enrollment"] == out
+    bare = hb.build_payload(
+        heartbeat_ts="t", last_audit_ts=None, last_skill_ts=None, uptime_seconds=None, version=None
+    )
+    assert "sender_enrollment" not in bare
+
+
+def test_enrollment_locked_at_the_seat_wide_limit_in_the_hour(tmp_path):
+    limit = hb.SENDER_ENROLLMENT_SEAT_MAX_FAILURES
+
+    def at_limit(led):
+        for i in range(limit):
+            _attempt(led, _ts(0.5 + i / 1000), "wrong_code")
+
+    assert _enrollment(tmp_path / "hour", at_limit)["locked"] is True
+
+    def one_short(led):
+        for i in range(limit - 1):
+            _attempt(led, _ts(0.5 + i / 1000), "wrong_code")
+
+    assert _enrollment(tmp_path / "short", one_short)["locked"] is False
+
+    def spread(led):
+        for i in range(limit):
+            _attempt(led, _ts(2 + i / 10), "wrong_code")
+
+    assert _enrollment(tmp_path / "spread", spread) == {
+        "enrolled": 2,
+        "failed_24h": limit,
+        "locked": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        None,
+        {},
+        {"seat": {"role": "guide"}},
+        {"seat": {"role": "guide"}, "sender_enrollment": {"enabled": False}},
+        {"seat": {"role": "operator"}, "sender_enrollment": {"enabled": True}},
+    ],
+)
+def test_enrollment_absent_on_a_seat_that_does_not_switch_it_on(tmp_path, config):
+    def build(led):
+        _attempt(led, _ts(1), "wrong_code")
+
+    assert _enrollment(tmp_path, build, config=config) is None
+
+
+def test_enrollment_absent_when_the_ledger_cannot_be_read(tmp_path):
+    assert hb.read_sender_enrollment(None, config=_GUIDE, enrolled_count=lambda: 1) is None
+    missing = str(tmp_path / "nope.db")
+    assert hb.read_sender_enrollment(missing, config=_GUIDE, enrolled_count=lambda: 1) is None
+    empty = tmp_path / "empty.db"
+    sqlite3.connect(str(empty)).close()
+    assert hb.read_sender_enrollment(str(empty), config=_GUIDE, enrolled_count=lambda: 1) is None
+
+
+def test_enrollment_vocabulary_is_the_brokers():
+    """The heartbeat's strings are the broker's: its FAILURES set, its seat-wide
+    limit and its attempt row's action type, read from the broker's own source
+    (parsed, not imported: the broker module imports its own package)."""
+    import ast
+
+    broker = Path(__file__).resolve().parents[2] / "workspace_broker"
+    store = ast.parse((broker / "sender_enrollment.py").read_text(encoding="utf-8"))
+    names: dict[str, object] = {}
+    failures: set[object] = set()
+    for node in store.body:
+        if not isinstance(node, ast.Assign) or not isinstance(node.targets[0], ast.Name):
+            continue
+        target = node.targets[0].id
+        if isinstance(node.value, ast.Constant):
+            names[target] = node.value.value
+        if target == "FAILURES":
+            elts = node.value.args[0].elts
+            failures = {names[e.id] if isinstance(e, ast.Name) else e.value for e in elts}
+    assert failures == set(hb.SENDER_ENROLLMENT_FAILURES)
+    assert names["SEAT_MAX_FAILURES"] == hb.SENDER_ENROLLMENT_SEAT_MAX_FAILURES
+    verbs = (broker / "enrollment_verbs.py").read_text(encoding="utf-8")
+    assert f'AUDIT_TYPE = "{hb.SENDER_ENROLLMENT_ACTION}"' in verbs
+
+
+def test_emitter_ships_sender_enrollment_on_a_guide_seat(tmp_path, monkeypatch):
+    cfg = tmp_path / "customer.yaml"
+    cfg.write_text(_GUIDE_YAML, encoding="utf-8")
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(cfg))
+    enrolled = tmp_path / "enrolled.json"
+    enrolled.write_text(
+        json.dumps({"schema": 1, "enrolled": [{"address": "a@x.example"}]}), encoding="utf-8"
+    )
+    monkeypatch.setenv("SMD_SENDER_ENROLLMENT_ENROLLED", str(enrolled))
+    db = tmp_path / "audit.db"
+    led = _Ledger(db)
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    led.add(stamp, hb.SENDER_ENROLLMENT_ACTION, {"outcome": "wrong_code"})
+    led.conn.close()
+
+    em, calls = _emitter(audit_db_path_fn=lambda: str(db))
+    em._post_control_plane()
+    body = json.loads(calls["posts"][-1][2])
+    assert body["sender_enrollment"] == {"enrolled": 1, "failed_24h": 1, "locked": False}
+
+    cfg.write_text(_GUIDE_YAML.replace("enabled: true", "enabled: false"), encoding="utf-8")
+    em._post_control_plane()
+    assert "sender_enrollment" not in json.loads(calls["posts"][-1][2])

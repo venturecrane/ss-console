@@ -44,7 +44,7 @@ Billing starts only when SMD states in writing that testing is complete and the 
 
 - Incidents use a severity ladder. SMD does not publish an uptime percentage and does not offer service credits.
 - At the highest severity, the seat is paused and the routines involved are stepped down until the fix is merged and the incident has become a rehearsal case.
-- The client is notified within 24 hours when its data or access is affected.
+- The standard agreement states that the client is notified within 24 hours when its data or access is affected.
 - A storage volume snapshot is taken before every release, and the audit record is archived daily. Some recovery procedures, including restoring SMD's console database, are stated as not yet written.
 
 ## Change requests

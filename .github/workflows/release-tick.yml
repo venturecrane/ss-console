@@ -96,7 +96,17 @@ on:
         default: none
         # One option per seat in operator/fleet/rings.yaml; the conformance test
         # fails when they drift.
-        options: [none, smd-staging, pilot-smokeball, scott, brokery, captain-mark, ashton-price]
+        options:
+          [
+            none,
+            smd-staging,
+            pilot-smokeball,
+            scott,
+            brokery,
+            captain-mark,
+            smd-guide,
+            ashton-price,
+          ]
       artifact:
         description: 'Urgent one-seat release of: image, or the jobs bundle'
         type: choice
@@ -206,6 +216,7 @@ jobs:
           FLY_DEPLOY_TOKEN__SCOTT: ${{ secrets.FLY_DEPLOY_TOKEN__SCOTT }}
           FLY_DEPLOY_TOKEN__BROKERY: ${{ secrets.FLY_DEPLOY_TOKEN__BROKERY }}
           FLY_DEPLOY_TOKEN__CAPTAIN_MARK: ${{ secrets.FLY_DEPLOY_TOKEN__CAPTAIN_MARK }}
+          FLY_DEPLOY_TOKEN__SMD_GUIDE: ${{ secrets.FLY_DEPLOY_TOKEN__SMD_GUIDE }}
           FLY_DEPLOY_TOKEN__ASHTON_PRICE: ${{ secrets.FLY_DEPLOY_TOKEN__ASHTON_PRICE }}
         run: |
           set -euo pipefail
