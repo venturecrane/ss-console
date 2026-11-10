@@ -90,3 +90,6 @@ differences:
     why: the fictional firm's name and mailing lines
   - path: form_letters.police_agencies
     why: fictional agencies in the same shape (the one email route is an SMD AgentMail stand-in outside the lab domain, so it classifies as outside mail as A&P's does), so a rehearsal never writes to a real police department
+  # ---- spend ----
+  - path: safety
+    why: "a $5/day model-spend cap (A&P runs the $50 default). A limit, not a path; every scheduled job still fires and runs its code gate exactly as on A&P, and the cap only bounds what a wake can cost on SMD's key"

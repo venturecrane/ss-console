@@ -643,6 +643,12 @@ business_hours:
     - fri
   start: 08:00
   end: '18:00'
+safety:
+  sticky_stop:
+    # The twin's one spend difference from A&P (twin.yaml): $5/day against the
+    # $50/day default, so its scheduled wakes on the near-empty staging tenant
+    # can never run up real money (2026-11-10).
+    cost_cap_daily_cents: 500
 escalation:
   red_flag_recipients:
     - ScottDurgan@smdopslab.onmicrosoft.com
