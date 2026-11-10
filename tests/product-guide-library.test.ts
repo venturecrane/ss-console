@@ -93,8 +93,8 @@ function loadMarkers(): { id: string; test: (t: string) => boolean }[] {
     const text = m.value ?? m.pattern ?? ''
     const kind = (m.kind ?? 'literal_ci').toLowerCase()
     if (kind === 'regex') {
-      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-      const re = new RegExp(text, 'i') // the gate's own checked-in registry, not user input
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp - the pattern is the overlay's own checked-in marker registry, never user input
+      const re = new RegExp(text, 'i')
       return { id: m.id, test: (t: string) => re.test(t) }
     }
     if (kind === 'literal') return { id: m.id, test: (t: string) => t.includes(text) }

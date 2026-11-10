@@ -37,9 +37,9 @@ fly_region: lax # Phoenix-adjacent; Fly has no phx region
 # model, no escalation tier.
 model: claude-sonnet-5-5
 
-# A light seat: one gateway, no lanes (the brokery and scott sizing).
+# A light seat: one gateway, no lanes; two shared CPUs, the fleet floor (#3917).
 machine:
-  size: shared-cpu-1x
+  size: shared-cpu-2x
   memory_mb: 2048
 
 # ---- HUMANS WITH PORTAL ACCESS ----
