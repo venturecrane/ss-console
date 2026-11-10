@@ -183,8 +183,11 @@ sender_enrollment:
 # the Captain's own, as bound to him in operator/customers/captain-mark
 # (people p2, telegram_id) and already allow-listed on SMD's scott seat. A
 # representative's numeric id is added here by a reviewed PR once known.
+# OFF for first boot (Captain, 2026-11-09): no bot exists yet, and a seat with
+# chat enabled and no bot token does not boot. Email carries both skills. Turn
+# it on by a reviewed PR once the bot is created and its token is vaulted.
 telegram:
-  enabled: true
+  enabled: false
   allow_from:
     - '7367659986'
 
