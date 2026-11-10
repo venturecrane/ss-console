@@ -1,23 +1,19 @@
 {
-  "measuredAt": "2026-11-10T20:50:53.420Z",
-  "commit": "ac5ccf6cd006a21bd1c78538391ae09ce3638c34",
+  "measuredAt": "2026-11-10T21:14:47.240Z",
+  "commit": "b6f0fc84c12ed990454bfec429b8641d8307517b",
   "instruments": {
     "jscpd": "jscpd@4.3.0",
     "vulture": "vulture==2.14",
     "couplingWindow": "6.months",
-    "commits": 2336
+    "commits": 2344
   },
   "clones": {
-    "duplicatedPct": 3.51,
-    "copiedFiles": 48,
-    "copiedLines": 25818,
-    "partialClones": 230,
-    "partialLines": 4662,
+    "duplicatedPct": 3.28,
+    "copiedFiles": 46,
+    "copiedLines": 23937,
+    "partialClones": 221,
+    "partialLines": 3698,
     "byArea": [
-      {
-        "area": "operator/safety_substrate",
-        "lines": 889
-      },
       {
         "area": "operator/runners",
         "lines": 888
@@ -28,7 +24,7 @@
       },
       {
         "area": "operator/hermes-smd-overlay",
-        "lines": 443
+        "lines": 452
       },
       {
         "area": "src/pages",
@@ -49,10 +45,6 @@
       {
         "area": "operator/skills/deadline-miss-escalator",
         "lines": 117
-      },
-      {
-        "area": "src/scripts",
-        "lines": 84
       },
       {
         "area": "operator/connectors",
@@ -97,84 +89,6 @@
     ],
     "largest": [
       {
-        "lines": 193,
-        "a": {
-          "name": "operator/safety_substrate/identifier_filter.py",
-          "start": 254,
-          "end": 446
-        },
-        "b": {
-          "name": "operator/hermes-smd-overlay/shared/identifier_filter.py",
-          "start": 326,
-          "end": 518
-        }
-      },
-      {
-        "lines": 165,
-        "a": {
-          "name": "operator/safety_substrate/identifier_filter.py",
-          "start": 71,
-          "end": 235
-        },
-        "b": {
-          "name": "operator/hermes-smd-overlay/shared/identifier_filter.py",
-          "start": 79,
-          "end": 266
-        }
-      },
-      {
-        "lines": 149,
-        "a": {
-          "name": "operator/safety_substrate/citation_filter.py",
-          "start": 209,
-          "end": 357
-        },
-        "b": {
-          "name": "operator/hermes-smd-overlay/shared/citation_filter.py",
-          "start": 211,
-          "end": 361
-        }
-      },
-      {
-        "lines": 137,
-        "a": {
-          "name": "operator/safety_substrate/identifier_filter.py",
-          "start": 569,
-          "end": 705
-        },
-        "b": {
-          "name": "operator/hermes-smd-overlay/shared/identifier_filter.py",
-          "start": 720,
-          "end": 856
-        }
-      },
-      {
-        "lines": 100,
-        "a": {
-          "name": "operator/safety_substrate/identifier_filter.py",
-          "start": 470,
-          "end": 569
-        },
-        "b": {
-          "name": "operator/hermes-smd-overlay/shared/identifier_filter.py",
-          "start": 559,
-          "end": 640
-        }
-      },
-      {
-        "lines": 79,
-        "a": {
-          "name": "operator/safety_substrate/citation_filter.py",
-          "start": 57,
-          "end": 135
-        },
-        "b": {
-          "name": "operator/hermes-smd-overlay/shared/citation_filter.py",
-          "start": 57,
-          "end": 133
-        }
-      },
-      {
         "lines": 75,
         "a": {
           "name": "operator/skills/client-verification-tracker/handoff_writer.py",
@@ -198,19 +112,6 @@
           "name": "operator/skills/medical-records-chaser/pre_run.py",
           "start": 820,
           "end": 879
-        }
-      },
-      {
-        "lines": 60,
-        "a": {
-          "name": "src/scripts/assessment-voice.ts",
-          "start": 45,
-          "end": 104
-        },
-        "b": {
-          "name": "src/scripts/assessment.ts",
-          "start": 54,
-          "end": 113
         }
       },
       {
@@ -279,16 +180,107 @@
         }
       },
       {
-        "lines": 47,
+        "lines": 46,
         "a": {
-          "name": "operator/safety_substrate/citation_filter.py",
-          "start": 135,
-          "end": 181
+          "name": "operator/runners/jobs/jobs/litigation/extract.py",
+          "start": 242,
+          "end": 287
         },
         "b": {
-          "name": "operator/hermes-smd-overlay/shared/citation_filter.py",
-          "start": 135,
-          "end": 181
+          "name": "operator/runners/jobs/jobs/negotiation/text.py",
+          "start": 127,
+          "end": 172
+        }
+      },
+      {
+        "lines": 40,
+        "a": {
+          "name": "operator/hermes-smd-overlay/plugins/hermes-smd-trust/outbound_send.py",
+          "start": 326,
+          "end": 365
+        },
+        "b": {
+          "name": "operator/hermes-smd-overlay/plugins/hermes-smd-trust/outbound_send.py",
+          "start": 201,
+          "end": 248
+        }
+      },
+      {
+        "lines": 39,
+        "a": {
+          "name": "operator/runners/jobs/jobs/casefile_lane.py",
+          "start": 109,
+          "end": 147
+        },
+        "b": {
+          "name": "operator/runners/jobs/jobs/records_lane.py",
+          "start": 149,
+          "end": 151
+        }
+      },
+      {
+        "lines": 39,
+        "a": {
+          "name": "src/lib/db/assessments.ts",
+          "start": 137,
+          "end": 175
+        },
+        "b": {
+          "name": "src/lib/db/meetings.ts",
+          "start": 323,
+          "end": 361
+        }
+      },
+      {
+        "lines": 34,
+        "a": {
+          "name": "operator/skills/deadline-miss-escalator/broker_writer.py",
+          "start": 38,
+          "end": 71
+        },
+        "b": {
+          "name": "operator/skills/medical-records-chaser/pre_run.py",
+          "start": 788,
+          "end": 820
+        }
+      },
+      {
+        "lines": 34,
+        "a": {
+          "name": "operator/hermes-smd-overlay/shared/msgraph_client.py",
+          "start": 199,
+          "end": 232
+        },
+        "b": {
+          "name": "operator/connectors/msgraph-mail/msgraph_mail_connector/normalize.py",
+          "start": 86,
+          "end": 117
+        }
+      },
+      {
+        "lines": 33,
+        "a": {
+          "name": "operator/skills/operator-help/pre_run.py",
+          "start": 62,
+          "end": 94
+        },
+        "b": {
+          "name": "operator/skills/statute-watch/pre_run.py",
+          "start": 55,
+          "end": 96
+        }
+      },
+      {
+        "lines": 32,
+        "a": {
+          "name": "operator/hermes-smd-overlay/shared/msgraph_client.py",
+          "start": 140,
+          "end": 171
+        },
+        "b": {
+          "name": "operator/connectors/msgraph-mail/msgraph_mail_connector/normalize.py",
+          "start": 31,
+          "end": 63
         }
       }
     ]
@@ -338,7 +330,7 @@
       "literal": "HERMES_HOME",
       "kind": "env",
       "files": 73,
-      "testFiles": 58,
+      "testFiles": 59,
       "languages": [
         "config",
         "python",
@@ -377,7 +369,7 @@
       "literal": "SMD_CUSTOMER_YAML_PATH",
       "kind": "env",
       "files": 42,
-      "testFiles": 73,
+      "testFiles": 74,
       "languages": [
         "config",
         "python",
@@ -506,10 +498,29 @@
       ]
     },
     {
+      "literal": "REPO_ROOT",
+      "kind": "env",
+      "files": 31,
+      "testFiles": 53,
+      "languages": [
+        "python",
+        "shell",
+        "ts/js"
+      ],
+      "areas": 11,
+      "sample": [
+        "bin/connect-smokeball.sh",
+        "bin/reauth-connector.sh",
+        "operator/bin/control-probes.py",
+        "operator/bin/decommission-customer.sh",
+        "operator/bin/generate-evidence-packet.sh"
+      ]
+    },
+    {
       "literal": "RESEND_API_KEY",
       "kind": "env",
-      "files": 32,
-      "testFiles": 17,
+      "files": 31,
+      "testFiles": 16,
       "languages": [
         "config",
         "python",
@@ -523,25 +534,6 @@
         "operator/bin/rehearse-card.py",
         "operator/bin/work-health.py",
         "src/env.d.ts"
-      ]
-    },
-    {
-      "literal": "REPO_ROOT",
-      "kind": "env",
-      "files": 31,
-      "testFiles": 54,
-      "languages": [
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 11,
-      "sample": [
-        "bin/connect-smokeball.sh",
-        "bin/reauth-connector.sh",
-        "operator/bin/control-probes.py",
-        "operator/bin/decommission-customer.sh",
-        "operator/bin/generate-evidence-packet.sh"
       ]
     },
     {
@@ -677,26 +669,6 @@
       ]
     },
     {
-      "literal": "ANTHROPIC_API_KEY",
-      "kind": "env",
-      "files": 18,
-      "testFiles": 22,
-      "languages": [
-        "config",
-        "python",
-        "shell",
-        "ts/js"
-      ],
-      "areas": 10,
-      "sample": [
-        "operator/assessment-eval/cli.ts",
-        "operator/bin/lib/boot_harness/cli.py",
-        "operator/bin/provision-customer.sh",
-        "operator/connectors/smokeball/smokeball_connector/page_finder.py",
-        "operator/connectors/smokeball/smokeball_connector/vision.py"
-      ]
-    },
-    {
       "literal": "ORG_ID",
       "kind": "env",
       "files": 17,
@@ -712,6 +684,26 @@
         "src/lib/auth/clerk-bridge.ts",
         "src/lib/booking/alerts.ts",
         "src/lib/booking/calendar-sync.ts"
+      ]
+    },
+    {
+      "literal": "ANTHROPIC_API_KEY",
+      "kind": "env",
+      "files": 15,
+      "testFiles": 20,
+      "languages": [
+        "config",
+        "python",
+        "shell",
+        "ts/js"
+      ],
+      "areas": 10,
+      "sample": [
+        "operator/assessment-eval/cli.ts",
+        "operator/bin/lib/boot_harness/cli.py",
+        "operator/bin/provision-customer.sh",
+        "operator/connectors/smokeball/smokeball_connector/page_finder.py",
+        "operator/connectors/smokeball/smokeball_connector/vision.py"
       ]
     },
     {
@@ -736,7 +728,7 @@
       "literal": "MSGRAPH_CLIENT_SECRET",
       "kind": "env",
       "files": 15,
-      "testFiles": 8,
+      "testFiles": 7,
       "languages": [
         "config",
         "python",
@@ -1178,7 +1170,7 @@
       "literal": "SMD_IDENTIFIER_GATE_MODE",
       "kind": "env",
       "files": 9,
-      "testFiles": 8,
+      "testFiles": 9,
       "languages": [
         "config",
         "python",
@@ -1490,23 +1482,6 @@
       ]
     },
     {
-      "literal": "SCRIPT_DIR",
-      "kind": "env",
-      "files": 7,
-      "testFiles": 0,
-      "languages": [
-        "shell"
-      ],
-      "areas": 7,
-      "sample": [
-        "bin/connect-smokeball.sh",
-        "bin/reauth-connector.sh",
-        "scripts/ci-publish-bundle.sh",
-        "scripts/ci-publish-customer-configs.sh",
-        "scripts/ci-publish-skills.sh"
-      ]
-    },
-    {
       "literal": "SMD_AUDIT_DB_PATH",
       "kind": "env",
       "files": 7,
@@ -1797,6 +1772,23 @@
         "operator/runners/jobs/jobs/litigation/firm.py",
         "operator/runners/jobs/jobs/litigation_lane.py",
         "operator/templates/entrypoint-litigation.sh"
+      ]
+    },
+    {
+      "literal": "SCRIPT_DIR",
+      "kind": "env",
+      "files": 6,
+      "testFiles": 0,
+      "languages": [
+        "shell"
+      ],
+      "areas": 6,
+      "sample": [
+        "bin/connect-smokeball.sh",
+        "bin/reauth-connector.sh",
+        "scripts/ci-publish-bundle.sh",
+        "scripts/ci-publish-customer-configs.sh",
+        "scripts/ci-publish-skills.sh"
       ]
     },
     {
@@ -2567,7 +2559,7 @@
       "a": "operator/contracts/overlay-pairs.json",
       "b": "operator/templates/Dockerfile",
       "shared": 273,
-      "degree": 84
+      "degree": 83
     },
     {
       "a": "operator/contracts/overlay-pairs.json",
@@ -2600,46 +2592,46 @@
       "degree": 83
     },
     {
+      "a": "operator/contracts/output-classes.yaml",
+      "b": "src/lib/portal/operator/facets/skills/skill-summaries.ts",
+      "shared": 24,
+      "degree": 77
+    },
+    {
       "a": "operator/adapter/audit_log.py",
       "b": "src/lib/portal/operator/audit.ts",
       "shared": 23,
-      "degree": 85
+      "degree": 84
     },
     {
-      "a": "operator/contracts/output-classes.yaml",
-      "b": "src/lib/portal/operator/facets/skills/skill-summaries.ts",
-      "shared": 23,
-      "degree": 77
+      "a": "operator/adapter/audit_log.py",
+      "b": "operator/contracts/audit-action-type-producers.json",
+      "shared": 22,
+      "degree": 76
     },
     {
       "a": "operator/contracts/audit-action-type-producers.json",
       "b": "src/lib/portal/operator/audit.ts",
       "shared": 22,
-      "degree": 72
-    },
-    {
-      "a": "operator/adapter/audit_log.py",
-      "b": "operator/contracts/audit-action-type-producers.json",
-      "shared": 21,
-      "degree": 76
+      "degree": 70
     },
     {
       "a": "operator/contracts/audit-action-type-producers.json",
       "b": "src/lib/portal/operator/activity-language.ts",
       "shared": 21,
-      "degree": 69
+      "degree": 67
     },
     {
       "a": "operator/adapter/audit_log.py",
       "b": "src/lib/portal/operator/activity-language.ts",
       "shared": 20,
-      "degree": 74
+      "degree": 73
     },
     {
       "a": ".claude/hooks/reflex-primer.sh",
       "b": "docs/doctrine/agent-operating-doctrine.md",
       "shared": 17,
-      "degree": 68
+      "degree": 67
     },
     {
       "a": "docs/adr/0096-release-controller-and-fleet-credentials.md",
@@ -2717,7 +2709,7 @@
       "a": "operator/fleet/rings.yaml",
       "b": "scripts/lib/seat-registries.ts",
       "shared": 7,
-      "degree": 82
+      "degree": 78
     },
     {
       "a": "docs/specs/ai-employee/customer-yaml-schema.md",
@@ -3105,9 +3097,9 @@
     }
   ],
   "dead": {
-    "candidates": 524,
+    "candidates": 523,
     "byKind": {
-      "variable": 140,
+      "variable": 139,
       "property": 4,
       "method": 89,
       "attribute": 129,
