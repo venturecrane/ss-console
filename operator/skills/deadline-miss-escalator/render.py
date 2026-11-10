@@ -75,33 +75,15 @@ _PRIORITY_PHRASES = {
     "HIGH PRIORITY": "the task is marked HIGH PRIORITY in Smokeball",
 }
 
-#: What a calendar date inside the firm's date-prep window still lacks: no
-#: date-prep brief has gone out for it (``prep_note_missing``, set by
-#: ``casework_filter.py`` on seats that authored ``case_manager.date_prep``).
-#: Replaced "a court date the firm authored" (2026-09-28): that told the reader
-#: what the item WAS, in our words, and asked nothing of them.
-_PREP_NOTE_PHRASE = "No prep note has gone out for this yet."
-
-#: A person answered "done" to an earlier digest and the Smokeball write never
-#: landed (``write_pending_stale``, set by ``casework_filter.py``). The line
-#: owns the miss instead of listing the task as if nobody had answered.
-_WRITE_PENDING_PHRASE = "I recorded your done on this earlier but could not update Smokeball; it is still open."
-
 
 def consequence_line(item: dict) -> str | None:
     """The one plain line of what an item still needs, or None.
 
-    Authored signal only: a recorded done that never reached Smokeball, a
-    task-priority marker the record carries, else a date in the prep window
-    with no brief out. Anything else renders nothing (rule 7: no invented
-    urgency)."""
-    if item.get("write_pending_stale") is True:
-        return _WRITE_PENDING_PHRASE
+    Authored signal only: a task-priority marker the record carries. Anything
+    else renders nothing (rule 7: no invented urgency)."""
     marker = item.get("priority_marker")
     if isinstance(marker, str) and marker in _PRIORITY_PHRASES:
         return _PRIORITY_PHRASES[marker]
-    if item.get("prep_note_missing") is True:
-        return _PREP_NOTE_PHRASE
     return None
 
 
@@ -242,32 +224,6 @@ def _overflow_block(band: dict | None) -> list[str]:
     return lines + [""]
 
 
-def _task_review_block(review: dict | None) -> list[str]:
-    """One line for the overdue tasks the task review holds (case-manager
-    seats only; the key is absent everywhere else). The day is the firm's own
-    schedule for the review, read from its cron entry, or no day at all."""
-    if not isinstance(review, dict):
-        return []
-    count = int(review.get("count") or 0)
-    if count <= 0:
-        return []
-    day = review.get("day")
-    where = f"{day}'s task review" if isinstance(day, str) and day else "the next task review"
-    noun = "overdue task is" if count == 1 else "overdue tasks are"
-    return [f"{count} more {noun} in {where}.", ""]
-
-
-def _done_since_block(rows: list[dict]) -> list[str]:
-    """Work the Operator finished without asking, told once (case-manager
-    seats with ``quiet`` authored; the key is absent everywhere else). The
-    lines are ``done_since.py``'s, rendered from the casework ledger rows."""
-    lines = [str(r.get("line") or "").strip().rstrip(". ") for r in rows or []]
-    lines = [line for line in lines if line]
-    if not lines:
-        return []
-    return ["Done since last time: " + "; ".join(lines) + ".", ""]
-
-
 def _elsewhere_block(band: dict | None) -> list[str]:
     if not (isinstance(band, dict) and band.get("matters")):
         return []
@@ -358,11 +314,8 @@ def render_digest(
     lines: list[str] = []
     if rekey_count > 0:
         lines += [_REKEY_NOTICE.format(n=rekey_count, s="" if rekey_count == 1 else "s"), ""]
-    # Done, then needs you (case-manager spec, rule 4).
-    lines += _done_since_block(digest.get("done_since") or [])
     lines += _needs_you_block(digest.get("needs_you") or [])
     lines += _overflow_block(digest.get("admin_confirms"))
-    lines += _task_review_block(digest.get("task_review"))
     lines += _elsewhere_block(digest.get("under_active_escalation_elsewhere"))
     lines += _clearance_block(digest.get("awaiting_clearance") or [])
     lines += _blanket_block(digest.get("blanket_ack_only") or [])

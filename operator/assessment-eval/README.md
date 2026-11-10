@@ -5,8 +5,7 @@ multi-turn business-assessment transcripts (an interviewer LLM in conversation
 with a simulated-owner LLM) so an interviewer skill's caliber can be judged — and
 so we can tell a good interview from a bad one.
 
-It is the analogue of `operator/voice-gate/`: local orchestration, never in the
-Cloudflare Workers bundle. No voice, no telephony, no Hermes wiring, no portal,
+It is local orchestration, never in the Cloudflare Workers bundle. No voice, no telephony, no Hermes wiring, no portal,
 no D1. Standalone by design.
 
 ## What it does and doesn't do

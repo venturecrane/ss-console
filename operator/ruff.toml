@@ -115,7 +115,6 @@ exclude = [
     "adapter/namespace_assertion.py",
     "adapter/d1_env.py",
     "workspace_broker/chain.py",
-    "adapter/recipient_classifier.py",
     "workspace_broker/escalation_ledger.py",
     "skills/*/escalation_ledger.py",
     # The casework ledger twin (overlay shared/casework_ledger.py) is formatted at

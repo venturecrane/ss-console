@@ -152,8 +152,9 @@ ACCEPTED_ACTION_TYPES = frozenset(
         "DECOMMISSION_STEP_FAILED",
         "DECOMMISSION_FINAL",
         # Honcho overlay (ADR 0016 rewrite, 2026-05-24) — mirror, don't gate.
-        # The hermes-smd-memory-mirror plugin emits this on Captain dismissal
-        # in the admin portal; the paired physical DELETE against Honcho's
+        # Reserved for a Captain dismissal of a Honcho conclusion (Phase 2;
+        # nothing emits it since the unused mirror plugin was removed
+        # 2026-11-10); the paired physical DELETE against Honcho's
         # API is what works around bug #658 (temporal awareness). There is
         # no observation or promotion event — Honcho's writes are unmodified.
         "HONCHO_CONCLUSION_DISMISSED",

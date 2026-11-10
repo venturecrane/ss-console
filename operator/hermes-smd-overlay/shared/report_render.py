@@ -132,9 +132,6 @@ class _Doc:
     def add(self, chunk: str) -> None:
         self.parts.append(chunk)
 
-    def in_list(self) -> bool:
-        return self._list is not None
-
     def item_open(self) -> bool:
         return self._item_open
 
@@ -239,7 +236,7 @@ def looks_like_report(text: str) -> bool:
 
     The send path renders only what this returns True for. That is deliberate
     and conservative: the report skills all emit block structure per their
-    ``output-format.md``, while a prose reply (the email-reply skill answering a
+    ``output-format.md``, while a prose reply (a reply answering a
     person) emits none. So the reports gain an html part and every other send
     stays byte-identical to today — this change cannot reshape a client-facing
     reply as a side effect.

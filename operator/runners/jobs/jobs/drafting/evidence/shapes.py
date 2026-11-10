@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field, replace
-from typing import Any, Iterable, Iterator, Literal, Mapping
+from typing import Any, Iterator, Literal, Mapping
 
 Kind = Literal["fact", "figure", "date", "quote", "testimony", "inference"]
 KINDS: tuple[str, ...] = ("fact", "figure", "date", "quote", "testimony", "inference")
@@ -187,9 +187,6 @@ class Ledger:
 
     def rejected(self) -> list[Fact]:
         return [f for f in self.facts if not f.usable]
-
-    def replace_facts(self, facts: Iterable[Fact]) -> "Ledger":
-        return Ledger(tuple(facts))
 
     def to_jsonl(self) -> str:
         return "".join(json.dumps(f.to_json(), sort_keys=True) + "\n" for f in self.facts)

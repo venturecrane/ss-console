@@ -338,8 +338,7 @@ def pull_matter_staff(matter_ids: Sequence[str], budget: int) -> dict[str, dict]
 # closes a task in Smokeball under the staff member who answered, so the send
 # resolves the recipient's record up front (the full-replace task PUT needs an
 # owner id, and the task read never echoes one). One paged /staff list, at
-# most two pages, read only when a dispatch has a closable task line. The
-# task-list-keeper resolves its fallback recipients the same way (pull.py).
+# most two pages, read only when a dispatch has a closable task line.
 # ---------------------------------------------------------------------------
 
 _STAFF_BY_EMAIL_SNIPPET = """\

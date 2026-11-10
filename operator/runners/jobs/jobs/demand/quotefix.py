@@ -113,12 +113,6 @@ class _Source:
         return None if best is None else best[1:]
 
 
-def best_region(quote: str, sources: list[_Source]) -> tuple[float, str] | None:
-    """(similarity, the source's own words) for the closest region, or None."""
-    got = _best(quote, sources)
-    return None if got is None else got[:2]
-
-
 def _best(quote: str, sources: list[_Source]) -> tuple[float, str, _Source] | None:
     """(similarity, the source's own words, the source they are from)."""
     qk = [_key(w) for w in quote.split()]

@@ -198,7 +198,7 @@ export function secretFindingToError(f: SecretFinding): ValidationError {
  * Characters that disqualify a roster entry outright.
  *
  * THIS SET IS A CROSS-LANGUAGE CONTRACT with the runtime classifier's
- * `_DISQUALIFYING_RE` (`operator/adapter/recipient_classifier.py`). It is spelled
+ * `_DISQUALIFYING_RE` (`operator/hermes-smd-overlay/shared/recipient_classifier.py`). It is spelled
  * out rather than written `\s` because the two languages' whitespace classes are
  * not the same set: `\uFEFF` is whitespace to JavaScript and not to Python;
  * `\x1C`-`\x1F` and `\x85` are the reverse. Arbiter fixture:

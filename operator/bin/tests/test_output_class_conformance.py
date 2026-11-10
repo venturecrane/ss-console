@@ -14,11 +14,10 @@ It also pins two claims that were previously prose only:
   * `outbound: none` — 25 skills state in their bodies that they never send
     ("It sends nothing", "never sends", "writes ONLY an internal memo"). That is
     now an assertion checked against the skill's own declared action_class.
-  * work_product placement — three of the four work_product drafters put the
-    draft in a Smokeball memo and mail a citation-free pointer, because the mail
-    channel's citation gate would refuse the draft. mediation-brief-drafter does
-    the opposite. That deviation must be DECLARED, not discovered later as a
-    delivery failure.
+  * work_product placement — a work_product drafter either places the draft
+    internally and mails a citation-free pointer (the mail channel's citation
+    gate would refuse the draft), or DECLARES that the draft leaves by email.
+    The choice must be declared, not discovered later as a delivery failure.
 
 Run::
 
@@ -185,8 +184,8 @@ def test_work_product_drafts_have_a_declared_destination() -> None:
         raise AssertionError(
             f"{skill}: content_ceiling is work_product but the binding places the draft nowhere. "
             "Declare an internal work_product artifact, or set work_product_outbound: true if the "
-            "draft leaves by email (mediation-brief-drafter does; the other three drafters mail a "
-            "citation-free pointer instead, because the citation gate would refuse the draft)."
+            "draft leaves by email (a drafter that mails a citation-free pointer instead declares the "
+            "internal artifact, because the citation gate would refuse the draft)."
         )
 
 

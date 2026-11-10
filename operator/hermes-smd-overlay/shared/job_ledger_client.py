@@ -126,18 +126,6 @@ class BrokerJobClient:
             )["decision"]
         )
 
-    def idem_complete(self, job_id: str, step_key: str, lease_epoch: int) -> bool:
-        return bool(
-            self._request(
-                {
-                    "action": "job_idem_complete",
-                    "job_id": job_id,
-                    "step_key": step_key,
-                    "lease_epoch": lease_epoch,
-                }
-            )["result"]
-        )
-
     # -- transport ---------------------------------------------------------
     def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """One request, riding out a broker respawn.

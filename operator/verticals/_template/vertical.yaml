@@ -23,8 +23,7 @@ personas:
   - slug: '[coordinator-archetype]'
     title: '[Coordinator Title]'
 
-# Reuse the shared spine where it fits (inbox-triage, status-report-assembler,
-# email-reply). Add vertical-specific skill identifiers; their bodies
+# Reuse the shared spine where it fits (inbox-triage, status-report-assembler). Add vertical-specific skill identifiers; their bodies
 # live in hermes-smd-overlay (the first hand-off).
 skills: []
 

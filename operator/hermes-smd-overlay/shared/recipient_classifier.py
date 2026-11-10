@@ -1,9 +1,8 @@
 """Recipient classification for outbound sends — the internal/external gate.
 
-Pure, deterministic, no I/O. This module is a **byte-identical twin**: this file
-(`operator/adapter/recipient_classifier.py`) and the overlay
-`shared/recipient_classifier.py` MUST stay identical (recorded in
-`operator/contracts/overlay-pairs.json`). Both the proactive send gate
+Pure, deterministic, no I/O. The one copy (its adapter twin, which no seat ran,
+was removed 2026-11-10; the spoof vectors that held it now hold this file, at
+``operator/adapter/tests/test_recipient_classifier.py``). Both the proactive send gate
 (`hermes-smd-trust`) and the reactive reply gate (`hermes-smd-reply`) classify
 recipients through this one function, so the two paths agree by construction.
 

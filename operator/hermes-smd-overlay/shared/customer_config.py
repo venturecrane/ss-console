@@ -391,8 +391,7 @@ class CustomerConfig:
 
         A sender matches when their full address (normalized lowercase) equals a
         roster entry exactly, OR a roster entry begins with ``@`` and the
-        sender's domain matches it exactly. Mirrors the email-reply skill's
-        allow-list matching. Fail-closed: an empty roster matches no one, so the
+        sender's domain matches it exactly. Fail-closed: an empty roster matches no one, so the
         Operator drafts rather than autonomously replying. Roster membership is
         the authorization to respond; the reply path still recipient-locks to the
         verified inbound sender independently.

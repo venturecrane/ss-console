@@ -285,11 +285,8 @@ The updated-records request for the one RECEIVED provider the step names
 ## Updated-records request (a routed step)
 
 Before a court date, a firm often wants a provider's newest treatment records even
-though that provider's first request was answered long ago. `date-prep-brief` offers
-this as a numbered decision when a **received** provider's newest record on file is
-older than the firm's authored `case_manager.date_prep.records_stale_days`; a person's
-"yes" reaches this skill through `matter-inbox-router` as a step with
-`mode: update`. At the firm's `handles` level the brief's own turn runs it.
+though that provider's first request was answered long ago. A person's ask for it
+reaches this skill through `matter-inbox-router` as a step with `mode: update`.
 
 **When it runs.** Only as that step (params `roster_task_id`, `provider`,
 `newest_record`, `mode: update`), or when a person asks for it directly on one

@@ -31,8 +31,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Keeps the shared calendar and sends each event as an invite to the people on the account. Never invites anyone else.',
   'case-file-manager':
     'Reads each file in a caseload, files a current File Status in each, and sends a ranked list with numbered changes for you to approve. Changes matter details only for the lines you approve.',
-  'client-matter-digest':
-    'Drafts a per-matter status update for a client, in your voice. Reports status, never advises.',
   'client-verification-tracker':
     'Tracks discovery-response verifications and chases the signer until signed. Never signs or sends without attorney approval.',
   'combined-post-intake':
@@ -61,8 +59,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Suggests date nights from what you have loved before, keeps the history, and sends you both the invite.',
   'dates-to-remember':
     'Keeps birthdays and anniversaries on your shared calendar. Gift ideas stay private to whoever had them.',
-  'date-prep-brief':
-    'When a court date comes into view, checks the file is ready, does the prep you turned on, and asks the attorney only what needs them.',
   'deadline-and-sol-tracker':
     'Surfaces your court dates, filing deadlines, and statute-of-limitations dates by urgency. Reflects dates you entered, never computes them.',
   'deadline-miss-escalator':
@@ -71,8 +67,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Drafts a policy-limits demand letter from the matter record when your attorney asks. The demand figure and every settlement decision stay with the attorney; it never sends to a carrier.',
   'document-drafter':
     'Drafts a mediation brief, discovery, a memo or a deposition outline in your house style when an administrator asks, filed in the matter for attorney review. Never sent outside the firm.',
-  'discovery-response-drafter':
-    'Drafts responses to served discovery from the matter record when your attorney asks, with objections labeled as candidates. Never serves, never signs a verification; the attorney finalizes.',
   'discovery-response-staging':
     'Stages a served discovery request and its documents so a response can be drafted, then files the finished draft for attorney review. Never drafts the response.',
   'discovery-response-tracker':
@@ -83,19 +77,13 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     "Finds your firm's own documents of each kind it drafts and lists the best for each, then makes the library file only from the one you choose, with every word of the case taken out. Admin only.",
   'document-receipt-logger':
     'Logs an inbound document against the right matter and drafts a receipt entry. Records arrival, never interprets contents.',
-  'email-reply':
-    'Handles inbound email from allow-listed senders and drafts replies in your voice.',
   'engagement-letter-chaser':
     "Tracks an unsigned engagement letter and drafts nudges until it's signed. Never interprets the terms.",
   'file-work-requests':
     "Makes your rep letters on your own forms and enters a client's medical facilities on the matter your staff name. Letter values come from the matter; anything missing is marked, never filled in.",
-  'follow-up-discovery-drafter':
-    "On your attorney's request, drafts the next round of written discovery aimed at what the record leaves unestablished, plus a short plan. Targeting decisions stay with the attorney; it never serves.",
   'gratitude-prompts':
     'Asks each of you, now and then, what you appreciated. Shared only when you choose.',
   'inbox-triage': 'Triages your inbox daily and drafts categorized replies for your review.',
-  'intake-to-system-sync':
-    'Syncs a converted lead from your intake CRM into Smokeball, with dedupe and conflict checks.',
   'lien-ledger-tracker':
     'Tracks every provider balance blocking disbursement and chases the open ones, one contact per provider. Never computes a reduction or moves money.',
   'litigation-status':
@@ -116,8 +104,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Assembles a periodic internal digest of your matters from Smokeball. Reports state, never decides next steps.',
   'matter-status-responder':
     'Answers a client\'s routine "where are we" with a factual status from the system of record. Status only, no opinion.',
-  'mediation-brief-drafter':
-    'Drafts a confidential mediation brief from the matter record against your skeleton when your attorney asks. Valuation and negotiation stay with the attorney; it never submits to a mediator.',
   'mediation-settlement-tracker':
     'Assembles the input packet for a mediation or settlement brief and tracks settlement deadlines. Never writes the brief, never asserts a deadline as final.',
   'medical-chronology-maintainer':
@@ -162,8 +148,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Drafts a press release only from facts your firm approved, at most two a month. Your firm approves, picks the wire and submits.',
   'rep-training':
     'Teaches a listed sales representative the Operator through lessons, an open-book quiz and a mock pitch, and keeps their progress. Readiness is counted by the seat, never by the model.',
-  'referral-source-acknowledgment':
-    'Drafts a courtesy thank-you to whoever referred a new matter. Never discloses client identity. Drafted for review, never auto-sent.',
   'review-reply-draft':
     "Drafts a reply to each Google review you forward, never confirming or repeating anything about anyone's matter. You post it.",
   'separate-statement-assembler':
@@ -174,8 +158,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Assembles the settlement-statement and disbursement figures when a case settles, for a person to execute in Smokeball. Never moves trust money.',
   'shared-lists':
     'Keeps your shared lists, chores, expenses and renewals in one place you can both see.',
-  'shape-establishment':
-    'Establishes how a kind of output is shaped, from examples you point it at. Admin only. Installs only rules it can show you in plain words.',
   'smd-note':
     'Sends a colleague a short note from SMD, in her own email thread or one new email to an administrator you name, in the exact words SMD approved. Never rewords it.',
   'social-post-draft':
@@ -186,8 +168,6 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Assembles a weekly client status report from your PM tools and analytics.',
   'statute-watch':
     'Emails the person you name a monthly spreadsheet of open cases with a statute date in the next three months and nothing filed, and what changed since last month. Never computes a date.',
-  'task-list-keeper':
-    'Keeps your task list honest: each week it sorts overdue tasks and sends each attorney suggested calls to answer in plain words. Nothing changes until someone says yes.',
   travel:
     'Builds your trip from forwarded confirmations, sends calendar invites, keeps packing lists, and watches prices.',
   'trial-binder-assembler':

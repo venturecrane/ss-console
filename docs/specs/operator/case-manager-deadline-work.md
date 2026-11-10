@@ -1,6 +1,12 @@
 # Operator deadline work: the case manager, not the alarm
 
-Status: **Spec, Captain-directed 2026-09-25.** Product feature; names no client.
+Status: **Removed 2026-11-10** (Captain-approved, code audit of that day). The task
+review (`task-list-keeper`), the date-prep brief (`date-prep-brief`), the
+`case_manager:` block and the escalator's half of this spec were deleted: no seat
+ever switched them on. The deadline digest's own "done with 1" completion and the
+casework ledger it writes remain. This file is kept as the record of the design.
+
+Original status: **Spec, Captain-directed 2026-09-25.** Product feature; names no client.
 Supersedes, for firm-staff messages, the ACK-code reply contract in
 `operator/skills/deadline-miss-escalator/SKILL.md` ("Fire once, acknowledge per
 item") and `references/output-format.md` ("The confirmation reply").

@@ -32,8 +32,8 @@ the firm.
   recipient).
 - "Chase Dr. Nakamura's office for the outstanding records." → `medical-records-chaser`.
 - "Draft the responses to the defense's requests for production." →
-  `discovery-response-drafter` (the other work-product drafting lane; a served discovery
-  instrument, not a settlement offer).
+  `document-drafter` where the seat carries it (a served discovery instrument, not a
+  settlement offer).
 
 ## Near-neighbor risk and the distinguisher
 

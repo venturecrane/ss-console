@@ -136,13 +136,13 @@ hooks:
 
 ### 5. `on_session_end`
 
-**Purpose (overlay):** Honcho conclusion mirror trigger (`hermes-smd-memory-mirror` — poll Honcho for new conclusions and write them to per-customer D1 with provenance).
+**Purpose (overlay):** end-of-turn checks (`hermes-smd-space-delivery`, `hermes-smd-reply`) and per-session cleanup (`hermes-smd-peer-memory`). It was first claimed for the Honcho conclusion mirror (`hermes-smd-memory-mirror`), which was removed unused on 2026-11-10 with Honcho still deferred to Phase 2.
 
 **Primary firing site:** `agent/turn_finalizer.py:798` (`run_agent.py:16016-16024` at v2026.5.16).
 
 **Safety-net firing site:** `hermes_cli/cli_shutdown.py:196-216` at v0.22.5 (a gateway turn now fires its own end hook when interrupted); `cli.py:13831-13839` at v2026.5.16 — only fires when an interrupted exit occurs while the agent is mid-turn (i.e., `run_conversation()`'s hook didn't fire because the turn was incomplete). `cli.py:13826-13828` documents the rule: "run_conversation() already fires this per-turn on normal completion".
 
-**Firing cadence:** **Per-turn, not per-conversation.** `on_session_end` fires at the end of every `run_conversation()` call, which is once per agent turn — not once per chat session. The overlay's memory-mirror plugin runs on every turn; this is the correct cadence given Honcho's `writeFrequency: session` (per ADR 0016) which produces new conclusions at the per-turn boundary.
+**Firing cadence:** **Per-turn, not per-conversation.** `on_session_end` fires at the end of every `run_conversation()` call, which is once per agent turn — not once per chat session. Every overlay `on_session_end` callback therefore runs once per turn.
 
 **Abnormal-exit risk:** Neither firing site handles `kill -9`, container OOM, or unhandled SIGSEGV. The plan §6 calls for a "periodic backup poller for sessions that end abnormally" — this risk justifies that work; the hook alone is not sufficient.
 
@@ -185,7 +185,7 @@ All six hooks the overlay design depends on exist in upstream Hermes at the pinn
 - The post-tool seam (`post_tool_call`) is the correct location for audit emission.
 - `pre_llm_call` writes into the user message (not the system prompt) — preserves prompt-cache stability.
 - `post_llm_call` only fires on completed, non-interrupted turns. Interrupted turns will need to be captured by an alternative signal (e.g., `on_session_end` with `completed=False, interrupted=True`); the audit plugin can compensate.
-- `on_session_end` fires per-turn, not per-conversation. The memory-mirror plugin's mirror cadence aligns naturally (Honcho's `writeFrequency: session` produces new conclusions at the same per-turn boundary).
+- `on_session_end` fires per-turn, not per-conversation.
 
 The plan's three branch conditions ((a) revise plugin design, (b) propose upstream contribution, (c) accept degraded feature) are **not triggered**. Proceed to §4 (create the overlay repo) as planned.
 
@@ -227,7 +227,7 @@ For reference, the complete set of hook names Hermes accepts at the pinned ref (
 | `pre_api_request` | no | gateway-level API request (not relevant) |
 | `post_api_request` | yes | per-person token metering — `hermes-smd-usage` folds each request's `usage` into a (day, person, model) row, attributed via the session's inbound origin (ss-console #2070; kwargs verified against the pinned ref, `vfy_01KYT51JXBHNSSE99PCCXAA2M3`) |
 | `on_session_start` | no | per-turn session-start (not currently used; available if needed) |
-| `on_session_end` | yes | memory-mirror trigger; `hermes-smd-space-delivery` checks a couples routine that owed an email sent one, and `hermes-smd-reply` that a rostered email answered only in text got its reply (ERROR + page otherwise). Both plugins' end-of-turn hooks only submit to `shared.hook_worker`: Hermes skips a bounded callback still running for another session |
+| `on_session_end` | yes | `hermes-smd-space-delivery` checks a couples routine that owed an email sent one, and `hermes-smd-reply` that a rostered email answered only in text got its reply (ERROR + page otherwise). Both plugins' end-of-turn hooks only submit to `shared.hook_worker`: Hermes skips a bounded callback still running for another session |
 | `on_session_finalize` | no | session-end finalization |
 | `on_session_reset` | no | session reset |
 | `subagent_stop` | yes | one SUBAGENT_STOPPED audit row per delegated child (`hermes-smd-audit`, ADR 0021 Stream C) |

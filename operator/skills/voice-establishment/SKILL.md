@@ -271,7 +271,7 @@ against the firm's own writing. **With zero rules the self-test is recorded NOT 
 passed** - a check that cannot fail has measured nothing. The six machine-checkable shape
 rules do not belong on a voice specification: format is binary and voice is graded, and
 offering a hard checker for how something sounds promises enforcement the substrate cannot
-deliver. Shape belongs to `shape-establishment`.
+deliver. Shape is not part of a voice specification.
 
 ### 5. Install
 
@@ -437,6 +437,3 @@ the two voices, format as a peer axis), and
 `docs/adr/0085-conversational-establishment-voice-output-shape.md` (why establishment happens
 here and not in a form). Those paths are where the rules are maintained; every rule you need at
 runtime is stated above, because the image does not carry the documentation tree.
-
-Companion skill: `shape-establishment`, the same motion for how an output is **shaped**. Voice
-and shape are separate properties of a class and separate runs.

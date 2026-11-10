@@ -235,9 +235,6 @@ class DraftingRun(EvidenceLane, Placing):
             self._put("date", stamp)
         return str(stamp)
 
-    def _json_text(self, name: str) -> str:
-        return (self.data / name).read_text(encoding="utf-8")
-
     def _json(self, name: str) -> Any:
         return json.loads((self.data / name).read_text(encoding="utf-8"))
 

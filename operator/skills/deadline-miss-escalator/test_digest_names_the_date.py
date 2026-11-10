@@ -12,7 +12,7 @@ already read everything a better line needs: the calendar title ("Final Status
 Conference - Okafor v. Grand Valley Market (Dept 47)") and the matter record
 whose ``title`` is "2026-PI-105 - Okafor, Denise - Personal Injury - Plaintiff -
 Grand Valley Market, Inc.". These tests run that record through the real pull
-parse, the casework filter, the projection and the envelope, and pin the words.
+parse, the projection and the envelope, and pin the words.
 
 Two things the words must still survive, both checked here against the
 ss-console source-of-truth copies of the send gate's filters:
@@ -53,7 +53,6 @@ def _load(path: Path, name: str):
 
 _pre_run = _load(_SKILL / "pre_run.py", "escalator_pre_run_names")
 _items = _load(_SKILL / "digest_items.py", "escalator_digest_items_names")
-_cw = _load(_SKILL / "casework_ledger.py", "escalator_cw_ledger_names")
 _citations = _load(_FILTERS / "citation_filter.py", "substrate_citation_filter_names")
 _identifiers = _load(_FILTERS / "identifier_filter.py", "substrate_identifier_filter_names")
 
@@ -86,7 +85,6 @@ LIEN_TASK = {
     "matterNumber": "2026-PI-104",
 }
 
-DATE_PREP = {"date_prep": {"level": "prepares", "window_days": 14}}
 
 #: Our words, never the firm's. None may reach a reader.
 INTERNAL_PHRASES = ("court-date", "task-deadline", "a court date the firm authored")
@@ -121,17 +119,12 @@ class _PullSource:
         return self._deadlines
 
 
-def _run(tmp_path: Path, monkeypatch, *, tasks=(), events=(), case_manager=None, casework_rows=()):
+def _run(tmp_path: Path, monkeypatch, *, tasks=(), events=()):
     tmp_path.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     doc: dict = {"escalation": {"red_flag_recipients": ["triage@firm.test"]}}
-    if case_manager is not None:
-        doc["case_manager"] = case_manager
     (tmp_path / "customer.yaml").write_text(yaml.safe_dump(doc), encoding="utf-8")
     monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(tmp_path / "customer.yaml"))
-    ledger_file = tmp_path / "casework.jsonl"
-    ledger_file.write_text("".join(json.dumps(r) + "\n" for r in casework_rows), encoding="utf-8")
-    monkeypatch.setenv("SMD_CASEWORK_LEDGER_PATH", str(ledger_file))
     with redirect_stdout(io.StringIO()):
         code = asyncio.new_event_loop().run_until_complete(
             _pre_run.run_once(
@@ -167,12 +160,11 @@ def _gate_register(handoff: dict):
 
 
 def test_the_okafor_email_names_the_case_and_the_date(tmp_path, monkeypatch):
-    dispatch, _handoff = _run(tmp_path, monkeypatch, events=[OKAFOR_EVENT], case_manager=DATE_PREP)
+    dispatch, _handoff = _run(tmp_path, monkeypatch, events=[OKAFOR_EVENT])
     assert dispatch["subject"] == "[Deadlines] Okafor: Final Status Conference Fri Oct 2"
     assert dispatch["full_body"] == (
         "## Needs you today (1)\n\n"
-        "1. 2026-PI-105 Okafor: Final Status Conference, Fri Oct 2, 2026 (in 4 days)\n"
-        "   No prep note has gone out for this yet.\n\n" + FOOTER
+        "1. 2026-PI-105 Okafor: Final Status Conference, Fri Oct 2, 2026 (in 4 days)\n\n" + FOOTER
     )
     # The reply loop is untouched: one number, one row behind it.
     assert [a["n"] for a in dispatch["appends"]] == [1]
@@ -184,7 +176,6 @@ def test_several_items_count_in_the_subject_and_each_line_names_its_own(tmp_path
         monkeypatch,
         tasks=[RIVERA_TASK, LIEN_TASK],
         events=[OKAFOR_EVENT],
-        case_manager=DATE_PREP,
     )
     assert dispatch["subject"] == "[Deadlines] 2 tasks and 1 date need you, Sep 28"
     assert dispatch["full_body"] == (
@@ -192,42 +183,14 @@ def test_several_items_count_in_the_subject_and_each_line_names_its_own(tmp_path
         "Most overdue first.\n\n"
         "1. 2026-PI-101 Rivera: Serve discovery responses, due Jul 8, 2026 (overdue 82 days)\n"
         "2. 2026-PI-104: Chase Medi-Cal (DHCS) final lien payoff demand, due Sep 30, 2026 (in 2 days)\n"
-        "3. 2026-PI-105 Okafor: Final Status Conference, Fri Oct 2, 2026 (in 4 days)\n"
-        "   No prep note has gone out for this yet.\n\n" + FOOTER
+        "3. 2026-PI-105 Okafor: Final Status Conference, Fri Oct 2, 2026 (in 4 days)\n\n" + FOOTER
     )
     assert [a["n"] for a in dispatch["appends"]] == [1, 2, 3]
 
 
-def test_no_prep_line_without_date_prep_or_once_a_brief_is_out(tmp_path, monkeypatch):
-    unconfigured, _ = _run(tmp_path / "a", monkeypatch, events=[OKAFOR_EVENT])
-    assert "prep note" not in unconfigured["full_body"]
-    assert (
-        "1. 2026-PI-105 Okafor: Final Status Conference, Fri Oct 2, 2026 (in 4 days)\n\n" in (unconfigured["full_body"])
-    )
-    key = _cw.item_key(matter_id="m-105", kind="date", source_id="ev-okafor-fsc")
-    briefed = {
-        "item_key": key,
-        "matter_id": "m-105",
-        "kind": "date",
-        "source_id": "ev-okafor-fsc",
-        "event": "briefed",
-        "n": 1,
-        "thread_ref": "t-1",
-        "dispatch_ref": "b" * 32,
-        "payload": {"action": "keep", "class": "at_stake", "evidence": []},
-        "ts": "2026-09-25T14:00:00Z",
-    }
-    # Unanswered brief inside notify_days: the backstop fires the date, and a
-    # brief HAS gone out, so the line does not claim otherwise.
-    near = {**OKAFOR_EVENT, "startTime": "2026-09-30T15:30:00Z"}
-    backstop, _ = _run(tmp_path / "b", monkeypatch, events=[near], case_manager=DATE_PREP, casework_rows=[briefed])
-    assert "1. 2026-PI-105 Okafor: Final Status Conference, Wed Sep 30, 2026 (in 2 days)" in backstop["full_body"]
-    assert "prep note" not in backstop["full_body"]
-
-
 def test_no_internal_phrase_reaches_a_subject_or_body(tmp_path, monkeypatch):
     runs = [
-        _run(tmp_path / "one", monkeypatch, events=[OKAFOR_EVENT], case_manager=DATE_PREP)[0],
+        _run(tmp_path / "one", monkeypatch, events=[OKAFOR_EVENT])[0],
         _run(tmp_path / "many", monkeypatch, tasks=[RIVERA_TASK, LIEN_TASK], events=[OKAFOR_EVENT])[0],
         _run(tmp_path / "bare", monkeypatch, events=[{**OKAFOR_EVENT, "subject": "", "matterTitle": ""}])[0],
     ]
@@ -243,9 +206,7 @@ def test_no_internal_phrase_reaches_a_subject_or_body(tmp_path, monkeypatch):
 
 
 def test_the_send_gate_passes_the_words_it_can_see(tmp_path, monkeypatch):
-    dispatch, handoff = _run(
-        tmp_path, monkeypatch, tasks=[RIVERA_TASK, LIEN_TASK], events=[OKAFOR_EVENT], case_manager=DATE_PREP
-    )
+    dispatch, handoff = _run(tmp_path, monkeypatch, tasks=[RIVERA_TASK, LIEN_TASK], events=[OKAFOR_EVENT])
     sent = dispatch["subject"] + "\n" + dispatch["full_body"]
     # Citation scan, with NO caption allowlist: a pre-rendered dispatch runs
     # before the turn reads anything, and the handoff seeds no captions.

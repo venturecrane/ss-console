@@ -263,12 +263,11 @@ classes:
 #
 # 32 of the 51 skills emit more than one artifact with different readers, which
 # is why every entry is a LIST. The known-hardest case is the work-product
-# drafters: three of the four put the draft in a Smokeball memo and email the
-# requesting attorney a CITATION-FREE POINTER, because the mail channel's
-# citation gate would refuse the draft itself. mediation-brief-drafter does the
-# opposite — it mails the draft and logs to the memo. Same class, different
-# declared delivery. That difference is exactly what this registry exists to
-# make visible rather than leave as a surprise in a skill body.
+# drafters: they put the draft in the matter and email the requesting attorney
+# a CITATION-FREE POINTER, because the mail channel's citation gate would refuse
+# the draft itself. A drafter that mailed the draft instead would have to
+# declare work_product_outbound. That difference is exactly what this registry
+# exists to make visible rather than leave as a surprise in a skill body.
 # ============================================================================
 
 skill_bindings:
@@ -284,27 +283,6 @@ skill_bindings:
       # in the matter; the turn itself writes nothing to the matter.
       - { artifact: draft, seam: smokeball_file, class: work_product }
     outbound: derived # one bound reply in the requester's thread naming the filed file
-  discovery-response-drafter:
-    internal:
-      - { artifact: draft, seam: smokeball_memo, class: work_product }
-      - { artifact: review_task, seam: smokeball_task, class: record }
-    outbound: derived # citation-free pointer
-  follow-up-discovery-drafter:
-    internal:
-      - { artifact: draft_package, seam: smokeball_memo, class: work_product }
-      - { artifact: review_task, seam: smokeball_task, class: record }
-    outbound: derived # citation-free pointer (Shape B)
-  mediation-brief-drafter:
-    internal:
-      - { artifact: internal_log, seam: smokeball_memo, class: record }
-    outbound: derived
-    # The one work_product skill whose draft leaves by email rather than landing
-    # in a memo. Declared, not hidden: the conformance test requires every
-    # work_product skill to place its draft SOMEWHERE, and this flag is the only
-    # way to satisfy it without an internal work_product artifact. A reader who
-    # wonders why this drafter differs from the other three finds the answer
-    # here instead of inferring it from a delivery failure.
-    work_product_outbound: true
 
   # ---- law-firm / PI: court-bound assembly (staged for an attorney to file) ----
   separate-statement-assembler:
@@ -462,21 +440,6 @@ skill_bindings:
       - { artifact: memo, seam: smokeball_memo, class: record }
       - { artifact: task, seam: smokeball_task, class: record }
     outbound: derived # confirmation reply enumerating acked codes
-  task-list-keeper:
-    internal:
-      - { artifact: task_review, seam: email_send, class: staff }
-      - { artifact: memo, seam: smokeball_memo, class: record }
-      - { artifact: task, seam: smokeball_task, class: record }
-      - { artifact: heartbeat_row, seam: local_file, class: record }
-    outbound: none # the review goes to firm staff only; a reply is answered by matter-inbox-router
-  # Date prep brief (case-manager spec Job 2): one brief per matter to its own
-  # staff, rendered by the overlay's casework_brief from turn-supplied
-  # done lines and at most two catalog questions. The steps it runs at
-  # "handles" write through their own routines' bindings, not this one.
-  date-prep-brief:
-    internal:
-      - { artifact: file_status, seam: session_output, class: staff }
-    outbound: derived # the brief to the matter's responsible attorney, assisting staff copied
   # Statute watch: one monthly report of open cases with a statute date in the
   # next three months and nothing filed, rendered by the pre-run and sent out
   # of turn to the one recipient the firm named in the skill's settings.
@@ -538,11 +501,6 @@ skill_bindings:
       - { artifact: filing_proposal, seam: session_output, class: staff }
       - { artifact: receipt_memo, seam: smokeball_memo, class: record }
     outbound: none
-  intake-to-system-sync:
-    internal:
-      - { artifact: contact_matter_draft, seam: smokeball_file, class: record }
-      - { artifact: sync_back, seam: local_file, class: record }
-    outbound: none
   conflict-intake-router:
     internal: []
     outbound: derived # conflict notice routed to the responsible person
@@ -570,9 +528,6 @@ skill_bindings:
       - { artifact: ledger_row, seam: local_file, class: record }
       - { artifact: task, seam: smokeball_task, class: record }
     outbound: derived # signer request, plus a tokened approval mail to the attorney
-  client-matter-digest:
-    internal: []
-    outbound: derived # proactive client status update
   matter-status-responder:
     internal:
       - { artifact: sources_audit, seam: session_output, class: staff }
@@ -601,12 +556,6 @@ skill_bindings:
       - { artifact: calendar_entry, seam: smokeball_event, class: record }
       - { artifact: memo, seam: smokeball_memo, class: record }
     outbound: derived # consult confirmation
-  referral-source-acknowledgment:
-    internal: []
-    outbound: derived
-  email-reply:
-    internal: []
-    outbound: derived # reply draft to an allow-listed sender
   inbox-triage:
     internal:
       - { artifact: triage_note, seam: local_file, class: staff }
@@ -737,25 +686,21 @@ skill_bindings:
     outbound: none
 
   # ---- conversational establishment (ADR 0085) ----
-  # These two do not produce an output OF a class; they establish a PROPERTY of
-  # one. The derived spec is not bound here on purpose: binding it would make
-  # the specification an artifact of some class, which inverts the relationship
-  # it has to every class. The only artifact either skill emits is its report
+  # voice-establishment does not produce an output OF a class; it establishes a
+  # PROPERTY of one. The derived spec is not bound here on purpose: binding it
+  # would make the specification an artifact of some class, which inverts the
+  # relationship it has to every class. The only artifact it emits is its report
   # back to the instructing admin, in that admin's own turn.
   voice-establishment:
     internal:
       - { artifact: establishment_report, seam: session_output, class: staff }
     outbound: none # the submission goes through the broker; the reply is the admin's own turn
-  shape-establishment:
-    internal:
-      - { artifact: establishment_report, seam: session_output, class: staff }
-    outbound: none # same
-  # The third establishment skill, and the one that lands a real artifact. Its
+  # The other establishment skill, and the one that lands a real artifact. Its
   # templates are `record`, not `work_product`: a skeleton carries the firm's
   # structure and, by the render gate's construction, no case content at all, so
   # it is a filed record of how the firm builds a document rather than a draft
   # of anything. The report to the instructing admin is the same staff-class
-  # session output the other two emit.
+  # session output voice-establishment emits.
   document-library-establishment:
     internal:
       - { artifact: template_docx, seam: smokeball_file, class: record }

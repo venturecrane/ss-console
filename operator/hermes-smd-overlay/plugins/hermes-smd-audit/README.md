@@ -20,6 +20,6 @@ Stub. Real implementation ports from `ss-console/operator/adapter/audit_log.py` 
 
 ## Notes
 
-- Interrupted turns are not captured by `post_llm_call`. The `on_session_end` hook (handled by `hermes-smd-memory-mirror`) covers that case with `interrupted=True`. Cross-correlate via `session_id`.
+- Interrupted turns are not captured by `post_llm_call`. No overlay plugin captures that case today; Hermes fires `on_session_end` with `interrupted=True` for it, which a future audit hook could read. Cross-correlate via `session_id`.
 - `transform_tool_result` fires after `post_tool_call`; audit is observer-only and does not interact with that seam.
 - GEPA-related action types (ADR 0018, superseded) are not carried forward.

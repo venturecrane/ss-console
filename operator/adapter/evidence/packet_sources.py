@@ -559,7 +559,7 @@ async def _fetch_memory_snapshot(reader: ReadExecutor) -> dict:
     # ADR-0016 live memory (#1355): the Machine-local persona_observations
     # mirror, pulled into the snapshot DB by the seam preserver
     # (bin/lib/seam_pull.py) before decommission. SELECT * because the table
-    # schema is owned by the overlay's memory-mirror plugin; absent table →
+    # schema is migration 0007's (its writer is deferred to Phase 2); absent table →
     # honest empty via _fetch_safe.
     observations = await _fetch_safe(reader, "SELECT * FROM persona_observations ORDER BY rowid ASC")
 

@@ -429,10 +429,6 @@ class EnrollmentStore:
             if outcome in FAILURES and (key is None or (row_key == key and outcome != UNAUTHENTICATED))
         )
 
-    def failed_attempts(self, since: datetime) -> int:
-        with self._db() as conn:
-            return self._failures(conn, since, None)
-
     def record(self, sender: str, outcome: str, now: datetime | None = None) -> None:
         if outcome not in OUTCOMES:
             raise EnrollmentError(f"unknown outcome {outcome!r}")

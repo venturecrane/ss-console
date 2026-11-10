@@ -213,13 +213,3 @@ def strip_tokens(text: str) -> str:
             if chars[i] != "\n":
                 chars[i] = " "
     return "".join(chars)
-
-
-def ids_used(text: str) -> list[str]:
-    tokens, _ = parse(text)
-    seen: list[str] = []
-    for t in tokens:
-        for i in t.ids:
-            if i not in seen:
-                seen.append(i)
-    return seen

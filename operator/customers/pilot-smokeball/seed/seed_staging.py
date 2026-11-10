@@ -206,10 +206,9 @@ def seed_events(api: Api, manifest: dict, specs: dict, staff_id: str) -> dict:
 def main() -> None:
     from seed_data import CONTACTS, MATTERS, build_documents, TASKS
     from seed_date_prep import DATE_PREP_EVENTS, build_date_prep_documents
-    from seed_keeper_overdue import KEEPER_TASKS, build_keeper_documents
 
-    documents = {**build_documents(), **build_keeper_documents(), **build_date_prep_documents()}
-    tasks = {**TASKS, **KEEPER_TASKS}
+    documents = {**build_documents(), **build_date_prep_documents()}
+    tasks = dict(TASKS)
 
     api = Api()
     manifest = load_manifest()
@@ -285,7 +284,7 @@ def main() -> None:
         save_manifest(manifest)
         print(f"task {key}: {task_id}")
 
-    # 5. calendar events (a court date the date-prep brief can prep for)
+    # 5. calendar events (court dates on the demo matters)
     events = seed_events(api, manifest, DATE_PREP_EVENTS, staff_id)
 
     print(

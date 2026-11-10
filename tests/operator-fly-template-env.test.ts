@@ -3,7 +3,7 @@
  * (operator/bin/lib/render-fly-toml.sh, sourced the way provision-customer.sh
  * sources it) and parsed as TOML.
  *
- * The overlay plugins (audit, voice, webhook-router, trust, memory-mirror) call
+ * The overlay plugins (audit, voice, webhook-router, trust) call
  * `require("SMD_CUSTOMER_SLUG", "SMD_D1_AUDIT_BINDING")` at register and bail to
  * a degraded no-op branch if either is missing. `SMD_CUSTOMER_SLUG` was once
  * omitted from the template (only `CUSTOMER_SLUG` was set), which silently

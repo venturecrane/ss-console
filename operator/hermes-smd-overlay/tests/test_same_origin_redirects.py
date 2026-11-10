@@ -2,8 +2,7 @@
 
 ``urlopen``'s redirect handler follows a 30x to any host and copies the
 original request's headers, ``Authorization`` included, onto the new request.
-Every authenticated urllib caller (AgentMail's API GET, the Graph client, the
-Honcho sidecar client) routes through ``shared.same_origin_redirects``, which
+Every authenticated urllib caller (AgentMail's API GET, the Graph client) routes through ``shared.same_origin_redirects``, which
 refuses any hop off the request's origin. These tests drive the REAL redirect
 machinery with a scripted network handler; nothing reaches the network.
 """
@@ -22,7 +21,6 @@ import pytest
 
 from shared import msgraph_client
 from shared import same_origin_redirects as same_origin
-from tests.conftest import load_plugin
 
 
 class _ScriptedNet(urllib.request.BaseHandler):
@@ -142,19 +140,3 @@ def test_a_graph_redirect_off_graph_never_carries_the_bearer(
         client.request("GET", url)
     assert all(not u.startswith("https://evil.example") for u, _ in net.hops)
     assert (url, "Bearer graph-tok") in net.hops
-
-
-# ---- the Honcho sidecar client ---------------------------------------------
-
-
-def test_a_honcho_redirect_off_the_sidecar_never_carries_the_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    mod = load_plugin("hermes-smd-memory-mirror")
-    client = mod.honcho_client.HonchoClient(base_url="http://localhost:8000", api_key="hk")
-    start = "http://localhost:8000/v2/anything"
-    # The off-origin URL is deliberately unscripted: reaching it is a KeyError.
-    net = _install({start: "http://evil.example/steal"}, monkeypatch)
-    with pytest.raises(mod.honcho_client.HonchoUnreachable, match="HTTP 302"):
-        client._get("/v2/anything")
-    assert net.hops == [(start, "Bearer hk")]

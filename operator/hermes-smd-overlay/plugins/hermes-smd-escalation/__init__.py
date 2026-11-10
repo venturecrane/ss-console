@@ -704,27 +704,6 @@ def _casework_append(event: dict[str, Any]) -> dict[str, Any]:
     return _broker_request({"action": "casework_event_append", "event": event})
 
 
-def _casework_finish(args: dict[str, Any], **kwargs: Any) -> str:
-    """Task review (``casework.py``). No model arguments."""
-    return casework.casework_finish(
-        session_id=_resolved_session(kwargs), append=lambda event: _casework_append(event)
-    )
-
-
-def _casework_brief(args: dict[str, Any], **kwargs: Any) -> str:
-    """Date-prep brief (``casework.py``): lines and catalog ids only."""
-    return casework.casework_brief(
-        args, session_id=_resolved_session(kwargs), append=lambda event: _casework_append(event)
-    )
-
-
-def _casework_step_done(args: dict[str, Any], **kwargs: Any) -> str:
-    """A date-prep step the turn ran at handles (``casework_steps.py``). No arguments."""
-    return casework.casework_step_done(
-        session_id=_resolved_session(kwargs), append=lambda event: _casework_append(event)
-    )
-
-
 def _reply_verdicts(args: dict[str, Any], **kwargs: Any) -> str:
     """Every plain-word reply: casework rows first, else the digest ack path."""
     return casework.reply_verdicts(
@@ -779,31 +758,18 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         reply_items.SCHEMA,
         _escalation_reply_ack,
     ),
-    "casework_finish": (casework.FINISH_DESCRIPTION, casework.EMPTY_SCHEMA, _casework_finish),
-    "casework_brief": (
-        casework.BRIEF_DESCRIPTION,
-        casework.BRIEF_SCHEMA,
-        _casework_brief,
-    ),
     "reply_verdicts": (casework.REPLY_DESCRIPTION, casework.EMPTY_SCHEMA, _reply_verdicts),
-    "casework_step_done": (
-        casework.STEP_DONE_DESCRIPTION,
-        casework.EMPTY_SCHEMA,
-        _casework_step_done,
-    ),
 }
 
 
-#: The casework tools: each hands the model ``mcp_smokeball_update_task`` calls to
-#: make, so they exist only on a seat that authors the Smokeball connector (ADR 0100).
-SMOKEBALL_TOOLS: frozenset[str] = frozenset(
-    {"casework_finish", "casework_brief", "reply_verdicts", "casework_step_done"}
-)
+#: The casework tool: it hands the model ``mcp_smokeball_update_task`` calls to
+#: make, so it exists only on a seat that authors the Smokeball connector (ADR 0100).
+SMOKEBALL_TOOLS: frozenset[str] = frozenset({"reply_verdicts"})
 
 
 def tools_for(doc: dict[str, Any] | None) -> dict[str, Any]:
     """The tools a seat whose config is ``doc`` registers: the ledger tools always,
-    the casework tools only where the seat authors Smokeball."""
+    the casework reply tool only where the seat authors Smokeball."""
     if capabilities.authors_connector(doc, "smokeball"):
         return dict(TOOLS)
     return {name: spec for name, spec in TOOLS.items() if name not in SMOKEBALL_TOOLS}

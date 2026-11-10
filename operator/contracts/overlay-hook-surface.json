@@ -5,7 +5,7 @@
     "THE INERT-CONTROL CLASS THIS CLOSES. The SMD overlay's governance is only real if its",
     "functional plugins actually REGISTER their Hermes hooks at boot. The trust-ceiling gate",
     "is the pre_tool_call hook; audit emission is post_tool_call/post_llm_call/subagent_stop;",
-    "the webhook router is pre_gateway_dispatch; memory-mirror is on_session_end. If a hook is",
+    "the webhook router is pre_gateway_dispatch. If a hook is",
     "dropped from the activation expectation, or a functional plugin stops registering, the",
     "operator boots UNGOVERNED while every other test still passes — the exact inert-control",
     "shape the audit named (test_invariant_8_overlay_activation.py is the runtime gate, but",
@@ -60,11 +60,6 @@
       "safetyCritical": false,
       "purpose": "one audit row per child subagent completion (ADR 0021 Stream C)"
     },
-    "on_session_end": {
-      "plugin": "hermes-smd-memory-mirror",
-      "safetyCritical": false,
-      "purpose": "mirror Honcho conclusions / agent-authored skills to D1 (ADR 0016/0017)"
-    },
     "pre_gateway_dispatch": {
       "plugin": "hermes-smd-webhook-router",
       "safetyCritical": true,
@@ -74,7 +69,6 @@
   "functionalPlugins": [
     "hermes-smd-audit",
     "hermes-smd-trust",
-    "hermes-smd-memory-mirror",
     "hermes-smd-webhook-router",
     "hermes-smd-inbound"
   ],

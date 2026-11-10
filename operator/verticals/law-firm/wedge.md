@@ -42,13 +42,10 @@ The tracker runs as a **scheduled internal surface alongside the named-job loop,
 
 It sits adjacent to `matter-status-digest` exactly as the digest sits adjacent to the responder (wedge.md "Spine"): the **digest** reports broad matter state (open-by-stage, quiet matters, trust); the **tracker** reports critical-date proximity (overdue / imminent / upcoming). Clean directional split, verified by the tracker's `tests/selector_test.md`. The tracker reads `list_calendar_entries` + `list_tasks(due_at)` — both available today, no connector field-widening required (unlike the escalation routing follow-on).
 
-## Deferred — 5 (each off the named job's critical path)
+## Deferred — 2 (each off the named job's critical path)
 
 - **`conflict-intake-router` — #1 depth-add.** Its detect-and-surface job is absorbed (above); what's deferred is the _full_ router: rich multi-party capture, routing to the specific assigned person, the cross-matter cadence scan. Add first, deliberately, when depth is wanted. It sits adjacent to a compliance floor, so it is never "just another skill."
 - **`document-receipt-logger`** — inbound-document filing is a parallel workflow; no wedge step depends on a logged document.
-- **`client-matter-digest`** — proactive scheduled digest; a richer form of the wedge's reactive `matter-status-responder`.
-- **`referral-source-acknowledgment`** — courtesy thank-you, off the matter-progression path.
-- **`intake-to-system-sync`** — only load-bearing when a _separate_ intake CRM (Clio Grow / Lawmatics) runs alongside Clio; the pilot assumes Clio as single system of record, and it needs `build:clio-grow`, which the wedge avoids.
 
 ## Write posture this phase — fail-closed, draft-and-surface
 

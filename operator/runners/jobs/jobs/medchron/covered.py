@@ -306,11 +306,6 @@ def _union(records: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def write_debug(path: Path, payload: dict[str, Any]) -> None:
-    """The payload as sent, beside the run, for a later hand-reconstruction."""
-    path.write_text(json.dumps(payload, indent=1, sort_keys=True), encoding="utf-8")
-
-
 def merge_covered(outcomes: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Union the units' coverage records from a job's outcomes, or None when no
     unit reported one (the daemon sends nothing rather than an empty claim).

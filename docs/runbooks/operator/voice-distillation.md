@@ -160,7 +160,8 @@ nothing retained can re-run the check, and that is correct rather than a gap.
 ### 11. [C] Held-out validation
 
 Exclude two documents from steps 4 through 10. Draft against the compiled spec
-and grade against the held-out originals using `operator/voice-gate/`.
+and grade against the held-out originals (the `operator/voice-gate/` blind-test
+harness that once did this was removed 2026-11-10, unused; grade by hand).
 
 A spec that cannot reproduce a document it never saw is overfit.
 

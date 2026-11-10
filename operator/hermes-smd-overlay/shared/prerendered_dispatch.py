@@ -65,9 +65,7 @@ APPENDS ARE POST-DISPATCH AND FULL-BODY ONLY. After a successful FULL send,
 this module writes the envelope's ``fired``/``chased``/``handed_off`` events
 through the broker's ``escalation_event_append`` verb with the SAME resolved
 session id the send row carries, so the broker's send witness joins them
-deterministically. On a case-manager seat the same holds for the casework
-``mentioned`` rows a body's "Done since last time" line earns
-(:mod:`shared.casework_mentions`). A skeleton delivery appends NOTHING — the per-item codes
+deterministically. A skeleton delivery appends NOTHING — the per-item codes
 never reached a person, and the items re-fire next run by the ledger's own
 re-fire property (annoying, never dangerous). The derive-handle discipline
 (ss #2304) guards MODEL-supplied identity; this module is deterministic code
@@ -92,7 +90,6 @@ import socket
 from collections import OrderedDict
 
 from shared import (
-    casework_mentions,
     casework_raises,
     cron_attribution,
     digest_reply_ref,
@@ -198,9 +195,7 @@ def _valid_dispatch(entry: object) -> bool:
             return False
         if not digest_reply_ref.append_digest_fields_ok(append):
             return False
-    return casework_mentions.valid(entry.get("casework_mentions")) and casework_raises.valid(
-        entry.get("casework_raises")
-    )
+    return casework_raises.valid(entry.get("casework_raises"))
 
 
 def take_envelope(
@@ -560,11 +555,6 @@ def dispatch_prerendered(session_id: str) -> str | None:
                         *(result.recipients or recipients),
                         *(c for c in (entry.get("cc") or []) if isinstance(c, str)),
                     ],
-                )
-                # Case-manager seats: the "Done since last time" line this body
-                # carried is told once (shared/casework_mentions.py).
-                casework_mentions.write(
-                    routine.skill, entry.get("casework_mentions") or [], resolved
                 )
                 # The task lines a person may answer "done" to: one proposed
                 # complete per line, joined to this send (shared/casework_raises.py).

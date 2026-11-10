@@ -4,7 +4,7 @@
  * `canonRosterAddress` decides whether two authored spellings are "the same
  * address" for the validator's collision rules (no address under two outbound
  * classes; no address in both the outbound roster and `inbound_allow_from`).
- * `_canonicalize_roster_entry` in `operator/adapter/recipient_classifier.py`
+ * `_canonicalize_roster_entry` in the overlay's `shared/recipient_classifier.py`
  * decides the same thing at classify time on the seat. When they disagree, a
  * config passes validation as two addresses and resolves at runtime to one — one
  * human holding two silent exposure classes.
@@ -14,7 +14,7 @@
  * did a bare `trim().toLowerCase()`), and NBSP / ideographic-space / BOM inside
  * a local part were refused here and accepted there.
  *
- * This file and `operator/adapter/tests/test_roster_canon_parity.py` load the
+ * This file and `operator/hermes-smd-overlay/tests/test_roster_canon_parity.py` load the
  * SAME fixture. Neither language can move the rule alone.
  */
 import { describe, expect, it } from 'vitest'

@@ -46,12 +46,6 @@ def path(out: Path) -> Path:
     return out / FILE
 
 
-def live_controls(rows: list[dict[str, Any]], out: Path) -> list[dict[str, Any]]:
-    """Every control row except the retired ones."""
-    gone = keys(out)
-    return [r for r in rows if str(r.get("kind", "")).startswith("control") and r.get("key") not in gone]
-
-
 def keys(out: Path) -> set[str]:
     p = path(out)
     if not p.is_file():

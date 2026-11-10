@@ -1,6 +1,6 @@
 name: hermes-smd-overlay
 version: "0.4.0"
-description: "Plugin overlay for the Nous Hermes Agent — adds audit emission, trust ceilings, and memory mirroring without modifying Hermes core."
+description: "Plugin overlay for the Nous Hermes Agent — adds audit emission and trust ceilings without modifying Hermes core."
 author: VentureCrane
 # Hermes v0.22 enables a plugin through its package manager (pm/), which reads a
 # plugin directory's pyproject.toml as dependencies to install into a shared
@@ -16,7 +16,6 @@ plugins:
   # before any other gate spends work on it.
   - plugins/hermes-smd-space-gate
   - plugins/hermes-smd-trust
-  - plugins/hermes-smd-memory-mirror
   # calendar registers BEFORE webhook-router: its pre_gateway_dispatch marks a
   # calendar response consumed (shared/calendar_inbox.py) so the router, which
   # Hermes runs on the same email regardless of the skip, leaves it alone.

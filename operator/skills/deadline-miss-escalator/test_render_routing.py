@@ -105,12 +105,6 @@ def test_the_footer_is_exactly_the_authored_sentence():
     ) in body
 
 
-def test_a_recorded_done_that_never_reached_smokeball_says_so():
-    body = render.render_digest(_digest(needs_you=[{**_item(), "write_pending_stale": True}]), ack_snooze_days=7)
-    assert "   I recorded your done on this earlier but could not update Smokeball; it is still open." in body
-    assert "I recorded your done" not in render.render_digest(_digest(), ack_snooze_days=7)
-
-
 def test_a_body_with_no_numbered_unit_invites_no_reply():
     """A body rendered without rows behind it (no ``n`` anywhere) must not ask
     for numbers: a reply would find nothing to quiet."""
@@ -205,10 +199,6 @@ def test_consequence_map_is_closed():
     assert render.consequence_line({"priority_marker": "CRITICAL"}) == ("the task is marked CRITICAL in Smokeball")
     # A calendar date says what it still needs, not what kind of item it is.
     assert render.consequence_line({"label": "court-date"}) is None
-    assert (
-        render.consequence_line({"label": "court-date", "prep_note_missing": True})
-        == "No prep note has gone out for this yet."
-    )
     # Unknown signal renders nothing — never a sentinel, never invented urgency.
     assert render.consequence_line({"label": "task-deadline"}) is None
     assert render.consequence_line({"priority_marker": "SUPER URGENT!!"}) is None

@@ -5,8 +5,7 @@ THE INERT-CONTROL CLASS THIS CLOSES
 The overlay's governance is only real if its functional plugins actually
 REGISTER their Hermes hooks at boot. The trust gate IS ``pre_tool_call``;
 audit emission is ``post_tool_call`` / ``post_llm_call`` / ``subagent_stop``;
-the webhook router is ``pre_gateway_dispatch``; memory-mirror is
-``on_session_end``. ``test_invariant_8_overlay_activation.py`` is the runtime
+the webhook router is ``pre_gateway_dispatch``. ``test_invariant_8_overlay_activation.py`` is the runtime
 gate that checks the overlay registered them — but nothing held ITS expectation
 (``_REQUIRED_HOOKS`` / ``_FUNCTIONAL``) in sync with the documented hook
 surface. Drop a hook from that set, or stop requiring a functional plugin, and

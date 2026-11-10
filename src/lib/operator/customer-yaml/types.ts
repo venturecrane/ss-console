@@ -980,73 +980,6 @@ export interface Escalation {
   request_card_text?: boolean
 }
 
-/**
- * The case-manager levels (spec docs/specs/operator/case-manager-deadline-work.md
- * §4), in the tier language the portal already speaks
- * (`src/lib/portal/operator/tier-language.ts`): `surfaces` = "Surfaces it"
- * (the Operator says so, does nothing), `prepares` = "Prepares it for you"
- * (a draft for a person), `handles` = "Handles it" (the Operator does it).
- * Ordered weakest first; the order is load-bearing for the step-level cap.
- */
-export const ACCEPTED_CASE_MANAGER_LEVELS = ['surfaces', 'prepares', 'handles'] as const
-export type CaseManagerLevel = (typeof ACCEPTED_CASE_MANAGER_LEVELS)[number]
-
-/**
- * The CLOSED set of prep steps a date-prep brief may offer
- * (`operator/skills/date-prep-brief/references/decision-catalog.md` maps each
- * to the routine that runs it). A step the firm did not list is never offered.
- */
-export const ACCEPTED_DATE_PREP_STEPS = [
-  'binder_assemble',
-  'witness_list_finalize',
-  'exhibit_list_finalize',
-  'records_refresh',
-  'motion_calendar_refresh',
-  'discovery_status_refresh',
-] as const
-export type DatePrepStep = (typeof ACCEPTED_DATE_PREP_STEPS)[number]
-
-/** Job 1a: the Operator's own tasks. */
-export interface CaseManagerOwnTasks {
-  level: CaseManagerLevel
-  /**
-   * Smokeball task ids the Operator created before the `[Operator]` subject
-   * stamp existed (2026-08-01). A task read carries no creator id, so this
-   * authored list is the only other way code can know a task is the
-   * Operator's own.
-   */
-  legacy_task_ids: string[]
-}
-
-/** Job 1: keep the task list trustworthy (weekly proposal per attorney). */
-export interface CaseManagerTaskCleanup {
-  level: CaseManagerLevel
-  /** Days a task a person chose to keep stays out of the proposal. Null = the routine's own. */
-  keep_quiet_days: number | null
-  /** Lines per proposal message. Null = the routine's own (30). */
-  max_lines: number | null
-}
-
-/** Job 2: prepare for a date entering its window. */
-export interface CaseManagerDatePrep {
-  level: CaseManagerLevel
-  /** A court date or deadline this many days out starts the prep. Required: no pack default. */
-  window_days: number
-  /**
-   * A provider whose newest received record is older than this many days is
-   * offered an updated-records request (`records_refresh` in `update` mode).
-   * Null = that offer is off: no pack default for how old is too old.
-   */
-  records_stale_days: number | null
-  /** Per step, the level the firm chose. Never above `level`; an unlisted step is never offered. */
-  steps: Partial<Record<DatePrepStep, CaseManagerLevel>>
-}
-
-/** Job 3: routine work done quietly and mentioned in one line. */
-export interface CaseManagerQuiet {
-  level: CaseManagerLevel
-}
-
 /** Whether a logic-in-code mechanism only records, or refuses. */
 export type LogicInCodeMode = 'observe' | 'enforce'
 
@@ -1065,18 +998,6 @@ export interface LogicInCode {
   library_edit_notice?: LogicInCodeMode
   status_from_events?: LogicInCodeMode
   layout_into_library?: LogicInCodeMode
-}
-
-/**
- * The `case_manager:` block. ABSENT = every case-manager job off (ADR 0035):
- * the escalator renders exactly as it did before the block existed. Each
- * absent sub-block turns off that one job.
- */
-export interface CaseManager {
-  own_tasks: CaseManagerOwnTasks | null
-  task_cleanup: CaseManagerTaskCleanup | null
-  date_prep: CaseManagerDatePrep | null
-  quiet: CaseManagerQuiet | null
 }
 
 /**
@@ -1567,11 +1488,6 @@ export interface CustomerYaml {
    */
   relationship: Relationship
   /**
-   * The case-manager deadline jobs (`case_manager:` block). Null = not
-   * authored, which turns every job off. See {@link CaseManager}.
-   */
-  case_manager: CaseManager | null
-  /**
    * The per-seat switches for the logic-in-code mechanisms (ADR 0104). Omitted
    * when unauthored, which every reader takes as `observe`.
    */
@@ -1639,8 +1555,6 @@ export type ValidationErrorCode =
   | 'UnknownSendPolicyField'
   /** An unrecognized key inside the `telegram:` block. */
   | 'UnknownTelegramField'
-  /** An unknown key, a bad level, or a step above its job's level in `case_manager`. */
-  | 'InvalidCaseManager'
   /** A malformed `people:` / `spaces:` block, or a cross-field rule of a
    * space-mode seat broken (ADR 0091). */
   | 'InvalidPeople'

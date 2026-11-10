@@ -437,10 +437,6 @@ def load_specs() -> dict:
     return (yaml.safe_load(PROBE_SPECS.read_text(encoding="utf-8")) or {}).get("probes") or {}
 
 
-def load_controls() -> dict:
-    return (yaml.safe_load(REGISTRY.read_text(encoding="utf-8")) or {}).get("controls") or {}
-
-
 def run_probe(spec: dict, ctx: ProbeContext) -> ProbeResult:
     name = spec.get("probe", "?")
     kind = spec.get("kind", "?")

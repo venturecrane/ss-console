@@ -299,7 +299,7 @@ def _audit_db_path() -> str | None:
 
 
 def _observations_db_path() -> str | None:
-    """ADR-0016 persona_observations DB path (memory-mirror's binding)."""
+    """ADR-0016 persona_observations DB path (its Phase-2 writer is not built)."""
     return _db_path_from_binding("SMD_D1_OBSERVATIONS_BINDING")
 
 
@@ -1027,17 +1027,6 @@ class _Handler(BaseHTTPRequestHandler):
         data = json.dumps(obj).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def _json_headers(self, status: int, obj: dict, extra: dict | None = None) -> None:
-        """``_json`` plus optional extra response headers (e.g. WWW-Authenticate)."""
-        data = json.dumps(obj).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        for name, value in (extra or {}).items():
-            self.send_header(name, value)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

@@ -54,7 +54,7 @@ vars:
     discovery: static
     stage: agent
     requirement: required
-    consumed_by: [voice, audit, trust, webhook-router, memory-mirror, workspace, peer-memory]
+    consumed_by: [voice, audit, trust, webhook-router, workspace, peer-memory]
     note: per-customer identity; read directly and via secrets.require across plugins
   SMD_D1_AUDIT_BINDING:
     discovery: static
@@ -614,23 +614,11 @@ vars:
       has a bot token, so token-less seats stay byte-identical. Provisioning
       disposition lives in ss-console operator/contracts/env-consumption.yaml.
   SMD_D1_OBSERVATIONS_BINDING:
-    discovery: static
+    discovery: indirect
     stage: agent
     requirement: optional
-    consumed_by: [memory-mirror]
-    note: Honcho observations mirror binding; inert in Phase 1 (ADR 0016 revised)
-  HONCHO_BASE_URL:
-    discovery: static
-    stage: agent
-    requirement: optional
-    consumed_by: [memory-mirror]
-    note: local Honcho sidecar base URL; inert in Phase 1
-  HONCHO_API_KEY:
-    discovery: static
-    stage: agent
-    requirement: optional
-    consumed_by: [memory-mirror]
-    note: Honcho API key; inert in Phase 1
+    consumed_by: [webhook-gate]
+    note: "read via _db_path_from_binding('SMD_D1_OBSERVATIONS_BINDING') (webhook_gate.py _observations_db_path): the persona_observations runtime read (ADR 0016); its writer plugin was removed 2026-11-10, so it is unset on every seat"
 
   # ---- B1 durable task-execution substrate (ADR 0051; consumed_by: jobs) ----
   HERMES_MODEL:

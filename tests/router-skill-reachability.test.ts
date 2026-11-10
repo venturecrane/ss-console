@@ -74,19 +74,12 @@ describe('skills the router and self-initiation read, on the firm seat', () => {
     expect([...new Set(bad)], `omitted skills read with no refusal instruction`).toEqual([])
   })
 
-  it('enables the demand and queued drafting lanes and none of the in-turn drafting skills', () => {
+  it('enables the demand and queued drafting lanes', () => {
     const enabled = enabledSkills()
     expect(enabled.has('demand-letter-drafter')).toBe(true)
     // 2026-10-07: the firm's own written ask activated the queued drafting lane.
     expect(enabled.has('document-drafter')).toBe(true)
     // 2026-10-07: letter 93's litigation status list, accepted, is the queued litigation lane.
     expect(enabled.has('litigation-status')).toBe(true)
-    for (const slug of [
-      'discovery-response-drafter',
-      'follow-up-discovery-drafter',
-      'mediation-brief-drafter',
-    ]) {
-      expect(enabled.has(slug), `${slug} must stay off this seat`).toBe(false)
-    }
   })
 })

@@ -18,7 +18,7 @@ metadata:
     connectors:
       - smokeball # PracticeManagement - dedupe + conflict check (read), internal memo (write)
       - m365-mail # Email - the acknowledgment draft
-    # IntakeCRM sync is the deferred `intake-to-system-sync` skill, not this one.
+    # IntakeCRM sync is not this skill's job.
 ---
 
 # New Matter Intake

@@ -429,22 +429,14 @@ describe('shipped skills cite only runtime paths the image carries', () => {
  * the debt is greppable and shrinks one line at a time.
  */
 const KNOWN_MISSING_SKILL_REFERENCES: readonly string[] = [
-  'operator/skills/client-matter-digest/references/output-format.md',
-  'operator/skills/client-matter-digest/references/test-cases.md',
-  'operator/skills/client-matter-digest/references/voice.md',
   'operator/skills/conflict-intake-router/references/output-format.md',
   'operator/skills/conflict-intake-router/references/test-cases.md',
   'operator/skills/document-receipt-logger/references/output-format.md',
   'operator/skills/document-receipt-logger/references/test-cases.md',
-  'operator/skills/intake-to-system-sync/references/output-format.md',
-  'operator/skills/intake-to-system-sync/references/test-cases.md',
   'operator/skills/matter-inbox-router/references/output-format.md',
   'operator/skills/matter-inbox-router/references/test-cases.md',
   'operator/skills/matter-status-digest/references/output-format.md',
   'operator/skills/matter-status-digest/references/test-cases.md',
-  'operator/skills/referral-source-acknowledgment/references/output-format.md',
-  'operator/skills/referral-source-acknowledgment/references/test-cases.md',
-  'operator/skills/referral-source-acknowledgment/references/voice.md',
 ]
 
 // ===========================================================================

@@ -494,12 +494,6 @@ vars:
     agent_env: held
     custody: infra
     note: Honcho observations mirror; inert in Phase 1 (ADR 0016 revised)
-  HONCHO_API_KEY:
-    stage: agent
-    requirement: optional
-    agent_env: held
-    custody: infra
-    note: Honcho inferred-memory; inert in Phase 1
   AGENTMAIL_API_KEY:
     stage: agent
     requirement: optional

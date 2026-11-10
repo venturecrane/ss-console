@@ -41,7 +41,6 @@ _ALL_HOOKS = {
     "post_llm_call",
     "pre_llm_call",
     "subagent_stop",
-    "on_session_end",
     "pre_gateway_dispatch",
 }
 # What the trust ceiling returns for the banned probe tool.

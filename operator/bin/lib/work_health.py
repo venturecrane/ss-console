@@ -139,9 +139,6 @@ class Item:
     #: not only sit in the digest: a dead sign-in stops all work.
     page: Optional[Page] = None
 
-    def age_text(self, now: datetime) -> str:
-        return span(now - self.onset)
-
 
 # Ordering in the email: the work a firm person is waiting on first.
 RANK = {

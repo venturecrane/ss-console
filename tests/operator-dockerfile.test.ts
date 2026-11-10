@@ -147,18 +147,11 @@ describe('Operator customer Machine Dockerfile', () => {
  *      resolved to /usr/bin and crashlooped at boot.
  */
 describe('Operator Machine first-boot build/runtime fixes', () => {
-  it('installs postgresql-17 (Debian 13 default), never postgresql-16', () => {
-    expect(
-      /apt-get install[\s\S]*?postgresql-17 postgresql-client-17/.test(DOCKERFILE),
-      'apt must install postgresql-17 / postgresql-client-17'
-    ).toBe(true)
-    expect(
-      /apt-get install[\s\S]*?postgresql-16 postgresql-client-16/.test(DOCKERFILE),
-      'postgresql-16 is not in Debian 13 trixie repos — build fails with exit 100'
-    ).toBe(false)
-    expect(DOCKERFILE, 'Postgres bin PATH must target /17/, not /16/').not.toMatch(
-      /usr\/lib\/postgresql\/16\/bin/
-    )
+  it('installs no Postgres or Redis (the Phase-2 Honcho data plane, never started; removed 2026-11-10)', () => {
+    // The check can fail: it reads the real apt install line.
+    expect(/apt-get install[\s\S]*?awscli/.test(DOCKERFILE_CODE)).toBe(true)
+    expect(/postgresql|redis-server/.test(DOCKERFILE_CODE)).toBe(false)
+    expect(DOCKERFILE_CODE).not.toMatch(/usr\/lib\/postgresql\//)
   })
 
   it('installs into the venv via `uv pip`, never the absent `.venv/bin/pip`', () => {
@@ -173,9 +166,8 @@ describe('Operator Machine first-boot build/runtime fixes', () => {
       /export PATH="\/opt\/hermes\/\.venv\/bin:/.test(BOOTSTRAP),
       'bootstrap.sh must prepend the venv to PATH so bare hermes/hermes-smd resolve to it'
     ).toBe(true)
-    // Postgres is no longer started in bootstrap (Honcho deferred), so the
-    // PG_BIN/17 reference moved out of bootstrap.sh — see the Honcho-deferral
-    // suite below. Postgres 17 stays INSTALLED in the Dockerfile (asserted above).
+    // Postgres is neither started in bootstrap nor installed in the image
+    // (Honcho deferred; the packages were removed 2026-11-10).
   })
 
   it('bootstrap.sh launches the front-door gate on WEBHOOK_SECRET_MCP, not only on the AgentMail secret', () => {

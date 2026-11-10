@@ -260,10 +260,6 @@ def classify(name: str, contract_custody: dict[str, str] | None = None) -> str:
     )
 
 
-def is_customer_owned(name: str, contract_custody: dict[str, str] | None = None) -> bool:
-    return classify(name, contract_custody) == CUSTOMER
-
-
 def customer_owned_names(contract_custody: dict[str, str] | None = None) -> set[str]:
     """The exact customer-owned secret NAMES (no per-seat expansion). Prefix
     families are represented by their base entries in the explicit tables plus

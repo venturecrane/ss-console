@@ -3,7 +3,7 @@
     "Shared test vectors for roster-address canonicalization -- the ONE notion of",
     "\"the same address\" used by BOTH the console validator",
     "(src/lib/operator/customer-yaml/sections-scope.ts::canonRosterAddress) and the",
-    "runtime classifier (operator/adapter/recipient_classifier.py::",
+    "runtime classifier (operator/hermes-smd-overlay/shared/recipient_classifier.py::",
     "_canonicalize_roster_entry). This fixture is the ARBITER: both suites load it",
     "and assert their own real implementation maps every input to its expected",
     "canonical form (null = refused).",

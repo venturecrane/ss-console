@@ -1401,9 +1401,9 @@ describe('skill prose carries no matter-number-shaped example (ss#2168)', () => 
 // suggestion, though, so this pins it the same way ss#2168's example ban is
 // pinned.
 describe('establishment skills warn that a numbered list is refused (ss#2212)', () => {
-  // Both skills write a spec body through the same invariant. `document-library-
+  // The skill that writes a spec body through the invariant. `document-library-
   // establishment` does not, so it is deliberately absent.
-  const SPEC_WRITING_SKILLS = ['voice-establishment', 'shape-establishment']
+  const SPEC_WRITING_SKILLS = ['voice-establishment']
 
   for (const skill of SPEC_WRITING_SKILLS) {
     it(`${skill} tells the model to use bullets, not numbers`, () => {

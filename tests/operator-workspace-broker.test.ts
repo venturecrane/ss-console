@@ -15,7 +15,6 @@ const bootstrap = readSeatScript('operator/templates/bootstrap.sh')
 const bootSmoke = readSeatScript('operator/templates/seat-checks.sh')
 const workspaceSkill = readFileSync(resolve('operator/skills/workspace/SKILL.md'), 'utf8')
 const inboxTriageSkill = readFileSync(resolve('operator/skills/inbox-triage/SKILL.md'), 'utf8')
-const emailReplySkill = readFileSync(resolve('operator/skills/email-reply/SKILL.md'), 'utf8')
 const smdCustomerConfig = readFileSync(
   resolve('operator/customers/smd-staging/customer.yaml'),
   'utf8'
@@ -212,9 +211,7 @@ describe('ADR 0045 Workspace capability broker', () => {
   it('keeps Wave A Gmail skills on read and draft tools only', () => {
     expect(inboxTriageSkill).toContain('workspace_gmail_search')
     expect(inboxTriageSkill).toContain('workspace_gmail_create_draft')
-    expect(emailReplySkill).toContain('workspace_gmail_create_draft')
     expect(inboxTriageSkill).not.toContain('workspace_gmail_send')
-    expect(emailReplySkill).not.toContain('workspace_gmail_send')
     // Narrowed for ADR 0089, not removed: the one send-shaped tool inbox-triage
     // may name is `smd_send_message` with `from`, and only inside its "Send as a
     // staff member" section, where the call proposes a draft to the staff member
