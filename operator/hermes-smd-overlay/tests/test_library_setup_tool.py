@@ -63,6 +63,17 @@ def test_who_asked_comes_from_the_email_and_the_model_gives_only_kind_and_attorn
     assert env["request_text"].startswith("Admin here")
 
 
+def test_the_document_library_and_a_pointer_travel_and_who_asked_still_comes_from_the_email(setup):
+    mod, make = setup
+    client = make({"ok": True, "accepted": True, "job_id": JOB, "live": False})
+    _email("Set up our memos from matter 2024-0113.")
+    mod.library_setup_submit({"kind": "memo", "matter": " 2024-0113 ", "requested_by": "x@y.z"})
+    mod.library_setup_submit({"kind": "library"})
+    pointed, whole = client.envelopes
+    assert pointed["matter"] == "2024-0113" and pointed["requested_by"] == ADMIN
+    assert whole["kind"] == "library" and "matter" not in whole and "document" not in whole
+
+
 def test_live_the_broker_sentence_is_passed_as_given(setup):
     mod, make = setup
     make(
@@ -106,8 +117,16 @@ def test_a_turn_no_email_opened_queues_nothing(setup):
 def test_the_schema_has_no_requester_field_and_the_tool_is_an_internal_write(setup):
     mod, _ = setup
     schema = mod.TOOLS["library_setup_submit"][1]
-    assert set(schema["properties"]) == {"kind", "attorney"} and schema["required"] == ["kind"]
-    assert schema["properties"]["kind"]["enum"] == ["mediation_brief", "memo"]
+    assert set(schema["properties"]) == {"kind", "attorney", "matter", "document"}
+    assert schema["required"] == ["kind"]
+    assert schema["properties"]["kind"]["enum"] == [
+        "discovery_set",
+        "discovery_response",
+        "mediation_brief",
+        "memo",
+        "depo_outline",
+        "library",
+    ]
     assert classify_tool("library_setup_submit").action_class is ActionClass.INTERNAL_WRITE
 
 

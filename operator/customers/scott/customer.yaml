@@ -39,7 +39,7 @@ fly_region: lax # Phoenix-adjacent; Fly retired phx (fleet standard, same as cus
 model: claude-sonnet-4-6
 
 machine:
-  size: shared-cpu-1x
+  size: shared-cpu-2x
   memory_mb: 2048
 
 # ---- HUMANS WITH PORTAL ACCESS ----

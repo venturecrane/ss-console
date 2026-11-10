@@ -1451,6 +1451,16 @@ _MARKETING_ROLE = "marketing"
 _MARKETING_REFUSED_TOOLSETS = ("web",)
 
 
+#: The guide role (ss ADR 0105) answers only from the library its skill ships.
+#: The native ``web`` toolset would be an outside source; ``memory`` would let
+#: one asker's words shape another's answer; ``establishment`` would let a
+#: conversation author voice or rules, and offers ``operations_request``, the
+#: firm-seat route to SMD changes, which a guide seat has none of. Reading the
+#: library stays (``file``, ``skills``), fenced to the one enabled skill.
+_GUIDE_ROLE = "guide"
+_GUIDE_REFUSED_TOOLSETS = ("web", "memory", "establishment")
+
+
 def _space_mode(customer: dict[str, Any]) -> bool:
     """True iff the seat authors ``people:`` (ADR 0091 space mode). Same rule as
     ``shared.space.parse_space_config``: a present, non-null key."""
@@ -1708,6 +1718,10 @@ def _persona_config(
                 disabled_toolsets.append(toolset)
     if _seat_role(customer) == _MARKETING_ROLE:
         for toolset in _MARKETING_REFUSED_TOOLSETS:
+            if toolset not in disabled_toolsets:
+                disabled_toolsets.append(toolset)
+    if _seat_role(customer) == _GUIDE_ROLE:
+        for toolset in _GUIDE_REFUSED_TOOLSETS:
             if toolset not in disabled_toolsets:
                 disabled_toolsets.append(toolset)
     # `max_turns` pins the v0.18 (v2026.7.1) per-turn tool-iteration budget of

@@ -270,3 +270,160 @@ describe('premise-gate: refuses to guess, fails open', () => {
     ).toBeNull()
   })
 })
+
+// Wave 2 PR 2 (2026-11-09): the measured-row unit list rejected real units.
+// The wave-2 plan's own measured premise counted PRs, transcripts and tokens.
+describe('premise-gate: measured rows accept the units a probe counts', () => {
+  const plan = (row: string) =>
+    [
+      '# Lane report for the client seats',
+      '## Premises',
+      '| Premise | Evidence |',
+      '|---|---|',
+      row,
+      '| the release ran first on the pilot | rehearsal via `lane-proof dry-run` |',
+      '## Workstreams',
+      'Build it.',
+    ].join('\n')
+
+  for (const row of [
+    '| bodies name the firm | measured via `gh pr list --limit 1000`: 346 PRs |',
+    '| sessions pass 250K | measured via `jq` over 48 transcripts |',
+    '| median first call | measured via `jq .usage`: 193K tokens |',
+    '| skills changed mid-session | `git log --oneline`: 21 commits |',
+    '| long foreground waits | measured via `jq`: 630 calls over 270s |',
+  ]) {
+    it(`counts as measured: ${row}`, () => {
+      expect(permission(runHook(payload({ tool_input: { plan: plan(row) } })))).toBeNull()
+    })
+  }
+
+  it('a bare number with a probe and no unit still does not count (control)', () => {
+    const r = runHook(payload({ tool_input: { plan: plan('| some count | `ls`: 12 |') } }))
+    expect(permission(r)).toBe('deny')
+    expect(r.stdout).toMatch(/Law 16 corollary/)
+  })
+})
+
+// Wave 2 PR 2 (2026-11-09, PREV-3): when /critique saved critics beside the
+// plan file, the plan must carry a "## Critic findings not adopted" section
+// naming each of them with its own verdict. The control fixture is modeled on
+// docs/plans/document-library/design-2026-11-06.md:124, which overruled its
+// critique in a "Not adopted:" list inside a revision-history section.
+describe('premise-gate: overruled critic findings are shown in the plan', () => {
+  const EVIDENCED = [
+    '## Premises',
+    '| Premise | Evidence |',
+    '|---|---|',
+    '| the resolver reads the library | read `operator/runners/jobs/jobs/example.py:12` |',
+  ].join('\n')
+
+  const MODELED_ON_LIBRARY_PLAN = [
+    '# Document library design',
+    '## What a firm experiences',
+    'Prose.',
+    EVIDENCED,
+    '## What changed in revision 2, and what was not adopted',
+    '1. **Proofs that could not fail were replaced** (critique).',
+    'Not adopted:',
+    '- **Deferring the plain letter until asked** (critique). The acceptance test names it.',
+    '- **Dropping two pieces as ahead of the evidence** (critique). Asked for by name.',
+    '## For the list',
+    'Nothing here.',
+  ].join('\n')
+
+  const SECTION = [
+    '## Critic findings not adopted',
+    '| Critic | Verdict | Finding not adopted | Reply |',
+    '|---|---|---|---|',
+    "| Devil's Advocate | Proceed with fixes | Deferring the plain letter | The acceptance test names it. |",
+    '| Simplifier | Reconsider approach | Dropping two pieces | Asked for by name. |',
+  ].join('\n')
+
+  const CRITICS: Record<string, string> = {
+    'devils-advocate.md':
+      "## Devil's Advocate Critique\n\n**Strengths**\n- ok\n\n**Issues Found**\n1. Defer the letter\n\n**Verdict**: Proceed with fixes\n",
+    'simplifier.md':
+      '## Simplifier Critique\n\n1. Drop two pieces\n\n**Verdict**: Reconsider approach. Fewer pieces.\n',
+  }
+
+  function writePlan(text: string, critics: Record<string, string> | null) {
+    const planPath = join(dir, 'plans', 'library-design.md')
+    mkdirSync(join(dir, 'plans'), { recursive: true })
+    writeFileSync(planPath, text)
+    if (critics) {
+      const cdir = join(dir, 'plans', 'library-design.critics')
+      mkdirSync(cdir, { recursive: true })
+      for (const [f, t] of Object.entries(critics)) writeFileSync(join(cdir, f), t)
+    }
+    return planPath
+  }
+
+  const viaPath = (planPath: string, plan?: string) =>
+    runHook(payload({ tool_input: { planFilePath: planPath, ...(plan ? { plan } : {}) } }))
+
+  it('DENIES the library-shaped plan whose critique was overruled out of sight (control)', () => {
+    const planPath = writePlan(MODELED_ON_LIBRARY_PLAN, CRITICS)
+    const r = viaPath(planPath)
+    expect(r.status).toBe(0)
+    expect(permission(r)).toBe('deny')
+    expect(r.stdout).toMatch(/Critic findings not adopted/)
+  })
+
+  it('the same plan with no critics directory is unaffected', () => {
+    const planPath = writePlan(MODELED_ON_LIBRARY_PLAN, null)
+    expect(permission(viaPath(planPath))).toBeNull()
+  })
+
+  it('passes once the section names every critic with its own verdict', () => {
+    const planPath = writePlan(`# Document library design\n${SECTION}\n${EVIDENCED}`, CRITICS)
+    expect(permission(viaPath(planPath))).toBeNull()
+  })
+
+  it('denies a section that omits one critic', () => {
+    const oneRow = SECTION.split('\n').slice(0, 4).join('\n')
+    const planPath = writePlan(`# Plan\n${oneRow}\n${EVIDENCED}`, CRITICS)
+    const r = viaPath(planPath)
+    expect(permission(r)).toBe('deny')
+    expect(r.stdout).toMatch(/omits critic\(s\): simplifier/)
+  })
+
+  it("denies a row that paraphrases the critic's verdict", () => {
+    const paraphrased = SECTION.replace('Reconsider approach', 'Revise; fewer pieces')
+    const planPath = writePlan(`# Plan\n${paraphrased}\n${EVIDENCED}`, CRITICS)
+    const r = viaPath(planPath)
+    expect(permission(r)).toBe('deny')
+    expect(r.stdout).toMatch(/simplifier \(reconsider approach\)/)
+  })
+
+  it('passes the exact none line', () => {
+    const planPath = writePlan(`# Plan\nCritic findings not adopted: none\n${EVIDENCED}`, CRITICS)
+    expect(permission(viaPath(planPath))).toBeNull()
+  })
+
+  it('reads the plan text from tool_input.plan and the critics beside planFilePath', () => {
+    const planPath = writePlan('# stale copy on disk', CRITICS)
+    expect(permission(viaPath(planPath, MODELED_ON_LIBRARY_PLAN))).toBe('deny')
+    expect(permission(viaPath(planPath, `# Plan\n${SECTION}\n${EVIDENCED}`))).toBeNull()
+  })
+
+  it('finds the plan file through the transcript when planFilePath is absent', () => {
+    const plansDir = join(dir, '.claude', 'plans')
+    mkdirSync(join(plansDir, 'p.critics'), { recursive: true })
+    const planPath = join(plansDir, 'p.md')
+    writeFileSync(planPath, MODELED_ON_LIBRARY_PLAN)
+    for (const [f, t] of Object.entries(CRITICS)) writeFileSync(join(plansDir, 'p.critics', f), t)
+    const transcriptPath = join(dir, 't.jsonl')
+    writeFileSync(transcriptPath, JSON.stringify({ text: `Plan File Info: ${planPath}` }) + '\n')
+    expect(permission(runHook(payload({ transcript_path: transcriptPath })))).toBe('deny')
+    writeFileSync(planPath, `# Plan\n${SECTION}\n${EVIDENCED}`)
+    expect(permission(runHook(payload({ transcript_path: transcriptPath })))).toBeNull()
+  })
+
+  it('reports a premises failure and a critics failure together, in one bounce', () => {
+    const planPath = writePlan('# Plan with nothing', CRITICS)
+    const r = viaPath(planPath)
+    expect(r.stdout).toMatch(/## Premises/)
+    expect(r.stdout).toMatch(/Critic findings not adopted/)
+  })
+})

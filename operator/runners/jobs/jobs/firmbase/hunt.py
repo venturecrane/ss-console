@@ -81,6 +81,47 @@ RULES = {
         ),
         (500, 12000),
     ),
+    # California discovery, by the names a firm files it under (2026-11-09): special
+    # and form interrogatories (SROG, FROG, "rogs"), requests for production (RFP,
+    # RPD) and for admission (RFA), "Set One". A set is the firm's PROPOUNDED paper;
+    # the same names with "responses" are the other kind, and opposing counsel's
+    # sets score low on firm authorship and are refused by the headers check.
+    "discovery_set": ClassRule(
+        re.compile(
+            r"(?i)interrogator|(?<![a-z])(s|f)?rogs?(?![a-z])|(?<![a-z])(srog|frog|rfa|rfp|rpd|rfpd)s?(?![a-z])"
+            r"|requests?[\s_-]*(for|to)[\s_-]*(the[\s_-]*)?(production|admission|inspection)"
+            r"|demand[\s_-]*for[\s_-]*(production|inspection)"
+        ),
+        re.compile(
+            r"(?i)respon|answer|objection|verif|(?<![a-z])(resp|resps|motion|mtc|meet|confer|m&c|notice|ntc|pos|"
+            r"proof|subpoena|deficien\w*|letter|ltr|email|stip\w*|order|ruling|transcript|separate|"
+            r"invoice|bill\w*|extension|ext)(?![a-z])"
+        ),
+        (300, 20000),
+    ),
+    "discovery_response": ClassRule(
+        re.compile(
+            r"(?i)^(?=.*(respon|(?<![a-z])resps?(?![a-z])|answers?[\s_-]*to|objections?[\s_-]*to))"
+            r"(?=.*(interrogator|(?<![a-z])(s|f)?rogs?(?![a-z])|(?<![a-z])(srog|frog|rfa|rfp|rpd|rfpd)s?(?![a-z])"
+            r"|request|production|admission|inspection|discovery|set[\s_-]*(one|two|three|four|five|\d)))"
+        ),
+        re.compile(
+            r"(?i)(?<![a-z])(motion|mtc|meet|confer|m&c|notice|ntc|pos|proof|subpoena|deficien\w*|letter|ltr|"
+            r"email|stip\w*|order|ruling|transcript|separate|invoice|bill\w*|extension|ext|opposition|oppo|reply)(?![a-z])"
+        ),
+        (300, 30000),
+    ),
+    "depo_outline": ClassRule(
+        re.compile(
+            r"(?i)depo(sition)?s?[\s_-]*(of[\s_-]*\w+[\s_-]*)?(outline|questions|prep\w*|exam\w*|topics)"
+            r"|(outline|questions)[\s_-]*(for|of)?[\s_-]*(the[\s_-]*)?depo"
+        ),
+        re.compile(
+            r"(?i)(?<![a-z])(notice|ntc|amended|transcript|summary|summ|subpoena|errata|invoice|bill\w*|"
+            r"confirm\w*|cancel\w*|letter|ltr|email|exhibits?|video\w*|reporter|pos|proof|stip\w*)(?![a-z])"
+        ),
+        (300, 20000),
+    ),
 }
 
 
@@ -293,23 +334,27 @@ def rank(
     max_reads: int = 200,
     hunted: Hunted | None = None,
     person: str | None = None,
+    named: Callable[[dict[str, Any]], bool] | None = None,
 ) -> Hunted:
     """The ranking of ``rows`` for ``cls``. ``read(matter_id, file_id)``: the file's
     bytes. Newest first up to ``max_reads``; what was left unread is counted.
     ``person``: only files that name this person, by their case-system name, in
-    the core properties or the signature (one attorney's own files)."""
+    the core properties or the signature (one attorney's own files).
+    ``named``: which rows are of the class, in place of the class's name rule
+    (a document the administrator pointed at, ``pointed``)."""
     out = hunted if hunted is not None else Hunted()
     now = now or datetime.now(timezone.utc)
     staff = list(staff)
     saved_at = {str(r.get("id")): str(r.get("dateModified") or "") for r in rows}
     best = _accepted_candidates(accepted, read, saved_at, now, out)
     taken = {c.file_id for c in best}
-    named = [r for r in rows if classify(cls, str(r.get("name") or "")) and (r.get("sizeBytes") or 0) <= MAX_BYTES]
-    out.bump("name_matched", len(named))
-    named.sort(key=lambda r: str(r.get("dateModified") or ""), reverse=True)
-    out.bump("not_read", max(0, len(named) - max_reads))
+    is_named = named or (lambda r: classify(cls, str(r.get("name") or "")))
+    rows_named = [r for r in rows if is_named(r) and (r.get("sizeBytes") or 0) <= MAX_BYTES]
+    out.bump("name_matched", len(rows_named))
+    rows_named.sort(key=lambda r: str(r.get("dateModified") or ""), reverse=True)
+    out.bump("not_read", max(0, len(rows_named) - max_reads))
     seen = {c.sha256 for c in best}
-    for row in named[:max_reads]:
+    for row in rows_named[:max_reads]:
         blob = _read_row(row, taken, read, out)
         if blob is None:
             continue
@@ -357,3 +402,62 @@ def hunt(
     rows = docx_rows(client, firm_matters(client, closed_since=closed_since), out, pause)
     staff = staff_names(client)
     return rank(cls, rows, read, staff=staff, accepted=accepted, now=now, hunted=out, person=person)
+
+
+def hunt_all(
+    classes: Iterable[str],
+    client: Any,
+    *,
+    closed_since: str = "",
+    now: datetime | None = None,
+    pause: float = 0.0,
+    person: str | None = None,
+) -> dict[str, Hunted]:
+    """One hunt per class over ONE listing of the firm's matters ("set up the
+    document library"): the matters are listed and the staff read once, then each
+    class ranks the same rows. Each class's counts start from the listing's."""
+
+    def read(matter_id: str, file_id: str) -> bytes:
+        return client.download_file(matter_id, file_id)[1]
+
+    listing = Hunted()
+    rows = docx_rows(client, firm_matters(client, closed_since=closed_since), listing, pause)
+    staff = staff_names(client)
+    return {
+        cls: rank(cls, rows, read, staff=staff, now=now, hunted=Hunted(counts=dict(listing.counts)), person=person)
+        for cls in classes
+    }
+
+
+def pointed(
+    cls: str,
+    client: Any,
+    *,
+    matter_id: str = "",
+    name_words: str = "",
+    closed_since: str = "",
+    now: datetime | None = None,
+    person: str | None = None,
+) -> Hunted:
+    """The hunt narrowed to what an administrator pointed at: one matter's files
+    (those named as the class first; when none is, every Word file on it), or the
+    files whose name holds ``name_words`` (folded, across the firm's matters)."""
+
+    def read(m: str, f: str) -> bytes:
+        return client.download_file(m, f)[1]
+
+    out = Hunted()
+    ids = [matter_id] if matter_id else firm_matters(client, closed_since=closed_since)
+    rows = docx_rows(client, ids, out)
+    staff = staff_names(client)
+    named: Callable[[dict[str, Any]], bool] | None = None
+    if name_words:
+        want = _fold_name(name_words)
+        named = lambda r: want in _fold_name(str(r.get("name") or ""))  # noqa: E731 - a one-line rule, kept beside its twin below
+    elif not any(classify(cls, str(r.get("name") or "")) for r in rows):
+        named = lambda r: True  # noqa: E731 - the matter the administrator named holds no file named as the class
+    return rank(cls, rows, read, staff=staff, now=now, hunted=out, person=person, named=named, max_reads=40)
+
+
+def _fold_name(text: str) -> str:
+    return re.sub(r"[\W_]+", " ", text or "").casefold().strip()

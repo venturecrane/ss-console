@@ -50,7 +50,7 @@ In the portal, the client's principal can, without SMD:
 
 - move a routine's level up or down, but never above the ceiling the agreement sets; it applies right away and is logged. The ceiling is the client's permission to climb, not a schedule: SMD's own rule is that a routine moves up only once the evidence for the next rung exists (dated review observations, then the Captain's sign-off for acting on its own; [promotion checklist](https://github.com/venturecrane/ss-console/blob/main/docs/runbooks/operator/enable-gate-checklist.md)). When a client raises a routine before that evidence exists, tell the Captain; it is the client's call within the agreement, and SMD's job is to say what the evidence shows;
 - pause and resume their Operator, where the agreement gives them that control;
-- add and remove the people who can use the portal;
+- add and remove the people who can use the portal, but only where the seat's `customer.yaml` gives the client that control (`authority.overrides.people_access: client`). No seat authors it on 2026-11-09, so the portal refuses the change and SMD makes it on request (`src/pages/api/portal/products/operator/role-action.ts`);
 - teach the Operator their firm's voice and output style by instructing it directly, if they are listed as one of its administrators.
 
 A routine's level is one of: flag-only (it reads and tells someone), prepare-and-route (it drafts for a person to send), and auto-handle (it acts on its own). Anything touching deadlines or money, or sending to opposing counsel or a court, never auto-handles (ADR 0075).

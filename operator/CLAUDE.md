@@ -20,8 +20,8 @@ The canonical frame for what the Operator _is_. Load this before any Operator st
 The Phase 1 Operator SKU (productized retainer offering, per ADR 0004) runs as a per-customer Fly.io Machine hosting the Nous Research Hermes Agent runtime (`NousResearch/hermes-agent`, MIT). The architectural posture was substantially realigned on 2026-05-24 after six rounds of focused research. Three principles govern all Operator work:
 
 1. **Hermes is the substrate. Trust it.** Skills, the flat-file memory core (`MEMORY.md`/`USER.md`), the Curator, profiles, the tool registry, the plugin hook surface, MCP integration, and approval/guardrail machinery are all native and not reinvented. Teknium's May 2026 hard rule applies: plugins MUST NOT modify Hermes core files. Our overlay is plugin code, and it lives in this repo at `operator/hermes-smd-overlay/` (ADR 0095; until 2026-10-22 it was the separate repo `venturecrane/hermes-smd-overlay`). It stays plugin-only: the fold changed where the code lives, not what it may touch. **Honcho is NOT deployed** — the 2026-05-30 revision of ADR 0016 deferred it to Phase 2 (demand-gated) after the first real boot exposed the in-container integration as fictional; Phase-1 seats run in-session flat-file memory only.
-2. **Build only what Hermes won't.** Sample-driven voice transformation, compliance-grade audit emission, content-class trust ceilings, configurable send-posture routing (draft-for-review among the authored options), curated vertical skill catalogs, and the customer-facing business surface are what we build on top of Hermes — none are on its roadmap. (These are capabilities, not the moat: the moat is the harness + the guide + the memory, per [ADR 0037](../docs/adr/0037-operator-thesis.md) Tenet 4. No single feature is the moat.)
-3. **Mirror, don't gate.** Where Hermes' learning loop creates state (today: agent-authored skills; Honcho conclusions if/when Phase 2 activates it), our overlay captures a parallel record in per-customer D1 with provenance. Captain dismissal physically removes the state from Hermes. No approval queue stands between the agent and its work; safety is enforced by the authored entitlement ceilings (fail-closed when unauthored), not by an interposed gate.
+2. **Build only what Hermes won't.** Authored voice and format specifications per output class (ADR 0083; the sample-driven voice transform was removed 2026-11-07), compliance-grade audit emission, content-class trust ceilings, configurable send-posture routing (draft-for-review among the authored options), curated vertical skill catalogs, and the customer-facing business surface are what we build on top of Hermes — none are on its roadmap. (These are capabilities, not the moat: the moat is the harness + the guide + the memory, per [ADR 0037](../docs/adr/0037-operator-thesis.md) Tenet 4. No single feature is the moat.)
+3. **Mirror, don't gate.** Where Hermes' learning loop creates state (today: agent-authored skills; Honcho conclusions if/when Phase 2 activates it), our overlay captures a parallel record with provenance in Machine-local SQLite on the seat's own volume (code and older ADRs call this "per-customer D1"; the per-customer Cloudflare D1 was never built, ADR 0062 Context). Captain dismissal physically removes the state from Hermes. No approval queue stands between the agent and its work; safety is enforced by the authored entitlement ceilings (fail-closed when unauthored), not by an interposed gate.
 
 Load these ADRs before any Operator architectural work:
 
@@ -36,16 +36,16 @@ Load these ADRs before any Operator architectural work:
 - **ADR 0015** — Hermes fork posture (pin-only fork, plugin-only overlay; its separate-repo half superseded by ADR 0095)
 - **ADR 0095**: One repository for the seat runtime: the overlay is built from `operator/hermes-smd-overlay/` in this tree, the version a seat reports is the ss-console commit, and there is no overlay pin
 - **ADR 0016** — Honcho disposition (revised 2026-05-30: **deferred to Phase 2, demand-gated** — Phase 1 = flat-file memory core, no Honcho on any seat; the mirror/dismiss/TTL machinery is the Phase-2 shape)
-- **ADR 0017** — Skill Curator disposition (disable autonomous curator per-customer; keep in-conversation `skill_manage`; mirror to D1 inventory; supervised `--dry-run` consolidation only)
+- **ADR 0017** — Skill Curator disposition (disable autonomous curator per-customer; keep in-conversation `skill_manage`; mirror to the seat's local SQLite inventory, which the ADR calls D1; supervised `--dry-run` consolidation only)
 - **ADR 0019** — customer.yaml → per-profile config translation
 - **ADR 0020** — Connector strategy (MCP-first; BUILD only where no acceptable MCP)
 - **ADR 0021** — Leverage Hermes native primitives (`execute_code`, `delegate_task`, no-agent cron, skill bundles, webhook gateway via `pre_gateway_dispatch`, MCP-first connector retirement)
 
 Decided since, and shaping code that exists today (load the ones your change touches):
 
-- **ADR 0050**: Task-execution framework: six execution classes (N/C/R/D/A/O) and `execution_class` frontmatter; decides how any new job runs and what it may cost
+- **ADR 0050**: Task-execution framework: six execution classes (N/C/R/D/A/O); decides how any new job runs and what it may cost. Its `execution_class` skill frontmatter and the merge-gate lint that reads it (build item B5) are decided, not built: no skill under `operator/skills/` carries the field (0 of 87, 2026-11-09), and no lint checks it
 - **ADR 0052**: The client portal is a management console (Direct / Account / Administer), never a data surface; no portal action touches client work
-- **ADR 0053**: Author-built connectors are MCP servers in `operator/connectors/`, installed per customer; the overlay stays substrate-only
+- **ADR 0053**: Author-built connectors are MCP servers in `operator/connectors/`, baked into the shared seat image and launched only on a seat whose `customer.yaml` binds them (the ADR's 2026-06-23 amendment; its title still says per-customer-installed); the overlay stays substrate-only
 - **ADR 0056**: Persona exposure plus skill initiation replace `trust_ceiling` and the other scalar ceilings; the entitlement model every gate reads
 - **ADR 0057**: Claude-connector access: Clerk proves who, the `mcp_issued_grants` row read per request decides whether (the kill switch)
 - **ADR 0086**: Matter identity binds at the send-scan seam through provenance pairs; the control against matter-A content reaching matter-B's recipient
@@ -61,9 +61,11 @@ The 2026-05-24 realignment burial is complete. Removed: `smd.hooks.*` dual-surfa
 ## Never run a second hermes runtime beside a live gateway (the one-shot rule)
 
 **Do not run `hermes -p <profile> ...` one-shots, `hermes chat`, or any other
-full hermes runtime on a seat whose gateway is up.** A seat is 1 vCPU / 1GB
-(`machine:` in its `customer.yaml`); a second runtime loads the same plugin set
-and competes for the same single core with the process that is answering clients.
+full hermes runtime on a seat whose gateway is up.** A seat is small: its size
+is authored in `machine:` in its `customer.yaml`, from `shared-cpu-1x` with
+2048 MB up to `shared-cpu-4x` with 8192 MB (2026-11-09). A second runtime loads
+the same plugin set and competes for the same shared CPU and memory with the
+process that is answering clients.
 
 Use instead:
 

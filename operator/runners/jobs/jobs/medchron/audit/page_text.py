@@ -66,6 +66,19 @@ def exhibit_paths(out_dir: Path) -> dict[int, Path]:
     return paths
 
 
+def duplicate_exhibits(out_dir: Path) -> dict[int, list[str]]:
+    """Exhibit numbers that more than one file in ``out_dir`` carries
+    (``exhibit_paths`` would keep one by directory order). 2026-11-09: a
+    redo's leftover first-attempt exhibits shadowed ten numbers and the audit
+    and review graded entries against other visits' pages."""
+    seen: dict[int, list[str]] = {}
+    if out_dir.is_dir():
+        for p in sorted(out_dir.iterdir()):
+            if m := EXHIBIT_PDF.match(p.name):
+                seen.setdefault(int(m.group(1)), []).append(p.name)
+    return {n: names for n, names in seen.items() if len(names) > 1}
+
+
 def page_traits(page: Any) -> dict[str, Any]:
     """Per-page facts from pymupdf; spans carry their own render mode and
     font, which is what makes this per-page on a merged exhibit."""

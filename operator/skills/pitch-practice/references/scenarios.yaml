@@ -1,0 +1,275 @@
+schema_version: 1
+scenarios:
+  - id: owner
+    role: the owner or managing principal who signs
+    example: false
+    situation: >-
+      The owner runs a small, busy business and has been pitched software tools many times this year.
+      They sign every agreement themselves and want to know what they would be paying for and what could go wrong.
+    objections:
+      - says: 'Another AI tool. I have watched people get burned by these.'
+        answer:
+          - document: what-it-is.md
+            section: Definition
+          - document: how-the-operator-works.md
+            section: 'One worker, configured for one business'
+      - says: 'How do I know it will not do something on its own that embarrasses us with a customer?'
+        answer:
+          - document: permission-model.md
+            section: Ceilings from least to most restrictive
+          - document: permission-model.md
+            section: Rules that hold everywhere
+      - says: 'What would this cost me, compared with what I spend now?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: How to read this document
+          - document: how-the-operator-works.md
+            section: 'One worker, configured for one business'
+      - says: 'Who else is running this today?'
+        answer:
+          - document: built-versus-planned.md
+            section: In production
+          - document: what-it-is.md
+            section: Industry packs
+      - says: 'When it gets something wrong, whose problem is that, mine or yours?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: "AI output and the client's review"
+          - document: what-smd-commits-to.md
+            section: Responsibility and liability
+      - says: 'If it does not work out, how do I stop it and get out?'
+        answer:
+          - document: permission-model.md
+            section: 'Pause, stop and safety'
+          - document: what-smd-commits-to.md
+            section: 'Ending the service, return and deletion'
+
+  - id: office-administrator
+    role: the office administrator who must live with it
+    example: false
+    situation: >-
+      The office administrator keeps the inbox, the calendar and the records moving and already juggles too many tools.
+      They will be the first person to correct the Operator and the first to hear about it when something goes wrong.
+    objections:
+      - says: 'Is this one more system I have to log in to and learn?'
+        answer:
+          - document: how-the-operator-works.md
+            section: 'Before and after: what changes for the business'
+      - says: 'If I correct it, will it remember next time, or will I keep fixing the same thing?'
+        answer:
+          - document: memory.md
+            section: Learned working preferences
+          - document: memory.md
+            section: Administrator corrections
+      - says: 'Can it send things to our customers without me seeing them first?'
+        answer:
+          - document: permission-model.md
+            section: What is in use today
+          - document: request-lifecycle.md
+            section: Delivery paths
+      - says: 'When it takes on a big piece of work and gets stuck, am I just left wondering?'
+        answer:
+          - document: jobs.md
+            section: From request to delivery
+          - document: jobs.md
+            section: What the client hears when a job stops
+      - says: 'Can I switch it off myself if something looks wrong on a busy day?'
+        answer:
+          - document: client-controls.md
+            section: Direct
+          - document: permission-model.md
+            section: 'Pause, stop and safety'
+      - says: 'Can I just message it from my phone in our team chat?'
+        answer:
+          - document: connections-and-channels.md
+            section: Other channels
+
+  - id: security-reviewer
+    role: the security or IT reviewer
+    example: false
+    situation: >-
+      The reviewer looks after the business's accounts and devices and has been asked to sign off before anything new connects to them.
+      They read the terms closely and will test every claim about isolation, access and the record.
+    objections:
+      - says: 'Where does our data live, and who else shares that machine?'
+        answer:
+          - document: isolation-and-data-custody.md
+            section: Isolation between clients
+      - says: 'Can your staff read our email and our documents?'
+        answer:
+          - document: isolation-and-data-custody.md
+            section: "How SMD's console reads a seat"
+          - document: isolation-and-data-custody.md
+            section: What SMD can see beyond the console
+      - says: 'Where are the credentials to our systems kept, and who can read them?'
+        answer:
+          - document: isolation-and-data-custody.md
+            section: Credential custody
+      - says: 'So the audit record is tamper-proof?'
+        answer:
+          - document: isolation-and-data-custody.md
+            section: The audit record
+      - says: 'What stops a malicious email from getting it to send something or delete something?'
+        answer:
+          - document: request-lifecycle.md
+            section: The taint rule
+          - document: permission-model.md
+            section: Rules that hold everywhere
+      - says: 'Do you have a SOC 2 report I can hand to our insurer?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: What SMD does not promise
+          - document: isolation-and-data-custody.md
+            section: Model and provider posture
+
+  - id: senior-staff
+    role: the skeptical senior staff member who fears replacement
+    example: false
+    situation: >-
+      A long-serving senior staff member knows how everything in the business really works and has heard that this is coming.
+      They are polite in the meeting, but they suspect the Operator is there to take their job.
+    objections:
+      - says: 'So this is here to replace me.'
+        answer:
+          - document: how-the-operator-works.md
+            section: 'Before and after: what changes for the business'
+      - says: 'It will make mistakes, and I will be the one blamed for them.'
+        answer:
+          - document: what-smd-commits-to.md
+            section: "AI output and the client's review"
+          - document: request-lifecycle.md
+            section: Content gates on outbound messages
+      - says: 'Who decides what it is allowed to do, you or us?'
+        answer:
+          - document: permission-model.md
+            section: Rules that hold everywhere
+          - document: managed-service.md
+            section: Who does what
+      - says: 'Will it learn how I like things done, or force its own way on the rest of us?'
+        answer:
+          - document: memory.md
+            section: Learned working preferences
+          - document: memory.md
+            section: Voice and format specifications
+      - says: 'Does it keep notes on me that management can read?'
+        answer:
+          - document: memory.md
+            section: Learned working preferences
+          - document: memory.md
+            section: 'Ownership, export and visibility'
+
+  - id: point-tool-buyer
+    role: the buyer who already bought a point tool
+    example: false
+    situation: >-
+      The buyer already pays for a chat assistant for the team and an intake tool at the front door.
+      They think the gap is already covered and want to know why they would add anything.
+    objections:
+      - says: 'We already pay for a chat assistant. Why would we need this as well?'
+        answer:
+          - document: how-the-operator-works.md
+            section: 'One worker, configured for one business'
+          - document: how-the-operator-works.md
+            section: 'Before and after: what changes for the business'
+      - says: 'Our intake tool already handles the front door.'
+        answer:
+          - document: how-the-operator-works.md
+            section: 'Before and after: what changes for the business'
+      - says: 'Can our people reach it from the chat assistant we already use?'
+        answer:
+          - document: connections-and-channels.md
+            section: Other channels
+          - document: built-versus-planned.md
+            section: 'Built, not yet in client use'
+      - says: 'Does it replace the system we keep our records in?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: Who owns the data
+          - document: connections-and-channels.md
+            section: Connections by client system type
+      - says: 'We bought a tool like this last year and nobody used it.'
+        answer:
+          - document: how-the-operator-works.md
+            section: What managed means
+          - document: managed-service.md
+            section: Onboarding phases
+
+  - id: procurement
+    role: a procurement-minded buyer who asks for terms
+    example: false
+    situation: >-
+      The buyer handles contracts and vendor reviews and wants the terms in writing before any further meeting.
+      They ask about data, security, exit and responsibility, and they want each answer to match the agreement.
+    objections:
+      - says: 'Who owns our data, and who owns what it learns about us?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: Who owns the data
+          - document: memory.md
+            section: 'Ownership, export and visibility'
+      - says: "Is our data used to train anyone's models?"
+        answer:
+          - document: what-smd-commits-to.md
+            section: 'How client data is used, and what it is never used for'
+          - document: isolation-and-data-custody.md
+            section: Model and provider posture
+      - says: 'How quickly will you tell us about a security incident?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: Security incident notice
+      - says: 'What uptime do you commit to, and are there service credits if you miss it?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: Service levels and support
+          - document: what-smd-commits-to.md
+            section: What SMD does not promise
+      - says: 'If it gets something wrong, what is your liability position?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: Responsibility and liability
+          - document: what-smd-commits-to.md
+            section: "AI output and the client's review"
+      - says: 'When we leave, what do we get back, and what happens to the rest?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: 'Ending the service, return and deletion'
+          - document: isolation-and-data-custody.md
+            section: Retention and offboarding
+
+  - id: law-practice
+    role: 'example: the managing partner or office manager of a law practice'
+    example: true
+    situation: >-
+      A small law practice is short on paralegal and coordinator time, and its people are worried about confidentiality and about anything that looks like practising law.
+      The managing partner wants to know exactly where the line sits before agreeing to anything.
+    objections:
+      - says: 'We cannot have a machine giving legal advice to anyone.'
+        answer:
+          - document: what-it-is.md
+            section: 'A seat at work: one example'
+          - document: how-the-operator-works.md
+            section: 'The same model, in one industry'
+      - says: 'Our client communications are privileged. How do I know they stay that way?'
+        answer:
+          - document: what-smd-commits-to.md
+            section: Confidentiality for privileged and professionally protected information
+      - says: 'Will it send anything to opposing counsel or the court on its own?'
+        answer:
+          - document: what-it-is.md
+            section: 'A seat at work: one example'
+          - document: request-lifecycle.md
+            section: Content gates on outbound messages
+      - says: 'Can I trust it with our deadlines?'
+        answer:
+          - document: what-it-is.md
+            section: 'A seat at work: one example'
+      - says: "What stops it sending one client's material to another client?"
+        answer:
+          - document: request-lifecycle.md
+            section: Content gates on outbound messages
+          - document: what-it-is.md
+            section: 'A seat at work: one example'
+      - says: 'Does it work with the case-management system we already use?'
+        answer:
+          - document: connections-and-channels.md
+            section: Connections by client system type

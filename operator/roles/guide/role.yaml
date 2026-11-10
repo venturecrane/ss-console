@@ -1,0 +1,55 @@
+# The guide role (ADR 0105): answers questions from an authored library.
+#
+# A seat selects it with `seat.role: guide`. The role has two jobs, both general
+# in shape. ANSWER: the seat answers questions from the library its skill
+# ships, cites the document and the section every answer came from, says
+# plainly when the library does not cover a question, and never answers from
+# outside the library. PRACTICE: on request it plays an authored buyer
+# scenario, raises that scenario's objections one turn at a time, then steps
+# out of role and gives feedback under an authored rubric, each point cited to
+# the library (skill pitch-practice). The first
+# seat is SMD's own `smd-guide`, whose library is the Operator product
+# reference for outside sales representatives (skill product-guide); a later
+# seat could carry another library under its own skill.
+#
+# What keeps the answers inside the library is the seat, not the model's good
+# behavior alone:
+#   - the role's seats drop the native web toolset and the establishment and
+#     memory toolsets (overlay bootstrap translate, _GUIDE_REFUSED_TOOLSETS),
+#     so there is no outside source and nothing a conversation could teach it;
+#   - the seat enables only the role's two skills, so the omitted-skill read
+#     fence refuses every other skill's files
+#     (plugins/hermes-smd-initiation/skill_fence.py);
+#   - the seat authors no record store, no connector but its own mailbox, and
+#     no code execution, so there is nothing else on the seat to read or run;
+#   - email replies go only to the rostered sender, in the sender's thread,
+#     through the recipient-locked reply relay (fabrication markers and the
+#     output checklist run on every one); every other send is unauthored and
+#     so refused;
+#   - a chat answer is the conversation itself, on the seat's own bot, to an
+#     id on the authored chat allowlist only; it is not a send tool, so the
+#     email relay's content gates do not run on it (ADR 0105 records this).
+
+role: guide
+schema_version: 1
+
+# The persona prompt and its safety rules, rendered verbatim into SOUL.md.
+persona: persona.md
+
+# Skills the role's persona carries; `built:` says whether
+# operator/skills/<name>/SKILL.md exists (an enabled skill with no body fails
+# the seat's boot).
+skills:
+  - name: product-guide
+    built: true
+    purpose: Every email to the seat; answers from the Operator product library and cites document and section, and hands a practice request to pitch-practice.
+  - name: pitch-practice
+    built: true
+    purpose: Plays an authored buyer scenario turn by turn, then gives rubric feedback cited to the library.
+
+# What this role's seats may send (ADR 0093). Nothing is loosened: the platform
+# default holds, and the reply to a rostered sender is the only send a guide
+# seat authors (its customer.yaml). No citation is needed for the default.
+policy:
+  output_checklist:
+    profile: paralegal

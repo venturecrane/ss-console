@@ -58,7 +58,7 @@ describe('generated registries are current (drift)', () => {
     ).toEqual([])
   })
 
-  it('the live inventory is the seven seats, each with its authored app or null', () => {
+  it('the live inventory is the eight seats, each with its authored app or null', () => {
     // A tripwire for the PR that introduced the inventory: the generated
     // registry was proven value-identical to the hand-kept one it replaced.
     // Adding or retiring a seat updates this list in the same change.
@@ -71,6 +71,8 @@ describe('generated registries are current (drift)', () => {
         'captain-mark': 'hermes-captain-mark',
         'pilot-smokeball': 'hermes-pilot-smokeball',
         scott: 'hermes-scott',
+        // Authored, not yet provisioned (provisioning is the Captain's act).
+        'smd-guide': null,
         'smd-staging': 'hermes-smd-staging',
       }
     )

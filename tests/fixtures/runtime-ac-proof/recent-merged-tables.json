@@ -1,0 +1,82 @@
+[
+  {
+    "pr": 3903,
+    "table": "| AC | Status | Evidence |\n|---|---|---|\n| (runtime) the act on the seat | pending | text |"
+  },
+  {
+    "pr": 3885,
+    "table": "| # | Gate | Layer | Status | Evidence |\n|---|---|---|---|---|\n| 3 | text | (runtime) | unmet | text |\n| 4 | text | (runtime) | unmet | text |"
+  },
+  {
+    "pr": 3881,
+    "table": "| AC | Status | Evidence |\n| --- | --- | --- |\n| (runtime) the act on the seat | not met: no seat has a reader-scoped rule or this build yet; the first real demand and memo are the proof | text |"
+  },
+  {
+    "pr": 3877,
+    "table": "| AC | Status | Evidence |\n| --- | --- | --- |\n| (runtime) the act on the seat | not met: no roster installed; the client firm's roster file is the first real proof | text |\n| (runtime) the act on the seat | not met: no roster installed; the client firm's roster file is the first real proof | text |"
+  },
+  {
+    "pr": 3876,
+    "table": "| # | Criterion | Status | Evidence |\n| --- | --- | --- | --- |\n| 6 | (runtime) the act on the seat | not met: the workspace runs it; expected lines above. The first real memo draft is the live proof, read back from its `library-resolution.json` | text |"
+  },
+  {
+    "pr": 3875,
+    "table": "| # | Criterion | Status | Evidence |\n| --- | --- | --- | --- |\n| 10 | (runtime) the act on the seat | not met: no seat holds an accepted file; the first real save after a firm sets up a kind is the live proof. `--edited` is the $0 step for a real edited brief | text |"
+  },
+  {
+    "pr": 3873,
+    "table": "| # | Criterion | Status | Evidence |\n| --- | --- | --- | --- |\n| 13 | (runtime) the act on the seat | proven at $0 on the firm's real files; the first real request is the live proof | vfy_01M6TYDN11PQ5RTXW9Z5917E9Z, vfy_01M6TYRJZPRKPZND5DQZ22X0S0, vfy_01M6TYBFMX3M8PCMNZ3891J81K, vfy_01M6V0N6QQFNQNGSWNN36C2585, vfy_01M6V2E6QTY0SKQ6X71QEQX02C, vfy_01M6V2E6X7N371QVCKGGX7SBPE, vfy_01M6V2E70X0VMFSDRR88C9SF12, vfy_01M6V2E75BCZV5CV5Q7RYQTNMY |\n| 14 | (runtime) the act on the seat | proven at $0 on the firm's real files; the first real request is the live proof | vfy_01M6TYRJZPRKPZND5DQZ22X0S0, vfy_01M6V0N6QQFNQNGSWNN36C2585 |\n| 15 | (runtime) the act on the seat | proven at $0 on the firm's real files; the first real request is the live proof | vfy_01M6TY2ZQ59ZV4F5YJWJ0Y2NMB, vfy_01M6TY9SJFWPH7ZKDD4EWEG5WY, vfy_01M6V0PRP1AEP4ACD1EWVT178H, vfy_01M6V0Q3EXXE9ZVXYKAK5GDX3R, vfy_01M6V0QAN9GQJCYPSGFRT16B5X, vfy_01M6V2HZE9FRHJWK8XP658RZ2J |"
+  },
+  {
+    "pr": 3872,
+    "table": "| # | Criterion | Status | Evidence |\n| --- | --- | --- | --- |\n| 9 | (runtime) the act on the seat | not met: run by the coordinator in the client ops workspace | text |\n| 10 | (runtime) the act on the seat | not met: first real request (after 3b and the Captain's read of the wording file) | text |"
+  },
+  {
+    "pr": 3871,
+    "table": "| AC | Status | Evidence |\n| --- | --- | --- |\n| (runtime) the act on the seat | unmet | text |"
+  },
+  {
+    "pr": 3861,
+    "table": "| AC | Status | Evidence |\n| --- | --- | --- |\n| the act on the seat (runtime) | not met in this PR | text |"
+  },
+  {
+    "pr": 3859,
+    "table": "| Criterion | Status | Evidence |\n| --- | --- | --- |\n| (runtime) the act on the seat | not met | text |"
+  },
+  {
+    "pr": 3858,
+    "table": "| AC | Status | Evidence |\n| --- | --- | --- |\n| the act on the seat (runtime) | not met in this PR | text |"
+  },
+  {
+    "pr": 3857,
+    "table": "| AC | Evidence | Status |\n| --- | --- | --- |\n| (runtime) the act on the seat | text | not met |"
+  },
+  {
+    "pr": 3853,
+    "table": "| AC | Kind | Status | Evidence |\n| --- | --- | --- | --- |\n| text | (runtime) | not met | text |\n| text | (runtime) | not met | text |"
+  },
+  {
+    "pr": 3852,
+    "table": "| AC | Status | Evidence |\n|---|---|---|\n| (runtime) the act on the seat | not met | text |\n| (runtime) the act on the seat | not met | text |"
+  },
+  {
+    "pr": 3850,
+    "table": "| Criterion | Status | Evidence |\n| --- | --- | --- |\n| (runtime) the act on the seat | not met | text |\n| (runtime) the act on the seat | not met | text |"
+  },
+  {
+    "pr": 3848,
+    "table": "| AC | Status | Evidence |\n| --- | --- | --- |\n| (runtime) the act on the seat | not met | text |\n| (runtime) the act on the seat | not met | text |"
+  },
+  {
+    "pr": 3803,
+    "table": "| AC | Status | Evidence |\n|---|---|---|\n| the act on the seat (runtime) | met | vfy_01M6PJ8XAK8PRN52NG5ENPW3D3 |"
+  },
+  {
+    "pr": 3795,
+    "table": "| AC | Status | Evidence |\n| --- | --- | --- |\n| (runtime) the act on the seat | UNMET | text |\n| (runtime) the act on the seat | UNMET | text |"
+  },
+  {
+    "pr": 3790,
+    "table": "| AC | Status | Evidence |\n| --- | --- | --- |\n| (runtime) the act on the seat | unmet | text |\n| (runtime) the act on the seat | unmet | text |"
+  }
+]

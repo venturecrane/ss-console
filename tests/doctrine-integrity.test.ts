@@ -353,6 +353,45 @@ describe('mechanisms under review are falsifiable', () => {
     }
     expect(violations).toEqual([])
   })
+
+  /**
+   * A check earns blocking power from its replay, so every mechanism added
+   * after 2026-11-09 records the replay it was read against, who owns a false
+   * alarm, and the way out when it misfires (wave 2, Q4). The entries below
+   * predate the rule and are grandfathered BY NAME; the list may only shrink.
+   * A grandfathered hook that changes behaviour adds the three fields in the
+   * same PR and leaves this list.
+   */
+  const GRANDFATHERED = [
+    'reply-contract',
+    'plan-premise-gate-rehearsal-row',
+    'session-board',
+    'obligation-capture-at-close',
+    'memory-audit',
+    'skunkworks-default-stance',
+  ]
+
+  it('every mechanism outside the grandfathered list records replay, false_alarm_owner and escape', () => {
+    const violations: string[] = []
+    for (const m of mechanisms as Array<Mechanism & Record<string, unknown>>) {
+      if (GRANDFATHERED.includes(m.id)) continue
+      for (const field of ['replay', 'false_alarm_owner', 'escape']) {
+        const v = m[field]
+        if (typeof v !== 'string' || v.trim().length === 0) violations.push(`${m.id}: no ${field}`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  it('the grandfathered list names only existing mechanisms (it can shrink, never hide a new one)', () => {
+    const ids = mechanisms.map((m) => m.id)
+    expect(GRANDFATHERED.filter((g) => !ids.includes(g))).toEqual([])
+    expect(GRANDFATHERED.length).toBeLessThanOrEqual(9)
+  })
+
+  it('the touch rule mechanism is registered (sanity: the new-field rule has a subject)', () => {
+    expect(mechanisms.map((m) => m.id)).toContain('runtime-ac-touch-rule')
+  })
 })
 
 /**

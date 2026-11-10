@@ -47,7 +47,7 @@ escalation_model: claude-opus-5-5
 # A light seat: one gateway, no lanes on the Machine (no chronology, demand or
 # litigation runner), the brokery and scott sizing.
 machine:
-  size: shared-cpu-1x
+  size: shared-cpu-2x
   memory_mb: 2048
 
 # ---- HUMANS WITH PORTAL ACCESS ----

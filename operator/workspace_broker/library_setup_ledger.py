@@ -42,7 +42,12 @@ from typing import Any
 from .audit_ledger import _iso_utc, _ulid
 
 JOB_KIND = "library_setup"
-KINDS = ("mediation_brief", "memo")
+#: Every kind the drafting job makes, in the document-kind registry's order
+#: (``runners/jobs/jobs/library_setup.KINDS``, pinned equal by test).
+KINDS = ("discovery_set", "discovery_response", "mediation_brief", "memo", "depo_outline")
+#: "Set up the document library": one job, one list per kind in ``KINDS``.
+LIBRARY = "library"
+MAX_POINT = 200
 STATES = ("submitted", "running", "observed", "delivered", "held", "failed")
 TERMINAL = frozenset({"observed", "delivered", "failed"})
 _ALLOWED_NEXT = {
@@ -77,6 +82,9 @@ ADDED_COLUMNS = {
     "attorney_name": "TEXT",
     "attorney_key": "TEXT",
     "run_id": "TEXT",
+    # What a list job was pointed at: "matter:<number>" or "name" (the words are
+    # in its queue file only: a file's name can carry a client's).
+    "pointed": "TEXT",
 }
 #: The columns a row is read with, plus what the reply chain expects of a
 #: drafting row (no matter, no files, no folder).
@@ -101,6 +109,7 @@ PROJECTION = (
     "mode",
     "parent_id",
     "run_id",
+    "pointed",
 )
 
 
@@ -116,12 +125,33 @@ class Underway(ValueError):
         self.job_id = job_id
 
 
+REQUIRED = frozenset({"kind", "attorney", "requested_by", "request_ref", "request_text"})
+#: What the administrator pointed at, as the request gives it: a matter's number,
+#: or words of a document's name. Each must appear in the request's own words.
+POINTERS = frozenset({"matter", "document"})
+
+
+def _fold(text: str) -> str:
+    return " ".join(re.sub(r"[^\w]+", " ", text or "").split()).casefold()
+
+
+def _pointer(req: dict[str, Any], key: str, text: str) -> str | None:
+    value = req.get(key)
+    if value is None:
+        return None
+    value = " ".join(str(value).split()) if isinstance(value, str) else ""
+    if not value or len(value) > MAX_POINT or _fold(value) not in _fold(text):
+        raise EnvelopeError(f"{key} must be words the request itself gives, or null")
+    return value
+
+
 def validate_envelope(req: Any) -> dict[str, Any]:
-    keys = {"kind", "attorney", "requested_by", "request_ref", "request_text"}
-    if not isinstance(req, dict) or set(req) != keys:
-        raise EnvelopeError(f"a library setup envelope carries exactly {sorted(keys)}")
-    if req["kind"] not in KINDS:
-        raise EnvelopeError(f"kind must be one of {list(KINDS)}")
+    if not isinstance(req, dict) or not REQUIRED <= set(req) <= REQUIRED | POINTERS:
+        raise EnvelopeError(
+            f"a library setup envelope carries exactly {sorted(REQUIRED)}, and may add {sorted(POINTERS)}"
+        )
+    if req["kind"] not in KINDS and req["kind"] != LIBRARY:
+        raise EnvelopeError(f"kind must be one of {[*KINDS, LIBRARY]}")
     attorney = req["attorney"]
     if attorney is not None:
         attorney = " ".join(str(attorney).split()) if isinstance(attorney, str) else ""
@@ -134,7 +164,24 @@ def validate_envelope(req: Any) -> dict[str, Any]:
         raise EnvelopeError("request_ref must be the request email's internetMessageId")
     if not (isinstance(text, str) and text.strip() and len(text) <= MAX_REQUEST_TEXT):
         raise EnvelopeError("request_text must be the request verbatim")
-    return {"kind": req["kind"], "attorney": attorney or None, "requested_by": who.strip().lower(), "request_ref": ref}
+    matter, document = _pointer(req, "matter", text), _pointer(req, "document", text)
+    if (matter or document) and req["kind"] == LIBRARY:
+        raise EnvelopeError("a document is pointed at for one kind, never for the whole library")
+    if matter and document:
+        raise EnvelopeError("point at a matter or at a document's name, not both")
+    out = {"kind": req["kind"], "attorney": attorney or None, "requested_by": who.strip().lower(), "request_ref": ref}
+    if matter:
+        out["matter"] = matter
+    if document:
+        out["document"] = document
+    return out
+
+
+def pointed_of(env: dict[str, Any]) -> str | None:
+    """The row's ``pointed``: ``matter:<number>``, ``name``, or None."""
+    if env.get("matter"):
+        return f"matter:{env['matter']}"
+    return "name" if env.get("document") else None
 
 
 def queue_record(env: dict[str, Any], job_id: str, library_number: str, live: bool) -> dict[str, Any]:
@@ -150,6 +197,8 @@ def queue_record(env: dict[str, Any], job_id: str, library_number: str, live: bo
         "message_ref": env["request_ref"],
         "library_matter_number": library_number,
         "live": live,
+        **({"point_matter": env["matter"]} if env.get("matter") else {}),
+        **({"point_name": env["document"]} if env.get("document") else {}),
     }
 
 
@@ -208,17 +257,19 @@ class SetupLedger:
             conn.execute("BEGIN IMMEDIATE")
             twin = conn.execute(
                 "SELECT id FROM library_setup_jobs WHERE mode='list' AND document_class=? "
-                "AND COALESCE(lower(attorney_named),'')=? AND state IN ('submitted','running') LIMIT 1",
-                (env["kind"], (env["attorney"] or "").lower()),
+                "AND COALESCE(lower(attorney_named),'')=? AND COALESCE(pointed,'')=? "
+                "AND state IN ('submitted','running') LIMIT 1",
+                (env["kind"], (env["attorney"] or "").lower(), pointed_of(env) or ""),
             ).fetchone()
             if twin is not None:
                 conn.rollback()
                 raise Underway(twin["id"])
             conn.execute(
                 "INSERT INTO library_setup_jobs (id, created_at, updated_at, state, document_class, matter_number, "
-                "requester, request_ref, envelope_digest, live, attorney_named) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "requester, request_ref, envelope_digest, live, attorney_named, pointed) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (job_id, now, now, "submitted", env["kind"], library_number, env["requested_by"],
-                 env["request_ref"], digest, int(live), env["attorney"]),
+                 env["request_ref"], digest, int(live), env["attorney"], pointed_of(env)),
             )  # fmt: skip
             conn.commit()
         finally:
@@ -319,6 +370,7 @@ def of_drafting(drafting: Any) -> SetupLedger:
 __all__ = [
     "JOB_KIND",
     "KINDS",
+    "LIBRARY",
     "STATES",
     "TERMINAL",
     "DraftingOrSetup",
@@ -326,6 +378,7 @@ __all__ = [
     "SetupLedger",
     "Underway",
     "of_drafting",
+    "pointed_of",
     "queue_record",
     "validate_envelope",
 ]

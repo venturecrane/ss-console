@@ -167,14 +167,60 @@ def vision_pages(path: Path, pages: list[tuple[int, str]]) -> list[int]:
     typed record (an 834-page file held 64) is never read when the document as
     a whole has text, and a garbled OCR layer turned Z94.0 into 294.0 and a
     client's own date of birth into "another person". A thin page with no
-    image is a short typed page or a blank one: vision would read nothing more."""
-    cand = [n for n, t in pages if thin(t) or garbled(t)]
+    image is a short typed page or a blank one: vision would read nothing more,
+    unless its words are drawn as shapes (``drawn_text``), which is checked on
+    every image-free page whose text layer is short, thin or not: a print
+    header and a URL line carried 285 characters over a drawn office visit
+    (2026-11-09)."""
+    text = dict(pages)
+    short = {n for n, t in pages if len(re.sub(r"\s", "", t or "")) < DRAWN_TEXT_CHARS}
+    cand = [n for n, t in pages if thin(t) or garbled(t) or n in short]
     if not cand:
         return []
     import pymupdf
 
+    out: list[int] = []
     with pymupdf.open(str(path)) as doc:
-        return [n for n in cand if 1 <= n <= len(doc) and doc[n - 1].get_images()]
+        for n in cand:
+            if not 1 <= n <= len(doc):
+                continue
+            page = doc[n - 1]
+            if page.get_images():
+                if thin(text[n]) or garbled(text[n]):
+                    out.append(n)
+            elif drawn_text(page):
+                out.append(n)
+    return out
+
+
+#: A page's text layer under this many non-space characters is short enough
+#: that its words may be drawn as shapes instead (a full typed page carries
+#: 2,000 or more).
+DRAWN_TEXT_CHARS = 1000
+#: Filled curve segments at which an image-free page carries text drawn as
+#: glyph outlines (a print-to-PDF that outlined its fonts). Rules, boxes and
+#: check boxes are straight lines and rectangles; a letterhead logo is tens
+#: to a few hundred curves; a page of outlined words is thousands.
+DRAWN_CURVES = 1500
+
+
+def glyph_curves(page: Any) -> int:
+    """Curve segments in the page's filled vector paths."""
+    n = 0
+    for path in page.get_drawings():
+        if path.get("fill") is None:
+            continue
+        n += sum(1 for item in path.get("items", ()) if item and item[0] == "c")
+    return n
+
+
+def drawn_text(page: Any) -> bool:
+    """True when an image-free page draws its words as shapes the text layer
+    does not carry. WHY (2026-11-09): an orthopaedic office visit printed with
+    outlined fonts reached an A&P update as two pages whose text layer was
+    only the print header, with no image to send to vision, so the composer
+    never read the visit and the chronology left it out."""
+    return glyph_curves(page) >= DRAWN_CURVES
 
 
 def live_rows(rows: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], int]:

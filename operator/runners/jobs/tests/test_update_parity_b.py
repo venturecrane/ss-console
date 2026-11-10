@@ -143,3 +143,54 @@ def test_a_heading_left_empty_goes_and_a_short_or_differing_sentence_stays() -> 
     assert out.count("Normal.") == 2  # a short line means something under each heading
     assert "Pain rated 3 of 10" in out and "Pain rated 4 of 10" in out  # a value differs: both stay
     assert W.dedupe(out) == (out, 0)
+
+
+def test_a_redo_moves_an_earlier_attempts_new_exhibits_aside_before_numbering(tmp_path: Path) -> None:
+    """2026-11-09: a redo kept the first attempt's exhibit files, a newly
+    cited visit shifted later numbers up one, and ten numbers had two files;
+    the audit and review read the wrong visit's pages."""
+    from jobs.medchron.audit.page_text import duplicate_exhibits
+    from jobs.stages import update_select as US
+
+    sr = _seed(tmp_path, {"whole": _whole_pages(), "tmpl": _template_pages()})
+    out = tmp_path / "out" / "alpha"
+    out.mkdir(parents=True)
+    (out / "Exhibit 1 - Delivered Clinic.pdf").write_bytes(b"%PDF delivered")
+    for n in (2, 3, 4):
+        (out / f"Exhibit {n} - Earlier Attempt {n}.pdf").write_bytes(b"%PDF stale")
+    # What the earlier attempt graded against those files, keyed by number.
+    (out / "auditpages").mkdir()
+    (out / "auditpages" / "ex2_p1.png").write_bytes(b"png")
+    rows = [
+        {"key": "a", "exhibit": 1, "verdict": "SUPPORTED"},
+        {"key": "b", "exhibit": 3, "verdict": "UNSUPPORTED"},
+        {"key": "c", "kind": "trim", "exhibit": None},  # keyed, no exhibit: would read as verified
+        {"kind": "summary"},
+    ]
+    (out / "audit-results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (out / "repair-edits.jsonl").write_text("{}\n")
+    (tmp_path / "runs" / "alpha" / "update" / "review_repair.json").write_text('{"status": "held"}')
+    assert US.run(sr) == 0, sr.logged  # type: ignore[arg-type]
+    assert duplicate_exhibits(out) == {}
+    assert (out / "Exhibit 1 - Delivered Clinic.pdf").is_file(), "the delivered set is never touched"
+    stale = tmp_path / "runs" / "alpha" / "update" / "stale"
+    assert sorted(p.name for p in stale.glob("Exhibit *")) == [
+        f"Exhibit {n} - Earlier Attempt {n}.pdf" for n in (2, 3, 4)
+    ]
+    kept = [json.loads(x).get("key") for x in (out / "audit-results.jsonl").read_text().splitlines()]
+    assert kept == ["a", None], "a delivered exhibit's row and an unkeyed summary stay"
+    assert [json.loads(x)["key"] for x in (stale / "audit-results.jsonl").read_text().splitlines()] == ["b", "c"]
+    assert not (out / "auditpages").exists() and (stale / "auditpages" / "ex2_p1.png").is_file()
+    assert not (out / "repair-edits.jsonl").exists() and (stale / "review_repair.json").is_file()
+
+
+def test_two_files_with_one_exhibit_number_hold_the_selection(tmp_path: Path) -> None:
+    from jobs.stages import update_select as US
+
+    sr = _seed(tmp_path, {"whole": _whole_pages()})
+    out = tmp_path / "out" / "alpha"
+    out.mkdir(parents=True)
+    (out / "Exhibit 1 - Delivered Clinic.pdf").write_bytes(b"%PDF a")
+    (out / "Exhibit 1 - Another Copy.pdf").write_bytes(b"%PDF b")
+    assert US.run(sr) == 2  # type: ignore[arg-type]
+    assert any("two files carry one exhibit number" in line for line in sr.logged)

@@ -123,3 +123,40 @@ def test_the_rehearsal_runs_on_real_drafting_inputs(tmp_path, monkeypatch, capsy
     assert _tool().main(["--kind", "memo", "--inputs", inputs, *extra], client=_client()) == 0
     report = json.loads(capsys.readouterr().out)
     assert "error" not in report and "stopped" not in report, report
+
+
+# ---- every kind (2026-11-09) ----------------------------------------------------------------
+
+
+def _customer(tmp_path: Path) -> str:
+    import yaml
+
+    p = tmp_path / "customer.yaml"
+    p.write_text(yaml.safe_dump({"firm_identity": {"name": "Example & Example, LLP"}}))
+    return str(p)
+
+
+def test_the_library_rehearsal_lists_every_kind_with_its_contract_and_prints_no_name(capsys, tmp_path):
+    from test_library_setup_every_kind import _firm
+
+    from jobs.library_setup import KINDS
+
+    tool = _tool()
+    assert tool.main(["--kind", "library", "--customer", _customer(tmp_path)], client=_firm()) == 0
+    out = capsys.readouterr().out
+    report = json.loads(out)
+    by = {e["kind"]: e for e in report["kinds"]}
+    assert list(by) == list(KINDS)
+    assert {c["contract"] for c in by["discovery_response"]["candidates"]} == {"styles"}
+    assert "Responses" not in out and "QUILLFEATHER" not in out and "Deposition Outline" not in out
+
+
+def test_a_styles_candidate_rehearses_its_accept_with_the_styles_base(capsys, tmp_path):
+    from test_library_setup_every_kind import _firm
+
+    tool = _tool()
+    argv = ["--kind", "depo_outline", "--customer", _customer(tmp_path), "--choose", "1", "--accept-dry"]
+    assert tool.main(argv, client=_firm()) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["accept_dry"] == "would_file" and report["contract"] == "styles"
+    assert report["blank"]["problems"] == 0

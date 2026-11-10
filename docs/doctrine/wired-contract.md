@@ -1,10 +1,10 @@
 # The Reachability Contract (Law 9)
 
-**Run `/wired`.** The method is an enterprise skill, canonical in crane-console (`.agents/skills/wired/`), synced into this repo's gitignored `.claude/commands/` on every `crane ss` launch. This page carries only what is specific to this venture: the layer list the gate chain is built from, and the merge gate that enforces it here.
+**Run `/wired`.** The method is SMD's own skill, `.claude/skills/wired/SKILL.md`, forked from crane-console on 2026-11-09 (crane's copy is still synced into the gitignored `.claude/commands/` on every `crane ss` launch, and the project skill wins over it). This page carries only what is specific to this venture: the layer list the gate chain is built from, and the merge gate that enforces it here.
 
 The skill produces the contract. The act as one sentence, the terminal seam, the gate chain enumerated backwards from that seam, a feasibility probe that escalates unclosable gates before the closable ones get built, and layer-tagged acceptance criteria that close against observations rather than artifacts. Run it on the ask, before the plan and before `/critique`.
 
-Do not re-derive the method here. If the skill and this page disagree, the skill wins, and the disagreement is a bug to fix in one PR.
+Do not re-derive the method here. The skill and this page carry the same READY definition, word for word, and `tests/smd-session-skills.test.ts` fails if they drift apart. Neither one wins a disagreement: a disagreement is a bug, fixed in both in one PR.
 
 ## Why it exists
 
@@ -38,7 +38,7 @@ A layer that survives a redeploy is exactly the layer a merge cannot reach. Thos
 
 ## The merge gate
 
-`.github/workflows/runtime-ac-proof.yml` blocks a PR that marks a `(runtime)`-tagged acceptance criterion `met` without a `crane_verify` ID in the Evidence column. The ID is resolved against the verify ledger (crane-context `GET /verify/lookup`, with the repo's `CRANE_RELAY_KEY`): it must exist and be a `live_state` or `fresh_process` observation, and a ledger the run cannot reach fails the check rather than passing it. The check is a required context in the main ruleset since 2026-09-25, so it blocks the merge rather than annotating it. `(repo)` ACs still take a file:line, because that is the right evidence for code. Parser: `scripts/runtime-ac-proof.mjs`, tested in `tests/runtime-ac-proof.test.ts`.
+`.github/workflows/runtime-ac-proof.yml` blocks a PR that marks a `(runtime)`-tagged acceptance criterion `met` without a `crane_verify` ID in the Evidence column, and since 2026-11-09 one that leaves it anything but `met`, `deferred` or `n/a`. A deferral names who switches it on and by when, anywhere in the row: `owner: <who>; enforce_by: YYYY-MM-DD`, the date not already passed. "not met", "unmet", "pending" and "not yet" fail; #3852 merged with two runtime rows "not met" while the check read only a section headed "## Acceptance criteria status". It now reads every table with a Status column, under any heading (accepted form: `docs/handbook/building-the-platform.md`, "The runtime AC table"). The ID is resolved against the verify ledger (crane-context `GET /verify/lookup`, with the repo's `CRANE_RELAY_KEY`): it must exist and be a `live_state` or `fresh_process` observation, and a ledger the run cannot reach fails the check rather than passing it. The check is a required context in the main ruleset since 2026-09-25, so it blocks the merge rather than annotating it. `(repo)` ACs still take a file:line, because that is the right evidence for code. Parser: `scripts/runtime-ac-proof.mjs`, tested in `tests/runtime-ac-proof.test.ts`.
 
 It exists because the acceptance-criteria machinery otherwise certifies the author's own definition of done. `tick-acs-on-merge` parses the merging PR's own status table to tick the linked issue, and `unmet-ac-on-close` skips PR-driven closes, so a slice that declares itself met is what closes the epic (`vfy_01KYNVJ4VG90G26SZSYPXF05KY`).
 

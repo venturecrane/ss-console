@@ -467,8 +467,9 @@ describe('existing seats are unchanged', () => {
       if (root.seat?.role === 'couples') return
       expect(root.people).toBeUndefined()
       expect(root.spaces).toBeUndefined()
-      // The marketing role (ADR 0098) selects a persona and a gate, not space mode.
-      if (root.seat?.role === 'marketing') return
+      // The marketing role (ADR 0098) selects a persona and a gate, and the
+      // guide role (ADR 0105) a persona and a toolset trim; neither is space mode.
+      if (root.seat?.role === 'marketing' || root.seat?.role === 'guide') return
       expect(root.seat?.role).toBeUndefined()
     })
   }

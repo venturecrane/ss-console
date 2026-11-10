@@ -8,9 +8,13 @@ choose.py``). This job, the jobs uid's child, then:
 1. reads the seat's switch again (unreadable holds; off does nothing);
 2. downloads the chosen document and requires the bytes the hunt listed (a file
    saved since is not what was chosen: the firm is told, nothing is made);
-3. makes the library file (``make.make``): adopt and clean through the kind's
-   plan, custom XML dropped, headers and footers judged against the firm's own
-   identity, marked places proven writable;
+3. makes the library file with the contract the list named for that document
+   (``choice.contract``): ``marked`` through ``make.make`` (adopt and clean
+   through the kind's plan, custom XML dropped, headers and footers judged
+   against the firm's own identity, marked places proven writable), ``styles``
+   through ``styles_make.make_styles`` (the body cleared, the same drops and the
+   same judgment of the headers and footers). A choice that names no contract is
+   from a list made before contracts were named: marked, as it was then;
 4. reads the slot's accepted file from the seat's ledger (what the acceptance
    says it replaces);
 5. files the made file in the firm's Document Library (``file.file_library``,
@@ -33,7 +37,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..firmbase import Source
-from . import file as file_mod, make as make_mod
+from . import MARKED, STYLES, file as file_mod, make as make_mod
 from .plan import PLAN_ERROR
 from .roster import ROSTER_UNREADABLE, RosterUnusable
 
@@ -130,12 +134,22 @@ def _made(
     from ..drafting import memo_charts
 
     kind = str(job["setup_kind"])
+    if contract_of(choice) == STYLES:
+        from .styles_make import make_styles
+
+        return make_styles(kind, blob, identity(inputs_dir) if pieces is None else pieces), None
     source = Source(str(choice["matter_id"]), str(choice["file_id"]), "", hashlib.sha256(blob).hexdigest())
     donor, donor_id = _donor(kind, blob, choice, client)
     made = make_mod.make(kind, blob, source, identity(inputs_dir) if pieces is None else pieces, chart_from=donor)
     if made.chart == memo_charts.FIRM_MEMO:
         return made, memo_charts.source(memo_charts.FIRM_MEMO, donor, donor_id)
     return made, memo_charts.source(memo_charts.BODY_LOOK) if made.chart == memo_charts.BODY_LOOK else None
+
+
+def contract_of(choice: dict[str, Any]) -> str:
+    """The contract the list named for the chosen document; ``marked`` when it
+    named none (a list made before contracts were named)."""
+    return STYLES if choice.get("contract") == STYLES else MARKED
 
 
 def run(
@@ -170,7 +184,11 @@ def run(
     except RosterUnusable as exc:  # the roster could not be read: SMD's to look at, nothing made
         return _held(exc.code)
     except make_mod.Unusable as exc:
-        if exc.code in ("header_picture_lost", PLAN_ERROR):  # our plan's fault, never the firm's: SMD looks
+        if exc.code in (
+            "header_picture_lost",
+            "body_not_cleared",
+            PLAN_ERROR,
+        ):  # our fault, never the firm's: SMD looks
             return _held(exc.code)
         return _told(NOT_A_FORM if exc.code in make_mod.STRUCTURAL else UNUSABLE, unusable=exc.code)
     kind, attorney = str(job["setup_kind"]), job.get("attorney_key") or None
@@ -192,6 +210,7 @@ def run(
             "sha256": filed.sha256,
             "new_file": filed.new_file,
         },
+        "contract": contract_of(choice),
         "fixed_strings": list(made.fixed_strings),
         "residue": made.residue,
         "replaces": slot,
@@ -199,4 +218,4 @@ def run(
     }
 
 
-__all__ = ["CHANGED", "MADE_NAME", "NOT_A_FORM", "UNUSABLE", "identity", "replaces", "run"]
+__all__ = ["CHANGED", "MADE_NAME", "NOT_A_FORM", "UNUSABLE", "contract_of", "identity", "replaces", "run"]

@@ -12,6 +12,8 @@ related-doc: docs/design/operator/legibility-ground-truth-matrix.md
 
 **Status:** Accepted (Captain sign-off 2026-07-07). Companion/amendment to ADR 0052.
 
+> **Amendment (2026-11-09).** Lock 3 says every client-configurable write persists to `customer.yaml`. Three client controls were built otherwise, on purpose: the entitlement level under the authored ceiling, pause, and the output-class specs change a seat without touching `customer.yaml`. They are runtime overrides or a separate vault object, each audited and each clamped by what `customer.yaml` authors. [ADR 0094](./0094-customer-configuration-as-built.md) section 8 is the record of them. No portal path writes `customer.yaml`; git stays its only authoring source (ADR 0094 section 1).
+
 **Source:** A 2026-07-07 working session reviewing the client-portal Operator page against a live seat. The Captain's direction: the page must be the one place anyone can see **what the operator is, everything it can do, everything it does regularly, how it does it, what it remembers, and what it is allowed to do** — and configure any of that, to the degree the client has been granted control. Grounded in four code sweeps whose findings are recorded in the companion ground-truth matrix.
 
 ---

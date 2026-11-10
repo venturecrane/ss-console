@@ -82,7 +82,7 @@ describe('the CLI still runs as a subprocess', () => {
 
 describe('clientOf', () => {
   it('rolls SMD-owned seats up to the SMD client', () => {
-    for (const seat of ['pilot-smokeball', 'smd-staging', 'scott']) {
+    for (const seat of ['pilot-smokeball', 'smd-guide', 'smd-staging', 'scott']) {
       expect(clientOf(seat)).toBe(SMD_CLIENT)
     }
   })
@@ -94,7 +94,12 @@ describe('clientOf', () => {
     // seats had work -- a clean-looking report over open work, the precise
     // failure this register exists to end. Found in review of PR #2837 and
     // reproduced against production before the fix.
-    expect(seatsOf(SMD_CLIENT).sort()).toEqual(['pilot-smokeball', 'scott', 'smd-staging'])
+    expect(seatsOf(SMD_CLIENT).sort()).toEqual([
+      'pilot-smokeball',
+      'scott',
+      'smd-guide',
+      'smd-staging',
+    ])
     // Round-trips: every seat the inverse names maps back to the client.
     for (const seat of seatsOf(SMD_CLIENT)) expect(clientOf(seat)).toBe(SMD_CLIENT)
   })

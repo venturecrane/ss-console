@@ -1,0 +1,177 @@
+schema_version: 1
+
+# GUIDE seat: SMD Services' own product guide (ADR 0105, role package
+# operator/roles/guide/). A sales representative SMD has listed emails a
+# question about the Operator and gets, in the same thread, an answer from the
+# product library (skill product-guide, operator/skills/product-guide/
+# references/) that names the document and section it came from. No client
+# material, no pricing.
+#
+# NOT YET PROVISIONED (seat.yaml fly_app: null). A merge of this file writes
+# nothing to R2 (ci-publish-customer-configs.sh never creates a seat's object)
+# and no D1 row (ci-sync-customer-configs.sh skips a slug with no
+# customer_configs row), so nothing runs until the Captain provisions it. The
+# outside representative's address is not known yet; until it is added below
+# by a reviewed PR, the only person the seat answers is SMD.
+
+# ---- IDENTITY ----
+customer_id: 'smd-guide'
+customer_name: 'SMD Services'
+
+# ---- SEAT DESCRIPTOR ----
+# SMD's own seat, on SMD's key; the role selects the guide persona and its
+# toolset trim (no web, no native memory, no establishment).
+seat:
+  kind: internal
+  product: operator
+  role: guide
+
+vertical: mixed
+addons: []
+practice_areas:
+  - general
+fly_region: lax # Phoenix-adjacent; Fly has no phx region
+
+# ---- RUNTIME ----
+# The guide reads an index and a few documents and writes one reply: the main
+# model, no escalation tier.
+model: claude-sonnet-5-5
+
+# A light seat: one gateway, no lanes; two shared CPUs, the fleet floor (#3917).
+machine:
+  size: shared-cpu-2x
+  memory_mb: 2048
+
+# ---- HUMANS WITH PORTAL ACCESS ----
+users:
+  - email: scott@smd.services
+    role: principal
+    full_name: Scott Durgan
+
+# ---- PERSONA ----
+personas:
+  - slug: guide
+    status: active
+    name: SMD Product Guide
+    title: Product Guide
+    tone:
+      - plainspoken
+      - concise
+    entitlements:
+      exposure:
+        # The one send this seat authors: the reply to a ROSTERED sender
+        # (scope.inbound_allow_from), in that sender's thread, through the
+        # recipient-locked reply relay. No person is present to confirm an
+        # answer, so it is autonomous. Every other class is unauthored, and an
+        # unauthored class is refused: no send to anyone off the roster, no
+        # write, no commitment, no code.
+        external_send_internal: autonomous
+    skills:
+      # Every email to the seat lands here (webhook_triggers below); a
+      # practice request is handed to pitch-practice in the same turn.
+      - name: product-guide
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+      # The role's second job: practice pitching against an authored buyer.
+      # Reached from product-guide on email, or chosen directly in chat.
+      - name: pitch-practice
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+
+# ---- CONNECTORS ----
+connectors:
+  Email:
+    adapter: agentmail
+    backend: 'mcp:agentmail'
+    enabled: true
+    webhook_url: 'https://hermes-smd-guide.fly.dev/webhooks/agentmail'
+    # The seat's OWN inbox, created at provisioning. Authored rather than
+    # derived so the address the representative is given is written down here;
+    # the workspace broker pins every outbound send to it and refuses every
+    # send from an address the account does not list.
+    inbox_address: smd-guide@agentmail.to
+
+webhook_triggers:
+  - source: agentmail
+    event_type: message.received
+    skill: product-guide
+    persona: guide
+
+# ---- SEND POLICY ----
+# Same authored values as scott and brokery: rostered senders exempt from the
+# reply throttle (a representative may send several questions in a row),
+# held replies auto-release, non-roster bounds unchanged.
+send_policy:
+  reply:
+    internal_exempt: true
+    per_sender_max: 3
+    per_sender_window_seconds: 600
+    global_max: 20
+    global_window_seconds: 3600
+    backstop_max: 60
+    backstop_window_seconds: 3600
+  held_release:
+    enabled: true
+    ttl_seconds: 86400
+
+# ---- SCOPE ----
+scope:
+  email_folders_visible:
+    - Inbox
+    - Sent
+  email_folders_blind: []
+  email_keyword_blocks: []
+  domain_blocks: []
+  # Exact addresses only. SMD for now; each representative is added here by a
+  # reviewed PR once SMD has their address (then reprovision or let the live
+  # applier pick it up).
+  inbound_allow_from:
+    - scott@smd.services
+  admins:
+    - scott@smd.services
+
+# ---- ESCALATION ----
+escalation:
+  red_flag_recipients:
+    - scott@smd.services
+  failure_recipients:
+    - team@smd.services
+
+# ---- SAFETY ----
+# On SMD's key: the runaway guard, the same caps as SMD's own scott seat.
+safety:
+  sticky_stop:
+    cost_cap_daily_cents: 1000
+    inbound_daily_cap: 100
+
+# ---- TELEGRAM (chat) ----
+# Chat, mainly so pitch practice runs turn by turn. Per-seat bot (BotFather);
+# its token is staged as the Fly secret TELEGRAM_BOT_TOKEN on hermes-smd-guide
+# at provisioning, never here (docs/runbooks/hosted-agent/concierge.md step 5).
+# The allowlist is MANDATORY: an empty one fails OPEN (ADR 0033; the validator
+# refuses it and ensure-telegram-allowlist.py refuses the boot). The one id is
+# the Captain's own, as bound to him in operator/customers/captain-mark
+# (people p2, telegram_id) and already allow-listed on SMD's scott seat. A
+# representative's numeric id is added here by a reviewed PR once known.
+telegram:
+  enabled: true
+  allow_from:
+    - '7367659986'
+
+# ---- MEMORY (isolation invariants; must match customer_id) ----
+# The native memory stores are off: every answer comes from the library, and
+# nothing one representative says may shape another's answer.
+memory:
+  d1_namespace: smd-guide
+  r2_vault_path: 'vaults/smd-guide/'
+  vectorize_index: 'hermes-smd-guide-vault'
+  memory_enabled: false
+  user_profile_enabled: false

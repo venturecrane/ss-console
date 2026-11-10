@@ -154,18 +154,15 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
     })
   })
 
-  // The 2026-09-21 library defect. Asked to set up the document library, the
-  // seat sampled five matters, found one firm document type, and proposed only
-  // that; filed a fee agreement as the `letter` class template (so it became
-  // the format base for every client letter); filed two templates whose FILL
-  // markers named no source; checked nothing past read-back; and rebuilt one
-  // class three times without saying so. Each rule below is the prose half of
-  // that fix; the FILL-source and class-name halves are mechanical in the
-  // render tool (operator/connectors/smokeball, test_render_docx_template.py
-  // and test_library_resolution.py).
-  describe('document-library-establishment covers every class, each from its own exemplars', () => {
-    // Read the class list from the renderer, never from a copy in this test,
-    // so a class added to the renderer fails here until the skill names it.
+  // The 2026-09-21 library defect: asked to set up the document library, the
+  // seat sampled five matters, proposed one kind, filed a fee agreement as the
+  // `letter` template, and built its own starter templates for the rest. Since
+  // 2026-11-09 the whole motion runs in code (operator/runners/jobs/jobs/
+  // library_setup/, workspace_broker/library_setup_*.py): the hunt per kind, the
+  // lists, the choice and the made files. The skill's one job is to route every
+  // request to the tool and relay its sentences; these pins keep it from ever
+  // building a template of its own again.
+  describe('document-library-establishment routes every library request to the code', () => {
     const rendererClasses = (() => {
       const src = readFileSync(
         resolve('operator/connectors/smokeball/smokeball_connector/docx_format.py'),
@@ -180,67 +177,39 @@ describe('setup-turn reply rules are pinned in skill prose', () => {
       expect(rendererClasses.length).toBe(7)
     })
 
-    it('names every class the renderer knows', () => {
+    it('names every class the renderer knows and says how each is covered', () => {
       const text = flat('document-library-establishment')
       const missing = rendererClasses.filter((c) => !text.includes(`\`${c}\``))
-      expect(
-        missing,
-        'the skill must name every document class the render tool accepts, so a proposal ' +
-          'reports each one rather than only the kinds a sample happened to surface'
-      ).toEqual([])
-    })
-
-    it('makes class coverage the goal and reports every class', () => {
-      const text = flat('document-library-establishment')
+      expect(missing).toEqual([])
       expect(text).toContain(
         'The goal is one template per document class the drafting renderer knows'
       )
-      expect(text).toContain('The class coverage, every class, one line each')
       expect(text).toContain("the tool's list governs")
-      expect(text, 'the old sample-driven rule must be gone').not.toContain(
-        'The types come from the documents, not from a list'
-      )
+      expect(text).toContain('already written from the firm')
     })
 
-    it('derives a class template only from exemplars of that class', () => {
+    it('sends set up, refresh and initialize to the tool, the whole library as one kind', () => {
       const text = flat('document-library-establishment')
-      expect(text).toContain('a class template is derived only from exemplars of that class')
-      expect(text).toContain('Derive a class template only from that class')
-      expect(text).toContain('additional template under its own name')
-      expect(text).toContain('reference skeleton')
+      expect(text).toContain('goes to `library_setup_submit`')
+      expect(text).toContain('`library` for the whole library')
+      expect(text).toContain('refresh the document library')
+      expect(text).toContain('initialize yourself and set up for our firm')
+      expect(text).toContain('call `library_setup_choose`')
     })
 
-    it('never infers "not applicable" from an empty search', () => {
-      expect(flat('document-library-establishment')).toContain(
-        'Only when the admin has said this firm does not write that class'
-      )
-    })
-
-    it('plans around the matter-mixing fence and never routes around it', () => {
+    it('retires the starter path: the Operator renders and files no template of its own', () => {
       const text = flat('document-library-establishment')
-      expect(text).toContain('The matter-mixing fence')
-      expect(text).toContain('Do not retry it, and do not route around it')
-      expect(text).toContain('new conversation')
+      expect(text).toContain("The Operator's own starter templates are retired")
+      expect(text).not.toContain('mcp_smokeball_render_docx_template')
+      expect(text).not.toContain('Derive one skeleton per blessed template')
     })
 
-    it('self-checks each template against its exemplars before calling it clean', () => {
+    it('keeps the choice gate in code and the admin-only rule', () => {
       const text = flat('document-library-establishment')
-      expect(text).toContain('Check each template against its exemplars')
-      expect(text).toContain('filed with findings')
-      expect(text).toContain('outside the markers')
-    })
-
-    it('tells the agent the FILL source is now enforced by the tool', () => {
-      expect(flat('document-library-establishment')).toContain(
-        'the render tool now refuses a FILL without one'
-      )
-    })
-
-    it('reports earlier versions on a rebuild and deletes nothing', () => {
-      const text = flat('document-library-establishment')
-      expect(text).toContain('earlier versions')
-      expect(text).toContain('nothing was deleted')
-      expect(text).toContain('Never delete, rename, or overwrite')
+      expect(text).toContain('Nothing is made before the administrator chooses')
+      expect(text).toContain('never decide the choice yourself')
+      expect(text).toContain('Named Administrators')
+      expect(text).toContain('decline politely')
     })
   })
 

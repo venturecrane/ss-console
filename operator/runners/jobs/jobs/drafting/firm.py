@@ -142,6 +142,59 @@ LAYOUT_KEYS = {
     "front_court_gap_lines": "lines",
 }
 
+#: Where each firm-authored format key belongs (ADR 0083 amendment 2026-11-10).
+#: ``template``: a Word paragraph, character, table or section style can carry
+#: it, so it belongs in the firm's template (item 1); the yaml copy is a known
+#: violation that shrinks as the styles base (#3905) takes it over.
+#: ``firm_yaml``: no style can express it, because it depends on the document's
+#: structure (blank lines between front-page blocks, a row picked by its text,
+#: one block placed beside another, a rule drawn to the caption grid) or is
+#: per-document text; it stays in drafting-firm.yaml, listed here (item 4).
+#: Rule-derived layout (pleading paper, line pitch) is not here: it is code in
+#: ``pleading.py`` (item 2).
+FORMAT_KEY_HOME: dict[str, str] = {
+    "format.font": "template",
+    "format.size_pt": "template",
+    **{
+        f"format.layout.{k}": "template"
+        for k in (
+            "line_spacing",
+            "line_spacing_pt",
+            "justify",
+            "first_line_indent_in",
+            "heading_indent_in",
+            "heading_underline",
+            "item_line_spacing",
+            "item_space_after_pt",
+            "centered_court_lines",
+            "bold_italic_heading_indent_in",
+            "page_numbers_always",
+            "heading_line_spacing",
+            "heading_line_spacing_pt",
+            "heading_space_before_pt",
+            "heading_space_after_pt",
+            "table_font_pt",
+            "table_header_fill",
+            "table_border_pt",
+            "front_single_spaced",
+            "signature_single_spaced",
+        )
+    },
+    **{
+        f"format.layout.{k}": "firm_yaml"
+        for k in (
+            "footer_title",  # per-document text, not a style
+            "table_total_fill",  # a row chosen by its first cell's text
+            "front_attorney_gap_lines",  # blank lines between front-page blocks
+            "front_caption_gap_lines",
+            "front_court_gap_lines",
+            "signature_gap_lines",
+            "caption_rule_below",  # a rule drawn to the caption grid's vertical line
+            "signature_date_beside",  # one block placed beside another
+        )
+    },
+}
+
 # section -> {key: (type, required)}; None: a free-keyed map checked by its own rules
 SCHEMA: dict[str, dict[str, tuple[str, bool]] | None | str] = {
     "firm": {"slug": ("str", True), "display_name": ("str", True)},

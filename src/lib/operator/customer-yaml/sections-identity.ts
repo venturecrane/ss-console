@@ -197,6 +197,39 @@ export function checkMachine(
  */
 export const MIN_SEAT_MEMORY_MB = 2048
 
+/**
+ * No seat runs on one shared CPU either. Raising memory to 2 GB (above) left
+ * the CPU at shared-cpu-1x, and on 2026-11-09 captain-mark sat at 84% CPU steal
+ * after a routine release: its gateway's startup (a session-store sweep, then
+ * session recovery) could not finish inside hermes' 3-minute loop watchdog,
+ * which killed it with exit 75 at 01:10 and 01:30 UTC while the couple's
+ * assistant went unanswered. Two shared CPUs is the floor; performance sizes
+ * and larger shared sizes pass.
+ */
+export const MIN_SEAT_SHARED_CPUS = 2
+
+/** The vCPU count a Fly size names, or null when the name is not a Fly size. */
+export function seatSizeCpus(
+  size: string
+): { kind: 'shared' | 'performance'; cpus: number } | null {
+  const match = /^(shared|performance)-cpu-(\d+)x$/.exec(size)
+  if (!match) return null
+  return { kind: match[1] as 'shared' | 'performance', cpus: Number(match[2]) }
+}
+
+function checkMachineSize(size: string, errors: ValidationError[]): boolean {
+  const parsed = seatSizeCpus(size)
+  if (parsed && parsed.kind === 'shared' && parsed.cpus < MIN_SEAT_SHARED_CPUS) {
+    errors.push({
+      code: 'EnumViolation',
+      path: 'machine.size',
+      message: `machine.size must be shared-cpu-${MIN_SEAT_SHARED_CPUS}x or larger (a one-CPU seat cannot finish its own startup under load)`,
+    })
+    return false
+  }
+  return true
+}
+
 function checkMachineFields(
   m: Record<string, unknown>,
   errors: ValidationError[]
@@ -210,6 +243,8 @@ function checkMachineFields(
       path: 'machine.size',
       message: 'machine.size is required',
     })
+    ok = false
+  } else if (!checkMachineSize(size, errors)) {
     ok = false
   }
   if (typeof mem !== 'number' || !Number.isInteger(mem)) {

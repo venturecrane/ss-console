@@ -49,7 +49,7 @@ Each customer gets:
 
 - A dedicated Fly.io Machine named `hermes-{customer-slug}`, deployed in the region matching the customer's data-residency requirement (PRD §7.3 example shows `us-west-2 (lax)`).
 - Dedicated D1, R2, and Vectorize bindings, all namespaced to the customer (PRD §7.6).
-- Dedicated OAuth tokens for each capability adapter, stored at the per-customer Infisical path (per PRD §7.9 OAuth token lifecycle).
+- Dedicated OAuth tokens for each capability adapter, stored at the per-customer Infisical path (per PRD §7.9 OAuth token lifecycle). **[Amended 2026-11-09: superseded by [ADR 0010](./0010-per-customer-oauth-token-storage.md). Customer OAuth tokens live on the customer's own Fly volume and are never stored in Infisical.]**
 - A pinned content-hash SHA of the Hermes agent runtime (per PRD §7.4 skill loading and pinning — updates do not propagate without explicit Captain re-pin).
 - Its own audit log, its own memory artifact, its own dashboard.
 

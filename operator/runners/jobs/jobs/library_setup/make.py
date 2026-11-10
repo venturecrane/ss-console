@@ -138,7 +138,9 @@ class Made:
 
 #: An ``Unusable`` code that means the document's layout gives the plan no
 #: places to write into, never that it kept words of its case.
-STRUCTURAL = frozenset({"plan_refused", "marked_places_unwritable", "not_a_firm_base"})
+STRUCTURAL = frozenset(
+    {"plan_refused", "marked_places_unwritable", "not_a_firm_base", "multi_section", "not_a_word_file"}
+)
 
 
 def dropped(blob: bytes) -> dict[str, int]:

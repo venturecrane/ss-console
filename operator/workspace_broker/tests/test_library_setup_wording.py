@@ -27,6 +27,7 @@ PIECE = (
     "runners/jobs/jobs/library_setup/file.py",
     "runners/jobs/jobs/library_setup/make.py",
     "runners/jobs/jobs/library_setup/plan.py",
+    "runners/jobs/jobs/library_setup/styles_make.py",
     "runners/jobs/jobs/library_setup_lane.py",
     "runners/jobs/jobs/library_setup_handoff.py",
     "workspace_broker/library_setup_choose.py",

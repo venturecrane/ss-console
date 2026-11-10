@@ -30,10 +30,13 @@ from typing import Iterable
 #: wording too: a diagnosis a form lists as a code with no description (a
 #: client chronology, 2026-11-06, flagged on every review round). The system's
 #: own "counted by code" stays caught on its own phrase.
+#: "lists the diagnoses by code" describes the record the same way (a client
+#: chronology update, 2026-11-09, flagged on a physical therapy prescription
+#: that gives its diagnoses as codes beside a handwritten entry).
 _SYSTEM = re.compile(
     r"(?i)\b(this chunk|in this chunk|the pipeline|the auditor|the drafter|drafting gate|compose stage|"
     r"under the job|the job's(?=\s+(?:stage|run|rule|budget|ledger|verdict|folder|cap)\b)|job rule|"
-    r"counted by code|by code(?!\s+(?:of|section|sections|§|(?:only|alone|numbers?)\b))|"
+    r"counted by code|(?<!diagnoses )(?<!diagnosis )by code(?!\s+(?:of|section|sections|§|(?:only|alone|numbers?)\b))|"
     r"the model(?!\s+(?:year|number|name|of)\b)(?!'s\s+(?:year|number|name)\b)|as an ai)\b"
 )
 #: How the system READ a page, which no record says of itself: the

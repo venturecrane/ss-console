@@ -151,7 +151,7 @@ def compact(entries: list[str], new_exhibits: list[dict[str, Any]]) -> tuple[lis
 def exhibit_rows(new_exhibits: list[dict[str, Any]]) -> list[str]:
     """Exhibit List rows for the new exhibits, in the delivered row shape."""
     return [
-        f"| {r['exhibit']} | {r['reused'] if r.get('reused') else r['title'].split(' - ', 1)[1]} |"
+        f"| {r['exhibit']} | {folder_title(str(r['reused'])) if r.get('reused') else r['title'].split(' - ', 1)[1]} |"
         for r in new_exhibits
     ]
 
@@ -163,10 +163,24 @@ def folder_rows(base_md: str, folder: list[dict[str, Any]], taken: set[int]) -> 
     resolves."""
     listed = B.delivered_numbers(base_md) | taken
     return [
-        f"| {r['exhibit']} | {r['name']} |"
+        f"| {r['exhibit']} | {folder_title(str(r['name']))} |"
         for r in sorted(folder, key=lambda r: int(r["exhibit"]))
         if int(r["exhibit"]) not in listed
     ]
+
+
+_FOLDER_PREFIX = re.compile(r"(?i)^\s*exhibit\s*\d+\s*[-–:.]?\s*")
+_FOLDER_EXT = re.compile(r"(?i)\.(?:pdf|docx?|tiff?|jpe?g|png)$")
+
+
+def folder_title(name: str) -> str:
+    """A firm file's name as an Exhibit List title: without its own
+    "Exhibit N -" prefix (the row already carries the number) and without
+    the file extension, like every other row (2026-11-09, an A&P update
+    listed "Exhibit 11- ALL MEDICAL BILLING ....pdf"). The name itself when
+    stripping would leave nothing."""
+    title = _FOLDER_EXT.sub("", _FOLDER_PREFIX.sub("", name)).strip()
+    return title or name
 
 
 _NUMBERED = re.compile(r"^\|\s*(\d+)\s*\|")
