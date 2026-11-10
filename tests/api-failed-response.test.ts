@@ -75,20 +75,20 @@ describe('misconfiguredResponse', () => {
     expect(captureError).not.toHaveBeenCalled()
   })
 
-  it('a public route can answer 503 unavailable in its own words while the warning still lands', async () => {
-    const res = misconfiguredResponse('api/assessment/turn', 'ANTHROPIC_API_KEY', {
+  it('a route can answer 503 unavailable in its own words while the warning still lands', async () => {
+    const res = misconfiguredResponse('api/admin/assessments/[id]', 'ANTHROPIC_API_KEY', {
       status: 503,
       code: 'unavailable',
-      message: 'Assessment is temporarily unavailable.',
+      message: 'Extraction is temporarily unavailable.',
     })
     expect(res.status).toBe(503)
     expect(await res.json()).toEqual({
       error: 'unavailable',
-      message: 'Assessment is temporarily unavailable.',
+      message: 'Extraction is temporarily unavailable.',
     })
     expect(captureWarning).toHaveBeenCalledWith(
       'ANTHROPIC_API_KEY not configured',
-      'api/assessment/turn'
+      'api/admin/assessments/[id]'
     )
   })
 })
