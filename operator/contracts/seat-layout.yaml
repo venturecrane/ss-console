@@ -1,0 +1,192 @@
+# ============================================================================
+# The Operator seat's folder layout: the SINGLE SOURCE for every seat path.
+# ============================================================================
+#
+# WHY THIS EXISTS (2026-11-10). The sprawl audit (scripts/sprawl-audit.ts, PR
+# #3944) found seat paths written out by hand across Python, shell and
+# TypeScript with no central definition in any install tree: 35 paths in five or
+# more files, /run/smd-jobs alone in 13. The ADR 0103 path move had to edit 49
+# files. A path declared here is generated into each tree by
+# operator/bin/gen-seat-layout.py, and code references the generated constant.
+#
+# GENERATED OUTPUTS (committed; operator/bin/tests/test_seat_layout_generation.py
+# fails when one is out of sync). Regenerate: python3 operator/bin/gen-seat-layout.py
+#   operator/templates/_seat-layout.generated.sh   shell: SMD_LAYOUT_<ID>=, never exported
+#   operator/templates/seat-layout.generated.json  read by operator/templates/seat-layout-probe.py
+#   operator/runners/jobs/jobs/seat_layout.py      the jobs runner (jobs bundle)
+#   operator/workspace_broker/seat_layout.py       the workspace broker
+#   operator/hermes-smd-overlay/shared/seat_layout.py  the overlay (gateway, appliers)
+#   operator/bin/lib/seat_layout.py                fleet tools on the laptop and in CI
+#
+# THE SEAT PROVES IT. seat-checks.sh runs seat-layout-probe.py at boot and every
+# hour: each path with an `expect` holds on the live seat, every tree's generated
+# module agrees with the image's copy, and every process that carries a declared
+# `env` var carries the declared value.
+#
+# FIELDS (per id; ids are lower_snake and become SMD_LAYOUT_<ID> / <ID> constants):
+#   path          absolute, or "{parent_id}/child" to derive from another id
+#   env           runtime override vars that carry this path. Set and non-empty
+#                 means equal to the path on a live seat; unset or empty is fine
+#                 (code reads `os.environ.get(VAR) or DEFAULT`, and a lane that is
+#                 off gets its queue var set empty, entrypoint-lanes.sh).
+#   expect        what the probe asserts: present | absent | lazy (may not exist
+#                 yet, kind checked when it does). Omitted: declared, not probed.
+#   kind          dir | file (checked when expect is present or lazy)
+#   when          always (default) | lanes: only on a seat that runs a job lane
+#   volume        true: lives on the Fly volume; changing it needs a bump of
+#                 operator/fleet/volume-epoch (ADR 0103 amendment)
+#   bundle_mount  true: a jobs-bundle mount; changing it needs a bump of
+#                 BundleSpec.layout (ADR 0103 decision 3)
+#
+# Values below were measured on hermes-smd-staging, the A&P twin, on 2026-11-10
+# (stat and /proc/*/environ, read-only).
+
+paths:
+  # ---- the volume ----
+  data:
+    path: /opt/data
+    expect: present
+    kind: dir
+    volume: true
+  profiles:
+    path: '{data}/profiles'
+    expect: present
+    kind: dir
+    volume: true
+  skills:
+    path: '{data}/skills'
+    volume: true
+  installs:
+    path: '{data}/installs'
+    volume: true
+  requests_db:
+    path: '{data}/requests.db'
+    volume: true
+  attachment_spool:
+    path: '{data}/attachment-spool'
+    volume: true
+  smokeball_extract_cache:
+    path: '{data}/smokeball-extract-cache'
+    volume: true
+  smokeball_refresh_token:
+    path: '{data}/.smokeball-mcp/refresh_token'
+    volume: true
+  casework_ledger:
+    path: '{data}/audit/casework-ledger.jsonl'
+    volume: true
+
+  # ---- the jobs family (ADR 0100, ADR 0103) ----
+  jobs_data:
+    path: '{data}/jobs'
+    env: [JOBS_DATA_DIR]
+    expect: present
+    kind: dir
+    when: lanes
+    volume: true
+  jobs_run:
+    path: /run/smd-jobs
+    env: [SMD_JOBS_RUN_DIR]
+    expect: present
+    kind: dir
+    when: lanes
+  jobs_queue:
+    path: '{jobs_run}/queue'
+    env: [SMD_MEDCHRON_QUEUE_DIR]
+  jobs_bundle:
+    path: /opt/jobs
+    expect: present
+    kind: dir
+    when: lanes
+    bundle_mount: true
+  jobs_python:
+    path: '{jobs_bundle}/.venv/bin/python'
+  lanes_run:
+    path: /run/smd-lanes
+
+  # ---- root-owned config (the 2026-06-15 keystone) ----
+  smd_config:
+    path: /var/lib/smd-config
+    expect: present
+    kind: dir
+  customer_yaml:
+    path: '{smd_config}/customer.yaml'
+    env: [SMD_CUSTOMER_YAML, SMD_CUSTOMER_YAML_PATH]
+    expect: present
+    kind: file
+  specs:
+    path: '{smd_config}/specs'
+    env: [SMD_SPEC_DIR]
+  marketing_registers:
+    path: '{smd_config}/marketing/marketing-firm.yaml'
+  volume_customer_yaml:
+    # The pre-keystone location. It must stay ABSENT: the agent uid owns /opt/data.
+    path: '{data}/customer.yaml'
+    expect: absent
+
+  # ---- interpreters ----
+  hermes_root:
+    path: /opt/hermes
+  hermes_sha:
+    path: '{hermes_root}/HERMES_SHA'
+  hermes_venv:
+    path: '{hermes_root}/.venv'
+  hermes_python:
+    path: '{hermes_venv}/bin/python'
+  hermes_python3:
+    path: '{hermes_venv}/bin/python3'
+  broker_root:
+    path: /opt/workspace-broker
+  broker_python:
+    path: '{broker_root}/.venv/bin/python'
+
+  # ---- audit and sockets ----
+  audit_run:
+    path: /run/smd-audit
+  audit_db:
+    path: '{audit_run}/audit.db'
+    env: [SMD_AUDIT_DB_PATH]
+  escalation_ledger:
+    path: '{data}/audit/escalation-ledger.jsonl'
+    env: [SMD_ESCALATION_LEDGER_PATH]
+    volume: true
+  broker_socket:
+    path: /run/smd-workspace-broker/broker.sock
+    env: [SMD_WORKSPACE_BROKER_SOCKET]
+  selftest_results:
+    path: /run/smd-selftest/results.json
+    expect: lazy
+    kind: file
+
+  # ---- connectors ----
+  connectors_root:
+    path: /opt/connectors
+  smokeball_bundle:
+    path: '{connectors_root}/smokeball'
+    bundle_mount: true
+  smokeball_python:
+    path: '{smokeball_bundle}/.venv/bin/python'
+
+# Files that must spell a path rather than import it, each with the reason. The
+# generation test pins each named path in each file to the value above.
+restated:
+  - file: operator/bin/lib/fleet/remote_busy_probe.py
+    ids: [jobs_run]
+    why: piped to python over fly ssh with no import path (operator/bin/lib/fleet/busy.py)
+  - file: operator/bin/lib/fleet/remote_quiesce.py
+    ids: [jobs_run]
+    why: piped to python over fly ssh with no import path (operator/bin/lib/fleet/busy.py)
+  - file: operator/templates/seat-layout-probe.py
+    ids: [hermes_python3, jobs_python, broker_python, broker_root]
+    why: the boot smoke sends this file over ssh, so it cannot import a tree's module
+
+# Seat paths the sprawl census finds in five or more files that are deliberately
+# NOT declared, each with the reason. The generation test fails when a path in
+# scripts/sprawl/literal-baseline.json is neither declared above nor listed here,
+# so a newly restated seat path is a decision, not a drift.
+left_out:
+  - path: /opt/data/medchron
+    why: the pre-ADR 0103 jobs tree; tests/jobs-volume-old-path-allowlist.test.ts owns it until the compatibility bind is removed
+  - path: /run/smd-medchron
+    why: the pre-ADR 0103 run dir; same owner and the same end as /opt/data/medchron
+  - path: /opt/data/profiles/operator
+    why: a persona's profile home; "operator" is a persona slug from customer.yaml, not a layout fact

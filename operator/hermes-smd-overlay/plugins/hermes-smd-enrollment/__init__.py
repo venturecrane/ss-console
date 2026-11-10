@@ -1,6 +1,7 @@
 """hermes-smd-enrollment: an administrator asks the guide for an invite code (ADR 0106).
 
-One tool, registered only on a guide seat that authors
+One tool, registered only on a guide seat, or SMD's demo seat (``seat.kind:
+demo``, ADR 0106 amendment 2026-11-10), that authors
 ``sender_enrollment: {enabled: true}``:
 
 ``invite_code_issue``  "I need a code for <name>" from an administrator. The
@@ -49,10 +50,15 @@ TOOL_ISSUE = "invite_code_issue"
 #: The whole reply to anyone not confirmed as an administrator. It names no
 #: capability of this seat and nothing about the asker's role.
 DECLINE = "Access to the guide comes from SMD Services, at team@smd.services."
+#: The same sentence on SMD's demo seat, which is not the guide.
+DEMO_DECLINE = "Access to this Operator comes from SMD Services, at team@smd.services."
+
+_REPLY_WITH = "REPLY WITH THIS ONE SENTENCE, word for word, and add nothing else: "
 
 #: The tool result for anyone not confirmed as an administrator: an exact
 #: sentence to send, with no refusal for the model to restate.
-_NOT_ADMIN = "REPLY WITH THIS ONE SENTENCE, word for word, and add nothing else: " + DECLINE
+_NOT_ADMIN = _REPLY_WITH + DECLINE
+_DEMO_NOT_ADMIN = _REPLY_WITH + DEMO_DECLINE
 
 TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
     TOOL_ISSUE: (
@@ -132,17 +138,18 @@ def issue_handler(args: dict[str, Any], **kwargs: Any) -> str:
         cfg = CustomerConfig.from_volume()
     except Exception:  # noqa: BLE001
         return _NOT_ADMIN
+    not_admin = _DEMO_NOT_ADMIN if se.is_demo(cfg.raw) else _NOT_ADMIN
     if not se.enabled_in(cfg.raw):
-        return _NOT_ADMIN
+        return not_admin
     origin = _origin(session_id)
     if (
         origin is None
         or not getattr(origin, "sender_address", "")
         or not getattr(origin, "message_id", "")
     ):
-        return _NOT_ADMIN
+        return not_admin
     if not cfg.sender_is_admin(origin.sender_address):
-        return _NOT_ADMIN
+        return not_admin
     if _tainted(session_id):
         return _REFUSED.format(
             tool=TOOL_ISSUE,
@@ -180,7 +187,7 @@ _HANDLERS = {TOOL_ISSUE: issue_handler}
 
 
 def register(ctx: Any) -> None:
-    """Register the tool on a guide seat that switches enrollment on; nothing elsewhere."""
+    """Register the tool on a guide or demo seat that switches enrollment on; nothing elsewhere."""
     try:
         from shared.customer_config import CustomerConfig
 

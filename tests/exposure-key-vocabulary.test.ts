@@ -235,7 +235,7 @@ describe('(c) a typo in exposure_keys fails config validation', () => {
   it('the live shipped grids still validate (the guard constrains, it does not break them)', () => {
     expect(validateRoutineGrid(gridYaml()).ok).toBe(true)
     const pilot = parseYaml(
-      readFileSync(resolve('operator/customers/pilot-smokeball/routine-grid.yaml'), 'utf-8')
+      readFileSync(resolve('tests/fixtures/ap-shaped-seat/routine-grid.yaml'), 'utf-8')
     )
     expect(validateRoutineGrid(pilot).ok).toBe(true)
   })

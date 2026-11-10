@@ -107,8 +107,7 @@ describe('generated registries are current (drift)', () => {
     // Adding or retiring a seat updates this list in the same change.
     expect(Object.fromEntries(loadSeatInventory(CUSTOMERS).map((s) => [s.slug, s.flyApp]))).toEqual(
       {
-        // Authored, not yet provisioned (docs/handbook/deployment-release.md).
-        'ap-staging': null,
+        'ap-staging': 'hermes-ap-staging',
         'ashton-price': 'hermes-ashton-price',
         // Authored, not yet provisioned (the firm creates its mailbox first).
         'ashton-price-marketing': null,

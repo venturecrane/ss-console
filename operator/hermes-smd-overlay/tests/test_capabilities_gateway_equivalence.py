@@ -113,17 +113,16 @@ def test_ashton_price_loads_exactly_what_it_loads_today(seat):
     assert _destructive_line(doc, as_today=False) == _destructive_line(doc, as_today=True)
 
 
-def test_pilot_smokeball_drops_only_its_unauthored_lanes(seat):
+def test_the_demo_seat_loads_no_lane_and_keeps_its_smokeball_surface(seat):
+    """pilot-smokeball is SMD's demo seat (ADR 0107): it queues no job, so no lane
+    tool registers, while its Smokeball reads and casework stay; it authors no
+    destructive class, so there is no destructive line."""
     doc = seat("pilot-smokeball")
-    lanes_plugin = load_plugin("hermes-smd-lanes")
-    dropped = _medchron_today() - _registered("hermes-smd-lanes")
-    unauthored = set(capabilities.JOB_LANES) - set(capabilities.authored_lanes(doc))
-    assert unauthored == {"drafting", "litigation", "negotiation", "records"}
-    assert dropped == set().union(*(set(lanes_plugin.LANE_TOOLS[lane]) for lane in unauthored))
+    assert capabilities.authored_lanes(doc) == []
+    assert _registered("hermes-smd-lanes") == set()
     assert _registered("hermes-smd-escalation") == set(load_plugin("hermes-smd-escalation").TOOLS)
     assert gate._route_served("smokeball") is True
-    # pilot authors destructive: confirm and Smokeball: the line is unchanged.
-    assert _destructive_line(doc, as_today=False) is True
+    assert _destructive_line(doc, as_today=False) is False
 
 
 def test_smd_staging_loads_its_lanes_and_no_smokeball_surface(seat):

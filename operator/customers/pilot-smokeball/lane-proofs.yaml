@@ -2,7 +2,9 @@
 # operator/runners/jobs/jobs/lane_proof.py; runbook
 # docs/runbooks/operator/lane-proof.md).
 #
-# None yet. Every job this seat is asked for waits (queued, never failed) and
+# None, by design: the demo seat binds no skill that queues a job
+# (tests/demo-seat.test.ts), so nothing here waits on a proof. Were one bound,
+# every job this seat is asked for would wait (queued, never failed) and
 # SMD is paged with the request and its lane, until SMD proves the lane with a
 # proof run on that request's own matter and accepts it on the seat
 # (`operator/bin/lane-proof.sh <slug> dry-run|accept <job id>`). An in-turn

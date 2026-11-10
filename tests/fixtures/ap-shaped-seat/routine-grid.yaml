@@ -1,3 +1,10 @@
+# TEST FIXTURE, NOT A SEAT. pilot-smokeball's configuration as it stood when that
+# seat became SMD's demo seat (2026-11-10, docs/handbook/demo-seat.md): an
+# A&P-shaped law seat with a 19-row routine grid, frozen here so the routine-grid
+# parser, the commitments contract and the case-manager validator keep a realistic
+# input no live seat has to stay shaped like. Nothing publishes or boots it.
+# Readers: tests/customer-commitments.test.ts and the tests that cite this folder.
+
 # routine-grid.yaml — the compiled traceability artifact for the Ashton & Price
 # routine-settings grid (ADR 0075).
 #

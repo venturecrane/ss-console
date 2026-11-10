@@ -1191,6 +1191,9 @@ export interface Memory {
  * `sandbox`   disposable, real-fidelity, no real data
  * `internal`  works ON the venture rather than in a customer's business
  * `preprod`   the permanent pre-production gate
+ * `demo`      SMD's demo seat: a fictional firm on our tenant, driven by a
+ *             sales representative in front of a prospect (ADR 0107 purpose
+ *             demo; the seat itself reads this, never seat.yaml)
  *
  * Deliberately carries NO lifecycle state. See sections-seat.ts for why.
  */
@@ -1202,7 +1205,7 @@ export interface Memory {
  */
 export const RETIRED_TOP_LEVEL_FIELDS = ['voice_library', 'voice_cohorts'] as const
 
-export const SEAT_KINDS = ['customer', 'proving', 'sandbox', 'internal', 'preprod'] as const
+export const SEAT_KINDS = ['customer', 'proving', 'sandbox', 'internal', 'preprod', 'demo'] as const
 export type SeatKind = (typeof SEAT_KINDS)[number]
 
 /** Which SKU this seat is. Implied today only by which template it was copied from. */

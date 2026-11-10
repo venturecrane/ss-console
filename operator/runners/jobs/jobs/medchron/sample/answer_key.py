@@ -74,6 +74,53 @@ def seed_billing(plan: Plan, slug_dir: Path, names: list[str]) -> int:
     return len(rows)
 
 
+#: What a careful reader of each page kind would call it, in the scanned
+#: classifier's label set (prompts/classify-system.md). A provider's fax cover
+#: is the cover form the release went out under; its certification is CERT.
+CLASSIFY = {"fax_cover": "ORDER", "custodian_cert": "CERT", "blank": "BLANK"}
+
+
+def page_label(doc: Document, page: Page) -> str:
+    return CLASSIFY.get(page.kind, "RECORD")
+
+
+def seed_classify(plan: Plan, slug_dir: Path, unit: str) -> dict[str, Any]:
+    """``scanned_labels.json``, the scanned classifier's output, answered from
+    the spec. The stage has no per-page checkpoint to seed, so its one output
+    file is written instead (as condense's is), in its exact shape: a label
+    for every page it would have asked about (scanned, near a file's head,
+    from ``nonrecord.json``'s unknowns), the non-record subset, and
+    ``controls_ok`` from the record control ``decide_control`` chose: the key
+    must call that page RECORD, or nothing it says is used, as in production."""
+    from ...stages.classify import NONRECORD_LABELS, file_heads
+
+    out = slug_dir / "out" / unit
+    page_map = json.loads((out / "page_map.json").read_text(encoding="utf-8"))
+    nr = json.loads((slug_dir / "nonrecord.json").read_text(encoding="utf-8"))
+    by_name = {d.file_name: d for d in plan.documents}
+    heads = file_heads(page_map)
+
+    def label(ex: int, p: int) -> str:
+        src = source_page(page_map, ex, p)
+        if src is None:
+            return "?"
+        doc = by_name[src[0]]
+        return page_label(doc, doc.pages[src[1] - 1])
+
+    labels: dict[str, str] = {}
+    nonrec: dict[str, list[tuple[int, str]]] = {}
+    for ex in sorted(int(k) for k in nr):
+        for p in sorted(set(nr[str(ex)]["unknown"]) & heads.get(ex, set())):
+            lab = labels[f"Ex{ex}p{p}"] = label(ex, p)
+            if lab in NONRECORD_LABELS:
+                nonrec.setdefault(str(ex), []).append((p, lab))
+    rc = json.loads((slug_dir / "record_control.json").read_text(encoding="utf-8"))
+    ok = not rc.get("skip") and label(int(rc["exhibit"]), int(rc["page"])) == "RECORD"
+    body = {"labels": labels, "nonrecord": nonrec if ok else {}, "controls_ok": ok, "answered_by": "answer key"}
+    (slug_dir / "scanned_labels.json").write_text(json.dumps(body, indent=1), encoding="utf-8")
+    return body
+
+
 def provider_line(plan: Plan, enc: Encounter) -> str:
     return f"{enc.signer} ({plan.providers[enc.provider].facility})"
 
@@ -189,11 +236,27 @@ def source_page(page_map: list[dict[str, Any]], exhibit: int, page: int) -> tupl
     return None
 
 
-def score(plan: Plan, final_md: str, page_map: list[dict[str, Any]]) -> list[str]:
+def unstripped_page(drops: dict[str, list[int]] | None, exhibit: int, page: int) -> int:
+    """The pre-strip exhibit page a stripped exhibit's ``page`` is: the
+    ``page``-th page the strip kept (``strip_result.json`` ``drops``)."""
+    gone = set((drops or {}).get(str(exhibit)) or [])
+    kept = 0
+    old = 0
+    while kept < page:
+        old += 1
+        if old not in gone:
+            kept += 1
+    return old
+
+
+def score(
+    plan: Plan, final_md: str, page_map: list[dict[str, Any]], drops: dict[str, list[int]] | None = None
+) -> list[str]:
     """Every way a built chronology departs from the key: a paragraph the key
     does not hold, one cited to the wrong page, one whose page does not print
     its fact, and one the key holds that the chronology lost. Empty is a pass.
-    This is the $0 rehearsal of a change to the stages after the map."""
+    This is the $0 rehearsal of a change to the stages after the map. After
+    the strip, ``drops`` maps each cited page back to its pre-strip page."""
     key = {(c["date"], norm(c["text"])): c for c in expected_citations(plan)}
     by_name = {d.file_name: d for d in plan.documents}
     seen, problems = set(), []
@@ -203,7 +266,7 @@ def score(plan: Plan, final_md: str, page_map: list[dict[str, Any]]) -> list[str
             problems.append(f"{day}: paragraph not in the answer key: {text[:70]!r}")
             continue
         seen.add((day, norm(text)))
-        got = source_page(page_map, exhibit, page)
+        got = source_page(page_map, exhibit, unstripped_page(drops, exhibit, page))
         if got is None or got != (want["file"], want["page"]):
             problems.append(f"{day}: {text[:50]!r} cites {got}, the key says {want['file']} p. {want['page']}")
             continue

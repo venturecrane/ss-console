@@ -88,13 +88,12 @@ describe('cron-send arming gate', () => {
   const seats = authoredSeats()
 
   it('sees the authored fleet (the join is not vacuous)', () => {
-    // pilot-smokeball's grid is the live proving ground; if it stops parsing
-    // here the gate is measuring nothing.
-    const pilot = seats.find((seat) => seat.slug === 'pilot-smokeball')
-    expect(pilot).toBeDefined()
-    // Five since 2026-09-29: nine trackers run on request until the output
-    // checklist is met on the pilot; the five that stay scheduled still join.
-    expect(pilot!.cron.length).toBeGreaterThanOrEqual(5)
+    // The client seat's schedule is the live one; if it stops parsing here the
+    // gate is measuring nothing. (pilot-smokeball carried this role until it
+    // became SMD's demo seat on 2026-11-10, whose one schedule calls no model.)
+    const client = seats.find((seat) => seat.slug === 'ashton-price')
+    expect(client).toBeDefined()
+    expect(client!.cron.length).toBeGreaterThanOrEqual(5)
     expect(renders.size).toBeGreaterThanOrEqual(7)
   })
 
@@ -228,21 +227,21 @@ describe('the join itself (synthetic seats)', () => {
 
 describe('falsifier: the gate can fire on the real fleet', () => {
   it('removing one live declaration produces the violation', () => {
-    // Prove the join is wired to the real data: drop deadline-miss-escalator
-    // from a COPY of the committed contract and the pilot seat must redden.
+    // Prove the join is wired to the real data: drop statute-watch from a COPY
+    // of the committed contract and the client seat must redden.
     const regressed = new Map(renders)
-    expect(regressed.delete('deadline-miss-escalator')).toBe(true)
+    expect(regressed.delete('statute-watch')).toBe(true)
     const seats = authoredSeats()
-    const pilot = seats.find((seat) => seat.slug === 'pilot-smokeball')!
+    const client = seats.find((seat) => seat.slug === 'ashton-price')!
     const violations = armingViolations({
-      seat: pilot.slug,
-      cron: pilot.cron,
+      seat: client.slug,
+      cron: client.cron,
       outbound,
       renders: regressed,
       templateExists,
     })
     expect(violations.map((v) => v.code)).toEqual(['undeclared-render'])
-    expect(violations[0].skill).toBe('deadline-miss-escalator')
+    expect(violations[0].skill).toBe('statute-watch')
   })
 })
 

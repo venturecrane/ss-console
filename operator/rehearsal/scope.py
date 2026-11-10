@@ -50,6 +50,11 @@ DRIVABLE_ADDRESSES: dict[str, str] = {
 #: against. Read from the target seat's ``seat.kind`` descriptor.
 DRIVABLE_SEAT_KINDS: dict[str, str] = {
     "proving": "the rehearsal rig; seeded fictional matters, no client data",
+    "demo": (
+        "SMD's demo seat: a fictional firm's seeded matters, no client data. Its "
+        "replies go to the scenario's own addresses, never to a representative; "
+        "still, never drive it during a scheduled demo"
+    ),
     "sandbox": "throwaway seat wired to nothing real",
     "preprod": "the permanent pre-production mirror; serves nobody",
 }

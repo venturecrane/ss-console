@@ -90,3 +90,6 @@ differences:
     why: the fictional firm's name and mailing lines
   - path: form_letters.police_agencies
     why: fictional agencies in the same shape (the one email route is an SMD AgentMail stand-in outside the lab domain, so it classifies as outside mail as A&P's does), so a rehearsal never writes to a real police department
+  # ---- size ----
+  - path: machine
+    why: "2 shared CPUs and 4 GB, smd-staging's proven size, not A&P's 8 GB (Captain, 2026-11-10); the twin proves boot and checks, never A&P's heavy jobs"

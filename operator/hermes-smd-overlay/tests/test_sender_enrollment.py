@@ -430,3 +430,75 @@ def test_the_tool_is_classified() -> None:
     from shared.action_classes import TOOL_ACTION_CLASS_MAP, ActionClass
 
     assert TOOL_ACTION_CLASS_MAP["invite_code_issue"] is ActionClass.INTERNAL_WRITE
+
+
+# -- the demo seat (amendment 2026-11-10): enrollment on seat.kind demo ---------
+
+DEMO = (
+    dedent(GUIDE)
+    .strip()
+    .replace("customer_id: smd-guide", "customer_id: pilot-smokeball")
+    .replace(
+        "  kind: internal\n  product: operator\n  role: guide", "  kind: demo\n  product: operator"
+    )
+    .replace(
+        "skill: product-guide\n    persona: guide",
+        "skill: matter-inbox-router\n    persona: operator",
+    )
+)
+
+
+def test_the_demo_seat_switches_enrollment_on_and_no_other_kind_does() -> None:
+    import yaml
+
+    demo = yaml.safe_load(DEMO)
+    assert se.enabled_in(demo) and se.is_demo(demo)
+    for kind in ("customer", "proving", "preprod", "internal", "sandbox"):
+        other = dict(demo, seat={"kind": kind, "product": "operator"})
+        assert not se.enabled_in(other), kind
+    assert not se.is_demo(yaml.safe_load(dedent(GUIDE))), "the guide keeps the guide wording"
+
+
+def test_a_rep_enrolls_on_the_demo_seat_with_the_demo_welcome(router) -> None:
+    mod, _fake, broker, tmp_path = router
+    (tmp_path / "customer.yaml").write_text(DEMO)
+    broker.name = "Jane Smith"
+    assert _dispatch(mod, _mail(REP, f"my code {CODE}")) == {"action": "skip"}
+    assert len(broker.redeems) == 1
+    [(_mid, text, _anchor)] = broker.replies
+    assert text == se.welcome_text("Jane Smith", demo=True)
+    assert text.startswith("Hello Jane Smith,")
+    assert "demo Operator" in text and "product guide" not in text
+    [notice] = broker.sends
+    assert notice["subject"] == se.DEMO_NOTICE_SUBJECT
+    assert "demo seat pilot-smokeball" in notice["text"]
+    assert inbound.PENDING.size() == 0
+
+
+def test_an_enrolled_rep_is_rostered_on_the_demo_seat_never_admin(tmp_path, enrolled_file) -> None:
+    _write_enrolled(enrolled_file, {"address": REP, "name": "Jane"})
+    demo = _cfg(tmp_path, DEMO)
+    assert demo.sender_on_roster(REP) and not demo.sender_is_admin(REP)
+
+
+def test_a_non_admin_on_the_demo_seat_gets_the_demo_access_sentence(tool, enrolled_file) -> None:
+    mod, issued, path = tool
+    path.write_text(DEMO)
+    _write_enrolled(enrolled_file, {"address": REP})
+    _origin("s-rep-demo", REP)
+    out = mod.issue_handler({"name": "Bob"}, session_id="s-rep-demo")
+    assert out.endswith(mod.DEMO_DECLINE)
+    assert _CAPABILITY_WORDS.findall(mod.DEMO_DECLINE) == []
+    assert "guide" not in mod.DEMO_DECLINE
+    assert issued == []
+
+
+def test_an_administrator_of_the_demo_seat_gets_a_code(tool, fake_ctx) -> None:
+    mod, issued, path = tool
+    path.write_text(DEMO)
+    mod.register(fake_ctx)
+    assert set(fake_ctx.tools) == {"invite_code_issue"}
+    _origin("s-admin-demo", ADMIN)
+    out = mod.issue_handler({"name": "Jane Smith"}, session_id="s-admin-demo")
+    assert out.startswith("DONE: invite code c_9 for Jane Smith")
+    assert issued and issued[0]["admin"] == ADMIN

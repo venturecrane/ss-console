@@ -103,7 +103,6 @@ documents:
           date: '2026-06-10',
           re: 'Medical records, dates of service 03/04/2026 to 03/18/2026',
         }
-      - { kind: custodian_cert, date: '2026-06-10', span: '03/04/2026 through 03/18/2026' }
       - kind: intake_form
         id: vpa-intake
         date: '2026-03-04'
@@ -224,6 +223,7 @@ documents:
       - { kind: lab_results, count: 8, as_of: '2026-06-09', dates: ['03/04/2026', '09/18/2025'] }
       - { kind: access_log, count: 2, date: '2026-03-20' }
       - { kind: blank, count: 6 }
+      - { kind: custodian_cert, date: '2026-06-10', span: '03/04/2026 through 03/18/2026' }
 
   - id: pcps
     name: 2026-06-12 Pacific Coast Pediatric Plastic Surgery - Consultation Records

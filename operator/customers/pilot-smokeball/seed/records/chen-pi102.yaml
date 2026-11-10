@@ -168,7 +168,6 @@ documents:
     fax: { sent: '2026-02-20 10:05', from_name: VMC HIM }
     pages:
       - { kind: fax_cover, date: '2026-02-20', re: 'Emergency department records, 01/14/2026' }
-      - { kind: custodian_cert, date: '2026-02-20', span: '01/14/2026' }
       - kind: intake_form
         id: vmc-reg
         date: '2026-01-14'
@@ -234,6 +233,7 @@ documents:
       - { kind: education, count: 22, topic: 'Wrist Fracture and Splint Care' }
       - { kind: access_log, count: 3, date: '2026-01-15' }
       - { kind: blank, count: 3 }
+      - { kind: custodian_cert, date: '2026-02-20', span: '01/14/2026' }
 
   - id: vmc-or
     name: 2026-02-20 Valley Medical Center - Surgical Records
@@ -241,7 +241,6 @@ documents:
     fax: { sent: '2026-02-20 10:41', from_name: VMC HIM }
     pages:
       - { kind: fax_cover, date: '2026-02-20', re: 'Surgical records, 01/21/2026' }
-      - { kind: custodian_cert, date: '2026-02-20', span: '01/21/2026' }
       - id: vor-op1
         title: Operative Report
         date: '2026-01-21'
@@ -305,6 +304,7 @@ documents:
       - { kind: key_images, count: 6, date: '2026-01-21' }
       - { kind: education, count: 18, topic: 'After Wrist Surgery' }
       - { kind: blank, count: 4 }
+      - { kind: custodian_cert, date: '2026-02-20', span: '01/21/2026' }
 
   - id: okonkwo
     name: 2026-06-01 Okonkwo Orthopedic Associates - Office Records
@@ -312,7 +312,6 @@ documents:
     fax: { sent: '2026-06-01 09:30', from_name: OOA Records }
     pages:
       - { kind: fax_cover, date: '2026-06-01', re: 'Office records 01/16/2026 through 05/28/2026' }
-      - { kind: custodian_cert, date: '2026-06-01', span: '01/16/2026 through 05/28/2026' }
       - kind: intake_form
         id: ooa-intake
         date: '2026-01-16'
@@ -419,6 +418,7 @@ documents:
           meds: ['Ibuprofen 400 mg PO as needed'],
         }
       - { kind: access_log, count: 2, date: '2026-05-29' }
+      - { kind: custodian_cert, date: '2026-06-01', span: '01/16/2026 through 05/28/2026' }
 
   - id: rap
     name: 2026-06-01 Radiology Associates of Phoenix - Imaging Reports
@@ -469,7 +469,6 @@ documents:
     fax: { sent: '2026-05-26 14:18', from_name: Desert PT Office }
     pages:
       - { kind: fax_cover, date: '2026-05-26', re: 'Therapy records 02/17/2026 through 05/18/2026' }
-      - { kind: custodian_cert, date: '2026-05-26', span: '02/17/2026 through 05/18/2026' }
       - kind: intake_form
         id: dpt-intake
         date: '2026-02-17'
@@ -520,6 +519,7 @@ documents:
           Discharged from therapy to a home program.
       - { kind: hep, count: 34 }
       - { kind: education, count: 16, topic: 'Hand and Wrist Exercises' }
+      - { kind: custodian_cert, date: '2026-05-26', span: '02/17/2026 through 05/18/2026' }
 
   - id: rx
     name: 2026-05-30 Camelback Community Pharmacy - Dispensing History

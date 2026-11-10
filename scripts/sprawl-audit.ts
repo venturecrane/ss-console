@@ -38,7 +38,7 @@ import {
   summarizeClones,
   summarizeVulture,
 } from './sprawl/analyze'
-import { LITERAL_BASELINE, readSources, trackedFiles } from './sprawl/sources'
+import { LITERAL_BASELINE, generatedPaths, readSources, trackedFiles } from './sprawl/sources'
 
 const JSCPD = 'jscpd@4.3.0'
 const VULTURE = 'vulture==2.14'
@@ -180,17 +180,28 @@ function commitFiles(since: string): string[][] {
 }
 
 function measure(since: string) {
-  const sources = readSources(trackedFiles())
+  const tracked = trackedFiles()
+  const sources = readSources(tracked)
+  // A generated file is one source projected per tree (isGenerated), not a copy.
+  const generated = generatedPaths(tracked)
+  const handWritten = (c: Clone) => !generated.has(c.a.name) && !generated.has(c.b.name)
   const { clones, percentage } = runJscpd()
   const commits = commitFiles(since)
+  const vulture = runVulture()
+    .split('\n')
+    .filter((line) => !generated.has(line.split(':', 1)[0]))
+    .join('\n')
   return {
     measuredAt: new Date().toISOString(),
     commit: run('git', ['rev-parse', 'HEAD']).trim(),
     instruments: { jscpd: JSCPD, vulture: VULTURE, couplingWindow: since, commits: commits.length },
-    clones: { duplicatedPct: percentage, ...summarizeClones(clones, factsFor(sources)) },
+    clones: {
+      duplicatedPct: percentage,
+      ...summarizeClones(clones.filter(handWritten), factsFor(sources)),
+    },
     literals: literalCensus(sources),
     coupling: changeCoupling(commits),
-    dead: summarizeVulture(runVulture()),
+    dead: summarizeVulture(vulture),
   }
 }
 

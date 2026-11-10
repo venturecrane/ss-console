@@ -7,9 +7,10 @@ The portal is the AUTHORING surface for output-class specs, and on a customer
 seat the portal write IS the customer's approval — ADR 0083 requires a customer
 to approve a spec before it applies, and a write that skips the portal skips the
 approval. So this script exists for exactly one case: installing a FIXTURE on a
-PROVING seat, where the "firm" is fictional and there is no approval to respect.
+seat of SMD's own whose "firm" is fictional (`seat.kind: proving` or `demo`),
+where there is no approval to respect.
 
-It refuses a seat whose `customer.yaml` does not declare `seat.kind: proving`.
+It refuses a seat whose `customer.yaml` declares any other `seat.kind`.
 That refusal is the point. A convenience script that can reach a client seat is
 not a convenience, it is a way to put an unapproved spec in front of a real
 firm's clients, and the fact that nobody INTENDS to do that is not a control.
@@ -56,8 +57,12 @@ _PROPERTIES = ("voice", "format")
 _MAX_BODY_BYTES = 256 * 1024
 
 
+#: The seat kinds whose "firm" is fictional, so no customer approval exists to skip.
+FICTIONAL_FIRM_KINDS = ("proving", "demo")
+
+
 def _assert_proving_seat(slug: str) -> None:
-    """Refuse any seat not authored `seat.kind: proving`.
+    """Refuse any seat not authored `seat.kind: proving` or `demo`.
 
     Read from git rather than from the projection: git is where the seat
     descriptor is authoritative, and a projection can lag a change that just
@@ -69,10 +74,10 @@ def _assert_proving_seat(slug: str) -> None:
     text = path.read_text()
     block = re.search(r"^seat:\n((?:[ \t]+.*\n)+)", text, re.MULTILINE)
     kind = re.search(r"^\s+kind:\s*(\w+)", block.group(1), re.MULTILINE) if block else None
-    if not kind or kind.group(1) != "proving":
+    if not kind or kind.group(1) not in FICTIONAL_FIRM_KINDS:
         found = kind.group(1) if kind else "absent"
         sys.exit(
-            f"REFUSED: '{slug}' is seat.kind: {found}, not proving.\n"
+            f"REFUSED: '{slug}' is seat.kind: {found}, not proving or demo.\n"
             "On a customer seat the portal write IS the customer's approval "
             "(ADR 0083). Use the portal."
         )

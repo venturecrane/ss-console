@@ -21,12 +21,7 @@ purpose: internal
 # The seat's Fly app (ADR 0036). Authored, never derived: confirm with
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 # Fly cannot rename an app, so this is a new app, never hermes-smd-staging.
-fly_app: null
-unprovisioned_reason: >-
-  The Fly app hermes-ap-staging is not created yet, and the twin's Operator
-  Library matter ids and expense staff id in SMD's staging tenant are PENDING
-  in customer.yaml; the Captain provisions it by the runbook in
-  docs/handbook/deployment-release.md.
+fly_app: hermes-ap-staging
 # Release ring until the flip: with SMD's own seats, last. At the flip this
 # line goes (a release twin is ring 0, derived).
 ring: 2

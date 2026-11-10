@@ -31,11 +31,12 @@ export const BEGIN =
 export const END = '<!-- END GENERATED: seat roster -->'
 
 /** Display order: the clients first, then SMD's own seats. */
-const KIND_ORDER = ['customer', 'proving', 'preprod', 'internal', 'sandbox'] as const
+const KIND_ORDER = ['customer', 'proving', 'preprod', 'demo', 'internal', 'sandbox'] as const
 const KIND_LABELS: Record<string, string> = {
   customer: 'Client seats',
   proving: "SMD's own: proving",
   preprod: "SMD's own: pre-production",
+  demo: "SMD's own: demo",
   internal: "SMD's own: internal",
   sandbox: "SMD's own: sandbox",
 }
