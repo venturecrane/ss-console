@@ -37,6 +37,9 @@
     "scott": {
       "output_classes": {}
     },
+    "smd-guide": {
+      "output_classes": {}
+    },
     "smd-staging": {
       "output_classes": {
         "staff": {

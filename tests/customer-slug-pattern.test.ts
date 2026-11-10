@@ -102,6 +102,7 @@ const CANDIDATES: readonly string[] = [
   'captain-mark',
   'pilot-smokeball',
   'scott',
+  'smd-guide',
   'smd-staging',
   // shape edges that MUST be accepted (2..40 chars). 39 and 40 both exceed the
   // provisioner's old 32-char ceiling — the divergence in the other direction.
@@ -143,6 +144,7 @@ const LIVE_SLUGS: readonly string[] = [
   'captain-mark',
   'pilot-smokeball',
   'scott',
+  'smd-guide',
   'smd-staging',
 ]
 

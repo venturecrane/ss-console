@@ -152,6 +152,10 @@ export const SKILL_SUMMARIES: Record<string, string> = {
     'Runs a one-page self-check on request: connections, a counted read, document output, and a live demonstration that it refuses identifiers it has not read. Reports to the requester only.',
   'opposing-response-deficiency-review':
     "Reads the opposing side's discovery responses and surfaces candidate gaps for an attorney. An assist, never a legal finding.",
+  'pitch-practice':
+    'Lets a listed person practice pitching the Operator against an authored buyer, then gives feedback cited to the product library. Never role-plays pricing or a real person.',
+  'product-guide':
+    "Answers a listed person's emailed question about the Operator from the product library, naming the document and section. Never discusses pricing or clients.",
   'press-release-draft':
     'Drafts a press release only from facts your firm approved, at most two a month. Your firm approves, picks the wire and submits.',
   'referral-source-acknowledgment':
