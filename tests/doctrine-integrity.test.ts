@@ -365,8 +365,6 @@ describe('mechanisms under review are falsifiable', () => {
   const GRANDFATHERED = [
     'reflex-primer',
     'reply-contract',
-    'plan-premise-gate',
-    'plan-premise-gate-measured-row',
     'plan-premise-gate-rehearsal-row',
     'session-board',
     'obligation-capture-at-close',

@@ -531,12 +531,18 @@ mechanisms:
     review: 2026-11-24
     on_failure: 'Demote to warn-only. A premise table filled with ceremonial evidence is Law 12 failing at the row level and means the check needs redesign, not more force.'
     last_review: '2026-10-24, MET FOR PLAN MODE. premise-gate.log: 145 evaluations, 128 passed with an evidenced table, 17 blocked, 0 on the warn-only path. Saved unprobed-premise corrections by month: 19/4/6. The October six are client-deliverable premises (register row, coverage diff, rehearsal recipient, a pipeline debugged one deploy at a time) that arose outside plan mode, which this gate cannot see; Law 16 (2026-10-23) now carries that half. Keep.'
+    replay: '35 plans in ~/.claude/plans replayed against the 2026-11-10 gate (#3920): 34 got the same decision as before, 1 moved from deny to allow because the widened unit list accepts a probed row counting messages. None had a critics directory, so the critic-findings branch fired on none.'
+    false_alarm_owner: 'The session that hits the denial fixes the gate in the same session if the denial is wrong (a narrow regex is the usual cause: on 2026-11-10 the measured-row units rejected PRs and transcripts), with a test row added.'
+    escape: 'SS_SKIP_PREMISE_GATE=1, logged to ~/.claude/ss-board/premise-gate.log.'
   - id: plan-premise-gate-measured-row
     file: .claude/hooks/plan-premise-gate.mjs
     hypothesis: 'Requiring a client-work plan to carry at least one premise row with a number measured on the real request or real inputs (Law 16 corollary, 2026-11-03) moves the "tested against imagined inputs" failure from the first dry-run to plan time.'
     success_criterion: 'Zero client-job dry-runs between 2026-11-04 and 2026-12-03 that fail on a property of the real request or the real file set (request parse, file count, page volume, cost against the cap) that a read-only probe could have measured before the build. Second half, from ~/.claude/ss-board/premise-gate.log: entries with mode "client" are counted, and a sample of the passing measured rows is read; if the measured numbers are mostly not from the real inputs (fixtures, guesses, the cap itself), the rule is being satisfied by ceremony.'
     review: 2026-12-03
     on_failure: 'If dry-runs still fail on unmeasured inputs, the shape check is not reaching the behavior: move the measurement into the job runner as a $0 pre-flight on the real request that must run before release. If the bounce fires mostly on plans that are not client work, narrow CLIENT_RE rather than teach agents to type a ceremonial number.'
+    replay: 'Same 35-plan replay as plan-premise-gate. The unit list was widened on 2026-11-10 after it rejected a real measured row (PRs, transcripts, tokens, commits, calls, messages); tests/plan-premise-gate.test.ts holds the five new units.'
+    false_alarm_owner: 'As plan-premise-gate.'
+    escape: 'As plan-premise-gate.'
   - id: plan-premise-gate-rehearsal-row
     file: .claude/hooks/plan-premise-gate.mjs
     hypothesis: 'Requiring a client-work plan that lands on a seat to name its off-seat rehearsal (Law 18, 2026-11-04) moves "tested first on the client seat" from the first paid run to plan time.'
@@ -568,6 +574,33 @@ mechanisms:
     success_criterion: 'At most 1 ss-console session between 2026-10-25 and 2026-11-24 in which the Captain typed /skunkworks, against a baseline of 4 sessions between 2026-09-24 and 2026-10-23 (2026-10-01, 10-07, 10-09 x2). Measured as the count of transcript files matching the typed-command tag: grep -l "<command-name>/skunkworks</command-name>" ~/.claude/projects/-Users-scottdurgan-dev-ss-console*/*.jsonl, bucketed by file mtime. Model-invoked uses ("skill":"skunkworks" tool calls) do not count; crane skill telemetry is not venture-scoped and cannot answer this. The review date sat inside the 30-day transcript cleanup on purpose; retention was raised to 120 days on 2026-11-10 (`cleanupPeriodDays` in the user settings), so a later review can still read it.'
     review: 2026-11-24
     on_failure: 'The suffix alone does not move behavior. Redesign rather than repeat: promote the stance to a numbered law with a primer_line, or find the drift point (long sessions, post-/compact) and put the reminder there. If the Captain still types /skunkworks mid-session as a deliberate re-anchor rather than a correction, record that and judge on corrections instead.'
+  - id: plan-premise-gate-critic-findings
+    file: .claude/hooks/plan-premise-gate.mjs
+    hypothesis: 'An overruled critic finding reaches the Captain at plan approval only if the critics own words are on the page. /critique saves each critic raw output beside the plan and writes a first section of findings not adopted; the gate blocks exit when a saved critic is missing from it (the document-library critic warned the build was ahead of the evidence and was overruled where nobody saw it).'
+    success_criterion: 'Between 2026-11-10 and 2026-12-10, every plan approved after a /critique carries the section with every critic represented, read from premise-gate.log and the plans directory; and no saved Captain correction says a critic warned of the failure and he was not told.'
+    review: 2026-12-10
+    on_failure: 'If agents satisfy the section with a row per critic while burying the substance, show the critic Verdict lines verbatim from the saved files in the deny message instead.'
+    replay: 'A fixture shaped like docs/plans/document-library/design-2026-11-06.md:124 is denied; the 35 real plans without a critics directory are untouched (#3920).'
+    false_alarm_owner: 'The session that hits the denial; a wrong parse of the section is fixed in the gate with a test row.'
+    escape: 'SS_SKIP_PREMISE_GATE=1, logged.'
+  - id: eos-check-j-ready
+    file: scripts/eos-ready.mjs
+    hypothesis: 'A session that ships a client-surface PR without its runtime rows met is the moment READY gets lost. Listing those PRs at /eos, under a heading the handoff carries verbatim, enforces the finish line on the session without blocking a merge.'
+    success_criterion: 'Between 2026-11-10 and 2026-12-10, no saved Captain correction about a feature reported done that was not READY; and every handoff from a session that merged a client-surface PR carries a Shipped, not READY block or none.'
+    review: 2026-12-10
+    on_failure: 'If handoffs drop the block, move it into the crane handoff payload so the handoff cannot be written without it.'
+    replay: 'The library build session: 4 of 13 merged PRs touch a client surface and all 4 are listed not READY. The 2026-11-10 wave-1 session prints none (#3920).'
+    false_alarm_owner: 'The session running /eos; a misclassified PR is fixed in scripts/lib/touch-map.mjs.'
+    escape: 'Never blocks the close; it only shapes the handoff text.'
+  - id: deferral-lister
+    file: scripts/ci-reconcile-deferrals.mjs
+    hypothesis: 'A runtime row deferred with an owner and a date is a promise nothing read after merge. Listing overdue ones daily in one rolling issue gives the owner a forcing function without a merge block.'
+    success_criterion: 'Between 2026-11-10 and 2026-12-10, every runtime deferral past its enforce_by date appears in the process-deferral issue within a day, and none is cleared by a PR that did not touch a client surface.'
+    review: 2026-12-10
+    on_failure: 'If the issue grows without anyone closing rows, route only client-lane rows into the obligation register and drop the rest.'
+    replay: '1,630 PRs merged in 120 days: 0 past-date deferrals live. Replay mode (not met read as due at merge): 289 rows on 150 PRs, 266 on client surfaces, including the two client-lane rows of #3852. A CI-only PR citing #3852 does not clear them (#3920).'
+    false_alarm_owner: 'The owner named in the row; a wrong parse is fixed in the lister with a test row.'
+    escape: 'Close the row with a later client-surface PR that references the number and carries a met runtime row with a vfy_ id.'
   - id: runtime-ac-touch-rule
     file: scripts/runtime-ac-proof.mjs
     hypothesis: 'Classifying a PR by its changed paths (scripts/lib/touch-map.mjs: send-path, client-lane, seat, none) lets the merge gate see a client-surface PR that writes no (runtime) row, which a body-only gate cannot. Reporting that on every PR, and blocking only a bare n/a on such a PR, raises the share of client-surface PRs that name the act a client performs without teaching agents to type boilerplate deferrals.'
