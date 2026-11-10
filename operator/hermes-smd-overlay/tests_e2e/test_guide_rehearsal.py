@@ -264,12 +264,14 @@ def test_the_purge_left_everything_of_b(rehearsal) -> None:
 
 def test_on_the_real_run_a_missing_declaration_fails(rehearsal) -> None:
     """Every purge-set location this run wrote to is load-bearing: drop one and
-    the real run's hits there become undeclared. (This run sends no reply and
-    holds none, so the reply, held-reply, sent-line and envelope layers are
-    exercised by ``workspace_broker/tests/test_person_purge.py`` instead.)"""
+    the real run's hits there become undeclared. (The desk's hourly digest is
+    the run's one send, so the envelope layer is exercised here; it holds no
+    reply and its digest carries no numbered labels, so the held-reply and
+    sent-line layers are exercised by ``workspace_broker/tests/test_person_purge.py``.)"""
     hits = rehearsal["before_a"].hits
     used = [loc for loc in purge_set(_slug(A)) if any(loc.covers(h) for h in hits)]
-    assert len(used) == 3, [str(loc) for loc in used]  # partitions, memory, requests
+    # partitions, memory, requests, and the digest's envelope
+    assert len(used) == 4, [str(loc) for loc in used]
     for dropped in used:
         kept = [loc for loc in purge_set(_slug(A)) if loc != dropped]
         inv = classify(hits, kept, RETAINED)
@@ -342,9 +344,10 @@ def test_past_the_daily_limit_one_notice_then_silence(rehearsal) -> None:
         for t in rehearsal["evidence"]["turns"]
         if t["sender"] == A
         and t["router_verdict"] != {"action": "skip"}
-        # The training slice's turns ("t-...") each start on a fresh day of the
-        # limit (_training_turns._fresh_day); the limit is proven here.
-        and not t["label"].startswith("t-")
+        # The training and desk slices' turns ("t-...", "d-...") each start on a
+        # fresh day of the limit (_training_turns._fresh_day); the limit is
+        # proven here.
+        and not t["label"].startswith(("t-", "d-"))
     ]
     assert len(admitted) == DAILY_LIMIT
     first = _turn(rehearsal, "a-over-the-limit")

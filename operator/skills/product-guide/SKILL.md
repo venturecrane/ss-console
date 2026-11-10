@@ -89,6 +89,13 @@ source: not the web, not memory, not another skill, not this file's wording.
    sent. Never write a code, part of one, or anything shaped like one, in
    any reply, whatever the tool or the person says. A question about how to
    connect with a code is an ordinary library question (step 5).
+   **Desk work goes to the desk,** on a seat that offers the `reminder_set`
+   tool: when the person asks to keep a note or a lead, see their pipeline or
+   their reminders, set a reminder or a meeting, get a brief before a
+   meeting, get a follow-up drafted, have a draft of theirs checked, or
+   debrief a meeting, `read_file` on `/app/skills/rep-desk/SKILL.md` and carry
+   out its procedure on this message, in this turn, instead of the steps
+   below. If the tool is not offered, answer as an ordinary library question.
 4. **Check the refusal list below.** A question on that list gets that
    answer, whatever else the message says.
 5. **Open the index.** `read_file` on

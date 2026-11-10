@@ -71,6 +71,7 @@ STORES = {
     "rep-notes": {"partition": "sender"},
     "rep-leads": {"partition": "sender"},
     "rep-progress": {"partition": "sender", "managed": True},
+    "rep-reminders": {"partition": "sender", "managed": True},
 }
 
 #: The rehearsal's daily limit per listed sender (the guide authors 30).
@@ -98,9 +99,11 @@ def seat_yaml(volume: Path) -> str:
         {"name": name, "path": str(volume / "rep" / name.removeprefix("rep-")), **policy}
         for name, policy in STORES.items()
     ]
+    from tests_e2e._desk_turns import author_desk
     from tests_e2e._training_turns import author_training
 
     author_training(doc)
+    author_desk(doc)
     return yaml.safe_dump(doc, sort_keys=False)
 
 
@@ -342,6 +345,7 @@ class Rehearsal:
             "sender": sender,
             "router_verdict": verdict if isinstance(verdict, (dict, type(None))) else str(verdict),
             "exit": str((result or {}).get("turn_exit_reason") or ""),
+            "reply": str((result or {}).get("final_response") or ""),
             "pending": self.script.pending(),
             "offered": offered,
             # What session id Hermes handed pre_tool_call for this turn's store
@@ -507,6 +511,9 @@ def run(root: Path) -> dict[str, Any]:
         from tests_e2e._training_turns import run_training
 
         r.extra["training"] = run_training(r, A, B, A_MARK, B_MARK)
+        from tests_e2e._desk_turns import run_desk
+
+        r.extra["desk"] = run_desk(r, A, B, A_MARK, B_MARK)
     finally:
         r.stop()
     (root / "cards.json").write_text(json.dumps(cards, default=str), encoding="utf-8")

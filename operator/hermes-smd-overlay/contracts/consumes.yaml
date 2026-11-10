@@ -237,6 +237,13 @@ vars:
     requirement: optional
     consumed_by: [webhook-router]
     note: "test/dev override for the Machine-local per-sender daily count; defaults to /opt/data/smd/sender_daily.db (plugins/hermes-smd-webhook-router/daily_limit.py). Read and written only on a guide seat that authors sender_enrollment.daily_limit. One row per sender and UTC day: the sha256 sender_key, the count answered, whether the over-limit notice went. Rows older than three days are deleted on every write; a person's purge deletes their rows."
+  # ---- ss-console #3946: the library gap counter on a guide seat's rep desk ----
+  SMD_GAP_COUNTS_DB_PATH:
+    discovery: indirect
+    stage: agent
+    requirement: optional
+    consumed_by: [desk]
+    note: "test/dev override for the Machine-local library gap counter; defaults to /opt/data/smd/gap_counts.db (shared/gap_report.py). The desk plugin's post_llm_call is its only writer: one row per (UTC day, topic key from a closed authored list) with a count, when a product-question turn answered with the product library's fixed not-covered sentence. No address, question, thread or reply text. The weekly administrator report reads it (weekly_gap_counts). Rows deleted after 120 days."
   SMD_GATE_CAP_DB_PATH:
     discovery: static
     stage: agent
