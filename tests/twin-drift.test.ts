@@ -111,14 +111,14 @@ describe('the falsifiers, on a copy of the real seats', () => {
     writeFileSync(file, stringify(doc))
   }
 
-  it('the client changing alone fails (machine memory)', () => {
+  it('the client changing alone fails (its model)', () => {
     const dir = copy()
     try {
       edit(dir, 'ashton-price', (d) => {
-        ;(d.machine as Record<string, unknown>).memory_mb = 16384
+        d.model = 'claude-opus-5-5'
       })
       const decl = readTwinDeclaration(dir, 'ap-staging') as TwinDeclaration
-      expect(twinDrift(dir, decl).undeclared).toEqual(['machine.memory_mb'])
+      expect(twinDrift(dir, decl).undeclared).toEqual(['model'])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

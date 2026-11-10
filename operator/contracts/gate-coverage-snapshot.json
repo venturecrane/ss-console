@@ -36,8 +36,12 @@
     },
     "pilot-smokeball": {
       "output_classes": {
-        "staff": {
+        "outbound_external": {
           "voice_spec": "expected",
+          "format_spec": "none"
+        },
+        "staff": {
+          "voice_spec": "none",
           "format_spec": "none"
         },
         "work_product": {

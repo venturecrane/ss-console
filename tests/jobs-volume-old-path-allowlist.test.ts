@@ -65,6 +65,8 @@ const ALLOWED: Record<string, string> = {
   'docs/handbook/deployment-release.md': 'the R2 move and its hand rollback',
   'operator/bin/tests/fixtures/boot-harness/': 'boot logs recorded from real seats before the move',
   '.stitch/audits/backlog-snapshot-2026-08-31.json': 'a dated snapshot of issue bodies',
+  'operator/contracts/seat-layout.yaml':
+    'its left_out list names the old paths so the census cannot treat them as undeclared',
   'scripts/sprawl/snapshot.json':
     'the sprawl census of the tree, which counts the old path where it still appears',
   'scripts/sprawl/literal-baseline.json':

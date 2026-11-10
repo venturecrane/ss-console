@@ -29,7 +29,13 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const SCRIPT = resolve('operator/bin/boot-smoke-test.sh')
-const SEAT_YAML = resolve('operator/customers/pilot-smokeball/customer.yaml')
+// Literal path constants (never interpolated). The demo seat is the default
+// subject; the client seat is the one case that needs lane skills enabled.
+const SEAT_YAMLS = {
+  'pilot-smokeball': resolve('operator/customers/pilot-smokeball/customer.yaml'),
+  'ashton-price': resolve('operator/customers/ashton-price/customer.yaml'),
+} as const
+type Slug = keyof typeof SEAT_YAMLS
 
 /**
  * The `machine.memory_mb` pilot-smokeball authors, for the `fly status` stub.
@@ -40,7 +46,8 @@ const SEAT_YAML = resolve('operator/customers/pilot-smokeball/customer.yaml')
  * defaulting: a silent fallback would make the stub agree with the script by
  * accident and this file would stop testing the comparison at all.
  */
-function authoredSeatMemoryMb(): number {
+function authoredSeatMemoryMb(slug: Slug): number {
+  const SEAT_YAML = SEAT_YAMLS[slug]
   const lines = readFileSync(SEAT_YAML, 'utf8').split('\n')
   let inMachine = false
   for (const line of lines) {
@@ -62,7 +69,8 @@ function authoredSeatMemoryMb(): number {
  * the seat moved from shared-cpu-1x to shared-cpu-2x (2026-10-13) and a literal
  * 1 here would turn this file red for a reason that is not its own.
  */
-function authoredSeatCpus(): number {
+function authoredSeatCpus(slug: Slug): number {
+  const SEAT_YAML = SEAT_YAMLS[slug]
   const m = /^machine:[\s\S]*?^\s+size:\s*shared-cpu-(\d+)x/m.exec(readFileSync(SEAT_YAML, 'utf8'))
   if (!m) throw new Error(`no machine.size shared-cpu-<N>x found in ${SEAT_YAML}`)
   return Number(m[1])
@@ -103,7 +111,7 @@ afterEach(() => {
  * A `fly` on PATH that reports the Machine started and fails exactly the checks
  * whose command contains one of `failOn`.
  */
-function stubDir(failOn: string[]): string {
+function stubDir(failOn: string[], slug: Slug): string {
   const dir = mkdtempSync(join(tmpdir(), 'boot-smoke-stub-'))
   scratch.push(dir)
   // Needles go in a FILE, read by `grep -F -f`, never interpolated into the
@@ -127,8 +135,8 @@ function stubDir(failOn: string[]): string {
   // its own reason. Reading it also proves the check is REAL: if
   // `guest-matches-authored-size` compared nothing, this stub could report any
   // number and the suite would not notice.
-  const authoredMemoryMb = authoredSeatMemoryMb()
-  const authoredCpus = authoredSeatCpus()
+  const authoredMemoryMb = authoredSeatMemoryMb(slug)
+  const authoredCpus = authoredSeatCpus(slug)
   const fly = `#!/usr/bin/env bash
 for a in "$@"; do
   [ "$a" = "status" ] && {
@@ -218,9 +226,15 @@ function staleCheckout(dir: string, rel: string): void {
 
 function run(
   failOn: string[],
-  opts: { medchronAuthored?: boolean; staleLane?: string; lever?: 'set' | 'unset' } = {}
+  opts: {
+    medchronAuthored?: boolean
+    staleLane?: string
+    lever?: 'set' | 'unset'
+    slug?: Slug
+  } = {}
 ): { out: string; code: number } {
-  const dir = stubDir(failOn)
+  const slug: Slug = opts.slug ?? 'pilot-smokeball'
+  const dir = stubDir(failOn, slug)
   if (opts.lever) writeFileSync(join(dir, 'lever.txt'), `SMD_LEVER=${opts.lever}\n`)
   if (opts.staleLane) {
     const l = opts.staleLane
@@ -235,7 +249,7 @@ function run(
     writeFileSync(join(firm, 'firm.yaml'), '')
   }
   try {
-    const out = execFileSync('bash', [SCRIPT, 'pilot-smokeball'], {
+    const out = execFileSync('bash', [SCRIPT, slug], {
       encoding: 'utf8',
       env: { ...cleanEnv(), PATH: hermeticPath(dir), SS_ENGAGEMENTS_DIR: dir },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -316,19 +330,30 @@ describe('boot smoke reports every check, not just the first red (ss#2487)', () 
   // pilot while this smoke pass-skipped it, because this smoke asked only the
   // engagements checkout. A lane is now authored when engagements authors it OR
   // the seat's customer.yaml enables the lane's skill. The stub dir holds no
-  // engagements files at all, so the pilot's enabled chronology skill alone must
-  // make medchron and demand authored, and drafting, whose skill it does not
-  // enable, must stay absent. FALSIFIER: with the customer.yaml branch removed, medchron reads
-  // absent here.
+  // engagements files at all, so the client seat's enabled chronology and demand
+  // skills alone must make medchron and demand authored, and marketing, whose
+  // skill it does not enable, must stay absent. FALSIFIER: with the customer.yaml
+  // branch removed, medchron reads absent here. (Run on ashton-price since
+  // 2026-11-10: the demo seat enables no lane skill, the case below.)
   it("a lane whose skill the seat's customer.yaml enables is checked with no engagements file", () => {
-    const { out } = run([])
+    const { out } = run([], { slug: 'ashton-price' })
     expect(out).not.toContain('medchron-firm-config-absent')
     expect(out).toMatch(/(PASS|FAIL): medchron-controls-present/)
-    // The pilot enables demand-letter-drafter, so demand is checked too...
+    // The client seat enables demand-letter-drafter, so demand is checked too...
     expect(out).not.toContain('demand-firm-inputs-absent')
     expect(out).toMatch(/(PASS|FAIL): demand-firm-inputs-present/)
-    // ...and drafting, whose skill it does not enable, still skips.
-    expect(out).toContain('drafting-firm-inputs-absent')
+    // ...and marketing, whose skill it does not enable, still skips.
+    expect(out).toContain('marketing-firm-inputs-absent')
+  }, 90_000)
+
+  // The demo seat (2026-11-10) queues no job of any kind, so with no engagements
+  // file every lane reads absent: the demo can never wait on an unproven lane.
+  it('the demo seat enables no lane skill, so every lane reads absent', () => {
+    const { out } = run([])
+    expect(out).toContain('medchron-firm-config-absent')
+    for (const lane of ['demand', 'drafting', 'litigation', 'casefile', 'records']) {
+      expect(out).toContain(`${lane}-firm-inputs-absent`)
+    }
   }, 90_000)
 
   it('a clean run still exits zero', () => {

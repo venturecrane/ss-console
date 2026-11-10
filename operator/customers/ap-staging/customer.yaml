@@ -65,11 +65,11 @@ fly_region: sjc
 model: claude-sonnet-5-5
 escalation_model: claude-opus-5-5
 machine:
-  size: shared-cpu-4x
-  memory_mb: 8192
-  lane_memory_mb:
-    medchron: 4096
-    demand: 3072
+  # Smaller than A&P on purpose (Captain, 2026-11-10): the twin proves each
+  # release boots and passes its checks; it never runs A&P's heavy jobs (every
+  # lane is capped at $0.01). The size smd-staging has passed every release on.
+  size: shared-cpu-2x
+  memory_mb: 4096
 users:
   - email: ss-probe-admin@agentmail.to
     role: principal
@@ -451,7 +451,7 @@ personas:
         enabled: true
         settings:
           demand_allowance_per_cycle: 25
-          rehearsal_matter_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+          rehearsal_matter_id: '84693f0c-ddc7-4d9d-8921-26dce238f96c' # OPS-OPERATOR-LIBRARY in SMD's staging tenant (read 2026-11-10)
       - name: document-drafter
         version: pending
         initiation:
@@ -462,7 +462,7 @@ personas:
         settings:
           drafting_allowance_per_cycle: 25
           enabled_classes: mediation_brief, discovery_set, discovery_response, memo, depo_outline
-          rehearsal_matter_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+          rehearsal_matter_id: '84693f0c-ddc7-4d9d-8921-26dce238f96c' # OPS-OPERATOR-LIBRARY in SMD's staging tenant (read 2026-11-10)
       - name: litigation-status
         version: pending
         initiation:
@@ -475,7 +475,7 @@ personas:
           deadlines_folder_name: Deadlines
           staff_reassignment: enabled
           discovery_breakdown: 'on'
-          file_to_matter_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+          file_to_matter_id: '84693f0c-ddc7-4d9d-8921-26dce238f96c' # OPS-OPERATOR-LIBRARY in SMD's staging tenant (read 2026-11-10)
           scheduled_recipients: ScottDurgan@smdopslab.onmicrosoft.com
       - name: case-file-manager
         version: pending
@@ -486,7 +486,7 @@ personas:
         enabled: true
         settings:
           folder_name: Case File Manager
-          file_to_matter_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+          file_to_matter_id: '84693f0c-ddc7-4d9d-8921-26dce238f96c' # OPS-OPERATOR-LIBRARY in SMD's staging tenant (read 2026-11-10)
       - name: matter-records
         version: pending
         initiation:
@@ -851,7 +851,7 @@ form_letters:
 vendor_invoice_intake:
   is_billable: true
   folder_name: INVOICES
-  staff_id: '00000000-0000-0000-0000-000000000000' # PENDING: an id in SMD's staging tenant, read before first provision
+  staff_id: 'ba848ad4-28ca-43a3-abe6-faa21b5fbbb3' # the staging tenant's one staff row (read 2026-11-10)
 matter_file_delivery:
   recipients:
     - '@smdopslab.onmicrosoft.com'

@@ -1482,9 +1482,10 @@ def _validate_logic_in_code(cfg: dict[str, Any], errors: list[str]) -> None:
 
 def _validate_sender_enrollment(cfg: dict[str, Any], errors: list[str]) -> None:
     """``sender_enrollment`` (ADR 0106): optional, ``{enabled: <bool>}`` only,
-    and only on a seat with ``seat.role: guide``. On any other seat who is
-    listed is the client's own decision, made in ``scope.inbound_allow_from``.
-    Mirrors ss-console ``checkSenderEnrollment``."""
+    and only on a seat with ``seat.role: guide`` or ``seat.kind: demo`` (SMD's
+    demo seat, amendment 2026-11-10). On any other seat who is listed is the
+    client's own decision, made in ``scope.inbound_allow_from``. Mirrors
+    ss-console ``checkSenderEnrollment``."""
     block = cfg.get("sender_enrollment")
     if block is None:
         return
@@ -1500,9 +1501,9 @@ def _validate_sender_enrollment(cfg: dict[str, Any], errors: list[str]) -> None:
     if not isinstance(block.get("enabled"), bool):
         _err("sender_enrollment.enabled: must be true or false", errors)
     seat = cfg.get("seat")
-    if not isinstance(seat, dict) or seat.get("role") != "guide":
+    if not isinstance(seat, dict) or (seat.get("role") != "guide" and seat.get("kind") != "demo"):
         _err(
-            "sender_enrollment: accepted only on a seat with seat.role: guide; on any other "
+            "sender_enrollment: accepted only on a seat with seat.role: guide or seat.kind: demo; on any other "
             "seat who is listed is the client's own decision, made in scope.inbound_allow_from",
             errors,
         )
@@ -1733,6 +1734,10 @@ def _validate_memory(cfg: dict[str, Any], errors: list[str]) -> None:
     for field in ("d1_namespace", "r2_vault_path", "vectorize_index"):
         if field not in memory:
             _err(f"memory.{field}: missing", errors)
+    # The per-sender memory switch (plugins/hermes-smd-peer-memory): absent is
+    # on, as on every seat before it existed; false registers nothing.
+    if "peer_memory_enabled" in memory and not isinstance(memory["peer_memory_enabled"], bool):
+        _err("memory.peer_memory_enabled must be a boolean", errors)
 
     customer_id = cfg.get("customer_id")
     if customer_id:

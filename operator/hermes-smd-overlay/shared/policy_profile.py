@@ -116,7 +116,7 @@ from typing import Any
 
 import yaml
 
-from shared import identifier_filter
+from shared import identifier_filter, seat_layout
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ ADVERTISING_ROLES: frozenset[str] = frozenset({"marketing"})
 
 #: The marketing seat's registers (the advertising gate reads them; the
 #: entrypoint stages them only on a marketing seat) and the boot's lane state dir.
-MARKETING_REGISTERS_DEFAULT = "/var/lib/smd-config/marketing/marketing-firm.yaml"
+MARKETING_REGISTERS_DEFAULT = seat_layout.MARKETING_REGISTERS
 MARKETING_REGISTERS_ENV = "SMD_MARKETING_REGISTERS"
 LANE_STATE_DIR_DEFAULT = "/run/smd-lanes"
 LANE_STATE_DIR_ENV = "SMD_LANE_INPUTS_STATE_DIR"

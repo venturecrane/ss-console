@@ -72,13 +72,14 @@ from typing import Any
 
 import yaml
 
+from .. import seat_layout
 from ..firm_inputs import pin
 
 from . import attorneys as attorneys_mod, citations, evidence_config, opening_demand, page_limits
 from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
-DEFAULT_DIR = "/var/lib/smd-config/drafting"
+DEFAULT_DIR = seat_layout.DRAFTING_INPUTS
 CONFIG_NAME = "drafting-firm.yaml"
 
 CLASSES = ("mediation_brief", "discovery_set", "discovery_response", "memo", "depo_outline")

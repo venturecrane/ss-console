@@ -63,7 +63,7 @@ const WORDS: Record<string, AlertWords> = {
   enrollment_guessing: {
     subject: 'someone may be guessing invite codes',
     happened:
-      'The product guide is receiving many wrong invite codes, or has locked itself and is refusing every code, real ones included.',
+      'A seat that takes invite codes (the product guide or the demo seat) is receiving many wrong ones, or has locked itself and is refusing every code, real ones included.',
     todo: 'Give this email to an agent today to see who is sending them and revoke any code that leaked.',
   },
 }

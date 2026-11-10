@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from shared import seat_layout
 from spec_applier.applier import (
     SpecApplyError,
     SpecApplyOutcome,
@@ -56,7 +57,7 @@ _ENV_SLUG = "CUSTOMER_SLUG"
 _ENV_SPEC_DIR = "SMD_SPEC_DIR"
 _ENV_POLL_SECONDS = "SMD_SPEC_POLL_SECONDS"
 
-_DEFAULT_SPEC_DIR = "/var/lib/smd-config/specs"
+_DEFAULT_SPEC_DIR = seat_layout.SPECS
 _DEFAULT_POLL_SECONDS = 30
 
 

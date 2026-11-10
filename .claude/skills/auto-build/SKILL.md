@@ -136,6 +136,13 @@ Heuristic for choosing — encode it explicitly so it isn't vibes-based:
 
 > Default `solo`. Choose `team` only when **(a)** ≥2 genuinely independent workstreams (different packages, surfaces, or layers with disjoint files), or **(b)** identical pattern applied across N targets (e.g., parallel mirror updates across `.claude` + `.gemini` + global). **Cap N at 4 per wave.** For N>4, declare batched waves: define ≤4 workstreams in the first wave and chain a second wave via `blocks`/`blocked_by`, or run sequential `/auto-build` invocations per issue if the work is already issue-cut. Coordination tax usually exceeds parallelism gain on single-package work — when in doubt, `solo`.
 
+**Pay each fixed wait once (Captain, 2026-11-10).** A merge is about 20 minutes in the queue and a seat rollout takes hours; a plan that chains slices behind them spends the day waiting. The guide-seat training plan did, and the Captain had to ask how long before the lead started the other builders: "I shouldn't have to ask these kinds of questions." So, in every multi-slice plan:
+
+- `blocked_by` means "needs that workstream's code to exist". A branch stacked on the first workstream's branch satisfies it. It never means "needs it merged" or "needs it on the seat". Later workstreams start as soon as the first one has pushed, and rebase when it lands.
+- The seat takes all the code in ONE release at the end, then ONE config change switches it on. The only true serial step is code on the seat before the config that names it (a `customer.yaml` reaches the seat ahead of the image).
+- The plan's Execution Mode section carries a `waits:` line under the YAML block, in prose: each fixed wait (merge queue, CI, seat rollout) and how many times the plan pays it in series. More than once for any of them needs a stated reason. The Captain reads this line at approval; he should never have to ask for it.
+- Reviews of a pushed slice and the next slice's build run at the same time.
+
 Do not call `ExitPlanMode` yet. Step 6 owns the exit.
 
 ### Step 5: Invoke `/critique`

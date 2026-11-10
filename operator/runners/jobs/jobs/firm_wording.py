@@ -47,11 +47,11 @@ from typing import Any
 
 from smokeball_connector import logic_in_code
 
-from . import wording_rules_store
+from . import seat_layout, wording_rules_store
 
 ENV_DIR = "JOBS_SPEC_DIR"
 #: The spec applier's install dir (``spec_applier/__main__.py``).
-DEFAULT_DIR = "/var/lib/smd-config/specs"
+DEFAULT_DIR = seat_layout.SPECS
 #: The job's frozen selection, beside its state.
 FILE = "wording-rules.json"
 #: The seat switch (``logic_in_code.WORDING_RULES``).

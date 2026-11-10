@@ -553,7 +553,13 @@ def dispatch_prerendered(session_id: str) -> str | None:
                     a["n"]: a["kind"] for a in numbered if a.get("kind") in sent_lines.LINE_KINDS
                 }
                 sent_lines.record(
-                    dispatch_ref, sent_lines.numbered_lines(sent_body, numbers), kinds
+                    dispatch_ref,
+                    sent_lines.numbered_lines(sent_body, numbers),
+                    kinds,
+                    recipients=[
+                        *(result.recipients or recipients),
+                        *(c for c in (entry.get("cc") or []) if isinstance(c, str)),
+                    ],
                 )
                 # Case-manager seats: the "Done since last time" line this body
                 # carried is told once (shared/casework_mentions.py).

@@ -1,0 +1,25 @@
+{
+  "bootstrap.cli:DEFAULT_CUSTOMER_YAML": "/opt/data/customer.yaml",
+  "config_applier.__main__:_DEFAULT_VOLUME": "/opt/data/customer.yaml",
+  "config_applier.applier:apply(volume_path=)": "/opt/data/customer.yaml",
+  "establish_intake.__main__:_DEFAULT_SPEC_DIR": "/var/lib/smd-config/specs",
+  "firm_inputs_applier.applier:DEFAULT_CONFIG_DIR": "/var/lib/smd-config",
+  "plugins/hermes-smd-reply:_DEFAULT_CUSTOMER_YAML_PATH": "/opt/data/customer.yaml",
+  "plugins/hermes-smd-webhook-router:_DEFAULT_CUSTOMER_YAML_PATH": "/opt/data/customer.yaml",
+  "shared.customer_config:DEFAULT_VOLUME_PATH": "/opt/data/customer.yaml",
+  "shared.fleet_facts:DEFAULT_CONFIG_PATH": "/var/lib/smd-config/customer.yaml",
+  "shared.oauth_callback:_HERMES_PY": "/opt/hermes/.venv/bin/python3",
+  "shared.oauth_callback:_trigger_webhook_reconcile({}) argv": [
+    "/opt/hermes/.venv/bin/python3",
+    "/app/webhook_reconcile.py",
+    "/opt/data/customer.yaml",
+    "--trigger",
+    "connect"
+  ],
+  "shared.policy_profile:MARKETING_REGISTERS_DEFAULT": "/var/lib/smd-config/marketing/marketing-firm.yaml",
+  "shared.review_job:DEFAULT_AUDIT_DB": "/opt/data/audit/audit.db",
+  "shared.scheduler_check:DEFAULT_CUSTOMER_YAML_PATH": "/var/lib/smd-config/customer.yaml",
+  "shared.selftest_check:RESULTS_PATH": "/run/smd-selftest/results.json",
+  "skills_applier.__main__:_DEFAULT_CUSTOMER_YAML": "/var/lib/smd-config/customer.yaml",
+  "spec_applier.__main__:_DEFAULT_SPEC_DIR": "/var/lib/smd-config/specs"
+}

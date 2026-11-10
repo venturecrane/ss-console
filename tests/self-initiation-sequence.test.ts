@@ -30,7 +30,6 @@ import { parse as parseYaml } from 'yaml'
 
 // Literal path constants (never interpolated) so the paths are auditable.
 const SEAT_PATHS = {
-  'pilot-smokeball': resolve('operator/customers/pilot-smokeball/customer.yaml'),
   'ashton-price': resolve('operator/customers/ashton-price/customer.yaml'),
 } as const
 

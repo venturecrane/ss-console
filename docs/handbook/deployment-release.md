@@ -315,9 +315,9 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    client seat with a twin takes a release only after its twin is done on that
    same release, on a laptop run as in the controller: `--only <client>` is
    refused until `--only <twin>` is done, and a full run whose twin was held or
-   failed records the client `waiting_twin` and leaves it alone. The pilot
-   (`pilot-smokeball`, now `purpose: demo`) gates nothing and is not a step
-   before the client. Rings live in `operator/fleet/rings.yaml`: 0
+   failed records the client `waiting_twin` and leaves it alone. The demo seat
+   (`pilot-smokeball`, `purpose: demo`, [The Demo Seat](/admin/playbook/demo-seat))
+   gates nothing and is not a step before the client. Rings live in `operator/fleet/rings.yaml`: 0
    `smd-staging` (the twin of `ashton-price`), 1 `ashton-price`, 2
    `pilot-smokeball` `scott` `brokery` `captain-mark` `smd-guide` (the last ring
    always one at a time), with a `twins:` block naming each client's twin. The
@@ -615,7 +615,7 @@ controller not enabled" and the build job is skipped, and neither enters the
 environment (a job's `if:` is checked first, so GitHub never auto-creates
 `fleet-release` without its branch policy). Set the variable only after the
 `fleet-release` environment exists with its main-only deployment branch policy
-and all eight Fly tokens. Then immediately dispatch `release-tick.yml` with
+and all nine Fly tokens. Then immediately dispatch `release-tick.yml` with
 `dry_run: true` and read the plan in its log before the first scheduled tick
 acts.
 
@@ -1014,7 +1014,12 @@ mailbox, a person, a vault, never a behaviour), held there by
 `tests/twin-drift.test.ts`. It is authored `purpose: internal` with
 `fly_app: null` because a client has at most one release twin (ADR 0107), and
 `smd-staging` stays the twin until `ap-staging` is provisioned and green. Every
-step below is the Captain's act and names the probe that shows it held. Values
+step below is an agent's work, done end to end the way `smd-guide` was stood up
+on 2026-11-10, and names the probe that shows it held. The one act only the
+Captain can do is step 8's sign-in to SMD's Smokeball staging tenant (an agent
+never enters a password). Steps 3 to 7 write to Fly, D1 and the secret stores,
+which an agent session in auto mode may be refused; a refused step is surfaced
+to the Captain with the exact action, never worked around. Values
 never pass through a terminal or a transcript: each copy below reads one
 Infisical name into a file that `crane_secret_set` (source `file`) writes under
 the new name and deletes.
@@ -1043,12 +1048,12 @@ the new name and deletes.
    prints nothing about customer.yaml (it still names `fly_app: null` until
    step 4).
 3. **The Fly app and its volume.** `fly apps create hermes-ap-staging --org
-   personal` (a new app: Fly cannot rename `hermes-smd-staging`). A&P's volume
-   is 25 GB and provisioning creates 10 GB only when none exists, so create it
-   first at A&P's size: `fly volumes create hermes_state --size 25 --region sjc
-   -a hermes-ap-staging --yes`.
-   Probe: `fly volumes list -a hermes-ap-staging` shows one `hermes_state`,
-   25GB, sjc; `fly volumes list -a hermes-ashton-price` is the size to match.
+   personal` (a new app: Fly cannot rename `hermes-smd-staging`). The twin is
+   sized like smd-staging, not A&P (2 shared CPUs, 4 GB, a 10 GB volume,
+   declared in `twin.yaml`): it proves each release boots and passes its checks
+   and never runs A&P's heavy jobs. Provisioning creates the 10 GB volume.
+   Probe: `fly volumes list -a hermes-ap-staging` after step 7 shows one
+   `hermes_state`, 10GB, sjc.
 4. **The app, authored, and the release tick.** One PR: `fly_app:
    hermes-ap-staging` in `ap-staging/seat.yaml` with `unprovisioned_reason`
    removed (purpose stays `internal`, ring 2, so it takes releases after A&P

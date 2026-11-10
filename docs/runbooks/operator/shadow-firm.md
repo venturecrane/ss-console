@@ -40,9 +40,15 @@ rather than written in a comment:
   reserved-domain addresses (the rig's seeded party contacts) may be named in
   prose but are never drive endpoints.
 - The target seat must declare a rig `seat.kind` in its own `customer.yaml`
-  (`proving`, `sandbox`, `preprod`). `customer` and `internal` are refused by
+  (`proving`, `sandbox`, `preprod`, `demo`). `customer` and `internal` are refused by
   name; an unclassified seat is refused too, because "cannot evaluate" must not
   read as "permitted".
+- `pilot-smokeball` is SMD's demo seat (`seat.kind: demo`,
+  `docs/handbook/demo-seat.md`): still the one rig with Smokeball bound, but it
+  now carries only the demo's skills and no routines, and representatives use it
+  live. Never drive it during a scheduled demo; a scenario that needs a routine
+  the demo seat no longer runs belongs on the release twin once that binds
+  Smokeball (ADR 0107's stated gap).
 
 Both gates abort the run with exit 2 before anything is driven. There is no flag
 that relaxes either one.

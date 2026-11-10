@@ -30,7 +30,7 @@ import yaml
 _OP = Path(__file__).resolve().parents[2]
 _CUSTOMERS = _OP / "customers"
 
-_KINDS = {"customer", "proving", "sandbox", "internal", "preprod"}
+_KINDS = {"customer", "proving", "sandbox", "internal", "preprod", "demo"}
 _PRODUCTS = {"operator", "hosted-agent"}
 
 
@@ -51,7 +51,7 @@ def test_every_customer_declares_a_seat_descriptor() -> None:
         seat = _load(path).get("seat")
         assert isinstance(seat, dict), (
             f"{path.relative_to(_OP)} does not declare `seat:`. Every seat must say what it is — "
-            "kind (customer / proving / sandbox / internal / preprod) and product. Templates "
+            "kind (customer / proving / sandbox / internal / preprod / demo) and product. Templates "
             "included: a template's value is what a new seat inherits before anyone thinks about it."
         )
         assert seat.get("kind") in _KINDS, f"{path.relative_to(_OP)}: seat.kind={seat.get('kind')!r}"

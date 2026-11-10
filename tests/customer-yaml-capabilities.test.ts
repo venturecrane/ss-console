@@ -98,8 +98,11 @@ describe.each(SEATS)('seat %s', (slug) => {
 })
 
 describe('enforcement', () => {
+  // The A&P-shaped fixture (pilot-smokeball's config as of 2026-11-10, frozen
+  // when that seat became SMD's demo seat): it authors both Smokeball-owned
+  // blocks, which no demo needs.
   const pilot = parseYaml(
-    readFileSync(join(CUSTOMERS, 'pilot-smokeball', 'customer.yaml'), 'utf8')
+    readFileSync(join(__dirname, 'fixtures', 'ap-shaped-seat', 'customer.yaml'), 'utf8')
   ) as Record<string, unknown>
 
   it('refuses a Smokeball block on a seat that binds no Smokeball connector', () => {
@@ -115,7 +118,7 @@ describe('enforcement', () => {
     const res = validate(doc)
     expect(res.ok).toBe(false)
     const refused = res.ok ? [] : res.errors.filter((e) => e.code === 'CapabilityNotAuthored')
-    // Both Smokeball-owned blocks the pilot authors (form_letters since its
+    // Both Smokeball-owned blocks the fixture authors (form_letters since its
     // form catalog moved into config, ADR 0100 W4).
     expect(refused.map((e) => e.path)).toEqual(['smokeball_layouts', 'form_letters'])
   })

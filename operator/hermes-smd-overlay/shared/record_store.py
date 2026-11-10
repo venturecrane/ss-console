@@ -136,9 +136,36 @@ def _clean_stores(raw: Any) -> list[dict[str, str]]:
 #:                  roster reads and only some may edit: a client's program,
 #:                  refined by the broker in conversation while every agent
 #:                  reads it (2026-10-13). Works with or without owner_field.
-POLICY_KEYS: tuple[str, ...] = ("owner_field", "readers", "index", "writers")
+#: ``partition``    ``sender``: the store is WALLED PER PERSON. Each person's
+#:                  records live in their own directory under the store,
+#:                  ``<path>/<person_slug(verified sender)>/<name>``; the owner
+#:                  is the directory, set by code from the turn's verified
+#:                  sender, never written in the content and never supplied by
+#:                  the model. A turn lists, reads and writes only its own
+#:                  directory; a turn with no verified sender, or one whose
+#:                  sender is not on the seat's roster now, is refused all three.
+#:                  There is no reader who sees across the wall, so it cannot
+#:                  be combined with owner_field, readers or writers.
+#: ``managed``      ``true``: only code writes this store. The model-facing
+#:                  write tool refuses it; code writes and reads it through
+#:                  :func:`code_write` / :func:`code_read` / :func:`code_list`.
+POLICY_KEYS: tuple[str, ...] = (
+    "owner_field",
+    "readers",
+    "index",
+    "writers",
+    "partition",
+    "managed",
+)
 FIELD_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 ALWAYS_INDEXED: tuple[str, ...] = ("status",)
+
+#: The one partition mode: by the turn's verified sender.
+PARTITION_SENDER = "sender"
+PARTITION_MODES: tuple[str, ...] = (PARTITION_SENDER,)
+#: Keys a partitioned store refuses: each would let someone see or change
+#: across the wall, or stamp an owner into content the wall does not read.
+_PARTITION_EXCLUSIVE: tuple[str, ...] = ("owner_field", "readers", "writers")
 
 
 def policy_problems(entry: dict[str, Any]) -> list[str]:
@@ -148,6 +175,17 @@ def policy_problems(entry: dict[str, Any]) -> list[str]:
     runtime rule cannot drift. Name and path are judged by the caller.
     """
     faults: list[str] = []
+    if "partition" in entry:
+        if entry["partition"] not in PARTITION_MODES:
+            faults.append("partition: must be 'sender'")
+        for key in _PARTITION_EXCLUSIVE:
+            if key in entry:
+                faults.append(
+                    f"partition: cannot be combined with {key} (a partitioned store "
+                    "has no reader or writer across its wall)"
+                )
+    if "managed" in entry and not isinstance(entry["managed"], bool):
+        faults.append("managed: must be true or false")
     owner = entry.get("owner_field")
     if "owner_field" in entry and (not isinstance(owner, str) or not FIELD_RE.match(owner)):
         faults.append("owner_field: must be a frontmatter key (a-z, 0-9, _)")
@@ -180,6 +218,13 @@ class StorePolicy:
     readers: frozenset[str] = frozenset()
     index: tuple[str, ...] = ()
     writers: frozenset[str] = frozenset()
+    partition: str | None = None
+    managed: bool = False
+
+    @property
+    def partitioned(self) -> bool:
+        """True when each person's records live behind their own wall."""
+        return self.partition == PARTITION_SENDER
 
     @property
     def private(self) -> bool:
@@ -208,6 +253,8 @@ def authored_policies(config: CustomerConfig | None = None) -> dict[str, StorePo
             readers=frozenset(r.strip().lower() for r in entry.get("readers", [])),
             index=tuple(entry.get("index", [])),
             writers=frozenset(w.strip().lower() for w in entry.get("writers", [])),
+            partition=entry.get("partition"),
+            managed=entry.get("managed") is True,
         )
     return out
 
@@ -607,9 +654,180 @@ def write_record(
     return {"store": store, "name": name, "bytes": len(data), "created": not existed}
 
 
+# ---------------------------------------------------------------------------
+# Partitioned stores (``partition: sender``)
+#
+# A person's records live in ``<store root>/<person_slug(address)>/``. The
+# directory IS the owner: nothing in a record's content names whose it is, and
+# the address is never the model's to give. The model-facing tools resolve the
+# address from the turn's verified sender (``plugins/hermes-smd-record-store``);
+# code that writes or reads on a person's behalf names the person explicitly
+# through ``code_*`` below. Either way the person must be on the seat's roster
+# (authored, or enrolled on a guide seat) at the moment of the write, so a turn
+# still in flight when a person is removed cannot recreate their directory
+# after the purge. ``person_slug`` is the one slug function: the purge
+# (``workspace_broker/person_purge.py``) carries a copy, pinned equal by test.
+# ---------------------------------------------------------------------------
+
+
+class PartitionRefused(RecordStoreError):
+    """The person cannot be shown to own a partition right now."""
+
+
+def _slug(address: str) -> str:
+    from shared.person_prefs import normalize_person_address, person_slug
+
+    norm = normalize_person_address(address)
+    if norm is None:
+        raise PartitionRefused("that is not a person's address")
+    return person_slug(norm)
+
+
+def partition_dir(policy: StorePolicy, address: str) -> Path:
+    """The directory ``address``'s records live in, in a partitioned store.
+
+    The slug is lowercase letters, digits and dashes plus a hash of the whole
+    address, so no address reaches another person's directory: not by case,
+    not by a look-alike character (it is replaced and the hash differs), not by
+    a separator. A directory that is a symlink, or that resolves anywhere but
+    directly under the store root, is refused rather than followed.
+    """
+    if not policy.partitioned:
+        raise RecordStoreError("this store is not partitioned by person")
+    candidate = policy.root / _slug(address)
+    if candidate.is_symlink():
+        raise RecordStoreError("this person's record directory is not a plain directory; refused")
+    if candidate.resolve().parent != policy.root.resolve():
+        raise RecordStoreError("this person's record directory resolves outside its store; refused")
+    return candidate
+
+
+def listed_on_seat(address: str, config: CustomerConfig | None = None) -> bool:
+    """Whether ``address`` is on the seat's roster right now (authored, or
+    enrolled on a guide seat). Read fresh: the enrolled list is re-read on every
+    call. A config that cannot be read lists nobody."""
+    try:
+        cfg = config if config is not None else CustomerConfig.from_volume()
+        return bool(cfg.sender_on_roster(address))
+    except Exception:  # noqa: BLE001 - "could not tell" lists nobody
+        return False
+
+
+def list_partition(policy: StorePolicy, address: str, store: str = "") -> list[dict[str, Any]]:
+    """The records in ``address``'s own directory, newest first."""
+    directory = partition_dir(policy, address)
+    return list_records(store, stores={store: directory})
+
+
+def read_partition(policy: StorePolicy, address: str, name: str, store: str = "") -> str:
+    """One record from ``address``'s own directory."""
+    directory = partition_dir(policy, address)
+    return read_record(store, name, stores={store: directory})
+
+
+def write_partition(
+    policy: StorePolicy,
+    address: str,
+    name: str,
+    content: str,
+    *,
+    overwrite: bool = False,
+    store: str = "",
+    listed: Any = None,
+) -> dict[str, Any]:
+    """Write one record into ``address``'s own directory.
+
+    ``listed`` is the roster check (``listed_on_seat`` by default). It runs
+    before the write, and again after it: if the person was removed while the
+    write was in flight, the record just written is deleted again and the write
+    is refused, so a removal can never be undone by a turn that started before
+    it.
+    """
+    check = listed if callable(listed) else listed_on_seat
+    if not check(address):
+        raise PartitionRefused("that person is not on this seat's list")
+    directory = partition_dir(policy, address)
+    receipt = write_record(store, name, content, overwrite=overwrite, stores={store: directory})
+    if not check(address):
+        try:
+            (directory / name).unlink()
+        except OSError:
+            pass
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+        raise PartitionRefused("that person was removed from this seat; nothing was kept")
+    return receipt
+
+
+def _code_policy(store: str, config: CustomerConfig | None) -> StorePolicy:
+    policies = authored_policies(config)
+    if store not in policies:
+        raise RecordStoreError(f"no record store named {store!r} is authored on this seat")
+    return policies[store]
+
+
+def code_list(
+    store: str, person: str | None = None, *, config: CustomerConfig | None = None
+) -> list[dict[str, Any]]:
+    """For code, never for a model tool: the records of ``person`` in a
+    partitioned store, or of the whole store when it is not partitioned."""
+    policy = _code_policy(store, config)
+    if policy.partitioned:
+        if not person:
+            raise RecordStoreError("a partitioned store is read one named person at a time")
+        return list_partition(policy, person, store)
+    return list_records(store, stores={store: policy.root})
+
+
+def code_read(
+    store: str, person: str | None, name: str, *, config: CustomerConfig | None = None
+) -> str:
+    """For code that renders a person's own email: one record of ``person``.
+    The caller names the person; this is the only path that does, and it is not
+    offered to the model."""
+    policy = _code_policy(store, config)
+    if policy.partitioned:
+        if not person:
+            raise RecordStoreError("a partitioned store is read one named person at a time")
+        return read_partition(policy, person, name, store)
+    return read_record(store, name, stores={store: policy.root})
+
+
+def code_write(
+    store: str,
+    person: str | None,
+    name: str,
+    content: str,
+    *,
+    overwrite: bool = False,
+    config: CustomerConfig | None = None,
+) -> dict[str, Any]:
+    """For code writers (a ``managed`` store's only writers). In a partitioned
+    store the person must be on the seat's roster now, as for the model's tool."""
+    policy = _code_policy(store, config)
+    if policy.partitioned:
+        if not person:
+            raise RecordStoreError("a partitioned store is written one named person at a time")
+        return write_partition(
+            policy,
+            person,
+            name,
+            content,
+            overwrite=overwrite,
+            store=store,
+            listed=lambda a: listed_on_seat(a, config),
+        )
+    return write_record(store, name, content, overwrite=overwrite, stores={store: policy.root})
+
+
 __all__ = [
     "CONFIG_KEY",
     "MAX_RECORD_BYTES",
+    "PARTITION_MODES",
+    "PARTITION_SENDER",
+    "PartitionRefused",
     "RECORD_NAME_RE",
     "RESERVED_PREFIXES",
     "STORE_NAME_RE",
@@ -619,7 +837,15 @@ __all__ = [
     "access_problem",
     "authored_policies",
     "authored_stores",
+    "code_list",
+    "code_read",
+    "code_write",
+    "list_partition",
     "list_records",
+    "listed_on_seat",
+    "partition_dir",
+    "read_partition",
+    "write_partition",
     "owner_space",
     "path_problem",
     "policy_problems",

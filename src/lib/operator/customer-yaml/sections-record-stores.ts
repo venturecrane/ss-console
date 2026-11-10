@@ -28,6 +28,11 @@
  *     `writers` are addresses that may write to the store at all: on an
  *     inbound turn nobody else may create or change a record (a program the
  *     roster reads and only the broker edits). With or without `owner_field`.
+ *     `partition: sender` walls the store per person: each person's records
+ *     live in their own directory, named by code from the turn's verified
+ *     sender, and nobody reads across it, so it refuses `owner_field`,
+ *     `readers` and `writers`. `managed: true` means only code writes the
+ *     store; the model-facing write tool refuses it.
  *   - no other keys.
  *
  * Validate-only (pushes errors); the block is materialized by the overlay and
@@ -40,7 +45,11 @@ import { isPlainObject } from './helpers'
 const STORE_NAME = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
 // A frontmatter key, as the overlay's FIELD_RE spells it.
 const FIELD_NAME = /^[a-z][a-z0-9_]{0,63}$/
-const POLICY_KEYS = ['owner_field', 'readers', 'index', 'writers'] as const
+const POLICY_KEYS = ['owner_field', 'readers', 'index', 'writers', 'partition', 'managed'] as const
+// The one partition mode, and the keys a partitioned store refuses: each would
+// let someone see or change across the wall.
+const PARTITION_MODES = ['sender'] as const
+const PARTITION_EXCLUSIVE = ['owner_field', 'readers', 'writers'] as const
 const ALLOWED_KEYS = new Set<string>(['name', 'path', ...POLICY_KEYS])
 const VOLUME_ROOT = '/opt/data'
 const RESERVED_PREFIXES = [
@@ -155,6 +164,7 @@ function checkStorePolicy(
   prefix: string,
   errors: ValidationError[]
 ): void {
+  checkPartitionKeys(entry, prefix, errors)
   if ('owner_field' in entry) {
     const owner = entry['owner_field']
     if (typeof owner !== 'string' || !FIELD_NAME.test(owner)) {
@@ -184,6 +194,44 @@ function checkStorePolicy(
       })
     }
     checkPolicyValues(key, value as string[], prefix, errors)
+  }
+}
+
+/**
+ * `partition` and `managed`, judged as the overlay's `policy_problems` judges
+ * them: one partition mode (`sender`), no reader or writer across the wall, and
+ * `managed` a boolean.
+ */
+function checkPartitionKeys(
+  entry: Record<string, unknown>,
+  prefix: string,
+  errors: ValidationError[]
+): void {
+  if ('partition' in entry) {
+    const mode = entry['partition']
+    if (typeof mode !== 'string' || !(PARTITION_MODES as readonly string[]).includes(mode)) {
+      errors.push({
+        code: 'InvalidFormat',
+        path: `${prefix}.partition`,
+        message: `${prefix}.partition: must be 'sender'`,
+      })
+    }
+    for (const key of PARTITION_EXCLUSIVE) {
+      if (key in entry) {
+        errors.push({
+          code: 'InvalidFormat',
+          path: `${prefix}.partition`,
+          message: `${prefix}.partition: cannot be combined with ${key} (a partitioned store has no reader or writer across its wall)`,
+        })
+      }
+    }
+  }
+  if ('managed' in entry && typeof entry['managed'] !== 'boolean') {
+    errors.push({
+      code: 'TypeMismatch',
+      path: `${prefix}.managed`,
+      message: `${prefix}.managed: must be true or false`,
+    })
   }
 }
 
