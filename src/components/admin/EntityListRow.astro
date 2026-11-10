@@ -106,31 +106,6 @@ function meetingSubstateBadgeClass(s: string): string {
       </div>
 
       {
-        r.isSignal && r.problems.length > 0 && (
-          <div class="flex flex-wrap items-center gap-1 mb-1.5">
-            {r.problems.map((p) => (
-              <span class="text-xs px-2 py-0.5 rounded-full bg-[color:var(--ss-color-background)] text-[color:var(--ss-color-text-secondary)] border border-[color:var(--ss-color-border-subtle)]">
-                {p.label}
-              </span>
-            ))}
-          </div>
-        )
-      }
-      {
-        r.isSignal && r.signalEvidence && (
-          <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-1 line-clamp-2">
-            {r.signalEvidence}
-          </p>
-        )
-      }
-      {
-        r.isSignal && r.enrichmentSummary && (
-          <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-1 line-clamp-2 italic">
-            {r.enrichmentSummary}
-          </p>
-        )
-      }
-      {
         !r.isSignal && e.summary && (
           <p class="text-xs text-[color:var(--ss-color-text-secondary)] mb-1 line-clamp-2">
             {e.summary}
@@ -152,9 +127,7 @@ function meetingSubstateBadgeClass(s: string): string {
         class="flex items-center gap-row text-xs text-[color:var(--ss-color-text-muted)] mt-1 flex-wrap"
       >
         {
-          r.isSignal && r.lastActivity ? (
-            <span>Last activity {r.lastActivityLabel}</span>
-          ) : r.isSignal ? (
+          r.isSignal ? (
             <span>{r.createdAtLabel}</span>
           ) : (
             <span>

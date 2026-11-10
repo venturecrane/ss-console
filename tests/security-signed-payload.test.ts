@@ -1,10 +1,9 @@
 /**
  * The shared signed-token codec (src/lib/security/signed-payload.ts), which
- * OAuth state, signed booking links and assessment sessions all sign and
- * verify through since 2026-09-25 (review 2026-09-25, Code Quality 3). Each
- * caller's own suite (tests/oauth-callback.test.ts, tests/booking/signed-link
- * .test.ts, tests/assessment/session.test.ts) still runs unchanged against it;
- * this file pins the codec's own contract.
+ * OAuth state and signed booking links both sign and verify through since
+ * 2026-09-25 (review 2026-09-25, Code Quality 3). Each caller's own suite
+ * (tests/oauth-callback.test.ts, tests/booking/signed-link.test.ts) still runs
+ * unchanged against it; this file pins the codec's own contract.
  *
  * What would make this false: a payload read before its signature is checked,
  * a malformed token that needs the key to be refused, or an encoder that is

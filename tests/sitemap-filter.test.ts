@@ -34,8 +34,6 @@ describe('sitemap filter (astro.config.mjs)', () => {
       '/api/booking/slots',
       '/dev/portal-components/',
       '/design-preview/portal-quotes-detail/',
-      '/assessment/',
-      '/assessment/report-preview/',
       '/patterns/',
       '/book/manage/',
       '/get-started/',

@@ -85,7 +85,7 @@ Enforcement rules for content quality: `empty-state-pattern.md` (render nothing 
 
 ### `docs/process/` - Process and workflow guides
 
-Agent and operational process: `assessment-extraction.md`, `branch-protection-setup.md`, `global-guardrails-upload.md`, and `index.md`.
+Agent and operational process: `assessment-extraction.md`, `branch-protection-setup.md`, and `index.md`.
 
 ### `docs/pm/` - Product management
 

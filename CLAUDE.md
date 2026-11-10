@@ -163,7 +163,7 @@ Any information displayed to a client (timelines, schedules, deliverables, prici
 
 **If authored data is missing:** render nothing or an explicit "TBD in SOW" marker. See `docs/style/empty-state-pattern.md`. Never invent plausible content.
 
-**Visual + component patterns:** see `docs/style/UI-PATTERNS.md`. Six rules covering status display, redundancy, button hierarchy, heading skip, typography scale, and spacing rhythm — authored to raise UI quality to professional level. Same enforcement shape as empty-state-pattern: narrow, cited to NN/g / Material 3 / WCAG 2.2, anti-patterns with file paths, merge gate per shipped rule. Produced by the `ui-drift-audit` skill (run by `.github/workflows/ui-drift-audit.yml`), which emits a surfaces × rules matrix at `.stitch/audits/ui-drift-{date}.md`.
+**Visual + component patterns:** see `docs/style/UI-PATTERNS.md`. Six rules covering status display, redundancy, button hierarchy, heading skip, typography scale, and spacing rhythm — authored to raise UI quality to professional level. Same enforcement shape as empty-state-pattern: narrow, cited to NN/g / Material 3 / WCAG 2.2, anti-patterns with file paths, merge gate per shipped rule. Checked by the `ui-drift-audit` skill (run by `.github/workflows/ui-drift-audit.yml`), which writes no file to the repo: it posts its counts and any threshold breach as a sticky PR comment and uploads `audit.json` as a workflow artifact. The dated hand-run audits are in `.design/audits/`.
 
 **Enforcement.** Violations are P0. Merge gate is `.github/workflows/scope-deferred-todo.yml` (blocks TODO-deferred ACs without the `scope-deferred` label). Issue-close gate is `.github/workflows/unmet-ac-on-close.yml` (reopens issues closed with unchecked ACs).
 

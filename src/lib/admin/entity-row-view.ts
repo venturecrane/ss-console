@@ -32,11 +32,6 @@ export interface EntityRowView {
   isEngaged: boolean
   isLost: boolean
   isDelivered: boolean
-  problems: Array<{ id: string; label: string }>
-  signalEvidence: string | null
-  enrichmentSummary: string | null
-  lastActivity: string | null
-  lastActivityLabel: string
   website: { href: string; label: string } | null
   rowSubstate: MeetingSubstate | null
   rowSubstateLabel: string
@@ -274,28 +269,14 @@ function assembleRow(input: RowInput): EntityRowView {
   } = input
   const flags = { isSignal, isProspect, isMeetings, isEngaged, isLost, isDelivered }
 
-  // Machine-derived row fields (signal evidence, enrichment summary, problem
-  // chips, last-activity) retired with the lead-gen pipeline. The manual
-  // worklist row carries none of them; the fields stay on the view model as
-  // inert null/empty so the row component contract is unchanged.
-  const problems: Array<{ id: string; label: string }> = []
-
   const { prospectFields, meetingsFields, engagedFields, lostFields, proposingFields } =
     resolveStageFields(args, e, flags)
 
   const stageEntry = ENTITY_STAGES.find((s) => s.value === e.stage)
-  const signalEvidence: string | null = null
-  const enrichmentSummary: string | null = null
-  const lastActivity: string | null = null
 
   return {
     entity: e,
     ...flags,
-    problems,
-    signalEvidence,
-    enrichmentSummary,
-    lastActivity,
-    lastActivityLabel: lastActivity ? fmt(lastActivity) : '',
     website: resolveWebsite(e.website),
     ...meetingsFields,
     ...engagedFields,

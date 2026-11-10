@@ -3,13 +3,13 @@
 Six rules governing how visual and component semantics are authored across
 Astro and React code. Each rule is narrow, cited to a public authority, and
 documented with real anti-patterns from the audit at
-[`.stitch/audits/ui-drift-2026-04-16.md`](../../.stitch/audits/ui-drift-2026-04-16.md).
+[`.design/audits/ui-drift-2026-04-16.md`](../../.design/audits/ui-drift-2026-04-16.md).
 Enforcement lands PR-by-PR as remediation ships (see "Enforcement" below).
 
 This document exists because our Stitch pipeline had carte blanche on visual
 and component design, and produced generic polished SaaS — pills adjacent to
 identical prose, inconsistent typography scales, inline spacing drift. The
-navigation drift problem was solved by `.stitch/NAVIGATION.md` (cited to
+navigation drift problem was solved by `.design/NAVIGATION.md` (cited to
 NN/g + Material 3 + HIG). The visual drift problem requires the same
 discipline one layer up: named rules, cited authorities, no invented
 "best practices."
@@ -17,7 +17,7 @@ discipline one layer up: named rules, cited authorities, no invented
 It pairs with two existing specs:
 
 - [`empty-state-pattern.md`](./empty-state-pattern.md) — content rule for missing authored data.
-- [`.stitch/NAVIGATION.md`](../../.stitch/NAVIGATION.md) — IA + navigation patterns + chrome.
+- [`.design/NAVIGATION.md`](../../.design/NAVIGATION.md) — IA + navigation patterns + chrome.
 
 Together these govern the three drift surfaces: content, navigation, visual.
 
@@ -502,7 +502,7 @@ Fixed select column so every row aligns down the page; the reason field takes th
 ## Relationship to other specs
 
 - [`empty-state-pattern.md`](./empty-state-pattern.md) — content pattern. When rule 1's "prose in detail page" pattern has no authored value, the empty-state pattern governs what renders instead.
-- [`.stitch/NAVIGATION.md`](../../.stitch/NAVIGATION.md) — IA + chrome. Heading hierarchy in Rule 4 complements nav's landmark structure rules.
+- [`.design/NAVIGATION.md`](../../.design/NAVIGATION.md) — IA + chrome. Heading hierarchy in Rule 4 complements nav's landmark structure rules.
 - `.agents/skills/ui-drift-audit/` — produces the audit that seeds this spec's anti-pattern citations.
 
 ## Stitch injection (earned, not planned)

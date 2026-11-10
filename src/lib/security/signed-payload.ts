@@ -3,8 +3,8 @@
  *
  * One home for the encoding, the key import, and sign/verify. Until
  * 2026-09-25 each of OAuth state (`src/lib/oauth/state.ts`), signed booking
- * links (`src/lib/booking/signed-link.ts`) and assessment sessions
- * (`src/lib/assessment/session.ts`) carried a private copy of all three, and
+ * links (`src/lib/booking/signed-link.ts`) and the assessment sessions of
+ * the since-removed public assessment flow carried a private copy of all three, and
  * the booking manage token (`src/lib/booking/tokens.ts`) a fourth encoder
  * (review 2026-09-25, Code Quality 3). The copies agreed; the hazard was that
  * the next fix (a key-length check, a `kid`) would land in one of them.
