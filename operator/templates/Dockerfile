@@ -841,6 +841,12 @@ RUN /opt/hermes/.venv/bin/python3 -I /app/gen-image-manifest.py /app/skills /app
 # REQUIRED_ENV / OPTIONAL_ENV, generated from operator/contracts/env-consumption.yaml
 # (operator/bin/gen-env-arrays.py); bootstrap.sh sources this instead of hardcoding them.
 COPY operator/templates/_env-arrays.generated.sh /app/_env-arrays.generated.sh
+# The seat's folder layout, generated from operator/contracts/seat-layout.yaml
+# (operator/bin/gen-seat-layout.py): shell assignments for the boot scripts, and
+# the JSON seat-layout-probe.py reads the live seat back against (seat-layout-live).
+COPY operator/templates/_seat-layout.generated.sh /app/_seat-layout.generated.sh
+COPY operator/templates/seat-layout.generated.json /app/seat-layout.generated.json
+COPY operator/templates/seat-layout-probe.py /app/seat-layout-probe.py
 # The retired repo-skill names bootstrap.sh prunes from the volume after the
 # additive skill seed (one home: operator/templates/retired-skills.txt).
 COPY operator/templates/retired-skills.txt /app/retired-skills.txt
@@ -974,6 +980,7 @@ RUN chown -R root:root \
       /app/overlay-pack \
       /app/operator/templates/drafting \
       /app/_env-arrays.generated.sh \
+      /app/seat-layout.generated.json \
       /app/OVERLAY_REF \
       /app/seat-spec.pub /app/image-manifest.json /app/image-capabilities.json \
  && chown root:root /app/*.sh /app/*.py \
