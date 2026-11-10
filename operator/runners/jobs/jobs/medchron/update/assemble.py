@@ -37,7 +37,7 @@ import re
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
-from ..lane_ref import lane_reference
+from ..lane_ref import lane_references
 from . import body as B, entry_edits as EE, icd, providers as P
 
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
@@ -176,8 +176,9 @@ def provider_rows(entries: list[str], canon: Callable[[str], str], name_of: Call
         a = agg[canon(e["provider"])]
         a["dates"].append(e["iso"])
         a["texts"].append(e["text"])
-    for a in agg.values():
-        a["ref"] = lane_reference(a["texts"])
+    refs = lane_references({prov: a["texts"] for prov, a in agg.items()})
+    for prov, a in agg.items():
+        a["ref"] = refs[prov]
     rows = []
     for prov, a in agg.items():
         ds = sorted(a["dates"])

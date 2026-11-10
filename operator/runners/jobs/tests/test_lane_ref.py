@@ -2,25 +2,36 @@
 
 from __future__ import annotations
 
-from jobs.medchron.lane_ref import lane_reference
+from jobs.medchron.lane_ref import lane_references
 
 
-def test_a_lane_whose_first_entry_cites_another_providers_exhibit_first_uses_its_own():
-    """An imaging lane's earliest entry cited the ordering physician's
-    referral (Exhibit 7) before its own report (Exhibit 8); every later
-    entry cites Exhibit 8. The lane is referenced by Exhibit 8."""
-    texts = [
-        "MRI ordered. (Exhibit 7 - p. 10) MRI of the shoulder performed. (Exhibit 8 - p. 1)",
-        "MRI of the cervical spine. (Exhibit 8 - p. 3)",
-        "MRI of the lumbar spine. (Exhibit 8 - p. 5-6)",
-    ]
-    assert lane_reference(texts) == "Exhibit 8 - p. 1"
+def test_a_lane_whose_first_citation_is_another_lanes_exhibit_skips_it():
+    """The imaging lane's earliest entry cited the orthopaedist's referral
+    (Exhibit 7, which the orthopaedist's lane cites throughout) before its
+    own report (Exhibit 8)."""
+    refs = lane_references(
+        {
+            "Orthopaedics": ["Seen. (Exhibit 7 - p. 1)", "Seen. (Exhibit 7 - p. 5)", "Referral. (Exhibit 7 - p. 10)"],
+            "Imaging": ["MRI ordered. (Exhibit 7 - p. 10) MRI performed. (Exhibit 8 - p. 12-14)"],
+        }
+    )
+    assert refs == {"Orthopaedics": "Exhibit 7 - p. 1", "Imaging": "Exhibit 8 - p. 12-14"}
 
 
-def test_a_single_exhibit_lane_keeps_its_first_citation():
-    assert lane_reference(["Seen. (Exhibit 3 - p. 2)", "Seen again. (Exhibit 3 - p. 9)"]) == "Exhibit 3 - p. 2"
+def test_a_lane_with_one_exhibit_per_visit_keeps_its_earliest_visit():
+    """A therapist with an exhibit per visit keeps the first visit's exhibit,
+    however often a later one is cited."""
+    refs = lane_references({"PT": ["V1. (Exhibit 19 - p. 1)", "V2. (Exhibit 21 - p. 1) (Exhibit 21 - p. 2)"]})
+    assert refs == {"PT": "Exhibit 19 - p. 1"}
 
 
-def test_a_tie_goes_to_the_earliest_cited_exhibit_and_no_citation_is_empty():
-    assert lane_reference(["A. (Exhibit 4 - p. 1)", "B. (Exhibit 5 - p. 2)"]) == "Exhibit 4 - p. 1"
-    assert lane_reference(["No citation."]) == ""
+def test_a_lane_with_only_another_lanes_exhibit_keeps_its_first_citation():
+    """A physician whose records sit inside the hospital's exhibit."""
+    refs = lane_references(
+        {
+            "Hospital": ["A. (Exhibit 2 - p. 1)", "B. (Exhibit 2 - p. 9)"],
+            "Physician": ["Consult. (Exhibit 2 - p. 96)"],
+            "Nothing": ["No citation."],
+        }
+    )
+    assert refs == {"Hospital": "Exhibit 2 - p. 1", "Physician": "Exhibit 2 - p. 96", "Nothing": ""}
