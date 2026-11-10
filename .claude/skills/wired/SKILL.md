@@ -151,6 +151,11 @@ Emit the chain as a table:
 | 10  | Every gate to the job open, probed on the seat | runtime         | agent            | probe         |       |
 | 11  | Outcome watched by the hourly triage code     | runtime          | agent            | probe         |       |
 
+For a client job lane, add two rows the table above does not show:
+
+- **Endings.** Every way a job can end (delivered, held, failed, stopped by a check), who resolves each one, and what the firm is told in its own thread. These are decided now, not discovered on the seat (doctrine "Process decisions (2026-11-10)").
+- **Review before enforce.** When the change switches a lane to `enforce` for a client, `/code-review` runs first and its findings are fixed or carried as rows.
+
 **Owner** is resolved per the ownership law: agents own execution, the Captain owns strategy, spend, and external commitments, the client owns their own posture (entitlements, autonomy tiers, risk acceptance). A gate whose owner is not the executing agent is not thereby out of scope. It is a gate you must surface, not silently skip.
 
 ## Step 5: The feasibility probe
