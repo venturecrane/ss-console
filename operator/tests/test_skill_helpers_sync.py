@@ -1,13 +1,14 @@
-"""The shared pre_run helpers have one home, and every copy of it is byte-identical.
+"""The shared pre_run helpers have one home, and no skill keeps a private copy of one.
 
 CANONICAL SOURCE is ``operator/templates/skill_helpers.py``. Each substantive
 skill carries a vendored copy at ``skills/<skill>/skill_helpers.py`` because
-the scheduler stages a skill directory alone; the copies are discovered by
-GLOB, not by a hand-maintained tuple, so a seventh skill that adopts the
-helpers is under the gate the moment its copy exists, and a copy that drifts
-turns red.
+the scheduler stages a skill directory alone. Those copies are written by
+operator/bin/gen-skill-shared.py from operator/contracts/skill-shared-modules.yaml,
+and operator/bin/tests/test_skill_shared_generation.py fails when one differs
+from the canonical or is not listed there. This file holds what that check does
+not: each adopting pre_run loads its copy, and no helper body is pasted back.
 
-The second half is the reason the module exists: before 2026-09-11 fifteen
+The reason the module exists: before 2026-09-11 fifteen
 helper bodies were duplicated byte-for-byte across six ``pre_run.py`` files
 (code review 2026-09-10, Architecture 4). Any ``pre_run.py`` that defines a
 function whose body equals one the canonical exports is a private copy that
@@ -92,17 +93,6 @@ def test_canonical_exists_and_exports_the_shared_set() -> None:
         "canonical_body_sha256",
     ):
         assert expected in names, f"canonical no longer exports {expected}"
-
-
-def test_every_vendored_copy_is_byte_identical_to_the_canonical() -> None:
-    canonical = _CANONICAL.read_bytes()
-    copies = _vendored_copies()
-    assert len(copies) >= 6, f"expected the six adopting skills to carry a copy; found {len(copies)}"
-    drifted = [str(p.relative_to(_OPERATOR_ROOT)) for p in copies if p.read_bytes() != canonical]
-    assert not drifted, (
-        f"vendored skill_helpers.py drifted from templates/skill_helpers.py: {drifted}. "
-        "Edit the canonical and copy it over every vendored file byte-for-byte."
-    )
 
 
 def test_every_adopting_pre_run_loads_the_shared_module_and_names_its_own_dir() -> None:

@@ -73,7 +73,7 @@
   "operator/templates/tests/test_seat_script_find_counts.py": 1,
   "operator/templates/tests/test_selftest.py": 1,
   "operator/tests/test_marketing_skill_examples.py": 6,
-  "operator/tests/test_skill_helpers_sync.py": 3,
+  "operator/tests/test_skill_helpers_sync.py": 2,
   "operator/workspace_broker/tests/test_delivery_proof.py": 1,
   "operator/workspace_broker/tests/test_held_wording_parity.py": 9,
   "operator/workspace_broker/tests/test_medchron_verbs.py": 3,

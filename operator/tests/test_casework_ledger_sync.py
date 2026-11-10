@@ -1,14 +1,16 @@
-"""Sync gate for the vendored casework_ledger.py copies.
+"""The overlay's copy of casework_ledger.py is pinned against the broker's.
 
 CANONICAL SOURCE is ``operator/workspace_broker/casework_ledger.py``: the broker
 validates every casework row with it. Skills that read the ledger (the deadline
 digest's completion raises) carry a byte-identical copy beside their
-``pre_run.py``, and the overlay carries one at
+``pre_run.py``, written by operator/bin/gen-skill-shared.py from
+operator/contracts/skill-shared-modules.yaml and checked by
+operator/bin/tests/test_skill_shared_generation.py. The overlay carries one at
 ``shared/casework_ledger.py`` for the reply tool. All of them must
 compute the same ``item_key`` and fold the same state, or a reply resolves to a
-row the broker never wrote. Edit the canonical, restamp the copies.
+row the broker never wrote.
 
-The overlay copy is cross-repo, so ``operator/contracts/overlay-pairs.json``
+The overlay copy is not a skill, so ``operator/contracts/overlay-pairs.json``
 pins it, and this file checks that pin the same way
 ``test_escalation_ledger_sync.py`` checks its own.
 """
@@ -19,19 +21,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from vendored_sync import assert_byte_identical, discover_copies
-
 _OPERATOR_ROOT = Path(__file__).resolve().parents[1]
 _CANONICAL = _OPERATOR_ROOT / "workspace_broker" / "casework_ledger.py"
 _PAIRS_MANIFEST = _OPERATOR_ROOT / "contracts" / "overlay-pairs.json"
 _CANONICAL_REL = "operator/workspace_broker/casework_ledger.py"
-
-# Copies are discovered by glob (skills/*/casework_ledger.py). The floor starts
-# at zero because the broker half lands first; the PR that vendors the first
-# skill copy raises it, and a skill dropping its copy lowers it on purpose.
-# One copy since 2026-11-10 (deadline-miss-escalator), when the two
-# case-manager routines that also carried one were removed.
-_FLOOR = 1
 
 
 def _pair() -> dict:
@@ -40,19 +33,6 @@ def _pair() -> dict:
         if pair.get("adapterPath") == _CANONICAL_REL:
             return pair
     raise AssertionError(f"overlay-pairs.json has no entry for {_CANONICAL_REL}")
-
-
-def test_canonical_exists() -> None:
-    assert _CANONICAL.is_file(), f"canonical casework_ledger.py missing at {_CANONICAL}"
-
-
-def test_vendored_copies_are_byte_identical() -> None:
-    assert_byte_identical(
-        _CANONICAL,
-        discover_copies("casework_ledger.py"),
-        floor=_FLOOR,
-        restamp_hint="Edit workspace_broker/casework_ledger.py and restamp, never the copy.",
-    )
 
 
 def test_manifest_records_the_canonical_hash() -> None:
