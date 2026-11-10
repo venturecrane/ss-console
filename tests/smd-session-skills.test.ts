@@ -369,6 +369,13 @@ const PINS: { skill: ForkedSkill; pin: string; holds: (body: string) => boolean 
       /Never `max`/.test(b),
   },
   {
+    skill: 'critique',
+    pin: "has the Devil's Advocate check who owns each decision, code or model (Law 18)",
+    holds: (b) =>
+      /The Devil's Advocate always also checks who owns each decision \(Law 18\)/.test(b) &&
+      /Any fact a firm or client will read that the model decides is an issue/.test(b),
+  },
+  {
     skill: 'auto-build',
     pin: 'carries a required model field per workstream in the team YAML',
     holds: (b) =>
@@ -398,6 +405,10 @@ describe('/wired, /critique and /auto-build carry READY and a model per role (fo
       expect(holds(skillBody(skill))).toBe(true)
     })
   }
+
+  it('/eos ends by asking for /clear before the next task in the window', () => {
+    expect(skillBody('eos')).toMatch(/^Run \/clear before the next task in this window/m)
+  })
 
   it('/critique writes what the plan gate reads: the same directory, heading and none line', async () => {
     const gate = await import('../.claude/hooks/plan-premise-gate.mjs')

@@ -88,6 +88,16 @@ function cmdSet(own, root, rest) {
   const args = {}
   for (let i = 0; i < rest.length; i += 2) args[rest[i]?.replace(/^--/, '')] = rest[i + 1]
   const rec = readRecord(own) || {}
+  // A new mission in a session that already had one is a task switch: the old
+  // task's context rides into the new one and is re-read every turn. /usage on
+  // 2026-11-10 ranked "start fresh when you switch tasks" first (97%), and a
+  // fresh context is also a quality fix: less stale material to reason from.
+  if (args.mission && rec.mission && args.mission !== rec.mission) {
+    process.stdout.write(
+      'task switch: this session already had a mission. Finish the old one with /eos, ' +
+        'then ask the Captain to run /clear so the new task starts with fresh context.\n'
+    )
+  }
   writeRecord(own, {
     ...rec,
     worktree: root,

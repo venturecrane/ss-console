@@ -84,6 +84,17 @@ describe('board: set / refresh / peers', () => {
     expect(out).toContain('[mission] ship the thing (focus: #123)')
   })
 
+  it('a changed mission is named as a task switch that wants /eos then /clear', () => {
+    const sw = '/fake/worktrees/switcher'
+    const first = board(['set', sw, '--mission', 'task one', '--pid', String(process.pid)])
+    expect(first).not.toContain('task switch')
+    const same = board(['set', sw, '--mission', 'task one', '--pid', String(process.pid)])
+    expect(same).not.toContain('task switch')
+    const next = board(['set', sw, '--mission', 'task two', '--pid', String(process.pid)])
+    expect(next).toContain('task switch')
+    expect(next).toContain('/clear')
+  })
+
   it('the mission line carries the skunkworks stance every turn', () => {
     // Folded 2026-10-24: the Captain typed /skunkworks to reset agents. The
     // stance rides this line because it is the only surface that survives
