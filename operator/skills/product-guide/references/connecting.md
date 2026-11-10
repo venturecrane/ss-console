@@ -1,6 +1,6 @@
 # Connecting to the Guide
 
-This document explains how a representative starts using the guide with an invite code, and how an administrator of the guide gets a code for someone.
+This document explains how a representative starts using the guide with an invite code.
 
 ## How to connect
 
@@ -16,13 +16,4 @@ Things to know:
 - If SMD Services already listed your address, you need no code. Just email your question.
 - Connecting with a code works by email only. Access by chat is set up by SMD Services.
 - Keep your code to yourself until you use it, and never forward it to anyone else.
-
-## Issuing a code (SMD administrators)
-
-This section is for the guide's administrators at SMD Services. Codes are issued only to them.
-
-1. Email the guide from your own administrator address: "I need a code for" followed by the person's name, written plainly on one line, with no links or addresses.
-2. The code comes back to you in that same email thread. It is never shown in chat, and it is not repeated anywhere else.
-3. Give the code to that person only. When they connect with it, the welcome greets them by the name you gave, and the guide uses that name from then on.
-
-A code can be stopped, and a connected person removed, by asking SMD Services at team@smd.services.
+- To disconnect an address, ask SMD Services at team@smd.services.

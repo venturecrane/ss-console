@@ -9,6 +9,7 @@ enforced_by:
   - operator/workspace_broker/tests/test_sender_enrollment.py
   - operator/hermes-smd-overlay/tests/test_sender_enrollment.py
   - tests/product-guide-library.test.ts
+  - tests/guide-code-capability-not-disclosed.test.ts
 ---
 
 # ADR 0106: Invite-code enrollment for guide seats
@@ -54,3 +55,14 @@ The store is on the Fly volume, so it survives a restart and a reprovision by de
 - **The `smd-guide` persona now authors `internal_write: autonomous`**, which the tool's class needs. It is also a CORRECTION to ADR 0105's seat config as merged: the email reply path is itself an internal write (`mcp_agentmail_create_draft` is `INTERNAL_WRITE` in `shared/action_classes.py`, and the reply plugin's `text_delivery.py` synthesizes that `create_draft` call through the trust plugin's own `pre_tool_call`), so with only `external_send_internal` authored every email reply on `smd-guide` would have been refused at the gate. The internal-write tools this opens on that seat: the mail connector's draft and label tools (`mcp_agentmail_create_draft`, `update_draft`, `delete_draft`, `update_thread`, `update_message`), the reply relay's `reply_verdicts` and `reply_bind`, Hermes' own `todo` and `clarify`, the escalation plugin's `escalation_append` and `escalation_reply_ack`, `correction_capture` (which refuses any sender not on `scope.admins` in code), and `invite_code_issue`. Not reachable: `calendar_invite_*` (no Calendar connector), `operator_help_*` (the operator-help skill is not enabled), record-store writes (no record stores) and every connector write (the seat's only connector is its mailbox). This list comes from reading each plugin's registration gate and the seat's config; it is not a probe of a running seat, because smd-guide is not provisioned.
 - **Enrolled senders widen who the guide seat answers and writes to.** Only on guide seats, only after SMD issued a code, and each address can be removed.
 - **Chat is not built.** The chat allow-list is materialized into the profile and the channel's allowed-users variable at boot (`bootstrap/translate.py`, `operator/templates/ensure-telegram-allowlist.py`, ADR 0033), the runtime reads it once at gateway start, and it rejects an unknown chat id before any plugin sees the message. There is no seat-side store a pre-dispatch hook could consult per message, and chat has no hook before the model equivalent to the email router's. Building it would take a broker-owned chat enrollment list, an allow check that consults it live for an unknown id, and a code-in-chat redeem path that never lets the model see the code. Until then a representative is reached by chat only through a reviewed allow-list PR, and an administrator's chat request for a code is refused with a pointer to email (contract 2's "or messages in chat" is answered by that refusal).
+
+## Amendment (2026-11-10): a non-administrator learns nothing about codes
+
+The owner's rule: the seat never tells a person who is not an administrator that it can generate a code. Decision 6's decline said codes are issued only to the guide seat's administrators, and the chat refusal said an administrator asks by email; both told a representative the capability exists, and the product library's `connecting.md` described how an administrator gets one. Now:
+
+- Every path of `invite_code_issue` that has not confirmed an administrator (an unreadable or switched-off config, a turn with no verified email origin, including every chat turn, and a sender not on `scope.admins`) returns one sentence for the model to send word for word: "Access to the guide comes from SMD Services, at team@smd.services." It names no capability and nothing about the asker's role, and the result carries no refusal for the model to restate. The decision stays in code.
+- The `product-guide` skill sends the same sentence for any other question about who makes or issues codes.
+- The library describes only how a representative connects with a code from SMD Services. The administrator how-to is in the handbook, `docs/handbook/connectors-channels.md`, "Getting a guide-seat invite code for someone".
+- An administrator's request is unchanged: the code is emailed in their thread and the guide replies in one line.
+
+`tests/guide-code-capability-not-disclosed.test.ts` pins the sentence and fails if the tool, the skill, the library or its index again says who makes or issues codes.

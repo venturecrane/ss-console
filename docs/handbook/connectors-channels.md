@@ -203,6 +203,16 @@ Beyond reaching the Operator's own mailbox, the Operator can **manage a principa
 
 No seat uses this path today. Of the seats in `operator/customers/`, only `smd-staging` authors `google_auth` at all, and its file states it declares no `managed_mailboxes`, so it touches no real inbox. The path is built in source (ADR 0045) and has no live consumer to observe end to end; the first seat that authors a managed mailbox is where it gets proven.
 
+### Getting a guide-seat invite code for someone
+
+This is for the administrators of a guide seat (its `scope.admins` addresses) that authors `sender_enrollment: {enabled: true}` (ADR 0106). The representatives' library no longer describes it, because the guide never tells a person who is not an administrator that it can make a code.
+
+1. Email the guide from your own administrator address: "I need a code for" followed by the person's name, written plainly on one line, with no links or addresses. Ask in a new email of your own, not in a thread that forwards or quotes someone else's message: a turn that read outside content is refused.
+2. The code comes back to you in that same email thread, from the platform, never from the model. It is not shown in chat and is kept nowhere else (only a salted fingerprint of it). The guide replies in one line that it is in your inbox. A code works for 14 days and one person unless you ask for other numbers in the request (1 to 90 days, 1 to 100 people).
+3. Give the code to that person only. When they email the guide with it, the welcome greets them by the name you gave, and the guide uses that name from then on.
+
+Anyone else who asks for a code, or asks who makes them, gets one fixed sentence decided in code, not by the model: "Access to the guide comes from SMD Services, at team@smd.services." It does not say the seat makes codes or anything about the asker's role. A request in chat gets the same sentence, because no chat id on a guide seat is mapped to an administrator (`operator/hermes-smd-overlay/plugins/hermes-smd-enrollment/__init__.py`). A code is stopped with `revoke`, and a connected person removed with `remove`, in `operator/workspace_broker/sender_enrollment_cli.py` on the seat.
+
 ## Why the dumb-pipe rule is load-bearing
 
 If channels held intelligence, every new front door would mean re-implementing memory, entitlements, and governance, and the front doors would drift apart. Keeping the worker as the single seat of intelligence means a capability authored once is reachable through every pipe, and a governance ceiling set once binds every pipe. The connector side mirrors this: the boundary that matters is per-customer credential isolation (per-customer OAuth or API keys, the broker for Google), not which backend pattern a vendor happens to use. Both sides push all the judgment into the worker and keep the edges dumb on purpose.
