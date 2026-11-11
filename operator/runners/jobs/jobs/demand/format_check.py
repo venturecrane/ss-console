@@ -279,6 +279,20 @@ def _fold(text: str) -> str:
     return " ".join(re.sub(r"\s*[—–-]\s*", " - ", text).split()).upper()
 
 
+def _header_footer(doc: Any, v: Variant, footer_markers: list[str], fails: list[str]) -> None:
+    """The footer's settlement-communication markers, and no unfilled {slot}
+    in the footer (numbered, crabtree) or the letterhead (crabtree)."""
+    foot = " ".join(p.text for s in doc.sections for f in (s.footer, s.first_page_footer) for p in f.paragraphs)
+    if v.layout == "crabtree":  # its footer and letterhead may sit in a table: read every text node
+        foot = _part_text(doc, ("footer", "first_page_footer"))
+    if not all(m in foot for m in footer_markers):
+        fails.append("footer lacks the firm's settlement-communication line")
+    if v.layout in ("numbered", "crabtree") and re.search(r"\{\w+\}", foot):
+        fails.append("the footer carries an unfilled {slot}")
+    if v.layout == "crabtree" and re.search(r"\{\w+\}", _part_text(doc, ("header", "first_page_header"))):
+        fails.append("the letterhead carries an unfilled {slot}")
+
+
 def _cell_lines(table: Any) -> list[str]:
     return [p.text.strip() for r in table.rows for c in r.cells for p in c.paragraphs if p.text.strip()]
 
@@ -456,17 +470,7 @@ def check(
         res.fails.append("no salutation")
     if not numbered:
         _headings(lines, res.fails, tuple(h.lower() for h in v.headings))
-    foot = " ".join(p.text for s in doc.sections for f in (s.footer, s.first_page_footer) for p in f.paragraphs)
-    if v.layout == "crabtree":  # its footer and letterhead may sit in a table: read every text node
-        foot = _part_text(doc, ("footer", "first_page_footer"))
-    if not all(m in foot for m in footer_markers):
-        res.fails.append("footer lacks the firm's settlement-communication line")
-    if numbered and re.search(r"\{\w+\}", foot):
-        res.fails.append("the footer carries an unfilled {slot}")
-    if v.layout == "crabtree":
-        head = _part_text(doc, ("header", "first_page_header"))
-        if re.search(r"\{\w+\}", head):
-            res.fails.append("the letterhead carries an unfilled {slot}")
+    _header_footer(doc, v, footer_markers, res.fails)
     _signature(texts, res.fails, signature, signer, signer_title, initials, v.valediction)
     table_text = " ".join(c.text for t in tables for r in t.rows for c in r.cells)
     _machinery("\n".join(texts) + "\n" + table_text, res.fails, res.notes)
