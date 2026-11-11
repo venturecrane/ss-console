@@ -22,7 +22,7 @@ from types import SimpleNamespace
 from typing import Any, Callable
 
 from ..stages import upload as upload_stage
-from . import format_check, house, house_numbered, plain_docx
+from . import format_check, house, house_crabtree, house_numbered, plain_docx
 
 UNIT = "demand"
 
@@ -50,6 +50,8 @@ def front_keys(firm: Any) -> tuple[str, ...]:
         return house.FRONT_KEYS
     if firm.variant.get("layout") == "numbered":
         return house_numbered.FRONT_KEYS
+    if firm.variant.get("layout") == "crabtree":
+        return house_crabtree.FRONT_KEYS
     return house.front_keys(bool(firm.variant.get("re_vs")))
 
 
@@ -71,8 +73,28 @@ def render_demand(
     title = who["title"].replace("{client}", client_label)
     # The expiry on a business day, in the banner and the closing sentence
     # alike (house.business_day_expiry); the move is told to the attorney.
-    draft_md, expiry_notes = house.business_day_expiry(draft_md)
-    if v.get("layout") == "numbered":
+    if v.get("layout") == "crabtree":
+        # The deadline is code's: thirty days after the letter, on a business day.
+        draft_md, expiry_notes = house_crabtree.settle_expiry(draft_md, int(v.get("response_days") or 30))
+    else:
+        draft_md, expiry_notes = house.business_day_expiry(draft_md)
+    if v.get("layout") == "crabtree":
+        path, notes = house_crabtree.render(
+            draft_md,
+            ref,
+            out_dir,
+            variant=v,
+            signature=fmt["firm_signature"],
+            signer=who["signer"],
+            signer_title=title,
+            author=author,
+            client_label=client_label,
+            initials=who["initials"],
+            bar_number=str(who.get("bar_number") or ""),
+            script=str(who.get("script") or ""),
+            figure=firm.figure,
+        )
+    elif v.get("layout") == "numbered":
         path, notes = house_numbered.render(
             draft_md,
             ref,

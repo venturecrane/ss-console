@@ -16,6 +16,12 @@ demand inputs keep saying which FORMAT an attorney's demands are written in
 
 When both lists name an attorney and say different things, the roster wins and
 the seat check ``attorney-roster-agrees`` (``jobs.attorneys.agree``) pages SMD.
+
+The row carries ``bar_number`` when one is authored (the roster's, else the
+demand inputs' row): the crabtree layout prints "<signer>, (SBN n)".
+
+``who_signs`` is WHO: the attorney the request names (``terms.named_attorney``),
+else the matter's responsible attorney.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ from typing import Any
 
 from operator_connector_sdk.library import roster as roster_mod
 
+from . import terms
 from .outcome import DemandFailed
 
 _KEYS = ("signer", "title", "initials")
@@ -40,10 +47,40 @@ def signer_for(firm: Any, who: str | None, roster: roster_mod.Roster) -> dict[st
     if sig is None:
         return None
     out = {k: sig[k] for k in _KEYS}
-    fmt = (firm.attorney_for(who) or {}).get("format")
-    if fmt:
-        out["format"] = fmt
+    row = firm.attorney_for(who) or {}
+    if row.get("format"):
+        out["format"] = row["format"]
+    bar = person.bar_number or row.get("bar_number") or ""
+    if bar:
+        out["bar_number"] = bar
+    # The script line prints the name the attorney signs letters with ("Craig
+    # F. Ashton" over the printed "Craig Fontaine Ashton", the 11-10 letter).
+    script = (roster.signature(person, roster_mod.LETTERS) or {}).get("name") or row.get("script") or ""
+    if script:
+        out["script"] = script
     return out
 
 
-__all__ = ["signer_for"]
+def _names(firm: Any, roster: roster_mod.Roster) -> dict[str, list[str]]:
+    """Each attorney who can sign a demand, by staff name, with every full
+    form of their name the firm writes."""
+    if roster.status == roster_mod.OK:
+        out = {}
+        for p in roster.attorneys:
+            sig = roster.signature(p, roster_mod.DEMAND)
+            if sig is None:
+                continue
+            letters = roster.signature(p, roster_mod.LETTERS) or {}
+            out[p.name] = [p.name, sig["signer"], *([letters["name"]] if letters.get("name") else [])]
+        return out
+    return {name: [name, row["signer"]] for name, row in firm.data["attorneys"].items()}
+
+
+def who_signs(firm: Any, responsible: str | None, request: str, roster: roster_mod.Roster) -> tuple[str | None, bool]:
+    """``(the attorney whose demand this is, named by the request)``: the one
+    attorney the request names, else the matter's responsible attorney."""
+    named = terms.named_attorney(request, _names(firm, roster)) if roster.status != roster_mod.UNUSABLE else None
+    return (named, True) if named else (responsible, False)
+
+
+__all__ = ["signer_for", "who_signs"]

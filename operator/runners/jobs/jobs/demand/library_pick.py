@@ -69,8 +69,9 @@ from operator_connector_sdk.library.resolver import replace_status
 
 from .. import library_edit
 from ..attorneys.seat import roster_for
+from . import terms
 from .outcome import DemandFailed, DemandHold
-from .signers import signer_for
+from .signers import signer_for, who_signs
 
 KIND = "demand_letter"
 #: Where an accepted reference is written for the writer to open.
@@ -119,18 +120,32 @@ def _stop(run: Any, res: Resolution) -> DemandFailed:
     )
 
 
+def _who(run: Any) -> str | None:
+    """The attorney the demand is for: ``select``'s choice once made, else the
+    matter's responsible attorney."""
+    return run.firm.data.get("_who") or run._json("facts.json").get("responsible_attorney")
+
+
 def select(run: Any, variant: str) -> tuple[Any, Path | None]:
-    """The firm selected for the matter's responsible attorney and ``variant``,
-    and the reference the demand is written in. The attorney is chosen in code
-    from the matter record; an unmapped attorney, or a variant with no format
-    for them, holds the job (``DemandHold``) before anything is spent."""
+    """The firm selected for the signing attorney and ``variant``, and the
+    reference the demand is written in. The attorney is the one the request
+    names, else the matter record's responsible attorney, chosen in code
+    (``signers.who_signs``); the demand figure is the request's
+    (``terms.demand_figure``). An unmapped attorney, a variant with no format
+    for them, or a request naming two figures holds the job (``DemandHold``)
+    before anything is spent."""
     firm = run.firm
-    who = run._json("facts.json").get("responsible_attorney")
+    request = str(getattr(run.job, "request_text", "") or "")
     roster = roster_for(run)
+    who, named = who_signs(firm, run._json("facts.json").get("responsible_attorney"), request, roster)
+    try:
+        figure = terms.demand_figure(request)
+    except terms.FigureUnclear as exc:
+        raise DemandHold(f"{exc}; which one is the demand is the attorney's call. Nothing was spent.") from None
     signs = signer_for(firm, who, roster)
     if roster.status == roster_mod.OK and not roster.is_attorney(who):
         raise DemandHold(
-            f"the responsible attorney ({who or 'none on the matter'}) is not an attorney on the firm's roster; "
+            f"the {'requested' if named else 'responsible'} attorney ({who or 'none on the matter'}) is not an attorney on the firm's roster; "
             "a demand is never signed for someone who is not. Nothing was spent."
         )
     # The format is the responsible attorney's when their row names one
@@ -143,10 +158,11 @@ def select(run: Any, variant: str) -> tuple[Any, Path | None]:
         )
     if not signs:
         raise DemandHold(
-            f"no signature is authored for the responsible attorney ({who or 'none on the matter'}); "
+            f"no signature is authored for the {'requested' if named else 'responsible'} attorney ({who or 'none on the matter'}); "
             "a demand is never signed for an attorney who has not been mapped. Nothing was spent."
         )
-    run.firm = firm.select(variant, signs)
+    run.firm = firm.select(variant, signs, figure)
+    run.firm.data["_who"] = who
     return run.firm, pick_reference(run)
 
 
@@ -159,7 +175,7 @@ def pick_reference(run: Any) -> Path | None:
     firm = run.firm
     pinned = firm.input_path("house_reference")
     pinned_used = BaseUsed.of(PINNED, pinned.read_bytes(), name=pinned.name, contract=PROTOTYPES)
-    matter, known = _attorneys(run, firm, run._json("facts.json").get("responsible_attorney"))
+    matter, known = _attorneys(run, firm, _who(run))
     store = LazyStore(lambda: open_store(run.seat))
     spec = spec_dir()
     asked = resolve(
