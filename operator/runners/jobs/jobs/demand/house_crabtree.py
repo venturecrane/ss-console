@@ -87,7 +87,10 @@ KINDS = (
     "exh_item",
 )
 #: Kinds a reference may add; absent, the renderer falls back to the named kind.
-OPTIONAL_KINDS = {"studyhead": "minorhead", "pquote": "quote", "blank": ""}
+OPTIONAL_KINDS = {"studyhead": "minorhead", "pquote": "quote", "boldhead": "body", "blank": ""}
+#: A paragraph that is bold text alone is a run-in head ("Provider - Practice,
+#: City (dates)", "Impact on Daily Life"), printed flush left.
+_BOLD_ONLY = re.compile(r"\*\*[^*]+\*\*[.:]?")
 #: A table's last row is its total when its first cell starts with one of these.
 TOTAL_LEADS = ("TOTAL", "PROJECTED")
 #: Required front matter. ``place`` and ``driver`` are optional rows.
@@ -161,6 +164,19 @@ def set_runs(p_el: Any, text: str) -> Any:
                         rp.append(rp.makeelement(_qn("w:u"), {_qn("w:val"): "single"}))
                 p_el.append(r)
     return p_el
+
+
+def _flush_left(el: Any) -> None:
+    ppr = el.find(_qn("w:pPr"))
+    if ppr is None:
+        return
+    ind = ppr.find(_qn("w:ind"))
+    if ind is not None:
+        for attr in ("w:firstLine", "w:hanging", "w:firstLineChars", "w:hangingChars"):
+            ind.attrib.pop(_qn(attr), None)
+    jc = ppr.find(_qn("w:jc"))
+    if jc is not None:
+        jc.set(_qn("w:val"), "left")
 
 
 def table_kind(header: list[str]) -> str:
@@ -238,9 +254,12 @@ class CrabtreeWriter(HouseWriter):
     def para(self, kind: str, text: str = "") -> Any:
         if kind == "blank":
             return super().para("blank") if "blank" in self.proto else None
+        flush = kind == "boldhead" and kind not in self.proto
         if kind not in self.proto and kind in OPTIONAL_KINDS:
             kind = OPTIONAL_KINDS[kind]
         el = copy.deepcopy(self.proto[kind])
+        if flush:  # no prototype of its own: the body's look, flush left, no first-line indent
+            _flush_left(el)
         set_runs(el, text)
         _force(el, *self.base[kind])
         self._insert(el)
@@ -427,7 +446,7 @@ class _Body:
 
     def paragraph(self, text: str) -> None:
         if not self.in_exhibits:
-            self.w.para("body", text)
+            self.w.para("boldhead" if _BOLD_ONLY.fullmatch(text.strip()) else "body", text)
             return
         m = _EXHIBIT_ITEM.match(text)
         self.w.para("exh_item", f"**Exhibit {m.group(1)}:**\t{m.group(2)}" if m else text)

@@ -456,3 +456,40 @@ def test_the_firms_marks_and_kinds_render(tmp_path):
     ref_doc = docx.Document(str(ref))
     proto_rows = next(t for t in ref_doc.tables if t.cell(0, 0).text == "PROTO:providers").rows
     assert len(proto_rows) == 4 and providers.rows[2]._tr.find(qn("w:trPr")) == proto_rows[2]._tr.find(qn("w:trPr"))
+
+
+def test_a_bold_only_paragraph_is_a_flush_left_run_in_head(tmp_path):
+    """A provider head or an "Impact on ..." head is bold text alone; the firm
+    prints it flush left, where the body has a first-line indent (rehearsal b-8)."""
+    import docx
+    from docx.shared import Pt
+
+    ref = tmp_path / "ref.docx"
+    make_crabtree_reference(ref)
+    d = docx.Document(str(ref))
+    body = next(p for p in d.paragraphs if p.text == "PROTO:body")
+    body.paragraph_format.first_line_indent = Pt(36)
+    d.save(str(ref))
+    md = CRABTREE_DRAFT.replace(
+        "## General Damages - Pain and Suffering\n",
+        "## General Damages - Pain and Suffering\n\n**Impact on Daily Life**\n",
+    )
+    md, _ = house_crabtree.settle_expiry(md)
+    path, _ = house_crabtree.render(
+        md,
+        ref,
+        tmp_path / "out",
+        variant=variant(),
+        signature=SIGNATURE,
+        signer=SIGNER,
+        signer_title=TITLE,
+        author="Example",
+        client_label="Alpha Example",
+        initials=INITIALS,
+        bar_number=BAR,
+    )
+    out = docx.Document(str(path))
+    head = next(p for p in out.paragraphs if p.text == "Impact on Daily Life")
+    plain = next(p for p in out.paragraphs if p.text.startswith("Your insured, Beta Driver"))
+    assert head.runs[0].bold and head.paragraph_format.first_line_indent is None
+    assert plain.paragraph_format.first_line_indent == Pt(36)
