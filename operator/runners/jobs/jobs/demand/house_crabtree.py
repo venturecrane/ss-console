@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from . import terms
-from .house import HouseWriter, RenderError, _keep_next, _qn, out_name, parse, set_runs
+from .house import HouseWriter, RenderError, _keep_next, _qn, _first_rpr, _run, out_name, parse
 from .house_numbered import _flags, _force, roman
 
 KINDS = (
@@ -86,16 +86,22 @@ KINDS = (
     "exh_head",
     "exh_item",
 )
+#: Kinds a reference may add; absent, the renderer falls back to the named kind.
+OPTIONAL_KINDS = {"studyhead": "minorhead", "pquote": "quote", "blank": ""}
+#: A table's last row is its total when its first cell starts with one of these.
+TOTAL_LEADS = ("TOTAL", "PROJECTED")
 #: Required front matter. ``place`` and ``driver`` are optional rows.
 FRONT_KEYS = ("date", "attn", "client", "claim", "dol", "insured", "salutation")
 OPTIONAL_FRONT = ("place", "driver")
+#: The RE rows as the firm prints them: the label, its colon in a column of
+#: its own (so the colons align), then the value.
 RE_ROWS = (
-    ("Our Client:", "client"),
-    ("Claim Number:", "claim"),
-    ("Date of Loss:", "dol"),
-    ("Place of Loss:", "place"),
-    ("Your Insured:", "insured"),
-    ("Insured Driver:", "driver"),
+    ("Our Client", "client"),
+    ("Claim Number", "claim"),
+    ("Date of Loss", "dol"),
+    ("Place of Loss", "place"),
+    ("Your Insured", "insured"),
+    ("Insured Driver", "driver"),
 )
 FIGURE_TOKEN = "[DEMAND FIGURE]"
 POLICY_LIMITS = "FULL AVAILABLE POLICY LIMITS"
@@ -118,6 +124,43 @@ def fold_dashes(text: str) -> str:
 
 
 _LETTERED = re.compile(r"^[A-Z][.)]\s+")
+
+
+_MARKS = re.compile(r"(\*\*__.+?__\*\*|__\*\*.+?\*\*__|\*\*.+?\*\*|__.+?__|\*.+?\*)")
+
+
+def set_runs(p_el: Any, text: str) -> Any:
+    """``house.set_runs`` plus underline: ``__text__`` underlines, and
+    ``**__text__**`` is bold and underlined (the firm underlines key terms)."""
+    rpr = _first_rpr(p_el)
+    for r in list(p_el):
+        if r.tag != _qn("w:pPr"):
+            p_el.remove(r)
+    for seg in _MARKS.split(text):
+        if not seg:
+            continue
+        bold = under = italic = False
+        t = seg
+        for _ in range(2):
+            if len(t) > 4 and t.startswith("**") and t.endswith("**"):
+                bold, t = True, t[2:-2]
+            elif len(t) > 4 and t.startswith("__") and t.endswith("__"):
+                under, t = True, t[2:-2]
+        if not (bold or under) and len(t) > 2 and t.startswith("*") and t.endswith("*"):
+            italic, t = True, t[1:-1]
+        for j, piece in enumerate(t.split("\t")):
+            if j:
+                tab = p_el.makeelement(_qn("w:r"), {})
+                tab.append(tab.makeelement(_qn("w:tab"), {}))
+                p_el.append(tab)
+            if piece:
+                r = _run(p_el, rpr, piece, bold, italic)
+                if under:
+                    rp = r.find(_qn("w:rPr"))
+                    if rp.find(_qn("w:u")) is None:
+                        rp.append(rp.makeelement(_qn("w:u"), {_qn("w:val"): "single"}))
+                p_el.append(r)
+    return p_el
 
 
 def table_kind(header: list[str]) -> str:
@@ -195,6 +238,8 @@ class CrabtreeWriter(HouseWriter):
     def para(self, kind: str, text: str = "") -> Any:
         if kind == "blank":
             return super().para("blank") if "blank" in self.proto else None
+        if kind not in self.proto and kind in OPTIONAL_KINDS:
+            kind = OPTIONAL_KINDS[kind]
         el = copy.deepcopy(self.proto[kind])
         set_runs(el, text)
         _force(el, *self.base[kind])
@@ -235,9 +280,15 @@ class CrabtreeWriter(HouseWriter):
         if prev is not None and prev.tag == _qn("w:p"):
             _keep_next(prev)
         head = [] if kind in HEADERLESS else [(trs[0], header)]
-        body_row = trs[min(1, len(trs) - 1)]
+        # Every prototype row between the header and the total is a body style,
+        # used in turn: a reference with two gives the firm's banded rows.
+        bodies = trs[1:-1] or [trs[min(1, len(trs) - 1)]]
         for n, (template, row) in enumerate(
-            head + [(trs[-1] if total_last and i == len(rows) - 1 else body_row, r) for i, r in enumerate(rows)]
+            head
+            + [
+                (trs[-1] if total_last and i == len(rows) - 1 else bodies[i % len(bodies)], r)
+                for i, r in enumerate(rows)
+            ]
         ):
             tr = copy.deepcopy(template)
             cells = tr.findall(_qn("w:tc"))
@@ -302,9 +353,9 @@ def _header(w: CrabtreeWriter, front: dict[str, str], variant: dict[str, Any], f
     rows = [(label, v) for label, v in rows if v]
     for n, (label, value) in enumerate(rows):
         if n == 0:
-            w.para("re_first", f"**RE:**\t**{label}**\t{value}")
+            w.para("re_first", f"**RE:**\t**{label}**\t:\t{value}")
         else:
-            w.para("re_line", f"\t**{label}**\t{value}")
+            w.para("re_line", f"\t**{label}**\t:\t{value}")
     w.box("banner", banner_lines(variant, figure, due))
     w.para("salute", front["salutation"])
     w.para("lead", str(variant["lead_heading"]))
@@ -359,7 +410,9 @@ class _Body:
             self.letter += 1
             self.w.para("subhead", f"{chr(64 + self.letter)}.  {_LETTERED.sub('', title)}")
         else:
-            self.w.para("minorhead", title)
+            # A region head in the preamble ("Lumbar Spine - <date>"); a study
+            # head inside a section ("MRI of the Lumbar Spine").
+            self.w.para("minorhead" if self.sections == 0 else "studyhead", title)
 
     def table(self, block: list[list[str]]) -> None:
         block = [r for r in block if not all(re.fullmatch(r":?-{2,}:?", c) for c in r)]
@@ -367,7 +420,7 @@ class _Body:
             raise RenderError("the index of exhibits is paragraphs ('Exhibit n: ...'), not a table")
         kind = table_kind(block[0])
         rows = block[1:]
-        total = bool(rows) and rows[-1][0].strip("* ").lower().startswith("total")
+        total = bool(rows) and rows[-1][0].strip("* ").upper().startswith(TOTAL_LEADS)
         if total:
             rows[-1] = [c.replace("**", "") for c in rows[-1]]
         self.w.table(kind, block[0], rows, total_last=total)
@@ -382,7 +435,7 @@ class _Body:
     def feed(self, lines: list[str]) -> None:
         self.exhibits = _count_exhibits(lines)
         i = 0
-        item = re.compile(r"\s*(- |> |\^ )")
+        item = re.compile(r"\s*(- |>> |> |\^ )")
         while i < len(lines):
             line = lines[i].rstrip()
             s = line.strip()
@@ -398,8 +451,11 @@ class _Body:
                     i += 1
                 self.table(block)
             elif item.match(line):
-                kind = {"- ": "bullet", "> ": "quote", "^ ": "note"}[s[:2]]
-                self.w.para(kind, s[2:].strip())
+                if s.startswith(">> "):  # a physician's own words, quoted
+                    self.w.para("pquote", s[3:].strip())
+                else:
+                    kind = {"- ": "bullet", "> ": "quote", "^ ": "note"}[s[:2]]
+                    self.w.para(kind, s[2:].strip())
                 i += 1
             else:
                 buf = [s]

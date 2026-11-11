@@ -211,13 +211,14 @@ def test_a_policy_limits_render_round_trips_through_its_format_check(tmp_path):
         "VIA ELECTRONIC MAIL AND CERTIFIED MAIL, RETURN RECEIPT REQUESTED",
         "Attn: Pat Adjuster",
     ]
-    re_lines = [t for t in texts if "\t" in t and ":" in t and not t.startswith("Exhibit")]
-    assert [t.split("\t")[-2] for t in re_lines] == [
-        "Our Client:",
-        "Claim Number:",
-        "Date of Loss:",
-        "Place of Loss:",
-        "Your Insured:",
+    re_lines = [t for t in texts if "\t:\t" in t]
+    assert re_lines[0] == "RE:\tOur Client\t:\tAlpha Example"
+    assert [t.split("\t")[-3] for t in re_lines] == [
+        "Our Client",
+        "Claim Number",
+        "Date of Loss",
+        "Place of Loss",
+        "Your Insured",
     ]
     banner, box = _boxes(path)
     assert banner == [
@@ -403,3 +404,55 @@ def test_the_figure_is_not_read_for_a_layout_that_does_not_write_it(tmp_path, pr
         vendor_factory=lambda: None,
     ).run()
     assert v.outcome == "delivered", v.reason
+
+
+def test_the_firms_marks_and_kinds_render(tmp_path):
+    """Underlined key terms, a PROJECTED total row, banded body rows, a study
+    head inside a section, and a physician's quotation; the last two fall back
+    to the region head and the italic block when the reference has no own kind."""
+    import docx
+    from docx.oxml.ns import qn
+
+    md = CRABTREE_DRAFT.replace(
+        "- A cervical strain (ER record 1-15-26, p. 1).",
+        "- A **__cervical strain__** and __spasm__ (ER record 1-15-26, p. 1).\n\n>> The physician's words.",
+    )
+    md = md.replace(
+        "| {{FILL: future care}} | {{FILL: cost}} |",
+        "| {{FILL: future care}} | {{FILL: cost}} |\n| PROJECTED FUTURE MEDICAL EXPENSES | {{FILL: sum}} |",
+    )
+    md = md.replace(
+        "| Exampletown ER | Emergency care, January 15, 2026 | $1,200.00 |",
+        "| Exampletown ER | Emergency care, January 15, 2026 | $1,200.00 |\n| Exampletown ER | Follow-up | $0.00 |",
+    )
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    ref = tmp_path / "ref.docx"
+    make_crabtree_reference(ref, banded=True)
+    md, _ = house_crabtree.settle_expiry(md)
+    path, _ = house_crabtree.render(
+        md,
+        ref,
+        tmp_path / "out",
+        variant=variant(),
+        signature=SIGNATURE,
+        signer=SIGNER,
+        signer_title=TITLE,
+        author="Example",
+        client_label="Alpha Example",
+        initials=INITIALS,
+        bar_number=BAR,
+    )
+    d = docx.Document(str(path))
+    runs = [r for p in d.paragraphs for r in p.runs]
+    term = next(r for r in runs if r.text == "cervical strain")
+    assert term.bold and term.underline and next(r for r in runs if r.text == "spasm").underline
+    assert any(p.text == "The physician's words." for p in d.paragraphs)
+    assert _check(path).ok, _check(path).fails
+    providers = next(t for t in d.tables if t.cell(0, 0).text == "Provider")
+    assert len(providers.rows) == 4 and providers.cell(3, 0).text == "TOTAL"
+    future = next(t for t in d.tables if t.cell(0, 0).text.startswith("Anticipated"))
+    assert future.cell(len(future.rows) - 1, 0).text == "PROJECTED FUTURE MEDICAL EXPENSES"
+    # the reference's banded rows: the second body row is the second prototype body row
+    ref_doc = docx.Document(str(ref))
+    proto_rows = next(t for t in ref_doc.tables if t.cell(0, 0).text == "PROTO:providers").rows
+    assert len(proto_rows) == 4 and providers.rows[2]._tr.find(qn("w:trPr")) == proto_rows[2]._tr.find(qn("w:trPr"))

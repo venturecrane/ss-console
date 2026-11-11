@@ -60,7 +60,7 @@ HEADINGS = [
 ]
 
 
-def make_crabtree_reference(path: Path) -> None:
+def make_crabtree_reference(path: Path, banded: bool = False) -> None:
     import docx
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
@@ -85,7 +85,7 @@ def make_crabtree_reference(path: Path) -> None:
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.runs[0].bold = True if i == n - 1 else None
     for kind, cols in TABLES.items():
-        t = d.add_table(rows=3, cols=cols)
+        t = d.add_table(rows=4 if banded and kind == "providers" else 3, cols=cols)
         t.cell(0, 0).text = f"PROTO:{kind}"
         t.cell(0, 0).paragraphs[0].runs[0].bold = True
     sec = d.sections[0]
@@ -103,7 +103,7 @@ def variant(**over: Any) -> dict[str, Any]:
         "house_reference": "house_reference_crabtree",
         "layout": "crabtree",
         "headings": HEADINGS,
-        "re_required": ["Our Client:", "Claim Number:", "Date of Loss:", "Your Insured:"],
+        "re_required": ["Our Client", "Claim Number", "Date of Loss", "Your Insured"],
         "re_one_of": [],
         "mail_line": "VIA ELECTRONIC MAIL AND CERTIFIED MAIL, RETURN RECEIPT REQUESTED",
         "banner": True,
