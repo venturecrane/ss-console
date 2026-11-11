@@ -220,19 +220,25 @@ def gateways(errors):
                     "state": st.get("gateway_state"),
                     "active_agents": st.get("active_agents"),
                     "quiet_s": conversation_quiet_s(os.path.dirname(path), time.time()),
-                    "live": live_work(os.path.dirname(path)) if alive else None,
+                    "live": live_work(os.path.dirname(path), gateway_python(st)) if alive else None,
                 }
             )
     return out
 
 
-LIVE_TIMEOUT_S = 5.0
+#: Extra import paths for that interpreter (none on a seat; tests point it at a stand-in).
+HERMES_PATH = []
+LIVE_TIMEOUT_S = 10.0
+LIVE_ASK = (
+    "import json,sys;from pathlib import Path;sys.path[:0]=sys.argv[2:];"
+    "from gateway.control_socket import query_gateway_control as q;"
+    "print('SMD_LIVE '+json.dumps(q(Path(sys.argv[1]),'active-work')))"
+)
 
 
 def gateway_socket(home):
     """The gateway's control socket for ``home``, as Hermes resolves it: ``gateway.sock``
-    in the home, or the path ``gateway.sock.path`` points at (a home too long for
-    ``sun_path``). None when neither exists."""
+    in the home, or the path ``gateway.sock.path`` points at. None when neither exists."""
     direct = os.path.join(home, "gateway.sock")
     if os.path.exists(direct):
         return direct
@@ -244,61 +250,68 @@ def gateway_socket(home):
     return target if target and os.path.exists(target) else None
 
 
-def _ask(sock_path, request, timeout):
-    import socket
-
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        sock.connect(sock_path)
-        sock.sendall(request)
-        buf = b""
-        deadline = time.time() + timeout
-        while b"\n" not in buf and time.time() < deadline and len(buf) < 1 << 20:
-            chunk = sock.recv(65536)
-            if not chunk:
-                break
-            buf += chunk
-    return buf.partition(b"\n")[0]
-
-
-def live_work(home):
-    """What the gateway serving ``home`` is running NOW, from its own ``active-work``
-    control verb: ``{"active_agents": n, "active_work": [...]}``, or None when it
-    does not answer (no socket, an image before the verb, a timeout, a refusal).
-
-    WHY (ap-staging, 2026-11-11). ``active_agents`` in gateway_state.json is a
-    snapshot Hermes writes only at a chat turn's boundaries (claim, release, resume,
-    shutdown), yet the number it writes also counts cron runs, API runs and deferred
-    workers, whose own start and end write nothing. A snapshot taken while such work
-    ran stays in the file until the next chat turn, and a seat nobody emails has no
-    next chat turn: the file said 1 for hours while the gateway's live answer was
-    0 (``active_agents: 0, active_work: []``) and its shutdown drain counted 0. Hermes'
-    own stop/restart guard asks this verb first and reads the file only for gateways
-    that predate it; the gate does the same.
-
-    The socket accepts only its own uid (peer credentials), and this probe runs as
-    root, so the question is asked from a child that has dropped to the socket
-    owner's uid. Reads only."""
-    sock_path = gateway_socket(home)
-    if sock_path is None:
+def gateway_python(state):
+    """The gateway's own interpreter, from the launch argv it records in
+    gateway_state.json (``<venv>/bin/hermes gateway run``): the python beside that
+    entry point. Hermes' control-socket client is asked from it, so the wire
+    protocol has one home (upstream's), not a copy here. None when unrecorded."""
+    argv = state.get("argv") if isinstance(state, dict) else None
+    if not isinstance(argv, list) or not argv or not isinstance(argv[0], str):
         return None
-    request = json.dumps({"verb": "active-work", "id": 1, "protocol": 1}).encode("utf-8") + b"\n"
+    bindir = os.path.dirname(argv[0])
+    for name in ("python", "python3"):
+        cand = os.path.join(bindir, name)
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
+def live_work(home, python):
+    """What the gateway serving ``home`` is running NOW, from its own ``active-work``
+    control verb: ``{"active_agents": n, "active_work": [kinds]}``, or None when it does
+    not answer (no socket, an image before the verb, a timeout, a refusal).
+
+    WHY (ap-staging, 2026-11-11). ``active_agents`` in gateway_state.json is a snapshot
+    Hermes writes only at a chat turn's boundaries (claim, release, resume, shutdown),
+    yet the number it writes also counts cron runs, API runs and deferred workers,
+    whose own start and end write nothing. A snapshot taken while such work ran stays
+    in the file until the next chat turn, and a seat nobody emails has no next chat
+    turn: the file said 1 for hours while the gateway's live answer was 0 and its
+    shutdown drain counted 0. Hermes' own stop/restart guard asks this verb first
+    and reads the file only for gateways that predate it; the gate does the same.
+
+    Asked through Hermes' own client (``gateway.control_socket``) in the gateway's
+    interpreter. The socket accepts only its own uid and this probe runs as root, so
+    the child drops to the socket owner's uid first. Reads only."""
+    sock = gateway_socket(home)
+    if sock is None or python is None:
+        return None
+    import subprocess
+
     try:
-        owner = os.stat(sock_path)
+        owner = os.stat(sock)
     except OSError:
         return None
-    if os.getuid() == owner.st_uid or os.getuid() != 0:
-        try:
-            raw = _ask(sock_path, request, LIVE_TIMEOUT_S)
-        except OSError:
-            return None
-    else:
-        raw = _ask_as(owner.st_uid, owner.st_gid, sock_path, request)
+
+    def drop():
+        if os.getuid() == 0 and owner.st_uid != 0:
+            os.setgroups([])
+            os.setgid(owner.st_gid)
+            os.setuid(owner.st_uid)
+
     try:
-        response = json.loads(raw.decode("utf-8")) if raw else None
+        proc = subprocess.run(  # noqa: S603 - argv is the live gateway's own recorded interpreter and a fixed program; no shell
+            [python, "-I", "-c", LIVE_ASK, home] + list(HERMES_PATH),
+            preexec_fn=drop, cwd="/", env={"PATH": "/usr/bin:/bin"},
+            capture_output=True, text=True, timeout=LIVE_TIMEOUT_S, check=False,
+        )  # fmt: skip
+    except (OSError, subprocess.SubprocessError):
+        return None
+    line = next((row for row in proc.stdout.splitlines() if row.startswith("SMD_LIVE ")), None)
+    try:
+        result = json.loads(line[len("SMD_LIVE ") :]) if line else None
     except ValueError:
         return None
-    result = response.get("result") if isinstance(response, dict) and response.get("ok") is True else None
     if not isinstance(result, dict) or not isinstance(result.get("active_work"), list):
         return None
     try:
@@ -307,47 +320,6 @@ def live_work(home):
         return None
     kinds = [str(u.get("kind")) for u in result["active_work"] if isinstance(u, dict)]
     return {"active_agents": count, "active_work": kinds}
-
-
-def _ask_as(uid, gid, sock_path, request):
-    """``_ask`` from a forked child running as ``uid``; b"" on any failure or timeout."""
-    rd, wr = os.pipe()
-    pid = os.fork()
-    if pid == 0:  # the child: drop privileges, ask, write the answer, exit
-        code = 1
-        try:
-            os.close(rd)
-            os.setgroups([])
-            os.setgid(gid)
-            os.setuid(uid)
-            os.write(wr, _ask(sock_path, request, LIVE_TIMEOUT_S))
-            code = 0
-        except BaseException:  # noqa: BLE001 - the child must never return into the probe
-            pass
-        finally:
-            os._exit(code)
-    os.close(wr)
-    raw = b""
-    deadline = time.time() + LIVE_TIMEOUT_S + 2
-    try:
-        import select
-
-        while time.time() < deadline:
-            ready, _, _ = select.select([rd], [], [], max(0.0, deadline - time.time()))
-            if not ready:
-                break
-            chunk = os.read(rd, 65536)
-            if not chunk:
-                break
-            raw += chunk
-    finally:
-        os.close(rd)
-        try:
-            os.kill(pid, 9)
-        except OSError:
-            pass
-        os.waitpid(pid, 0)
-    return raw
 
 
 def conversation_quiet_s(home, now):

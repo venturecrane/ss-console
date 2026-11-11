@@ -535,6 +535,14 @@ class _Gateway:
         self.dir = tempfile.mkdtemp(prefix="gw", dir="/tmp")
         self.path = os.path.join(self.dir, "control.sock")
         (home / "gateway.sock.path").write_text(self.path)
+        # The probe asks through Hermes' own client in the gateway's interpreter;
+        # here that client is a stand-in package speaking the same wire contract
+        # (the real one answered on ap-staging: vfy in the PR).
+        pkg = Path(self.dir) / "client" / "gateway"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "control_socket.py").write_text(_STAND_IN_CLIENT)
+        self.client_path = str(pkg.parent)
         self.requests: list[dict] = []
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.bind(self.path)
@@ -571,6 +579,45 @@ class _Gateway:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
+_STAND_IN_CLIENT = """
+import json, os, socket
+
+
+def query_gateway_control(home, verb, params=None, timeout=3.0):
+    direct = os.path.join(str(home), "gateway.sock")
+    path = direct if os.path.exists(direct) else open(os.path.join(str(home), "gateway.sock.path")).read().strip()
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            s.connect(path)
+            s.sendall(json.dumps({"verb": verb, "id": 1, "protocol": 1}).encode() + b"\\n")
+            buf = b""
+            while b"\\n" not in buf:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                buf += chunk
+        response = json.loads(buf.partition(b"\\n")[0])
+    except Exception:
+        return None
+    result = response.get("result") if response.get("ok") is True else None
+    return result if isinstance(result, dict) else None
+"""
+
+
+def _probe_with(tmp: Path, gw: "_Gateway | None") -> dict:
+    """The shipped probe, with the gateway's client pointed at the stand-in when a
+    gateway is given (its interpreter is this python, recorded in _busy_twin)."""
+    src = _run_remote_source("remote_busy_probe.py", tmp)
+    if gw is not None:
+        src = src.replace("HERMES_PATH = []", "HERMES_PATH = " + json.dumps([gw.client_path]))
+    proc = subprocess.run(
+        [sys.executable, "-I", "-"], input=src, capture_output=True, text=True, timeout=60, check=False
+    )
+    assert proc.returncode == 0, proc.stderr
+    return busy.parse_probe(proc.stdout)
+
+
 def _busy_twin(tmp_path: Path, file_count: int) -> Path:
     """A seat whose gateway file says ``file_count`` turns and whose conversation
     store was written a moment ago, so the quiet rule cannot clear it."""
@@ -578,7 +625,14 @@ def _busy_twin(tmp_path: Path, file_count: int) -> Path:
 
     _, data = _seat(tmp_path)
     home = data / "profiles" / "operator"
-    state = {"pid": os.getpid(), "gateway_state": "running", "active_agents": file_count}
+    # The launch argv the gateway records: the probe asks from the python beside it.
+    entry = os.path.join(os.path.dirname(sys.executable), "hermes")
+    state = {
+        "pid": os.getpid(),
+        "gateway_state": "running",
+        "active_agents": file_count,
+        "argv": [entry, "gateway", "run"],
+    }
     (home / "gateway_state.json").write_text(json.dumps(state))
     con = sqlite3.connect(home / "state.db")
     con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, timestamp REAL)")
@@ -597,7 +651,7 @@ def test_a_stale_file_count_is_not_busy_when_the_gateway_answers_idle(tmp_path: 
     home = _busy_twin(tmp_path, file_count=1)
     gw = _Gateway(home, {"active_agents": 0, "active_work": [], "pid": os.getpid()})
     try:
-        facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+        facts = _probe_with(tmp_path, gw)
     finally:
         gw.close()
     (g,) = facts["gateways"]
@@ -613,7 +667,7 @@ def test_live_work_is_busy_even_when_the_file_says_none(tmp_path: Path) -> None:
     home = _busy_twin(tmp_path, file_count=0)
     gw = _Gateway(home, {"active_agents": 1, "active_work": [{"kind": "cron", "job_id": "x", "pid": 1}]})
     try:
-        facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+        facts = _probe_with(tmp_path, gw)
     finally:
         gw.close()
     assert facts["gateways"][0]["live"] == {"active_agents": 1, "active_work": ["cron"]}
@@ -627,13 +681,13 @@ def test_a_gateway_that_does_not_answer_the_verb_is_judged_by_its_file(tmp_path:
     home = _busy_twin(tmp_path, file_count=1)
     gw = _Gateway(home, None, ok=False)
     try:
-        facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+        facts = _probe_with(tmp_path, gw)
     finally:
         gw.close()
     assert facts["gateways"][0]["live"] is None
     assert busy.decide(facts).busy
     (home / "gateway.sock.path").unlink()
-    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    facts = _probe_with(tmp_path, None)
     assert facts["gateways"][0]["live"] is None
     assert busy.decide(facts).busy
 
