@@ -250,6 +250,14 @@ def conversation_quiet_s(home, now):
     except Exception:  # noqa: BLE001 - unknown is reported as None, which the gate reads as busy
         return None
     last = row[0] if row else None
+    if last is None:
+        # The table read back EMPTY: this gateway has never written a conversation
+        # message (ap-staging, 2026-11-10: a release twin nobody emails kept a stale
+        # active_agents=1 and every release waited on it all night). That is known,
+        # not unknown: quiet since the store last changed, from either the database
+        # or its WAL, so a write a moment ago still reads as recent.
+        stamps = [os.path.getmtime(p) for p in (db, db + "-wal") if os.path.exists(p)]
+        return round(now - max(stamps), 1) if stamps else None
     if not isinstance(last, (int, float)):
         return None
     return round(now - float(last), 1)

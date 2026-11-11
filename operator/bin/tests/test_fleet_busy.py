@@ -295,6 +295,35 @@ def test_the_probe_reads_how_long_the_conversation_store_is_quiet(tmp_path: Path
     con.close()
 
 
+def test_a_gateway_that_never_held_a_conversation_is_quiet_not_unknown(tmp_path: Path) -> None:
+    # ap-staging 2026-11-10: the twin had never been emailed, its messages table was
+    # empty, MAX(timestamp) was NULL, quiet_s read as unknown, and a stale
+    # active_agents=1 held every release to the twin (and so to A&P) all night.
+    # FALSIFIER: drop the empty-table branch and the first verdict is busy forever.
+    import sqlite3
+
+    _, data = _seat(tmp_path)
+    home = data / "profiles" / "operator"
+    state = {"pid": os.getpid(), "gateway_state": "running", "active_agents": 1}
+    (home / "gateway_state.json").write_text(json.dumps(state))
+    db = home / "state.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, timestamp REAL)")
+    con.commit()
+    con.close()
+    old = time.time() - 7200
+    os.utime(db, (old, old))
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    (gw,) = facts["gateways"]
+    assert gw["quiet_s"] is not None and gw["quiet_s"] > 7000
+    assert not busy.decide(facts).busy
+    # A store written a moment ago is still recent, empty or not.
+    os.utime(db, None)
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    assert facts["gateways"][0]["quiet_s"] < 60
+    assert busy.decide(facts).busy
+
+
 def test_the_probe_reads_the_gateway_turn_count(tmp_path: Path) -> None:
     _, data = _seat(tmp_path)
     state = {"pid": os.getpid(), "gateway_state": "running", "active_agents": 3}
