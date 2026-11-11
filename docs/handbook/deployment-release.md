@@ -374,7 +374,12 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   used ssh, and a fresh tunnel per GitHub run lost two of three probes. A running job (a live job child, or a lane
   heartbeat naming one), pending wakes, a heartbeat gone stale (over 5 minutes) while its daemon
   lives, a managed cron firing within 6 minutes (or fired within the last 2),
-  or a store the probe could not read means busy
+  a gateway with turns in flight, or a store the probe could not read means busy. The gateway is
+  asked live, by its own `active-work` control verb (from a child that drops to the gateway's uid,
+  since the socket accepts no other); the `active_agents` number in `gateway_state.json` is read
+  only from a gateway that does not answer, because Hermes writes that number only when a chat
+  turn starts or ends, and a stale one held ap-staging for 45 minutes on 2026-11-11. The program
+  ships zlib-compressed, because exec refuses a command over its size cap
   (`operator/bin/lib/fleet/busy.py`; the cron window is that narrow so a seat
   with 15-minute slot crons still has an idle gap). Busy writes the quiesce marker (`/run/smd-jobs/quiesce`, root-owned,
   expires on its own) so no new job is claimed, and waits for idle, up to

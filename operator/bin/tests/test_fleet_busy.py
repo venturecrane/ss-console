@@ -138,10 +138,7 @@ def _seat(tmp: Path) -> tuple[Path, Path]:
 
 
 def _run_remote(name: str, tmp: Path, prefix: str = "") -> str:
-    src = (HERE / name).read_text(encoding="utf-8")
-    src = src.replace('"/run/smd-jobs"', json.dumps(str(tmp / "run" / "smd-jobs")))
-    src = src.replace('"/run/smd-medchron"', json.dumps(str(tmp / "run" / "smd-medchron")))
-    src = src.replace('"/opt/data/', '"' + str(tmp / "opt" / "data") + "/")
+    src = _run_remote_source(name, tmp)
     if name == "remote_quiesce.py":
         src = src.replace("os.chown(tmp, 0, 0)", "pass")  # not root in the test
     proc = subprocess.run(
@@ -520,3 +517,164 @@ def test_unquiesce_on_a_seat_with_no_machine_says_so() -> None:
     binary = _FlyBinary(Result(0, "[]", ""))
     assert "no Machine" in _gate(_real_fly(binary)).clear_any_fleet("smd-guide")  # type: ignore[arg-type]
     assert not any(c[1:3] == ["machine", "exec"] for c in binary.calls)
+
+
+# ---- the gateway's live answer (its active-work control verb) ---------------------------
+class _Gateway:
+    """A unix-socket server speaking Hermes' control-socket wire contract (gateway/
+    control_socket.py at the pinned tag: ONE JSON line in, one JSON line out, then
+    close), answering ``active-work`` with ``result``. The socket lives in a short
+    /tmp directory and the home points at it through ``gateway.sock.path``, exactly
+    as Hermes does when a home is too long for ``sun_path``."""
+
+    def __init__(self, home: Path, result: dict | None, ok: bool = True) -> None:
+        import socket
+        import tempfile
+        import threading
+
+        self.dir = tempfile.mkdtemp(prefix="gw", dir="/tmp")
+        self.path = os.path.join(self.dir, "control.sock")
+        (home / "gateway.sock.path").write_text(self.path)
+        self.requests: list[dict] = []
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.bind(self.path)
+        self.sock.listen(4)
+
+        def serve() -> None:
+            while True:
+                try:
+                    conn, _ = self.sock.accept()
+                except OSError:
+                    return
+                with conn:
+                    buf = b""
+                    while b"\n" not in buf:
+                        chunk = conn.recv(4096)
+                        if not chunk:
+                            break
+                        buf += chunk
+                    req = json.loads(buf.partition(b"\n")[0])
+                    self.requests.append(req)
+                    body = {"ok": ok, "protocol": 1, "id": req.get("id")}
+                    if ok:
+                        body["result"] = result
+                    else:
+                        body["error"] = "unknown verb"
+                    conn.sendall(json.dumps(body).encode() + b"\n")
+
+        threading.Thread(target=serve, daemon=True).start()
+
+    def close(self) -> None:
+        import shutil
+
+        self.sock.close()
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+
+def _busy_twin(tmp_path: Path, file_count: int) -> Path:
+    """A seat whose gateway file says ``file_count`` turns and whose conversation
+    store was written a moment ago, so the quiet rule cannot clear it."""
+    import sqlite3
+
+    _, data = _seat(tmp_path)
+    home = data / "profiles" / "operator"
+    state = {"pid": os.getpid(), "gateway_state": "running", "active_agents": file_count}
+    (home / "gateway_state.json").write_text(json.dumps(state))
+    con = sqlite3.connect(home / "state.db")
+    con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, timestamp REAL)")
+    con.execute("INSERT INTO messages (timestamp) VALUES (?)", (time.time(),))
+    con.commit()
+    con.close()
+    return home
+
+
+def test_a_stale_file_count_is_not_busy_when_the_gateway_answers_idle(tmp_path: Path) -> None:
+    # ap-staging 2026-11-11 06:22Z and 06:34Z: the file said 1 turn, the hourly
+    # auth check had just written the store (so the quiet rule could not clear it),
+    # the gateway's own active-work verb said {"active_agents": 0, "active_work": []}
+    # and its shutdown drain counted 0. Two ten-minute waits, then WAITING_IDLE.
+    # FALSIFIER: drop the live read (or the live branch in decide) and this is busy.
+    home = _busy_twin(tmp_path, file_count=1)
+    gw = _Gateway(home, {"active_agents": 0, "active_work": [], "pid": os.getpid()})
+    try:
+        facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    finally:
+        gw.close()
+    (g,) = facts["gateways"]
+    assert g["active_agents"] == 1 and g["quiet_s"] < 60
+    assert g["live"] == {"active_agents": 0, "active_work": []}
+    assert gw.requests == [{"verb": "active-work", "id": 1, "protocol": 1}]
+    assert not busy.decide(facts).busy
+
+
+def test_live_work_is_busy_even_when_the_file_says_none(tmp_path: Path) -> None:
+    # The file is written only at chat-turn boundaries; a cron run starts without
+    # writing it. The live answer names the cron, and that holds the restart.
+    home = _busy_twin(tmp_path, file_count=0)
+    gw = _Gateway(home, {"active_agents": 1, "active_work": [{"kind": "cron", "job_id": "x", "pid": 1}]})
+    try:
+        facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    finally:
+        gw.close()
+    assert facts["gateways"][0]["live"] == {"active_agents": 1, "active_work": ["cron"]}
+    verdict = busy.decide(facts)
+    assert verdict.busy and "1 turn(s) (live: cron)" in verdict.reasons[0]
+
+
+def test_a_gateway_that_does_not_answer_the_verb_is_judged_by_its_file(tmp_path: Path) -> None:
+    # An image before the verb answers ok:false; a seat with no socket answers
+    # nothing. Either way the file and the quiet rule decide, as before.
+    home = _busy_twin(tmp_path, file_count=1)
+    gw = _Gateway(home, None, ok=False)
+    try:
+        facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    finally:
+        gw.close()
+    assert facts["gateways"][0]["live"] is None
+    assert busy.decide(facts).busy
+    (home / "gateway.sock.path").unlink()
+    facts = busy.parse_probe(_run_remote("remote_busy_probe.py", tmp_path))
+    assert facts["gateways"][0]["live"] is None
+    assert busy.decide(facts).busy
+
+
+def test_decide_trusts_the_live_count_over_the_file() -> None:
+    gw = {"file": "/opt/data/profiles/operator/gateway_state.json", "alive": True, "active_agents": 1, "quiet_s": 5.0}
+    assert busy.decide(_facts(gateways=[gw])).busy  # no live answer: the file decides
+    assert not busy.decide(_facts(gateways=[dict(gw, live={"active_agents": 0, "active_work": []})])).busy
+    unnamed = busy.decide(_facts(gateways=[dict(gw, active_agents=0, live={"active_agents": 2, "active_work": []})]))
+    assert unnamed.busy and "2 turn(s) (live: unnamed)" in unnamed.reasons[0]
+    # A dead gateway's live field is never consulted (the probe does not ask one).
+    assert not busy.decide(_facts(gateways=[dict(gw, alive=False, live={"active_agents": 3, "active_work": []})])).busy
+
+
+def test_every_seat_program_fits_one_exec_request_and_runs_as_shipped(tmp_path: Path) -> None:
+    # ap-staging 2026-11-11: the busy probe grew to 16 KB, its base64 command to
+    # 21,360 characters, and `fly machine exec` refused it: "exec request rejected:
+    # payload too large". FALSIFIER: ship uncompressed and the probe exceeds the bound.
+    from bin.lib.fleet import fly as fly_module
+    from bin.lib.fleet.selftest_plant import plant_source
+
+    programs = {
+        "busy probe": (HERE / "remote_busy_probe.py").read_text(encoding="utf-8"),
+        "quiesce set": busy.quiesce_source("set", "fleet:x", 2_000_000_000.0, "rollout"),
+        "selftest plant": plant_source("plant"),
+    }
+    for name, src in programs.items():
+        command = fly_module.exec_command(src)
+        assert len(command) <= fly_module.EXEC_COMMAND_MAX, (name, len(command))
+    # The command as shipped runs: exec hands it to a shell, so run it through one.
+    src = _run_remote_source("remote_busy_probe.py", tmp_path)
+    proc = subprocess.run(  # noqa: S603 - the fleet's own exec command for a repo file, run as exec runs it
+        ["/bin/sh", "-c", fly_module.exec_command(src).replace("python3", sys.executable, 1)],
+        capture_output=True, text=True, timeout=30, check=False,
+    )  # fmt: skip
+    assert proc.returncode == 0, proc.stderr
+    assert not busy.decide(busy.parse_probe(proc.stdout)).busy
+
+
+def _run_remote_source(name: str, tmp: Path) -> str:
+    src = (HERE / name).read_text(encoding="utf-8")
+    src = src.replace('"/run/smd-jobs"', json.dumps(str(tmp / "run" / "smd-jobs")))
+    src = src.replace('"/run/smd-medchron"', json.dumps(str(tmp / "run" / "smd-medchron")))
+    return src.replace('"/opt/data/', '"' + str(tmp / "opt" / "data") + "/")

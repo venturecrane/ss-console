@@ -76,6 +76,22 @@ def app_in_args(args: tuple[str, ...]) -> str | None:
     return None
 
 
+#: The largest exec command any seat program here may produce. The busy probe at
+#: 15,061 base64 characters ran (2026-11-10); at 21,360 exec refused it as "payload
+#: too large" (2026-11-11). Programs are compressed, and the tests hold each one
+#: under this bound so a growing probe fails in CI, not on a release.
+EXEC_COMMAND_MAX = 14_000
+
+
+def exec_command(source: str) -> str:
+    """The ``python3 -I -c`` command that runs ``source`` on a seat: compressed,
+    then base64 (no quote, space or backslash for exec's quoting to touch)."""
+    import zlib
+
+    encoded = base64.b64encode(zlib.compress(source.encode("utf-8"), 9)).decode("ascii")
+    return f"python3 -I -c \"import base64,zlib;exec(zlib.decompress(base64.b64decode('{encoded}')))\""
+
+
 class FlyTokens:
     """Per-call Fly credentials: scoped (CI) or ambient (a laptop's own login).
 
@@ -263,9 +279,13 @@ class Fly:
         quote, space or backslash, so the one quoting layer exec applies cannot
         touch it. It runs under the image's system python3, which every seat image
         has carried since the first one.
+
+        The program is zlib-compressed before encoding: exec rejects a command
+        over its request cap ("exec request rejected: payload too large", the busy
+        probe at 16 KB, 2026-11-11), and compression keeps every program here far
+        under it (``EXEC_COMMAND_MAX``, asserted by the tests).
         """
-        encoded = base64.b64encode(source.encode("utf-8")).decode("ascii")
-        command = f"python3 -I -c \"import base64;exec(base64.b64decode('{encoded}'))\""
+        command = exec_command(source)
         return self._fly(
             "machine", "exec", self.machine_id(app), command, "-a", app, "--timeout", str(int(timeout)),
             timeout=timeout + 30,
