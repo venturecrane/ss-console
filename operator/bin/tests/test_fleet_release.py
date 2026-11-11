@@ -162,9 +162,7 @@ def test_smoke_tooling_error_stalls_its_seat_without_rollback_and_the_rollout_go
     states = w.store.states()
     assert states["ap-staging"] == "tooling_error"
     # FALSIFIER: roll back on a tooling error and a second deploy (to the from-image) appears.
-    assert [d for d in deployed_images(w) if d[0] == "hermes-ap-staging"] == [
-        ("hermes-ap-staging", w.rel["image_ref"])
-    ]
+    assert [d for d in deployed_images(w) if d[0] == "hermes-ap-staging"] == [("hermes-ap-staging", w.rel["image_ref"])]
     # FALSIFIER: put tooling_error back in HALTING and every later seat is "halted" (2026-10-29).
     assert not result.halted and not result.completed
     assert states["pilot-smokeball"] == "done" and states["ashton-price"] == "done"
