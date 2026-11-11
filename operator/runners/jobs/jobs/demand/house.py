@@ -161,7 +161,10 @@ class HouseWriter:
         self.sect = kids[-1] if kids and kids[-1].tag == _qn("w:sectPr") else None
         self.proto: dict[str, Any] = {}
         for k in kids:
-            m = re.match(r"PROTO:(\w+)", _text(k).strip())
+            # The tag is the first paragraph's text: a box prototype (one cell,
+            # several styled paragraphs) carries more text after it.
+            first = k if k.tag == _qn("w:p") else next(k.iter(_qn("w:p")), k)
+            m = re.match(r"PROTO:(\w+)", _text(first).strip())
             if m:
                 self.proto[m.group(1)] = copy.deepcopy(k)
         missing = [k for k in kinds if k not in self.proto]

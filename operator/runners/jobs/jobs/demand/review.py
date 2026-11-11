@@ -355,9 +355,13 @@ def signature_block(firm: Any) -> str:
     who = getattr(firm, "attorney", None) or {}
     if not who.get("signer"):
         return "(no signature row selected)"
-    numbered = (getattr(firm, "variant", None) or {}).get("layout") == "numbered"
+    layout = (getattr(firm, "variant", None) or {}).get("layout")
+    numbered = layout in ("numbered", "crabtree")
     shape = (
-        "a script signature line in the signer's name, then the same name printed, then the title"
+        "a script signature line in the signer's name, then the same name printed with the bar number, then "
+        "the title, then the line naming the client the firm represents, then the typist's initials"
+        if layout == "crabtree"
+        else "a script signature line in the signer's name, then the same name printed, then the title"
         if numbered
         else "the signer's printed name, then the title"
     )

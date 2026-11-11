@@ -174,17 +174,50 @@ OPTIONAL_VARIANT_KEYS = {
     "lead_heading": "str",
     "footer_markers": "list[str]",
     "required_leads": "list[str]",
+    # The crabtree layout (house_crabtree.py, the firm's S. Crabtree letter of
+    # 2026-11-10): its sign-off, the banner box's policy-limits title and
+    # statute line, the C.C.P. 999.1 box (title, label lines and the deadline
+    # line, each with {date} / {expires} / {days} slots), the letterhead's San
+    # Francisco office (one authored value), the line under the title
+    # ("Attorneys for Claimant {client}"), and the days to respond.
+    "valediction": "str",
+    "banner_title": "str",
+    "banner_statute": "str",
+    "box_title": "str",
+    "box_lines": "list[str]",
+    "box_deadline": "str",
+    "sf_office": "str",
+    "sign_for": "str",
+    "response_days": "int",
+}
+#: What each non-house layout must author.
+LAYOUT_REQUIRED = {
+    "numbered": ("lead_heading", "footer_markers"),
+    "crabtree": (
+        "lead_heading",
+        "footer_markers",
+        "valediction",
+        "banner_title",
+        "banner_statute",
+        "box_title",
+        "box_deadline",
+        "sf_office",
+    ),
 }
 #: The stages a firm may batch. Transcription and the two summary stages are
 #: one independent call per page or chunk; the drafting stages read each
 #: other's output and the audit's cache design needs live calls.
 BATCHABLE_STAGES = ("vision", "digest", "condense")
-LAYOUTS = ("house", "numbered")
+LAYOUTS = ("house", "numbered", "crabtree")
 VARIANTS = ("pre_suit", "litigation")
 ATTORNEY_KEYS = ("signer", "title", "initials")
 #: ``format``: the name of an entry in the optional ``formats`` section. Absent,
 #: the attorney's demands take the firm's default format (``variants``).
-OPTIONAL_ATTORNEY_KEYS = ("format",)
+#: ``bar_number``: printed after the name in the crabtree signature block when
+#: no attorney roster is installed (an installed roster's bar number wins).
+#: ``script``: the name the crabtree script signature line prints, when it is
+#: not the signer (the roster's letters name wins when one is installed).
+OPTIONAL_ATTORNEY_KEYS = ("format", "bar_number", "script")
 #: Optional top-level sections: present or absent, never misspelled.
 OPTIONAL_SECTIONS = ("formats",)
 
@@ -309,10 +342,8 @@ def _variant_problems(where: str, v: Any, inputs: dict[str, Any]) -> list[str]:
     layout = v.get("layout", "house")
     if layout not in LAYOUTS:
         out.append(f"{where}.layout: expected one of {list(LAYOUTS)}")
-    elif layout == "numbered":
-        out += [
-            f"{where}.{k}: required for the numbered layout" for k in ("lead_heading", "footer_markers") if k not in v
-        ]
+    else:
+        out += [f"{where}.{k}: required for the {layout} layout" for k in LAYOUT_REQUIRED.get(layout, ()) if k not in v]
     return out
 
 
@@ -331,7 +362,9 @@ def _variant_set(where: str, body: Any, inputs: dict[str, Any]) -> list[str]:
 def _attorney_problems(who: str, a: Any, formats: dict[str, Any]) -> list[str]:
     keys = set(ATTORNEY_KEYS) | set(OPTIONAL_ATTORNEY_KEYS)
     if not isinstance(a, dict) or not set(ATTORNEY_KEYS) <= set(a) <= keys:
-        return [f"attorneys.{who}: expected {{signer, title, initials}} and optionally format, each a string"]
+        return [
+            f"attorneys.{who}: expected {{signer, title, initials}} and optionally format, bar_number, each a string"
+        ]
     out = [
         f"attorneys.{who}.{k}: expected a non-empty string" for k in ("signer", "title") if not _type_ok(a[k], "str")
     ]
@@ -340,6 +373,8 @@ def _attorney_problems(who: str, a: Any, formats: dict[str, Any]) -> list[str]:
         out.append(f"attorneys.{who}.initials: expected a string (empty for no initials line)")
     if isinstance(a["title"], str) and re.sub(r"\{client\}", "", a["title"]).count("{"):
         out.append(f"attorneys.{who}.title: the only placeholder a title may carry is {{client}}")
+    if "bar_number" in a and not re.fullmatch(r"[A-Za-z0-9-]+", str(a["bar_number"])):
+        out.append(f"attorneys.{who}.bar_number: expected letters, digits or dashes")
     if "format" in a and a["format"] not in formats:
         out.append(f"attorneys.{who}.format: {a['format']!r} names no entry in formats")
     return out
@@ -409,8 +444,16 @@ class DemandFirm:
         rows = {" ".join(k.split()).casefold(): v for k, v in self.data["attorneys"].items()}
         return rows.get(key) if key else None
 
-    def select(self, variant: str, attorney: dict[str, str]) -> "DemandFirm":
-        return DemandFirm(root=self.root, data={**self.data, "_variant": variant, "_attorney": attorney})
+    @property
+    def figure(self) -> int | None:
+        """The request's demand figure in cents (``terms.demand_figure``);
+        None is a policy-limits demand."""
+        got = self.data.get("_figure")
+        return int(got) if got is not None else None
+
+    def select(self, variant: str, attorney: dict[str, str], figure: int | None = None) -> "DemandFirm":
+        data = {**self.data, "_variant": variant, "_attorney": attorney, "_figure": figure}
+        return DemandFirm(root=self.root, data=data)
 
     @property
     def firm_domains(self) -> tuple[str, ...]:

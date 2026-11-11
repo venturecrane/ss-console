@@ -287,7 +287,7 @@ class DemandRun:
             )
             if f.get(key)
         ]
-        return [*fields, f"today's date, the drafting date: {self.long_date}"]
+        return [*fields, *library_pick.decided(self.firm), f"today's date, the drafting date: {self.long_date}"]
 
     def _drafter(self) -> draft.Drafter:
         decision = self._json("premise.json")

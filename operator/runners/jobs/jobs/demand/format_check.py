@@ -157,6 +157,11 @@ class Variant:
     banner_lines: tuple[str, ...] = ()
     lead_heading: str = ""
     required_leads: tuple[str, ...] = ()
+    # The crabtree layout (house_crabtree.py): its sign-off, its banner title
+    # and the C.C.P. 999.1 box's title.
+    valediction: str = "Cordially,"
+    banner_title: str = ""
+    box_title: str = ""
 
     @classmethod
     def from_config(cls, v: dict[str, Any]) -> "Variant":
@@ -172,6 +177,9 @@ class Variant:
             banner_lines=tuple(v.get("banner_lines") or ()),
             lead_heading=str(v.get("lead_heading") or ""),
             required_leads=tuple(v.get("required_leads") or ()),
+            valediction=str(v.get("valediction") or "Cordially,"),
+            banner_title=str(v.get("banner_title") or ""),
+            box_title=str(v.get("box_title") or ""),
         )
 
 
@@ -251,6 +259,112 @@ def _numbered(lines: list[tuple[str, str | None, Any]], doc: Any, v: Variant, fa
     ]
 
 
+#: The crabtree banner's demand line: the title, or a sum-certain figure in words.
+_SUM_CERTAIN = re.compile(r"^\$[\d,]+(\.\d{2})? DEMAND - [A-Z -]+ DOLLARS( AND \d{2}/100)?$")
+_EXPIRY_DATE = re.compile(r"^ON (MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY), [A-Z]+ \d{1,2}, \d{4}$")
+
+
+def _part_text(doc: Any, parts: tuple[str, ...]) -> str:
+    out = []
+    for s in doc.sections:
+        for name in parts:
+            part = getattr(s, name)
+            if not part.is_linked_to_previous:
+                out.append("".join(t.text or "" for t in part._element.iter(_qn("w:t"))))
+    return " ".join(out)
+
+
+def _fold(text: str) -> str:
+    """A heading compared with its authored form: dashes and spacing folded."""
+    return " ".join(re.sub(r"\s*[—–-]\s*", " - ", text).split()).upper()
+
+
+def _header_footer(doc: Any, v: Variant, footer_markers: list[str], fails: list[str]) -> None:
+    """The footer's settlement-communication markers, and no unfilled {slot}
+    in the footer (numbered, crabtree) or the letterhead (crabtree)."""
+    foot = " ".join(p.text for s in doc.sections for f in (s.footer, s.first_page_footer) for p in f.paragraphs)
+    if v.layout == "crabtree":  # its footer and letterhead may sit in a table: read every text node
+        foot = _part_text(doc, ("footer", "first_page_footer"))
+    if not all(m in foot for m in footer_markers):
+        fails.append("footer lacks the firm's settlement-communication line")
+    if v.layout in ("numbered", "crabtree") and re.search(r"\{\w+\}", foot):
+        fails.append("the footer carries an unfilled {slot}")
+    if v.layout == "crabtree" and re.search(r"\{\w+\}", _part_text(doc, ("header", "first_page_header"))):
+        fails.append("the letterhead carries an unfilled {slot}")
+
+
+def _cell_lines(table: Any) -> list[str]:
+    return [p.text.strip() for r in table.rows for c in r.cells for p in c.paragraphs if p.text.strip()]
+
+
+def _crabtree_head(lines: list[tuple[str, str | None, Any]], doc: Any, v: Variant, fails: list[str]) -> int:
+    """Above the salutation: mail line, Attn block, RE labels, the banner box.
+    Returns the salutation's index in ``lines``."""
+    dear = next((i for i, (k, t, _) in enumerate(lines) if k == "p" and str(t).startswith("Dear ")), len(lines))
+    head = [str(t) for k, t, _ in lines[:dear] if k == "p" and t]
+    if v.mail_line and not any(t.strip().upper() == v.mail_line.upper() for t in head):
+        fails.append(f"no {v.mail_line!r} line above the salutation")
+    if not any(t.startswith("Attn:") for t in head):
+        fails.append("no 'Attn:' line in the address block")
+    if not any(t.startswith("RE:") for t in head):
+        fails.append("no RE block above the salutation")
+    fails += [f"RE block lacks {label!r}" for label in v.re_required if not any(label in t for t in head)]
+    for bad in v.forbidden:
+        if any(bad.upper() in t.upper() for t in head):
+            fails.append(f"{bad!r} belongs to another demand format")
+    tables = [el for k, _t, el in lines[:dear] if k == "t"]
+    import docx.table
+
+    boxes = [_cell_lines(docx.table.Table(el, doc._body)) for el in tables]
+    banner = next((b for b in boxes if b and (b[0] == v.banner_title or _SUM_CERTAIN.match(b[0]))), None)
+    if banner is None:
+        fails.append(f"no banner box reading {v.banner_title!r} or a sum-certain '$N DEMAND - ... DOLLARS' line")
+    else:
+        if "THIS DEMAND EXPIRES AT 5:00 P.M. PACIFIC TIME" not in banner:
+            fails.append("the banner box lacks 'THIS DEMAND EXPIRES AT 5:00 P.M. PACIFIC TIME'")
+        if not any(_EXPIRY_DATE.match(t) for t in banner):
+            fails.append("the banner box lacks its 'ON <WEEKDAY>, <DATE>' expiry line")
+    return dear
+
+
+def _crabtree(lines: list[tuple[str, str | None, Any]], doc: Any, v: Variant, fails: list[str]) -> None:
+    """The crabtree layout (house_crabtree.py): its opening, the PREAMBLE head
+    and the 999.1 box after the salutation, Roman sections I, II, III ... in the
+    format's order, the INDEX OF EXHIBITS, and none of another format's parts."""
+    dear = _crabtree_head(lines, doc, v, fails)
+    after = lines[dear + 1 :]
+    paras = [(str(t), el) for k, t, el in after if k == "p" and t]
+    if v.lead_heading and not (paras and paras[0][0] == v.lead_heading and _centered(paras[0][1])):
+        fails.append(f"the centered {v.lead_heading!r} heading does not follow the salutation")
+    import docx.table
+
+    boxes = [_cell_lines(docx.table.Table(el, doc._body)) for k, _t, el in after if k == "t"]
+    if v.box_title and not any(b and b[0] == v.box_title for b in boxes):
+        fails.append(f"no {v.box_title!r} box after the preamble heading")
+    matched = [(ROMAN_HEAD.fullmatch(t), el) for t, el in paras]
+    heads = [m.groups() for m, el in matched if m is not None and _bold(el) and _centered(el)]
+    nums = [_from_roman(n) for n, _ in heads]
+    if nums != list(range(1, len(nums) + 1)):
+        fails.append("the section numbers do not run I, II, III ... in order")
+    titles = [_fold(h) for _, h in heads]
+    want = [_fold(h) for h in v.headings]
+    missing = [h for h in want if h not in titles]
+    fails += [f"numbered section {h!r} missing" for h in missing]
+    if not missing and [t for t in titles if t in want] != want:
+        fails.append("numbered sections are out of the format's order (" + ", ".join(v.headings) + ")")
+    texts = [t for t, _ in paras]
+    if not any(t.startswith("Enclosures:") for t in texts):
+        fails.append("no 'Enclosures:' line under the signature")
+    if "INDEX OF EXHIBITS" not in texts:
+        fails.append("no 'INDEX OF EXHIBITS' page")
+    elif not any(re.match(r"Exhibit \d+:", t) for t in texts[texts.index("INDEX OF EXHIBITS") :]):
+        fails.append("the INDEX OF EXHIBITS lists no 'Exhibit n:' paragraph")
+    alltext = "\n".join(texts).upper()
+    for gone in ("CASE DISTILLED", "THE DUTY TO ACCEPT", "CORDIALLY,"):
+        if gone in alltext:
+            fails.append(f"{gone.title()!r} belongs to another demand format")
+
+
 def _address_block(texts: list[str], variant: Variant, fails: list[str]) -> None:
     head = texts[: next((i for i, t in enumerate(texts) if t.startswith("Dear ")), 20)]
     if variant.mail_line and not any(t.strip().upper() == variant.mail_line.upper() for t in head):
@@ -270,13 +384,21 @@ def _address_block(texts: list[str], variant: Variant, fails: list[str]) -> None
 
 
 def _signature(
-    texts: list[str], fails: list[str], signature: str, signer: str, signer_title: str, initials: str
+    texts: list[str],
+    fails: list[str],
+    signature: str,
+    signer: str,
+    signer_title: str,
+    initials: str,
+    valediction: str = "Cordially,",
 ) -> None:
-    if "Cordially," not in texts:
-        fails.append("no 'Cordially,' sign-off")
+    if valediction not in texts:
+        fails.append(f"no {valediction!r} sign-off")
         return
-    i = texts.index("Cordially,")
-    blk = [t.strip() for t in texts[i : i + 6]]
+    i = texts.index(valediction)
+    blk = [t.strip() for t in texts[i : i + 8]]
+    # The crabtree printed-name line carries the bar number after the name.
+    blk += [t.split(", (SBN")[0] for t in blk if ", (SBN" in t]
     for want, what in (
         (signature, "the firm"),
         (signer, "the signer"),
@@ -333,8 +455,10 @@ def check(
     lines = _lines(doc)
     texts = [str(t) for k, t, _ in lines if k == "p" and t]
     tables = doc.tables
-    numbered = v.layout == "numbered"
-    if numbered:
+    numbered = v.layout in ("numbered", "crabtree")
+    if v.layout == "crabtree":
+        _crabtree(lines, doc, v, res.fails)
+    elif numbered:
         _numbered(lines, doc, v, res.fails)
     else:
         _address_block(texts, v, res.fails)
@@ -346,12 +470,8 @@ def check(
         res.fails.append("no salutation")
     if not numbered:
         _headings(lines, res.fails, tuple(h.lower() for h in v.headings))
-    foot = " ".join(p.text for s in doc.sections for f in (s.footer, s.first_page_footer) for p in f.paragraphs)
-    if not all(m in foot for m in footer_markers):
-        res.fails.append("footer lacks the firm's settlement-communication line")
-    if numbered and re.search(r"\{\w+\}", foot):
-        res.fails.append("the footer carries an unfilled {slot}")
-    _signature(texts, res.fails, signature, signer, signer_title, initials)
+    _header_footer(doc, v, footer_markers, res.fails)
+    _signature(texts, res.fails, signature, signer, signer_title, initials, v.valediction)
     table_text = " ".join(c.text for t in tables for r in t.rows for c in r.cells)
     _machinery("\n".join(texts) + "\n" + table_text, res.fails, res.notes)
     if own_render:
