@@ -116,7 +116,7 @@ class _Drill:
         console.writes.append({"summary": outcome.headline, "details": outcome.details, "driver_prefix": driver_prefix})
         return None
 
-    def run(self, slug="smd-staging"):
+    def run(self, slug="ap-staging"):
         return chain_rehearsal.rehearse_mismatch(
             slug,
             self.console,
@@ -131,7 +131,7 @@ def test_the_drill_fires_the_alarm_and_then_clears_it():
     code, lines = d.run()
     assert code == chain_rehearsal.EXIT_REHEARSAL_OK
     assert len(d.console.writes) == 1, "the alarm did not fire"
-    assert d.console.cleared == ["smd-staging"], "the drill left its own alarm standing"
+    assert d.console.cleared == ["ap-staging"], "the drill left its own alarm standing"
     assert any("the alarm fired" in ln for ln in lines)
 
 
@@ -178,7 +178,7 @@ def test_a_drill_that_produces_no_finding_fails():
     """The drill's own falsifier. If a head that is not in the export stops being
     a finding, the detector is broken and every clean run since is unproven — so
     the drill goes red rather than quietly succeeding at nothing."""
-    clean = watch.SeatOutcome("smd-staging", watch.CLEAN, "smd-staging: fine", {"head": "x"})
+    clean = watch.SeatOutcome("ap-staging", watch.CLEAN, "ap-staging: fine", {"head": "x"})
     d = _Drill(_chain(12), evaluate=lambda *a, **k: clean)
     code, lines = d.run()
     assert code == chain_rehearsal.EXIT_REHEARSAL_FAILED

@@ -31,9 +31,8 @@ const CUSTOMERS = resolve('operator/customers')
 
 /**
  * Release twins that are NOT exact copies of their client, each with the reason.
- * smd-staging binds no Smokeball connector and is a different persona; ap-staging
- * replaces it at the flip (docs/handbook/deployment-release.md), and that PR
- * removes this entry, after which every release twin must declare twin.yaml.
+ * Empty since ap-staging replaced smd-staging (which bound no Smokeball connector
+ * and was decommissioned 2026-11-11): every release twin declares twin.yaml.
  */
 const STATED_GAPS: Record<string, string> = {}
 

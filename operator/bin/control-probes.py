@@ -31,7 +31,7 @@ nothing ran; 3 the self-test found a probe that cannot come back red.
 
 USAGE
     operator/bin/control-probes.py                    # local probes (default)
-    operator/bin/control-probes.py --kind all --seat smd-staging
+    operator/bin/control-probes.py --kind all --seat ap-staging
     operator/bin/control-probes.py --self-test        # prove the runner can fail
     operator/bin/control-probes.py --emit-seat-script /tmp/seat-probes.sh
     operator/bin/control-probes.py --json

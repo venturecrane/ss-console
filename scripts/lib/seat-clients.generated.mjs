@@ -10,5 +10,4 @@ export const INVENTORY_SEAT_CLIENTS = Object.freeze([
   ['pilot-smokeball', 'smd-services'],
   ['scott', 'smd-services'],
   ['smd-guide', 'smd-services'],
-  ['smd-staging', 'smd-services'],
 ])

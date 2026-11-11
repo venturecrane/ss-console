@@ -20,8 +20,12 @@ from shared import capabilities
 from tests.conftest import FakePluginContext, load_plugin
 
 CUSTOMERS = Path(__file__).resolve().parents[2] / "customers"
+# Not a seat: an ``_`` scaffold, or a decommissioned seat's
+# ``<slug>.decommissioned.<date>`` tombstone (operator/bin/lib/seat_dirs.py).
 SEATS = sorted(
-    p.parent.name for p in CUSTOMERS.glob("*/customer.yaml") if not p.parent.name.startswith("_")
+    p.parent.name
+    for p in CUSTOMERS.glob("*/customer.yaml")
+    if not p.parent.name.startswith("_") and ".decommissioned." not in p.parent.name
 )
 CASEWORK = {"reply_verdicts"}
 NO_LANE_SEATS = {"captain-mark", "scott", "brokery", "ashton-price-marketing"}
@@ -125,14 +129,31 @@ def test_the_demo_seat_loads_no_lane_and_keeps_its_smokeball_surface(seat):
     assert _destructive_line(doc, as_today=False) is False
 
 
-def test_smd_staging_loads_its_lanes_and_no_smokeball_surface(seat):
-    """Staging authors lanes but not the Smokeball connector: exactly its authored
-    lanes' tools (derived from its config, whichever lanes those are), no
-    casework, no Smokeball route, no destructive line."""
-    doc = seat("smd-staging")
+def test_a_seat_with_lanes_and_no_smokeball_loads_only_its_lanes(seat, monkeypatch, tmp_path):
+    """A seat that authors lanes but not the Smokeball connector: exactly its
+    authored lanes' tools, no casework, no Smokeball route, no destructive line.
+    smd-staging was that seat until its decommission (2026-11-11); no live seat
+    has the shape now, so it is derived from ap-staging with every Smokeball
+    connector removed, which keeps the lanes and drops only the connector."""
+    import yaml
+
+    base = seat("ap-staging")
+    smokeball = capabilities.CONNECTOR_BACKENDS["smokeball"]
+    connectors = {
+        k: v
+        for k, v in (base.get("connectors") or {}).items()
+        if not (isinstance(v, dict) and v.get("backend") in smokeball)
+    }
+    path = tmp_path / "customer.yaml"
+    path.write_text(
+        yaml.safe_dump({**base, "connectors": connectors}, sort_keys=False), encoding="utf-8"
+    )
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+    doc = capabilities.read(path)
+    assert doc is not None
     lanes_plugin = load_plugin("hermes-smd-lanes")
     lanes = capabilities.authored_lanes(doc)
-    assert lanes, "staging authors at least one lane"
+    assert lanes, "the derived seat authors at least one lane"
     assert capabilities.authors_connector(doc, "smokeball") is False
     expected = set().union(*(set(lanes_plugin.LANE_TOOLS[lane]) for lane in lanes))
     assert _registered("hermes-smd-lanes") == expected

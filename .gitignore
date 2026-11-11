@@ -108,3 +108,10 @@ operator/hermes-smd-overlay/.venv/
 # Sample medical record sets and their chronologies (python -m jobs.medchron.sample):
 # build output, tens of MB of PDFs, regenerated from the committed case specs.
 operator/customers/pilot-smokeball/seed/records/out/
+
+# Decommission archives (operator/bin/decommission-customer.sh): preserved audit
+# ledgers, memory snapshots and evidence packets. This repo is public; these
+# must never be committed. Copy them somewhere durable after a run
+# (docs/specs/operator/decommission-customer.md).
+operator/.decommission-archive/
+operator/customers/*/.decommission-audit.sqlite

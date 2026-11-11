@@ -32,6 +32,3 @@ seats:
   smd-guide:
     purpose: internal
     provisioned: true
-  smd-staging:
-    purpose: internal
-    provisioned: true

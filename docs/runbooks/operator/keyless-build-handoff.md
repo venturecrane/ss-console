@@ -29,10 +29,10 @@ Validate + materialize `customer.yaml`, render `fly.toml`, create app/volume/buc
 The live, exercised form of Phase A today is **staging**:
 
 ```bash
-operator/bin/reprovision-staging.sh          # hermes-smd-staging, wired to nothing real
+operator/bin/reprovision-staging.sh          # the release twin (hermes-ap-staging), wired to nothing real
 ```
 
-It computes the isolate set from the classification (`secret_custody.py isolate-names smd-staging`), **blanks every customer-owned secret**, and **substitutes** an isolated Google SA. This replaced a hand-maintained `CLIO_*`-only denylist that failed open (it leaked AgentMail / Smokeball / per-seat Anthropic / webhook secrets onto staging the moment a staging seat bound that connector).
+It computes the isolate set from the classification (`secret_custody.py isolate-names ap-staging`), **blanks every customer-owned secret**, and **substitutes** an isolated Google SA. This replaced a hand-maintained `CLIO_*`-only denylist that failed open (it leaked AgentMail / Smokeball / per-seat Anthropic / webhook secrets onto staging the moment a staging seat bound that connector).
 
 Inspect the isolate set for any seat:
 

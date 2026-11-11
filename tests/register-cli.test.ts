@@ -633,7 +633,7 @@ describe('reading the register', () => {
 
   it('the table groups by client, dates the age, and flags an all-undated register', async () => {
     const { renderTable } = await loadLib()
-    const text = renderTable([row(), row({ obligation_id: 'o2', customer_slug: 'smd-staging' })])
+    const text = renderTable([row(), row({ obligation_id: 'o2', customer_slug: 'ap-staging' })])
     expect(text).toMatch(/ashton-price\s+\(1\)/)
     expect(text).toMatch(/smd-services\s+\(1\)/)
     expect(text).toMatch(/12d old/)

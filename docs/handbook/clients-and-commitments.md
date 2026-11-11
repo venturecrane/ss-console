@@ -43,7 +43,6 @@ Seats declared in the repository (`operator/customers/`). Whether each one is ru
 | Seat | Purpose | Product | Role | Vertical |
 |---|---|---|---|---|
 | `ap-staging` | release-twin of `ashton-price` | operator | none | law-firm |
-| `smd-staging` | internal | operator | none | mixed |
 
 **SMD's own: demo**
 
@@ -87,7 +86,7 @@ A seat carries two labels that answer different questions. Its **kind** (above, 
 | demo | Shows the product on SMD's own test data. It gates nothing. |
 | internal | SMD's own work. |
 
-Every tool that used to name a seat now asks for a purpose instead, so renaming a seat or adding one is an edit to its `seat.yaml` and `npm run gen:seat-registries`, nothing else. Today the one twin is `smd-staging`, the twin of `ashton-price`. It is not yet an exact copy: it binds no Smokeball connection. A later change renames it `ap-staging` and connects it to a test firm.
+Every tool that used to name a seat now asks for a purpose instead, so renaming a seat or adding one is an edit to its `seat.yaml` and `npm run gen:seat-registries`, nothing else. Today the one twin is `ap-staging`, the exact twin of `ashton-price`. It replaced `smd-staging`, which was not an exact copy and was decommissioned 2026-11-11.
 
 ## What we owe
 

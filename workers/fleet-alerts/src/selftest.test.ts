@@ -12,7 +12,7 @@ const NOW = Date.parse('2026-10-23T12:05:00.000Z')
 
 function row(overrides: Partial<FleetStatusRow>): FleetStatusRow {
   return {
-    customer_slug: 'smd-staging',
+    customer_slug: 'ap-staging',
     last_heartbeat_ts: '2026-10-23T12:04:00.000Z',
     sticky_stop_level: 'OK',
     sticky_stop_reason: null,

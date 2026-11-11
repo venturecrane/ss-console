@@ -21,6 +21,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { extname, join, relative, resolve } from 'node:path'
+import { skipReason } from '../scripts/lib/seat-inventory'
 
 const REPO_ROOT = resolve('.')
 const CUSTOMERS_ROOT = resolve('operator/customers')
@@ -35,7 +36,6 @@ const OUR_DOMAINS = new Set([
   'smdurgan.com', // the Captain
   'icloud.com', // the Captain's personal, used as a seat owner
   'agentmail.to', // provisioned Operator mailboxes
-  'smd-staging.invalid', // staging seats
   'smdopslab.onmicrosoft.com', // our M365 lab tenant
   'venturecrane.com', // the parent org
 ])
@@ -105,6 +105,8 @@ function rosterDomains(): Map<string, string[]> {
   if (!existsSync(CUSTOMERS_ROOT)) return found
 
   for (const slug of readdirSync(CUSTOMERS_ROOT)) {
+    // A decommissioned seat's tombstone is history, not an authored roster.
+    if (skipReason(slug) === 'tombstone') continue
     const yaml = join(CUSTOMERS_ROOT, slug, 'customer.yaml')
     if (!existsSync(yaml)) continue
     const raw = readFileSync(yaml, 'utf-8')

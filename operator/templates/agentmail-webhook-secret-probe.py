@@ -41,7 +41,7 @@ key exits 1 saying so, because "cannot ask the vendor" must never read as "the v
 fine" -- that equivalence is what hid the scott outage for two months.
 
 VACUOUS PASS, STATED. A seat whose agent env carries no WEBHOOK_SECRET_AGENTMAIL
-(no AgentMail channel authored: ashton-price, smd-staging) passes with a line
+(no AgentMail channel authored: ashton-price, ap-staging) passes with a line
 saying so. That is the honest outcome for a webhook that does not exist; the
 provisioner's agentmail-webhook-secret-fence is what guarantees an AgentMail
 seat never boots without the per-seat value in the first place.

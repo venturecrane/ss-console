@@ -171,7 +171,7 @@ def test_seat_probe_without_a_seat_holds() -> None:
 
 def test_seat_probe_without_a_driver_holds_even_with_a_seat() -> None:
     seat = next(s for s in _specs().values() if s.get("kind") == "seat")
-    result = cp.run_probe(dict(seat, seat_command=[]), cp.ProbeContext(seat="smd-staging"))
+    result = cp.run_probe(dict(seat, seat_command=[]), cp.ProbeContext(seat="ap-staging"))
     assert result.status == cp.HOLD
     assert "no driver authored" in result.detail
 
@@ -188,7 +188,7 @@ def test_seat_transport_failure_holds_and_is_not_a_finding() -> None:
         "seat_command": ["true"],
         "expect_pattern": "x",
     }
-    result = cp.run_probe(spec, cp.ProbeContext(seat="smd-staging", run_seat=_explode))
+    result = cp.run_probe(spec, cp.ProbeContext(seat="ap-staging", run_seat=_explode))
     assert result.status == cp.HOLD
     assert not result.is_finding
 

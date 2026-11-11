@@ -31,7 +31,7 @@ def _head() -> str:
 def _validator(marker: bytes | None) -> tuple[LaneValidator, FakeR2]:
     r2 = FakeR2()
     if marker is not None:
-        r2.objects["vaults/smd-staging/records/records-firm.yaml"] = marker
+        r2.objects["vaults/ap-staging/records/records-firm.yaml"] = marker
     return LaneValidator(CommandRunner(), REPO, r2), r2
 
 
@@ -49,25 +49,25 @@ def test_the_release_s_own_validator_judges_the_staged_marker() -> None:
     interpreter. FALSIFIER: return True without running the child and the bad marker passes."""
     sha = _head()
     good, _ = _validator(GOOD)
-    assert good.validates("smd-staging", "records", sha) is True
+    assert good.validates("ap-staging", "records", sha) is True
     bad, _ = _validator(BAD)
-    assert bad.validates("smd-staging", "records", sha) is False
+    assert bad.validates("ap-staging", "records", sha) is False
 
 
 def test_a_question_that_cannot_be_asked_is_none_never_a_pass() -> None:
     """FALSIFIER: treat any of these as True and a seat is passed by a broken instrument."""
     sha = _head()
     absent, _ = _validator(None)
-    assert absent.validates("smd-staging", "records", sha) is None  # no marker in the vault
+    assert absent.validates("ap-staging", "records", sha) is None  # no marker in the vault
     good, r2 = _validator(GOOD)
-    assert good.validates("smd-staging", "records", "0" * 40) is None  # a commit this clone never saw
-    assert good.validates("smd-staging", "records", None) is None
-    assert good.validates("smd-staging", "nosuchlane", sha) is None
-    assert good.validates("smd-staging", "demand", sha) is None  # this seat stages no demand marker
+    assert good.validates("ap-staging", "records", "0" * 40) is None  # a commit this clone never saw
+    assert good.validates("ap-staging", "records", None) is None
+    assert good.validates("ap-staging", "nosuchlane", sha) is None
+    assert good.validates("ap-staging", "demand", sha) is None  # this seat stages no demand marker
     r2.fail_reads = True
-    assert good.validates("smd-staging", "records", sha) is None  # the vault is unreachable
+    assert good.validates("ap-staging", "records", sha) is None  # the vault is unreachable
     broken = LaneValidator(CommandRunner(), REPO, _validator(GOOD)[1], python="/nonexistent/python")
-    assert broken.validates("smd-staging", "records", sha) is None  # the child could not start
+    assert broken.validates("ap-staging", "records", sha) is None  # the child could not start
 
 
 def test_the_validators_words_never_reach_the_caller() -> None:
@@ -85,8 +85,8 @@ def test_the_validators_words_never_reach_the_caller() -> None:
 
     spy = Spy()
     r2 = FakeR2()
-    r2.objects["vaults/smd-staging/records/records-firm.yaml"] = BAD
-    assert LaneValidator(spy, REPO, r2).validates("smd-staging", "records", _head()) is False
+    r2.objects["vaults/ap-staging/records/records-firm.yaml"] = BAD
+    assert LaneValidator(spy, REPO, r2).validates("ap-staging", "records", _head()) is False
     child = spy.results[-1]
     assert child.stdout.strip() == "problems=2" and "surprise" not in child.text and "per_job_cap_usd" not in child.text
 
@@ -166,6 +166,6 @@ def test_each_lane_s_validator_imports_in_a_bare_interpreter(lane: str) -> None:
     answer silently becomes None (the bytes-only refusal) on every release."""
     r2 = FakeR2()
     marker, _ = LANE_VALIDATORS[lane]
-    r2.objects[f"vaults/smd-staging/{marker}"] = b"{}\n"
+    r2.objects[f"vaults/ap-staging/{marker}"] = b"{}\n"
     # An empty map is not valid for any lane; the point is that the validator RAN and counted.
-    assert LaneValidator(CommandRunner(), REPO, r2).validates("smd-staging", lane, _head()) is False
+    assert LaneValidator(CommandRunner(), REPO, r2).validates("ap-staging", lane, _head()) is False

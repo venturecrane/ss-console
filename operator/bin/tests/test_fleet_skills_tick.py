@@ -33,7 +33,7 @@ from bin.lib.fleet.tick import (
 from bin.tests.fleet_fakes import DIGEST, FakeFly, FakeR2, FakeStore, fresh_status, release
 
 RINGS = [
-    Ring(0, ["smd-staging"], None, 30),
+    Ring(0, ["ap-staging"], None, 30),
     Ring(1, ["pilot-smokeball"], None, 30),
     Ring(2, ["scott", "brokery"], None, 30),
     Ring(3, ["ashton-price"], 1, 30),
@@ -128,7 +128,7 @@ def test_a_skills_release_waits_for_the_seat_image_and_never_halts() -> None:
     # FALSIFIER: drop the at_or_after check and every seat is pending here.
     waiting = deferrals(skills_rel(NEW, NEW_SKILLS_SHA), SEATS, status, image, ancestor)
     assert sorted(waiting) == sorted(SEATS)
-    assert "waiting for the image" in waiting["smd-staging"]
+    assert "waiting for the image" in waiting["ap-staging"]
     plan = plan_tick(RINGS, {}, {}, lambda seats: [], datetime.fromtimestamp(T0, timezone.utc), waiting)
     assert plan.code == TICK_WAITING and plan.seats is None and "no seat may take" in plan.reason
     # Skills written at the image's own commit, or before it, go.
@@ -145,7 +145,7 @@ def test_a_seat_on_an_image_not_from_main_waits_rather_than_being_assumed_curren
 
 def test_a_deferred_seat_does_not_stop_its_ring_once_another_seat_there_is_done() -> None:
     now = datetime(2026, 10, 28, 5, tzinfo=timezone.utc)
-    latest = {s: {"state": "done", "finished_at": "2026-10-28T00:00:00Z"} for s in ("smd-staging", "pilot-smokeball")}
+    latest = {s: {"state": "done", "finished_at": "2026-10-28T00:00:00Z"} for s in ("ap-staging", "pilot-smokeball")}
     plan = plan_tick(RINGS, latest, {}, lambda seats: [], now, {"scott": "waiting for the image"})
     assert plan.code == TICK_PROGRESS and plan.seats == ["brokery"]  # scott is not rolled
     latest["brokery"] = {"state": "done", "finished_at": "2026-10-28T00:00:00Z"}
@@ -183,14 +183,14 @@ def test_a_skills_release_follows_the_image_and_goes_once_the_image_has_its_comm
     w = World()
     rel = w.publish(NEW, NEW_SKILLS_SHA)
     assert w.tick(0, [rel]) == TICK_WAITING
-    assert w.r2.writes.count(pointer_key("smd-staging")) == 0  # nothing written, nothing halted
+    assert w.r2.writes.count(pointer_key("ap-staging")) == 0  # nothing written, nothing halted
     assert any("waiting for the image" in line for line in w.logs)
     # The image release at the skills' commit reaches staging: staging takes the skills next tick.
     newer_image = release(release_id="img-202610280300-33333333", image_digest="sha256:" + "c" * 64,
                           ss_console_sha=NEW_SKILLS_SHA)  # fmt: skip
     w.store.insert_release(newer_image)
     w.r2.put_json(image_key(newer_image["image_digest"], "image-capabilities.json"), CAPS)
-    w.store.status["smd-staging"] = fresh_status(image=f"{newer_image['image_ref']}@{newer_image['image_digest']}")
+    w.store.status["ap-staging"] = fresh_status(image=f"{newer_image['image_ref']}@{newer_image['image_digest']}")
     shas = {f"{newer_image['image_ref']}@{newer_image['image_digest']}": NEW_SKILLS_SHA}
 
     def defer(rel: dict[str, Any]) -> dict[str, str]:
@@ -199,7 +199,7 @@ def test_a_skills_release_follows_the_image_and_goes_once_the_image_has_its_comm
 
     w.defer = defer  # type: ignore[method-assign]
     assert w.tick(15, [rel]) == TICK_PROGRESS
-    assert w.pointer("smd-staging") == NEW
+    assert w.pointer("ap-staging") == NEW
     # The pilot still runs the older image: past the bake, it waits for its image, it does not halt.
     assert w.tick(60, [rel]) == TICK_WAITING
     assert w.pointer("pilot-smokeball") is None
@@ -231,11 +231,11 @@ def test_an_older_skills_release_never_overwrites_a_newer_one() -> None:
 def test_a_seat_reporting_newer_skills_than_any_release_weighed_is_never_moved_back() -> None:
     w = World()
     older = w.publish(OLD, OLD_SKILLS_SHA)
-    w.r2.put_json(pointer_key("smd-staging"), {"version": NEW, "manifest_key": "k", "manifest_sha256": "0" * 64})
+    w.r2.put_json(pointer_key("ap-staging"), {"version": NEW, "manifest_key": "k", "manifest_sha256": "0" * 64})
     writes = len(w.r2.writes)
     # FALSIFIER: drop the newer-version deferral and staging is repointed to OLD.
     assert w.tick(0, [older]) == TICK_WAITING
-    assert w.pointer("smd-staging") == NEW and len(w.r2.writes) == writes
+    assert w.pointer("ap-staging") == NEW and len(w.r2.writes) == writes
     assert any("already runs newer skills" in line for line in w.logs)
 
 
@@ -244,7 +244,7 @@ def test_a_skills_capability_refusal_is_a_standing_halt() -> None:
     w.needs = {"smd-note": {"tools": ["a_tool_no_image_has"]}}
     rel = w.publish(OLD, OLD_SKILLS_SHA)
     assert w.tick(0, [rel]) == TICK_HALT
-    assert w.store.states()["smd-staging"] == "failed" and w.pointer("smd-staging") is None
+    assert w.store.states()["ap-staging"] == "failed" and w.pointer("ap-staging") is None
     # FALSIFIER: ignore halting rows and the next tick retries staging.
     assert w.tick(120, [rel]) == TICK_HALTED_STANDING
     assert w.pointer("pilot-smokeball") is None
@@ -252,10 +252,10 @@ def test_a_skills_capability_refusal_is_a_standing_halt() -> None:
 
 def test_a_held_seat_takes_no_skills() -> None:
     w = World()
-    w.store.hold("smd-staging", "drill", "test")
+    w.store.hold("ap-staging", "drill", "test")
     rel = w.publish(OLD, OLD_SKILLS_SHA)
     assert w.tick(0, [rel]) == TICK_WAITING
-    assert w.pointer("smd-staging") is None
+    assert w.pointer("ap-staging") is None
 
 
 # -- the CLI: `fleet release latest --tick` steps skills too ------------------------------------
@@ -294,7 +294,7 @@ def test_a_latest_tick_points_ring_0_at_the_newest_skills_release() -> None:
     w.store.releases["img-202610190000-11111111"]["completed_last_ring_at"] = "2026-10-27T00:00:00Z"
     # FALSIFIER: tick image releases only (the defect) and no pointer is ever written.
     assert cli.main(["release", "latest", "--tick"], ctx=ctx) == TICK_PROGRESS
-    assert w.pointer("smd-staging") == OLD and w.pointer("pilot-smokeball") is None
+    assert w.pointer("ap-staging") == OLD and w.pointer("pilot-smokeball") is None
 
 
 def test_an_image_step_refusal_does_not_starve_the_skills_step() -> None:
@@ -303,7 +303,7 @@ def test_an_image_step_refusal_does_not_starve_the_skills_step() -> None:
     # The newest image carries no self-test: the image step refuses (exit 4)...
     assert cli.main(["release", "latest", "--tick"], ctx=ctx) == 4
     # ...and the skills step ran anyway. FALSIFIER: run skills only after a clean image step.
-    assert w.pointer("smd-staging") == OLD
+    assert w.pointer("ap-staging") == OLD
 
 
 def test_a_skills_release_not_published_from_main_is_never_weighed() -> None:
@@ -311,7 +311,7 @@ def test_a_skills_release_not_published_from_main_is_never_weighed() -> None:
     w.publish(OLD, "9" * 40)  # a commit the clone has never seen
     w.store.releases["img-202610190000-11111111"]["completed_last_ring_at"] = "2026-10-27T00:00:00Z"
     assert cli.main(["release", "latest", "--tick"], ctx=ctx) == TICK_WAITING
-    assert w.pointer("smd-staging") is None
+    assert w.pointer("ap-staging") is None
 
 
 def test_tick_still_refuses_skills_flag_force_and_lane_acceptance() -> None:

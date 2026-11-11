@@ -1,7 +1,7 @@
 """The harness customer.yaml: the release twin's shape with every reach into the world removed.
 
 Derived, not hand-copied, so the harness boots what the release twin (the seat
-whose seat.yaml says ``purpose: release-twin``, ADR 0107; smd-staging today)
+whose seat.yaml says ``purpose: release-twin``, ADR 0107; ap-staging today)
 boots (same persona, skills, entitlements, output classes, machine size) and
 cannot drift from it unnoticed. The source is looked up by purpose, never by
 slug, so renaming the twin needs no edit here. What is changed, and why:

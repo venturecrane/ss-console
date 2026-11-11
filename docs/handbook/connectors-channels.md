@@ -201,7 +201,7 @@ A channel carries a message in and a message out. It holds none of the worker's 
 
 Beyond reaching the Operator's own mailbox, the Operator can **manage a principal's mailbox** - read, triage, and draft against a human's inbox - through a per-operation delegation subject. The broker is the authorization boundary: it validates the requested subject and sender against the mailboxes the engagement authored in `customer.yaml.google_auth.managed_mailboxes` before any operation runs. This is the same broker that serves Google generally (ADR 0045); the managed-mailbox path is one set of governed `workspace_*` operations on top of it.
 
-No seat uses this path today. Of the seats in `operator/customers/`, only `smd-staging` authors `google_auth` at all, and its file states it declares no `managed_mailboxes`, so it touches no real inbox. The path is built in source (ADR 0045) and has no live consumer to observe end to end; the first seat that authors a managed mailbox is where it gets proven.
+No seat uses this path today. No seat in `operator/customers/` authors `google_auth` (the last one that did, `smd-staging`, declared no `managed_mailboxes` and was decommissioned 2026-11-11). The path is built in source (ADR 0045) and has no live consumer to observe end to end; the first seat that authors a managed mailbox is where it gets proven.
 
 ### Getting a guide-seat invite code for someone
 

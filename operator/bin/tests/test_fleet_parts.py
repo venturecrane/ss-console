@@ -175,9 +175,9 @@ def test_d1_parses_rows_and_turns_failure_into_tooling_error() -> None:
 
 def test_d1_statement_inlines_values_as_hex() -> None:
     runner = ScriptRunner(Result(0, "[]", ""))
-    FleetStore(D1(runner, "/repo")).hold("smd-staging", "it's a demo", "captain")
+    FleetStore(D1(runner, "/repo")).hold("ap-staging", "it's a demo", "captain")
     sql = runner.calls[0][-1]
-    assert "it's" not in sql and "'smd-staging'" not in sql and "CAST(x'" in sql
+    assert "it's" not in sql and "'ap-staging'" not in sql and "CAST(x'" in sql
 
 
 def test_r2_refuses_writes_outside_the_fleet_key_spaces() -> None:

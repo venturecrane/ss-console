@@ -4,16 +4,11 @@
 # tests/seat-inventory.test.ts fails while a generated registry is stale.
 #
 # The exact twin of ashton-price (customer.yaml beside this file, held equal to
-# A&P's by tests/twin-drift.test.ts and twin.yaml). It BECOMES ashton-price's
-# release twin at the flip, and is `internal` until then, because a client has at
-# most one release twin (ADR 0107) and smd-staging holds that role until this
-# seat is provisioned and green. The flip is one PR: here `purpose: release-twin`,
-# `twin_of: ashton-price`, and the ring line removed (a twin's ring 0 is
-# derived); smd-staging leaves the twin role in the same PR. Until the flip the
-# intended twin is declared by twin.yaml (`twin_of`), which is what
-# `operator/bin/reprovision-staging.sh --pre-flip ap-staging` isolates on.
+# A&P's by tests/twin-drift.test.ts and twin.yaml), and ashton-price's release
+# twin since the flip (#3972): a client has at most one release twin (ADR 0107).
+# It took the role from smd-staging, which was decommissioned 2026-11-11.
 #
-# TO PROVISION: docs/handbook/deployment-release.md, "Provisioning ap-staging,
+# TO REPROVISION: docs/handbook/deployment-release.md, "Provisioning ap-staging,
 # the exact twin of ashton-price".
 
 # What this seat is for (ADR 0107): client | release-twin | demo | internal.
@@ -23,9 +18,8 @@ twin_of: ashton-price
 # `fly apps list`. null = no app yet, and then unprovisioned_reason is required.
 # Fly cannot rename an app, so this is a new app, never hermes-smd-staging.
 fly_app: hermes-ap-staging
-# Release ring until the flip: with SMD's own seats, last. At the flip this
-# line goes (a release twin is ring 0, derived).
-# No wait after this seat: it is in the last ring until the flip.
+# A release twin is ring 0 (derived, ADR 0107).
+# No wait after this seat.
 bake_minutes: 0
 # The day this seat's customer.yaml first landed on main. Orders seats in a ring.
 authored: '2026-11-10'

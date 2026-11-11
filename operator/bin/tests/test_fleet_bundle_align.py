@@ -36,7 +36,7 @@ LINE = [OLD, FLOOR, IMAGE, AFTER, "c" * 40, NEEDS_NEWER]
 BASES = {OLD: OLD, FLOOR: OLD, AFTER: IMAGE, NEEDS_NEWER: "c" * 40}
 VERSIONS = {OLD: "202611060000-aaaaaaaa", FLOOR: "202611070000-ffffffff", AFTER: "202611070100-eeeeeeee",
             NEEDS_NEWER: "202611070200-dddddddd"}  # fmt: skip
-SEAT = "smd-staging"
+SEAT = "ap-staging"
 
 
 def _rel(sha: str) -> dict[str, Any]:

@@ -888,7 +888,7 @@ def test_the_no_reply_threshold_is_per_purpose():
 def test_a_renamed_twin_takes_the_purpose_threshold_with_no_contract_edit():
     seats = {"ap-staging": {"purpose": "release-twin", "twin_of": "x", "provisioned": True}}
     cfg = wh.load_config(seats=seats)
-    assert cfg.no_reply_for("ap-staging") == 5 and cfg.no_reply_for("smd-staging") == 30
+    assert cfg.no_reply_for("ap-staging") == 5 and cfg.no_reply_for("another-seat") == 30
 
 
 def test_a_purpose_override_must_name_a_purpose(tmp_path):
@@ -1184,7 +1184,7 @@ def test_times_read_in_phoenix():
 
 
 def test_a_seat_is_hidden_only_when_its_own_yaml_says_it_is_not_a_client():
-    assert cli.footnoted_seats(["ashton-price", "brokery", "pilot-smokeball", "smd-staging", "no-such-seat"]) == {
+    assert cli.footnoted_seats(["ashton-price", "brokery", "pilot-smokeball", "ap-staging", "no-such-seat"]) == {
         "pilot-smokeball",
-        "smd-staging",
+        "ap-staging",
     }

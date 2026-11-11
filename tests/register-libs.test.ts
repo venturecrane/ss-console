@@ -82,7 +82,7 @@ describe('the CLI still runs as a subprocess', () => {
 
 describe('clientOf', () => {
   it('rolls SMD-owned seats up to the SMD client', () => {
-    for (const seat of ['pilot-smokeball', 'smd-guide', 'smd-staging', 'scott']) {
+    for (const seat of ['ap-staging', 'pilot-smokeball', 'smd-guide', 'scott']) {
       expect(clientOf(seat)).toBe(SMD_CLIENT)
     }
   })
@@ -99,7 +99,6 @@ describe('clientOf', () => {
       'pilot-smokeball',
       'scott',
       'smd-guide',
-      'smd-staging',
     ])
     // Round-trips: every seat the inverse names maps back to the client.
     for (const seat of seatsOf(SMD_CLIENT)) expect(clientOf(seat)).toBe(SMD_CLIENT)
