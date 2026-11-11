@@ -23,7 +23,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable
+from typing import Iterable, Mapping
 
 _NUM = r"\$?\s?(?P<num>\d{1,3}(?:,\d{3})+|\d+)(?P<dec>\.\d{2})?\s?(?P<k>[kK]\b|thousand\b|[mM]\b|million\b)?"
 #: "$75,000 demand", "$75K sum-certain demand", "75K DEMAND"
@@ -137,7 +137,7 @@ def _fold(name: str) -> str:
 _LABEL = re.compile(r"(?im)^\s*(?:requesting|signing|responsible)\s+attorney\s*:\s*(?P<who>[^\n\[]+)$")
 
 
-def named_attorney(request: str, candidates: dict[str, Iterable[str]]) -> str | None:
+def named_attorney(request: str, candidates: Mapping[str, Iterable[str]]) -> str | None:
     """The key of the one attorney the request names, or None. ``candidates``
     maps each attorney's key (the roster's staff name) to every full form of
     their name the firm writes (staff name, demand signer, letters name). A

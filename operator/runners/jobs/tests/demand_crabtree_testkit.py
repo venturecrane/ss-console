@@ -137,7 +137,10 @@ def make_crabtree_inputs(root: Path, attorney: str = "Gamma Counsel", default: b
     sk.write_text(SKELETON, encoding="utf-8")
     cfg = root / "demand-firm.yaml"
     data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
-    data["inputs"]["house_reference_crabtree"] = {"path": ref.name, "sha256": hashlib.sha256(ref.read_bytes()).hexdigest()}
+    data["inputs"]["house_reference_crabtree"] = {
+        "path": ref.name,
+        "sha256": hashlib.sha256(ref.read_bytes()).hexdigest(),
+    }
     data["inputs"]["skeleton_crabtree"] = {"path": sk.name, "sha256": hashlib.sha256(sk.read_bytes()).hexdigest()}
     entry = {"signer": SIGNER, "title": TITLE, "initials": INITIALS, "bar_number": BAR, **row}
     if default:

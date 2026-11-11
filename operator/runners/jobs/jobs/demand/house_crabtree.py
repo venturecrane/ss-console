@@ -115,6 +115,8 @@ def fold_dashes(text: str) -> str:
     """A heading compared with its authored form: em and en dashes, hyphens
     and spacing are the same mark."""
     return " ".join(re.sub(r"\s*[\u2014\u2013-]\s*", " - ", text).split()).upper()
+
+
 _LETTERED = re.compile(r"^[A-Z][.)]\s+")
 
 

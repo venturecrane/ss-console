@@ -69,7 +69,7 @@ from operator_connector_sdk.library.resolver import replace_status
 
 from .. import library_edit
 from ..attorneys.seat import roster_for
-from . import terms
+from . import house_crabtree, terms
 from .outcome import DemandFailed, DemandHold
 from .signers import signer_for, who_signs
 
@@ -131,17 +131,14 @@ def select(run: Any, variant: str) -> tuple[Any, Path | None]:
     reference the demand is written in. The attorney is the one the request
     names, else the matter record's responsible attorney, chosen in code
     (``signers.who_signs``); the demand figure is the request's
-    (``terms.demand_figure``). An unmapped attorney, a variant with no format
-    for them, or a request naming two figures holds the job (``DemandHold``)
-    before anything is spent."""
+    (``terms.demand_figure``), read only for a layout that writes it (the
+    crabtree layout). An unmapped attorney, a variant with no format for them,
+    or a request naming two figures holds the job (``DemandHold``) before
+    anything is spent."""
     firm = run.firm
     request = str(getattr(run.job, "request_text", "") or "")
     roster = roster_for(run)
     who, named = who_signs(firm, run._json("facts.json").get("responsible_attorney"), request, roster)
-    try:
-        figure = terms.demand_figure(request)
-    except terms.FigureUnclear as exc:
-        raise DemandHold(f"{exc}; which one is the demand is the attorney's call. Nothing was spent.") from None
     signs = signer_for(firm, who, roster)
     if roster.status == roster_mod.OK and not roster.is_attorney(who):
         raise DemandHold(
@@ -161,6 +158,12 @@ def select(run: Any, variant: str) -> tuple[Any, Path | None]:
             f"no signature is authored for the {'requested' if named else 'responsible'} attorney ({who or 'none on the matter'}); "
             "a demand is never signed for an attorney who has not been mapped. Nothing was spent."
         )
+    figure = None
+    if firm.variants_for(signs)[variant].get("layout") == "crabtree":
+        try:
+            figure = terms.demand_figure(request)
+        except terms.FigureUnclear as exc:
+            raise DemandHold(f"{exc}; which one is the demand is the attorney's call. Nothing was spent.") from None
     run.firm = firm.select(variant, signs, figure)
     run.firm.data["_who"] = who
     return run.firm, pick_reference(run)
@@ -215,4 +218,28 @@ def pick_reference(run: Any) -> Path | None:
     return dest
 
 
-__all__ = ["KIND", "REFERENCE_NAME", "open_store", "pick_reference", "select", "spec_dir"]
+def decided(firm: Any) -> list[str]:
+    """What code decided from the request before drafting (``select``), as
+    matter-field lines for the drafter: who signs, and, in the crabtree layout,
+    the demand's amount, which the letter carries as a token the renderer fills."""
+    if "_variant" not in firm.data:
+        return []
+    out = []
+    who = firm.data.get("_who")
+    if who:
+        out.append(f"the signing attorney (decided by code): {who}")
+    if firm.variant.get("layout") == "crabtree":
+        fig = firm.figure
+        kind = (
+            "a policy-limits demand"
+            if fig is None
+            else f"a sum-certain demand of {house_crabtree.figure_text(fig)}, named in the request"
+        )
+        out.append(
+            f"the demand (decided by code): {kind}; write {house_crabtree.FIGURE_TOKEN} wherever the letter "
+            "states the amount demanded, and never write the amount yourself"
+        )
+    return out
+
+
+__all__ = ["KIND", "REFERENCE_NAME", "decided", "open_store", "pick_reference", "select", "spec_dir"]

@@ -138,7 +138,10 @@ def test_the_signature_row_carries_the_bar_number_from_the_roster_or_the_inputs(
         name=ATTORNEY,
         attorney=True,
         bar_number="123456",
-        signs={"demand": {"signer": SIGNER, "title": TITLE, "initials": INITIALS}, "letters": {"name": "G. Q. Counsel"}},
+        signs={
+            "demand": {"signer": SIGNER, "title": TITLE, "initials": INITIALS},
+            "letters": {"name": "G. Q. Counsel"},
+        },
     )
     ok = roster_mod.Roster(status=roster_mod.OK, people=(person,))
     row = signers.signer_for(firm, ATTORNEY, ok)
@@ -209,7 +212,13 @@ def test_a_policy_limits_render_round_trips_through_its_format_check(tmp_path):
         "Attn: Pat Adjuster",
     ]
     re_lines = [t for t in texts if "\t" in t and ":" in t and not t.startswith("Exhibit")]
-    assert [t.split("\t")[-2] for t in re_lines] == ["Our Client:", "Claim Number:", "Date of Loss:", "Place of Loss:", "Your Insured:"]
+    assert [t.split("\t")[-2] for t in re_lines] == [
+        "Our Client:",
+        "Claim Number:",
+        "Date of Loss:",
+        "Place of Loss:",
+        "Your Insured:",
+    ]
     banner, box = _boxes(path)
     assert banner == [
         "TIME-LIMITED POLICY LIMITS DEMAND",
@@ -227,7 +236,9 @@ def test_a_policy_limits_render_round_trips_through_its_format_check(tmp_path):
     assert "A.  Medical Providers and Billings to Date" in texts and "B.  Liability in Brief" in texts
     assert "A.  The Insured" in texts  # lettering restarts in each section
     heads = [t for t in texts if t.split(". ")[0] in ("I", "II", "III", "IV", "V", "VI", "VII")]
-    assert heads == [f"{n}. {h.upper()}" for n, h in zip(("I", "II", "III", "IV", "V", "VI", "VII"), variant()["headings"])]
+    assert heads == [
+        f"{n}. {h.upper()}" for n, h in zip(("I", "II", "III", "IV", "V", "VI", "VII"), variant()["headings"])
+    ]
     assert any("FULL AVAILABLE POLICY LIMITS" in t for t in texts) and not any("[DEMAND FIGURE]" in t for t in texts)
     i = texts.index("Very truly yours,")
     assert texts[i + 1 : i + 8] == [
@@ -306,7 +317,14 @@ def test_falsifier_the_old_numbered_format_fails_the_crabtree_check(tmp_path):
         client_label="Alpha Example",
     )
     res = _check(path)
-    wants = ("no 'Attn:' line", "no banner box", "PREAMBLE", "'Cordially,' belongs", "Case Distilled", "no 'Very truly yours,'")
+    wants = (
+        "no 'Attn:' line",
+        "no banner box",
+        "PREAMBLE",
+        "'Cordially,' belongs",
+        "Case Distilled",
+        "no 'Very truly yours,'",
+    )
     assert all(any(w in f for f in res.fails) for w in wants), res.fails
 
 
@@ -347,7 +365,9 @@ def test_a_request_naming_the_signer_and_a_figure_is_rendered_in_the_crabtree_la
     assert v.outcome == "delivered", v.reason
     compose = next(c for c in client.calls if "COMPOSE-PROMPT" in json.dumps(c.get("system")))
     sent = json.dumps(compose)
-    assert "a sum-certain demand of $75,000.00" in sent and f"the signing attorney (decided by code): {ATTORNEY}" in sent
+    assert (
+        "a sum-certain demand of $75,000.00" in sent and f"the signing attorney (decided by code): {ATTORNEY}" in sent
+    )
     path = out / "Demand.Alpha Example.docx"
     texts = _texts(path)
     assert f"{SIGNER}, (SBN {BAR})" in texts and _boxes(path)[0][0] == "$75,000 DEMAND - SEVENTY-FIVE THOUSAND DOLLARS"
@@ -359,3 +379,27 @@ def test_a_request_naming_two_figures_holds_before_anything_is_spent(tmp_path, p
     v, seat, client, _ = _run(tmp_path, pricing, make_crabtree_inputs(tmp_path / "in"), ATTORNEY, request)
     assert v.outcome == "held" and "more than one demand figure" in v.reason
     assert client.calls == [] and seat.sent == []
+
+
+def test_the_figure_is_not_read_for_a_layout_that_does_not_write_it(tmp_path, pricing):
+    """The house layout's demand is worded from its own skeleton; two figures in
+    its request are not a reason to hold it."""
+    from demand_testkit import DRAFT, make_inputs
+
+    seat = seat_with(standard_docs())
+    client = ScriptedClient(draft=DRAFT)
+    jd = make_job(tmp_path / "job")
+    job = json.loads((jd / "job.json").read_text())
+    job["request_text"] = "Draft a $75,000 demand. Actually a $50,000 demand."
+    (jd / "job.json").write_text(json.dumps(job))
+    v = DemandRun(
+        jd,
+        inputs_dir=str(make_inputs(tmp_path / "in")),
+        pricing=str(pricing),
+        seat_factory=lambda: seat,
+        client=client,
+        log=lambda _m: None,
+        readback_pause=0.0,
+        vendor_factory=lambda: None,
+    ).run()
+    assert v.outcome == "delivered", v.reason

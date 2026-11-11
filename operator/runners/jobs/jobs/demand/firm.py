@@ -362,7 +362,9 @@ def _variant_set(where: str, body: Any, inputs: dict[str, Any]) -> list[str]:
 def _attorney_problems(who: str, a: Any, formats: dict[str, Any]) -> list[str]:
     keys = set(ATTORNEY_KEYS) | set(OPTIONAL_ATTORNEY_KEYS)
     if not isinstance(a, dict) or not set(ATTORNEY_KEYS) <= set(a) <= keys:
-        return [f"attorneys.{who}: expected {{signer, title, initials}} and optionally format, bar_number, each a string"]
+        return [
+            f"attorneys.{who}: expected {{signer, title, initials}} and optionally format, bar_number, each a string"
+        ]
     out = [
         f"attorneys.{who}.{k}: expected a non-empty string" for k in ("signer", "title") if not _type_ok(a[k], "str")
     ]

@@ -327,7 +327,8 @@ def _crabtree(lines: list[tuple[str, str | None, Any]], doc: Any, v: Variant, fa
     boxes = [_cell_lines(docx.table.Table(el, doc._body)) for k, _t, el in after if k == "t"]
     if v.box_title and not any(b and b[0] == v.box_title for b in boxes):
         fails.append(f"no {v.box_title!r} box after the preamble heading")
-    heads = [ROMAN_HEAD.fullmatch(t).groups() for t, el in paras if ROMAN_HEAD.fullmatch(t) and _bold(el) and _centered(el)]
+    matched = [(ROMAN_HEAD.fullmatch(t), el) for t, el in paras]
+    heads = [m.groups() for m, el in matched if m is not None and _bold(el) and _centered(el)]
     nums = [_from_roman(n) for n, _ in heads]
     if nums != list(range(1, len(nums) + 1)):
         fails.append("the section numbers do not run I, II, III ... in order")

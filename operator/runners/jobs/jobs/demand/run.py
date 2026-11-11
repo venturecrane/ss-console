@@ -62,7 +62,6 @@ from . import (
     format_check,
     gapaudit,
     gate,
-    house_crabtree,
     job as job_mod,
     library_pick,
     preflight,
@@ -288,30 +287,7 @@ class DemandRun:
             )
             if f.get(key)
         ]
-        return [*fields, *self._decided(), f"today's date, the drafting date: {self.long_date}"]
-
-    def _decided(self) -> list[str]:
-        """What code decided from the request before drafting (library_pick.select):
-        who signs, and, in the crabtree layout, the demand's amount, which the
-        letter carries as a token the renderer fills."""
-        if "_variant" not in self.firm.data:
-            return []
-        out = []
-        who = self.firm.data.get("_who")
-        if who:
-            out.append(f"the signing attorney (decided by code): {who}")
-        if self.firm.variant.get("layout") == "crabtree":
-            fig = self.firm.figure
-            kind = (
-                "a policy-limits demand"
-                if fig is None
-                else f"a sum-certain demand of {house_crabtree.figure_text(fig)}, named in the request"
-            )
-            out.append(
-                f"the demand (decided by code): {kind}; write {house_crabtree.FIGURE_TOKEN} wherever the letter "
-                "states the amount demanded, and never write the amount yourself"
-            )
-        return out
+        return [*fields, *library_pick.decided(self.firm), f"today's date, the drafting date: {self.long_date}"]
 
     def _drafter(self) -> draft.Drafter:
         decision = self._json("premise.json")
