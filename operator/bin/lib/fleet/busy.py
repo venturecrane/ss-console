@@ -11,8 +11,10 @@ BUSY means any of:
   * a lane has wakes pending (a finished job's notice not yet sent);
   * a DELIVER turn started in the last TURN_BUSY_S and its reply is not yet
     seen (the wake is consumed, so the lane reads idle while the turn sends);
-  * a live gateway reports turns in flight (``active_agents`` in its
-    gateway_state.json): an answer to an inbound email is no lane and no cron;
+  * a live gateway reports turns in flight: an answer to an inbound email is
+    no lane and no cron. Asked live first (the gateway's ``active-work`` control
+    verb, what Hermes' own restart guard asks); the ``active_agents`` snapshot in
+    gateway_state.json is read only from a gateway that does not answer it;
   * a lane daemon is alive but its heartbeat is STALE: it cannot be shown idle,
     so it is treated as busy (a stale heartbeat never reads as idle), unless
     the live daemon started after that beat was written: then it is a lane the
@@ -138,6 +140,20 @@ def decide(
     for cron in facts.get("crons") or []:
         reasons.extend(_cron_reasons(cron, ahead, behind))
     for gw in facts.get("gateways") or []:
+        live = gw.get("live")
+        if gw.get("alive") and isinstance(live, dict):
+            # The gateway answered its own active-work verb: that is the count, in
+            # both directions (a stale file count is not work; a live unit is work
+            # even when the file says 0). Older gateways fall through to the file.
+            kinds = [str(k) for k in live.get("active_work") or []]
+            try:
+                count = max(int(live.get("active_agents") or 0), len(kinds))
+            except (TypeError, ValueError):
+                count = max(1, len(kinds))  # an unreadable count is never idle
+            if count > 0:
+                what = ", ".join(kinds) if kinds else "unnamed"
+                reasons.append(f"{gw.get('file')}: the gateway is running {count} turn(s) (live: {what})")
+            continue
         try:
             active = int(gw.get("active_agents") or 0)
         except (TypeError, ValueError):

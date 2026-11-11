@@ -212,16 +212,114 @@ def gateways(errors):
                 continue
             if not isinstance(st, dict):
                 continue
+            alive = pid_alive(st.get("pid"))
             out.append(
                 {
                     "file": path,
-                    "alive": pid_alive(st.get("pid")),
+                    "alive": alive,
                     "state": st.get("gateway_state"),
                     "active_agents": st.get("active_agents"),
                     "quiet_s": conversation_quiet_s(os.path.dirname(path), time.time()),
+                    "live": live_work(os.path.dirname(path), gateway_python(st)) if alive else None,
                 }
             )
     return out
+
+
+#: Extra import paths for that interpreter (none on a seat; tests point it at a stand-in).
+HERMES_PATH = []
+LIVE_TIMEOUT_S = 10.0
+LIVE_ASK = (
+    "import json,sys;from pathlib import Path;sys.path[:0]=sys.argv[2:];"
+    "from gateway.control_socket import query_gateway_control as q;"
+    "print('SMD_LIVE '+json.dumps(q(Path(sys.argv[1]),'active-work')))"
+)
+
+
+def gateway_socket(home):
+    """The gateway's control socket for ``home``, as Hermes resolves it: ``gateway.sock``
+    in the home, or the path ``gateway.sock.path`` points at. None when neither exists."""
+    direct = os.path.join(home, "gateway.sock")
+    if os.path.exists(direct):
+        return direct
+    try:
+        with open(os.path.join(home, "gateway.sock.path"), encoding="utf-8-sig") as fh:
+            target = fh.read().strip()
+    except OSError:
+        return None
+    return target if target and os.path.exists(target) else None
+
+
+def gateway_python(state):
+    """The gateway's own interpreter, from the launch argv it records in
+    gateway_state.json (``<venv>/bin/hermes gateway run``): the python beside that
+    entry point. Hermes' control-socket client is asked from it, so the wire
+    protocol has one home (upstream's), not a copy here. None when unrecorded."""
+    argv = state.get("argv") if isinstance(state, dict) else None
+    if not isinstance(argv, list) or not argv or not isinstance(argv[0], str):
+        return None
+    bindir = os.path.dirname(argv[0])
+    for name in ("python", "python3"):
+        cand = os.path.join(bindir, name)
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
+def live_work(home, python):
+    """What the gateway serving ``home`` is running NOW, from its own ``active-work``
+    control verb: ``{"active_agents": n, "active_work": [kinds]}``, or None when it does
+    not answer (no socket, an image before the verb, a timeout, a refusal).
+
+    WHY (ap-staging, 2026-11-11). ``active_agents`` in gateway_state.json is a snapshot
+    Hermes writes only at a chat turn's boundaries (claim, release, resume, shutdown),
+    yet the number it writes also counts cron runs, API runs and deferred workers,
+    whose own start and end write nothing. A snapshot taken while such work ran stays
+    in the file until the next chat turn, and a seat nobody emails has no next chat
+    turn: the file said 1 for hours while the gateway's live answer was 0 and its
+    shutdown drain counted 0. Hermes' own stop/restart guard asks this verb first
+    and reads the file only for gateways that predate it; the gate does the same.
+
+    Asked through Hermes' own client (``gateway.control_socket``) in the gateway's
+    interpreter. The socket accepts only its own uid and this probe runs as root, so
+    the child drops to the socket owner's uid first. Reads only."""
+    sock = gateway_socket(home)
+    if sock is None or python is None:
+        return None
+    import subprocess
+
+    try:
+        owner = os.stat(sock)
+    except OSError:
+        return None
+
+    def drop():
+        if os.getuid() == 0 and owner.st_uid != 0:
+            os.setgroups([])
+            os.setgid(owner.st_gid)
+            os.setuid(owner.st_uid)
+
+    try:
+        proc = subprocess.run(  # noqa: S603 - argv is the live gateway's own recorded interpreter and a fixed program; no shell
+            [python, "-I", "-c", LIVE_ASK, home] + list(HERMES_PATH),
+            preexec_fn=drop, cwd="/", env={"PATH": "/usr/bin:/bin"},
+            capture_output=True, text=True, timeout=LIVE_TIMEOUT_S, check=False,
+        )  # fmt: skip
+    except (OSError, subprocess.SubprocessError):
+        return None
+    line = next((row for row in proc.stdout.splitlines() if row.startswith("SMD_LIVE ")), None)
+    try:
+        result = json.loads(line[len("SMD_LIVE ") :]) if line else None
+    except ValueError:
+        return None
+    if not isinstance(result, dict) or not isinstance(result.get("active_work"), list):
+        return None
+    try:
+        count = int(result.get("active_agents") or 0)
+    except (TypeError, ValueError):
+        return None
+    kinds = [str(u.get("kind")) for u in result["active_work"] if isinstance(u, dict)]
+    return {"active_agents": count, "active_work": kinds}
 
 
 def conversation_quiet_s(home, now):

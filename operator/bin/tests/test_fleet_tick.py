@@ -1026,9 +1026,11 @@ def test_a_seat_program_runs_by_machine_exec_with_the_source_intact() -> None:
     assert argv[:4] == ["fly", "machine", "exec", "6e8206d0f36d08"]
     assert argv[5:] == ["-a", "hermes-smd-staging", "--timeout", "60"]
     command = argv[4]
-    prefix, suffix = "python3 -I -c \"import base64;exec(base64.b64decode('", "'))\""
+    import zlib
+
+    prefix, suffix = "python3 -I -c \"import base64,zlib;exec(zlib.decompress(base64.b64decode('", "')))\""
     assert command.startswith(prefix) and command.endswith(suffix)
-    assert base64.b64decode(command[len(prefix) : -len(suffix)]).decode() == source
+    assert zlib.decompress(base64.b64decode(command[len(prefix) : -len(suffix)])).decode() == source
     assert env == {"FLY_API_TOKEN": "FlyV1 fm2_seatsecretvalue,fm2_registrysecretvalue"}
 
 
