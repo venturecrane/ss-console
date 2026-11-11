@@ -938,7 +938,9 @@ personas:
           # Comma-separated (settings are scalars, ADR 0075); the first entry
           # gets every offer email and must be in scope.admins.
           scheduled_recipients: 'christa@ashtonandprice.com'
-          monthly_budget_usd: 25
+          # Captain 2026-11-11: raised from 25. November's $25 was spent by
+          # 11-10 (one 4 PM run cost $5.13), stopping Christa's offer emails.
+          monthly_budget_usd: 100
           per_job_cap_usd: 10
           matter_statuses: 'Open'
           # Words that mark a counter-offer as the firm's own (the reader's
