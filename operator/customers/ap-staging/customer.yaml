@@ -503,7 +503,7 @@ personas:
         enabled: true
         settings:
           scheduled_recipients: ScottDurgan@smdopslab.onmicrosoft.com
-          monthly_budget_usd: 25
+          monthly_budget_usd: 100
           per_job_cap_usd: 10
           matter_statuses: Open
           firm_words: smd,lab
