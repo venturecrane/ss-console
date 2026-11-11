@@ -293,7 +293,7 @@ def test_an_allowlisted_line_is_tolerated(tmp_path: Path) -> None:
 # -- targets and fixture --------------------------------------------------------------
 def test_every_seat_app_is_refused() -> None:
     apps = cli.seat_apps(OPERATOR)
-    assert "hermes-smd-staging" in apps
+    assert "hermes-ap-staging" in apps
     for app in apps:
         assert cli.refuse_target(app, OPERATOR) is not None
     assert cli.refuse_target("hermes-boot-harness", OPERATOR) is None

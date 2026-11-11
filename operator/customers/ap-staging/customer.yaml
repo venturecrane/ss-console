@@ -9,7 +9,7 @@
 #   - Smokeball: SMD's own STAGING tenant (environment: staging), the tenant
 #     pilot-smokeball also uses, through SMD's sandbox app (SMOKEBALL_STAGING_*,
 #     the `sandbox` custody class in operator/bin/lib/secret_custody.py).
-#   - Mail: the smdopslab lab mailbox smd-staging uses, the same two Graph app
+#   - Mail: the smdopslab lab mailbox smd-staging used, the same two Graph app
 #     registrations (read app below; send app staged as MSGRAPH_SEND_*__AP_STAGING).
 #   - People: SMD lab stand-ins in the shape A&P's people have. The office
 #     manager (admin, recipient of every scheduled email, the one send-as name)

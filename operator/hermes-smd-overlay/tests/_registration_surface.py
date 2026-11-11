@@ -84,8 +84,13 @@ def sub_plugins() -> list[str]:
 
 
 def authored_seats() -> list[Path]:
-    """Every authored seat config (``_template`` and its presets are not seats)."""
-    return sorted(p for p in CUSTOMERS.glob("*/customer.yaml") if not p.parent.name.startswith("_"))
+    """Every authored seat config (``_template`` and its presets are not seats,
+    nor is a decommissioned seat's ``<slug>.decommissioned.<date>`` tombstone)."""
+    return sorted(
+        p
+        for p in CUSTOMERS.glob("*/customer.yaml")
+        if not p.parent.name.startswith("_") and ".decommissioned." not in p.parent.name
+    )
 
 
 def collect(customer_yaml: Path, load_plugin: Callable[[str], Any]) -> dict[str, Any]:

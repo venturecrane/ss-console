@@ -15,5 +15,4 @@ export const INVENTORY_SEAT_PURPOSES = Object.freeze([
   ['pilot-smokeball', 'demo', null],
   ['scott', 'internal', null],
   ['smd-guide', 'internal', null],
-  ['smd-staging', 'internal', null],
 ])

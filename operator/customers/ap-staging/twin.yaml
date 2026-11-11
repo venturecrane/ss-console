@@ -51,7 +51,7 @@ differences:
     why: the staging tenant's staff row (PENDING until read from it)
   # ---- the mailbox: the smdopslab lab tenant ----
   - path: connectors.Email.msgraph_auth
-    why: the lab tenant, its read app registration and its operator mailbox (the ones smd-staging uses)
+    why: the lab tenant, its read app registration and its operator mailbox (the ones smd-staging used, before its decommission)
   - path: staff_mailbox_reads
     why: a lab mailbox, never a client staff member's; never the send-as approver's, or the read-app fence check fails
   # ---- people: SMD lab stand-ins in the client's shape ----

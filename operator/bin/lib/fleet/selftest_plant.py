@@ -15,7 +15,7 @@ proves all five on a release twin, end to end, with a REAL violation:
      run, wait until the check passes and, when nothing else failed, until the
      alert RESOLVES.
 
-Release twins only (seat.yaml ``purpose: release-twin``, ADR 0107; smd-staging
+Release twins only (seat.yaml ``purpose: release-twin``, ADR 0107; ap-staging
 today), refused for any other seat: it plants a fault on a seat.
 """
 

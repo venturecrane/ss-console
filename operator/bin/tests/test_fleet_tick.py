@@ -35,7 +35,7 @@ from bin.tests.fleet_fakes import DIGEST, fresh_status, selftest_json
 from bin.tests.test_fleet_release import World
 
 RINGS = [
-    Ring(0, ["smd-staging"], None, 30),
+    Ring(0, ["ap-staging"], None, 30),
     Ring(1, ["pilot-smokeball"], None, 30),
     Ring(2, ["scott", "brokery"], None, 30),
     Ring(3, ["ashton-price"], 1, 30),
@@ -72,22 +72,22 @@ def _deployed(w: World) -> list[str]:
 def test_a_tick_advances_one_ring_and_the_bake_holds_the_next(tmp_path) -> None:
     w = _tick_world(tmp_path)
     assert _tick(w, 0) == TICK_PROGRESS
-    assert _deployed(w) == ["hermes-smd-staging"]  # ring 0 only, never two rings in one tick
+    assert _deployed(w) == ["hermes-ap-staging"]  # ring 0 only, never two rings in one tick
     # Bake not elapsed: FALSIFIER: drop bake_gate and ring 1 deploys here.
     assert _tick(w, 10) == TICK_WAITING
-    assert _deployed(w) == ["hermes-smd-staging"]
+    assert _deployed(w) == ["hermes-ap-staging"]
     assert any("baking" in line for line in w.logs)
     assert _tick(w, 31) == TICK_PROGRESS
-    assert _deployed(w) == ["hermes-smd-staging", "hermes-pilot-smokeball"]
+    assert _deployed(w) == ["hermes-ap-staging", "hermes-pilot-smokeball"]
 
 
 def test_an_open_selftest_failing_on_ring_n_blocks_ring_n_plus_1(tmp_path) -> None:
     w = _tick_world(tmp_path)
     _tick(w, 0)
-    w.store.alerts.append({"customer_slug": "smd-staging", "condition": "selftest_failing", "status": "open"})
+    w.store.alerts.append({"customer_slug": "ap-staging", "condition": "selftest_failing", "status": "open"})
     # FALSIFIER: skip the open-alarm read and the pilot deploys after the bake.
     assert _tick(w, 60) == TICK_WAITING
-    assert _deployed(w) == ["hermes-smd-staging"]
+    assert _deployed(w) == ["hermes-ap-staging"]
     assert any("alarm is open" in line for line in w.logs)
     w.store.alerts.clear()
     assert _tick(w, 61) == TICK_PROGRESS
@@ -99,7 +99,7 @@ def test_a_full_release_by_ticks_never_redeploys_and_completes(tmp_path) -> None
     for minute in (0, 31, 62, 93):
         assert _tick(w, minute) == TICK_PROGRESS
     assert _deployed(w) == [
-        "hermes-smd-staging", "hermes-pilot-smokeball", "hermes-scott", "hermes-brokery", "hermes-ashton-price",
+        "hermes-ap-staging", "hermes-pilot-smokeball", "hermes-scott", "hermes-brokery", "hermes-ashton-price",
     ]  # fmt: skip
     assert w.store.completed == [w.rel["release_id"]]
     assert _tick(w, 200) == TICK_WAITING  # nothing left to do
@@ -120,7 +120,7 @@ def test_a_preflight_refusal_the_declarations_now_cover_is_retried_not_halted() 
         return row.get("detail") == refused
 
     plan = plan_tick(RINGS, latest, {}, lambda seats: [], now, None, retriable)
-    assert plan.code == TICK_PROGRESS and plan.seats == ["smd-staging"] and asked == ["ashton-price"]
+    assert plan.code == TICK_PROGRESS and plan.seats == ["ap-staging"] and asked == ["ashton-price"]
     # the hook says no (the declaration does not cover it): the halt stands exactly as before
     plan = plan_tick(RINGS, latest, {}, lambda seats: [], now, None, lambda seat, row: False)
     assert plan.code == TICK_HALTED_STANDING and "ashton-price=failed" in plan.reason
@@ -137,7 +137,7 @@ def test_a_halt_stands_until_a_person_acts(tmp_path) -> None:
     for seat in w.store.status:
         w.store.status[seat] = {**fresh_status(), "selftest_json": selftest_json(failed_count=1, failed=["x"])}
     assert _tick(w, 0) == TICK_HALT
-    assert w.store.states()["smd-staging"] == "rolled_back"
+    assert w.store.states()["ap-staging"] == "rolled_back"
     # FALSIFIER: ignore halting rows and the next tick retries the seat.
     assert _tick(w, 120) == TICK_HALTED_STANDING
     assert len(w.fly.deploys) == 2  # the release deploy and its rollback, nothing since
@@ -148,12 +148,12 @@ def test_a_selftest_timeout_in_a_tick_stalls_the_seat_without_any_boot_smoke(tmp
     for seat in w.store.status:
         w.store.status[seat] = fresh_status()  # no self-test row ever arrives
     assert _tick(w, 0) == TICK_PROGRESS
-    assert w.store.states()["smd-staging"] == "tooling_error"
+    assert w.store.states()["ap-staging"] == "tooling_error"
     assert w.smoke.calls == []  # FALSIFIER: fall back to bash and the boot smoke is called
     # Ring 0 has no seat done, so it stays the front and the next tick retries it,
     # and nothing past it moves: nothing has proved the release yet.
     assert _tick(w, 20) == TICK_PROGRESS
-    assert _deployed(w) == ["hermes-smd-staging", "hermes-smd-staging"]
+    assert _deployed(w) == ["hermes-ap-staging", "hermes-ap-staging"]
 
 
 def test_a_stalled_seat_never_holds_the_client_ring_back(tmp_path) -> None:
@@ -177,7 +177,7 @@ def test_a_stalled_seat_never_holds_the_client_ring_back(tmp_path) -> None:
 
 def test_a_stalled_seat_is_retried_while_the_front_bakes() -> None:
     latest = {
-        "smd-staging": {"state": "done", "finished_at": DONE_AT},
+        "ap-staging": {"state": "done", "finished_at": DONE_AT},
         "pilot-smokeball": {"state": "done", "finished_at": DONE_AT},
         "scott": {"state": "done", "finished_at": "2026-10-23T01:55:00Z"},
         "brokery": {"state": "tooling_error", "finished_at": "2026-10-23T01:55:00Z"},
@@ -192,7 +192,7 @@ def test_a_stalled_seat_is_retried_while_the_front_bakes() -> None:
 def test_a_busy_seat_waits_and_a_later_tick_picks_it_up(tmp_path) -> None:
     w = _tick_world(tmp_path)
     busy = {"lanes": [], "children": [{"file": "child.pid", "pid": "7", "alive": True}], "crons": [], "errors": []}
-    w.fly.probe_facts["smd-staging"] = [busy] * 50
+    w.fly.probe_facts["ap-staging"] = [busy] * 50
     w.roll.gate.sleep = w.clock.sleep  # the idle wait runs on the fake clock
     plan_wait = 60.0
     w.clock.t = T0
@@ -200,14 +200,14 @@ def test_a_busy_seat_waits_and_a_later_tick_picks_it_up(tmp_path) -> None:
                      ssh_fallback=False)  # fmt: skip
     ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
     assert ticker.run(RINGS, w.rel, lambda s, r: w.roll.run(s, r, plan), "h") == TICK_PROGRESS
-    assert w.store.states()["smd-staging"] == "waiting_idle" and w.fly.deploys == []
-    w.fly.probe_facts["smd-staging"] = [{"lanes": [], "children": [], "crons": [], "errors": []}]
+    assert w.store.states()["ap-staging"] == "waiting_idle" and w.fly.deploys == []
+    w.fly.probe_facts["ap-staging"] = [{"lanes": [], "children": [], "crons": [], "errors": []}]
     assert _tick(w, 20) == TICK_PROGRESS
-    assert _deployed(w) == ["hermes-smd-staging"]
+    assert _deployed(w) == ["hermes-ap-staging"]
 
 
 def test_held_seats_neither_deploy_nor_block_their_ring_but_a_fully_held_ring_waits() -> None:
-    latest = {"smd-staging": {"state": "done", "finished_at": DONE_AT}}
+    latest = {"ap-staging": {"state": "done", "finished_at": DONE_AT}}
     now = datetime(2026, 10, 23, 2, tzinfo=timezone.utc)
     plan = plan_tick(RINGS, latest, {"pilot-smokeball": {}}, lambda seats: [], now)
     assert plan.code == TICK_WAITING and "every seat is held" in plan.reason
@@ -253,7 +253,7 @@ def test_with_no_bake_one_tick_takes_staging_then_the_client_seat(tmp_path) -> N
     """2026-10-30 rings: staging, then ashton-price at once, then SMD's own seats."""
     w = _tick_world(tmp_path)
     rings = [
-        Ring(0, ["smd-staging"], None, 0),
+        Ring(0, ["ap-staging"], None, 0),
         Ring(1, ["ashton-price"], None, 0),
         Ring(2, ["pilot-smokeball", "scott", "brokery"], 1, 10),
     ]
@@ -263,7 +263,7 @@ def test_with_no_bake_one_tick_takes_staging_then_the_client_seat(tmp_path) -> N
     code = ticker.run_promoting(rings, [w.rel], lambda rel: lambda s, r: w.roll.run(s, r, plan), "h")
     assert code == TICK_PROGRESS
     # FALSIFIER: a bake of even one minute on ring 0 and the client seat waits for the next tick.
-    assert _deployed(w)[:2] == ["hermes-smd-staging", "hermes-ashton-price"]
+    assert _deployed(w)[:2] == ["hermes-ap-staging", "hermes-ashton-price"]
 
 
 def _done_releases(w: World, seat: str) -> list[str]:
@@ -291,7 +291,7 @@ def test_a_run_of_merges_faster_than_the_bake_does_not_starve_the_later_rings(tm
     # FALSIFIER: restart-at-ring-0, or wait for the next newer release with no
     # bound, and the pilot never moves while merges keep landing.
     assert _promote(w, 60, [d, c, b, a]) == TICK_PROGRESS
-    assert _done_releases(w, "smd-staging") == [r["release_id"] for r in (a, b, c, d)]
+    assert _done_releases(w, "ap-staging") == [r["release_id"] for r in (a, b, c, d)]
     assert _done_releases(w, "pilot-smokeball") == [a["release_id"]]
     assert any("baked on the earlier rings" in line for line in w.logs)
 
@@ -309,25 +309,25 @@ def test_one_tick_moves_every_ring_that_has_a_release_ready(tmp_path) -> None:
     # FALSIFIER: one ring per tick and B's staging deploy is all this tick does.
     assert _promote(w, 93, [b, a]) == TICK_PROGRESS
     apps = [app for app, _, _ in w.fly.deploys[before:]]
-    assert apps == ["hermes-smd-staging", "hermes-ashton-price"], apps
+    assert apps == ["hermes-ap-staging", "hermes-ashton-price"], apps
     assert _done_releases(w, "ashton-price") == [a["release_id"]]
-    assert _done_releases(w, "smd-staging")[-1] == b["release_id"]
+    assert _done_releases(w, "ap-staging")[-1] == b["release_id"]
 
 
 def test_a_seat_done_on_a_newer_release_is_never_pending_for_an_older_one() -> None:
     # FALSIFIER: drop overlay_newer and the older release plans the pilot as
     # pending, which would deploy it backwards onto the older image.
     now = datetime(2026, 10, 23, 2, 0, tzinfo=timezone.utc)
-    older_rows = {"smd-staging": {"state": "done", "finished_at": "2026-10-23T00:00:00Z"}}
+    older_rows = {"ap-staging": {"state": "done", "finished_at": "2026-10-23T00:00:00Z"}}
     newer_rows = {"pilot-smokeball": {"state": "done", "finished_at": "2026-10-23T00:20:00Z"}}
     merged = overlay_newer(older_rows, [newer_rows])
     plan = plan_tick(RINGS, merged, {}, lambda seats: [], now)
     assert plan.code == TICK_PROGRESS and plan.ring is not None and plan.ring.number == 2
     assert "pilot-smokeball" not in (plan.seats or [])
     # A seat done on the older release keeps its own finish time for the bake.
-    own = overlay_newer({"smd-staging": {"state": "done", "finished_at": "2026-10-23T00:00:00Z"}},
-                        [{"smd-staging": {"state": "done", "finished_at": "2026-10-23T01:59:00Z"}}])  # fmt: skip
-    assert own["smd-staging"]["finished_at"] == "2026-10-23T00:00:00Z"
+    own = overlay_newer({"ap-staging": {"state": "done", "finished_at": "2026-10-23T00:00:00Z"}},
+                        [{"ap-staging": {"state": "done", "finished_at": "2026-10-23T01:59:00Z"}}])  # fmt: skip
+    assert own["ap-staging"]["finished_at"] == "2026-10-23T00:00:00Z"
 
 
 def test_an_older_release_gives_way_to_a_newer_one_about_to_reach_the_ring(tmp_path) -> None:
@@ -354,7 +354,7 @@ def test_a_release_published_mid_run_ends_the_run_so_the_next_one_takes_it(tmp_p
     later seat in this run; the newer one waits for all of them."""
     w = _tick_world(tmp_path)
     rings = [
-        Ring(0, ["smd-staging"], None, 0),
+        Ring(0, ["ap-staging"], None, 0),
         Ring(1, ["ashton-price"], None, 0),
         Ring(2, ["pilot-smokeball", "scott", "brokery"], 1, 0),
     ]
@@ -377,7 +377,7 @@ def test_a_release_published_mid_run_ends_the_run_so_the_next_one_takes_it(tmp_p
     ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
     assert ticker.run_promoting(rings, [older], do_seat_for, "h", refresh=refresh) == TICK_PROGRESS
     assert seen["calls"] == 1
-    assert _deployed(w) == ["hermes-smd-staging"]  # the older release stopped after ring 0
+    assert _deployed(w) == ["hermes-ap-staging"]  # the older release stopped after ring 0
     assert any("was published while this run moved ring 0" in line for line in w.logs)
     # The next run: the newer release takes staging, then the client seat, then the rest; the
     # older release is never carried into a ring the newer one is about to reach.
@@ -399,7 +399,7 @@ def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> No
     deploy on the old release."""
     w = _tick_world(tmp_path)
     rings = [
-        Ring(0, ["smd-staging"], None, 0),
+        Ring(0, ["ap-staging"], None, 0),
         Ring(1, ["ashton-price", "pilot-smokeball", "scott", "brokery"], 2, 0),
     ]
     older = w.rel
@@ -408,7 +408,7 @@ def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> No
 
     def refresh() -> list[dict]:
         # No newer release until ring 1's canary and first full wave have rolled.
-        if len([d for d in w.fly.deploys if d[0] != "hermes-smd-staging"]) >= 3:
+        if len([d for d in w.fly.deploys if d[0] != "hermes-ap-staging"]) >= 3:
             if newer["release_id"] not in w.store.releases:
                 w.store.insert_release(newer)
             return [newer, older]
@@ -423,7 +423,7 @@ def test_a_client_ring_rolls_in_waves_and_hands_off_between_them(tmp_path) -> No
     assert ticker.run_promoting(rings, [older], do_seat_for, "h", refresh=refresh) == TICK_PROGRESS
     apps = [app for app, _, _ in w.fly.deploys]
     # staging, the canary, then ONE wave of two client seats, then the hand-off.
-    assert apps[0] == "hermes-smd-staging" and len(apps) == 4
+    assert apps[0] == "hermes-ap-staging" and len(apps) == 4
     assert apps[1] == "hermes-ashton-price"
     assert set(apps[2:]) == {"hermes-pilot-smokeball", "hermes-scott"}
     assert any("left for the next run" in line for line in w.logs)
@@ -478,9 +478,9 @@ def test_a_client_ring_rolls_a_canary_alone_then_every_other_seat_at_once(tmp_pa
     """FALSIFIER: chunk the ring by max_parallel with no canary and the four seats roll as one wave."""
     w = _tick_world(tmp_path)
     calls = _spy_waves(monkeypatch)
-    rings = [Ring(0, ["smd-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
+    rings = [Ring(0, ["ap-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
     assert _roll(w, rings) == TICK_PROGRESS
-    assert calls == [["smd-staging"], ["ashton-price"], ["pilot-smokeball", "scott", "brokery"]]
+    assert calls == [["ap-staging"], ["ashton-price"], ["pilot-smokeball", "scott", "brokery"]]
     assert any("ring 1 canary ashton-price first, then 3 at once" in line for line in w.logs)
     assert w.store.release_done_seats(w.rel["release_id"]) >= set(CLIENTS)
 
@@ -490,10 +490,10 @@ def test_a_failing_canary_halts_before_any_other_client_seat_deploys(tmp_path, m
     w = _tick_world(tmp_path)
     calls = _spy_waves(monkeypatch)
     w.store.status["ashton-price"] = {**fresh_status(), "selftest_json": selftest_json(failed_count=1, failed=["x"])}
-    rings = [Ring(0, ["smd-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
+    rings = [Ring(0, ["ap-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
     assert _roll(w, rings) == TICK_HALT
-    assert calls == [["smd-staging"], ["ashton-price"]]
-    assert set(_deployed(w)) == {"hermes-smd-staging", "hermes-ashton-price"}  # the canary and its rollback
+    assert calls == [["ap-staging"], ["ashton-price"]]
+    assert set(_deployed(w)) == {"hermes-ap-staging", "hermes-ashton-price"}  # the canary and its rollback
     assert w.store.states()["ashton-price"] == "rolled_back"
     for seat in CLIENTS[1:]:
         assert seat not in w.store.states()
@@ -504,11 +504,11 @@ def test_a_ring_with_a_seat_already_done_on_the_release_skips_the_canary(tmp_pat
     FALSIFIER: ignore release_done_seats and pilot-smokeball rolls alone as a second canary."""
     w = _tick_world(tmp_path)
     rid = w.rel["release_id"]
-    for i, seat in enumerate(["smd-staging", "ashton-price"]):
+    for i, seat in enumerate(["ap-staging", "ashton-price"]):
         w.store.start_rollout({"rollout_id": f"r{i}", "customer_slug": seat, "release_id": rid})
         w.store.update_rollout(f"r{i}", "done")
     calls = _spy_waves(monkeypatch)
-    rings = [Ring(0, ["smd-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
+    rings = [Ring(0, ["ap-staging"], None, 0), Ring(1, list(CLIENTS), 20, 0)]
     assert _roll(w, rings) == TICK_PROGRESS
     assert calls == [["pilot-smokeball", "scott", "brokery"]]
     assert not any("canary" in line for line in w.logs)
@@ -520,7 +520,7 @@ def test_smds_own_last_ring_still_rolls_one_seat_at_a_time(tmp_path, monkeypatch
     w = _tick_world(tmp_path)
     calls = _spy_waves(monkeypatch)
     rings = [
-        Ring(0, ["smd-staging"], None, 0),
+        Ring(0, ["ap-staging"], None, 0),
         Ring(1, ["ashton-price", "pilot-smokeball"], 20, 0),
         Ring(2, ["scott", "brokery"], 1, 0),
     ]
@@ -540,7 +540,7 @@ def test_a_skills_or_bundle_step_yields_the_lane_when_a_newer_image_lands(tmp_pa
 
     w = _tick_world(tmp_path)
     rings = [
-        Ring(0, ["smd-staging"], None, 0),
+        Ring(0, ["ap-staging"], None, 0),
         Ring(1, ["ashton-price", "pilot-smokeball", "scott", "brokery"], 2, 0),
     ]
     newer = {**w.rel, "release_id": "img-202610190100-22222222"}
@@ -553,7 +553,7 @@ def test_a_skills_or_bundle_step_yields_the_lane_when_a_newer_image_lands(tmp_pa
         def seat(s: str, r: int):
             out = w.roll.run(s, r, plan)
             # A newer image lands while the first client wave (the canary) rolls.
-            if s != "smd-staging" and newer["release_id"] not in w.store.releases:
+            if s != "ap-staging" and newer["release_id"] not in w.store.releases:
                 w.store.insert_release(newer)
             return out
 
@@ -563,7 +563,7 @@ def test_a_skills_or_bundle_step_yields_the_lane_when_a_newer_image_lands(tmp_pa
     ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
     assert ticker.run_promoting(rings, [w.rel], do_seat_for, "h", yield_when=signal) == TICK_PROGRESS
     apps = [app for app, _, _ in w.fly.deploys]
-    assert apps == ["hermes-smd-staging", "hermes-ashton-price"], apps  # the canary, then the hand-off
+    assert apps == ["hermes-ap-staging", "hermes-ashton-price"], apps  # the canary, then the hand-off
     assert any("a newer image was published while this run moved ring 1" in line for line in w.logs)
     assert signal() is True
 
@@ -573,7 +573,7 @@ def test_a_pass_that_holds_the_last_ring_stops_before_it(tmp_path) -> None:
     FALSIFIER: ignore hold_ring and the first pass deploys SMD's own seats too."""
     w = _tick_world(tmp_path)
     rings = [
-        Ring(0, ["smd-staging"], None, 0),
+        Ring(0, ["ap-staging"], None, 0),
         Ring(1, ["ashton-price"], 5, 0),
         Ring(2, ["scott", "brokery"], 1, 0),
     ]
@@ -585,7 +585,7 @@ def test_a_pass_that_holds_the_last_ring_stops_before_it(tmp_path) -> None:
     w.clock.t = T0
     ticker = Ticker(w.store, w.logs.append, w.clock)  # type: ignore[arg-type]
     assert ticker.run_promoting(rings, [w.rel], do_seat_for, "h", hold_ring=2) == TICK_PROGRESS
-    assert [app for app, _, _ in w.fly.deploys] == ["hermes-smd-staging", "hermes-ashton-price"]
+    assert [app for app, _, _ in w.fly.deploys] == ["hermes-ap-staging", "hermes-ashton-price"]
     assert any("ring 2 waits" in line for line in w.logs)
     # Nothing is left before the held ring: the same pass again waits and deploys nothing.
     assert ticker.run_promoting(rings, [w.rel], do_seat_for, "h", hold_ring=2) == TICK_WAITING
@@ -608,7 +608,7 @@ def test_a_latest_tick_gives_client_rings_every_release_before_the_last_ring(mon
     calls: list[tuple[str, int | None]] = []
     images = [{"release_id": "img-a", "kind": "image"}]
     ctx = SimpleNamespace(
-        rings=lambda: [Ring(0, ["smd-staging"], None, 0), Ring(1, ["ashton-price"], 5, 0), Ring(2, ["scott"], 1, 0)],
+        rings=lambda: [Ring(0, ["ap-staging"], None, 0), Ring(1, ["ashton-price"], 5, 0), Ring(2, ["scott"], 1, 0)],
         log=lambda m: None,
         store=SimpleNamespace(recent_releases=lambda n: list(images)),
     )
@@ -651,7 +651,7 @@ def test_a_latest_tick_gives_client_rings_every_release_before_the_last_ring(mon
 
     # A fleet of one ring holds nothing.
     calls.clear()
-    ctx.rings = lambda: [Ring(0, ["smd-staging"], None, 0)]
+    ctx.rings = lambda: [Ring(0, ["ap-staging"], None, 0)]
     artifact_tick.latest_tick(ctx, None, image)  # type: ignore[arg-type]
     assert calls == [("image", None), ("skills", None), ("bundle", None)]
 
@@ -922,7 +922,7 @@ def test_an_image_from_a_commit_the_clone_never_saw_is_not_from_main_and_not_an_
 
 SEAT_TOK = "FlyV1 fm2_seatsecretvalue"
 REG_TOK = "FlyV1 fm2_registrysecretvalue"
-CI_ENV = {"GITHUB_ACTIONS": "true", "FLY_DEPLOY_TOKEN__SMD_STAGING": SEAT_TOK, "FLY_REGISTRY_TOKEN": REG_TOK}
+CI_ENV = {"GITHUB_ACTIONS": "true", "FLY_DEPLOY_TOKEN__AP_STAGING": SEAT_TOK, "FLY_REGISTRY_TOKEN": REG_TOK}
 
 
 class RecordingRunner:
@@ -936,7 +936,7 @@ class RecordingRunner:
 
 
 def test_token_name_for_a_seat_app() -> None:
-    assert seat_token_env_name("hermes-smd-staging") == "FLY_DEPLOY_TOKEN__SMD_STAGING"
+    assert seat_token_env_name("hermes-ap-staging") == "FLY_DEPLOY_TOKEN__AP_STAGING"
     assert seat_token_env_name("hermes-captain-mark") == "FLY_DEPLOY_TOKEN__CAPTAIN_MARK"
     with pytest.raises(ToolingError):
         seat_token_env_name("hermes")
@@ -945,7 +945,7 @@ def test_token_name_for_a_seat_app() -> None:
 def test_a_seat_call_carries_the_seat_and_registry_macaroons_combined() -> None:
     runner = RecordingRunner()
     fly = Fly(runner, "/repo", FlyTokens(CI_ENV))  # type: ignore[arg-type]
-    fly.machines("hermes-smd-staging")
+    fly.machines("hermes-ap-staging")
     _, env = runner.calls[-1]
     assert env == {"FLY_API_TOKEN": "FlyV1 fm2_seatsecretvalue,fm2_registrysecretvalue"}
     assert combine_tokens(SEAT_TOK, REG_TOK) == "FlyV1 fm2_seatsecretvalue,fm2_registrysecretvalue"
@@ -1021,10 +1021,10 @@ def test_a_seat_program_runs_by_machine_exec_with_the_source_intact() -> None:
     runner = MachineRunner(out="SMD_BUSY_PROBE {}")
     fly = Fly(runner, "/repo", FlyTokens(CI_ENV))  # type: ignore[arg-type]
     source = "import json\nARGS = json.loads(\"{\\\"a\\\": 'b c'}\")\nprint('x')\n"
-    fly.run_python("hermes-smd-staging", source, timeout=60)
+    fly.run_python("hermes-ap-staging", source, timeout=60)
     argv, env = runner.calls[-1]
     assert argv[:4] == ["fly", "machine", "exec", "6e8206d0f36d08"]
-    assert argv[5:] == ["-a", "hermes-smd-staging", "--timeout", "60"]
+    assert argv[5:] == ["-a", "hermes-ap-staging", "--timeout", "60"]
     command = argv[4]
     import zlib
 
@@ -1050,7 +1050,7 @@ def test_no_fly_call_in_the_fleet_library_lists_the_whole_org() -> None:
 def test_tokens_never_reach_an_argv_and_repr_hides_them() -> None:
     runner = RecordingRunner()
     tokens = FlyTokens(CI_ENV)
-    Fly(runner, "/repo", tokens).secret_names("hermes-smd-staging")  # type: ignore[arg-type]
+    Fly(runner, "/repo", tokens).secret_names("hermes-ap-staging")  # type: ignore[arg-type]
     assert not any("secretvalue" in arg for argv, _ in runner.calls for arg in argv)
     assert "secretvalue" not in repr(tokens)
 
@@ -1076,8 +1076,8 @@ def test_a_missing_seat_token_ends_that_seat_as_a_tooling_error_before_anything_
             return super().secret_names(app)
 
     w.fly.__class__ = ScopedFly
-    w.release_all(only="smd-staging")
-    assert w.store.states()["smd-staging"] == "tooling_error"
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "tooling_error"
     assert w.fly.deploys == [] and w.fly.snapshots == []
 
 
@@ -1101,7 +1101,7 @@ def test_each_judged_seat_writes_a_live_state_row_with_the_relay_key() -> None:
 
     w = World()
     w.roll.ledger = VerifyLedger("relay-secret", post=post)
-    w.release_all(only="smd-staging")
+    w.release_all(only="ap-staging")
     url, body, headers = sent[0]
     assert url.endswith("/verify") and headers == {"X-Relay-Key": "relay-secret"}
     assert body["method"] == "live_state" and body["command"] and len(body["claim"]) <= 300
@@ -1113,7 +1113,7 @@ def test_each_judged_seat_writes_a_live_state_row_with_the_relay_key() -> None:
 def test_a_ledger_failure_is_a_note_and_never_fails_the_seat() -> None:
     w = World()
     w.roll.ledger = VerifyLedger("k", post=lambda u, b, h: (503, None))
-    w.release_all(only="smd-staging")
+    w.release_all(only="ap-staging")
     row = next(iter(w.store.rollouts.values()))
     assert row["state"] == "done" and "verify row: not written (HTTP 503)" in row["detail"]
 

@@ -57,7 +57,7 @@ MACAROON_SCHEME = "FlyV1 "
 
 
 def seat_token_env_name(app: str) -> str:
-    """The secret holding ``app``'s deploy token: hermes-smd-staging -> FLY_DEPLOY_TOKEN__SMD_STAGING."""
+    """The secret holding ``app``'s deploy token: hermes-ap-staging -> FLY_DEPLOY_TOKEN__AP_STAGING."""
     if not app.startswith("hermes-"):
         raise ToolingError(f"{app} is not a seat app, so it has no per-app token name")
     return SEAT_TOKEN_PREFIX + ids.slug(app.removeprefix("hermes-")).upper().replace("-", "_")

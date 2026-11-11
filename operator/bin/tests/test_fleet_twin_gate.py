@@ -32,7 +32,7 @@ from bin.tests.fleet_fakes import fresh_status, selftest_json
 from bin.tests.test_fleet_release import World
 
 OPERATOR = Path(__file__).resolve().parents[2]
-CLIENT, TWIN = "ashton-price", "smd-staging"
+CLIENT, TWIN = "ashton-price", "ap-staging"
 NOW = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
 DONE = {"state": "done", "finished_at": "2026-10-30T11:00:00Z"}
 
@@ -141,7 +141,7 @@ def test_only_the_client_is_refused_until_its_twin_is_done_on_the_release() -> N
     assert _deployed(w) == []
     _waves(w, only=TWIN)
     _waves(w, only=CLIENT)
-    assert _deployed(w) == ["hermes-smd-staging", "hermes-ashton-price"]
+    assert _deployed(w) == ["hermes-ap-staging", "hermes-ashton-price"]
 
 
 def test_a_full_run_with_the_twin_held_never_reaches_the_client() -> None:
@@ -158,7 +158,7 @@ def test_a_full_run_with_the_twin_held_never_reaches_the_client() -> None:
 def test_a_full_run_counts_a_twin_that_finished_earlier_in_the_same_run() -> None:
     w = _world()
     result = _waves(w)
-    assert _deployed(w)[:2] == ["hermes-smd-staging", "hermes-ashton-price"]
+    assert _deployed(w)[:2] == ["hermes-ap-staging", "hermes-ashton-price"]
     assert {o.seat: o.state for o in result.outcomes}[CLIENT] == "done"
 
 

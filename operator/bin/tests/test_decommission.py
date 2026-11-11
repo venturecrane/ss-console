@@ -512,6 +512,54 @@ def test_cli_live_allow_unwired_runs_and_tombstones(tmp_path, _no_ambient_backen
     assert len(list(customers_root.glob("smd.decommissioned.*"))) == 1
 
 
+def test_cli_default_audit_db_survives_the_tombstone_rename(tmp_path, _no_ambient_backends):
+    """The smd-staging retirement, 2026-11-11: with no ``--audit-db`` the trail
+    defaulted to ``customers/<slug>/.decommission-audit.sqlite``, INSIDE the dir
+    step 08 renames. SQLite could not create its journal beside the moved file,
+    so the step-08 completion row failed (``attempt to write a readonly
+    database``, AuditWriteError, exit 4) after the rename had already happened.
+    The default now lives under ``--archive-root``, which nothing renames.
+
+    Runs with the DEFAULT audit path (no ``--audit-db``) through the tombstone
+    and reads the completion row back. Falsifier: point the default back inside
+    the seat dir and this run exits non-zero with no 08_tombstone row."""
+    from bin.lib.decommission_cli import main
+
+    customers_root = _copy_fixture(tmp_path)
+    archive_root = tmp_path / "archive"
+    rc = main(
+        [
+            "smd",
+            "--live",
+            "--confirm-slug",
+            "smd",
+            "--allow-unwired",
+            "--customers-root",
+            str(customers_root),
+            "--archive-root",
+            str(archive_root),
+        ]
+    )
+    assert rc == 0
+    assert len(list(customers_root.glob("smd.decommissioned.*"))) == 1
+    # Nothing of the trail is left in (or under) the renamed seat dir.
+    assert not list(customers_root.rglob("*.sqlite"))
+
+    audit_db = archive_root / "smd" / "decommission-audit.sqlite"
+    assert audit_db.exists(), "the default audit trail must live under --archive-root"
+    conn = sqlite3.connect(str(audit_db))
+    try:
+        steps = [
+            json.loads(meta).get("step")
+            for (meta,) in conn.execute(
+                "SELECT metadata FROM audit_log WHERE action_type = 'DECOMMISSION_STEP_COMPLETE'"
+            )
+        ]
+    finally:
+        conn.close()
+    assert "08_tombstone" in steps, f"no step-08 completion row; rows: {steps}"
+
+
 def _untouched(customers_root: Path) -> bool:
     return (customers_root / "smd" / "customer.yaml").exists() and not list(customers_root.glob("smd.decommissioned.*"))
 

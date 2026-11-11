@@ -127,10 +127,10 @@ def test_the_real_seats_author_what_their_configs_say() -> None:
     assert cap.authored_lanes(seat("ashton-price")) == every_lane
     assert cap.authors_connector(seat("ashton-price"), "smokeball")
     assert cap.authors_connector(seat("pilot-smokeball"), "smokeball")
-    # smd-staging is ring 0: it authors every lane A&P runs (manual only, no firm
-    # inputs, so each lane's self-test notes "absent" by the boot fetch verdict).
-    assert cap.authored_lanes(seat("smd-staging")) == every_lane
-    assert not cap.authors_connector(seat("smd-staging"), "smokeball")
+    # ap-staging is ring 0, ashton-price's exact twin (ADR 0107): every lane A&P
+    # runs, and the Smokeball connector, bound to SMD's staging tenant.
+    assert cap.authored_lanes(seat("ap-staging")) == every_lane
+    assert cap.authors_connector(seat("ap-staging"), "smokeball")
     for slug in ("captain-mark", "scott", "brokery", "ashton-price-marketing"):
         assert cap.authored_lanes(seat(slug)) == [], slug
         assert not cap.authors_connector(seat(slug), "smokeball"), slug

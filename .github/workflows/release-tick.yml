@@ -97,17 +97,7 @@ on:
         # One option per seat in operator/fleet/rings.yaml; the conformance test
         # fails when they drift.
         options:
-          [
-            none,
-            smd-staging,
-            ap-staging,
-            pilot-smokeball,
-            scott,
-            brokery,
-            captain-mark,
-            smd-guide,
-            ashton-price,
-          ]
+          [none, ap-staging, pilot-smokeball, scott, brokery, captain-mark, smd-guide, ashton-price]
       artifact:
         description: 'Urgent one-seat release of: image, or the jobs bundle'
         type: choice
@@ -212,7 +202,6 @@ jobs:
           FLY_REGISTRY_TOKEN: ${{ secrets.FLY_REGISTRY_TOKEN }}
           # One line per seat in operator/fleet/rings.yaml; the conformance
           # test fails when a ringed seat has no line here.
-          FLY_DEPLOY_TOKEN__SMD_STAGING: ${{ secrets.FLY_DEPLOY_TOKEN__SMD_STAGING }}
           FLY_DEPLOY_TOKEN__AP_STAGING: ${{ secrets.FLY_DEPLOY_TOKEN__AP_STAGING }}
           FLY_DEPLOY_TOKEN__PILOT_SMOKEBALL: ${{ secrets.FLY_DEPLOY_TOKEN__PILOT_SMOKEBALL }}
           FLY_DEPLOY_TOKEN__SCOTT: ${{ secrets.FLY_DEPLOY_TOKEN__SCOTT }}

@@ -318,7 +318,7 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    failed records the client `waiting_twin` and leaves it alone. The demo seat
    (`pilot-smokeball`, `purpose: demo`, [The Demo Seat](/admin/playbook/demo-seat))
    gates nothing and is not a step before the client. Rings live in `operator/fleet/rings.yaml`: 0
-   `smd-staging` (the twin of `ashton-price`), 1 `ashton-price`, 2
+   `ap-staging` (the twin of `ashton-price`), 1 `ashton-price`, 2
    `pilot-smokeball` `scott` `brokery` `captain-mark` `smd-guide` (the last ring
    always one at a time), with a `twins:` block naming each client's twin. The
    client seat has been ring 1 since 2026-10-30; the reason is under "The
@@ -576,7 +576,7 @@ Two workflows run the release (ADR 0096).
   progress.
 
 There is no approval step before the client ring. Since 2026-10-30 the client
-seat is ring 1, straight after its release twin (`smd-staging`) with no bake on
+seat is ring 1, straight after its release twin (`ap-staging`) with no bake on
 either, and SMD's other seats follow it. Since 2026-11-10 the client seat also
 waits for its twin to be done on each release (ADR 0107), so a release that
 skipped the twin never reaches the client: with one client, a fix waited about an hour behind four
@@ -804,7 +804,7 @@ the old image boots (the R1 image leaves the moved tree alone, but it makes a
 fresh, empty `/opt/data/medchron` and runs every lane on that, with no queue,
 state or cache; an image older than R1 would also chown the moved tree to the
 agent uid); restore the bundle pointer; or restore the volume snapshot. There
-is no separate rehearsal: smd-staging takes R2 first, and a halt there stops
+is no separate rehearsal: the release twin (then smd-staging) took R2 first, and a halt there stops
 the release before any client seat, which is where this recovery would first
 be used.
 
@@ -847,7 +847,7 @@ one seat, run release-tick by hand with the seat and `artifact: bundle`
 read-back and rollback, with no ring order and no bake, whatever the switch
 says, and only to a seat that authors a job lane. A client seat with a twin
 takes a bundle only after its twin is done on that bundle, here as in the tick
-(ADR 0107), so a bundle goes to smd-staging first, then ashton-price. `fleet status` shows
+(ADR 0107), so a bundle goes to ap-staging first, then ashton-price. `fleet status` shows
 what each seat runs in its bundles column: a version, `image` when the image's
 own copy runs, `-` when the seat reports none.
 
@@ -1010,9 +1010,14 @@ suite never touches a client seat or a client-visible address
 ### Provisioning ap-staging, the exact twin of ashton-price
 
 The winning line: every change is rehearsed on an exact twin of the A&P seat
-before A&P sees it. `smd-staging` is the release twin today and is not an exact
-copy (no Smokeball connector, a different persona). `ap-staging` is the exact
-copy: `operator/customers/ap-staging/customer.yaml` equals A&P's except the paths
+before A&P sees it. This is done: `ap-staging` has been ashton-price's release
+twin since the flip (#3972), and `smd-staging`, the twin before it (not an
+exact copy: no Smokeball connector, a different persona), was decommissioned
+on 2026-11-11. The steps below are the record of how the twin was stood up,
+kept because a new exact twin for a future client follows the same path; to
+reprovision `ap-staging` itself run `operator/bin/reprovision-staging.sh
+ap-staging`. Where a step names `smd-staging` it describes the state at the
+time. `ap-staging` is the exact copy: `operator/customers/ap-staging/customer.yaml` equals A&P's except the paths
 `operator/customers/ap-staging/twin.yaml` declares (an identity, a tenant, a
 mailbox, a person, a vault, never a behaviour), held there by
 `tests/twin-drift.test.ts`. It is authored `purpose: internal` with
@@ -1137,7 +1142,7 @@ the new name and deletes.
     Probe: `operator/fleet/rings.yaml` reads ring 0 `[ap-staging]` and
     `twins: ashton-price: ap-staging`; the next release's rollout rows show
     `ap-staging` done before `ashton-price` takes it.
-12. **Decommission smd-staging.** `infisical run --env=prod --path=/ss --
+12. **Decommission smd-staging** (done 2026-11-11). `infisical run --env=prod --path=/ss --
     operator/bin/decommission-customer.sh smd-staging` (a dry run: the survey
     of every layer `operator/bin/lib/decommission_inventory.py` names), then
     `--live --confirm-slug smd-staging`, then the repo edits its residue
@@ -1255,7 +1260,7 @@ paths now judge lanes the same way (#3448), so the default is `selftest`.
 path after any change to the self-test: it plants one real violation as root,
 asks the seat's loop for two runs (through its root-only trigger), waits for
 `selftest_failing` to open, clears the violation (always, even after a timeout),
-and waits for the alert to resolve. It refuses any seat but a release twin (`seat.yaml` `purpose: release-twin`, ADR 0107; `smd-staging` today).
+and waits for the alert to resolve. It refuses any seat but a release twin (`seat.yaml` `purpose: release-twin`, ADR 0107; `ap-staging` today).
 
 ## Build commands reference
 

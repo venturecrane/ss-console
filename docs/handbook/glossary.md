@@ -149,11 +149,11 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **space.** On a seat shared by several people, the privacy partition a turn runs in: `shared`, or one person's own space. A person sees the shared space plus their own; the shared space sees only itself (ADR 0091).
 
-**seat.** One running Operator instance for one customer, named by its customer slug (for example `smd-staging`). Each seat has its own `operator/customers/<slug>/customer.yaml`, its own Fly Machine, and one row in `fleet_status`; one client may hold several seats (migrations 0089, 0093).
+**seat.** One running Operator instance for one customer, named by its customer slug (for example `ap-staging`). Each seat has its own `operator/customers/<slug>/customer.yaml`, its own Fly Machine, and one row in `fleet_status`; one client may hold several seats (migrations 0089, 0093).
 
 **seat purpose.** What a seat is for, written as `purpose:` in its `operator/customers/<slug>/seat.yaml`: `client`, `release-twin`, `demo` or `internal`. Every tool that once named a seat asks for a purpose instead, so a seat is renamed or added by editing that one file (ADR 0107; [Clients & Commitments](/admin/playbook/clients-and-commitments)). Different from a seat's kind, which says whose records are on it.
 
-**release twin.** A seat that is an exact copy of one client seat (named in its `twin_of`) and takes every Operator release first. The client seat takes a release only after its twin is done on it, so a change reaches the twin before the client sees it. Today `smd-staging` is the twin of `ashton-price`; it does not yet connect to Smokeball (ADR 0107).
+**release twin.** A seat that is an exact copy of one client seat (named in its `twin_of`) and takes every Operator release first. The client seat takes a release only after its twin is done on it, so a change reaches the twin before the client sees it. Today `ap-staging` is the twin of `ashton-price` (ADR 0107).
 
 **routine.** A named duty the client bought: what the Operator does, how it starts, its level of autonomy, and any volume limit. Its definition lives in six artifacts, from the agreement's schedule to `routine-grid.yaml` and the skill body (`docs/runbooks/operator/routine-lifecycle.md`, ADR 0075).
 

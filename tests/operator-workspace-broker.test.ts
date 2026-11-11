@@ -16,7 +16,7 @@ const bootSmoke = readSeatScript('operator/templates/seat-checks.sh')
 const workspaceSkill = readFileSync(resolve('operator/skills/workspace/SKILL.md'), 'utf8')
 const inboxTriageSkill = readFileSync(resolve('operator/skills/inbox-triage/SKILL.md'), 'utf8')
 const smdCustomerConfig = readFileSync(
-  resolve('operator/customers/smd-staging/customer.yaml'),
+  resolve('operator/customers/ap-staging/customer.yaml'),
   'utf8'
 )
 

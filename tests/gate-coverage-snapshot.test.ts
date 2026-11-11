@@ -50,6 +50,7 @@ import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { parse as parseYaml } from 'yaml'
+import { skipReason } from '../scripts/lib/seat-inventory'
 
 const CUSTOMERS_DIR = 'operator/customers'
 const SNAPSHOT_PATH = 'operator/contracts/gate-coverage-snapshot.json'
@@ -62,7 +63,7 @@ const SNAPSHOT_PATH = 'operator/contracts/gate-coverage-snapshot.json'
  * repos when seat coverage changes; `vitest -u`-style regeneration deliberately
  * does NOT update this line, so the cross-repo half stays a human edit.
  */
-const PINNED_SEATS_SHA256 = '6942ef20bfb7d217f685fa5521c79b414b2988ffacb2e3ef4404d1ffb5b335f4'
+const PINNED_SEATS_SHA256 = '2686932abab1b66dd180af7af09048b8d9969d797ca6a8870226df5e6b26ad08'
 
 /** A seat's gate-relevant declaration, as the overlay consumes it. */
 interface SeatCoverage {
@@ -85,9 +86,20 @@ interface SeatCoverage {
  */
 const isScaffold = (dirName: string): boolean => dirName.startsWith('_')
 
+/**
+ * Every customer dir that is a seat or a scaffold. A decommissioned seat's
+ * `<slug>.decommissioned.<date>` tombstone (and any dotfile dir) is neither: it
+ * never boots, so it never reaches the snapshot (the smd-staging retirement,
+ * 2026-11-11, first left one beside the seats). `skipReason` is the inventory's
+ * one rule for what a dir name is.
+ */
 function seatDirs(): string[] {
   return readdirSync(resolve(CUSTOMERS_DIR), { withFileTypes: true })
     .filter((d) => d.isDirectory())
+    .filter((d) => {
+      const why = skipReason(d.name)
+      return why !== 'tombstone' && why !== 'hidden'
+    })
     .map((d) => d.name)
     .sort()
 }

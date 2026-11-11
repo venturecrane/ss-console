@@ -6,7 +6,7 @@
 # The production pilot firm (Smokeball Operator, ADR 0053). Ring 1, straight
 # after its release twin (Captain, 2026-10-30): with one client, a fix must not
 # wait an hour behind our own seats. Its twin (the seat whose twin_of names this
-# one, smd-staging today) must be done on a release before this seat takes it
+# one, ap-staging today) must be done on a release before this seat takes it
 # (ADR 0107, the twin gate in operator/bin/lib/fleet/tick.py).
 
 # What this seat is for (ADR 0107): client | release-twin | demo | internal.

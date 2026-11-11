@@ -45,7 +45,7 @@
 #
 # Usage:  operator/bin/reprovision-staging.sh [<twin-slug>]
 #   With no argument it provisions the one release twin the inventory declares
-#   (smd-staging today), so the old no-argument invocation still works; with
+#   (ap-staging today), so the old no-argument invocation still works; with
 #   more than one twin declared, name the one you mean.
 #         operator/bin/reprovision-staging.sh --pre-flip <twin-slug>
 #   The first provision of a new exact twin while another seat still holds the

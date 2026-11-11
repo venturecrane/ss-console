@@ -225,7 +225,7 @@ describe('clientSeats', () => {
   it('the live inventory gives the client seats and none of the twin, demo or SMD seats', () => {
     const seats = clientSeats()
     expect(seats).toContain('ashton-price')
-    for (const seat of ['smd-staging', 'scott', 'pilot-smokeball', 'smd-guide']) {
+    for (const seat of ['ap-staging', 'scott', 'pilot-smokeball', 'smd-guide']) {
       expect(seats).not.toContain(seat)
     }
   })

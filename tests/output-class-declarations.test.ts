@@ -27,6 +27,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
+import { skipReason } from '../scripts/lib/seat-inventory'
 
 import {
   buildSpecDocument,
@@ -56,9 +57,19 @@ function registryClasses(): Set<string> {
 }
 
 /** Every (seat, class, property) declared `expected` anywhere in the tree. */
+/** Customer dirs that boot or scaffold one: never a decommissioned seat's tombstone. */
+function customerDirs(): string[] {
+  return readdirSync(CUSTOMERS_DIR)
+    .filter((name) => {
+      const why = skipReason(name)
+      return why !== 'tombstone' && why !== 'hidden'
+    })
+    .sort()
+}
+
 function expectedDeclarations(): Declaration[] {
   const found: Declaration[] = []
-  for (const slug of readdirSync(CUSTOMERS_DIR).sort()) {
+  for (const slug of customerDirs()) {
     const path = join(CUSTOMERS_DIR, slug, 'customer.yaml')
     let raw: string
     try {
@@ -86,7 +97,7 @@ describe('declared spec expectations are satisfiable', () => {
     // Without this, every assertion below passes vacuously and the spec loader
     // stays shipped-but-bound-to-nothing — which is the state #2094 exists to
     // end, and precisely the failure class this programme indicts.
-    const anyDeclared = readdirSync(CUSTOMERS_DIR).some((slug) => {
+    const anyDeclared = customerDirs().some((slug) => {
       try {
         const doc = parseYaml(readFileSync(join(CUSTOMERS_DIR, slug, 'customer.yaml'), 'utf8')) as {
           output_classes?: unknown

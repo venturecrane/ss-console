@@ -97,12 +97,10 @@ describe('generated registries are current (drift)', () => {
       'pilot-smokeball': ['demo', null, 2],
       scott: ['internal', null, 2],
       'smd-guide': ['internal', null, 2],
-      // Superseded as the twin 2026-11-10; last ring until decommissioned.
-      'smd-staging': ['internal', null, 2],
     })
   })
 
-  it('the live inventory is the nine seats, each with its authored app or null', () => {
+  it('the live inventory is the eight seats, each with its authored app or null', () => {
     // A tripwire for the PR that introduced the inventory: the generated
     // registry was proven value-identical to the hand-kept one it replaced.
     // Adding or retiring a seat updates this list in the same change.
@@ -118,7 +116,6 @@ describe('generated registries are current (drift)', () => {
         scott: 'hermes-scott',
         // Authored, not yet provisioned (provisioning is the Captain's act).
         'smd-guide': 'hermes-smd-guide',
-        'smd-staging': 'hermes-smd-staging',
       }
     )
   })

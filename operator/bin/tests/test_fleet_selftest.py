@@ -105,7 +105,7 @@ def test_authored_guest_follows_the_machine_size_rules(tmp_path: Path) -> None:
 
 def _side(tmp_path: Path, fly: FakeFly, yaml_text: str | None) -> Check:
     if yaml_text is not None:
-        seat = tmp_path / "operator/customers/smd-staging"
+        seat = tmp_path / "operator/customers/ap-staging"
         seat.mkdir(parents=True)
         (seat / "customer.yaml").write_text(yaml_text)
     clock = {"t": 0.0}
@@ -113,7 +113,7 @@ def _side(tmp_path: Path, fly: FakeFly, yaml_text: str | None) -> Check:
     def sleep(s: float) -> None:
         clock["t"] += s
 
-    return FleetSideChecks(fly, str(tmp_path), sleep, lambda: clock["t"]).run("smd-staging")  # type: ignore[arg-type]
+    return FleetSideChecks(fly, str(tmp_path), sleep, lambda: clock["t"]).run("ap-staging")  # type: ignore[arg-type]
 
 
 def test_fleet_side_checks_pass_started_on_the_authored_guest(tmp_path: Path) -> None:

@@ -161,7 +161,6 @@ jobs:
           # red run and a named reason, never a clean report on a mailbox nobody
           # could open.
           MSGRAPH_CLIENT_SECRET__ASHTON_PRICE: ${{ secrets.MSGRAPH_CLIENT_SECRET__ASHTON_PRICE }}
-          MSGRAPH_CLIENT_SECRET__SMD_STAGING: ${{ secrets.MSGRAPH_CLIENT_SECRET__SMD_STAGING }}
           MSGRAPH_CLIENT_SECRET__AP_STAGING: ${{ secrets.MSGRAPH_CLIENT_SECRET__AP_STAGING }}
           # Via env, never interpolated into the script body: a workflow_dispatch
           # input is user-supplied and would otherwise be a shell-injection seam.

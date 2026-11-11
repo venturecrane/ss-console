@@ -129,9 +129,9 @@ def _build_local_audit_writer(audit_db_path: Optional[Path]):
     slug with no seat dir the default path would CREATE that dir).
 
     The decommission script runs from Captain's workstation and writes
-    its trail to a per-customer sqlite file under
-    ``operator/customers/{slug}/.decommission-audit.sqlite`` before
-    the customer directory is tombstoned. This is intentionally distinct
+    its trail to a per-customer sqlite file, by default
+    ``<archive-root>/{slug}/decommission-audit.sqlite``: outside the
+    customer directory, which step 08 renames while this file is open. This is intentionally distinct
     from the per-customer D1 (which is itself being deleted as part of
     the sequence); we want the audit row of decommission to survive
     after the customer's substrate is gone.
@@ -231,7 +231,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--audit-db",
         type=Path,
         default=None,
-        help="Override the local audit-log sqlite path (used by tests).",
+        help="Override the local audit-log sqlite path (default: <archive-root>/<slug>/decommission-audit.sqlite).",
     )
     p.add_argument(
         "--actor",
@@ -274,7 +274,11 @@ def _resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
     repo_root = Path(__file__).resolve().parents[3]
     customers_root = args.customers_root or _default_customers_root()
     archive_root = args.archive_root or (repo_root / "operator" / ".decommission-archive")
-    audit_db = args.audit_db or (customers_root / args.slug / ".decommission-audit.sqlite")
+    # Under the archive root, never under customers/<slug>/: step 08 renames
+    # that dir while this file is open, and SQLite then cannot create its
+    # journal beside the moved file, so the step-08 completion row failed with
+    # "attempt to write a readonly database" (the smd-staging run, 2026-11-11).
+    audit_db = args.audit_db or (archive_root / args.slug / "decommission-audit.sqlite")
     return customers_root, archive_root, audit_db
 
 

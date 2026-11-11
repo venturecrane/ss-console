@@ -85,7 +85,9 @@ Every step writes audit rows via `adapter.audit_log.AuditLogWriter`:
 - On failure: `DECOMMISSION_INITIATED` with `metadata.detail.failed = true` and the exception class + message.
 - Final marker: `DECOMMISSION_FINAL` with `metadata.detail.steps = [...]`.
 
-All three `action_type` values are in `ACCEPTED_ACTION_TYPES` in `adapter/audit_log.py` (Decommission lifecycle section). The local audit log is written to `customers/{slug}/.decommission-audit.sqlite` so the trail survives after the per-customer D1 is deleted by step 2.
+All three `action_type` values are in `ACCEPTED_ACTION_TYPES` in `adapter/audit_log.py` (Decommission lifecycle section). The local audit log is written by default to `<archive-root>/{slug}/decommission-audit.sqlite` (override with `--audit-db`), so the trail survives after the per-customer D1 is deleted by step 2. It must not live under `customers/{slug}/`: step 8 renames that directory while the SQLite handle is open, SQLite can then no longer create its journal beside the moved file, and the step-8 completion row fails with `attempt to write a readonly database` (AuditWriteError, exit 4) after the rename has already happened. That was the default until the `smd-staging` run of 2026-11-11 hit it; `operator/bin/tests/test_decommission.py::test_cli_default_audit_db_survives_the_tombstone_rename` runs the default paths through the tombstone and reads the completion row back.
+
+**Keep the archive somewhere durable.** `--archive-root` defaults to `operator/.decommission-archive/` inside the checkout the CLI runs from. It holds the preserved audit ledger, the memory snapshot, the obligations export, the signed evidence packet and the decommission audit trail, and it is gitignored (with `operator/customers/*/.decommission-audit.sqlite`): this repository is public and the archive must never be committed. On a worktree it is deleted with the worktree, so after a run copy `operator/.decommission-archive/<slug>/` somewhere durable, or pass `--archive-root` pointing there in the first place. The `smd-staging` archive was copied to `~/smd-decommission-archive/smd-staging`.
 
 ### Real backends (2026-09-10)
 

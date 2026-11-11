@@ -119,22 +119,22 @@ def test_the_checker_passes_a_declared_change_and_refuses_an_undeclared_one(
 ) -> None:
     repo, a, s, t = _repo(tmp_path, monkeypatch)
     r2 = FakeR2()
-    r2.put_json("vaults/smd-staging/records/records-firm.yaml", {})
-    r2.put_json("vaults/smd-staging/demand/demand-firm.yaml", {})
+    r2.put_json("vaults/ap-staging/records/records-firm.yaml", {})
+    r2.put_json("vaults/ap-staging/demand/demand-firm.yaml", {})
     r2.put_json(image_key(DIGEST, "required-env.json"), {"required": []})
     r2.put_json(image_key(DIGEST, "lane-inputs.json"), {"records": "new", "demand": "d-new"})
     r2.put_json(image_key(OLD_DIGEST, "lane-inputs.json"), {"records": "old", "demand": "d-new"})
     fly = FakeFly()
-    fly.secrets["hermes-smd-staging"] = (set(), set())
+    fly.secrets["hermes-ap-staging"] = (set(), set())
     checker = PreflightChecker(fly, r2, LaneInputDeclarations(CommandRunner(), repo))  # type: ignore[arg-type]
-    ok = checker.run("smd-staging", release(ss_console_sha=t), "", OLD_DIGEST, False, current_sha=a)
+    ok = checker.run("ap-staging", release(ss_console_sha=t), "", OLD_DIGEST, False, current_sha=a)
     assert ok.ok and any("declared unchanged since" in n for n in ok.notes)
-    past = checker.run("smd-staging", release(ss_console_sha=t), "", OLD_DIGEST, False, current_sha=s)
+    past = checker.run("ap-staging", release(ss_console_sha=t), "", OLD_DIGEST, False, current_sha=s)
     assert not past.ok and "lane records" in past.problems[0]
-    unknown = checker.run("smd-staging", release(ss_console_sha=t), "", OLD_DIGEST, False, current_sha=None)
+    unknown = checker.run("ap-staging", release(ss_console_sha=t), "", OLD_DIGEST, False, current_sha=None)
     assert not unknown.ok
     bare = PreflightChecker(fly, r2)  # type: ignore[arg-type]
-    assert not bare.run("smd-staging", release(ss_console_sha=t), "", OLD_DIGEST, False, current_sha=a).ok
+    assert not bare.run("ap-staging", release(ss_console_sha=t), "", OLD_DIGEST, False, current_sha=a).ok
 
 
 def test_the_repo_declaration_for_adr_0103_is_well_formed() -> None:

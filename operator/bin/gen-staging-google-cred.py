@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate an ISOLATED, throwaway Google service-account JSON for the staging
-Operator (hermes-smd-staging).
+Operator (the release twin; hermes-ap-staging today).
 
 It is a structurally-valid service account with a freshly generated RSA keypair,
 so the Workspace broker boots IDENTICALLY to production (entrypoint.sh's

@@ -223,7 +223,7 @@ describe('premise-gate: Law 18, seat plans name their off-seat rehearsal', () =>
       'Build the page.',
     ].join('\n')
     expect(plan).not.toMatch(
-      /\bseats?\b|lane-proof|\brelease\b|ashton-price|pilot-smokeball|smd-staging|customer\.yaml/
+      /\bseats?\b|lane-proof|\brelease\b|ashton-price|pilot-smokeball|ap-staging|customer\.yaml/
     )
     expect(permission(runHook(payload({ tool_input: { plan } })))).toBeNull()
   })

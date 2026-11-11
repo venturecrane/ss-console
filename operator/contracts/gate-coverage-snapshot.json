@@ -55,14 +55,6 @@
     },
     "smd-guide": {
       "output_classes": {}
-    },
-    "smd-staging": {
-      "output_classes": {
-        "staff": {
-          "voice_spec": "expected",
-          "format_spec": "expected"
-        }
-      }
     }
   }
 }

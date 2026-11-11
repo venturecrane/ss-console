@@ -65,7 +65,7 @@ def world(manifest: dict | None = None):
     r2.put_bytes(skills_manifest_key(VERSION), raw)
     r2.put_json(image_key(DIGEST, "image-capabilities.json"), CAPS)
     store.insert_release(release())
-    for seat in ("smd-staging", "pilot-smokeball"):
+    for seat in ("ap-staging", "pilot-smokeball"):
         store.status[seat] = fresh_status(skills=VERSION)
         r2.put_json(
             pointer_key(seat),
@@ -114,9 +114,9 @@ def test_a_bundle_path_is_provided_by_bundle_paths() -> None:
 
 def test_capable_seats_get_the_pointer_and_confirm() -> None:
     store, r2, roll, raw = world()
-    result = run(store, roll, [Ring(0, ["smd-staging"]), Ring(1, ["pilot-smokeball"], 1)])
+    result = run(store, roll, [Ring(0, ["ap-staging"]), Ring(1, ["pilot-smokeball"], 1)])
     assert set(store.states().values()) == {"done"} and result.completed
-    pointer = r2.get_json(pointer_key("smd-staging"))
+    pointer = r2.get_json(pointer_key("ap-staging"))
     assert pointer == {
         "version": VERSION,
         "manifest_key": skills_manifest_key(VERSION),
@@ -128,39 +128,39 @@ def test_capability_unsatisfied_seat_is_refused_and_no_pointer_written() -> None
     needy = json.loads(json.dumps(MANIFEST))
     needy["needs"]["smd-note"]["tools"].append("brand_new_tool")
     store, r2, roll, _ = world(needy)
-    result = run(store, roll, [Ring(0, ["smd-staging"]), Ring(1, ["pilot-smokeball"], 1)])
+    result = run(store, roll, [Ring(0, ["ap-staging"]), Ring(1, ["pilot-smokeball"], 1)])
     states = store.states()
-    assert states["smd-staging"] == "failed"
-    assert "brand_new_tool" in next(r for r in store.rollouts.values() if r["customer_slug"] == "smd-staging")["detail"]
-    assert pointer_key("smd-staging") not in r2.writes  # FALSIFIER: drop the gate and this pointer is written
+    assert states["ap-staging"] == "failed"
+    assert "brand_new_tool" in next(r for r in store.rollouts.values() if r["customer_slug"] == "ap-staging")["detail"]
+    assert pointer_key("ap-staging") not in r2.writes  # FALSIFIER: drop the gate and this pointer is written
     assert result.halted and states["pilot-smokeball"] == "halted"
 
 
 def test_unknown_image_is_refused() -> None:
     store, r2, roll, _ = world()
-    store.status["smd-staging"] = dict(fresh_status(image=f"{ids.FLEET_REGISTRY}:x@{OLD_DIGEST}"))
-    run(store, roll, [Ring(0, ["smd-staging"], 1)])
-    assert store.states()["smd-staging"] == "failed"
+    store.status["ap-staging"] = dict(fresh_status(image=f"{ids.FLEET_REGISTRY}:x@{OLD_DIGEST}"))
+    run(store, roll, [Ring(0, ["ap-staging"], 1)])
+    assert store.states()["ap-staging"] == "failed"
     assert "cannot tell what the seat's image provides" in next(iter(store.rollouts.values()))["detail"]
     assert r2.writes == []
 
 
 def test_no_confirming_heartbeat_repoints_to_previous_and_halts() -> None:
     store, r2, roll, _ = world()
-    store.status["smd-staging"] = fresh_status(skills=OLD_VERSION)  # never flips
-    result = run(store, roll, [Ring(0, ["smd-staging"]), Ring(1, ["pilot-smokeball"], 1)])
-    assert store.states()["smd-staging"] == "rolled_back"
-    assert r2.get_json(pointer_key("smd-staging"))["version"] == OLD_VERSION
+    store.status["ap-staging"] = fresh_status(skills=OLD_VERSION)  # never flips
+    result = run(store, roll, [Ring(0, ["ap-staging"]), Ring(1, ["pilot-smokeball"], 1)])
+    assert store.states()["ap-staging"] == "rolled_back"
+    assert r2.get_json(pointer_key("ap-staging"))["version"] == OLD_VERSION
     assert result.halted and store.states()["pilot-smokeball"] == "halted"
 
 
 def test_repoint_with_no_previous_pointer_removes_it() -> None:
     store, r2, roll, _ = world()
-    r2.objects.pop(pointer_key("smd-staging"))
-    store.status["smd-staging"] = fresh_status(skills=None)
-    run(store, roll, [Ring(0, ["smd-staging"], 1)])
-    assert pointer_key("smd-staging") in r2.deletes
-    assert pointer_key("smd-staging") not in r2.objects
+    r2.objects.pop(pointer_key("ap-staging"))
+    store.status["ap-staging"] = fresh_status(skills=None)
+    run(store, roll, [Ring(0, ["ap-staging"], 1)])
+    assert pointer_key("ap-staging") in r2.deletes
+    assert pointer_key("ap-staging") not in r2.objects
 
 
 def test_missing_manifest_is_a_tooling_error() -> None:
@@ -174,5 +174,5 @@ def test_dry_run_writes_no_pointer() -> None:
     store, r2, roll, _ = world()
     manifest, key, sha = roll.load_manifest(VERSION)
     rel = {"release_id": f"skl-{VERSION}", "kind": "skills", "skills_version": VERSION}
-    out = roll.run("smd-staging", 0, rel, manifest, key, sha, True)
+    out = roll.run("ap-staging", 0, rel, manifest, key, sha, True)
     assert out.state == "pending" and r2.writes == [] and store.rollouts == {}

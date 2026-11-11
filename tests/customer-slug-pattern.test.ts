@@ -27,6 +27,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
+import { skipReason } from '../scripts/lib/seat-inventory'
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
@@ -104,7 +105,6 @@ const CANDIDATES: readonly string[] = [
   'pilot-smokeball',
   'scott',
   'smd-guide',
-  'smd-staging',
   // shape edges that MUST be accepted (2..40 chars). 39 and 40 both exceed the
   // provisioner's old 32-char ceiling — the divergence in the other direction.
   'ab',
@@ -147,7 +147,6 @@ const LIVE_SLUGS: readonly string[] = [
   'pilot-smokeball',
   'scott',
   'smd-guide',
-  'smd-staging',
 ]
 
 /**
@@ -248,7 +247,7 @@ describe('customer slug pattern: one shape, every guard (#2285)', () => {
     })
       .split('\n')
       .map((d) => d.trim())
-      .filter((d) => d.length > 0 && !d.startsWith('_'))
+      .filter((d) => d.length > 0 && skipReason(d) === null)
 
     expect(dirs.length).toBeGreaterThan(0)
     const rejected = dirs.filter((d) => !bashMatches(PROVISIONER, d))
@@ -299,11 +298,28 @@ describe('retired seats', () => {
     expect(existsSync(resolve(REPO_ROOT, 'operator/customers/smd'))).toBe(false)
   })
 
+  /**
+   * `smd-staging` -- ashton-price's release twin until ap-staging took the role
+   * (#3972), then an internal seat -- was decommissioned 2026-11-11 by
+   * `operator/bin/decommission-customer.sh --live`: Fly app destroyed, R2 vault
+   * emptied, console D1 rows deleted, healthchecks cancelled. Its directory is
+   * kept only as the `smd-staging.decommissioned.2026-11-11` tombstone, which no
+   * loader reads as a seat (`skipReason` in scripts/lib/seat-inventory.ts). A
+   * live directory reappearing would re-arm the R2 publisher, the release rings
+   * and every reconciler against a Fly app that no longer exists.
+   */
+  it('smd-staging has no live seat directory, only its tombstone', () => {
+    expect(existsSync(resolve(REPO_ROOT, 'operator/customers/smd-staging'))).toBe(false)
+    expect(
+      existsSync(resolve(REPO_ROOT, 'operator/customers/smd-staging.decommissioned.2026-11-11'))
+    ).toBe(true)
+  })
+
   it('the live-seat list matches the directories on disk', () => {
     const onDisk = readdirSync(resolve(REPO_ROOT, 'operator/customers'), {
       withFileTypes: true,
     })
-      .filter((e) => e.isDirectory() && !e.name.startsWith('_') && !e.name.startsWith('.'))
+      .filter((e) => e.isDirectory() && skipReason(e.name) === null)
       .map((e) => e.name)
       .sort()
     expect(onDisk).toEqual([...LIVE_SLUGS].sort())

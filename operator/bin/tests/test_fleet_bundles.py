@@ -139,8 +139,8 @@ def test_an_unreadable_customer_yaml_is_a_tooling_error_not_a_seat_left_out(tmp_
 
 def test_the_real_fleet_splits_by_authored_lanes() -> None:
     """The repo's own seats: the law-firm lanes are authored where the persona enables them."""
-    got = authoring_seats(REPO, ["smd-staging", "ashton-price", "brokery", "captain-mark"])
-    assert {"smd-staging", "ashton-price"} <= got
+    got = authoring_seats(REPO, ["ap-staging", "ashton-price", "brokery", "captain-mark"])
+    assert {"ap-staging", "ashton-price"} <= got
     assert not {"brokery", "captain-mark"} & got
 
 
