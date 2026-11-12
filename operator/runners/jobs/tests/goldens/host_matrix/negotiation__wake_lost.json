@@ -1,0 +1,1059 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/negotiation-queue/<ULID1>.json",
+      "run/queue/",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "NEGOTIATION_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 0,
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "<ULID1>",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices": 0,
+          "reason": null,
+          "stage": null,
+          "state": "running"
+        },
+        "skill": "negotiation-watch"
+      },
+      {
+        "action_type": "NEGOTIATION_JOB_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 500,
+          "docs_failed": 0,
+          "docs_read": 0,
+          "job_id": "<ULID1>",
+          "matters_seeded": 0,
+          "matters_total": 0,
+          "notices": 0,
+          "reason": "unexpected: a stage failed",
+          "stage": "read",
+          "state": "failed"
+        },
+        "skill": "negotiation-watch"
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "demand/cgroup.procs": "<PID>",
+      "demand/memory.max": "1073741824"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "negotiate",
+          "<TMP>/seat/run/negotiation-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/negotiation-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/negotiation-jobs/<ULID1>",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_NEGOTIATION_STATE_DIR": "<TMP>/seat/state/negotiation",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
+          "SMOKEBALL_API_KEY": "<SECRET:present>",
+          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
+          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "<SECRET:present>"
+        },
+        "job_id": "<ULID1>",
+        "lane": "negotiation",
+        "pidfile": "<TMP>/seat/run/negotiation-child.pid"
+      }
+    ],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 0,
+          "pending": true,
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        }
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["negotiation-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "failed",
+    "step": "run",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "<ULID1>",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_sent_at": null,
+            "row": {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "<TS>",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "<HEX>",
+              "id": "<ULID1>",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notice": false,
+              "notices_count": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "queued",
+              "trigger": "scheduled",
+              "updated_at": "<TS>"
+            },
+            "stage": null,
+            "state": "queued",
+            "trigger": "scheduled",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "jobs": [
+            {
+              "cents": 0,
+              "created_at": "<TS>",
+              "docs_failed": null,
+              "docs_read": null,
+              "job_id": "<ULID1>",
+              "kind": "job",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": null,
+              "reply_sent_at": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "scheduled",
+              "updated_at": "<TS>"
+            }
+          ],
+          "month": "<MONTH>",
+          "month_cents": 0,
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_status",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "<ULID1>",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "<TS>"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "<TS>",
+            "docs_failed": 0,
+            "docs_read": 0,
+            "job_id": "<ULID1>",
+            "kind": "job",
+            "matters_seeded": 0,
+            "matters_total": 0,
+            "notices_count": null,
+            "reason": "unexpected: a stage failed",
+            "reply_sent_at": null,
+            "stage": "read",
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "<TS>"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_record",
+          "fields": {
+            "cents": 500,
+            "docs_failed": 0,
+            "docs_read": 0,
+            "matters_seeded": 0,
+            "matters_total": 0,
+            "notices": [],
+            "reason": "unexpected: a stage failed",
+            "stage": "read"
+          },
+          "job_id": "<ULID1>",
+          "state": "failed"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 1,
+          "pending": true,
+          "seq": 1,
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": ["WARNING jobs.daemon wake for <ULID1> failed (status 500), attempt 1/5"],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 1,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["negotiation-heartbeat.json: 1 wake(s) pending"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 1
+      }
+    },
+    "result": null,
+    "step": "gateway refuses 1",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [
+      {
+        "auth": true,
+        "body": {
+          "handoff_id": "negotiation-<ULID1>",
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "path": "/webhooks/handoff"
+      }
+    ],
+    "wire": []
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 2,
+          "pending": true,
+          "seq": 1,
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": ["WARNING jobs.daemon wake for <ULID1> failed (status 500), attempt 2/5"],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 1,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["negotiation-heartbeat.json: 1 wake(s) pending"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 1
+      }
+    },
+    "result": null,
+    "step": "gateway refuses 2",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [
+      {
+        "auth": true,
+        "body": {
+          "handoff_id": "negotiation-<ULID1>",
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "path": "/webhooks/handoff"
+      }
+    ],
+    "wire": []
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 3,
+          "pending": true,
+          "seq": 1,
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": ["WARNING jobs.daemon wake for <ULID1> failed (status 500), attempt 3/5"],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 1,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["negotiation-heartbeat.json: 1 wake(s) pending"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 1
+      }
+    },
+    "result": null,
+    "step": "gateway refuses 3",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [
+      {
+        "auth": true,
+        "body": {
+          "handoff_id": "negotiation-<ULID1>",
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "path": "/webhooks/handoff"
+      }
+    ],
+    "wire": []
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 4,
+          "pending": true,
+          "seq": 1,
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": ["WARNING jobs.daemon wake for <ULID1> failed (status 500), attempt 4/5"],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 1,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["negotiation-heartbeat.json: 1 wake(s) pending"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 1
+      }
+    },
+    "result": null,
+    "step": "gateway refuses 4",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [
+      {
+        "auth": true,
+        "body": {
+          "handoff_id": "negotiation-<ULID1>",
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "path": "/webhooks/handoff"
+      }
+    ],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "DELIVERY_PROOF_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "attempt": 1,
+          "code": "wake_lost",
+          "detail": "the DELIVER wake failed every attempt (status 500); nobody was told",
+          "job_id": "<ULID1>",
+          "lane": "negotiation"
+        },
+        "skill": null
+      }
+    ],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "proof_alerts": {
+          "wake_lost:1": "<CLOCK+0.0>"
+        },
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 5,
+          "outcome": "failed: status 500",
+          "pending": false,
+          "seq": 1,
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": [
+      "WARNING jobs.daemon wake for <ULID1> failed (status 500), attempt 5/5",
+      "WARNING jobs.daemon negotiation job <ULID1>: proof alert wake_lost raised (the DELIVER wake failed every attempt (status 500); nobody was told)"
+    ],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "gateway refuses 5",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [
+      {
+        "auth": true,
+        "body": {
+          "handoff_id": "negotiation-<ULID1>",
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "path": "/webhooks/handoff"
+      }
+    ],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "<TS>",
+            "docs_failed": 0,
+            "docs_read": 0,
+            "job_id": "<ULID1>",
+            "kind": "job",
+            "matters_seeded": 0,
+            "matters_total": 0,
+            "notices_count": null,
+            "reason": "unexpected: a stage failed",
+            "reply_sent_at": null,
+            "stage": "read",
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "<TS>"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_record",
+          "fields": {
+            "wake": {
+              "outcome": "status 500",
+              "wake_failed": true
+            }
+          },
+          "job_id": "<ULID1>",
+          "state": "failed"
+        }
+      },
+      {
+        "reply": {
+          "audit_id": "<ULID2>",
+          "ok": true
+        },
+        "request": {
+          "action": "delivery_proof_alert",
+          "attempt": 1,
+          "code": "wake_lost",
+          "detail": "the DELIVER wake failed every attempt (status 500); nobody was told",
+          "job_id": "<ULID1>",
+          "lane": "negotiation"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "proof_alerts": {
+          "wake_lost:1": "<CLOCK+0.0>"
+        },
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 5,
+          "outcome": "failed: status 500",
+          "pending": false,
+          "seq": 1,
+          "task": "Run the negotiation-watch skill's DELIVER mode for negotiation job <ULID1>.\nLoad it first: your first call is read_file on negotiation-watch/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: negotiation.\nTrigger: scheduled.\nOutcome: failed.\nReason: stopped at read."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "gateway back",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  }
+]

@@ -1,0 +1,314 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/records-queue/<ULID1>.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "records-jobs/<ULID1>": {
+        "claimed": false,
+        "state": "submitted",
+        "stop_queued_at": "<CLOCK+0.0>"
+      }
+    },
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "stopped",
+    "step": "smd stop (queued)",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-jobs/",
+      "run/records-jobs/<ULID1>/",
+      "run/records-jobs/<ULID1>/.smd-stop.json",
+      "run/records-jobs/<ULID1>/daemon.json",
+      "run/records-jobs/<ULID1>/envelope.json",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "RECORDS_JOB_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 0,
+          "job_id": "<ULID1>",
+          "prev_state": "queued",
+          "reason": "stopped_by_smd: by smd@example.test: matrix stop",
+          "review_id": null,
+          "stage": null,
+          "state": "failed"
+        },
+        "skill": "matter-records"
+      }
+    ],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "records-jobs/<ULID1>": {
+        "claimed": false,
+        "finished_at": "<CLOCK+0.0>",
+        "reason": "stopped_by_smd: by smd@example.test: matrix stop",
+        "retry_after": null,
+        "state": "stopped_by_smd",
+        "stop_queued_at": "<CLOCK+0.0>",
+        "stopped_by": "smd@example.test",
+        "stopped_cents": 0,
+        "stopped_exit": null,
+        "stopped_recorded": true,
+        "stopped_why": "matrix stop",
+        "wake": null
+      }
+    },
+    "job_files": {},
+    "log": [
+      "WARNING jobs.daemon records job <ULID1> stopped by SMD while not running (was submitted); final, never claimed"
+    ],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "records-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "sweep",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-heartbeat.json",
+      "run/records-jobs/",
+      "run/records-jobs/<ULID1>/",
+      "run/records-jobs/<ULID1>/.smd-stop.json",
+      "run/records-jobs/<ULID1>/daemon.json",
+      "run/records-jobs/<ULID1>/envelope.json",
+      "run/records-queue/",
+      "run/records-tick",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "job_id": "<ULID1>",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "stopped_by_smd: by smd@example.test: matrix stop",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "records_job_record",
+          "cents": 0,
+          "job_id": "<ULID1>",
+          "reason": "stopped_by_smd: by smd@example.test: matrix stop",
+          "state": "failed"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "records-jobs/<ULID1>": {
+        "claimed": false,
+        "finished_at": "<CLOCK+0.0>",
+        "reason": "stopped_by_smd: by smd@example.test: matrix stop",
+        "retry_after": null,
+        "state": "stopped_by_smd",
+        "stop_queued_at": "<CLOCK+0.0>",
+        "stopped_by": "smd@example.test",
+        "stopped_cents": 0,
+        "stopped_exit": null,
+        "stopped_recorded": true,
+        "stopped_why": "matrix stop",
+        "wake": null
+      }
+    },
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "records-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "idle",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-heartbeat.json",
+      "run/records-jobs/",
+      "run/records-jobs/<ULID1>/",
+      "run/records-jobs/<ULID1>/.smd-stop.json",
+      "run/records-jobs/<ULID1>/daemon.json",
+      "run/records-jobs/<ULID1>/envelope.json",
+      "run/records-queue/",
+      "run/records-tick",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  }
+]

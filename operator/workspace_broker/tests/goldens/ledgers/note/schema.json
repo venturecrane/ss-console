@@ -1,0 +1,148 @@
+{
+  "aged": [
+    {
+      "after_today_opened_it": {
+        "note_jobs": {
+          "index_list": [
+            ["idx_note_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+            ["sqlite_autoindex_note_jobs_1", 1, "pk", 0, [[0, 0, "id"]]],
+            [
+              "sqlite_autoindex_note_jobs_2",
+              1,
+              "u",
+              0,
+              [
+                [0, 3, "request_ref"],
+                [1, 5, "text_digest"]
+              ]
+            ]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_note_jobs_created",
+              "CREATE INDEX idx_note_jobs_created ON note_jobs(created_at)"
+            ],
+            [
+              "table",
+              "note_jobs",
+              "CREATE TABLE note_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, text TEXT NOT NULL, text_digest TEXT NOT NULL, approved_by TEXT NOT NULL, recorded_by TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'delivered', attempt INTEGER NOT NULL DEFAULT 1, reply_sent_at TEXT, reply_key TEXT, trigger TEXT NOT NULL DEFAULT 'request', subject TEXT, UNIQUE(request_ref, text_digest))"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "requester", "TEXT", 1, null, 0],
+            [3, "request_ref", "TEXT", 1, null, 0],
+            [4, "text", "TEXT", 1, null, 0],
+            [5, "text_digest", "TEXT", 1, null, 0],
+            [6, "approved_by", "TEXT", 1, null, 0],
+            [7, "recorded_by", "TEXT", 1, null, 0],
+            [8, "state", "TEXT", 1, "'delivered'", 0],
+            [9, "attempt", "INTEGER", 1, "1", 0],
+            [10, "reply_sent_at", "TEXT", 0, null, 0],
+            [11, "reply_key", "TEXT", 0, null, 0],
+            [12, "trigger", "TEXT", 1, "'request'", 0],
+            [13, "subject", "TEXT", 0, null, 0]
+          ]
+        }
+      },
+      "commit": "15ba382db4e6"
+    },
+    {
+      "after_today_opened_it": {
+        "note_jobs": {
+          "index_list": [
+            ["idx_note_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+            ["sqlite_autoindex_note_jobs_1", 1, "pk", 0, [[0, 0, "id"]]],
+            [
+              "sqlite_autoindex_note_jobs_2",
+              1,
+              "u",
+              0,
+              [
+                [0, 3, "request_ref"],
+                [1, 5, "text_digest"]
+              ]
+            ]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_note_jobs_created",
+              "CREATE INDEX idx_note_jobs_created ON note_jobs(created_at)"
+            ],
+            [
+              "table",
+              "note_jobs",
+              "CREATE TABLE note_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, text TEXT NOT NULL, text_digest TEXT NOT NULL, approved_by TEXT NOT NULL, recorded_by TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'delivered', attempt INTEGER NOT NULL DEFAULT 1, reply_sent_at TEXT, reply_key TEXT, trigger TEXT NOT NULL DEFAULT 'request', subject TEXT, UNIQUE(request_ref, text_digest))"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "requester", "TEXT", 1, null, 0],
+            [3, "request_ref", "TEXT", 1, null, 0],
+            [4, "text", "TEXT", 1, null, 0],
+            [5, "text_digest", "TEXT", 1, null, 0],
+            [6, "approved_by", "TEXT", 1, null, 0],
+            [7, "recorded_by", "TEXT", 1, null, 0],
+            [8, "state", "TEXT", 1, "'delivered'", 0],
+            [9, "attempt", "INTEGER", 1, "1", 0],
+            [10, "reply_sent_at", "TEXT", 0, null, 0],
+            [11, "reply_key", "TEXT", 0, null, 0],
+            [12, "trigger", "TEXT", 1, "'request'", 0],
+            [13, "subject", "TEXT", 0, null, 0]
+          ]
+        }
+      },
+      "commit": "9a9b531764b7"
+    }
+  ],
+  "fresh": {
+    "note_jobs": {
+      "index_list": [
+        ["idx_note_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+        ["sqlite_autoindex_note_jobs_1", 1, "pk", 0, [[0, 0, "id"]]],
+        [
+          "sqlite_autoindex_note_jobs_2",
+          1,
+          "u",
+          0,
+          [
+            [0, 3, "request_ref"],
+            [1, 5, "text_digest"]
+          ]
+        ]
+      ],
+      "sqlite_master": [
+        [
+          "index",
+          "idx_note_jobs_created",
+          "CREATE INDEX idx_note_jobs_created ON note_jobs(created_at)"
+        ],
+        [
+          "table",
+          "note_jobs",
+          "CREATE TABLE note_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, text TEXT NOT NULL, text_digest TEXT NOT NULL, approved_by TEXT NOT NULL, recorded_by TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'delivered', attempt INTEGER NOT NULL DEFAULT 1, reply_sent_at TEXT, reply_key TEXT, trigger TEXT NOT NULL DEFAULT 'request', subject TEXT, UNIQUE(request_ref, text_digest))"
+        ]
+      ],
+      "table_info": [
+        [0, "id", "TEXT", 0, null, 1],
+        [1, "created_at", "TEXT", 1, null, 0],
+        [2, "requester", "TEXT", 1, null, 0],
+        [3, "request_ref", "TEXT", 1, null, 0],
+        [4, "text", "TEXT", 1, null, 0],
+        [5, "text_digest", "TEXT", 1, null, 0],
+        [6, "approved_by", "TEXT", 1, null, 0],
+        [7, "recorded_by", "TEXT", 1, null, 0],
+        [8, "state", "TEXT", 1, "'delivered'", 0],
+        [9, "attempt", "INTEGER", 1, "1", 0],
+        [10, "reply_sent_at", "TEXT", 0, null, 0],
+        [11, "reply_key", "TEXT", 0, null, 0],
+        [12, "trigger", "TEXT", 1, "'request'", 0],
+        [13, "subject", "TEXT", 0, null, 0]
+      ]
+    }
+  }
+}

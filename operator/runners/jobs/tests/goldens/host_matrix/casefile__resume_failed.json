@@ -1,0 +1,1086 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/casefile-queue/<ULID1>.json",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "CASEFILE_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 0,
+          "job_id": "<ULID1>",
+          "lines_proposed": null,
+          "matters_current": null,
+          "matters_held": null,
+          "matters_read": null,
+          "matters_total": null,
+          "mode": "full",
+          "reason": null,
+          "stage": null,
+          "state": "running"
+        },
+        "skill": "case-file-manager"
+      },
+      {
+        "action_type": "CASEFILE_JOB_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 500,
+          "job_id": "<ULID1>",
+          "lines_proposed": 0,
+          "matters_current": 0,
+          "matters_held": 0,
+          "matters_read": 0,
+          "matters_total": 0,
+          "mode": "full",
+          "reason": "unexpected: a stage failed",
+          "stage": "read",
+          "state": "failed"
+        },
+        "skill": "case-file-manager"
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "demand/cgroup.procs": "<PID>",
+      "demand/memory.max": "1073741824"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "casefile",
+          "<TMP>/seat/run/casefile-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/casefile-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/casefile-jobs/<ULID1>",
+          "JOBS_CASEFILE_INPUTS_DIR": "<TMP>/seat/inputs/casefile",
+          "JOBS_CASEFILE_STATE_DIR": "<TMP>/seat/state/casefile",
+          "JOBS_CASEFILE_YIELD_PIDS": "<TMP>/seat/run/demand-child.pid,<TMP>/seat/run/drafting-child.pid,<TMP>/seat/run/child.pid",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_LITIGATION_TEXTCACHE_DIR": "<TMP>/litigation-textcache",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
+          "SMOKEBALL_API_KEY": "<SECRET:present>",
+          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
+          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "<SECRET:present>"
+        },
+        "job_id": "<ULID1>",
+        "lane": "casefile",
+        "pidfile": "<TMP>/seat/run/casefile-child.pid"
+      }
+    ],
+    "daemon": {
+      "casefile-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 0,
+          "pending": true,
+          "task": "Run the case-file-manager skill's DELIVER mode for casefile job <ULID1>.\nLoad it first: your first call is read_file on case-file-manager/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: casefile.\nMode: full.\nTrigger: request.\nOutcome: failed.\nMatters: 0; read this run: 0; already current: 0; not reviewed: 0; File Status filed: 0; changes proposed: 0.\nFolder id: none.\nRequested by: admin@firm.example.\nReason: stopped at read."
+        }
+      }
+    },
+    "job_files": {
+      "casefile-jobs/<ULID1>/job.json": "{\n \"file_to_matter_id\": \"99999999-9999-4999-8999-999999999999\",\n \"file_to_matter_number\": \"OPS-LIBRARY\",\n \"folder_name\": \"Case File Manager\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"casefile\",\n \"message_ref\": \"<req-1@firm.example>\",\n \"mode\": \"full\",\n \"request_text\": \"Please review Pat Example's files.\",\n \"requester\": \"admin@firm.example\",\n \"scope\": {\n  \"assisting\": {\n   \"names\": [\n    \"Pat Example\"\n   ]\n  }\n },\n \"trigger\": \"request\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"per_job_cap_usd\": 20.0,\n \"monthly_budget_usd\": 100.0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "casefile-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["casefile-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "failed",
+    "step": "run",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-heartbeat.json",
+      "run/casefile-jobs/",
+      "run/casefile-jobs/<ULID1>/",
+      "run/casefile-jobs/<ULID1>/daemon.json",
+      "run/casefile-jobs/<ULID1>/daemon.log",
+      "run/casefile-jobs/<ULID1>/data/",
+      "run/casefile-jobs/<ULID1>/envelope.json",
+      "run/casefile-jobs/<ULID1>/job.json",
+      "run/casefile-jobs/<ULID1>/verdict.json",
+      "run/casefile-queue/",
+      "run/casefile-tick",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [],
+            "folder_id": null,
+            "job_id": "<ULID1>",
+            "lines_proposed": null,
+            "matters_current": null,
+            "matters_held": null,
+            "matters_read": null,
+            "matters_total": null,
+            "mode": "full",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "row": {
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "<TS>",
+              "delivery_json": null,
+              "envelope_digest": "<HEX>",
+              "file_to_matter_id": "99999999-9999-4999-8999-999999999999",
+              "folder_id": null,
+              "id": "<ULID1>",
+              "lines_proposed": null,
+              "matters_current": null,
+              "matters_held": null,
+              "matters_read": null,
+              "matters_total": null,
+              "metrics_json": null,
+              "mode": "full",
+              "outcomes_json": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "scope_json": "{\"assisting\": {\"names\": [\"Pat Example\"]}}",
+              "scope_key": "casefile:<HEX>",
+              "source_job_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "<TS>"
+            },
+            "source_job_id": null,
+            "stage": null,
+            "state": "queued",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "jobs": [
+            {
+              "cents": 0,
+              "created_at": "<TS>",
+              "file": null,
+              "files": [],
+              "folder_id": null,
+              "job_id": "<ULID1>",
+              "lines_proposed": null,
+              "matters_current": null,
+              "matters_held": null,
+              "matters_read": null,
+              "matters_total": null,
+              "mode": "full",
+              "reason": null,
+              "reply_sent_at": null,
+              "requester": "admin@firm.example",
+              "source_job_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "<TS>"
+            }
+          ],
+          "month": "<MONTH>",
+          "month_cents": 0,
+          "monthly_budget_cents": null,
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_status",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [],
+            "folder_id": null,
+            "job_id": "<ULID1>",
+            "lines_proposed": null,
+            "matters_current": null,
+            "matters_held": null,
+            "matters_read": null,
+            "matters_total": null,
+            "mode": "full",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "source_job_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [],
+            "folder_id": null,
+            "job_id": "<ULID1>",
+            "lines_proposed": 0,
+            "matters_current": 0,
+            "matters_held": 0,
+            "matters_read": 0,
+            "matters_total": 0,
+            "mode": "full",
+            "reason": "unexpected: a stage failed",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "source_job_id": null,
+            "stage": "read",
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_record",
+          "fields": {
+            "cents": 500,
+            "files": [],
+            "folder_id": "",
+            "lines_proposed": 0,
+            "matters_current": 0,
+            "matters_held": 0,
+            "matters_read": 0,
+            "matters_total": 0,
+            "reason": "unexpected: a stage failed",
+            "stage": "read"
+          },
+          "job_id": "<ULID1>",
+          "state": "failed"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [
+      {
+        "action_type": "CASEFILE_JOB_RESUME_REQUESTED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "job_id": "<ULID1>",
+          "reason": "the matrix fixed it"
+        },
+        "skill": "case-file-manager"
+      }
+    ],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "casefile-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "unexpected: a stage failed",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 0,
+          "pending": true,
+          "task": "Run the case-file-manager skill's DELIVER mode for casefile job <ULID1>.\nLoad it first: your first call is read_file on case-file-manager/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: casefile.\nMode: full.\nTrigger: request.\nOutcome: failed.\nMatters: 0; read this run: 0; already current: 0; not reviewed: 0; File Status filed: 0; changes proposed: 0.\nFolder id: none.\nRequested by: admin@firm.example.\nReason: stopped at read."
+        }
+      }
+    },
+    "job_files": {
+      "casefile-jobs/<ULID1>/job.json": "{\n \"file_to_matter_id\": \"99999999-9999-4999-8999-999999999999\",\n \"file_to_matter_number\": \"OPS-LIBRARY\",\n \"folder_name\": \"Case File Manager\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"casefile\",\n \"message_ref\": \"<req-1@firm.example>\",\n \"mode\": \"full\",\n \"request_text\": \"Please review Pat Example's files.\",\n \"requester\": \"admin@firm.example\",\n \"scope\": {\n  \"assisting\": {\n   \"names\": [\n    \"Pat Example\"\n   ]\n  }\n },\n \"trigger\": \"request\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"per_job_cap_usd\": 20.0,\n \"monthly_budget_usd\": 100.0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "casefile-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["casefile-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": true,
+    "step": "resume requested",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-heartbeat.json",
+      "run/casefile-jobs/",
+      "run/casefile-jobs/<ULID1>/",
+      "run/casefile-jobs/<ULID1>/daemon.json",
+      "run/casefile-jobs/<ULID1>/daemon.log",
+      "run/casefile-jobs/<ULID1>/data/",
+      "run/casefile-jobs/<ULID1>/envelope.json",
+      "run/casefile-jobs/<ULID1>/job.json",
+      "run/casefile-jobs/<ULID1>/verdict.json",
+      "run/casefile-queue/",
+      "run/casefile-queue/.resume-<ULID1>.json",
+      "run/casefile-tick",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job_id": "<ULID1>",
+          "ok": true,
+          "queued": true
+        },
+        "request": {
+          "action": "casefile_job_resume",
+          "job_id": "<ULID1>",
+          "reason": "the matrix fixed it"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [
+      {
+        "action_type": "CASEFILE_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 500,
+          "job_id": "<ULID1>",
+          "lines_proposed": 0,
+          "matters_current": 0,
+          "matters_held": 0,
+          "matters_read": 0,
+          "matters_total": 0,
+          "mode": "full",
+          "reason": "unexpected: a stage failed",
+          "stage": "read",
+          "state": "running"
+        },
+        "skill": "case-file-manager"
+      },
+      {
+        "action_type": "DELIVERY_PROVEN",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "attempt": 1,
+          "files": [
+            {
+              "file_id": "f1",
+              "sha256": "<HEX>",
+              "size": 10
+            }
+          ],
+          "job_id": "<ULID1>",
+          "lane": "casefile",
+          "review": "passed",
+          "review_cents": 0,
+          "review_model": "",
+          "rows": 0
+        },
+        "skill": null
+      },
+      {
+        "action_type": "CASEFILE_JOB_DELIVERED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 500,
+          "job_id": "<ULID1>",
+          "lines_proposed": 0,
+          "matters_current": 0,
+          "matters_held": 0,
+          "matters_read": 0,
+          "matters_total": 9,
+          "mode": "full",
+          "reason": "unexpected: a stage failed",
+          "stage": "report",
+          "state": "delivered"
+        },
+        "skill": "case-file-manager"
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "demand/cgroup.procs": "<PID>",
+      "demand/memory.max": "1073741824"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "casefile",
+          "<TMP>/seat/run/casefile-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/casefile-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/casefile-jobs/<ULID1>",
+          "JOBS_CASEFILE_INPUTS_DIR": "<TMP>/seat/inputs/casefile",
+          "JOBS_CASEFILE_STATE_DIR": "<TMP>/seat/state/casefile",
+          "JOBS_CASEFILE_YIELD_PIDS": "<TMP>/seat/run/demand-child.pid,<TMP>/seat/run/drafting-child.pid,<TMP>/seat/run/child.pid",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_LITIGATION_TEXTCACHE_DIR": "<TMP>/litigation-textcache",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
+          "SMOKEBALL_API_KEY": "<SECRET:present>",
+          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
+          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "<SECRET:present>"
+        },
+        "job_id": "<ULID1>",
+        "lane": "casefile",
+        "pidfile": "<TMP>/seat/run/casefile-child.pid"
+      }
+    ],
+    "daemon": {
+      "casefile-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": null,
+        "resume_reason": "the matrix fixed it",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_by": "",
+        "resume_release_held": false,
+        "resumes": 1,
+        "retry_after": null,
+        "state": "delivered",
+        "wake": {
+          "attempts": 0,
+          "pending": true,
+          "task": "Run the case-file-manager skill's DELIVER mode for casefile job <ULID1>.\nLoad it first: your first call is read_file on case-file-manager/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: casefile.\nMode: full.\nTrigger: request.\nOutcome: delivered.\nMatters: 9; read this run: 0; already current: 0; not reviewed: 0; File Status filed: 0; changes proposed: 0.\nFolder id: folder-7.\nRequested by: admin@firm.example."
+        }
+      }
+    },
+    "job_files": {
+      "casefile-jobs/<ULID1>/job.json": "{\n \"file_to_matter_id\": \"99999999-9999-4999-8999-999999999999\",\n \"file_to_matter_number\": \"OPS-LIBRARY\",\n \"folder_name\": \"Case File Manager\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"casefile\",\n \"message_ref\": \"<req-1@firm.example>\",\n \"mode\": \"full\",\n \"request_text\": \"Please review Pat Example's files.\",\n \"requester\": \"admin@firm.example\",\n \"scope\": {\n  \"assisting\": {\n   \"names\": [\n    \"Pat Example\"\n   ]\n  }\n },\n \"trigger\": \"request\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"per_job_cap_usd\": 20.0,\n \"monthly_budget_usd\": 100.0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "casefile-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["casefile-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "delivered",
+    "step": "resumed run",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-heartbeat.json",
+      "run/casefile-jobs/",
+      "run/casefile-jobs/<ULID1>/",
+      "run/casefile-jobs/<ULID1>/daemon.json",
+      "run/casefile-jobs/<ULID1>/daemon.log",
+      "run/casefile-jobs/<ULID1>/data/",
+      "run/casefile-jobs/<ULID1>/envelope.json",
+      "run/casefile-jobs/<ULID1>/job.json",
+      "run/casefile-jobs/<ULID1>/verdict.json",
+      "run/casefile-queue/",
+      "run/casefile-tick",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [],
+            "folder_id": null,
+            "job_id": "<ULID1>",
+            "lines_proposed": 0,
+            "matters_current": 0,
+            "matters_held": 0,
+            "matters_read": 0,
+            "matters_total": 0,
+            "mode": "full",
+            "reason": "unexpected: a stage failed",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "row": {
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "<TS>",
+              "delivery_json": "{\"files\": []}",
+              "envelope_digest": "<HEX>",
+              "file_to_matter_id": "99999999-9999-4999-8999-999999999999",
+              "folder_id": null,
+              "id": "<ULID1>",
+              "lines_proposed": 0,
+              "matters_current": 0,
+              "matters_held": 0,
+              "matters_read": 0,
+              "matters_total": 0,
+              "metrics_json": null,
+              "mode": "full",
+              "outcomes_json": null,
+              "reason": "unexpected: a stage failed",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "scope_json": "{\"assisting\": {\"names\": [\"Pat Example\"]}}",
+              "scope_key": "casefile:<HEX>",
+              "source_job_id": null,
+              "stage": "read",
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "<TS>"
+            },
+            "source_job_id": null,
+            "stage": "read",
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "jobs": [
+            {
+              "cents": 500,
+              "created_at": "<TS>",
+              "file": null,
+              "files": [],
+              "folder_id": null,
+              "job_id": "<ULID1>",
+              "lines_proposed": 0,
+              "matters_current": 0,
+              "matters_held": 0,
+              "matters_read": 0,
+              "matters_total": 0,
+              "mode": "full",
+              "reason": "unexpected: a stage failed",
+              "reply_sent_at": null,
+              "requester": "admin@firm.example",
+              "source_job_id": null,
+              "stage": "read",
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "<TS>"
+            }
+          ],
+          "month": "<MONTH>",
+          "month_cents": 0,
+          "monthly_budget_cents": null,
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_status",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [],
+            "folder_id": null,
+            "job_id": "<ULID1>",
+            "lines_proposed": 0,
+            "matters_current": 0,
+            "matters_held": 0,
+            "matters_read": 0,
+            "matters_total": 0,
+            "mode": "full",
+            "reason": "unexpected: a stage failed",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "source_job_id": null,
+            "stage": "read",
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "audit_id": "<ULID2>",
+          "ok": true
+        },
+        "request": {
+          "action": "delivery_proof_record",
+          "attempt": 1,
+          "files": [
+            {
+              "file_id": "f1",
+              "name": "x.docx",
+              "sha256": "<HEX>",
+              "size": 10
+            }
+          ],
+          "job_id": "<ULID1>",
+          "lane": "casefile",
+          "review": "passed",
+          "review_cents": 0,
+          "review_model": "",
+          "rows": 0
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [
+              {
+                "name": "Out.xlsx",
+                "role": "report",
+                "size": 900
+              }
+            ],
+            "folder_id": "folder-7",
+            "job_id": "<ULID1>",
+            "lines_proposed": 0,
+            "matters_current": 0,
+            "matters_held": 0,
+            "matters_read": 0,
+            "matters_total": 9,
+            "mode": "full",
+            "reason": "unexpected: a stage failed",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "source_job_id": null,
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_record",
+          "fields": {
+            "cents": 500,
+            "files": [
+              {
+                "name": "Out.xlsx",
+                "role": "report",
+                "sha256": "<HEX>",
+                "size": 900
+              }
+            ],
+            "folder_id": "folder-7",
+            "lines_proposed": 0,
+            "matters_current": 0,
+            "matters_held": 0,
+            "matters_read": 0,
+            "matters_total": 9,
+            "stage": "report"
+          },
+          "job_id": "<ULID1>",
+          "state": "delivered"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "casefile-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": null,
+        "reply_watch": {
+          "attempt": 1,
+          "due": "<CLOCK+1200.0>",
+          "kind": "casefile_job",
+          "state": "delivered"
+        },
+        "resume_reason": "the matrix fixed it",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_by": "",
+        "resume_release_held": false,
+        "resumes": 1,
+        "retry_after": null,
+        "state": "delivered",
+        "wake": {
+          "attempts": 0,
+          "outcome": "delivered",
+          "pending": false,
+          "sent_at": "<CLOCK+0.0>",
+          "seq": 2,
+          "task": "Run the case-file-manager skill's DELIVER mode for casefile job <ULID1>.\nLoad it first: your first call is read_file on case-file-manager/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: casefile.\nMode: full.\nTrigger: request.\nOutcome: delivered.\nMatters: 9; read this run: 0; already current: 0; not reviewed: 0; File Status filed: 0; changes proposed: 0.\nFolder id: folder-7.\nRequested by: admin@firm.example."
+        },
+        "wake_seq": 2
+      }
+    },
+    "job_files": {
+      "casefile-jobs/<ULID1>/job.json": "{\n \"file_to_matter_id\": \"99999999-9999-4999-8999-999999999999\",\n \"file_to_matter_number\": \"OPS-LIBRARY\",\n \"folder_name\": \"Case File Manager\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"casefile\",\n \"message_ref\": \"<req-1@firm.example>\",\n \"mode\": \"full\",\n \"request_text\": \"Please review Pat Example's files.\",\n \"requester\": \"admin@firm.example\",\n \"scope\": {\n  \"assisting\": {\n   \"names\": [\n    \"Pat Example\"\n   ]\n  }\n },\n \"trigger\": \"request\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"per_job_cap_usd\": 20.0,\n \"monthly_budget_usd\": 100.0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "casefile-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": [
+            {
+              "file": "casefile-jobs/<ULID1>",
+              "reply_open": true,
+              "sent_ago_s": 0.0
+            }
+          ]
+        },
+        "reasons": ["casefile-jobs/<ULID1>: DELIVER turn started 0s ago, its reply not yet seen"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "wake",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-heartbeat.json",
+      "run/casefile-jobs/",
+      "run/casefile-jobs/<ULID1>/",
+      "run/casefile-jobs/<ULID1>/daemon.json",
+      "run/casefile-jobs/<ULID1>/daemon.log",
+      "run/casefile-jobs/<ULID1>/data/",
+      "run/casefile-jobs/<ULID1>/envelope.json",
+      "run/casefile-jobs/<ULID1>/job.json",
+      "run/casefile-jobs/<ULID1>/verdict.json",
+      "run/casefile-queue/",
+      "run/casefile-tick",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [
+      {
+        "auth": true,
+        "body": {
+          "handoff_id": "casefile-<ULID1>-w2",
+          "task": "Run the case-file-manager skill's DELIVER mode for casefile job <ULID1>.\nLoad it first: your first call is read_file on case-file-manager/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: casefile.\nMode: full.\nTrigger: request.\nOutcome: delivered.\nMatters: 9; read this run: 0; already current: 0; not reviewed: 0; File Status filed: 0; changes proposed: 0.\nFolder id: folder-7.\nRequested by: admin@firm.example."
+        },
+        "path": "/webhooks/handoff"
+      }
+    ],
+    "wire": [
+      {
+        "reply": {
+          "channel": "agentmail",
+          "expected_key": "casefile_job:<ULID1>:2:delivered",
+          "holds": 0,
+          "ok": true,
+          "replies": [],
+          "sends_to_requester": 0
+        },
+        "request": {
+          "action": "delivery_reply_status",
+          "job_id": "<ULID1>",
+          "kind": "casefile_job",
+          "requester": "admin@firm.example",
+          "since": "<TS>"
+        }
+      }
+    ]
+  }
+]

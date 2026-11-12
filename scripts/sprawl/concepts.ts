@@ -10,10 +10,12 @@
  * past scripts/sprawl/concept-baseline.json, and when one falls without the
  * baseline being lowered (`npx tsx scripts/sprawl-audit.ts --write-concept-baseline`).
  *
- * Only ideas a pattern can find reliably are here. The review's table names
- * more (job host loops, verdict shapes, job-run engines, page readers, paid
- * page stores, firm-settings loaders, broker job ledgers); those need a reader
- * of the code, not a pattern, and are left out rather than guessed.
+ * Only ideas a pattern can find reliably are here. The wave 2 job-kit rows
+ * (lane host loops, verdict readers, ledger classes, firm-settings loaders,
+ * paid-session setups, model-id literals, Word-to-text) are counted by a
+ * structural mark each one carries (a method name, a class shape, a literal
+ * form), locked at their 2026-11-12 counts. Job-run engines, page readers and
+ * paid page stores still need a reader of the code and are left out.
  */
 
 import { type RatchetResult, type SourceFile, countRatchet, isTestPath } from './analyze'
@@ -146,7 +148,100 @@ function distinctWritingRuleBodies(files: SourceFile[]): string[] {
   return [...first.values()].sort()
 }
 
+/** Non-test Python files whose path starts with one of `roots`. */
+function python(files: SourceFile[], ...roots: string[]): SourceFile[] {
+  return programs(files).filter(
+    (f) => f.path.endsWith('.py') && roots.some((r) => f.path.startsWith(r))
+  )
+}
+
+const RUNNER = 'operator/runners/jobs/jobs/'
+const BROKER = 'operator/workspace_broker/'
+
+/** A method `run_job` or `tick` defined on a class (indented `def name(self`). */
+const HOST_LOOP = /^\s+def (run_job|tick)\(self\b/
+
+/** A function that reads a job's verdict: read_verdict, read_verdicts, finished_verdict,
+ * or a bare `read(` in a file that names verdict.json. */
+const VERDICT_READER = /^\s*def (read_verdicts?|finished_verdict)\(/
+
+function readsVerdicts(code: string[]): boolean {
+  if (code.some((l) => VERDICT_READER.test(l))) return true
+  return code.some((l) => /^def read\(/.test(l)) && code.some((l) => l.includes('verdict.json'))
+}
+
+/** A job ledger: a method recording a job's transition, `def record(self, job_id`. */
+const LEDGER_RECORD = /^\s+def record\(self, job_id\b/
+
+/** A lane's firm-settings loader: it declares its own `*ConfigError` and a `def load(`. */
+function loadsFirmSettings(code: string[]): boolean {
+  return (
+    code.some((l) => /^class \w*ConfigError\(/.test(l)) && code.some((l) => /^def load\(/.test(l))
+  )
+}
+
+/** A paid session set up in place: the model doorway and the spend limits both constructed. */
+function setsUpPaidSession(code: string[]): boolean {
+  return code.some((l) => /\bDoorway\(/.test(l)) && code.some((l) => /\bLimits\(/.test(l))
+}
+
+/** A Claude model id written as a string literal (claude-opus-..., claude-sonnet-..., claude-haiku-...). */
+const MODEL_ID = /['"]claude-(opus|sonnet|haiku|fable)-[\w.-]+['"]/
+
+/** Word to text: a function of its own that turns a .docx into text (`docx_text`, `_docx_text`,
+ * `word_text`). A file that builds or edits a .docx is not one. */
+const WORD_TO_TEXT = /^\s*def _?\w*(docx|word)_text\w*\(/
+
+function readsWordText(code: string[]): boolean {
+  return code.some((l) => WORD_TO_TEXT.test(l))
+}
+
 export const CONCEPTS: Concept[] = [
+  {
+    id: 'lane-host-loops',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ defining a `run_job(self` or `tick(self` method.',
+    target: '1 job host plus per-lane hooks',
+    instances: (files) =>
+      matching(python(files, RUNNER), (code) => code.some((l) => HOST_LOOP.test(l))),
+  },
+  {
+    id: 'verdict-readers',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ defining read_verdict, read_verdicts or finished_verdict, or a module-level read( beside verdict.json.',
+    target: '1 (one verdict shape, one reader)',
+    instances: (files) => matching(python(files, RUNNER), readsVerdicts),
+  },
+  {
+    id: 'lane-ledger-classes',
+    rule: 'Non-test Python file under operator/workspace_broker/ defining a `record(self, job_id` method.',
+    target: '1 ledger class plus per-lane rules',
+    instances: (files) =>
+      matching(python(files, BROKER), (code) => code.some((l) => LEDGER_RECORD.test(l))),
+  },
+  {
+    id: 'firm-settings-loaders',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ declaring its own `*ConfigError` class and a module-level `load(`.',
+    target: '1 loader over declared keys',
+    instances: (files) => matching(python(files, RUNNER), loadsFirmSettings),
+  },
+  {
+    id: 'paid-session-setups',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ constructing both `Doorway(` and `Limits(`.',
+    target: '1 paid-session kit',
+    instances: (files) => matching(python(files, RUNNER), setsUpPaidSession),
+  },
+  {
+    id: 'model-id-literals',
+    rule: 'Non-test Python file under operator/ with a quoted Claude model id (claude-opus-, claude-sonnet-, claude-haiku-, claude-fable-).',
+    target: '1 home for model facts',
+    instances: (files) =>
+      matching(python(files, 'operator/'), (code) => code.some((l) => MODEL_ID.test(l))),
+  },
+  {
+    id: 'word-to-text',
+    rule: 'Non-test Python file under operator/ defining its own .docx-to-text function (a def named *docx_text* or *word_text*).',
+    target: '1 Word reader',
+    instances: (files) => matching(python(files, 'operator/'), readsWordText),
+  },
   {
     id: 'job-lane-lists',
     rule: 'Non-test program file naming 4+ job lanes as quoted strings, object keys or case arms, or 4+ on one line.',

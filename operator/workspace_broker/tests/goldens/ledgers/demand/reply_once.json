@@ -1,0 +1,66 @@
+{
+  "row": {
+    "attempt": 1,
+    "cents": 500,
+    "created_at": "2026-10-20T17:00:00.000Z",
+    "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+    "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+    "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+    "folder_id": "folder-7",
+    "id": "01KTJ0BX000000000000000001",
+    "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+    "matter_number": "100001",
+    "reason": null,
+    "reply_key": "reply",
+    "reply_sent_at": "2026-10-20T17:00:08.000Z",
+    "request_ref": "<req-1@firm.example>",
+    "requester": "admin@firm.example",
+    "state": "delivered",
+    "supersedes": null,
+    "updated_at": "2026-10-20T17:00:03.000Z"
+  },
+  "rows": [
+    {
+      "call": "mark reply",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "mark reply again",
+      "result": {
+        "returned": false
+      }
+    },
+    {
+      "call": "mark another key",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark reply",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark reply after unmark",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark a key never marked",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark an unknown job",
+      "result": {
+        "returned": false
+      }
+    }
+  ]
+}

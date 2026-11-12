@@ -1,0 +1,67 @@
+{
+  "row": {
+    "attempt": 1,
+    "cents": 500,
+    "created_at": "2026-10-20T17:00:00.000Z",
+    "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+    "document_class": "mediation_brief",
+    "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+    "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+    "folder_id": "folder-7",
+    "id": "01KTJ0BX000000000000000001",
+    "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+    "matter_number": "100001",
+    "reason": null,
+    "reply_key": "reply",
+    "reply_sent_at": "2026-10-20T17:00:08.000Z",
+    "request_ref": "<req-1@firm.example>",
+    "requester": "admin@firm.example",
+    "revise_of": null,
+    "state": "delivered",
+    "updated_at": "2026-10-20T17:00:03.000Z"
+  },
+  "rows": [
+    {
+      "call": "mark reply",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "mark reply again",
+      "result": {
+        "returned": false
+      }
+    },
+    {
+      "call": "mark another key",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark reply",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark reply after unmark",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark a key never marked",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark an unknown job",
+      "result": {
+        "returned": false
+      }
+    }
+  ]
+}

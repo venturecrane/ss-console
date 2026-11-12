@@ -1,0 +1,18 @@
+{
+  "_why": "Each schema an empty file got from one historical version of this lane's ledger (bin/goldens/ledger-aged-schemas.py, from git history). test_ledger_goldens.py opens each with today's ledger class and compares the migrated schema with its golden.",
+  "steps": [
+    {
+      "commit": "107639ab389d",
+      "method": "import",
+      "schema": [
+        "index idx_negotiation_jobs_created: CREATE INDEX idx_negotiation_jobs_created ON negotiation_jobs(created_at)",
+        "index idx_negotiation_notices_job: CREATE INDEX idx_negotiation_notices_job ON negotiation_notices(job_id)",
+        "index idx_negotiation_spend_at: CREATE INDEX idx_negotiation_spend_at ON negotiation_spend(at)",
+        "index uq_negotiation_jobs_request_ref: CREATE UNIQUE INDEX uq_negotiation_jobs_request_ref ON negotiation_jobs(request_ref)",
+        "table negotiation_jobs: CREATE TABLE negotiation_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_seeded INTEGER, docs_read INTEGER, docs_failed INTEGER, notices_count INTEGER, reason TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_sent_at TEXT, reply_key TEXT)",
+        "table negotiation_notices: CREATE TABLE negotiation_notices (id TEXT PRIMARY KEY, job_id TEXT NOT NULL, created_at TEXT NOT NULL, requester TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, status TEXT NOT NULL, text TEXT NOT NULL, reply_sent_at TEXT, reply_key TEXT, wake_failed INTEGER NOT NULL DEFAULT 0)",
+        "table negotiation_spend: CREATE TABLE negotiation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    }
+  ]
+}
