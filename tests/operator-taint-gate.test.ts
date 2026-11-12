@@ -5,7 +5,14 @@ import { resolve } from 'node:path'
 /**
  * Taint-gate refusal set — the check that keeps F4 closed.
  *
- * THE FINDING. `operator/adapter/trust_ceiling.py` carries, at its taint gate,
+ * WHERE IT READS (2026-11-12). The gateway's own trust rule: the enum in
+ * `operator/hermes-smd-overlay/shared/action_classes.py` and the taint gate's
+ * class set, `_TAINT_GATED_CLASSES`, in `plugins/hermes-smd-trust/enforce.py`.
+ * Until then it read `operator/adapter/trust_ceiling.py`, a second copy of the
+ * rule that no seat ran; that copy was deleted, so this now pins the module the
+ * gateway's `pre_tool_call` hook calls. The history below is that copy's.
+ *
+ * THE FINDING. `operator/adapter/trust_ceiling.py` carried, at its taint gate,
  * the comment "Mirrors the overlay's live pre_tool_call gate; here for parity
  * (the two cores must agree)". Nothing checked the agreement. The 2026-08-23
  * review recorded this as `trust_ceiling` claiming parity while absent from
@@ -41,7 +48,8 @@ import { resolve } from 'node:path'
  * because two empty sets compare equal and would make the whole file inert.
  */
 
-const ADAPTER_PATH = resolve('operator/adapter/trust_ceiling.py')
+const ENUM_PATH = resolve('operator/hermes-smd-overlay/shared/action_classes.py')
+const GATE_PATH = resolve('operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py')
 
 /**
  * Classes a tainted turn may still perform. Read is inert; internal_write is a
@@ -51,8 +59,22 @@ const ADAPTER_PATH = resolve('operator/adapter/trust_ceiling.py')
  */
 const ALLOWED_WHEN_TAINTED = new Set(['read', 'internal_write', 'external_send_as_staff'])
 
-function source(): string {
-  return readFileSync(ADAPTER_PATH, 'utf-8')
+/**
+ * Refused on EVERY turn, tainted or not, before the gate is reached: the
+ * gateway's terminal class for an unmapped tool (issue #1327). It is not in the
+ * gate's set because nothing in it ever runs. That it is refused under every
+ * authored exposure is proven by running the gateway's enforce():
+ * operator/hermes-smd-overlay/tests/test_security_phase1.py
+ * (test_unmapped_tool_blocked_under_autonomous_ceiling).
+ */
+const REFUSED_BEFORE_THE_GATE = new Set(['refused'])
+
+function enumSource(): string {
+  return readFileSync(ENUM_PATH, 'utf-8')
+}
+
+function gateSource(): string {
+  return readFileSync(GATE_PATH, 'utf-8')
 }
 
 /** Every `NAME = "value"` member of the `ActionClass` enum, as its string value. */
@@ -60,9 +82,11 @@ function actionClassValues(src: string): string[] {
   const start = src.indexOf('class ActionClass')
   expect(start, 'ActionClass enum not found — parser is stale, not the code').toBeGreaterThan(-1)
   const after = src.slice(start)
-  const endRel = after.indexOf('\nclass ')
-  const body = endRel > -1 ? after.slice(0, endRel) : after
-  const re = /^\s+[A-Z_]+\s*=\s*"([a-z_]+)"/gm
+  // The enum body ends at the first following line that starts in column 0.
+  const endRel = after.slice(1).search(/\n(?=\S)/)
+  const body = endRel > -1 ? after.slice(0, endRel + 1) : after
+  // A member is `NAME = "value"`, or `NAME = (` with the value on the next line.
+  const re = /^\s+[A-Z_]+\s*=\s*\(?\s*"([a-z_]+)"/gm
   const out: string[] = []
   let m: RegExpExecArray | null
   while ((m = re.exec(body)) !== null) out.push(m[1])
@@ -70,33 +94,32 @@ function actionClassValues(src: string): string[] {
 }
 
 /**
- * The action classes named in the taint gate's membership test.
+ * The action classes in the taint gate's set.
  *
  * The gate reads:
  *
- *   if inbound_trust_class != _TRUST_CLASS_INTERNAL and action in (
- *       ActionClass.EXTERNAL_SEND,
- *       ...
- *   ):
+ *   _TAINT_GATED_CLASSES: frozenset[ActionClass] = frozenset(
+ *       {
+ *           ActionClass.EXTERNAL_SEND,
+ *           ...
+ *       }
+ *   )
  *
- * so the tuple is the text between that `action in (` and its closing `):`.
- * Anchoring on `_TRUST_CLASS_INTERNAL` rather than on `action in (` alone
- * matters: `enforce()` contains other membership tests, and matching the first
- * one found would silently pin the wrong tuple.
+ * so the set is the text between that assignment and its closing `}`.
  */
 function taintGateMembers(src: string): string[] {
-  const anchor = src.indexOf('_TRUST_CLASS_INTERNAL and action in (')
+  const anchor = src.indexOf('_TAINT_GATED_CLASSES: frozenset[ActionClass] = frozenset(')
   expect(anchor, 'taint gate not found — the gate was renamed, moved, or removed').toBeGreaterThan(
     -1
   )
   const rest = src.slice(anchor)
-  const close = rest.indexOf('):')
-  expect(close, 'taint gate tuple is unterminated').toBeGreaterThan(-1)
-  const tuple = rest.slice(0, close)
+  const close = rest.indexOf('}')
+  expect(close, 'taint gate set is unterminated').toBeGreaterThan(-1)
+  const members = rest.slice(0, close)
   const re = /ActionClass\.([A-Z_]+)/g
   const out: string[] = []
   let m: RegExpExecArray | null
-  while ((m = re.exec(tuple)) !== null) out.push(m[1])
+  while ((m = re.exec(members)) !== null) out.push(m[1])
   return out
 }
 
@@ -109,16 +132,16 @@ describe('operator taint gate', () => {
   it('the parser finds a real enum and a real gate', () => {
     // Law 12 on the instrument itself. Two empty sets are equal, so a parser
     // that silently found nothing would make every assertion below vacuous.
-    const src = source()
-    expect(actionClassValues(src).length).toBeGreaterThanOrEqual(5)
-    expect(taintGateMembers(src).length).toBeGreaterThanOrEqual(5)
+    expect(actionClassValues(enumSource()).length).toBeGreaterThanOrEqual(5)
+    expect(taintGateMembers(gateSource()).length).toBeGreaterThanOrEqual(5)
   })
 
   it('withholds every sensitive action class on a tainted turn', () => {
-    const src = source()
-    const all = actionClassValues(src)
-    const expected = all.filter((v) => !ALLOWED_WHEN_TAINTED.has(v)).sort()
-    const actual = taintGateMembers(src).map(toValue).sort()
+    const all = actionClassValues(enumSource())
+    const expected = all
+      .filter((v) => !ALLOWED_WHEN_TAINTED.has(v) && !REFUSED_BEFORE_THE_GATE.has(v))
+      .sort()
+    const actual = taintGateMembers(gateSource()).map(toValue).sort()
 
     expect(
       actual,
@@ -136,9 +159,14 @@ describe('operator taint gate', () => {
     // The other half of the same policy, asserted directly rather than left as
     // a consequence of the set arithmetic above: a gate that refused reads
     // would satisfy "withholds every sensitive class" and still be broken.
-    const gate = taintGateMembers(source()).map(toValue)
+    const gate = taintGateMembers(gateSource()).map(toValue)
     for (const allowed of ALLOWED_WHEN_TAINTED) {
       expect(gate, `${allowed} must not be withheld on a tainted turn`).not.toContain(allowed)
     }
+  })
+
+  it('the terminal class named above is really in the gateway enum', () => {
+    const all = actionClassValues(enumSource())
+    for (const v of REFUSED_BEFORE_THE_GATE) expect(all).toContain(v)
   })
 })

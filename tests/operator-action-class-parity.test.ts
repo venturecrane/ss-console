@@ -2,10 +2,12 @@
  * Cross-language action-class parity (ADR 0075).
  *
  * The TS authoring surface (`ACCEPTED_ACTION_CLASSES` / `SEND_ACTION_CLASSES`) and
- * the Python enforcement adapter (`operator/adapter/trust_ceiling.py`'s
- * `ActionClass`) must agree on the action-class vocabulary — the overlay
- * materializer carries the authored strings across the seam to the runtime
- * `enforce()` call. If a send class exists on one side and not the other, an
+ * the gateway's Python vocabulary (`operator/hermes-smd-overlay/shared/action_classes.py`'s
+ * `ActionClass`, which the live `hermes-smd-trust` `enforce()` imports) must agree
+ * on the action-class vocabulary — the overlay materializer carries the authored
+ * strings across the seam to the runtime `enforce()` call. (Until 2026-11-12 this
+ * read `operator/adapter/trust_ceiling.py`, a second copy of the rule no seat ran;
+ * that copy was deleted and this now reads the module the gateway imports.) If a send class exists on one side and not the other, an
  * authored ceiling is silently dropped or a runtime send resolves to an
  * unhandled class. This pins the agreement by reading the Python enum directly.
  */
@@ -18,27 +20,36 @@ import {
   SEND_ACTION_CLASSES,
 } from '../src/lib/operator/customer-yaml/types'
 
-const ADAPTER_PATH = resolve('operator/adapter/trust_ceiling.py')
+const ADAPTER_PATH = resolve('operator/hermes-smd-overlay/shared/action_classes.py')
 
-/** Extract the `ActionClass` enum's string `.value`s from the Python adapter. */
+/**
+ * `refused` is the gateway's terminal class for an unmapped tool (issue #1327):
+ * every call in it is refused before any ceiling is read, so it is never
+ * authored. It is the one Python value that is deliberately not an accepted
+ * TS action class, named here so any other gap still fails.
+ */
+const NOT_AUTHORABLE = new Set(['refused'])
+
+/** Extract the `ActionClass` enum's string `.value`s from the gateway's module. */
 function pythonActionClassValues(): string[] {
   const src = readFileSync(ADAPTER_PATH, 'utf-8')
   const start = src.indexOf('class ActionClass')
-  expect(start, 'ActionClass enum not found in adapter').toBeGreaterThan(-1)
+  expect(start, 'ActionClass enum not found in the gateway module').toBeGreaterThan(-1)
   const after = src.slice(start)
-  // The enum body ends at the next top-level `class ` (EnforcementDecision).
-  const endRel = after.indexOf('\nclass ')
-  const body = endRel > -1 ? after.slice(0, endRel) : after
+  // The enum body ends at the first following line that starts in column 0.
+  const endRel = after.slice(1).search(/\n(?=\S)/)
+  const body = endRel > -1 ? after.slice(0, endRel + 1) : after
   // Enum members are indented `NAME = "value"`; a top-level module constant has no
   // leading whitespace and is excluded by the `^\s+` anchor.
-  const re = /^\s+[A-Z_]+\s*=\s*"([a-z_]+)"/gm
+  // A member is `NAME = "value"`, or `NAME = (` with the value on the next line.
+  const re = /^\s+[A-Z_]+\s*=\s*\(?\s*"([a-z_]+)"/gm
   const out: string[] = []
   let m: RegExpExecArray | null
   while ((m = re.exec(body)) !== null) out.push(m[1])
   return out
 }
 
-describe('action-class parity: TS ⇄ Python adapter (ADR 0075)', () => {
+describe('action-class parity: TS ⇄ the gateway enum (ADR 0075)', () => {
   const pyValues = pythonActionClassValues()
 
   it('extracts a non-trivial enum (sanity)', () => {
@@ -49,9 +60,21 @@ describe('action-class parity: TS ⇄ Python adapter (ADR 0075)', () => {
   it('every Python ActionClass value is an accepted TS action class', () => {
     const accepted = new Set<string>(ACCEPTED_ACTION_CLASSES as readonly string[])
     for (const v of pyValues) {
+      if (NOT_AUTHORABLE.has(v)) continue
       expect(accepted.has(v), `Python enum value "${v}" missing from ACCEPTED_ACTION_CLASSES`).toBe(
         true
       )
+    }
+  })
+
+  it('the one non-authorable class is in the gateway enum and never accepted in TS', () => {
+    const accepted = new Set<string>(ACCEPTED_ACTION_CLASSES as readonly string[])
+    for (const v of NOT_AUTHORABLE) {
+      expect(
+        pyValues,
+        `${v} is no longer in the gateway enum; drop it from NOT_AUTHORABLE`
+      ).toContain(v)
+      expect(accepted.has(v), `${v} must never be an authorable action class`).toBe(false)
     }
   })
 
@@ -72,14 +95,10 @@ describe('action-class parity: TS ⇄ Python adapter (ADR 0075)', () => {
    * store will honor, and it now gates what `routine-grid.yaml` may author.
    * The seat computes its own `_OVERRIDABLE_ACTIONS`
    * (`shared/exposure_override.py`) as the Python enum minus `READ` and
-   * `REFUSED`. This pins the same derivation against the in-repo adapter, so
-   * a class added or renamed on the Python side cannot leave the authoring
-   * gate silently checking a stale vocabulary.
-   *
-   * LIMIT, stated so this test is not read as more than it is: the adapter
-   * this reads is ss-console's copy. The overlay's `shared/action_classes.py`
-   * lives in another repo and is not reachable from CI here — drift between
-   * those two Python files is out of this instrument's range.
+   * `REFUSED`. This pins the same derivation against the gateway's own enum
+   * (`shared/action_classes.py`, in this repo since the ADR 0095 fold), so a
+   * class added or renamed on the Python side cannot leave the authoring gate
+   * silently checking a stale vocabulary.
    */
   it('EXPOSURE_ACTION_CLASSES equals the Python enum minus read/refused', () => {
     const expected = new Set(pyValues.filter((v) => v !== 'read' && v !== 'refused'))

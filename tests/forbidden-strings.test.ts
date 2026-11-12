@@ -1000,7 +1000,7 @@ describe('operator send-posture doctrine guard (recipient-aware send; ADR 0025/0
   // universal drafts-only doctrine re-taught in prose and (b) the vestigial
   // per-skill trust_ceiling scalar. This block is the string-HYGIENE backstop;
   // the anti-regression GUARANTEE is behavioral and lives in the golden
-  // enforcement tests (operator/adapter/tests/test_external_send_internal.py +
+  // enforcement tests (operator/hermes-smd-overlay/tests/test_enforce_external_send_internal.py +
   // test_recipient_classifier.py, and the overlay evaluate_tool_call tests) —
   // drop the recipient classification and those go red with no banned string
   // present. The one source is operator/references/send-posture.md.

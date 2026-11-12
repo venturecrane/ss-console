@@ -79,7 +79,7 @@ personas:
     entitlements:
       # Hosted Agent default tier ladder (ADR 0071 decision 4). Only the two
       # exposure knobs below are authored in customer.yaml; the rest of the
-      # ladder is substrate-enforced (operator/adapter/trust_ceiling.py):
+      # ladder is substrate-enforced (operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py):
       #   READ           -> autonomous (scope-bound, always allowed)
       #   INTERNAL_WRITE -> autonomous (authored below)
       #   EXTERNAL_SEND  -> confirm    (authored below)

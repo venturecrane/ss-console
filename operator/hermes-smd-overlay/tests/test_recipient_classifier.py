@@ -6,27 +6,18 @@ each canonicalization rule has an adversarial test. UNKNOWN must never silently
 mean "internal" and must never be swallowed into a draft — it is the caller's
 hard-error signal (that silent default was the "nothing ever sends" bug, in
 reverse).
+
+Moved from operator/adapter/tests on 2026-11-12. It already tested the overlay's
+``shared/recipient_classifier.py`` (the adapter copy went in #3977); its one
+parity check now reads the gateway's ``shared.action_classes.ActionClass``
+instead of the deleted adapter enum.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
 
-# The live classifier is the overlay's shared/recipient_classifier.py (stdlib
-# only). The adapter's former copy ran nowhere and was removed 2026-11-10; these
-# spoof vectors now hold the copy the seats run.
-_LIVE = Path(__file__).resolve().parents[2] / "hermes-smd-overlay" / "shared" / "recipient_classifier.py"
-_SPEC = importlib.util.spec_from_file_location("live_recipient_classifier", _LIVE)
-assert _SPEC is not None and _SPEC.loader is not None
-_MOD = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = _MOD
-_SPEC.loader.exec_module(_MOD)
-
-from live_recipient_classifier import (  # noqa: E402 - the module is path-loaded just above, so this import must follow it
+from shared.recipient_classifier import (
     ACTION_CLASS_EXTERNAL_SEND,
     ACTION_CLASS_EXTERNAL_SEND_CLIENT,
     ACTION_CLASS_EXTERNAL_SEND_INTERNAL,
@@ -115,7 +106,10 @@ def test_homoglyph_domain_does_not_match_ascii_roster():
 
 def test_tainted_recipient_matching_roster_is_outside_never_internal():
     # An injected "send to scott@smd.services" must not ride the roster to autonomous.
-    assert classify_recipient("scott@smd.services", ROSTER, from_tainted=True) is RecipientClass.OUTSIDE
+    assert (
+        classify_recipient("scott@smd.services", ROSTER, from_tainted=True)
+        is RecipientClass.OUTSIDE
+    )
 
 
 def test_tainted_unresolvable_is_still_unknown():
@@ -181,7 +175,9 @@ def test_router_unknown_is_a_hard_error_not_a_draft():
 
 def test_typed_client_and_vendor_resolve_by_class():
     assert classify_recipients_typed(["jane@gmail.com"], ROSTER, TYPED) is RecipientClass.CLIENT
-    assert classify_recipients_typed(["records@radiology.com"], ROSTER, TYPED) is RecipientClass.VENDOR
+    assert (
+        classify_recipients_typed(["records@radiology.com"], ROSTER, TYPED) is RecipientClass.VENDOR
+    )
 
 
 def test_typed_class_outranks_the_internal_roster():
@@ -192,7 +188,9 @@ def test_typed_class_outranks_the_internal_roster():
 
 
 def test_typed_unrostered_is_outside():
-    assert classify_recipients_typed(["opposing@counsel.com"], ROSTER, TYPED) is RecipientClass.OUTSIDE
+    assert (
+        classify_recipients_typed(["opposing@counsel.com"], ROSTER, TYPED) is RecipientClass.OUTSIDE
+    )
 
 
 def test_typed_public_domain_exact_matches_but_grant_would_not():
@@ -219,7 +217,10 @@ def test_typed_empty_roster_is_outside():
 
 
 def test_typed_tainted_recipient_is_outside_never_typed():
-    assert classify_recipients_typed(["jane@gmail.com"], ROSTER, TYPED, from_tainted=True) is RecipientClass.OUTSIDE
+    assert (
+        classify_recipients_typed(["jane@gmail.com"], ROSTER, TYPED, from_tainted=True)
+        is RecipientClass.OUTSIDE
+    )
 
 
 def test_typed_empty_recipient_list_is_unknown():
@@ -270,11 +271,11 @@ def test_router_client_and_vendor_map_to_their_action_classes():
     assert send_action_class(RecipientClass.VENDOR) == ACTION_CLASS_EXTERNAL_SEND_VENDOR
 
 
-# ---- cross-module parity: classifier constants == adapter enum values ------
+# ---- cross-module parity: classifier constants == the gateway's enum values ----
 
 
-def test_classifier_constants_match_adapter_enum_values():
-    from adapter.trust_ceiling import ActionClass
+def test_classifier_constants_match_gateway_enum_values():
+    from shared.action_classes import ActionClass
 
     assert ACTION_CLASS_EXTERNAL_SEND == ActionClass.EXTERNAL_SEND.value
     assert ACTION_CLASS_EXTERNAL_SEND_INTERNAL == ActionClass.EXTERNAL_SEND_INTERNAL.value
