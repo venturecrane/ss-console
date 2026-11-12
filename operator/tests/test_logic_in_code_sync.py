@@ -2,7 +2,9 @@
 
 CANONICAL SOURCE is ``operator/hermes-smd-overlay/shared/logic_in_code.py``. The
 connector and the broker run in separate virtualenvs and import nothing from it,
-so each carries a byte-identical copy. Edit the canonical and copy it over them.
+so each carries a byte-identical copy, written by operator/bin/gen-skill-shared.py
+from operator/contracts/skill-shared-modules.yaml (module ``logic_in_code``), whose
+``--check`` holds the bytes equal in CI. Edit the canonical and regenerate.
 
 The behaviour table runs against every copy, loaded by path with nothing else of
 its process on ``sys.path``, which also proves each stands alone.
@@ -17,7 +19,7 @@ from types import ModuleType
 
 import pytest
 
-from vendored_sync import OPERATOR_ROOT, assert_byte_identical
+OPERATOR_ROOT = Path(__file__).resolve().parents[1]
 
 _CANONICAL = OPERATOR_ROOT / "hermes-smd-overlay" / "shared" / "logic_in_code.py"
 _COPIES = [
@@ -51,15 +53,6 @@ def _load(path: Path) -> ModuleType:
 @pytest.fixture(params=_ALL, ids=lambda p: p.parent.name)
 def reader(request: pytest.FixtureRequest) -> ModuleType:
     return _load(request.param)
-
-
-def test_the_copies_are_byte_identical() -> None:
-    assert_byte_identical(
-        _CANONICAL,
-        _COPIES,
-        floor=len(_COPIES),
-        restamp_hint=f"Edit {_CANONICAL.relative_to(OPERATOR_ROOT)} and copy it over the vendored files byte-for-byte.",
-    )
 
 
 def test_it_names_the_four_switches(reader: ModuleType) -> None:

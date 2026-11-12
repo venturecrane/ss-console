@@ -55,11 +55,11 @@ _SKIP = re.compile(r"(^|/)(node_modules|dist|\.venv|__pycache__|fixtures)/")
 
 _THE_LEDGER_COPIES = (
     "byte-identical with the copies vendored into operator/skills/*/ (staged alone and "
-    "loaded by path, so they cannot import a tree module); the sync tests pin the bytes"
+    "loaded by path, so they cannot import a tree module); gen-skill-shared.py --check pins the bytes"
 )
 _THE_SWITCH_COPIES = (
     "byte-identical with operator/connectors/smokeball/smokeball_connector/logic_in_code.py, "
-    "a separate venv with no generated module (operator/tests/test_logic_in_code_sync.py)"
+    "a separate venv with no generated module (stamped by operator/bin/gen-skill-shared.py)"
 )
 
 #: file -> (paths it may spell, why). Every path listed must still be spelled.
@@ -87,7 +87,7 @@ ALLOWED: dict[str, tuple[frozenset[str], str]] = {
     "operator/runners/jobs/jobs/attorneys/roster.py": (
         frozenset({"/var/lib/smd-config/attorneys"}),
         "byte-identical with operator/connectors/_sdk/operator_connector_sdk/library/roster.py, "
-        "a separate package with no generated module (runners/jobs/tests/test_attorney_roster.py)",
+        "a separate package with no generated module (stamped by operator/bin/gen-skill-shared.py)",
     ),
     "operator/workspace_broker/logic_in_code.py": (
         frozenset({"/var/lib/smd-config/customer.yaml"}),

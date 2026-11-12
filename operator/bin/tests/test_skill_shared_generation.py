@@ -1,14 +1,19 @@
-"""Every shared-module copy in a skill folder is its source's bytes, and the yaml lists it.
+"""Every shared-module copy is its source's bytes, and the yaml lists it.
 
-operator/contracts/skill-shared-modules.yaml names one source per shared module
-and the skills that carry a copy; operator/bin/gen-skill-shared.py writes the
+operator/contracts/skill-shared-modules.yaml names one source per shared module,
+the skills that carry a copy and the other processes' trees that do (broker,
+gateway, job runner, connectors); operator/bin/gen-skill-shared.py writes the
 copies. This is the CI guard that a source edit cannot reach a seat without its
 copies, that nobody edits a copy instead of the source, and that a copy pasted
 into a new skill by hand is declared. It replaced nine hand-kept sync tests
 (test_broker_writer_sync, test_case_alert_routing_sync, test_casework_ledger_sync,
 test_casework_view_sync, test_digest_items_sync, test_done_since_sync,
 test_escalation_ledger_sync, test_skill_helpers_sync and the stamp half of
-test_pre_run_gate), each of which globbed for its own copies.
+test_pre_run_gate), each of which globbed for its own copies, and on 2026-11-12
+the cross-process parity tests (staff_mailbox_rule and wording_rules_store on
+both sides, the overlay's two ledger digest pins, the logic_in_code byte half,
+and the byte halves of the layout_store and attorney roster checks) plus three
+overlay-pairs.json pins (chain.py, escalation_ledger.py, casework_ledger.py).
 
 Run::
 
@@ -54,6 +59,9 @@ _YAML = """modules:
     source: operator/skills/alpha/helpers.py
     copy_as: helpers.py
     skills: [beta]
+  rule:
+    source: operator/overlay/shared/rule.py
+    copies: [operator/connector/pkg/rule.py]
 """
 
 
@@ -73,6 +81,8 @@ def _tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "operator/skills/alpha/helpers.py": "def helper():\n    return 1\n",
         "operator/skills/gamma/pre_run.py": _BESPOKE,
         "operator/skills/gamma/SKILL.md": "gamma\n",
+        "operator/overlay/shared/rule.py": "RULE = 1\n",
+        "operator/connector/pkg/__init__.py": "",
     }
     for rel, text in files.items():
         target = tmp_path / rel
@@ -105,8 +115,9 @@ def test_generate_writes_the_source_bytes_and_check_then_passes(
 ) -> None:
     root = _tree(tmp_path, monkeypatch)
     cli = _cli()
-    assert _check(cli) == 1, "three copies are missing, so --check must fail first"
+    assert _check(cli) == 1, "four copies are missing, so --check must fail first"
     assert cli.main(["gen-skill-shared.py"]) == 0
+    assert (root / "operator/connector/pkg/rule.py").read_bytes() == b"RULE = 1\n"
     assert (root / "operator/skills/alpha/pre_run.py").read_bytes() == _GATE.encode()
     assert (root / "operator/skills/beta/pre_run.py").read_bytes() == _GATE.encode()
     assert (root / "operator/skills/beta/helpers.py").read_bytes() == b"def helper():\n    return 1\n"
@@ -164,7 +175,16 @@ def _load(root: Path) -> list[gen.Module]:
     ("body", "why"),
     [
         ("modules: {}\n", "at least one module"),
-        ("modules:\n  x:\n    source: a.py\n    copy_as: a.py\n", "exactly the fields"),
+        ("modules:\n  x:\n    source: a.py\n    bogus: 1\n    copies: [b.py]\n", "exactly the fields"),
+        ("modules:\n  x:\n    source: a.py\n    copy_as: a.py\n", "at least one must be non-empty"),
+        ("modules:\n  x:\n    source: a.py\n    copy_as: a.py\n    copies: [b.py]\n", "it needs skills"),
+        ("modules:\n  x:\n    source: a.py\n    copies: [operator/skills/s/a.py]\n", "list the skill"),
+        ("modules:\n  x:\n    source: a.py\n    copies: [../b.py]\n", "repo-relative .py path"),
+        ("modules:\n  x:\n    source: a.py\n    copies: [a.py]\n", "copy of itself"),
+        (
+            "modules:\n  x:\n    source: a.py\n    copies: [b.py]\n  y:\n    source: b.py\n    copies: [c.py]\n",
+            "a source is never a copy",
+        ),
         ("modules:\n  x:\n    source: /abs.py\n    copy_as: a.py\n    skills: [s]\n", "repo-relative"),
         ("modules:\n  x:\n    source: a.py\n    copy_as: sub/a.py\n    skills: [s]\n", "plain .py file name"),
         ("modules:\n  x:\n    source: a.py\n    copy_as: a.py\n    skills: [_shared]\n", "valid skill folder"),
@@ -180,3 +200,40 @@ def test_a_bad_yaml_is_refused(tmp_path: Path, body: str, why: str) -> None:
     bad.write_text(body, encoding="utf-8")
     with pytest.raises(ValueError, match=why):
         gen.load(bad)
+
+
+def test_editing_a_cross_process_copy_fails_the_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A copy outside the skills tree (another process's venv) is held the same way.
+    root = _tree(tmp_path, monkeypatch)
+    cli = _cli()
+    cli.main(["gen-skill-shared.py"])
+    copy = root / "operator/connector/pkg/rule.py"
+    copy.write_text("RULE = 2\n", encoding="utf-8")
+    assert _check(cli) == 1
+    assert "differs: operator/connector/pkg/rule.py is not byte-identical to operator/overlay/shared/rule.py" in (
+        gen.problems(root, _load(root))
+    )
+    copy.unlink()
+    assert "missing: operator/connector/pkg/rule.py (copy of operator/overlay/shared/rule.py)" in (
+        gen.problems(root, _load(root))
+    )
+    cli.main(["gen-skill-shared.py"])
+    assert copy.read_bytes() == b"RULE = 1\n"
+    assert _check(cli) == 0
+
+
+def test_the_real_yaml_holds_the_cross_process_copies() -> None:
+    # Each of these was a hand-kept pair with its own parity test or pin before
+    # 2026-11-12; dropping one from the yaml would leave it held by nothing.
+    declared = {path.relative_to(ROOT).as_posix() for path in gen.copies(ROOT, gen.load(ROOT / gen.CONTRACT_REL))}
+    assert {
+        "operator/hermes-smd-overlay/shared/escalation_ledger.py",
+        "operator/hermes-smd-overlay/shared/casework_ledger.py",
+        "operator/hermes-smd-overlay/shared/audit_chain.py",
+        "operator/workspace_broker/logic_in_code.py",
+        "operator/connectors/smokeball/smokeball_connector/logic_in_code.py",
+        "operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailbox_rule.py",
+        "operator/runners/jobs/jobs/wording_rules_store.py",
+        "operator/runners/jobs/jobs/drafting/layout_store.py",
+        "operator/runners/jobs/jobs/attorneys/roster.py",
+    } <= declared

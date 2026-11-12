@@ -2,7 +2,8 @@
 """Write every shared-module copy declared in operator/contracts/skill-shared-modules.yaml.
 
 The copies are COMMITTED and byte-identical to their sources (each skill folder
-ships alone), and CI asserts they are in sync
+ships alone, and the broker, gateway, job runner and connectors each run in a
+venv of their own), and CI asserts they are in sync
 (operator/bin/tests/test_skill_shared_generation.py).
 
 Usage:
@@ -38,8 +39,8 @@ def main(argv: list[str]) -> int:
         )
         return 1
     if check:
-        count = sum(len(m.skills) for m in modules)
-        print(f"shared skill modules in sync: {len(modules)} modules, {count} copies")
+        count = len(gen.copies(root, modules))
+        print(f"shared modules in sync: {len(modules)} modules, {count} copies")
     return 0
 
 

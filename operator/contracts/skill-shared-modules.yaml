@@ -1,5 +1,6 @@
 # ============================================================================
-# Shared skill modules: ONE source per module, and the skills that carry a copy.
+# Shared Python modules: ONE source per module, and every place that carries a
+# copy of it (skill folders, and the other processes' trees).
 # ============================================================================
 #
 # WHY THIS EXISTS (2026-11-10). The scheduler stages one skill directory at a
@@ -10,32 +11,48 @@
 # after the fact (36 copies of nine modules at the time; 23 copies of six since
 # #3977 removed the case-manager routines that carried the rest).
 #
+# THE CROSS-PROCESS COPIES (2026-11-12, wave 1 item 1.3). The broker, the
+# gateway (the overlay's `shared` package), the job runner and each connector
+# run in separate virtualenvs and import nothing from one another, so a helper
+# two of them need is a whole file in each tree. Those copies were held equal by
+# seven per-pair parity tests and three overlay-pairs.json pins, each a
+# different mechanism; `copies:` below declares them, and the same --check
+# replaces all of them.
+#
 # THE RULE. Edit the module's `source`, then run
 #     python3 operator/bin/gen-skill-shared.py
 # which writes the source's bytes, unchanged, to operator/skills/<skill>/<copy_as>
-# for every skill listed. Never edit a copy. `--check` exits 1 naming each copy
-# that differs from its source, each listed copy that is missing, and each copy
-# in a skill folder that this file does not list;
-# operator/bin/tests/test_skill_shared_generation.py runs it in CI.
+# for every skill listed and to every path under `copies`. Never edit a copy.
+# `--check` exits 1 naming each copy that differs from its source, each listed
+# copy that is missing, and each copy in a skill folder that this file does not
+# list; operator/bin/tests/test_skill_shared_generation.py runs it in CI. A
+# byte-identical copy outside the skills tree that this file does not list is
+# counted by the sprawl census (hand-kept-python-copies, which reads this file
+# to leave the declared copies out) and the ratchet fails on it.
 #
 # THE COPIES ARE COMMITTED AND BYTE-IDENTICAL TO THE SOURCE, with no generated
-# header: they are what the image (`COPY operator/skills/ /app/skills/`) and the
-# skills release (operator/bin/skills-manifest.py) ship, and a header would be a
-# byte change to every shipped skill. Step two of the plan moves the copying to
-# packaging time and takes the copies out of git.
+# header: they are what the image (`COPY operator/skills/ /app/skills/`), the
+# skills release (operator/bin/skills-manifest.py) and each process's install
+# ship, and a header would be a byte change to every one of them. Step two of
+# the plan moves the skill copying to packaging time and takes those copies out
+# of git.
 #
 # WHERE THE SOURCES LIVE. Four sources are outside operator/skills (the templates
 # and the workspace broker, which imports both ledgers itself). Two are the
 # copy in deadline-miss-escalator (routing.py, broker_writer.py), because that file's own text names it as the
 # canonical source and changing that text would change shipped bytes; step two
 # moves them to a home outside the skills tree. A source inside a skill folder
-# is never written by the generator.
+# is never written by the generator. For a cross-process module the source is
+# the copy its own text or its old parity test already named canonical.
 #
 # FIELDS
 #   source   repo-relative path of the one file to edit
 #   copy_as  file name inside each skill folder (the empty-seat gate is stamped
-#            under the name pre_run.py; every other module keeps its own name)
+#            under the name pre_run.py; every other module keeps its own name);
+#            only with `skills`
 #   skills   skill folder names under operator/skills that carry a copy
+#   copies   repo-relative paths outside operator/skills that carry a copy
+#   (each module has `skills`, `copies`, or both)
 # ============================================================================
 
 modules:
@@ -73,12 +90,16 @@ modules:
       - deadline-miss-escalator
       - lien-ledger-tracker
       - medical-records-chaser
+    copies:
+      - operator/hermes-smd-overlay/shared/escalation_ledger.py
 
   casework_ledger:
     source: operator/workspace_broker/casework_ledger.py
     copy_as: casework_ledger.py
     skills:
       - deadline-miss-escalator
+    copies:
+      - operator/hermes-smd-overlay/shared/casework_ledger.py
 
   routing:
     source: operator/skills/deadline-miss-escalator/routing.py
@@ -91,3 +112,45 @@ modules:
     copy_as: broker_writer.py
     skills:
       - client-verification-tracker
+
+  # The audit ledger's hash chain: the broker writes with it, the gateway's
+  # export and verifier read with it (SEC-32).
+  audit_chain:
+    source: operator/workspace_broker/chain.py
+    copies:
+      - operator/hermes-smd-overlay/shared/audit_chain.py
+
+  # The logic-in-code switch reader: one meaning in the gateway, the broker and
+  # the Smokeball connector.
+  logic_in_code:
+    source: operator/hermes-smd-overlay/shared/logic_in_code.py
+    copies:
+      - operator/workspace_broker/logic_in_code.py
+      - operator/connectors/smokeball/smokeball_connector/logic_in_code.py
+
+  # The staff-mailbox read rule: the gateway (mail_spool_message) and the
+  # msgraph-mail connector (list_staff_messages, read_staff_message) must refuse
+  # the same mailboxes (ADR 0089 amendment 5a).
+  staff_mailbox_rule:
+    source: operator/hermes-smd-overlay/shared/staff_mailbox_rule.py
+    copies:
+      - operator/connectors/msgraph-mail/msgraph_mail_connector/staff_mailbox_rule.py
+
+  # The wording-rule reader: the install letter (gateway) and the job lanes read
+  # the installed wording.json the same way.
+  wording_rules_store:
+    source: operator/hermes-smd-overlay/shared/wording_rules_store.py
+    copies:
+      - operator/runners/jobs/jobs/wording_rules_store.py
+
+  # The firm layout rule reader, shared by the gateway and the drafting lane.
+  layout_store:
+    source: operator/hermes-smd-overlay/shared/layout_store.py
+    copies:
+      - operator/runners/jobs/jobs/drafting/layout_store.py
+
+  # The firm's attorney roster reader: the connector toolkit and the job runner.
+  attorney_roster:
+    source: operator/connectors/_sdk/operator_connector_sdk/library/roster.py
+    copies:
+      - operator/runners/jobs/jobs/attorneys/roster.py
