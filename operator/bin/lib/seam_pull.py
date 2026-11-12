@@ -39,12 +39,10 @@ from __future__ import annotations
 import csv
 import hashlib
 import hmac
-import http.client
 import json
 import logging
 import os
 import sqlite3
-import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -52,6 +50,8 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional, Sequence
+
+from bin.lib import transient_http
 
 log = logging.getLogger("aie.bin.seam_pull")
 
@@ -99,18 +99,9 @@ _PAGE_LIMIT = 200  # overlay MAX_LIMIT
 # after. A hold is loud by design, so a one-packet blip reddened main and
 # raised an alert nobody could act on. Auth refusals, 404s and malformed
 # payloads are NOT retried: those are real, and must surface on attempt one.
-_RETRY_DELAYS_SECONDS: tuple[float, ...] = (2.0, 6.0)
-_RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
-
-
-def _is_transient(exc: BaseException) -> bool:
-    """True only for failures a retry of the same idempotent GET can fix."""
-    if isinstance(exc, urllib.error.HTTPError):
-        return exc.code in _RETRYABLE_HTTP_STATUS
-    if isinstance(exc, urllib.error.URLError):
-        # DNS, refused, reset, TLS EOF/handshake: all arrive wrapped here.
-        return True
-    return isinstance(exc, (ssl.SSLError, ConnectionError, TimeoutError, http.client.HTTPException))
+# The retryable set, the delays and the loop live in lib/transient_http.py,
+# shared with the send reconcile's Graph and AgentMail reads (2026-11-12).
+_RETRY_DELAYS_SECONDS = transient_http.RETRY_DELAYS_SECONDS
 
 
 def derive_runtime_read_key(master: str, slug: str) -> str:
@@ -151,8 +142,8 @@ class SeamClient:
         Raises the LAST error once attempts are exhausted, so callers keep the
         fail-loud contract: a pull that never succeeded is never a partial pull.
         """
-        attempts = len(self._retry_delays) + 1
-        for attempt in range(attempts):
+
+        def attempt_once() -> object:
             req = urllib.request.Request(  # noqa: S310 - https enforced at SeamClient construction; the path is a module literal
                 url,
                 headers={
@@ -161,24 +152,13 @@ class SeamClient:
                 },
                 method="GET",
             )
-            try:
-                # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — scheme is constructor-enforced https:// (file:// and ftp:// raise at SeamClient init); the host comes from operator env staged by Infisical, and every path segment is a module constant.
-                with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 — https enforced at construction
-                    return json.loads(resp.read().decode("utf-8"))
-            except Exception as exc:  # classified below; a non-transient error re-raises at once
-                if attempt == attempts - 1 or not _is_transient(exc):
-                    raise
-                delay = self._retry_delays[attempt]
-                log.warning(
-                    "seam read %s: transient %s on attempt %d/%d; retrying in %.0fs",
-                    self._slug,
-                    type(exc).__name__,
-                    attempt + 1,
-                    attempts,
-                    delay,
-                )
-                self._sleep(delay)
-        raise AssertionError("unreachable")  # pragma: no cover
+            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — scheme is constructor-enforced https:// (file:// and ftp:// raise at SeamClient init); the host comes from operator env staged by Infisical, and every path segment is a module constant.
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310 — https enforced at construction
+                return json.loads(resp.read().decode("utf-8"))
+
+        return transient_http.with_retry(
+            attempt_once, label=f"seam read {self._slug}", delays=self._retry_delays, sleep=self._sleep
+        )
 
     def read_page(self, kind: str, *, cursor: Optional[str] = None, table: Optional[str] = None) -> dict:
         params: dict[str, str] = {"limit": str(_PAGE_LIMIT)}
