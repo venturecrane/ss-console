@@ -89,7 +89,7 @@ jobs:
           # input is user-supplied and would otherwise be a shell-injection seam.
           RECONCILE_DAYS: ${{ github.event.inputs.days }}
         run: |
-          set -u
+          set -eu
           ARGS=""
           if [ -n "${RECONCILE_DAYS:-}" ]; then
             ARGS="--days ${RECONCILE_DAYS}"

@@ -116,7 +116,7 @@ jobs:
           WATCH_NO_ARCHIVE: ${{ github.event.inputs.no_archive }}
           WATCH_REHEARSE: ${{ github.event.inputs.rehearse_mismatch }}
         run: |
-          set -u
+          set -eu
           ARGS=""
           if [ -n "${WATCH_REHEARSE:-}" ]; then
             # The drill is its own run and takes no other flags: it evaluates one

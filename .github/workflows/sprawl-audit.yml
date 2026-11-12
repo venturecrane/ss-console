@@ -65,7 +65,7 @@ jobs:
         env:
           SPRAWL_VULTURE: python
         run: |
-          set -o pipefail
+          set -eo pipefail
           STATUS=0
           npx tsx scripts/sprawl-audit.ts --compare scripts/sprawl/snapshot.json --strict > report.txt || STATUS=$?
           { echo '```'; cat report.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

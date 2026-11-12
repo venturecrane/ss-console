@@ -65,7 +65,15 @@ jobs:
 
       - name: Sweep ${{ matrix.ws.app }}
         run: |
+          # This step keeps its own rc and reports every failure before it
+          # exits, so errexit must be OFF. GitHub runs a `run:` block as
+          # `bash -e {0}`, so `set -uo pipefail` alone left -e on: on
+          # 2026-11-06 (run 42224600144) the ops-sweep pipeline below exited
+          # nonzero and -e killed the step on the spot, with no FAIL line and
+          # no healthchecks /fail ping, after ten silent minutes. `set +e`
+          # is load-bearing (pinned by tests/workflow-errexit.test.ts).
           set -uo pipefail
+          set +e
           ping() { [ -n "$HC_URL" ] && curl -fsS -m 10 --retry 3 "$HC_URL$1" >/dev/null || true; }
           [ -n "$FLY_API_TOKEN" ] || { echo "no OPS_FLY_TOKEN__${{ matrix.ws.suffix }}: run bin/ops-workspace create"; ping /fail; exit 1; }
           ping /start
@@ -82,7 +90,12 @@ jobs:
           up=0
           for i in $(seq 1 30); do fly ssh console -a "$APP" -u ops -C true >/dev/null 2>&1 && { up=1; break; }; sleep 5; done
           if [ "$up" = 1 ]; then
-            fly ssh console -a "$APP" -u ops -C /opt/ops/bin/ops-sweep 2>/dev/null | tee sweep.txt
+            # stderr stays dropped (the run prints counts and names only); the
+            # exit status is reported instead, and 124 means the 15-minute cap.
+            timeout 900 fly ssh console -a "$APP" -u ops -C /opt/ops/bin/ops-sweep 2>/dev/null | tee sweep.txt
+            swept=${PIPESTATUS[0]}
+            if [ "$swept" -eq 124 ]; then echo "FAIL ops-sweep did not finish within 15 minutes"; rc=1
+            elif [ "$swept" -ne 0 ]; then echo "FAIL ops-sweep exited $swept"; rc=1; fi
             grep -q '^FAIL' sweep.txt && rc=1
             grep -q '^retention:' sweep.txt || { echo "FAIL ops-sweep did not finish"; rc=1; }
           else

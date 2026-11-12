@@ -60,7 +60,7 @@ jobs:
       - name: Build the report
         id: report
         run: |
-          set -o pipefail
+          set -eo pipefail
           STATUS=0
           npx tsx scripts/handbook-review.ts --strict > report.md || STATUS=$?
           cat report.md >> "$GITHUB_STEP_SUMMARY"
