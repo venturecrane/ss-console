@@ -1,0 +1,689 @@
+{
+  "card_multipliers": [0.5, 1.25, 0.1],
+  "grid": [
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "usd": 0.8
+    },
+    {
+      "row": {
+        "model": "claude-haiku-4-5-20251001",
+        "out": 1000000
+      },
+      "usd": 4.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "usd": 0.08
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "usd": 1.0
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-haiku-4-5-20251001",
+        "out": 567
+      },
+      "usd": 0.00508
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-haiku-4-5-20251001",
+        "out": 567
+      },
+      "usd": 0.00254
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-haiku-4-5-20251001",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-haiku-5-5"
+      },
+      "usd": 0.1
+    },
+    {
+      "row": {
+        "model": "claude-haiku-5-5",
+        "out": 1000000
+      },
+      "usd": 0.5
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-haiku-5-5"
+      },
+      "usd": 0.01
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-haiku-5-5"
+      },
+      "usd": 0.125
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-haiku-5-5",
+        "out": 567
+      },
+      "usd": 0.000635
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-haiku-5-5",
+        "out": 567
+      },
+      "usd": 0.0003175
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-haiku-5-5",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-opus-4-7"
+      },
+      "usd": 15.0
+    },
+    {
+      "row": {
+        "model": "claude-opus-4-7",
+        "out": 1000000
+      },
+      "usd": 75.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-opus-4-7"
+      },
+      "usd": 1.5
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-opus-4-7"
+      },
+      "usd": 18.75
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-4-7",
+        "out": 567
+      },
+      "usd": 0.09525
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-4-7",
+        "out": 567
+      },
+      "usd": 0.047625
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-opus-4-7",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-opus-4-8"
+      },
+      "usd": 5.0
+    },
+    {
+      "row": {
+        "model": "claude-opus-4-8",
+        "out": 1000000
+      },
+      "usd": 25.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-opus-4-8"
+      },
+      "usd": 0.5
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-opus-4-8"
+      },
+      "usd": 6.25
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-4-8",
+        "out": 567
+      },
+      "usd": 0.03175
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-4-8",
+        "out": 567
+      },
+      "usd": 0.015875
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-opus-4-8",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-opus-5"
+      },
+      "usd": 5.0
+    },
+    {
+      "row": {
+        "model": "claude-opus-5",
+        "out": 1000000
+      },
+      "usd": 25.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-opus-5"
+      },
+      "usd": 0.5
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-opus-5"
+      },
+      "usd": 6.25
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-5",
+        "out": 567
+      },
+      "usd": 0.03175
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-5",
+        "out": 567
+      },
+      "usd": 0.015875
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-opus-5",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-opus-5-5"
+      },
+      "usd": 4.0
+    },
+    {
+      "row": {
+        "model": "claude-opus-5-5",
+        "out": 1000000
+      },
+      "usd": 20.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-opus-5-5"
+      },
+      "usd": 0.2
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-opus-5-5"
+      },
+      "usd": 5.0
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-5-5",
+        "out": 567
+      },
+      "usd": 0.023618
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-5-5",
+        "out": 567
+      },
+      "usd": 0.011809
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-opus-5-5",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-sonnet-4-6"
+      },
+      "usd": 3.0
+    },
+    {
+      "row": {
+        "model": "claude-sonnet-4-6",
+        "out": 1000000
+      },
+      "usd": 15.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-sonnet-4-6"
+      },
+      "usd": 0.3
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-sonnet-4-6"
+      },
+      "usd": 3.75
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-sonnet-4-6",
+        "out": 567
+      },
+      "usd": 0.01905
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-sonnet-4-6",
+        "out": 567
+      },
+      "usd": 0.009525
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-sonnet-4-6",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-sonnet-5"
+      },
+      "usd": 2.0
+    },
+    {
+      "row": {
+        "model": "claude-sonnet-5",
+        "out": 1000000
+      },
+      "usd": 10.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-sonnet-5"
+      },
+      "usd": 0.2
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-sonnet-5"
+      },
+      "usd": 2.5
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-sonnet-5",
+        "out": 567
+      },
+      "usd": 0.0127
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-sonnet-5",
+        "out": 567
+      },
+      "usd": 0.00635
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-sonnet-5",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-sonnet-5-5"
+      },
+      "usd": 2.0
+    },
+    {
+      "row": {
+        "model": "claude-sonnet-5-5",
+        "out": 1000000
+      },
+      "usd": 10.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-sonnet-5-5"
+      },
+      "usd": 0.1
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-sonnet-5-5"
+      },
+      "usd": 2.5
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-sonnet-5-5",
+        "out": 567
+      },
+      "usd": 0.011809
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-sonnet-5-5",
+        "out": 567
+      },
+      "usd": 0.0059045
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-sonnet-5-5",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "usd": 0.8
+    },
+    {
+      "row": {
+        "model": "claude-haiku-4-5-20251001",
+        "out": 1000000
+      },
+      "usd": 4.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "usd": 0.08
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "usd": 1.0
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-haiku-4-5-20251001",
+        "out": 567
+      },
+      "usd": 0.00508
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-haiku-4-5-20251001",
+        "out": 567
+      },
+      "usd": 0.00254
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-haiku-4-5-20251001",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "row": {
+        "in": 1000000,
+        "model": "claude-opus-5-5-20261201"
+      },
+      "usd": 4.0
+    },
+    {
+      "row": {
+        "model": "claude-opus-5-5-20261201",
+        "out": 1000000
+      },
+      "usd": 20.0
+    },
+    {
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-opus-5-5-20261201"
+      },
+      "usd": 0.2
+    },
+    {
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-opus-5-5-20261201"
+      },
+      "usd": 5.0
+    },
+    {
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-5-5-20261201",
+        "out": 567
+      },
+      "usd": 0.023618
+    },
+    {
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-opus-5-5-20261201",
+        "out": 567
+      },
+      "usd": 0.011809
+    },
+    {
+      "row": {
+        "in": 0,
+        "model": "claude-opus-5-5-20261201",
+        "out": 0
+      },
+      "usd": 0.0
+    },
+    {
+      "error": "model 'claude-unknown-9' has no row in <CARD>; refusing to price it at zero",
+      "row": {
+        "in": 1000000,
+        "model": "claude-unknown-9"
+      }
+    },
+    {
+      "error": "model 'claude-unknown-9' has no row in <CARD>; refusing to price it at zero",
+      "row": {
+        "model": "claude-unknown-9",
+        "out": 1000000
+      }
+    },
+    {
+      "error": "model 'claude-unknown-9' has no row in <CARD>; refusing to price it at zero",
+      "row": {
+        "cache_read": 1000000,
+        "model": "claude-unknown-9"
+      }
+    },
+    {
+      "error": "model 'claude-unknown-9' has no row in <CARD>; refusing to price it at zero",
+      "row": {
+        "cache_write": 1000000,
+        "model": "claude-unknown-9"
+      }
+    },
+    {
+      "error": "model 'claude-unknown-9' has no row in <CARD>; refusing to price it at zero",
+      "row": {
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-unknown-9",
+        "out": 567
+      }
+    },
+    {
+      "error": "model 'claude-unknown-9' has no row in <CARD>; refusing to price it at zero",
+      "row": {
+        "batch": true,
+        "cache_read": 8910,
+        "cache_write": 1112,
+        "in": 1234,
+        "model": "claude-unknown-9",
+        "out": 567
+      }
+    },
+    {
+      "error": "model 'claude-unknown-9' has no row in <CARD>; refusing to price it at zero",
+      "row": {
+        "in": 0,
+        "model": "claude-unknown-9",
+        "out": 0
+      }
+    }
+  ]
+}

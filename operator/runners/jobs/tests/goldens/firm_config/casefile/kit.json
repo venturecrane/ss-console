@@ -1,0 +1,292 @@
+{
+  "cli": {
+    "fixture": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "<TMP>/inputs/casefile-firm.yaml: OK (example)\n"
+    },
+    "no_argument": {
+      "exit": 2,
+      "stderr": "usage: python -m jobs.casefile.firm <casefile inputs dir>\n",
+      "stdout": ""
+    },
+    "without_firm": {
+      "exit": 1,
+      "stderr": "<TMP>/inputs/casefile-firm.yaml: firm: required\n",
+      "stdout": ""
+    }
+  },
+  "load": {
+    "__type": "CasefileFirm",
+    "at_stake_rx": {
+      "__regex": "(?<![\\w-])(lien|settlement|court|statute)(?![\\w-])",
+      "flags": 34
+    },
+    "data": {
+      "at_stake_terms": ["lien", "settlement", "court", "statute"],
+      "file_status_folder": "File Status",
+      "firm": {
+        "display_name": "Example Law Office",
+        "slug": "example"
+      },
+      "models": {
+        "audit": "claude-sonnet-5",
+        "read": "claude-sonnet-5"
+      },
+      "monthly_budget_usd": 100.0,
+      "pack": {
+        "bill_patterns": ["bill|statement|ledger"],
+        "correspondence_patterns": ["report|letter"]
+      },
+      "per_job_cap_usd": 20.0,
+      "rank": {
+        "court_event_patterns": ["hearing|trial"],
+        "gov_claim_patterns": ["government claim"]
+      },
+      "read_workers": 1,
+      "statute_reminder_patterns": ["1 week before statute runs"],
+      "timezone": "America/Los_Angeles",
+      "tool_iterations": 6
+    },
+    "prompts": {
+      "auditor.md": "Try to refute each closure; answer with record_verdicts.",
+      "contract.md": "Reader contract (synthetic). Record what the file shows; a gap is a question.",
+      "reader.md": "Read the pack, then call record_review."
+    },
+    "root": {
+      "__path": "<TMP>/inputs"
+    },
+    "statute_rx": [
+      {
+        "__regex": "1 week before statute runs",
+        "flags": 34
+      }
+    ]
+  },
+  "mutations": {
+    "<root> :: unknown_sibling": {
+      "problems": ["zz_unknown_key: unknown key (closed key set)"]
+    },
+    "at_stake_terms :: blank": {
+      "problems": ["at_stake_terms: expected a non-empty list of strings"]
+    },
+    "at_stake_terms :: missing": {
+      "problems": ["at_stake_terms: required"]
+    },
+    "at_stake_terms :: wrong_type": {
+      "problems": ["at_stake_terms: expected a non-empty list of strings"]
+    },
+    "file_status_folder :: blank": {
+      "problems": ["file_status_folder: expected one plain folder name"]
+    },
+    "file_status_folder :: missing": {
+      "problems": ["file_status_folder: required"]
+    },
+    "file_status_folder :: wrong_type": {
+      "problems": ["file_status_folder: expected one plain folder name"]
+    },
+    "firm :: blank": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm :: missing": {
+      "problems": ["firm: required"]
+    },
+    "firm :: unknown_sibling": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm :: wrong_type": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.display_name :: blank": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.display_name :: missing": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.display_name :: wrong_type": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.slug :: blank": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.slug :: missing": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.slug :: wrong_type": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "models :: blank": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "models :: missing": {
+      "problems": ["models: required"]
+    },
+    "models :: unknown_sibling": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "models :: wrong_type": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "models.audit :: blank": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "models.audit :: missing": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "models.audit :: wrong_type": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "models.read :: blank": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "models.read :: missing": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "models.read :: wrong_type": {
+      "problems": [
+        "models: expected ['read', 'audit'] (and optionally ['screen', 'transcription']) as model ids"
+      ]
+    },
+    "monthly_budget_usd :: blank": {
+      "problems": ["monthly_budget_usd: expected a number > 0"]
+    },
+    "monthly_budget_usd :: missing": {
+      "problems": ["monthly_budget_usd: required"]
+    },
+    "monthly_budget_usd :: wrong_type": {
+      "problems": ["monthly_budget_usd: expected a number > 0"]
+    },
+    "pack :: blank": {
+      "problems": []
+    },
+    "pack :: missing": {
+      "problems": []
+    },
+    "pack :: unknown_sibling": {
+      "problems": [
+        "pack: expected a map of ['bill_patterns', 'budget_chars', 'correspondence_patterns', 'doc_budgets', 'fetch_cap', 'listing_rows_cap', 'record_folder_patterns']"
+      ]
+    },
+    "pack :: wrong_type": {
+      "problems": [
+        "pack: expected a map of ['bill_patterns', 'budget_chars', 'correspondence_patterns', 'doc_budgets', 'fetch_cap', 'listing_rows_cap', 'record_folder_patterns']"
+      ]
+    },
+    "pack.bill_patterns :: blank": {
+      "problems": []
+    },
+    "pack.bill_patterns :: missing": {
+      "problems": []
+    },
+    "pack.bill_patterns :: wrong_type": {
+      "problems": ["pack.bill_patterns: expected a list of strings"]
+    },
+    "pack.correspondence_patterns :: blank": {
+      "problems": []
+    },
+    "pack.correspondence_patterns :: missing": {
+      "problems": []
+    },
+    "pack.correspondence_patterns :: wrong_type": {
+      "problems": ["pack.correspondence_patterns: expected a list of strings"]
+    },
+    "per_job_cap_usd :: blank": {
+      "problems": ["per_job_cap_usd: expected a number > 0"]
+    },
+    "per_job_cap_usd :: missing": {
+      "problems": ["per_job_cap_usd: required"]
+    },
+    "per_job_cap_usd :: wrong_type": {
+      "problems": ["per_job_cap_usd: expected a number > 0"]
+    },
+    "rank :: blank": {
+      "problems": []
+    },
+    "rank :: missing": {
+      "problems": []
+    },
+    "rank :: unknown_sibling": {
+      "problems": [
+        "rank: expected a map of ['court_event_patterns', 'court_pull_days', 'court_week_days', 'gov_claim_patterns', 'gov_claim_pull_days', 'stale_negotiation_days', 'statute_pull_days', 'statute_week_days']"
+      ]
+    },
+    "rank :: wrong_type": {
+      "problems": [
+        "rank: expected a map of ['court_event_patterns', 'court_pull_days', 'court_week_days', 'gov_claim_patterns', 'gov_claim_pull_days', 'stale_negotiation_days', 'statute_pull_days', 'statute_week_days']"
+      ]
+    },
+    "rank.court_event_patterns :: blank": {
+      "problems": []
+    },
+    "rank.court_event_patterns :: missing": {
+      "problems": []
+    },
+    "rank.court_event_patterns :: wrong_type": {
+      "problems": ["rank.court_event_patterns: expected a list of strings"]
+    },
+    "rank.gov_claim_patterns :: blank": {
+      "problems": []
+    },
+    "rank.gov_claim_patterns :: missing": {
+      "problems": []
+    },
+    "rank.gov_claim_patterns :: wrong_type": {
+      "problems": ["rank.gov_claim_patterns: expected a list of strings"]
+    },
+    "read_workers :: blank": {
+      "problems": ["read_workers: expected 1..4"]
+    },
+    "read_workers :: missing": {
+      "problems": []
+    },
+    "read_workers :: wrong_type": {
+      "problems": ["read_workers: expected 1..4"]
+    },
+    "statute_reminder_patterns :: blank": {
+      "problems": []
+    },
+    "statute_reminder_patterns :: missing": {
+      "problems": ["statute_reminder_patterns: required"]
+    },
+    "statute_reminder_patterns :: wrong_type": {
+      "problems": ["statute_reminder_patterns: expected a list of strings"]
+    },
+    "timezone :: blank": {
+      "problems": ["timezone: expected a string"]
+    },
+    "timezone :: missing": {
+      "problems": []
+    },
+    "timezone :: wrong_type": {
+      "problems": ["timezone: expected a string"]
+    },
+    "tool_iterations :: blank": {
+      "problems": ["tool_iterations: expected an integer >= 4"]
+    },
+    "tool_iterations :: missing": {
+      "problems": []
+    },
+    "tool_iterations :: wrong_type": {
+      "problems": ["tool_iterations: expected an integer >= 4"]
+    }
+  },
+  "validate": {
+    "problems": []
+  }
+}

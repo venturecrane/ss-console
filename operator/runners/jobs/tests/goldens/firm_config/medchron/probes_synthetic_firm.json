@@ -1,0 +1,712 @@
+{
+  "cli": {
+    "fixture": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "<TMP>/inputs/firm.yaml: OK (example-firm)\n"
+    },
+    "no_argument": {
+      "exit": 2,
+      "stderr": "usage: jobs validate-config [-h] path\njobs validate-config: error: the following arguments are required: path\n",
+      "stdout": ""
+    },
+    "without_firm": {
+      "exit": 1,
+      "stderr": "<TMP>/inputs/firm.yaml: firm: required section missing\n",
+      "stdout": ""
+    }
+  },
+  "load": {
+    "__type": "FirmConfig",
+    "batch_stages": [],
+    "data": {
+      "billing": {
+        "name_patterns": ["(?i)\\bbill", "(?i)ledger", "(?i)invoice"],
+        "suspect_amount_cents": 50000000
+      },
+      "budget": {
+        "monthly_budget_usd": 500.0,
+        "per_job_cap_usd": 150.0,
+        "usd_per_audit_claim": 0.06,
+        "usd_per_million_chars": 10.0,
+        "usd_per_scanned_page": 0.03
+      },
+      "chronology": {
+        "pre_incident_history": "include",
+        "treatment_gap_days": 45
+      },
+      "coverage": {
+        "exclusions": [
+          {
+            "match": "(?i)retainer|fee agreement",
+            "reason": "engagement document, not a chronology source"
+          },
+          {
+            "match": "(?i)pay stub|salary",
+            "reason": "wage-loss documentation, not a treatment record"
+          }
+        ]
+      },
+      "delivery": {
+        "chronology_name_template": "{CLIENT} - Medical Chronology {MM-DD-YY}.docx",
+        "folder_template": "MEDICAL CHRONOLOGY - {CLIENT} {MM-DD-YY} by Example Operator",
+        "worksheet_glob": "* - Medical Billing Worksheet *.docx"
+      },
+      "firm": {
+        "display_name": "Example Firm",
+        "slug": "example-firm"
+      },
+      "folders": {
+        "status_suffix_regex": "(?i)\\s*[-]\\s*(have|need)\\b.*$"
+      },
+      "format": {
+        "font": "Calibri",
+        "subsections": ["Medical Diagnoses", "All Other Information"]
+      },
+      "levers": {
+        "audit_mode": "image",
+        "batch_stages": [],
+        "cache": true,
+        "compose_max_tokens": 128000
+      },
+      "models": {
+        "tiers": {
+          "audit": "claude-sonnet-5",
+          "composition": "claude-opus-5-5",
+          "judgment": "claude-opus-5-5",
+          "mechanical": "claude-sonnet-5",
+          "transcription": "claude-sonnet-5"
+        }
+      },
+      "nonrecord": {
+        "page_classes": [
+          {
+            "name": "INDEX",
+            "patterns": ["this list is computer generated"]
+          }
+        ]
+      },
+      "pipeline": {},
+      "providers": {
+        "aliases": [
+          {
+            "label": "Example Clinic",
+            "match": "example clinic|ex clinic"
+          }
+        ],
+        "unresolved_label": "(unattributed)"
+      },
+      "selection": {
+        "doc_extensions": [".pdf", ".docx", ".doc", ".tif", ".tiff", ".jpg", ".jpeg", ".png"],
+        "exclude_folder_classes": ["(?i)vendor chron", "(?i)client correspondence", "(?i)^photos$"],
+        "root_pdfs": true,
+        "shared_folder_classes": ["(?i)^emails"]
+      },
+      "units": {
+        "exclude_name_patterns": ["(?i)retainer"]
+      }
+    },
+    "itemize_all_pre_incident": false,
+    "monthly_budget_usd": 500.0,
+    "path": {
+      "__path": "<TMP>/inputs/firm.yaml"
+    },
+    "per_job_cap_usd": 150.0,
+    "slug": "example-firm",
+    "usd_per_audit_claim": 0.06,
+    "usd_per_scanned_page": 0.03
+  },
+  "mutations": {
+    "<root> :: unknown_sibling": {
+      "problems": ["zz_unknown_key: unknown section (closed key set)"]
+    },
+    "billing :: blank": {
+      "problems": ["billing.name_patterns: required", "billing.suspect_amount_cents: required"]
+    },
+    "billing :: missing": {
+      "problems": ["billing: required section missing"]
+    },
+    "billing :: unknown_sibling": {
+      "problems": ["billing.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "billing :: wrong_type": {
+      "problems": ["billing: must be a map"]
+    },
+    "billing.name_patterns :: blank": {
+      "problems": []
+    },
+    "billing.name_patterns :: missing": {
+      "problems": ["billing.name_patterns: required"]
+    },
+    "billing.name_patterns :: wrong_type": {
+      "problems": ["billing.name_patterns: expected list[str]"]
+    },
+    "billing.suspect_amount_cents :: blank": {
+      "problems": ["billing.suspect_amount_cents: expected int"]
+    },
+    "billing.suspect_amount_cents :: missing": {
+      "problems": ["billing.suspect_amount_cents: required"]
+    },
+    "billing.suspect_amount_cents :: wrong_type": {
+      "problems": ["billing.suspect_amount_cents: expected int"]
+    },
+    "budget :: blank": {
+      "problems": [
+        "budget.per_job_cap_usd: required",
+        "budget.usd_per_million_chars: required",
+        "budget.monthly_budget_usd: required",
+        "budget.usd_per_scanned_page: required",
+        "budget.usd_per_audit_claim: required"
+      ]
+    },
+    "budget :: missing": {
+      "problems": ["budget: required section missing"]
+    },
+    "budget :: unknown_sibling": {
+      "problems": ["budget.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "budget :: wrong_type": {
+      "raises": "AttributeError: 'str' object has no attribute 'get'"
+    },
+    "budget.monthly_budget_usd :: blank": {
+      "problems": [
+        "budget.monthly_budget_usd: expected float",
+        "budget.monthly_budget_usd: must be > 0 (a zero budget refuses every job)"
+      ]
+    },
+    "budget.monthly_budget_usd :: missing": {
+      "problems": ["budget.monthly_budget_usd: required"]
+    },
+    "budget.monthly_budget_usd :: wrong_type": {
+      "raises": "ValueError: could not convert string to float: 'not-a-number'"
+    },
+    "budget.per_job_cap_usd :: blank": {
+      "raises": "TypeError: float() argument must be a string or a real number, not 'NoneType'"
+    },
+    "budget.per_job_cap_usd :: missing": {
+      "problems": [
+        "budget.per_job_cap_usd: required",
+        "budget.per_job_cap_usd: must be > 0 (a zero cap refuses every paid stage)"
+      ]
+    },
+    "budget.per_job_cap_usd :: wrong_type": {
+      "raises": "ValueError: could not convert string to float: 'not-a-number'"
+    },
+    "budget.usd_per_audit_claim :: blank": {
+      "problems": [
+        "budget.usd_per_audit_claim: expected float",
+        "budget.usd_per_audit_claim: must be > 0 (a zero rate projects every claim at no cost)"
+      ]
+    },
+    "budget.usd_per_audit_claim :: missing": {
+      "problems": ["budget.usd_per_audit_claim: required"]
+    },
+    "budget.usd_per_audit_claim :: wrong_type": {
+      "raises": "ValueError: could not convert string to float: 'not-a-number'"
+    },
+    "budget.usd_per_million_chars :: blank": {
+      "problems": ["budget.usd_per_million_chars: expected float"]
+    },
+    "budget.usd_per_million_chars :: missing": {
+      "problems": ["budget.usd_per_million_chars: required"]
+    },
+    "budget.usd_per_million_chars :: wrong_type": {
+      "problems": ["budget.usd_per_million_chars: expected float"]
+    },
+    "budget.usd_per_scanned_page :: blank": {
+      "problems": [
+        "budget.usd_per_scanned_page: expected float",
+        "budget.usd_per_scanned_page: must be > 0 (a zero rate projects every page at no cost)"
+      ]
+    },
+    "budget.usd_per_scanned_page :: missing": {
+      "problems": ["budget.usd_per_scanned_page: required"]
+    },
+    "budget.usd_per_scanned_page :: wrong_type": {
+      "raises": "ValueError: could not convert string to float: 'not-a-number'"
+    },
+    "chronology :: blank": {
+      "problems": [
+        "chronology.treatment_gap_days: required",
+        "chronology.pre_incident_history: required"
+      ]
+    },
+    "chronology :: missing": {
+      "problems": ["chronology: required section missing"]
+    },
+    "chronology :: unknown_sibling": {
+      "problems": ["chronology.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "chronology :: wrong_type": {
+      "raises": "AttributeError: 'str' object has no attribute 'get'"
+    },
+    "chronology.pre_incident_history :: blank": {
+      "problems": [
+        "chronology.pre_incident_history: expected one of ['include', 'itemize_all', 'summarize_only']"
+      ]
+    },
+    "chronology.pre_incident_history :: missing": {
+      "problems": ["chronology.pre_incident_history: required"]
+    },
+    "chronology.pre_incident_history :: wrong_type": {
+      "problems": [
+        "chronology.pre_incident_history: expected str",
+        "chronology.pre_incident_history: expected one of ['include', 'itemize_all', 'summarize_only']"
+      ]
+    },
+    "chronology.treatment_gap_days :: blank": {
+      "problems": ["chronology.treatment_gap_days: expected int"]
+    },
+    "chronology.treatment_gap_days :: missing": {
+      "problems": ["chronology.treatment_gap_days: required"]
+    },
+    "chronology.treatment_gap_days :: wrong_type": {
+      "problems": ["chronology.treatment_gap_days: expected int"]
+    },
+    "coverage :: blank": {
+      "problems": ["coverage.exclusions: required"]
+    },
+    "coverage :: missing": {
+      "problems": ["coverage: required section missing"]
+    },
+    "coverage :: unknown_sibling": {
+      "problems": ["coverage.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "coverage :: wrong_type": {
+      "raises": "AttributeError: 'str' object has no attribute 'get'"
+    },
+    "coverage.exclusions :: blank": {
+      "problems": []
+    },
+    "coverage.exclusions :: missing": {
+      "problems": ["coverage.exclusions: required"]
+    },
+    "coverage.exclusions :: wrong_type": {
+      "problems": [
+        "coverage.exclusions: expected list[map]",
+        "coverage.exclusions[0]: `match` required",
+        "coverage.exclusions[1]: `match` required",
+        "coverage.exclusions[2]: `match` required",
+        "coverage.exclusions[3]: `match` required",
+        "coverage.exclusions[4]: `match` required",
+        "coverage.exclusions[5]: `match` required",
+        "coverage.exclusions[6]: `match` required",
+        "coverage.exclusions[7]: `match` required",
+        "coverage.exclusions[8]: `match` required",
+        "coverage.exclusions[9]: `match` required"
+      ]
+    },
+    "delivery :: blank": {
+      "problems": [
+        "delivery.folder_template: required",
+        "delivery.chronology_name_template: required",
+        "delivery.worksheet_glob: required"
+      ]
+    },
+    "delivery :: missing": {
+      "problems": ["delivery: required section missing"]
+    },
+    "delivery :: unknown_sibling": {
+      "problems": ["delivery.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "delivery :: wrong_type": {
+      "problems": ["delivery: must be a map"]
+    },
+    "delivery.chronology_name_template :: blank": {
+      "problems": []
+    },
+    "delivery.chronology_name_template :: missing": {
+      "problems": ["delivery.chronology_name_template: required"]
+    },
+    "delivery.chronology_name_template :: wrong_type": {
+      "problems": ["delivery.chronology_name_template: expected str"]
+    },
+    "delivery.folder_template :: blank": {
+      "problems": []
+    },
+    "delivery.folder_template :: missing": {
+      "problems": ["delivery.folder_template: required"]
+    },
+    "delivery.folder_template :: wrong_type": {
+      "problems": ["delivery.folder_template: expected str"]
+    },
+    "delivery.worksheet_glob :: blank": {
+      "problems": []
+    },
+    "delivery.worksheet_glob :: missing": {
+      "problems": ["delivery.worksheet_glob: required"]
+    },
+    "delivery.worksheet_glob :: wrong_type": {
+      "problems": ["delivery.worksheet_glob: expected str"]
+    },
+    "firm :: blank": {
+      "problems": ["firm.slug: required", "firm.display_name: required"]
+    },
+    "firm :: missing": {
+      "problems": ["firm: required section missing"]
+    },
+    "firm :: unknown_sibling": {
+      "problems": ["firm.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "firm :: wrong_type": {
+      "problems": ["firm: must be a map"]
+    },
+    "firm.display_name :: blank": {
+      "problems": []
+    },
+    "firm.display_name :: missing": {
+      "problems": ["firm.display_name: required"]
+    },
+    "firm.display_name :: wrong_type": {
+      "problems": ["firm.display_name: expected str"]
+    },
+    "firm.slug :: blank": {
+      "problems": []
+    },
+    "firm.slug :: missing": {
+      "problems": ["firm.slug: required"]
+    },
+    "firm.slug :: wrong_type": {
+      "problems": ["firm.slug: expected str"]
+    },
+    "folders :: blank": {
+      "problems": ["folders.status_suffix_regex: required"]
+    },
+    "folders :: missing": {
+      "problems": ["folders: required section missing"]
+    },
+    "folders :: unknown_sibling": {
+      "problems": ["folders.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "folders :: wrong_type": {
+      "problems": ["folders: must be a map"]
+    },
+    "folders.status_suffix_regex :: blank": {
+      "problems": []
+    },
+    "folders.status_suffix_regex :: missing": {
+      "problems": ["folders.status_suffix_regex: required"]
+    },
+    "folders.status_suffix_regex :: wrong_type": {
+      "problems": ["folders.status_suffix_regex: expected str"]
+    },
+    "format :: blank": {
+      "problems": ["format.subsections: required", "format.font: required"]
+    },
+    "format :: missing": {
+      "problems": ["format: required section missing"]
+    },
+    "format :: unknown_sibling": {
+      "problems": ["format.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format :: wrong_type": {
+      "problems": ["format: must be a map"]
+    },
+    "format.font :: blank": {
+      "problems": []
+    },
+    "format.font :: missing": {
+      "problems": ["format.font: required"]
+    },
+    "format.font :: wrong_type": {
+      "problems": ["format.font: expected str"]
+    },
+    "format.subsections :: blank": {
+      "problems": []
+    },
+    "format.subsections :: missing": {
+      "problems": ["format.subsections: required"]
+    },
+    "format.subsections :: wrong_type": {
+      "problems": ["format.subsections: expected list[str]"]
+    },
+    "levers :: blank": {
+      "problems": [
+        "levers.batch_stages: required",
+        "levers.audit_mode: required",
+        "levers.cache: required",
+        "levers.compose_max_tokens: required"
+      ]
+    },
+    "levers :: missing": {
+      "problems": ["levers: required section missing"]
+    },
+    "levers :: unknown_sibling": {
+      "problems": ["levers.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "levers :: wrong_type": {
+      "raises": "AttributeError: 'str' object has no attribute 'get'"
+    },
+    "levers.audit_mode :: blank": {
+      "problems": ["levers.audit_mode: expected one of ['image', 'text']"]
+    },
+    "levers.audit_mode :: missing": {
+      "problems": ["levers.audit_mode: required"]
+    },
+    "levers.audit_mode :: wrong_type": {
+      "problems": [
+        "levers.audit_mode: expected str",
+        "levers.audit_mode: expected one of ['image', 'text']"
+      ]
+    },
+    "levers.batch_stages :: blank": {
+      "problems": []
+    },
+    "levers.batch_stages :: missing": {
+      "problems": ["levers.batch_stages: required"]
+    },
+    "levers.batch_stages :: wrong_type": {
+      "problems": [
+        "levers.batch_stages: expected list[str]",
+        "levers.batch_stages: `n` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `o` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `t` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `-` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `a` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `-` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `l` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `i` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `s` is not a batchable stage ['billing', 'compose', 'vision']",
+        "levers.batch_stages: `t` is not a batchable stage ['billing', 'compose', 'vision']"
+      ]
+    },
+    "levers.cache :: blank": {
+      "problems": ["levers.cache: expected bool"]
+    },
+    "levers.cache :: missing": {
+      "problems": ["levers.cache: required"]
+    },
+    "levers.cache :: wrong_type": {
+      "problems": ["levers.cache: expected bool"]
+    },
+    "levers.compose_max_tokens :: blank": {
+      "problems": ["levers.compose_max_tokens: expected int"]
+    },
+    "levers.compose_max_tokens :: missing": {
+      "problems": ["levers.compose_max_tokens: required"]
+    },
+    "levers.compose_max_tokens :: wrong_type": {
+      "problems": ["levers.compose_max_tokens: expected int"]
+    },
+    "models :: blank": {
+      "problems": ["models.tiers: required"]
+    },
+    "models :: missing": {
+      "problems": ["models: required section missing"]
+    },
+    "models :: unknown_sibling": {
+      "problems": ["models.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "models :: wrong_type": {
+      "raises": "AttributeError: 'str' object has no attribute 'get'"
+    },
+    "models.tiers :: blank": {
+      "problems": []
+    },
+    "models.tiers :: missing": {
+      "problems": ["models.tiers: required"]
+    },
+    "models.tiers :: unknown_sibling": {
+      "problems": []
+    },
+    "models.tiers :: wrong_type": {
+      "raises": "AttributeError: 'str' object has no attribute 'get'"
+    },
+    "models.tiers.audit :: blank": {
+      "problems": []
+    },
+    "models.tiers.audit :: missing": {
+      "problems": ["models.tiers.audit: required"]
+    },
+    "models.tiers.audit :: wrong_type": {
+      "problems": []
+    },
+    "models.tiers.composition :: blank": {
+      "problems": []
+    },
+    "models.tiers.composition :: missing": {
+      "problems": ["models.tiers.composition: required"]
+    },
+    "models.tiers.composition :: wrong_type": {
+      "problems": []
+    },
+    "models.tiers.judgment :: blank": {
+      "problems": []
+    },
+    "models.tiers.judgment :: missing": {
+      "problems": ["models.tiers.judgment: required"]
+    },
+    "models.tiers.judgment :: wrong_type": {
+      "problems": []
+    },
+    "models.tiers.mechanical :: blank": {
+      "problems": []
+    },
+    "models.tiers.mechanical :: missing": {
+      "problems": ["models.tiers.mechanical: required"]
+    },
+    "models.tiers.mechanical :: wrong_type": {
+      "problems": []
+    },
+    "models.tiers.transcription :: blank": {
+      "problems": []
+    },
+    "models.tiers.transcription :: missing": {
+      "problems": ["models.tiers.transcription: required"]
+    },
+    "models.tiers.transcription :: wrong_type": {
+      "problems": []
+    },
+    "nonrecord :: blank": {
+      "problems": ["nonrecord.page_classes: required"]
+    },
+    "nonrecord :: missing": {
+      "problems": ["nonrecord: required section missing"]
+    },
+    "nonrecord :: unknown_sibling": {
+      "problems": ["nonrecord.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "nonrecord :: wrong_type": {
+      "problems": ["nonrecord: must be a map"]
+    },
+    "nonrecord.page_classes :: blank": {
+      "problems": []
+    },
+    "nonrecord.page_classes :: missing": {
+      "problems": ["nonrecord.page_classes: required"]
+    },
+    "nonrecord.page_classes :: wrong_type": {
+      "problems": ["nonrecord.page_classes: expected list[map]"]
+    },
+    "pipeline :: blank": {
+      "problems": []
+    },
+    "pipeline :: missing": {
+      "problems": []
+    },
+    "pipeline :: unknown_sibling": {
+      "problems": ["pipeline.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "pipeline :: wrong_type": {
+      "problems": ["pipeline: must be a map"]
+    },
+    "providers :: blank": {
+      "problems": ["providers.aliases: required", "providers.unresolved_label: required"]
+    },
+    "providers :: missing": {
+      "problems": ["providers: required section missing"]
+    },
+    "providers :: unknown_sibling": {
+      "problems": ["providers.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "providers :: wrong_type": {
+      "raises": "AttributeError: 'str' object has no attribute 'get'"
+    },
+    "providers.aliases :: blank": {
+      "problems": []
+    },
+    "providers.aliases :: missing": {
+      "problems": ["providers.aliases: required"]
+    },
+    "providers.aliases :: wrong_type": {
+      "problems": [
+        "providers.aliases: expected list[map]",
+        "providers.aliases[0]: `match` required",
+        "providers.aliases[1]: `match` required",
+        "providers.aliases[2]: `match` required",
+        "providers.aliases[3]: `match` required",
+        "providers.aliases[4]: `match` required",
+        "providers.aliases[5]: `match` required",
+        "providers.aliases[6]: `match` required",
+        "providers.aliases[7]: `match` required",
+        "providers.aliases[8]: `match` required",
+        "providers.aliases[9]: `match` required"
+      ]
+    },
+    "providers.unresolved_label :: blank": {
+      "problems": []
+    },
+    "providers.unresolved_label :: missing": {
+      "problems": ["providers.unresolved_label: required"]
+    },
+    "providers.unresolved_label :: wrong_type": {
+      "problems": ["providers.unresolved_label: expected str"]
+    },
+    "selection :: blank": {
+      "problems": [
+        "selection.exclude_folder_classes: required",
+        "selection.root_pdfs: required",
+        "selection.doc_extensions: required"
+      ]
+    },
+    "selection :: missing": {
+      "problems": ["selection: required section missing"]
+    },
+    "selection :: unknown_sibling": {
+      "problems": ["selection.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "selection :: wrong_type": {
+      "problems": ["selection: must be a map"]
+    },
+    "selection.doc_extensions :: blank": {
+      "problems": []
+    },
+    "selection.doc_extensions :: missing": {
+      "problems": ["selection.doc_extensions: required"]
+    },
+    "selection.doc_extensions :: wrong_type": {
+      "problems": ["selection.doc_extensions: expected list[str]"]
+    },
+    "selection.exclude_folder_classes :: blank": {
+      "problems": []
+    },
+    "selection.exclude_folder_classes :: missing": {
+      "problems": ["selection.exclude_folder_classes: required"]
+    },
+    "selection.exclude_folder_classes :: wrong_type": {
+      "problems": ["selection.exclude_folder_classes: expected list[str]"]
+    },
+    "selection.root_pdfs :: blank": {
+      "problems": ["selection.root_pdfs: expected bool"]
+    },
+    "selection.root_pdfs :: missing": {
+      "problems": ["selection.root_pdfs: required"]
+    },
+    "selection.root_pdfs :: wrong_type": {
+      "problems": ["selection.root_pdfs: expected bool"]
+    },
+    "selection.shared_folder_classes :: blank": {
+      "problems": []
+    },
+    "selection.shared_folder_classes :: missing": {
+      "problems": []
+    },
+    "selection.shared_folder_classes :: wrong_type": {
+      "problems": ["selection.shared_folder_classes: expected list[str]"]
+    },
+    "units :: blank": {
+      "problems": ["units.exclude_name_patterns: required"]
+    },
+    "units :: missing": {
+      "problems": ["units: required section missing"]
+    },
+    "units :: unknown_sibling": {
+      "problems": ["units.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "units :: wrong_type": {
+      "problems": ["units: must be a map"]
+    },
+    "units.exclude_name_patterns :: blank": {
+      "problems": []
+    },
+    "units.exclude_name_patterns :: missing": {
+      "problems": ["units.exclude_name_patterns: required"]
+    },
+    "units.exclude_name_patterns :: wrong_type": {
+      "problems": ["units.exclude_name_patterns: expected list[str]"]
+    }
+  },
+  "validate": {
+    "problems": []
+  }
+}
