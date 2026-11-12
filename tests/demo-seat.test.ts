@@ -27,12 +27,12 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { validate, type CustomerYaml } from '../src/lib/operator/customer-yaml'
+import { LANE_SKILL } from '../src/lib/operator/job-lanes.generated'
 
 const CUSTOMERS = resolve('operator/customers')
 const DEMO_DIR = resolve('operator/customers/pilot-smokeball')
 const DEMO_YAML = resolve('operator/customers/pilot-smokeball/customer.yaml')
 const CLIENT_YAML = resolve('operator/customers/ashton-price/customer.yaml')
-const LANE_PROOF_PY = resolve('operator/runners/jobs/jobs/lane_proof.py')
 const VOICE_SPEC = resolve(
   'operator/customers/pilot-smokeball/seed/voice/spec/work_product.voice.md'
 )
@@ -59,14 +59,9 @@ function raw(path: string): Record<string, unknown> {
   return parseYaml(readFileSync(path, 'utf8')) as Record<string, unknown>
 }
 
-/** The skills that queue a job on a lane (lane_proof.py SKILLS), read from source. */
+/** The skills that author a job lane (operator/contracts/job-lanes.yaml), each of which can queue a paid job. */
 function laneSkills(): string[] {
-  const src = readFileSync(LANE_PROOF_PY, 'utf8')
-  const block = /^SKILLS = \{([\s\S]*?)^\}/m.exec(src)
-  if (!block) throw new Error('lane_proof.py: no SKILLS map')
-  const names = [...block[1].matchAll(/:\s*"([a-z0-9-]+)"/g)].map((m) => m[1])
-  if (names.length < 5) throw new Error(`lane_proof.py SKILLS parsed to ${names.length} entries`)
-  return names
+  return Object.values(LANE_SKILL)
 }
 
 const demo = validated(DEMO_YAML)
