@@ -49,6 +49,16 @@ export type CloneSummary = {
 
 const TEST_PATH = /(^|\/)tests?\/|(^|\/)test_[^/]*$|\.test\.[a-z]+$|_test\.py$|(^|\/)conftest\.py$/
 
+/**
+ * A census instrument: code that runs every instance a census counts. The
+ * seat-config caller capture (operator/bin/lib/seat_callers/, wave 2 A2)
+ * executes each customer.yaml parser, broker socket client and slug read, so it
+ * must name the slug variable, open sockets and parse the documents it feeds
+ * them. Like concepts.ts stating its own vocabulary, it is the measure, not an
+ * instance, and no census counts it.
+ */
+export const INSTRUMENT_PATH = /^operator\/bin\/lib\/seat_callers\//
+
 export function isTestPath(path: string): boolean {
   return TEST_PATH.test(path)
 }
@@ -203,7 +213,7 @@ function codeLines(text: string): string {
 }
 
 export function literalCensus(files: SourceFile[], minFiles = LITERAL_MIN_FILES): LiteralRow[] {
-  const code = files.filter((f) => languageOf(f.path) !== 'docs')
+  const code = files.filter((f) => languageOf(f.path) !== 'docs' && !INSTRUMENT_PATH.test(f.path))
   const env = envNames(code)
   const paths = new Map<string, Set<string>>()
   const envHits = new Map<string, Set<string>>()
