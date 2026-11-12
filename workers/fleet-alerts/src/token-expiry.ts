@@ -101,9 +101,12 @@ export function parseTokenAgeMap(json: string | null): Record<string, number> | 
  * missing one costs the firm's Smokeball access with nobody told.
  *
  * ashton-price re-consented 2026-10-12 19:36:39Z, the first production token
- * issued after 09-21. It warns 2026-11-06 under this rule. If it is still
- * working after 2026-11-11 19:36Z, set `provenAtMs` to that observation (cite
- * the crane_verify id); the open warning then resolves on the next tick.
+ * issued after 09-21. It warned 2026-11-06 under this rule. PROVEN 2026-11-12:
+ * the 30-day line passed 2026-11-11 19:36Z with the token file never rewritten,
+ * and the negotiation watch, whose every run opens with a live GET /matters and
+ * fails `inventory_unreadable` without it, delivered at 2026-11-11 20:32:25Z,
+ * 2026-11-12 00:28Z and 16:30Z (vfy_01M78HWBZBX0QA166WSRKHJ1TE). `provenAtMs` is
+ * the first of those. The next horizon is the 175-day warning, ~2027-04-05.
  */
 export interface VendorLifetimeRule {
   cutoverMs: number
@@ -112,7 +115,11 @@ export interface VendorLifetimeRule {
 }
 
 export const VENDOR_LIFETIME_RULES: Record<string, VendorLifetimeRule> = {
-  smokeball: { cutoverMs: Date.parse('2026-09-21T00:22:30Z'), days: 30, provenAtMs: null },
+  smokeball: {
+    cutoverMs: Date.parse('2026-09-21T00:22:30Z'),
+    days: 30,
+    provenAtMs: Date.parse('2026-11-11T20:32:25Z'),
+  },
 }
 
 type Basis = 'configured' | 'pre-cutover' | 'unproven'

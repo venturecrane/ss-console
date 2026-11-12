@@ -172,6 +172,12 @@ both keeping this ADR's deterministic-predicate discipline:
    2026-10-12 19:36:39Z: it warns 2026-11-06, and if it still works after
    2026-11-11 19:36Z, `provenAtMs` is set and the warning resolves.
 
+   PROVEN 2026-11-12: it did. With the token file never rewritten, the
+   negotiation watch (every run opens with a live matter list and fails without
+   it) delivered at 2026-11-11 20:32:25Z, 2026-11-12 00:28Z and 16:30Z
+   (vfy_01M78HWBZBX0QA166WSRKHJ1TE). `provenAtMs` is 2026-11-11 20:32:25Z, so
+   post-cutover tokens are judged at 180 and warn at day 175.
+
    ALSO 2026-10-13: while open, this condition re-sends once a day, threaded
    under the original alert (`workers/fleet-alerts/src/reminder.ts`). It is
    the only condition that does: it counts down to a hard outage, and the one

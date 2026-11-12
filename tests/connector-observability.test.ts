@@ -651,34 +651,45 @@ describe('worker runOnce — Smokeball 2026-09-21 lifetime cutover', () => {
     expect(opened[0]?.detail).toContain('recorded lifetime 30d')
   })
 
-  it('a POST-cutover token is judged at 30d while the 180d lifetime is unproven', async () => {
-    // 2026-10-13: the vendor's 180 days has never been observed on our app.
-    // Twice their stated lifetime was wrong for us and the token died with no
-    // warning, so until a post-cutover token outlives 30 days, a 26-day-old
-    // one opens the warning. Fails if the rule collapses back to "after the
-    // cutover means 180".
-    await setTokenAge(26 * 86400)
-    const opened = tokenTransitions(await runOnce(workerEnv(), Date.parse('2026-10-20T15:00:00Z')))
-    expect(opened).toHaveLength(1)
-    expect(opened[0]?.kind).toBe('opened')
-    expect(opened[0]?.detail).toContain('recorded lifetime 30d')
-    expect(opened[0]?.detail).toContain('never been observed on our app')
+  it('a POST-cutover token is judged at 30d while the 180d lifetime is unproven', () => {
+    // 2026-10-13: until a post-cutover token outlives the old lifetime, the
+    // vendor's longer one is only their word, and twice it was wrong for us.
+    // Proven for Smokeball on 2026-11-12, so this runs on an explicit unproven
+    // rule: the mechanism stays tested for the next vendor or cutover. Fails if
+    // the rule collapses back to "after the cutover means the configured value".
+    const unproven = { smokeball: { ...VENDOR_LIFETIME_RULES.smokeball, provenAtMs: null } }
+    const [state] = tokenExpiryConditions(
+      {
+        customer_slug: 'seat',
+        connector_token_age_json: JSON.stringify({ smokeball: 26 * 86400 }),
+      } as FleetStatusRow,
+      {
+        lifetimesDays: { smokeball: 180 },
+        warnDays: 5,
+        nowMs: Date.parse('2026-10-20T15:00:00Z'),
+        rules: unproven,
+      }
+    )
+    expect(state?.active).toBe(true)
+    expect(state?.detail).toContain('recorded lifetime 30d')
+    expect(state?.detail).toContain('never been observed on our app')
   })
 
-  it('the 2026-10-12 ashton-price re-consent warns on 2026-11-06, five days before day 30', async () => {
-    // The first production token issued after 09-21. If Smokeball's 180 days
-    // did not reach it, it dies 2026-11-11 19:36Z; this is the warning that
-    // leaves five days to re-consent. Update this case on purpose when the
-    // lifetime is proven (token-expiry.ts provenAtMs).
+  it('the 2026-10-12 ashton-price token is judged at 180d now the lifetime is proven', async () => {
+    // The first production token issued after 09-21. It outlived day 30
+    // (2026-11-11 19:36Z) and VENDOR_LIFETIME_RULES records that, so the
+    // 11-06 warning resolves and the real one comes at day 175, 2027-04-05.
+    // Fails if provenAtMs is reverted to null.
     const issued = Date.parse('2026-10-12T19:36:39Z')
-    const day24 = issued + 24 * 86400 * 1000
-    await setTokenAge(Math.floor((day24 - issued) / 1000))
-    expect(tokenTransitions(await runOnce(workerEnv(), day24))).toEqual([])
-    const nov6 = Date.parse('2026-11-06T20:00:00Z')
-    await setTokenAge(Math.floor((nov6 - issued) / 1000))
-    const opened = tokenTransitions(await runOnce(workerEnv(), nov6))
+    const nov12 = Date.parse('2026-11-12T20:00:00Z')
+    await setTokenAge(Math.floor((nov12 - issued) / 1000))
+    expect(tokenTransitions(await runOnce(workerEnv(), nov12))).toEqual([])
+    const day176 = issued + 176 * 86400 * 1000
+    await setTokenAge(Math.floor((day176 - issued) / 1000))
+    const opened = tokenTransitions(await runOnce(workerEnv(), day176))
     expect(opened).toHaveLength(1)
     expect(opened[0]?.kind).toBe('opened')
+    expect(opened[0]?.detail).toContain('recorded lifetime 180d')
   })
 
   describe('once the 180d lifetime is proven', () => {
@@ -751,8 +762,10 @@ describe('worker runOnce — Smokeball 2026-09-21 lifetime cutover', () => {
 
 describe('worker runOnce — connector_token_expiring reminds daily while open', () => {
   const ISSUED = Date.parse('2026-10-12T19:36:39Z')
-  const OPEN_AT = Date.parse('2026-11-06T20:00:00Z')
   const HOUR = 3600 * 1000
+  // Day 175 plus an hour: inside the 5-day warn window of the proven 180-day
+  // lifetime (token-expiry.ts VENDOR_LIFETIME_RULES), ~2027-04-05.
+  const OPEN_AT = ISSUED + 175 * 24 * HOUR + HOUR
 
   let db: D1Database
   let fetchMock: ReturnType<typeof vi.fn>
