@@ -4,7 +4,7 @@ section: engineering
 order: 10
 owner: engineering
 review_every: 90
-last_reviewed: "2026-11-10"
+last_reviewed: "2026-11-12"
 summary: The dev workflow, the verify gate, worktree isolation, and the coding standards every change ships under
 sources:
   - label: CI - verify.yml
@@ -13,6 +13,12 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/package.json
   - label: ESLint config - the enforced coding rules
     href: https://github.com/venturecrane/ss-console/blob/main/eslint.config.js
+  - label: The job lanes, declared once
+    href: operator/contracts/job-lanes.yaml
+  - label: Shared Python helpers and their stamped copies
+    href: operator/contracts/skill-shared-modules.yaml
+  - label: The law-seat writing rules and the skills that carry them
+    href: operator/contracts/skill-text-blocks.yaml
 ---
 
 This page covers how a code change gets from an idea to a merge: the PR workflow, the checks
@@ -111,6 +117,23 @@ counts how many places one idea is built (job lane lists, customer.yaml hand
 parsers, broker socket clients, money formatters and others) and fails a PR that
 adds a place. Each file's header names its regenerate command; never raise a
 number to pass, give the idea one home.
+
+Three facts that used to be copied by hand are now declared once and generated,
+and CI fails a PR whose copies disagree with the declaration. A job lane is
+declared once in `operator/contracts/job-lanes.yaml` (its skill, its run-dir
+names, whether it has a request card, firm inputs, a wake word and so on);
+`python3 operator/bin/gen-job-lanes.py` writes it into each Python install tree,
+the console's TypeScript and a shell file, and `--check` runs in
+`operator/bin/tests/test_job_lanes_generation.py`. Adding a lane starts there. A
+Python helper that two processes or several skills carry as a whole file (each
+seat process has its own virtualenv, and a skill folder ships alone) is declared
+with its one source and every copy in `operator/contracts/skill-shared-modules.yaml`,
+and `python3 operator/bin/gen-skill-shared.py` writes the copies byte for byte.
+The law-seat writing rules section of a skill's `SKILL.md` has one source,
+`operator/contracts/law-seat-writing-rules.md`, stamped into the skills that
+`operator/contracts/skill-text-blocks.yaml` lists by the same command; skills it
+lists as `own_text` keep their own wording until each is reconciled on purpose.
+Edit the declaration or the source, never a copy, and run the generator.
 
 The Operator tree is one Python project (`operator/pyproject.toml`). Its CLIs
 (`operator/bin/*.py`, `operator/rehearsal/run.py`) import `bin.lib.*`,

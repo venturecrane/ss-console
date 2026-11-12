@@ -6,7 +6,7 @@ _ADR 0027. The contract the overlay implements: `shared/inbound.py` in venturecr
 
 Untrusted external content (email bodies, webhook payloads, connector/MCP results, fetched pages) is **attributed** with its provenance and trust class, then **structurally separated** from the instruction channel before it reaches the engine's reasoning context. The agent may reason _about_ untrusted content; it may not take a privileged action _because_ untrusted content told it to.
 
-**Defense-in-depth, not the wall.** The enforcing control against injection-driven action is the trust gate (`trust_ceiling.py::enforce` + the overlay `hermes-smd-trust` `pre_tool_call` hook): an instruction smuggled into inbound text asking the agent to send / commit / raise a ceiling is refused there regardless of the fence (ADR 0026: inbound text can never drive a ceiling raise). This boundary makes the data/instruction split structural and records provenance; it does **not** sanitize or filter content (ADR 0027 §Alt-B).
+**Defense-in-depth, not the wall.** The enforcing control against injection-driven action is the trust gate (`enforce()` in the overlay `hermes-smd-trust` plugin and its `pre_tool_call` hook): an instruction smuggled into inbound text asking the agent to send / commit / raise a ceiling is refused there regardless of the fence (ADR 0026: inbound text can never drive a ceiling raise). This boundary makes the data/instruction split structural and records provenance; it does **not** sanitize or filter content (ADR 0027 §Alt-B).
 
 ## Architecture (hybrid)
 

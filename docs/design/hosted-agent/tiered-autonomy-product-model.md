@@ -4,7 +4,7 @@ _Status: **ACCEPTED 2026-07-07** — all three open decisions approved as recomm
 
 ## TL;DR
 
-**We already built the tiered-autonomy engine. We just never used anything but its "off" switch.** `operator/adapter/trust_ceiling.py` enforces autonomy **per action class**, calibrated to reversibility and blast radius — which is exactly the converged 2026 safe-action model the research found. Draft-only is an **authoring choice** in the Hosted Agent template, not a substrate limit.
+**We already built the tiered-autonomy engine. We just never used anything but its "off" switch.** `operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py` enforces autonomy **per action class**, calibrated to reversibility and blast radius, which is exactly the converged 2026 safe-action model the research found. Draft-only is an **authoring choice** in the Hosted Agent template, not a substrate limit.
 
 The product-model change is therefore mostly **re-authoring**, plus **one genuine substrate addition**: a middle ceiling for external sends — _"the agent executes the send after a per-action confirmation"_ — which is the market's dominant safe-action pattern (Lindy-style) and the one posture our current three-value ceiling cannot express.
 

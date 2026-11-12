@@ -72,7 +72,7 @@ def test_the_compilers_keys_are_the_lanes_keys():
     assert LR.RELATIVE_STEP == firm_rules.RELATIVE_STEP
     assert firm_rules.LAYOUT_REL == layout_store.LAYOUT_REL
     assert LR.SCHEMA_VERSION == layout_store.SCHEMA_VERSION
-    assert (_OVERLAY.parent / "layout_store.py").read_bytes() == Path(layout_store.__file__).read_bytes()
+    # The bytes of layout_store.py are held to the overlay's by operator/bin/gen-skill-shared.py --check.
     assert set(LR.BASE_OWNS) == set(brief_base.BASE_OWNS)
     assert set(LR.BASE_CLASSES) == set(firm.FIRM_BASE_CLASSES)
 

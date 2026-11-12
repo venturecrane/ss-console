@@ -18,7 +18,7 @@ the skill MUST abort.
   - §11.4: every action at every ceiling is logged
 - platform-prd.md §7.5: safety substrate invariants
   - invariant #5 (ceiling enforced in code, not in prompt)
-- `operator/adapter/trust_ceiling.py` (`enforce()` decision tree)
+- `operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py` (`enforce()` decision tree)
 - `operator/safety_substrate/trust_ceiling_log.py` (sibling module
   from PR #953; canonical audit row writer this module delegates to)
 - `operator/hermes-smd-overlay/shared/sticky_stop.py` (sibling module from

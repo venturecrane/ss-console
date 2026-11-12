@@ -21,7 +21,7 @@ from types import ModuleType
 
 import pytest
 
-from jobs import lane_memory, lane_proof, lane_proof_cli, lanes, rewake
+from jobs import job_lanes, lane_memory, lane_proof, lane_proof_cli, lanes, rewake
 from jobs.medchron import lane as medchron_lane
 from jobs.proof import holds, watch
 
@@ -152,8 +152,10 @@ def test_every_lane_can_record_a_delivery_proof_under_its_reply_kind(mod: Module
     # proof/watch.py alerts under the lane's name and binds under its reply
     # kind; the broker refuses a lane or kind it does not know.
     lane = _lane_name(mod)
+    # The broker's delivery_proof.LANES and the overlay's heartbeat
+    # DELIVERY_PROOF_LANES are job_lanes.JOB_LANES, generated from
+    # operator/contracts/job-lanes.yaml into each tree (each tree's
+    # test_job_lane_lists.py holds its constant to it), so the lane must be declared.
+    assert lane in job_lanes.JOB_LANES, f"operator/contracts/job-lanes.yaml lacks {lane!r}"
     broker = _OPERATOR / "workspace_broker" / "delivery_proof.py"
-    assert lane in _frozenset_literal(broker, "LANES"), f"delivery_proof.LANES lacks {lane!r}"
     assert watch.REPLY_KIND[lane] in _frozenset_literal(broker, "REPLY_KINDS")
-    overlay = _OPERATOR / "hermes-smd-overlay" / "shared" / "heartbeat.py"
-    assert lane in _frozenset_literal(overlay, "DELIVERY_PROOF_LANES"), f"heartbeat.DELIVERY_PROOF_LANES lacks {lane!r}"

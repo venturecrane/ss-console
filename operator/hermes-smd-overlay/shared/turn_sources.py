@@ -27,32 +27,23 @@ import threading
 from collections import OrderedDict
 from typing import Any
 
+from shared import job_lanes
 from shared.cron_attribution import parse_cron_session
 
 #: The sender id the gateway gives a ``/webhooks/handoff`` turn (the route, as
 #: ``webhook:agentmail`` is for mail): a job's completion wake.
 HANDOFF_SENDER = "webhook:handoff"
-WAKE_JOB = re.compile(
-    r"\b(demand|drafting|chronology|litigation|negotiation|note|casefile) job ([0-9A-HJKMNP-TV-Z]{26})\b"
-)
 #: The wake word -> the broker's job kind (ss-console reply_binding.KINDS, and
-#: the participant fence's job anchor kinds).
-JOB_KIND = {
-    "demand": "demand_job",
-    "drafting": "drafting_job",
-    "chronology": "medchron_job",
-    "litigation": "litigation_job",
-    "negotiation": "negotiation_job",
-    "note": "note_job",
-    "casefile": "casefile_job",
-}
+#: the participant fence's job anchor kinds), from operator/contracts/job-lanes.yaml.
+JOB_KIND = dict(job_lanes.WAKE_WORD_JOB_KIND)
+WAKE_JOB = re.compile(rf"\b({'|'.join(JOB_KIND)}) job ([0-9A-HJKMNP-TV-Z]{{26}})\b")
 JOB_KINDS = frozenset(JOB_KIND.values())
 #: The kinds whose wake may be a SCHEDULED run's (no request email): a
 #: litigation list the calendar ran, a negotiation notice, a NEW-MESSAGE
 #: SMD note (no colleague's email to answer; the broker binds it
 #: ``mode: new_message`` and sets its recipient and subject), and the Case
 #: File Manager's weekday re-check and monthly full read.
-SCHEDULED_KINDS = frozenset({"litigation_job", "negotiation_job", "note_job", "casefile_job"})
+SCHEDULED_KINDS = frozenset(job_lanes.SCHEDULED_JOB_KINDS)
 #: A litigation, negotiation or note wake's trigger line (ss-console
 #: litigation_lane.py / negotiation_lane.py / note_lane.py, code-authored):
 #: "Trigger: scheduled." Read only from a wake the gateway delivered on the

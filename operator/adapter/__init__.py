@@ -29,9 +29,9 @@ ADR-0043 runtime-read seam; see `bin/lib/seam_pull.py`.) Specifically:
   decision 6, 2026-11-07.)
 * Cost telemetry (`cost_ingest.py`, `cost_rollup.py`,
   `cost_telemetry/`) — billing rollup against per-customer Machines.
-* Trust-ceiling enforcement primitive (`trust_ceiling.py`) — pure-data
-  module imported by the safety_substrate invariant #5 test fixture;
-  the runtime path lives in `hermes-smd-trust`.
+* (The trust-ceiling rule is not here. Its copy, `trust_ceiling.py`, ran
+  on no seat and was deleted 2026-11-12; the one rule is the overlay's
+  `hermes-smd-trust/enforce.py`, which the boot invariants load.)
 * Customer.yaml schema validator (`validate_customer_yaml.py`) — see
   the in-flight follow-up that replaces this with the overlay's
   `bootstrap/validate.py` per ADR 0019.

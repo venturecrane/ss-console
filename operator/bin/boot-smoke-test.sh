@@ -364,6 +364,8 @@ fi
 # list's verbs to the ssh transport above; behaviour per check is what it was
 # when the checks lived here. Read seat-checks.sh for what each check proves.
 TEMPLATES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../templates" && pwd)"
+# shellcheck source=../templates/_job-lanes.generated.sh
+. "${TEMPLATES_DIR}/_job-lanes.generated.sh"
 CAPABILITIES_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../hermes-smd-overlay/shared" && pwd)/capabilities.py"
 # shellcheck disable=SC2034 # read by seat-checks.sh: seat paths are the Machine's own
 SEAT_ROOT=""
@@ -488,7 +490,9 @@ any_lane_runs() {
 }
 lane_skill_enabled() {
   local skill
-  case "$1" in medchron) skill=medical-chronology-maintainer ;; demand) skill=demand-letter-drafter ;; drafting) skill=document-drafter ;; litigation) skill=litigation-status ;; casefile) skill=case-file-manager ;; records) skill=matter-records ;; marketing) skill=marketing-request-router ;; *) return 1 ;; esac
+  # A firm-input lane's skill (operator/contracts/job-lanes.yaml), or marketing's.
+  case " ${SMD_FIRM_INPUT_LANES} marketing " in *" $1 "*) ;; *) return 1 ;; esac
+  if [ "$1" = marketing ]; then skill=marketing-request-router; else skill="$(smd_lane_skill "$1")"; fi
   # Cannot evaluate (no file, unparseable, no uv) reads as authored, never as
   # absent: exit 1 is the only "not enabled" answer.
   [ -f "${CUSTOMER_YAML}" ] || return 0

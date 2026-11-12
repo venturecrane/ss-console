@@ -27,7 +27,6 @@ from smokeball_connector import form_letter_facts as flf
 from jobs.attorneys import agree, firm as roster_firm, roster as twin
 
 RUNNER = Path(__file__).resolve().parents[1]
-SDK = RUNNER.parents[1] / "connectors" / "_sdk" / "operator_connector_sdk" / "library" / "roster.py"
 LEAD_BLOCK = [
     "Lead Attorney, Esq. (SBN 123456)",
     "EXAMPLE & EXAMPLE, LLP",
@@ -68,8 +67,9 @@ def _no_roster(monkeypatch, tmp_path):
     monkeypatch.setenv(sdk_roster.DIR_ENV, str(tmp_path / "no-roster-here"))
 
 
-def test_the_runners_reader_is_the_toolkits_byte_for_byte():
-    assert (RUNNER / "jobs" / "attorneys" / "roster.py").read_bytes() == SDK.read_bytes()
+def test_the_runners_reader_is_the_toolkits():
+    # The bytes are held equal by operator/bin/gen-skill-shared.py --check
+    # (module attorney_roster in operator/contracts/skill-shared-modules.yaml).
     assert twin.SCHEMA_VERSION == sdk_roster.SCHEMA_VERSION
 
 

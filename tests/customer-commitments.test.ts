@@ -20,10 +20,11 @@
  * repo.
  *
  * The tool-to-action-class map that pins payments_* / trust-ledger / create_matter
- * as COMMITMENT-class lives OVERLAY-side (shared/action_classes.py), outside this
- * repo, so there is no ss-side BANNED_TOOLS list. Test (e) asserts the ss-reachable
- * enforcement floor instead: trust_ceiling.enforce() never lets a COMMITMENT action
- * fire without explicit current-turn approval.
+ * as COMMITMENT-class lives in the overlay (shared/action_classes.py). Test (e)
+ * asserts the gateway's enforcement floor: hermes-smd-trust's enforce() never lets
+ * a COMMITMENT action fire without explicit current-turn approval. (It read the
+ * adapter's copy of that rule, operator/adapter/trust_ceiling.py, until that copy,
+ * which no seat ran, was deleted on 2026-11-12.)
  */
 
 import { describe, it, expect } from 'vitest'
@@ -38,7 +39,8 @@ const SEAT_YAML_PATH = resolve('tests/fixtures/ap-shaped-seat/customer.yaml')
 const GRID_YAML_PATH = resolve('tests/fixtures/ap-shaped-seat/routine-grid.yaml')
 const COMMITMENTS_PATH = resolve('tests/fixtures/ap-shaped-seat/commitments.json')
 const DEMO_YAML_PATH = resolve('operator/customers/pilot-smokeball/customer.yaml')
-const TRUST_CEILING_PY = resolve('operator/adapter/trust_ceiling.py')
+const ACTION_CLASSES_PY = resolve('operator/hermes-smd-overlay/shared/action_classes.py')
+const TRUST_ENFORCE_PY = resolve('operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py')
 const AP_DIR = resolve('operator/customers/ashton-price')
 
 const TIER_VOCAB = ['flag-only', 'prepare-and-route', 'auto-handle'] as const
@@ -184,16 +186,23 @@ describe('commitments contract: the A&P-shaped fixture and the client seat (ADR 
     ).toEqual([])
   })
 
-  // (e) Banned-tools sanity. There is no ss-side tool->class map (it lives overlay-
-  // side in shared/action_classes.py), so we assert the ss-reachable enforcement
-  // FLOOR: trust_ceiling.enforce() never lets a COMMITMENT action (which the overlay
+  // (e) Banned-tools sanity. The tool->class map lives in the overlay's
+  // shared/action_classes.py, so we assert the gateway's enforcement FLOOR:
+  // hermes-smd-trust's enforce() never lets a COMMITMENT action (which the overlay
   // classifies payments_* / trust-ledger / create_matter into) fire without an
   // explicit current-turn approval, and no persona authors commitment: autonomous.
   it('(e) COMMITMENT (fund movement) is never autonomous in the reachable enforcement floor', () => {
-    const src = readFileSync(TRUST_CEILING_PY, 'utf-8')
-    expect(src).toContain('COMMITMENT = "commitment"')
-    expect(src).toContain('# COMMITMENT never autonomous')
-    expect(src).toContain('commitment action requires explicit current-turn approval')
+    expect(readFileSync(ACTION_CLASSES_PY, 'utf-8')).toContain('COMMITMENT = "commitment"')
+    const src = readFileSync(TRUST_ENFORCE_PY, 'utf-8')
+    // COMMITMENT routes to the approval-class decision, whose last word without an
+    // approval is the refusal below (label "commitment"). The behaviour itself is
+    // boot invariant 3 (safety_substrate/tests/test_invariant_3_no_autonomous_commitment.py).
+    expect(src).toContain(
+      'if action == ActionClass.COMMITMENT:\n        return _decide_approval_class('
+    )
+    expect(src).toContain(
+      'return _refuse(f"{label} action requires explicit current-turn approval", action)'
+    )
 
     const seat = seatValue()
     for (const persona of seat.personas) {

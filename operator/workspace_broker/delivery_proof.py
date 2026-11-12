@@ -35,11 +35,12 @@ import sqlite3
 from typing import Any
 
 from .broker_context import BrokerContext
-from . import bound_replies
+from . import bound_replies, job_lanes
 
 AUDIT_TYPE = "DELIVERY_PROOF_FAILED"
 PROVEN_TYPE = "DELIVERY_PROVEN"
-LANES = frozenset({"medchron", "demand", "drafting", "litigation", "negotiation", "note", "casefile", "records"})
+#: Every job lane writes a delivery-proof row (operator/contracts/job-lanes.yaml).
+LANES = frozenset(job_lanes.JOB_LANES)
 #: Mirrors ``jobs/proof/gate.py`` CODES: the wire vocabulary.
 CODES = frozenset(
     {

@@ -34,6 +34,11 @@
  * not run says nothing about whether the customer.yaml is runnable.
  */
 
+import {
+  FIRM_INPUT_FILE_LANES,
+  FIRM_INPUT_LANES,
+  LANE_FIRM_MODULE,
+} from '../../src/lib/operator/job-lanes.generated'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -48,32 +53,17 @@ export const SPEC_SCHEMA_VERSION = 1
  * `fleet build` hashes into lane-inputs.json (tests/compile-seat-spec.test.ts
  * holds the two equal).
  */
-export const LANE_INPUTS: Record<string, { module: string; manifest: string }> = {
-  medchron: {
-    module: 'operator/runners/jobs/jobs/medchron/config.py',
-    manifest: 'medchron-firm.yaml',
-  },
-  demand: {
-    module: 'operator/runners/jobs/jobs/demand/firm.py',
-    manifest: 'demand/demand-firm.yaml',
-  },
-  drafting: {
-    module: 'operator/runners/jobs/jobs/drafting/firm.py',
-    manifest: 'drafting/drafting-firm.yaml',
-  },
-  litigation: {
-    module: 'operator/runners/jobs/jobs/litigation/firm.py',
-    manifest: 'litigation/litigation-firm.yaml',
-  },
-  casefile: {
-    module: 'operator/runners/jobs/jobs/casefile/firm.py',
-    manifest: 'casefile/casefile-firm.yaml',
-  },
-  records: {
-    module: 'operator/runners/jobs/jobs/records/firm.py',
-    manifest: 'records/records-firm.yaml',
-  },
-}
+export const LANE_INPUTS: Record<string, { module: string; manifest: string }> = Object.fromEntries(
+  FIRM_INPUT_LANES.map((lane) => [
+    lane,
+    {
+      module: `operator/runners/jobs/${(LANE_FIRM_MODULE as Record<string, string>)[lane].replaceAll('.', '/')}.py`,
+      manifest: FIRM_INPUT_FILE_LANES.includes(lane)
+        ? `${lane}-firm.yaml`
+        : `${lane}/${lane}-firm.yaml`,
+    },
+  ])
+)
 
 const NEED_KINDS = ['paths', 'tools', 'verbs', 'action_classes'] as const
 type NeedKind = (typeof NEED_KINDS)[number]

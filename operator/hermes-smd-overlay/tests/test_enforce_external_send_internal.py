@@ -11,16 +11,21 @@ assertions the resolved-ceiling snapshot guard (WS4) is built on:
   * the law-firm draft floor pins the OUTSIDE class only, never the internal class;
   * a rostered internal send on a TAINTED turn is still refused (an injected
     "notify staff" is still an injected action).
+Moved from operator/adapter/tests on 2026-11-12, when the adapter's copy of the
+trust rule (adapter/trust_ceiling.py) was deleted: nothing a seat runs imported
+it. These assertions now run against hermes-smd-trust's ``enforce``, the module
+the gateway's ``pre_tool_call`` hook calls. Each call maps the old arguments
+one to one: ``action_ceilings`` is the gateway's ``exposure``; the retired
+per-skill scalar (``ceiling``) and ``skill_name`` are not inputs to it (ADR 0056).
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from shared.action_classes import ActionClass
+from tests.conftest import load_plugin
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from adapter.trust_ceiling import ActionClass, Ceiling, enforce
+_TRUST = load_plugin("hermes-smd-trust").enforce
+Ceiling, enforce = _TRUST.Ceiling, _TRUST.enforce
 
 INTERNAL = ActionClass.EXTERNAL_SEND_INTERNAL
 OUTSIDE = ActionClass.EXTERNAL_SEND
@@ -30,11 +35,9 @@ LAW_FLOORS = {ActionClass.EXTERNAL_SEND: Ceiling.DRAFT_FOR_REVIEW}
 
 def _enforce(action, action_ceilings=None, *, floors=None, tainted=False):
     return enforce(
-        ceiling=Ceiling.AUTONOMOUS,  # skill scalar; does not grant sends
         action=action,
-        skill_name="client-verification-tracker",
         tool_name="agentmail.send_draft",
-        action_ceilings=action_ceilings,
+        exposure=action_ceilings,
         vertical_floors=floors,
         inbound_trust_class="internal" if not tainted else "unknown_external",
     )

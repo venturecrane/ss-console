@@ -1,8 +1,13 @@
-"""Shared empty-seat pre-run gate: sync, decision core, probe, heartbeat wire.
+"""Shared empty-seat pre-run gate: decision core, probe, heartbeat wire.
 
-The canonical source is ``operator/templates/pre_run_gate.py``; the copies
-stamped into skill dirs as ``pre_run.py`` must be byte-identical (edit template,
-restamp). The copies are discovered, not listed: see ``_STAMP_FLOOR`` below.
+The canonical source is ``operator/templates/pre_run_gate.py``. Its copies,
+stamped into skill dirs as ``pre_run.py``, are written by
+operator/bin/gen-skill-shared.py from operator/contracts/skill-shared-modules.yaml
+and checked by operator/bin/tests/test_skill_shared_generation.py, which also
+fails on a ``pre_run.py`` that shares a function body with the template and is
+not listed there. Seven stamps as of 2026-11-10; the four bespoke gates
+(deadline-miss-escalator, client-verification-tracker, medical-records-chaser,
+lien-ledger-tracker) share no body with it.
 """
 
 from __future__ import annotations
@@ -16,34 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from vendored_sync import assert_byte_identical, discover_stamps
-
 _OPERATOR_ROOT = Path(__file__).resolve().parents[1]
 _TEMPLATE = _OPERATOR_ROOT / "templates" / "pre_run_gate.py"
-
-# The empty-seat gate is stamped into skill dirs under the name pre_run.py, so
-# its copies cannot be found by filename alone: four skills carry a bespoke
-# pre_run.py that is not a stamp. deadline-miss-escalator kept its deadline
-# gate; client-verification-tracker graduated to its own cadence gate (WP-B,
-# #1889), medical-records-chaser to its ledger-backed cadence gate (ss #2404),
-# lien-ledger-tracker to its settlement-closeout obligation ledger (ss #2455).
-# Two more bespoke files (paid-media-anomaly-watcher, retainer-hours-reconciler)
-# left with their skills when those were retired on 2026-09-29.
-#
-# The stamps are DISCOVERED, not listed: a pre_run.py that shares a function
-# body with the template is a stamp, pristine or edited, and must equal it
-# byte-for-byte. The bespoke files share no body with it (probed
-# 2026-09-11), so they are not stamps; a ninth stamp is under the gate the
-# moment it is written. Until 2026-09-11 this was a hand-maintained tuple
-# (code review 2026-09-10, Architecture 5).
-#
-# Eight stamps as of 2026-09-11; SEVEN since 2026-09-17, when routine 11's
-# running-note form was retired and nothing schedules medical-chronology-maintainer
-# any more, so its stamped gate was deleted rather than left as a gate for a cron
-# that cannot exist (its skill authors `initiation.scheduled: false` on both
-# seats). A skill graduating to a bespoke gate, or losing its schedule, lowers
-# the floor in the same change, on purpose.
-_STAMP_FLOOR = 7
 
 
 def _load_gate():
@@ -51,40 +30,6 @@ def _load_gate():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-# ---------------------------------------------------------------------------
-# Stamp sync
-# ---------------------------------------------------------------------------
-
-
-def stamped_pre_runs() -> list[Path]:
-    return discover_stamps(_TEMPLATE, "pre_run.py")
-
-
-def test_every_stamp_is_byte_identical_to_the_template() -> None:
-    assert_byte_identical(
-        _TEMPLATE,
-        stamped_pre_runs(),
-        floor=_STAMP_FLOOR,
-        restamp_hint="Edit templates/pre_run_gate.py and restamp, never the copy.",
-    )
-
-
-def test_no_pre_run_is_an_unrecognised_stamp() -> None:
-    """A stamp can only be missed by the detector if it shares NO function body
-    with the template, which means every one of its functions was rewritten. At
-    that point it is a bespoke gate and belongs outside this test. Pin the
-    reading: a pre_run.py that names the template in its own header as the
-    thing it is stamped from is one the detector must have found."""
-    stamped = {p.resolve() for p in stamped_pre_runs()}
-    marker = "CANONICAL SOURCE: ``operator/templates/pre_run_gate.py``"
-    missed = [
-        str(p.relative_to(_OPERATOR_ROOT))
-        for p in sorted((_OPERATOR_ROOT / "skills").glob("*/pre_run.py"))
-        if marker in p.read_text(encoding="utf-8") and p.resolve() not in stamped
-    ]
-    assert not missed, f"stamped headers with no shared body, so the detector cannot see them: {missed}"
 
 
 # ---------------------------------------------------------------------------

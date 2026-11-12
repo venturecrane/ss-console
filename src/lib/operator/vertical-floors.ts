@@ -16,7 +16,7 @@ import type { ActionClass } from './customer-yaml/types'
 export type Ceiling = 'autonomous' | 'confirm' | 'draft_for_review' | 'refused'
 
 /**
- * Restrictiveness ordering — mirrors `operator/adapter/trust_ceiling.py`
+ * Restrictiveness ordering, mirrors `operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py`
  * `_RESTRICTIVENESS`. Higher = more restrictive. Single source for the
  * raise/lower asymmetry and the floor comparison on the TS side.
  */

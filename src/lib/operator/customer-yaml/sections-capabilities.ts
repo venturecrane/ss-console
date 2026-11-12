@@ -26,18 +26,13 @@
 
 import type { ValidationError } from './types'
 import { isPlainObject } from './helpers'
+import { LANE_SKILL } from '../job-lanes.generated'
 
-/** Job lane -> the skill whose being enabled authors it (capabilities.py JOB_LANES). */
-export const JOB_LANES = {
-  medchron: 'medical-chronology-maintainer',
-  demand: 'demand-letter-drafter',
-  drafting: 'document-drafter',
-  litigation: 'litigation-status',
-  casefile: 'case-file-manager',
-  negotiation: 'negotiation-watch',
-  note: 'smd-note',
-  records: 'matter-records',
-} as const satisfies Record<string, string>
+/**
+ * Job lane -> the skill whose being enabled authors it (capabilities.py JOB_LANES),
+ * from operator/contracts/job-lanes.yaml.
+ */
+export const JOB_LANES = LANE_SKILL
 export type JobLane = keyof typeof JOB_LANES
 
 /** Connector capability -> the backends that author it (capabilities.py CONNECTOR_BACKENDS). */

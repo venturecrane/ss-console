@@ -158,7 +158,7 @@ export type ExposureCeiling = (typeof ACCEPTED_EXPOSURE_CEILINGS)[number]
 
 /**
  * Action classes a tool call is categorized into, mirroring the Python
- * `ActionClass` enum in `operator/adapter/trust_ceiling.py`. Per ADR 0025,
+ * `ActionClass` enum in `operator/hermes-smd-overlay/shared/action_classes.py`. Per ADR 0025,
  * autonomy is enforced as a configurable ceiling **per action class** rather
  * than one scalar applied to the whole skill — splitting the exposure axis
  * (external_send) from the initiation and internal axes.

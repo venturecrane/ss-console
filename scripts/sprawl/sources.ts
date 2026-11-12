@@ -6,6 +6,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { parse as parseYaml } from 'yaml'
 import { type SourceFile, isGenerated } from './analyze'
 import { pinLangOf } from './text-pins'
 
@@ -44,20 +45,70 @@ const DECLARATIONS = new Set([
   'operator/contracts/env-consumption.yaml',
 ])
 
-/** The hand-written sources: generated files (analyze.ts isGenerated) and the declarations are left out. */
+/**
+ * The manifest of stamped Python copies (operator/bin/gen-skill-shared.py). A
+ * copy it declares is the generator's byte-for-byte projection of one source,
+ * like a file with a GENERATED header, but it carries no header because a
+ * header would change what a seat runs. The manifest names it instead.
+ */
+export const STAMPED_COPIES_MANIFEST = 'operator/contracts/skill-shared-modules.yaml'
+
+/**
+ * Every copy path the manifest declares: `operator/skills/<skill>/<copy_as>`
+ * for each listed skill, and each path under `copies`. Sources are never in it.
+ * A manifest that does not parse declares nothing, so nothing is left out.
+ */
+export function declaredCopies(manifestText: string): Set<string> {
+  const out = new Set<string>()
+  let doc: unknown
+  try {
+    doc = parseYaml(manifestText)
+  } catch {
+    return out
+  }
+  const modules = (doc as { modules?: unknown } | null)?.modules
+  if (modules === null || typeof modules !== 'object') return out
+  for (const body of Object.values(modules as Record<string, unknown>)) {
+    if (body === null || typeof body !== 'object') continue
+    const { copy_as: copyAs, skills, copies } = body as Record<string, unknown>
+    if (typeof copyAs === 'string' && Array.isArray(skills)) {
+      for (const skill of skills)
+        if (typeof skill === 'string') out.add(`operator/skills/${skill}/${copyAs}`)
+    }
+    if (Array.isArray(copies))
+      for (const path of copies) if (typeof path === 'string') out.add(path)
+  }
+  return out
+}
+
+function stampedCopies(cwd: string): Set<string> {
+  try {
+    return declaredCopies(readFileSync(`${cwd}/${STAMPED_COPIES_MANIFEST}`, 'utf8'))
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * The hand-written sources: generated files (analyze.ts isGenerated), the
+ * stamped copies the generator manifest declares, and the declarations are
+ * left out.
+ */
 export function readSources(paths: string[], cwd = '.'): SourceFile[] {
   const tracked = new Set(paths)
+  const stamped = stampedCopies(cwd)
   return readAll(paths, cwd).filter(
-    (f) => !DECLARATIONS.has(f.path) && !isGenerated(f.text, tracked)
+    (f) => !DECLARATIONS.has(f.path) && !stamped.has(f.path) && !isGenerated(f.text, tracked)
   )
 }
 
-/** The generated files among `paths`, for the clone and dead-code reports to leave out too. */
+/** The generated files among `paths` (stamped copies included), for the clone and dead-code reports to leave out too. */
 export function generatedPaths(paths: string[], cwd = '.'): Set<string> {
   const tracked = new Set(paths)
+  const stamped = stampedCopies(cwd)
   return new Set(
     readAll(paths, cwd)
-      .filter((f) => isGenerated(f.text, tracked))
+      .filter((f) => stamped.has(f.path) || isGenerated(f.text, tracked))
       .map((f) => f.path)
   )
 }

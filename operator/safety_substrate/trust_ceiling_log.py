@@ -2,7 +2,7 @@
 
 The platform PRD §11 ("Trust Ceiling Model") and §11.4 ("Audit log") say
 every action at every ceiling is logged. The `enforce()` call point in
-`operator/adapter/trust_ceiling.py` makes the allow / draft_for_review /
+`operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py` makes the allow / draft_for_review /
 refuse call, but nothing emits those decisions as audit rows today. Without
 emission, the trust ceiling is invisible to operators and customers: the
 Captain dashboard has no aggregate view, the customer dashboard has no
@@ -22,7 +22,7 @@ Design rules
   and `DecisionReason` are closed enums. The dashboard aggregates on these
   values; free-text reasons would make the aggregate view degrade as new
   variants appear in production. The enum members below are drawn from the
-  decision tree in `adapter/trust_ceiling.py::enforce()`. Adding a new
+  decision tree in `hermes-smd-trust/enforce.py::enforce()`. Adding a new
   reason means: extend the enum here, extend the wrapper's reason mapping,
   extend the spec doc, ship in one PR.
 
@@ -132,7 +132,7 @@ from adapter.audit_log import (
 # Decision + reason enums
 #
 # Source of truth: platform-prd.md §11 (trust ceiling model) and the
-# decision tree in adapter/trust_ceiling.py::enforce(). The enum members
+# decision tree in hermes-smd-trust/enforce.py::enforce(). The enum members
 # below cover every branch in that decision tree. When the dispatch
 # integration lands, the mapping from enforce()'s EnforcementDecision
 # (allowed, reason_text, audit_action) to the (Decision, DecisionReason)
@@ -145,7 +145,7 @@ class Decision(str, enum.Enum):
     """Closed set of trust-ceiling decisions.
 
     Mirrors `EnforcementDecision.audit_action` in
-    `adapter/trust_ceiling.py`. Names match the platform PRD §11
+    `hermes-smd-trust/enforce.py`. Names match the platform PRD §11
     vocabulary verbatim; the underlying string values match the audit_log
     column convention.
     """
@@ -159,7 +159,7 @@ class CeilingLevel(str, enum.Enum):
     """The trust ceiling configured for the skill at decision time.
 
     Values match platform PRD §11.1's three ceilings and the
-    `Ceiling` enum in `adapter/trust_ceiling.py`. The PRD names the
+    `Ceiling` enum in `hermes-smd-trust/enforce.py`. The PRD names the
     third value `disabled`; the adapter uses `refused` for the same
     semantics (skill does not run). Both spellings are accepted here so
     the dispatch path can pass through whichever name its source uses
@@ -175,7 +175,7 @@ class CeilingLevel(str, enum.Enum):
 class ActionClassName(str, enum.Enum):
     """Action class as declared on the tool the skill is invoking.
 
-    Mirrors `ActionClass` in `adapter/trust_ceiling.py`. Held as a closed
+    Mirrors `ActionClass` in `hermes-smd-trust/enforce.py`. Held as a closed
     set here so the dashboard's "decisions by action class" facet stays
     well-defined and so new categories can't enter via free-text drift.
     """
@@ -191,7 +191,7 @@ class DecisionReason(str, enum.Enum):
     """Closed set of reasons the trust ceiling reached a given decision.
 
     Each member maps to exactly one branch in the
-    `adapter/trust_ceiling.py::enforce()` decision tree. Adding a branch
+    `hermes-smd-trust/enforce.py::enforce()` decision tree. Adding a branch
     means adding a member here; the spec doc and the wrapper test must be
     updated in the same PR.
 

@@ -300,7 +300,7 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
   'operator/safety_substrate/tests/test_guard_hook_parity.py':
     'Contract: the hook-surface contract.',
   'operator/tests/test_skill_helpers_sync.py':
-    'Contract: vendored helper copies are byte-identical.',
+    'Contract: every adopting pre_run loads its vendored helpers by its own directory name.',
   'operator/tests/test_marketing_skill_examples.py':
     'Policy: worked examples pass the advertising gate and style rules.',
   'operator/hermes-smd-overlay/tests/test_rep_desk.py':

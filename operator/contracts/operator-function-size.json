@@ -7,7 +7,6 @@
     "adapter/evidence/packet_render.py::_readme_text": 197,
     "adapter/evidence/packet_sources.py::AuditCoverage.narrative_lines": 76,
     "adapter/evidence/pdf.py::render_summary_pdf": 142,
-    "adapter/trust_ceiling.py::enforce": 130,
     "bin/lib/decommission_cli.py::_run": 76,
     "bin/lib/evidence.py::_run": 80,
     "bin/lib/evidence.py::parse_args": 99,
@@ -108,7 +107,6 @@
     "workspace_broker/establishment_store.py::EstablishmentStore._submit_person": 85
   },
   "complexity": {
-    "adapter/trust_ceiling.py::enforce": 20,
     "connectors/smokeball/smokeball_connector/vision.py::_stream": 16,
     "hermes-smd-overlay/bootstrap/cron_materialize.py::materialize_cron": 17,
     "hermes-smd-overlay/bootstrap/translate.py::_materialize_mcp_servers": 16,

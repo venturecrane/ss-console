@@ -12,16 +12,21 @@ tests (the recipient axis is resolved upstream; here the class is already defini
     NOT a silent send (ADR 0035);
   * a rostered client / vendor send on a TAINTED turn is still refused;
   * `confirm` (ADR 0071) is a legal ceiling on both classes.
+Moved from operator/adapter/tests on 2026-11-12, when the adapter's copy of the
+trust rule (adapter/trust_ceiling.py) was deleted: nothing a seat runs imported
+it. These assertions now run against hermes-smd-trust's ``enforce``, the module
+the gateway's ``pre_tool_call`` hook calls. Each call maps the old arguments
+one to one: ``action_ceilings`` is the gateway's ``exposure``; the retired
+per-skill scalar (``ceiling``) and ``skill_name`` are not inputs to it (ADR 0056).
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from shared.action_classes import ActionClass
+from tests.conftest import load_plugin
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from adapter.trust_ceiling import ActionClass, Ceiling, enforce
+_TRUST = load_plugin("hermes-smd-trust").enforce
+Ceiling, enforce = _TRUST.Ceiling, _TRUST.enforce
 
 CLIENT = ActionClass.EXTERNAL_SEND_CLIENT
 VENDOR = ActionClass.EXTERNAL_SEND_VENDOR
@@ -31,11 +36,9 @@ INTERNAL = ActionClass.EXTERNAL_SEND_INTERNAL
 
 def _enforce(action, action_ceilings=None, *, tainted=False, approval=False):
     return enforce(
-        ceiling=Ceiling.AUTONOMOUS,  # skill scalar; does not grant sends
         action=action,
-        skill_name="client-verification-tracker",
         tool_name="agentmail.send_draft",
-        action_ceilings=action_ceilings,
+        exposure=action_ceilings,
         current_turn_approval=approval,
         inbound_trust_class="internal" if not tainted else "unknown_external",
     )

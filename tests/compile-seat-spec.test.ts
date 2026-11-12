@@ -318,16 +318,9 @@ describe('signing', () => {
 })
 
 describe('tables held equal to the code they mirror', () => {
-  it('LANE_INPUTS names the same schema modules fleet build hashes into lane-inputs.json', () => {
-    const build = readFileSync(join(REPO_ROOT, 'operator/bin/lib/fleet/build.py'), 'utf8')
-    const block = /LANE_SCHEMA_MODULES = \{([\s\S]*?)\n\}/.exec(build)?.[1] ?? ''
-    const fromBuild = Object.fromEntries(
-      [...block.matchAll(/"([a-z]+)":\s*"([^"]+)"/g)].map((m) => [m[1], m[2]])
-    )
-    expect(Object.keys(fromBuild).length).toBeGreaterThan(0)
-    const ours = Object.fromEntries(Object.entries(LANE_INPUTS).map(([k, v]) => [k, v.module]))
-    expect(ours).toEqual(fromBuild)
-  })
+  // LANE_INPUTS and fleet build's LANE_SCHEMA_MODULES (lane-inputs.json) are both
+  // derived from operator/contracts/job-lanes.yaml; tests/job-lane-lists.test.ts
+  // and operator/bin/tests/test_job_lane_lists.py hold each to it.
 
   it('every lane schema module is copied into the image at the path the spec names', () => {
     const dockerfile = readFileSync(join(REPO_ROOT, 'operator/templates/Dockerfile'), 'utf8')

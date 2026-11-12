@@ -37,6 +37,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .. import job_lanes
 from . import ids
 from .runner import ToolingError
 
@@ -45,13 +46,14 @@ RUNNER_PACKAGE = "operator/runners/jobs/jobs"
 RUNNER_ROOT = "operator/runners/jobs"
 
 #: lane -> (the marker's key under vaults/<slug>/, the module whose validate() judges it).
+#: (operator/contracts/job-lanes.yaml: a file lane's marker is its one file, a
+#: dir lane's is <lane>/<lane>-firm.yaml; the module is the lane's firm_module.)
 LANE_VALIDATORS: dict[str, tuple[str, str]] = {
-    "medchron": ("medchron-firm.yaml", "jobs.medchron.config"),
-    "demand": ("demand/demand-firm.yaml", "jobs.demand.firm"),
-    "drafting": ("drafting/drafting-firm.yaml", "jobs.drafting.firm"),
-    "litigation": ("litigation/litigation-firm.yaml", "jobs.litigation.firm"),
-    "casefile": ("casefile/casefile-firm.yaml", "jobs.casefile.firm"),
-    "records": ("records/records-firm.yaml", "jobs.records.firm"),
+    lane: (
+        f"{lane}-firm.yaml" if lane in job_lanes.FIRM_INPUT_FILE_LANES else f"{lane}/{lane}-firm.yaml",
+        job_lanes.LANE_FIRM_MODULE[lane],
+    )
+    for lane in job_lanes.FIRM_INPUT_LANES
 }
 
 # Prints one line, the number of problems. Nothing the validator SAYS is printed.

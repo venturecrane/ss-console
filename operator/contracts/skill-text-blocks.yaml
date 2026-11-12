@@ -1,0 +1,79 @@
+# ============================================================================
+# Shared SKILL.md sections: ONE source per section, stamped into each skill.
+# ============================================================================
+#
+# WHY THIS EXISTS (2026-11-12, wave 1 item 1.4). The law-seat writing rules
+# (citation-free email, no em dashes, the matter by its number, dollar figures
+# only from an authored source, what to do when a gate refuses a draft) were
+# pasted into 42 SKILL.md files by hand; a rule edit was 42 edits, and 11 of the
+# copies had already drifted into 11 different texts.
+#
+# THE RULE. Edit the block's `source` (the whole section, heading line first),
+# then run
+#     python3 operator/bin/gen-skill-shared.py
+# which writes the source's bytes over that section (its heading to the next
+# `## ` heading, or the end of the file) in every skill under `skills`. Never
+# edit the section in a listed SKILL.md. `--check` (in CI through
+# operator/bin/tests/test_skill_shared_generation.py) fails on a listed section
+# that differs, on a SKILL.md carrying the heading that this file does not list,
+# and on an `own_text` section that has come to equal the source.
+#
+# OWN TEXT. A skill under `own_text` keeps the section it has today, byte for
+# byte, as its own stated variant: those 11 bodies drifted from the shared rules
+# (each adds lane-specific lines, or lacks later ones). Reconciling one changes
+# what that skill's model reads on a client seat, so each is reconciled on its
+# own, one skill per release, by moving it to `skills` and regenerating. Until
+# then the generator never writes it.
+#
+# The sections are committed and shipped as they are (the image copies
+# operator/skills/, the skills release ships each folder); the source file
+# lives outside operator/skills, so it is never shipped itself.
+# ============================================================================
+
+blocks:
+  law_seat_writing_rules:
+    source: operator/contracts/law-seat-writing-rules.md
+    skills:
+      - client-verification-tracker
+      - conflict-intake-router
+      - consult-scheduler
+      - daily-needs-you-digest
+      - deadline-and-sol-tracker
+      - discovery-response-staging
+      - discovery-response-tracker
+      - discovery-served-watch
+      - document-receipt-logger
+      - engagement-letter-chaser
+      - lien-ledger-tracker
+      - matter-document-review
+      - matter-inbox-router
+      - matter-initiation-setup
+      - matter-memo-on-update
+      - matter-status-digest
+      - matter-status-responder
+      - mediation-settlement-tracker
+      - medical-records-chaser
+      - meet-and-confer-drafter
+      - minors-compromise-packet
+      - motion-calendar-tracker
+      - motion-package-assembler
+      - new-matter-intake
+      - opposing-response-deficiency-review
+      - separate-statement-assembler
+      - service-confirmation-watcher
+      - settlement-statement-feeder
+      - stalled-matter-nudge
+      - trial-binder-assembler
+      - trust-balance-nudge
+    own_text:
+      - case-file-manager
+      - combined-post-intake
+      - deadline-miss-escalator
+      - demand-letter-drafter
+      - document-drafter
+      - file-work-requests
+      - litigation-status
+      - medical-chronology-maintainer
+      - negotiation-watch
+      - smd-note
+      - vendor-invoice-intake

@@ -34,20 +34,14 @@ from typing import Any, Optional
 
 import yaml
 
-from bin.lib import seat_purpose
+from bin.lib import job_lanes, seat_purpose
 
 CONTRACT_PATH = Path(__file__).resolve().parents[2] / "contracts" / "work-health.yaml"
 
 #: The audit action_type prefix of each job lane, as the broker writes it
-#: (``operator/workspace_broker/<lane>_ledger.py`` AUDIT_TYPE).
-LANE_PREFIXES = {
-    "DEMAND": "demand",
-    "DRAFTING": "drafting",
-    "LITIGATION": "litigation",
-    "NEGOTIATION": "negotiation",
-    "CASEFILE": "casefile",
-    "MEDCHRON": "medchron",
-}
+#: (``operator/workspace_broker/<lane>_ledger.py`` AUDIT_TYPE); the
+#: ``audit_prefix`` column of operator/contracts/job-lanes.yaml.
+LANE_PREFIXES = dict(job_lanes.AUDIT_PREFIX_LANE)
 #: Leading reason tokens a person writes when ending a job on purpose.
 _CLOSED_REASONS = frozenset({"superseded", "closed", "cancelled", "canceled"})
 IN_FLIGHT = {"SUBMITTED": "queued", "QUEUED": "queued", "RUNNING": "running"}

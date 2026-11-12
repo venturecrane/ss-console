@@ -1,6 +1,6 @@
 """Refusal handling runtime (issue #866).
 
-When `enforce()` in `operator/adapter/trust_ceiling.py` returns
+When `enforce()` in `operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py` returns
 `refuse`, PR #953 (`trust_ceiling_log.py`) records the decision as an
 audit row tagged `metadata.trust_ceiling_decision = true` with
 `metadata.decision = "refuse"`. That row makes the refusal visible to

@@ -65,20 +65,18 @@ from typing import Any, Callable
 
 import yaml
 
+from .. import job_lanes
 from . import ids
 from .d1 import decode_json_list
 from .fly import Fly
 from .lane_validate import LaneValidator
 from .r2 import R2, image_key
 
-# lane -> what in vaults/<slug>/ shows the seat authors it.
+# lane -> what in vaults/<slug>/ shows the seat authors it: the one file of a
+# file lane, the prefix of a dir lane (operator/contracts/job-lanes.yaml).
 LANE_VAULT_MARKERS: dict[str, str] = {
-    "medchron": "medchron-firm.yaml",
-    "demand": "demand/",
-    "drafting": "drafting/",
-    "litigation": "litigation/",
-    "casefile": "casefile/",
-    "records": "records/",
+    lane: f"{lane}-firm.yaml" if lane in job_lanes.FIRM_INPUT_FILE_LANES else f"{lane}/"
+    for lane in job_lanes.FIRM_INPUT_LANES
 }
 
 

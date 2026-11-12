@@ -51,6 +51,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from . import job_lanes
+
 logger = logging.getLogger("jobs.daemon")
 
 AUTHORED_NAME = "lane-proofs.yaml"
@@ -59,15 +61,7 @@ HOLDS_DIR = "lane-holds"
 HOLD_PREFIX = "lane_unproven: "
 
 #: The skill that queues each daemon lane's jobs (the lane's ``LANE``).
-SKILLS = {
-    "medchron": "medical-chronology-maintainer",
-    "demand": "demand-letter-drafter",
-    "drafting": "document-drafter",
-    "litigation": "litigation-status",
-    "negotiation": "negotiation-watch",
-    "casefile": "case-file-manager",
-    "records": "matter-records",
-}
+SKILLS = {lane: job_lanes.LANE_SKILL[lane] for lane in job_lanes.QUEUED_LANES}
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}(?:\.[a-z0-9_]{1,40})?$")
 _CLASS_RE = re.compile(r"^[a-z_]{1,40}$")
 UPDATE_CLASS = "update_delivered"

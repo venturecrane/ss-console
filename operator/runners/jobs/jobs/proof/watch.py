@@ -31,7 +31,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from .. import proof_mode
+from .. import job_lanes, proof_mode
 from . import PROOF_KEY, gate, holds
 
 logger = logging.getLogger("jobs.daemon")
@@ -41,20 +41,12 @@ REPLY_DEADLINE_SECONDS = 20 * 60.0
 #: The model's one redraft lands in seconds (A&P 20:29Z 2026-10-20: 8 s).
 HELD_GRACE_SECONDS = 3 * 60.0
 REALERT_SECONDS = 23 * 3600.0
-#: The bound-reply kind each lane's jobs answer under (reply_binding.KINDS).
-REPLY_KIND = {
-    "medchron": "medchron_job",
-    "demand": "demand_job",
-    "drafting": "drafting_job",
-    "litigation": "litigation_job",
-    "negotiation": "negotiation_job",
-    "casefile": "casefile_job",
-    # Matter records (records_lane.py): no DELIVER wake; the reply is the
-    # review row the gateway sends, watched by the lane itself.
-    "records": "records_job",
-    # An SMD note (jobs/note_by_smd.py), watched by the note lane.
-    "note": "note_job",
-}
+#: The bound-reply kind each lane's jobs answer under (reply_binding.KINDS),
+#: ``<lane>_job`` for every lane in operator/contracts/job-lanes.yaml. Matter
+#: records (records_lane.py) has no DELIVER wake: its reply is the review row the
+#: gateway sends, watched by the lane itself; an SMD note (jobs/note_by_smd.py)
+#: is watched by the note lane.
+REPLY_KIND = dict(job_lanes.LANE_JOB_KIND)
 #: A reason that begins with one of these is already a proof failure the
 #: runner named; the daemon pages it under the same code.
 _REASON_CODES = ("review_held", "readback_mismatch", "readback_unproven")

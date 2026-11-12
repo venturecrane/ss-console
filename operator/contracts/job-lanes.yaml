@@ -1,0 +1,152 @@
+# ============================================================================
+# The job lanes: ONE declaration, generated into Python, TypeScript and shell.
+# ============================================================================
+#
+# WHY THIS EXISTS (2026-11-12, wave 1 item 1.5). A job lane (a paid or queued
+# job the jobs runner executes for a firm) was named in about forty files: the
+# gateway's capability table, the broker's delivery-proof set, the runner's
+# queue and pid tables, the fleet tools' firm-input tables, the console's
+# heartbeat parser, the boot scripts. Each list was a hand copy, and several
+# legitimately differ (the lanes with a request card, the lanes with firm
+# inputs). Each difference is a named column below, not another hand list, so
+# adding a lane is one entry here and lists cannot disagree.
+#
+# THE RULE. Edit this file, then run
+#     python3 operator/bin/gen-job-lanes.py
+# which writes, each with a GENERATED header:
+#   operator/runners/jobs/jobs/job_lanes.py          (the jobs bundle)
+#   operator/workspace_broker/job_lanes.py           (the broker)
+#   operator/hermes-smd-overlay/shared/job_lanes.py  (the gateway)
+#   operator/bin/lib/job_lanes.py                    (the laptop fleet tools)
+#   src/lib/operator/job-lanes.generated.ts          (the console)
+#   operator/templates/_job-lanes.generated.sh       (shell, bash 3.2 safe)
+# One Python module per install tree because the trees cannot import one
+# another on a seat (the same reason operator/contracts/seat-layout.yaml
+# generates four). `--check` fails on a stale output;
+# operator/bin/tests/test_job_lanes_generation.py runs it in CI.
+#
+# ORDER IS DECLARED. Every generated sequence keeps the order of `lanes:` below.
+# It is the gateway's tool-registration order (shared/capabilities.py JOB_LANES,
+# which hermes-smd-lanes walks to register each lane's tools), so changing it
+# changes the order of the tools the model sees.
+#
+# COLUMNS (each lane; absent means "no" / "none")
+#   skill            the skill whose being enabled authors the lane
+#   queued           true: the runner takes its jobs from a queue under the
+#                    run dir (lane-proof and the stop tool cover it), so it has
+#   queue_dir          that queue,
+#   jobs_dir           its job dirs (a finished job's envelope),
+#   child_pid          and its child pid file. The chronology's predate the
+#                      other lanes and carry no prefix.
+#   wake_word        the word a job's completion wake uses ("<word> job <ULID>")
+#   scheduled        a wake may be a scheduled run's (no request email)
+#   request_card     the lane writes a request card row (shared/request_cards.py)
+#   email_label      what a person calls the lane's work in a card email
+#   audit_prefix     the audit action_type prefix the broker writes (work-health)
+#   firm_inputs      file | dir: the lane's firm inputs in the vault, one file
+#                    (<lane>-firm.yaml) or a directory (<lane>/<lane>-firm.yaml)
+#   firm_module      the runner module whose validate() judges those inputs
+#   broker_firm_copy the applier also writes <lane>-broker-firm.yaml for the broker
+#
+# firm_input_extras: firm inputs that are not job lanes (the attorney roster).
+# ============================================================================
+
+lanes:
+  medchron:
+    skill: medical-chronology-maintainer
+    queued: true
+    queue_dir: queue
+    jobs_dir: jobs
+    child_pid: child.pid
+    wake_word: chronology
+    request_card: true
+    email_label: chronology
+    audit_prefix: MEDCHRON
+    firm_inputs: file
+    firm_module: jobs.medchron.config
+
+  demand:
+    skill: demand-letter-drafter
+    queued: true
+    queue_dir: demand-queue
+    jobs_dir: demand-jobs
+    child_pid: demand-child.pid
+    wake_word: demand
+    request_card: true
+    email_label: demand
+    audit_prefix: DEMAND
+    firm_inputs: dir
+    firm_module: jobs.demand.firm
+
+  drafting:
+    skill: document-drafter
+    queued: true
+    queue_dir: drafting-queue
+    jobs_dir: drafting-jobs
+    child_pid: drafting-child.pid
+    wake_word: drafting
+    request_card: true
+    email_label: drafting
+    audit_prefix: DRAFTING
+    firm_inputs: dir
+    firm_module: jobs.drafting.firm
+
+  litigation:
+    skill: litigation-status
+    queued: true
+    queue_dir: litigation-queue
+    jobs_dir: litigation-jobs
+    child_pid: litigation-child.pid
+    wake_word: litigation
+    scheduled: true
+    request_card: true
+    email_label: litigation list
+    audit_prefix: LITIGATION
+    firm_inputs: dir
+    firm_module: jobs.litigation.firm
+    broker_firm_copy: true
+
+  casefile:
+    skill: case-file-manager
+    queued: true
+    queue_dir: casefile-queue
+    jobs_dir: casefile-jobs
+    child_pid: casefile-child.pid
+    wake_word: casefile
+    scheduled: true
+    request_card: true
+    email_label: case file
+    audit_prefix: CASEFILE
+    firm_inputs: dir
+    firm_module: jobs.casefile.firm
+    broker_firm_copy: true
+
+  negotiation:
+    skill: negotiation-watch
+    queued: true
+    queue_dir: negotiation-queue
+    jobs_dir: negotiation-jobs
+    child_pid: negotiation-child.pid
+    wake_word: negotiation
+    scheduled: true
+    email_label: negotiation
+    audit_prefix: NEGOTIATION
+
+  note:
+    skill: smd-note
+    wake_word: note
+    scheduled: true
+
+  records:
+    skill: matter-records
+    queued: true
+    queue_dir: records-queue
+    jobs_dir: records-jobs
+    child_pid: records-child.pid
+    request_card: true
+    firm_inputs: dir
+    firm_module: jobs.records.firm
+    broker_firm_copy: true
+
+firm_input_extras:
+  - attorneys

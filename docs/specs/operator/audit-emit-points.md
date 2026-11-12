@@ -6,7 +6,7 @@
 
 This spec is the contract for `operator/adapter/audit_emit_points.py`. It thickens the per-tool audit emission shape that PR [#981](https://github.com/venturecrane/ss-console/pull/981) landed (`aie_adapter.register()` + the `hermes_hook` surface) with a closed tool registry, a latency timer, and scope-aware metadata extraction.
 
-> **Doctrine note (2026-06-08, reconciliation to [ADR 0035](../../adr/0035-no-imposed-entitlement-defaults.md)).** Earlier revisions of this spec put every send tool (`email_send`, `sms_send`, …) in a `BANNED_TOOLS` set with reason `banned_tool_pattern_a` ("autonomous send forbidden"). That is the dead autonomous-send-forbidden default. **External send is not banned** — it is action class `EXTERNAL_SEND`, gated at runtime by `trust_ceiling.enforce()` per the authored ceiling (autonomous / draft / refused; fail-closed when unauthored — exactly as `operator/adapter/trust_ceiling.py` already implements). What stays structurally refused are the **irreversible** classes — `COMMITMENT` / `DESTRUCTIVE` (money movement, deletes, ledger posting, court filing) — which additionally require explicit current-turn approval (ADR 0025 reversibility floor). The registry below classifies send tools as `EXTERNAL_SEND`; there is no `banned_tool_pattern_a`. Note: `operator/adapter/audit_emit_points.py` is **not yet implemented** — this spec leads the implementation, which must match the corrected classification.
+> **Doctrine note (2026-06-08, reconciliation to [ADR 0035](../../adr/0035-no-imposed-entitlement-defaults.md)).** Earlier revisions of this spec put every send tool (`email_send`, `sms_send`, …) in a `BANNED_TOOLS` set with reason `banned_tool_pattern_a` ("autonomous send forbidden"). That is the dead autonomous-send-forbidden default. **External send is not banned**: it is action class `EXTERNAL_SEND`, gated at runtime by `trust_ceiling.enforce()` per the authored ceiling (autonomous / draft / refused; fail-closed when unauthored, exactly as the gateway's `operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py` implements). What stays structurally refused are the **irreversible** classes, `COMMITMENT` / `DESTRUCTIVE` (money movement, deletes, ledger posting, court filing), which additionally require explicit current-turn approval (ADR 0025 reversibility floor). The registry below classifies send tools as `EXTERNAL_SEND`; there is no `banned_tool_pattern_a`. Note: `operator/adapter/audit_emit_points.py` is **not yet implemented**: this spec leads the implementation, which must match the corrected classification.
 
 ---
 
@@ -41,7 +41,7 @@ Out of scope (covered by separate work):
 
 ## 3. Tool action class registry
 
-The registry maps every known tool name to its `HookActionClass`. The action classes are: `READ`, `INTERNAL_WRITE`, `EXTERNAL_SEND`, `COMMITMENT`, `DESTRUCTIVE`. The string values match `adapter.trust_ceiling.ActionClass`.
+The registry maps every known tool name to its `HookActionClass`. The action classes are: `READ`, `INTERNAL_WRITE`, `EXTERNAL_SEND`, `COMMITMENT`, `DESTRUCTIVE`. The string values match `ActionClass` in `operator/hermes-smd-overlay/shared/action_classes.py`.
 
 | Capability group    | Tool name pattern                                                                                                                                                                  | Action class     |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
@@ -79,7 +79,7 @@ The `unmapped=True` flag propagates through to `metadata.unmapped_tool = true` o
 
 ## 4. Irreversible tools (the reversibility floor)
 
-Send tools are **not** banned. The only tools structurally gated beyond the configured ceiling are the **irreversible** ones, which classify as `COMMITMENT` / `DESTRUCTIVE`. The trust-ceiling enforcer (`operator/adapter/trust_ceiling.py`) refuses these unless the operator gave **explicit current-turn approval** (ADR 0025 reversibility floor) — a prior-turn or configured approval is not enough.
+Send tools are **not** banned. The only tools structurally gated beyond the configured ceiling are the **irreversible** ones, which classify as `COMMITMENT` / `DESTRUCTIVE`. The trust-ceiling enforcer (`operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py`) refuses these unless the operator gave **explicit current-turn approval** (ADR 0025 reversibility floor); a prior-turn or configured approval is not enough.
 
 | Class         | Meaning                                                       | Examples                                                       |
 | ------------- | ------------------------------------------------------------- | -------------------------------------------------------------- |

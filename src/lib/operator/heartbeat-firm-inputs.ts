@@ -13,18 +13,12 @@
  */
 
 import { isRecord } from '../api/helpers'
+import { FIRM_INPUT_EXTRAS, FIRM_INPUT_LANES as LANES } from './job-lanes.generated'
 
-const FIRM_INPUT_LANES = new Set([
-  'demand',
-  'drafting',
-  'litigation',
-  'casefile',
-  'records',
-  'medchron',
-  // The firm's attorney roster: a firm input every document path reads, not a
-  // job lane (operator_connector_sdk/library/roster.py).
-  'attorneys',
-])
+// The firm-input lanes, and the firm's attorney roster: a firm input every
+// document path reads, not a job lane (operator_connector_sdk/library/roster.py).
+// Both from operator/contracts/job-lanes.yaml.
+const FIRM_INPUT_LANES = new Set([...LANES, ...FIRM_INPUT_EXTRAS])
 const FIRM_INPUT_VERDICTS = new Set(['fetched', 'rejected'])
 const ENTRY_KEYS = new Set(['etag8', 'verdict', 'applied_at', 'rejected_etag8'])
 const ETAG8_RE = /^[0-9a-f]{8}$/
