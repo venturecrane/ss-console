@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,28 @@ _SECONDS = re.compile(r"(\b)\d+s after")
 #: The current month (the broker's month window reads the wall clock); a full
 #: date is left alone.
 _MONTH = re.compile(r"\b20\d\d-[01]\d\b(?!-\d)")
+
+
+#: The resolved length every cell's root has, on every machine.
+_ROOT_BASE_LEN = len("/private/tmp")
+
+
+def fixed_root() -> Path:
+    """A fresh cell root whose path is already resolved and is the same length
+    on every machine.
+
+    A lane cuts a reason to a fixed number of characters with the seat path
+    inside it, so the path must reach the same character everywhere or the
+    text after ``<TMP>`` ends at a different place. ``/tmp`` resolves to
+    ``/private/tmp`` on macOS and to itself on Linux, and a lane that resolves
+    the path (litigation, drafting ``settings_missing``) printed 8 characters
+    more of the seat path on macOS than on Linux. So the root is created
+    resolved, and padded on a short base to the macOS base's length. Short,
+    too: the broker's unix socket lives under it.
+    """
+    base = os.path.realpath("/tmp")
+    pad = "-" * max(0, _ROOT_BASE_LEN - len(base))
+    return Path(os.path.realpath(tempfile.mkdtemp(prefix=f"hm{pad}", dir=base)))
 
 
 class Normal:

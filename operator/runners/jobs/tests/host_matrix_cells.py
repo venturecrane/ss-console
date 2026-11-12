@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import sqlite3
-import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -30,7 +29,7 @@ from host_matrix_kit import (
     serve,
 )
 from host_matrix_lanes import KITS, LaneKit, break_settings, remove
-from host_matrix_normal import Normal, readers
+from host_matrix_normal import Normal, fixed_root, readers
 
 #: Every cell the matrix runs: lane x ending, less the declared not-applicable.
 CELLS = tuple(f"{lane}/{ending}" for lane in LANES for ending in ENDINGS if f"{lane}/{ending}" not in NOT_APPLICABLE)
@@ -66,10 +65,8 @@ class Run:
     def __init__(self, tmp_path: Path, mp: Any, lane_name: str, ending: str) -> None:
         self.lane_name, self.ending = lane_name, ending
         self.kit: LaneKit = KITS[lane_name]
-        # A root of the same length on every machine: a lane cuts a reason to a
-        # fixed length, and a path in it must cut at the same character
-        # everywhere. Short, too: the broker's unix socket lives under it.
-        self.sock_dir = Path(tempfile.mkdtemp(prefix="hm", dir="/tmp"))
+        # A resolved root of the same length on every machine (fixed_root says why).
+        self.sock_dir = fixed_root()
         self.seat = Seat(root=self.sock_dir / "seat", sock_dir=self.sock_dir)
         self.mp = mp
         self.launches = Launches(ending=ending if ending in VERDICT_ENDINGS else "delivered")
