@@ -1,0 +1,713 @@
+{
+  "garbled": [
+    {
+      "args": ["ANSWER number 3 filed on the date shown\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["EXAMPLE INTAKE FORM\nClient: Delta Example\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "\nEXAMPLETOWN CLINIC\nITEMIZED STATEMENT\nPatient: Gamma Example\nDate of service 2026-01-13\nTotal charges 1,250.00"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "PROOF OF SERVICE OF SUMMONS\nDefendant DELTA EXAMPLE was personally served on 04/10/2026.\nPapers received from the firm for service on March 20, 2026 by Example Legal Process.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["\nANSWER OF DEFENDANT DELTA EXAMPLE\nFiled April 30, 2026"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "EXAMPLETOWN CLINIC\nITEMIZED STATEMENT\nPatient: Gamma Example\nDate of service 2026-01-13\nTotal charges 1,250.00\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "page text page text page text page text page text page text page text page text page text page text "
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "Form Interrogatories, Set One, served by mail on March 5, 2026 on defendant Delta.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "\nForm Interrogatories, Set One, served by mail on March 5, 2026 on defendant Delta."
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["EXAMPLE LETTER\nto Gamma Example\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "\nSUPERIOR COURT OF EXAMPLETOWN\nGAMMA EXAMPLE v. DELTA EXAMPLE\nCase No. CV-0001\nCOMPLAINT FOR DAMAGES\nFILED 03/02/2026"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["A printed page with enough text to carry a text layer.\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["ANSWER filed 04/30/2026 by the defendant\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["REQUEST FOR DISMISSAL entered 09/29/2026\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "EXAMPLETOWN POLICE DEPARTMENT\nTRAFFIC COLLISION REPORT\nParty: Gamma Example\nDate 2026-01-12\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["ANSWER number 2 filed on the date shown\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["\nEXAMPLE INTAKE FORM\nClient: Delta Example"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["EXAMPLE LETTER TWO\nto Gamma Example\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["COMPLAINT FOR DAMAGES filed 03/02/2026\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "\nPROOF OF SERVICE OF SUMMONS\nDefendant DELTA EXAMPLE was personally served on 04/10/2026.\nPapers received from the firm for service on March 20, 2026 by Example Legal Process."
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["a typed page that has a real text layer\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["shared text"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "From: adjuster@carrier.example\nTo: \nDate: \nSubject: Notice of settlement\n\nConfirming the case has settled; release to follow."
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd "
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": ["Responses to Form Interrogatories, Set One. Served April 4, 2026.\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "SUPERIOR COURT OF EXAMPLETOWN\nGAMMA EXAMPLE v. DELTA EXAMPLE\nCase No. CV-0001\nCOMPLAINT FOR DAMAGES\nFILED 03/02/2026\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["ANSWER number 4 filed on the date shown\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["page two text here, long enough\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["\nResponses to Form Interrogatories, Set One. Served April 4, 2026."],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["ANSWER number 1 filed on the date shown\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["PROOF OF SERVICE [X] personal"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [""],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "[rehearsal OCR stub: a scanned page this rehearsal counted and did not transcribe]"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["[scanned page, no text layer: not read in this job]"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["\nOCR TEXT\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["Case No. 24CV0001"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "\nEXAMPLETOWN POLICE DEPARTMENT\nTRAFFIC COLLISION REPORT\nParty: Gamma Example\nDate 2026-01-12"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["Special Interrogatories, Set One, served October 20, 2026 on defendant Delta.\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["ANSWER number 5 filed on the date shown\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["ANSWER OF DEFENDANT DELTA EXAMPLE\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. "
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["PROOF OF SERVICE on a different party, 09/29/2026\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["ANSWER OF DEFENDANT DELTA EXAMPLE\nFiled April 30, 2026\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["ANSWER number 0 filed on the date shown\n"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["\nOCR TEXT"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    }
+  ],
+  "html_text": [
+    {
+      "args": [
+        {
+          "__b64": "PGh0bWw+PGJvZHk+PGgxPlJlZ2lzdGVyIG9mIEFjdGlvbnM8L2gxPjxwPkFuc3dlciBmaWxlZCAwNC8zMC8yMDI2PC9wPjwvYm9keT48L2h0bWw+"
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Register of Actions\nAnswer filed 04/30/2026"
+    },
+    {
+      "args": [
+        "<html><body><p>CMC set for <b>11/20/2026</b></p><script>x()</script></body></html>\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "CMC set for\n11/20/2026"
+    }
+  ],
+  "ocr_pages": [
+    {
+      "args": [["PROOF OF SERVICE on a different party, 09/29/2026\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["", "", "A printed page with enough text to carry a text layer.\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0, 1]
+    },
+    {
+      "args": [
+        [
+          "EXAMPLETOWN CLINIC\nITEMIZED STATEMENT\nPatient: Gamma Example\nDate of service 2026-01-13\nTotal charges 1,250.00\n"
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        ["Form Interrogatories, Set One, served by mail on March 5, 2026 on defendant Delta.\n"]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [[""]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0]
+    },
+    {
+      "args": [["EXAMPLE LETTER\nto Gamma Example\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["", "A printed page with enough text to carry a text layer.\n", ""]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0, 2]
+    },
+    {
+      "args": [["Special Interrogatories, Set One, served October 20, 2026 on defendant Delta.\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["ANSWER number 2 filed on the date shown\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          "EXAMPLETOWN POLICE DEPARTMENT\nTRAFFIC COLLISION REPORT\nParty: Gamma Example\nDate 2026-01-12\n"
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["a typed page that has a real text layer\n", ""]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [1]
+    },
+    {
+      "args": [["ANSWER filed 04/30/2026 by the defendant\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["REQUEST FOR DISMISSAL entered 09/29/2026\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          "\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab\u0001\u0002\u0003\u0004 ab"
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0]
+    },
+    {
+      "args": [
+        [
+          "",
+          "Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. "
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0]
+    },
+    {
+      "args": [["", "", "", "", "", "", "", "", ""]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0, 1, 2, 7, 8]
+    },
+    {
+      "args": [["ANSWER number 0 filed on the date shown\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          "SUPERIOR COURT OF EXAMPLETOWN\nGAMMA EXAMPLE v. DELTA EXAMPLE\nCase No. CV-0001\nCOMPLAINT FOR DAMAGES\nFILED 03/02/2026\n"
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["EXAMPLE INTAKE FORM\nClient: Delta Example\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", ""]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0, 2]
+    },
+    {
+      "args": [["ANSWER OF DEFENDANT DELTA EXAMPLE\nFiled April 30, 2026\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["ANSWER number 1 filed on the date shown\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          "PROOF OF SERVICE OF SUMMONS\nDefendant DELTA EXAMPLE was personally served on 04/10/2026.\nPapers received from the firm for service on March 20, 2026 by Example Legal Process.\n"
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["COMPLAINT FOR DAMAGES filed 03/02/2026\n", "page two text here, long enough\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["ANSWER number 5 filed on the date shown\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["ANSWER OF DEFENDANT DELTA EXAMPLE\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["Responses to Form Interrogatories, Set One. Served April 4, 2026.\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["", ""]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0, 1]
+    },
+    {
+      "args": [["EXAMPLE LETTER TWO\nto Gamma Example\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          "Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. Proof of service. On the date below I served the summons and complaint on the defendant. "
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          "Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd Qzx vkwp rtyl mnbq hjkd "
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0]
+    },
+    {
+      "args": [["ANSWER number 4 filed on the date shown\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [["ANSWER number 3 filed on the date shown\n"]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    }
+  ],
+  "rtf_text": [
+    {
+      "args": [
+        {
+          "__b64": "e1xydGYxXGFuc2l7XGZvbnR0Ymx7XGYwIFRpbWVzO319e1xjb2xvcnRibDtccmVkMFxncmVlbjBcYmx1ZTA7fVxmMCBQcm9vZiBvZiBzZXJ2aWNlXHBhciBTZXJ2ZWQgb24gMDQvMTAvMjAyNiBcJzkzcGVyc29uYWxseVwnOTRccGFyfQ=="
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Proof of service\nServed on 04/10/2026 “personally”\n"
+    },
+    {
+      "args": [
+        {
+          "__b64": "e1xydGYxXGFuc2l7XGZvbnR0Ymx7XGYwIFRpbWVzO319fQ=="
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": ""
+    },
+    {
+      "args": [
+        {
+          "__b64": "e1xydGYxXGFuc2kgQW5zd2VyIGZpbGVkIDA0LzMwLzIwMjZccGFyfQ=="
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Answer filed 04/30/2026\n"
+    }
+  ],
+  "strip_rtf": [
+    {
+      "args": ["{\\rtf1\\ansi{\\fonttbl{\\f0 Times;}}}"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": ""
+    },
+    {
+      "args": ["{\\rtf1\\ansi Answer filed 04/30/2026\\par}"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Answer filed 04/30/2026\n"
+    }
+  ]
+}

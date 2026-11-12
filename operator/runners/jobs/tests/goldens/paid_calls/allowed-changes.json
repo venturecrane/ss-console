@@ -1,0 +1,18 @@
+{
+  "_why": "Dotted paths (JSONL goldens: <line>.<key>) that may differ from the captured paid-call goldens, per case. Captured on origin/main 4413e23e9 before wave 2 moves the seven lanes' paid-session setup into one kit. Every list is empty: any difference in a request, a receipt, a limit decision or a cents figure fails. An intended change adds its path here, in the PR that makes it.",
+  "casefile": [],
+  "cost-grid": [],
+  "demand": [],
+  "demand_estimate_hold": [],
+  "drafting": [],
+  "limits-grid": [],
+  "litigation": [],
+  "litigation_cap": [],
+  "medchron": [],
+  "medchron_update": [],
+  "model-facts": [],
+  "model-facts-disagreements": [],
+  "negotiation": [],
+  "records": [],
+  "records_cap": []
+}

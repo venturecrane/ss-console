@@ -1,0 +1,357 @@
+{
+  "cli": {
+    "fixture": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "<TMP>/inputs/litigation-firm.yaml: OK (example)\n"
+    },
+    "no_argument": {
+      "exit": 2,
+      "stderr": "usage: python -m jobs.litigation.firm <litigation inputs dir>\n",
+      "stdout": ""
+    },
+    "without_firm": {
+      "exit": 1,
+      "stderr": "<TMP>/inputs/litigation-firm.yaml: firm: required\n",
+      "stdout": ""
+    }
+  },
+  "load": {
+    "__type": "LitigationFirm",
+    "court_rx": [
+      {
+        "__regex": "complaint",
+        "flags": 34
+      },
+      {
+        "__regex": "summons",
+        "flags": 34
+      },
+      {
+        "__regex": "\\bPOS\\b|proof of service",
+        "flags": 34
+      },
+      {
+        "__regex": "answer",
+        "flags": 34
+      },
+      {
+        "__regex": "\\bCMC\\b",
+        "flags": 34
+      }
+    ],
+    "data": {
+      "case_statuses": [
+        "Active",
+        "Settled, dismissal not yet filed",
+        "Dismissed/closed",
+        "Judgment entered",
+        "Stayed/arbitration",
+        "Not filed",
+        "Unclear",
+        "Not served",
+        "Service rejected (not served)",
+        "Out for service",
+        "Served, no answer in file",
+        "Appeared, no answer in file",
+        "Answered",
+        "Answered original complaint, not the amended complaint",
+        "Default entered",
+        "Dismissed",
+        "Settled",
+        "Dropped by amendment",
+        "UIM arbitration respondent (not a court defendant)",
+        "Firm's client (firm is defense counsel)",
+        "Unclear"
+      ],
+      "court_paper_patterns": [
+        "complaint",
+        "summons",
+        "\\bPOS\\b|proof of service",
+        "answer",
+        "\\bCMC\\b"
+      ],
+      "discovery_patterns": ["interrogator", "request for production"],
+      "email_recent_n": 2,
+      "firm": {
+        "display_name": "Example & Example, LLP",
+        "slug": "example"
+      },
+      "form_hints": {
+        "FORM-110": "case management statement; items 2-3 list each party's service and answer"
+      },
+      "models": {
+        "audit": "claude-sonnet-5",
+        "read": "claude-sonnet-5",
+        "verify": "claude-sonnet-5"
+      },
+      "monthly_budget_usd": 100.0,
+      "per_job_cap_usd": 50.0,
+      "process_server_names": ["Example Legal Process"],
+      "settlement_terms": ["\\bhas settled\\b", "notice of settlement", "settlement check"],
+      "timezone": "America/Los_Angeles",
+      "tool_iterations": 6
+    },
+    "discovery_rx": [
+      {
+        "__regex": "interrogator",
+        "flags": 34
+      },
+      {
+        "__regex": "request for production",
+        "flags": 34
+      }
+    ],
+    "process_servers": ["example legal process"],
+    "root": {
+      "__path": "<TMP>/inputs"
+    },
+    "settlement_rx": [
+      {
+        "__regex": "\\bhas settled\\b",
+        "flags": 34
+      },
+      {
+        "__regex": "notice of settlement",
+        "flags": 34
+      },
+      {
+        "__regex": "settlement check",
+        "flags": 34
+      }
+    ]
+  },
+  "mutations": {
+    "<root> :: unknown_sibling": {
+      "problems": ["zz_unknown_key: unknown key (closed key set)"]
+    },
+    "case_statuses :: blank": {
+      "problems": [
+        "case_statuses: missing 'Active'",
+        "case_statuses: missing 'Answered'",
+        "case_statuses: missing 'Answered original complaint, not the amended complaint'",
+        "case_statuses: missing 'Appeared, no answer in file'",
+        "case_statuses: missing 'Default entered'",
+        "case_statuses: missing 'Dismissed'",
+        "case_statuses: missing 'Dismissed/closed'",
+        "case_statuses: missing 'Dropped by amendment'",
+        "case_statuses: missing \"Firm's client (firm is defense counsel)\"",
+        "case_statuses: missing 'Judgment entered'",
+        "case_statuses: missing 'Not filed'",
+        "case_statuses: missing 'Not served'",
+        "case_statuses: missing 'Out for service'",
+        "case_statuses: missing 'Served, no answer in file'",
+        "case_statuses: missing 'Service rejected (not served)'",
+        "case_statuses: missing 'Settled'",
+        "case_statuses: missing 'Settled, dismissal not yet filed'",
+        "case_statuses: missing 'Stayed/arbitration'",
+        "case_statuses: missing 'UIM arbitration respondent (not a court defendant)'",
+        "case_statuses: missing 'Unclear'"
+      ]
+    },
+    "case_statuses :: missing": {
+      "problems": ["case_statuses: required"]
+    },
+    "case_statuses :: wrong_type": {
+      "problems": ["case_statuses: expected a list of strings"]
+    },
+    "court_paper_patterns :: blank": {
+      "problems": []
+    },
+    "court_paper_patterns :: missing": {
+      "problems": ["court_paper_patterns: required"]
+    },
+    "court_paper_patterns :: wrong_type": {
+      "problems": ["court_paper_patterns: expected a list of strings"]
+    },
+    "discovery_patterns :: blank": {
+      "problems": []
+    },
+    "discovery_patterns :: missing": {
+      "problems": []
+    },
+    "discovery_patterns :: wrong_type": {
+      "problems": ["discovery_patterns: expected a list of strings"]
+    },
+    "email_recent_n :: blank": {
+      "problems": ["email_recent_n: expected an integer >= 1"]
+    },
+    "email_recent_n :: missing": {
+      "problems": ["email_recent_n: required"]
+    },
+    "email_recent_n :: wrong_type": {
+      "problems": ["email_recent_n: expected an integer >= 1"]
+    },
+    "firm :: blank": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm :: missing": {
+      "problems": ["firm: required"]
+    },
+    "firm :: unknown_sibling": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm :: wrong_type": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.display_name :: blank": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.display_name :: missing": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.display_name :: wrong_type": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.slug :: blank": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.slug :: missing": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "firm.slug :: wrong_type": {
+      "problems": ["firm: expected exactly {slug, display_name} as strings"]
+    },
+    "form_hints :: blank": {
+      "problems": []
+    },
+    "form_hints :: missing": {
+      "problems": ["form_hints: required"]
+    },
+    "form_hints :: unknown_sibling": {
+      "problems": []
+    },
+    "form_hints :: wrong_type": {
+      "problems": ["form_hints: expected a map of string to string"]
+    },
+    "form_hints.FORM-110 :: blank": {
+      "problems": ["form_hints: expected a map of string to string"]
+    },
+    "form_hints.FORM-110 :: missing": {
+      "problems": []
+    },
+    "form_hints.FORM-110 :: wrong_type": {
+      "problems": ["form_hints: expected a map of string to string"]
+    },
+    "models :: blank": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models :: missing": {
+      "problems": ["models: required"]
+    },
+    "models :: unknown_sibling": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models :: wrong_type": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.audit :: blank": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.audit :: missing": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.audit :: wrong_type": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.read :: blank": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.read :: missing": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.read :: wrong_type": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.verify :: blank": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.verify :: missing": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "models.verify :: wrong_type": {
+      "problems": [
+        "models: expected ['read', 'verify', 'audit'] (and optionally ['transcription']) as model ids"
+      ]
+    },
+    "monthly_budget_usd :: blank": {
+      "problems": ["monthly_budget_usd: expected a number > 0"]
+    },
+    "monthly_budget_usd :: missing": {
+      "problems": ["monthly_budget_usd: required"]
+    },
+    "monthly_budget_usd :: wrong_type": {
+      "problems": ["monthly_budget_usd: expected a number > 0"]
+    },
+    "per_job_cap_usd :: blank": {
+      "problems": ["per_job_cap_usd: expected a number > 0"]
+    },
+    "per_job_cap_usd :: missing": {
+      "problems": ["per_job_cap_usd: required"]
+    },
+    "per_job_cap_usd :: wrong_type": {
+      "problems": ["per_job_cap_usd: expected a number > 0"]
+    },
+    "process_server_names :: blank": {
+      "problems": []
+    },
+    "process_server_names :: missing": {
+      "problems": ["process_server_names: required"]
+    },
+    "process_server_names :: wrong_type": {
+      "problems": ["process_server_names: expected a list of strings"]
+    },
+    "settlement_terms :: blank": {
+      "problems": []
+    },
+    "settlement_terms :: missing": {
+      "problems": ["settlement_terms: required"]
+    },
+    "settlement_terms :: wrong_type": {
+      "problems": ["settlement_terms: expected a list of strings"]
+    },
+    "timezone :: blank": {
+      "problems": ["timezone: expected a string"]
+    },
+    "timezone :: missing": {
+      "problems": []
+    },
+    "timezone :: wrong_type": {
+      "problems": ["timezone: expected a string"]
+    },
+    "tool_iterations :: blank": {
+      "problems": ["tool_iterations: expected an integer >= 4"]
+    },
+    "tool_iterations :: missing": {
+      "problems": []
+    },
+    "tool_iterations :: wrong_type": {
+      "problems": ["tool_iterations: expected an integer >= 4"]
+    }
+  },
+  "validate": {
+    "problems": []
+  }
+}

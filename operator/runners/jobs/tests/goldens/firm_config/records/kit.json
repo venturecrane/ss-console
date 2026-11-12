@@ -1,0 +1,68 @@
+{
+  "cli": {
+    "fixture": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "<TMP>/inputs/inputs/records-firm.yaml: OK\n"
+    },
+    "no_argument": {
+      "exit": 2,
+      "stderr": "usage: python -m jobs.records.firm <records inputs dir>\n",
+      "stdout": ""
+    },
+    "without_monthly_budget_usd": {
+      "exit": 1,
+      "stderr": "<TMP>/inputs/inputs/records-firm.yaml: monthly_budget_usd: required\n",
+      "stdout": ""
+    }
+  },
+  "load": {
+    "__type": "RecordsFirm",
+    "data": {
+      "monthly_budget_usd": 100.0,
+      "per_job_cap_usd": 5.0,
+      "usd_per_page": 0.01
+    },
+    "monthly_budget_usd": 100.0,
+    "per_job_cap_usd": 5.0,
+    "root": {
+      "__path": "<TMP>/inputs/inputs"
+    },
+    "usd_per_page": 0.01
+  },
+  "mutations": {
+    "<root> :: unknown_sibling": {
+      "problems": ["zz_unknown_key: unknown key (closed key set)"]
+    },
+    "monthly_budget_usd :: blank": {
+      "problems": ["monthly_budget_usd: expected a number > 0"]
+    },
+    "monthly_budget_usd :: missing": {
+      "problems": ["monthly_budget_usd: required"]
+    },
+    "monthly_budget_usd :: wrong_type": {
+      "problems": ["monthly_budget_usd: expected a number > 0"]
+    },
+    "per_job_cap_usd :: blank": {
+      "problems": ["per_job_cap_usd: expected a number > 0"]
+    },
+    "per_job_cap_usd :: missing": {
+      "problems": ["per_job_cap_usd: required"]
+    },
+    "per_job_cap_usd :: wrong_type": {
+      "problems": ["per_job_cap_usd: expected a number > 0"]
+    },
+    "usd_per_page :: blank": {
+      "problems": ["usd_per_page: expected a number > 0"]
+    },
+    "usd_per_page :: missing": {
+      "problems": ["usd_per_page: required"]
+    },
+    "usd_per_page :: wrong_type": {
+      "problems": ["usd_per_page: expected a number > 0"]
+    }
+  },
+  "validate": {
+    "problems": []
+  }
+}

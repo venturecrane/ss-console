@@ -1,0 +1,14 @@
+{
+  "_why": "Dotted paths (<checker>.<input index>.out...) that may differ from the captured text-rule goldens, per target module, plus the sample deliverable. Captured on origin/main 4413e23e9 before wave 2 gives the text rules one home. Every list is empty: any different answer fails. An intended change adds its path here, in the PR that makes it.",
+  "jobs.demand.gapaudit": [],
+  "jobs.demand.review": [],
+  "jobs.drafting.citations": [],
+  "jobs.litigation.extract": [],
+  "jobs.negotiation.text": [],
+  "jobs.proof.checks": [],
+  "jobs.proof.review": [],
+  "jobs.stages.extract": [],
+  "jobs.stages.review": [],
+  "jobs.wording": [],
+  "synthetic": []
+}
