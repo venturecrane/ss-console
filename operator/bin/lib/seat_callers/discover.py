@@ -20,6 +20,8 @@ from pathlib import Path
 
 import yaml
 
+from .inputs import SLUG_VAR
+
 # scripts/sprawl/analyze.ts TEST_PATH, sources.ts SKIP, concepts.ts COMMENT_LINE.
 TEST_PATH = re.compile(r"(^|/)tests?/|(^|/)test_[^/]*$|\.test\.[a-z]+$|_test\.py$|(^|/)conftest\.py$")
 SKIP = re.compile(r"(^|/)(node_modules|dist|\.venv|__pycache__|fixtures)/")
@@ -30,7 +32,7 @@ SELF_DIR = "operator/bin/lib/seat_callers/"
 
 YAML_LOAD = re.compile(r"\b(yaml\.(safe_)?load|safe_load)\(")
 NAMES_CUSTOMER_YAML = re.compile(r"customer[._]ya?ml", re.I)
-SLUG = "CUSTOMER_SLUG"
+SLUG = SLUG_VAR
 
 
 @dataclass

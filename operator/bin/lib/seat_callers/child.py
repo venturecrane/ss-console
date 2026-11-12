@@ -36,9 +36,8 @@ from bin.lib.seat_callers.canon import Normaliser, canon, digest, shape  # noqa:
 from bin.lib.seat_callers.sites import OVERRIDES  # noqa: E402 - imported only once sys.path holds the operator tree
 
 DEADLINE = 20.0
-# A seat directory or file variable (HERMES_HOME, SMD_JOBS_RUN_DIR, ..._DB_PATH): pointed into the input's scratch.
-SEAT_DIR = re.compile(r"^[A-Z0-9]+(_[A-Z0-9]+)*_(DIR|HOME|ROOT|PATH)$|^HERMES_HOME$")
-SLUG_VARS = ("CUSTOMER_SLUG", *inp.SLUG_ALTERNATES)
+# A seat directory or file variable (..._HOME, ..._RUN_DIR, ..._DB_PATH): pointed into the input's scratch.
+SEAT_DIR = re.compile(r"^[A-Z0-9]+(_[A-Z0-9]+)*_(DIR|HOME|ROOT|PATH)$")
 
 
 class Site:
@@ -89,10 +88,18 @@ def _materialise(site: Site, input_id: str, kind: str, text: str | None) -> Ctx:
     )
 
 
-def _set_env(state: dict[str, str]) -> None:
-    for name in SLUG_VARS:
+def _slug_names(site: Site) -> list[str]:
+    """The slug variable and every other slug-named variable the site was seen to read."""
+    return sorted({inp.SLUG_VAR} | {n for n in site.env_names if "SLUG" in n})
+
+
+def _set_env(site: Site, state: dict[str, str]) -> None:
+    for name in _slug_names(site):
         os.environ.pop(name, None)
-    os.environ.update(state)
+    resolved = {k: v for k, v in state.items() if k != inp.ALTERNATES}
+    if inp.ALTERNATES in state:
+        resolved |= {n: state[inp.ALTERNATES] for n in _slug_names(site) if n != inp.SLUG_VAR}
+    os.environ.update(resolved)
 
 
 def _callable(site: Site, ctx: Ctx) -> Any:
@@ -182,7 +189,7 @@ def _seat_paths(site: Site, ctx: Ctx) -> dict[str, str]:
 
 def _in_fork(site: Site, ctx: Ctx, apply: dict[str, Any]) -> dict[str, Any]:
     sandbox.block_fork()
-    _set_env({**_seat_paths(site, ctx), **apply.get("env", {})})
+    _set_env(site, {**_seat_paths(site, ctx), **apply.get("env", {})})
     sandbox.STATE.yaml_target = str(ctx.path)
     sandbox.STATE.yaml_text = ctx.text
     sandbox.STATE.track = bool(apply.get("track"))
@@ -303,7 +310,9 @@ def _socket_runs(site: Site) -> list[dict[str, Any]]:
 def _slug_runs(site: Site) -> list[dict[str, Any]]:
     good = _materialise(site, "good", "file", inp.good_text())
     _learn_paths(site, good, {"env": dict(inp.SLUG_STATES[2][1])})
-    return [{"input": sid, **run_input(site, good, {"env": state})} for sid, state in inp.SLUG_STATES]
+    rows = [{"input": sid, **run_input(site, good, {"env": state})} for sid, state in inp.SLUG_STATES]
+    rows.append({"input": "$slug-names", "names": _slug_names(site)})
+    return rows
 
 
 def main(spec_path: str) -> None:
@@ -312,7 +321,7 @@ def main(spec_path: str) -> None:
     loader.setup_path(site.repo)
     sandbox.install(str(site.tmp))
     yamltrack.install()
-    _set_env({})
+    _set_env(site, {})
     sandbox.STATE.yaml_target = str(site.tmp / "absent" / "customer.yaml")
     result: dict[str, Any] = {"key": site.key}
     if spec["kind"] == "function" and "skip" not in site.override:

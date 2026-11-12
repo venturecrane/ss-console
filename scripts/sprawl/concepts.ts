@@ -16,7 +16,13 @@
  * of the code, not a pattern, and are left out rather than guessed.
  */
 
-import { type RatchetResult, type SourceFile, countRatchet, isTestPath } from './analyze'
+import {
+  INSTRUMENT_PATH,
+  type RatchetResult,
+  type SourceFile,
+  countRatchet,
+  isTestPath,
+} from './analyze'
 
 export const CONCEPT_BASELINE = 'scripts/sprawl/concept-baseline.json'
 
@@ -39,7 +45,13 @@ function codeLines(text: string): string[] {
 
 /** Non-test program files (no docs, no config data), the instrument itself left out. */
 function programs(files: SourceFile[]): SourceFile[] {
-  return files.filter((f) => f.path !== SELF && !isTestPath(f.path) && PROGRAM.test(f.path))
+  return files.filter(
+    (f) =>
+      f.path !== SELF &&
+      !INSTRUMENT_PATH.test(f.path) &&
+      !isTestPath(f.path) &&
+      PROGRAM.test(f.path)
+  )
 }
 
 function matching(files: SourceFile[], test: (code: string[]) => boolean): string[] {

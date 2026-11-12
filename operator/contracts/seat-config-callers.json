@@ -6562,6 +6562,9 @@
       "raises-RuntimeError-on-valid",
       "raises-RuntimeError-on-whitespace"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {},
      "status": "executable",
      "symbol": "namespaced_executor_from_env",
@@ -6583,6 +6586,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": 2,
@@ -6624,6 +6630,9 @@
       "returns-value-on-valid",
       "returns-value-on-whitespace"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": "alpha-seat",
       "padded": " alpha-seat\n",
@@ -6661,6 +6670,9 @@
       "returns-value-on-padded",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": "alpha-seat",
@@ -6700,6 +6712,9 @@
       "returns-value-on-valid",
       "returns-value-on-whitespace"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": "alpha-seat",
       "padded": " alpha-seat\n",
@@ -6726,6 +6741,7 @@
      "kind": "function",
      "modes": [
       "fails-open-on-whitespace",
+      "keeps-padding",
       "prefers-alternate",
       "returns-none-on-empty",
       "returns-none-on-unset",
@@ -6733,6 +6749,10 @@
       "returns-value-on-padded",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
      ],
      "slug_values": {
       "empty": null,
@@ -6764,6 +6784,10 @@
       "raises-JobLedgerError-on-whitespace",
       "raises-KeyError-on-unset"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "HERMES_PERSONA_SLUG"
+     ],
      "slug_values": {},
      "status": "executable",
      "symbol": "_start_background_job",
@@ -6785,6 +6809,7 @@
      "kind": "function",
      "modes": [
       "fails-open-on-whitespace",
+      "keeps-padding",
       "prefers-alternate",
       "returns-none-on-empty",
       "returns-none-on-unset",
@@ -6792,6 +6817,10 @@
       "returns-value-on-padded",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
      ],
      "slug_values": {
       "empty": null,
@@ -6828,6 +6857,10 @@
       "returns-value-on-valid",
       "returns-value-on-whitespace"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": "beta-seat",
       "empty": "_machine",
@@ -6857,6 +6890,10 @@
      "modes": [
       "input-insensitive"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
+     ],
      "slug_values": {},
      "status": "executable",
      "symbol": "snapshot",
@@ -6878,6 +6915,10 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
      ],
      "slug_values": {},
      "status": "executable",
@@ -6906,6 +6947,9 @@
       "raises-ValueError-on-whitespace",
       "returns-value-on-both",
       "returns-value-on-valid"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {},
      "status": "executable",
@@ -6939,6 +6983,10 @@
       "returns-value-on-valid",
       "returns-value-on-whitespace"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": "beta-seat",
       "empty": "_machine",
@@ -6969,6 +7017,7 @@
       "fails-open-on-empty",
       "fails-open-on-unset",
       "fails-open-on-whitespace",
+      "keeps-padding",
       "prefers-alternate",
       "returns-value-on-both",
       "returns-value-on-empty",
@@ -6976,6 +7025,10 @@
       "returns-value-on-unset",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
      ],
      "slug_values": {},
      "status": "executable",
@@ -6998,6 +7051,7 @@
      "kind": "function",
      "modes": [
       "fails-open-on-whitespace",
+      "keeps-padding",
       "prefers-alternate",
       "returns-none-on-empty",
       "returns-none-on-unset",
@@ -7005,6 +7059,10 @@
       "returns-value-on-padded",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
      ],
      "slug_values": {
       "empty": null,
@@ -7030,6 +7088,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": null,
@@ -7060,6 +7121,9 @@
      "modes": [
       "input-insensitive"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": null,
       "empty": null,
@@ -7088,6 +7152,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": false,
@@ -7118,6 +7185,9 @@
      "modes": [
       "input-insensitive"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": null,
       "empty": null,
@@ -7146,6 +7216,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": null,
@@ -7187,6 +7260,9 @@
       "returns-value-on-valid",
       "returns-value-on-whitespace"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": "alpha-seat",
       "padded": " alpha-seat\n",
@@ -7224,6 +7300,9 @@
       "returns-value-on-padded",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": "alpha-seat",
@@ -7284,6 +7363,9 @@
       "returns-value-on-valid",
       "strips-padding"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": "alpha-seat",
       "padded": "alpha-seat",
@@ -7312,6 +7394,7 @@
       "fails-open-on-empty",
       "fails-open-on-unset",
       "fails-open-on-whitespace",
+      "keeps-padding",
       "prefers-CUSTOMER_SLUG",
       "returns-value-on-both",
       "returns-value-on-empty",
@@ -7319,6 +7402,9 @@
       "returns-value-on-unset",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {},
      "status": "executable",
@@ -7341,6 +7427,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": false,
@@ -7382,6 +7471,9 @@
      "modes": [
       "input-insensitive"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": false,
       "empty": false,
@@ -7412,6 +7504,7 @@
       "fails-open-on-empty",
       "fails-open-on-unset",
       "fails-open-on-whitespace",
+      "keeps-padding",
       "prefers-CUSTOMER_SLUG",
       "returns-value-on-both",
       "returns-value-on-empty",
@@ -7419,6 +7512,9 @@
       "returns-value-on-unset",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {},
      "status": "executable",
@@ -7453,6 +7549,9 @@
      "modes": [
       "input-insensitive"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": 0,
       "empty": 0,
@@ -7481,6 +7580,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": false,
@@ -7522,6 +7624,9 @@
      "modes": [
       "input-insensitive"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": false,
       "empty": false,
@@ -7550,6 +7655,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": false,
@@ -7580,6 +7688,9 @@
      "modes": [
       "input-insensitive"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": false,
       "empty": false,
@@ -7608,6 +7719,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": false,
@@ -7638,6 +7752,9 @@
      "modes": [
       "input-insensitive"
      ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
      "slug_values": {
       "both": false,
       "empty": false,
@@ -7666,6 +7783,9 @@
      "kind": "function",
      "modes": [
       "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": false,
@@ -7697,6 +7817,7 @@
       "fails-open-on-empty",
       "fails-open-on-unset",
       "fails-open-on-whitespace",
+      "keeps-padding",
       "prefers-CUSTOMER_SLUG",
       "returns-value-on-both",
       "returns-value-on-empty",
@@ -7704,6 +7825,9 @@
       "returns-value-on-unset",
       "returns-value-on-valid",
       "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {},
      "status": "executable",
@@ -7725,14 +7849,18 @@
      "file": "operator/workspace_broker/send_as_links.py",
      "kind": "function",
      "modes": [
-      "keeps-padding",
       "prefers-alternate",
       "returns-empty-on-empty",
       "returns-empty-on-unset",
       "returns-empty-on-whitespace",
       "returns-value-on-both",
       "returns-value-on-padded",
-      "returns-value-on-valid"
+      "returns-value-on-valid",
+      "strips-padding"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
      ],
      "slug_values": {
       "both": "https://hermes-beta-seat.fly.dev",
@@ -7767,6 +7895,9 @@
       "raises-KeyError-on-unset",
       "raises-KeyError-on-valid",
       "raises-KeyError-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
      ],
      "slug_values": {},
      "status": "executable",

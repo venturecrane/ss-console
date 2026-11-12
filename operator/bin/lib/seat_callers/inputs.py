@@ -23,7 +23,10 @@ import yaml
 
 GOOD_SLUG = "alpha-seat"
 ALT_SLUG = "beta-seat"
-SLUG_ALTERNATES = ("SMD_CUSTOMER_SLUG", "SMD_SLUG")
+SLUG_VAR = "CUSTOMER_SLUG"
+# The "both" state sets SLUG_VAR to GOOD_SLUG and every OTHER slug-named
+# variable the site was seen to read (an alternate name) to ALT_SLUG.
+ALTERNATES = "*"
 
 # The shape of operator/templates/customer-no-pm-system.yaml, with synthetic
 # values, held here so a template edit does not move the table.
@@ -96,11 +99,11 @@ SOCKET_SCENARIOS = ("ok", "not-ok", "empty-reply", "non-json", "fault-after-send
 
 SLUG_STATES: list[tuple[str, dict[str, str]]] = [
     ("unset", {}),
-    ("empty", {"CUSTOMER_SLUG": ""}),
-    ("valid", {"CUSTOMER_SLUG": GOOD_SLUG}),
-    ("whitespace", {"CUSTOMER_SLUG": "   "}),
-    ("padded", {"CUSTOMER_SLUG": f" {GOOD_SLUG}\n"}),
-    ("both", {"CUSTOMER_SLUG": GOOD_SLUG, **dict.fromkeys(SLUG_ALTERNATES, ALT_SLUG)}),
+    ("empty", {SLUG_VAR: ""}),
+    ("valid", {SLUG_VAR: GOOD_SLUG}),
+    ("whitespace", {SLUG_VAR: "   "}),
+    ("padded", {SLUG_VAR: f" {GOOD_SLUG}\n"}),
+    ("both", {SLUG_VAR: GOOD_SLUG, ALTERNATES: ALT_SLUG}),
 ]
 
 

@@ -141,6 +141,8 @@ def _row(spec: SiteSpec, result: dict[str, Any], real_digests: bool) -> dict[str
         row["wire"] = {r["input"]: r.get("wire", []) for r in runs if r.get("wire")}
     if spec.concept == "slug":
         row["slug_values"] = {r["input"]: r.get("value") for r in runs if "value" in r}
+        for extra in (r for r in runs if r["input"] == "$slug-names"):
+            row["slug_names_read"] = extra["names"]
     row["modes"] = modes(spec.concept, runs)
     return row
 

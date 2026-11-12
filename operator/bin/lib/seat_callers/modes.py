@@ -138,11 +138,10 @@ def _slug_modes(runs: dict[str, dict[str, Any]]) -> list[str]:
         labels.append("prefers-CUSTOMER_SLUG")
     elif both == [ALT_SLUG]:
         labels.append("prefers-alternate")
-    padded = runs.get("padded", {})
-    if padded.get("value") == GOOD_SLUG:
-        labels.append("strips-padding")
-    elif isinstance(padded.get("value"), str) and padded.get("value") != GOOD_SLUG:
-        labels.append("keeps-padding")
+    padded, valid = runs.get("padded", {}), runs.get("valid", {})
+    if padded.get("outcome") == valid.get("outcome") == "return":
+        # A padded slug that reads like the clean one was stripped; one that reads differently was kept.
+        labels.append("strips-padding" if padded.get("digest") == valid.get("digest") else "keeps-padding")
     return labels
 
 

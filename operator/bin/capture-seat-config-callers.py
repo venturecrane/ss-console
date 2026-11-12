@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Capture the seat-config caller table (wave 2, Phase A, item A2).
 
-Every customer.yaml hand parser, broker socket client and CUSTOMER_SLUG read in
+Every customer.yaml hand parser, broker socket client and seat-slug environment read in
 the operator tree is EXECUTED over a fixed input set and what it returned or
 raised is written to operator/contracts/seat-config-callers.json. The table is
 the instrument the Phase B readers migration is checked against: a migrated
