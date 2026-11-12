@@ -136,7 +136,12 @@ class MsGraphApiError(RuntimeError):
         self.url = url
         self.status = status
         self.body = body
-        super().__init__(f"MSGraph {method} {url} -> HTTP {status}: {body or '(empty body)'}")
+        # The query string is left out of the message: on a delta poll it is the
+        # sync cursor ($deltatoken / $skiptoken), long enough to push the status
+        # out of every bounded surface the message reaches (ledger, alert mail),
+        # and nothing a reader acts on. ``self.url`` keeps it whole for callers.
+        shown = url.split("?", 1)[0]
+        super().__init__(f"MSGraph {method} {shown} -> HTTP {status}: {body or '(empty body)'}")
 
 
 # ---------------------------------------------------------------------------

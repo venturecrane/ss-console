@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
@@ -51,6 +52,29 @@ _DEFAULT_LEDGER_PATH = "/run/smd-connector-health/ledger.json"
 
 MAX_SERVERS = 32
 MAX_ERROR_CHARS = 200
+
+# The verdict our typed clients append to every API failure: "... -> HTTP 502: <body>".
+_HTTP_VERDICT_RE = re.compile(r"->\s*HTTP\s*\d{3}")
+_ELLIPSIS = "\u2026"
+
+
+def bounded_error(message: str) -> str:
+    """``message`` cut to :data:`MAX_ERROR_CHARS`, keeping the HTTP verdict.
+
+    A plain head cut lost the one fact an alert reader needs: on 2026-11-12 an
+    A&P Graph delta URL filled all 200 characters, so the ops alert named the
+    URL and not the 502 Microsoft returned. When the ``-> HTTP <status>``
+    verdict would fall past the cut, the message is kept as its head, an
+    ellipsis, and the verdict onward (itself capped at half the budget).
+    """
+    if len(message) <= MAX_ERROR_CHARS:
+        return message
+    match = _HTTP_VERDICT_RE.search(message)
+    if match is None or match.end() <= MAX_ERROR_CHARS:
+        return message[:MAX_ERROR_CHARS]
+    tail = message[match.start() :][: MAX_ERROR_CHARS // 2]
+    head = message[: MAX_ERROR_CHARS - len(tail) - len(_ELLIPSIS)]
+    return head + _ELLIPSIS + tail
 
 
 def ledger_path() -> Path:
@@ -159,7 +183,7 @@ def record_call(
         entry["consecutive_failures"] = count + 1
         entry["last_error_ts"] = ts
         if isinstance(error_message, str) and error_message:
-            entry["last_error_message"] = error_message[:MAX_ERROR_CHARS]
+            entry["last_error_message"] = bounded_error(error_message)
         if conn_class:
             entry["last_conn_error_ts"] = ts
     servers[server] = entry
@@ -183,6 +207,7 @@ def mark_mapping_broken() -> bool:
 __all__ = [
     "MAX_ERROR_CHARS",
     "MAX_SERVERS",
+    "bounded_error",
     "ledger_path",
     "mark_mapping_broken",
     "record_call",

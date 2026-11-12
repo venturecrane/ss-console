@@ -329,6 +329,20 @@ def test_5xx_records_conn_class_failure(ledger_path):
     assert "-> HTTP 503" in entry["last_error_message"]
 
 
+def test_api_error_message_omits_the_delta_cursor_and_keeps_the_status():
+    url = (
+        "https://graph.microsoft.com/v1.0/users/x/mailFolders('inbox')/messages/delta?$deltatoken="
+        + "k" * 300
+    )
+    exc = MsGraphApiError("GET", url, 502, "UnknownError")
+    assert "deltatoken" not in str(exc)
+    assert str(exc) == (
+        "MSGraph GET https://graph.microsoft.com/v1.0/users/x/mailFolders('inbox')/messages/delta"
+        " -> HTTP 502: UnknownError"
+    )
+    assert exc.url == url
+
+
 def test_404_records_failure_without_conn_evidence(ledger_path):
     opener = _Opener(graph_script=[_http_error(404, b"gone")])
     client = _client(opener)
