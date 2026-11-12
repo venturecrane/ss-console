@@ -47,7 +47,7 @@
   "operator/runners/jobs/tests/test_deliver_by_smd.py": 2,
   "operator/runners/jobs/tests/test_drafting_firm_rules.py": 1,
   "operator/runners/jobs/tests/test_drafting_run.py": 3,
-  "operator/runners/jobs/tests/test_lane_registries.py": 6,
+  "operator/runners/jobs/tests/test_lane_registries.py": 4,
   "operator/runners/jobs/tests/test_note_by_smd.py": 1,
   "operator/runners/jobs/tests/test_skill_load.py": 1,
   "operator/runners/jobs/tests/test_uncovered_why.py": 1,

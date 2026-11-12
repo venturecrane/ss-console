@@ -168,8 +168,11 @@ def load(path: Path) -> Declaration:
 
 def constants(decl: Declaration) -> list[tuple[str, str, object]]:
     """(name, comment, value) for every generated constant; a value is a tuple or a dict."""
-    lanes = decl.lanes
-    firm = [lane for lane in lanes if lane.firm_inputs]
+    return [*_run_constants(decl.lanes), *_input_constants(decl)]
+
+
+def _run_constants(lanes: tuple[Lane, ...]) -> list[tuple[str, str, object]]:
+    """The lanes, their skills and kinds, their run-dir names and their wakes."""
     return [
         ("JOB_LANES", "Every job lane, in declared order.", tuple(lane.name for lane in lanes)),
         (
@@ -212,6 +215,14 @@ def constants(decl: Declaration) -> list[tuple[str, str, object]]:
             "Job kinds whose wake may be a scheduled run's (no request email).",
             tuple(f"{lane.name}_job" for lane in lanes if lane.scheduled),
         ),
+    ]
+
+
+def _input_constants(decl: Declaration) -> list[tuple[str, str, object]]:
+    """Request cards, email labels, audit prefixes and firm inputs."""
+    lanes = decl.lanes
+    firm = [lane for lane in lanes if lane.firm_inputs]
+    return [
         (
             "REQUEST_CARD_LANES",
             "Lanes that write a request card row.",

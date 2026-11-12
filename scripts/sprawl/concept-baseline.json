@@ -1,8 +1,8 @@
 {
   "$comment": "Written by scripts/sprawl-audit.ts --write-concept-baseline; gated by tests/sprawl-ratchet.test.ts. Lower only.",
-  "job-lane-lists": 40,
+  "job-lane-lists": 25,
   "$job-lane-lists": "target 1 declaration plus generated files. Non-test program file naming 4+ job lanes as quoted strings, object keys or case arms, or 4+ on one line.",
-  "lane-skill-tables": 6,
+  "lane-skill-tables": 3,
   "$lane-skill-tables": "target 1. Non-test program file pairing 4+ lanes with their skill names on the same line.",
   "customer-yaml-hand-parsers": 81,
   "$customer-yaml-hand-parsers": "target 1 reader per process. Non-test Python file that calls a yaml load and names customer.yaml.",

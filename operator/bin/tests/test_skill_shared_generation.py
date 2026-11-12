@@ -260,7 +260,9 @@ def test_a_block_is_stamped_and_own_text_is_left_alone(tmp_path: Path, monkeypat
     alpha = (root / "operator/skills/alpha/SKILL.md").read_text(encoding="utf-8")
     # The section (heading to the next `## `) is the source's bytes; the rest stays.
     assert alpha == f"# alpha\n\n{_BLOCK}## After\n\nkept\n"
-    assert (root / "operator/skills/gamma/SKILL.md").read_text(encoding="utf-8").endswith("the gamma lines\n")
+    assert (root / "operator/skills/gamma/SKILL.md").read_text(
+        encoding="utf-8"
+    ) == f"gamma\n\n{_HEAD}\n\nthe gamma lines\n"
     assert _check(cli) == 0
     # A hand edit of a stamped section fails, and regenerating restores it.
     md = root / "operator/skills/alpha/SKILL.md"
