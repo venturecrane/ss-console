@@ -1135,3 +1135,62 @@ def test_ledger_output_is_kept_under_the_route_limit() -> None:
     text, mode = head_tail("x" * 20_000)
     assert mode == "head_tail" and len(text.encode()) <= 8 * 1024
     assert head_tail("short") == ("short", "none")
+
+
+STREAM_RESET = (
+    'Error: failed to list VMs: Get "https://api.machines.dev/v1/apps/hermes-smd-guide/machines": '
+    "stream error: stream ID 1; INTERNAL_ERROR; received from peer"
+)
+
+
+class SequenceRunner(RecordingRunner):
+    def __init__(self, *results: Result) -> None:
+        super().__init__()
+        self.results = list(results)
+
+    def run(self, argv, *, input_text=None, timeout=120, cwd=None, env=None) -> Result:
+        super().run(argv, input_text=input_text, timeout=timeout, cwd=cwd, env=env)
+        return self.results.pop(0) if len(self.results) > 1 else self.results[0]
+
+
+def test_a_reset_http2_stream_is_a_transport_failure() -> None:
+    # FALSIFIER: on 2026-11-12 this exact text ended two smd-guide releases as a
+    # tooling error; without the marker no read is retried.
+    from bin.lib.fleet.runner import looks_like_transport_failure
+
+    assert looks_like_transport_failure(Result(1, "", STREAM_RESET))
+
+
+def test_a_read_rides_through_a_dropped_connection() -> None:
+    naps: list[float] = []
+    runner = SequenceRunner(Result(1, "", STREAM_RESET), Result(0, '[{"id": "m1"}]', ""))
+    fly = Fly(runner, "/repo", FlyTokens(CI_ENV), sleep=naps.append)  # type: ignore[arg-type]
+    assert fly.machine_id("hermes-ap-staging") == "m1"
+    assert len(runner.calls) == 2 and naps == [5.0]
+
+
+def test_a_read_that_keeps_dropping_stands_as_a_tooling_error_after_three_tries() -> None:
+    naps: list[float] = []
+    runner = SequenceRunner(Result(1, "", STREAM_RESET))
+    fly = Fly(runner, "/repo", FlyTokens(CI_ENV), sleep=naps.append)  # type: ignore[arg-type]
+    with pytest.raises(ToolingError):
+        fly.machines("hermes-ap-staging")
+    assert len(runner.calls) == 3 and len(naps) == 2
+
+
+def test_a_refusal_is_an_answer_and_is_not_asked_again() -> None:
+    naps: list[float] = []
+    runner = SequenceRunner(Result(1, "", "Error: unauthorized (Request ID: x-lax)"))
+    fly = Fly(runner, "/repo", FlyTokens(CI_ENV), sleep=naps.append)  # type: ignore[arg-type]
+    with pytest.raises(ToolingError):
+        fly.volume_id("hermes-ap-staging")
+    assert len(runner.calls) == 1 and naps == []
+
+
+def test_a_call_that_changes_the_seat_is_never_repeated() -> None:
+    # A deploy, restart or snapshot asked twice could happen twice.
+    naps: list[float] = []
+    runner = SequenceRunner(Result(1, "", STREAM_RESET))
+    fly = Fly(runner, "/repo", FlyTokens(CI_ENV), sleep=naps.append)  # type: ignore[arg-type]
+    fly.deploy("hermes-ap-staging", "registry.fly.io/hermes-fleet:rel-x", "/tmp/fly.toml")
+    assert len(runner.calls) == 1 and naps == []

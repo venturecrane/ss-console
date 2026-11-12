@@ -113,6 +113,11 @@ TRANSPORT_MARKERS: tuple[str, ...] = (
     "authentication error",
     "fetch failed",
     "econnreset",
+    # Go's HTTP/2 client names a stream the server reset as
+    # `stream error: stream ID 1; INTERNAL_ERROR; received from peer`. On
+    # 2026-11-12 the Machines API answered two of five `fly machines list`
+    # calls that way, and each one ended a smd-guide release before it began.
+    "stream error: stream id",
 )
 
 

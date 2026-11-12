@@ -27,7 +27,8 @@ import json
 import os
 import re
 import tempfile
-from typing import Any, Mapping
+import time
+from typing import Any, Callable, Mapping
 
 from . import ids
 from .runner import Result, Runner, ToolingError, looks_like_transport_failure, require_ok
@@ -149,19 +150,51 @@ def _json(res: Result, what: str) -> Any:
         raise ToolingError(f"{what}: output is not JSON") from exc
 
 
+#: How many times a read-only Fly call is made before a transport failure stands.
+READ_ATTEMPTS = 3
+#: Seconds between those attempts.
+READ_RETRY_S = 5.0
+
+
 class Fly:
-    def __init__(self, runner: Runner, repo_root: str, tokens: FlyTokens | None = None) -> None:
+    def __init__(
+        self,
+        runner: Runner,
+        repo_root: str,
+        tokens: FlyTokens | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self.runner = runner
         self.repo_root = repo_root
         # Ambient unless told: only Ctx.default reads the process environment,
         # so a test that builds a Fly never inherits CI's GITHUB_ACTIONS.
         self.tokens = tokens or FlyTokens()
+        self.sleep = sleep
 
     def _fly(self, *args: str, timeout: float = 180, input_text: str | None = None, app: str | None = None) -> Result:
         env = self.tokens.env_for(app or app_in_args(args))
         return self.runner.run(
             ["fly", *args], timeout=timeout, input_text=input_text, cwd=self.repo_root, env=env or None
         )
+
+    def _fly_read(self, *args: str, app: str | None = None) -> Result:
+        """A call that only READS Fly's state, retried through a dropped connection.
+
+        Asking again changes nothing, so a transport failure is not an answer:
+        the call is made up to READ_ATTEMPTS times before the failure stands. A
+        call that changes anything (deploy, restart, exec, snapshot, create)
+        goes through ``_fly`` and is never repeated here, because a repeat
+        could do the thing twice. On 2026-11-12 one reset HTTP/2 stream from
+        the Machines API ended two smd-guide releases before either touched
+        the seat.
+        """
+        res = self._fly(*args, app=app)
+        for _ in range(READ_ATTEMPTS - 1):
+            if res.ok or not looks_like_transport_failure(res):
+                return res
+            self.sleep(READ_RETRY_S)
+            res = self._fly(*args, app=app)
+        return res
 
     # -- apps ------------------------------------------------------------------
     def app_exists(self, app: str) -> bool:
@@ -173,7 +206,7 @@ class Fly:
         app's own token, and a missing app answers "Could not find App" to any
         token. Anything else is a tooling error, not a "no".
         """
-        res = self._fly("status", "-a", app, "--json", app=app)
+        res = self._fly_read("status", "-a", app, "--json", app=app)
         if res.ok:
             return True
         if APP_NOT_FOUND_MARKER in res.text.lower():
@@ -186,7 +219,7 @@ class Fly:
     # -- secrets (NAMES only) ------------------------------------------------------
     def secret_names(self, app: str) -> tuple[set[str], set[str]]:
         """(deployed, staged) secret NAMES. Values never leave Fly."""
-        rows = _json(self._fly("secrets", "list", "-a", app, "--json"), f"fly secrets list -a {app}")
+        rows = _json(self._fly_read("secrets", "list", "-a", app, "--json"), f"fly secrets list -a {app}")
         deployed: set[str] = set()
         staged: set[str] = set()
         for row in rows or []:
@@ -200,7 +233,7 @@ class Fly:
 
     # -- machine -------------------------------------------------------------------
     def machines(self, app: str) -> list[dict[str, Any]]:
-        rows = _json(self._fly("machines", "list", "-a", app, "--json"), f"fly machines list -a {app}")
+        rows = _json(self._fly_read("machines", "list", "-a", app, "--json"), f"fly machines list -a {app}")
         return [m for m in rows or [] if isinstance(m, dict)]
 
     def machine_image(self, app: str) -> str:
@@ -231,7 +264,7 @@ class Fly:
         return {"cpu_kind": guest.get("cpu_kind"), "cpus": guest.get("cpus"), "memory_mb": guest.get("memory_mb")}
 
     def volume_id(self, app: str, name: str = "hermes_state") -> str:
-        rows = _json(self._fly("volumes", "list", "-a", app, "--json"), f"fly volumes list -a {app}")
+        rows = _json(self._fly_read("volumes", "list", "-a", app, "--json"), f"fly volumes list -a {app}")
         vols = [v for v in rows or [] if isinstance(v, dict) and v.get("name") == name]
         # An app can carry an orphan volume of the same name (hermes-brokery,
         # 2026-10-19); the one that matters is the one the Machine mounts.
@@ -254,7 +287,9 @@ class Fly:
             dest = os.path.join(tmp, "fly.toml")
             # flyctl refuses `--config <path>` unless the file already exists.
             open(dest, "w", encoding="utf-8").close()
-            require_ok(self._fly("config", "save", "-a", app, "--config", dest, "--yes"), f"fly config save -a {app}")
+            require_ok(
+                self._fly_read("config", "save", "-a", app, "--config", dest, "--yes"), f"fly config save -a {app}"
+            )
             with open(dest, encoding="utf-8") as fh:
                 return fh.read()
 
