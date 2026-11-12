@@ -20,7 +20,7 @@ import logging
 import ssl
 import time
 import urllib.error
-from typing import Callable, Sequence, TypeVar
+from typing import Any, Callable, Sequence, TypeVar
 
 T = TypeVar("T")
 
@@ -75,12 +75,12 @@ def with_retry(
     raise AssertionError("unreachable")  # pragma: no cover
 
 
-def get_json(open_fn: Callable, request, *, timeout: float, label: str) -> object:
+def get_json(open_fn: Callable, request, *, timeout: float, label: str) -> Any:
     """Open ``request`` with ``open_fn`` and decode the JSON body, retrying a
     transient failure. ``open_fn`` is ``urllib.request.urlopen`` or a test's
     fake; the caller keeps its own except clauses and error wording."""
 
-    def once() -> object:
+    def once() -> Any:
         with open_fn(request, timeout=timeout) as response:
             return json.loads(response.read())
 
