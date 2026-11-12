@@ -140,7 +140,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from bin.lib import seam_pull, seat_dirs, seat_inbox, send_verify
+from bin.lib import seam_pull, seat_dirs, seat_inbox, send_verify, transient_http
 
 #: ``_usable_ids`` -- every exact join key a row's metadata offers -- moved to
 #: lib/send_attribution.py (claims review 2026-09-04, B7) so the verifier's
@@ -274,9 +274,8 @@ def _parse_ts(value) -> datetime:
 def _agentmail_get(path: str, api_key: str, *, opener=None) -> dict:
     request = urllib.request.Request(AGENTMAIL_API_BASE + path, headers={"Authorization": f"Bearer {api_key}"})  # noqa: S310 - AGENTMAIL_API_BASE is an https constant; the path is built in this module
     open_fn = opener or urllib.request.urlopen
-    try:
-        with open_fn(request, timeout=_HTTP_TIMEOUT_S) as response:
-            return json.loads(response.read())
+    try:  # a transient failure is retried before it holds the inbox (lib/transient_http.py)
+        return transient_http.get_json(open_fn, request, timeout=_HTTP_TIMEOUT_S, label=f"agentmail GET {path}")
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise ReconcileError(f"agentmail GET {path} failed: {exc}") from exc
 

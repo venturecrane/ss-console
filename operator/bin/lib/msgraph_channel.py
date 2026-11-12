@@ -15,7 +15,6 @@ touches.
 
 from __future__ import annotations
 
-import json
 import os
 import urllib.error
 import urllib.parse
@@ -23,6 +22,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Optional
 
+from . import transient_http
 from .html_channel import HtmlBody
 from .seat_dirs import seat_slugs, unprovisioned_slugs
 
@@ -165,8 +165,11 @@ def graph_token(seat: MsGraphSeat, secret: str, *, opener=None) -> str:
     )
     open_fn = opener or urllib.request.urlopen
     try:
-        with open_fn(request, timeout=_HTTP_TIMEOUT_S) as response:
-            parsed = json.loads(response.read())
+        # A client-credentials mint has no side effect but a token, so a
+        # transient 5xx or reset is retried like a read (lib/transient_http.py).
+        parsed = transient_http.get_json(
+            open_fn, request, timeout=_HTTP_TIMEOUT_S, label=f"msgraph token mint {seat.slug}"
+        )
     except urllib.error.HTTPError as exc:
         # Status only. The token endpoint echoes request parameters back in its
         # error bodies, and one of those parameters is the client secret.
@@ -194,8 +197,9 @@ def _graph_get(url: str, token: str, *, opener=None) -> dict:
     request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})  # noqa: S310 - url is checked above to sit under the https GRAPH_API_BASE constant
     open_fn = opener or urllib.request.urlopen
     try:
-        with open_fn(request, timeout=_HTTP_TIMEOUT_S) as response:
-            return json.loads(response.read())
+        # One transient 502/503 from Graph held both msgraph inboxes and paged
+        # on 2026-11-12 (run 43278803074); the GET is retried before it holds.
+        return transient_http.get_json(open_fn, request, timeout=_HTTP_TIMEOUT_S, label="msgraph GET")
     except urllib.error.HTTPError as exc:
         raise ReconcileError(f"msgraph GET failed: HTTP {exc.code}") from exc
     except (urllib.error.URLError, OSError, ValueError) as exc:
