@@ -29,6 +29,7 @@ from types import ModuleType
 import pytest
 
 from bin.lib import skill_shared_gen as gen
+from bin.lib import skill_text_blocks as blocks_gen
 
 ROOT = gen.repo_root()
 
@@ -65,6 +66,16 @@ _YAML = """modules:
 """
 
 
+_HEAD = "## Rules (shared)"
+_BLOCK = f"{_HEAD}\n\nwrite it right the first time\n\n"
+_BLOCKS = """blocks:
+  rules:
+    source: operator/contracts/rules.md
+    skills: [alpha]
+    own_text: [gamma]
+"""
+
+
 def _cli() -> ModuleType:
     spec = importlib.util.spec_from_file_location("gen_skill_shared_under_test", ROOT / gen.GENERATOR)
     assert spec and spec.loader
@@ -80,8 +91,11 @@ def _tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "operator/templates/gate.py": _GATE,
         "operator/skills/alpha/helpers.py": "def helper():\n    return 1\n",
         "operator/skills/gamma/pre_run.py": _BESPOKE,
-        "operator/skills/gamma/SKILL.md": "gamma\n",
+        "operator/skills/gamma/SKILL.md": f"gamma\n\n{_HEAD}\n\nthe gamma lines\n",
+        "operator/skills/alpha/SKILL.md": f"# alpha\n\n{_HEAD}\n\nold words\n\n## After\n\nkept\n",
         "operator/overlay/shared/rule.py": "RULE = 1\n",
+        blocks_gen.CONTRACT_REL: _BLOCKS,
+        "operator/contracts/rules.md": _BLOCK,
         "operator/connector/pkg/__init__.py": "",
     }
     for rel, text in files.items():
@@ -115,7 +129,7 @@ def test_generate_writes_the_source_bytes_and_check_then_passes(
 ) -> None:
     root = _tree(tmp_path, monkeypatch)
     cli = _cli()
-    assert _check(cli) == 1, "four copies are missing, so --check must fail first"
+    assert _check(cli) == 1, "four copies are missing and alpha's section differs, so --check must fail first"
     assert cli.main(["gen-skill-shared.py"]) == 0
     assert (root / "operator/connector/pkg/rule.py").read_bytes() == b"RULE = 1\n"
     assert (root / "operator/skills/alpha/pre_run.py").read_bytes() == _GATE.encode()
@@ -237,3 +251,71 @@ def test_the_real_yaml_holds_the_cross_process_copies() -> None:
         "operator/runners/jobs/jobs/drafting/layout_store.py",
         "operator/runners/jobs/jobs/attorneys/roster.py",
     } <= declared
+
+
+def test_a_block_is_stamped_and_own_text_is_left_alone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _tree(tmp_path, monkeypatch)
+    cli = _cli()
+    assert cli.main(["gen-skill-shared.py"]) == 0
+    alpha = (root / "operator/skills/alpha/SKILL.md").read_text(encoding="utf-8")
+    # The section (heading to the next `## `) is the source's bytes; the rest stays.
+    assert alpha == f"# alpha\n\n{_BLOCK}## After\n\nkept\n"
+    assert (root / "operator/skills/gamma/SKILL.md").read_text(encoding="utf-8").endswith("the gamma lines\n")
+    assert _check(cli) == 0
+    # A hand edit of a stamped section fails, and regenerating restores it.
+    md = root / "operator/skills/alpha/SKILL.md"
+    md.write_text(alpha.replace("first time", "second time"), encoding="utf-8")
+    assert _check(cli) == 1
+    cli.main(["gen-skill-shared.py"])
+    assert md.read_text(encoding="utf-8") == alpha
+
+
+def test_a_section_the_yaml_does_not_list_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _tree(tmp_path, monkeypatch)
+    cli = _cli()
+    cli.main(["gen-skill-shared.py"])
+    (root / "operator/skills/beta/SKILL.md").write_text(f"beta\n\n{_BLOCK}", encoding="utf-8")
+    assert _check(cli) == 1
+    blocks = blocks_gen.load(root / blocks_gen.CONTRACT_REL)
+    assert blocks_gen.problems(root, blocks) == [
+        f"undeclared: operator/skills/beta/SKILL.md carries {_HEAD!r}; list it in {blocks_gen.CONTRACT_REL}"
+    ]
+
+
+def test_own_text_that_matches_the_source_must_move_to_skills(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _tree(tmp_path, monkeypatch)
+    cli = _cli()
+    cli.main(["gen-skill-shared.py"])
+    (root / "operator/skills/gamma/SKILL.md").write_text(f"gamma\n\n{_BLOCK}", encoding="utf-8")
+    assert _check(cli) == 1
+    blocks = blocks_gen.load(root / blocks_gen.CONTRACT_REL)
+    assert blocks_gen.problems(root, blocks) == [
+        "rules: gamma now matches operator/contracts/rules.md; move it from own_text to skills"
+    ]
+
+
+def test_the_real_writing_rules_block_covers_every_law_seat_skill() -> None:
+    blocks = blocks_gen.load(ROOT / blocks_gen.CONTRACT_REL)
+    (rules,) = [b for b in blocks if b.id == "law_seat_writing_rules"]
+    # Not vacuous: 31 skills carry the shared text, 11 keep their own until reconciled.
+    assert len(rules.skills) == 31
+    assert len(rules.own_text) == 11
+    assert blocks_gen.problems(ROOT, blocks) == []
+
+
+@pytest.mark.parametrize(
+    ("body", "why"),
+    [
+        ("blocks: {}\n", "non-empty mapping"),
+        ("blocks:\n  r:\n    skills: [a]\n", "needs `source`"),
+        ("blocks:\n  r:\n    source: x.txt\n    skills: [a]\n", "repo-relative .md"),
+        ("blocks:\n  r:\n    source: operator/skills/a/x.md\n    skills: [a]\n", "never shipped"),
+        ("blocks:\n  r:\n    source: x.md\n    skills: []\n", "non-empty list"),
+        ("blocks:\n  r:\n    source: x.md\n    skills: [a]\n    own_text: [a]\n", "listed twice"),
+    ],
+)
+def test_a_bad_blocks_yaml_is_refused(tmp_path: Path, body: str, why: str) -> None:
+    bad = tmp_path / "skill-text-blocks.yaml"
+    bad.write_text(body, encoding="utf-8")
+    with pytest.raises(ValueError, match=why):
+        blocks_gen.load(bad)

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Write every shared-module copy declared in operator/contracts/skill-shared-modules.yaml.
+"""Write every shared-module copy declared in operator/contracts/skill-shared-modules.yaml,
+and every shared SKILL.md section declared in operator/contracts/skill-text-blocks.yaml.
 
 The copies are COMMITTED and byte-identical to their sources (each skill folder
 ships alone, and the broker, gateway, job runner and connectors each run in a
@@ -20,27 +21,39 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from bin.lib import skill_shared_gen as gen
+from bin.lib import skill_text_blocks as blocks_gen
 
 
 def main(argv: list[str]) -> int:
     check = "--check" in argv[1:]
     root = gen.repo_root()
     modules = gen.load(root / gen.CONTRACT_REL)
+    blocks = blocks_gen.load(root / blocks_gen.CONTRACT_REL)
     if not check:
-        for path in gen.stamp(root, modules):
+        for path in [*gen.stamp(root, modules), *blocks_gen.stamp(root, blocks)]:
             print(f"wrote {path.relative_to(root)}")
-    found = gen.problems(root, modules)
-    if found:
-        lines = "\n  ".join(found)
-        print(
-            f"OUT OF SYNC with {gen.CONTRACT_REL}:\n  {lines}\n"
-            f"Edit the source, never a copy, then run: python3 {gen.GENERATOR}",
-            file=sys.stderr,
-        )
+    failed = False
+    for contract, found in (
+        (gen.CONTRACT_REL, gen.problems(root, modules)),
+        (blocks_gen.CONTRACT_REL, blocks_gen.problems(root, blocks)),
+    ):
+        if found:
+            failed = True
+            lines = "\n  ".join(found)
+            print(
+                f"OUT OF SYNC with {contract}:\n  {lines}\n"
+                f"Edit the source, never a copy, then run: python3 {gen.GENERATOR}",
+                file=sys.stderr,
+            )
+    if failed:
         return 1
     if check:
         count = len(gen.copies(root, modules))
-        print(f"shared modules in sync: {len(modules)} modules, {count} copies")
+        sections = sum(len(b.skills) for b in blocks)
+        print(
+            f"shared modules in sync: {len(modules)} modules, {count} copies; "
+            f"shared SKILL.md sections in sync: {len(blocks)} blocks, {sections} stamped"
+        )
     return 0
 
 
