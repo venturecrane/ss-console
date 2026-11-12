@@ -17,6 +17,7 @@ Run::
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -27,7 +28,7 @@ OPERATOR = Path(__file__).resolve().parents[2]
 REPO = OPERATOR.parent
 sys.path.insert(0, str(OPERATOR))
 
-from bin.lib.seat_callers.capture import run_site  # noqa: E402 - imported only once sys.path holds the operator tree
+from bin.lib.seat_callers.capture import _row, run_site  # noqa: E402 - imported only once sys.path holds the operator tree
 from bin.lib.seat_callers.diff import differences  # noqa: E402 - imported only once sys.path holds the operator tree
 from bin.lib.seat_callers.discover import SiteSpec, sites_in  # noqa: E402 - imported only once sys.path holds the operator tree
 from bin.lib.seat_callers.modes import modes  # noqa: E402 - imported only once sys.path holds the operator tree
@@ -214,3 +215,112 @@ def test_a_changed_row_is_named_by_the_diff() -> None:
 def test_module_level_reads_are_inline_sites(source: str, kind: str, assign: str | None) -> None:
     (site,) = sites_in("slug", "operator/x/y.py", source)
     assert isinstance(site, SiteSpec) and site.kind == kind and site.assign == assign and site.qualname is None
+
+
+# ------------------------------------------------------------ real customer.yaml rows
+
+
+def _real_files(repo: Path) -> list[str]:
+    """Every operator/customers/<folder>/customer.yaml, found without the instrument's code."""
+    root = repo / "operator" / "customers"
+    return sorted(name for name in os.listdir(root) if os.path.isfile(os.path.join(root, name, "customer.yaml")))
+
+
+def test_every_real_customer_yaml_is_an_input_of_every_executable_yaml_site() -> None:
+    """The golden runs each yaml site over every real seat document the tree holds.
+
+    It once held none: the child looked the real files up under its own sandbox,
+    whose customer.yaml redirect sent Path.glob's lstat of each candidate to the
+    absent input file, so every one read as missing and the real rows vanished
+    without a difference to see.
+    """
+    table = json.loads(TABLE.read_text(encoding="utf-8"))
+    want = len(_real_files(REPO))
+    assert want >= 1
+    rows = [r for r in table["concepts"]["customer-yaml"]["rows"] if r["status"] != "not-executable"]
+    assert rows
+    for row in rows:
+        got = [k for k in row["behaviour"] if k.startswith("real-")]
+        assert len(got) == want, f"{row['file']}::{row['symbol']} has {len(got)} real rows, the tree holds {want}"
+
+
+def test_a_planted_tree_with_real_seats_gets_a_row_per_seat(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    for name in ("seat-one", "seat-two", "seat-three"):
+        seat = repo / "operator" / "customers" / name
+        seat.mkdir(parents=True)
+        (seat / "customer.yaml").write_text("customer_id: x\nmemory: {}\n", encoding="utf-8")
+    (repo / "operator" / "customers" / "_template").mkdir()  # no customer.yaml of its own: not a seat
+    got = _plant(tmp_path, "customer-yaml", YAML_SITES)["strict"]
+    real = sorted(k for k in got["runs"] if k.startswith("real-"))
+    assert len(real) == len(_real_files(repo)) == 3
+    assert all(got["runs"][k]["outcome"] == "return" for k in real)
+
+
+# ------------------------------------------------------------ every site's dependencies are installed
+
+
+MISSING_MODULE = ("ModuleNotFoundError", "ImportError")
+
+
+def _missing_module(row: dict) -> list[str]:
+    """Where a row says a module was absent: an import that failed, or a call that raised it."""
+    found = []
+    if row["status"] == "not-executable" and any(m in str(row.get("reason")) for m in MISSING_MODULE):
+        found.append(f"not-executable: {row['reason']}")
+    found += [
+        f"{i}: {b}"
+        for i, b in (row.get("behaviour") or {}).items()
+        if b.startswith(tuple("raise " + m for m in MISSING_MODULE))
+    ]
+    return found
+
+
+def test_no_site_is_left_unrun_for_a_missing_module() -> None:
+    """The capture environment carries every third-party module a site imports.
+
+    httpx, lxml, pydantic and mcp are installed beside pytest in the
+    operator-substrate job (pinned to requirements/jobs.txt). Before they were,
+    six readers were recorded not-executable (their import failed) and a
+    seventh, templates/lane-memory-caps-probe.py, raised ModuleNotFoundError
+    from a function-level import on its good input, so none of them ran.
+    """
+    table = json.loads(TABLE.read_text(encoding="utf-8"))
+    missing = [
+        f"{r['file']}::{r['symbol']} {hit}"
+        for body in table["concepts"].values()
+        for r in body["rows"]
+        for hit in _missing_module(r)
+    ]
+    assert missing == []
+
+
+IMPORTS_ABSENT = """
+import yaml
+import not_an_installed_module_for_the_capture
+
+
+def load():
+    return yaml.safe_load(open("/opt/data/customer.yaml"))
+"""
+
+CALLS_ABSENT = """
+import yaml
+
+
+def load():
+    doc = yaml.safe_load(open("/opt/data/customer.yaml"))
+    import not_an_installed_module_for_the_capture
+    return doc
+"""
+
+
+@pytest.mark.parametrize("source", [IMPORTS_ABSENT, CALLS_ABSENT], ids=["at-import", "at-call"])
+def test_a_missing_module_is_recorded_in_the_words_that_test_reads(tmp_path: Path, source: str) -> None:
+    (spec,) = sites_in("customer-yaml", "operator/planted_tree/planted_site.py", source)
+    repo = tmp_path / "repo"
+    (repo / "operator" / "planted_tree").mkdir(parents=True)
+    (repo / "operator" / "planted_tree" / "planted_site.py").write_text(source, encoding="utf-8")
+    result = run_site(spec, repo, sys.executable)
+    row = _row(spec, result, real_digests=False)
+    assert _missing_module(row), row

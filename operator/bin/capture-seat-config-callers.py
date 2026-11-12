@@ -12,7 +12,9 @@ site must reproduce its row, or the difference is a reviewed change.
     python3 operator/bin/capture-seat-config-callers.py --check    # exit 1 if the table is stale
 
 Runs in the environment of the operator-substrate pytest step (pytest, pyyaml,
-the operator tree and the overlay installed). The package doing the work is
+httpx, lxml, pydantic and mcp at the seat's pins, the operator tree and the
+overlay installed): a site whose import needs a module that is absent is
+recorded not-executable rather than run. The package doing the work is
 operator/bin/lib/seat_callers/.
 """
 

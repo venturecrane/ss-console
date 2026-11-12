@@ -51,6 +51,9 @@ class Site:
         self.override = OVERRIDES.get(self.key, {})
         self.module: Any = None
         self.env_names: set[str] = set()
+        # Read by main() BEFORE the sandbox is installed: under it every path named customer.yaml is
+        # redirected to the current input, so Path.glob's lstat of each candidate found none (0 real rows).
+        self.reals: list[tuple[str, str]] = []
         self.norm = Normaliser(
             [
                 (str(self.tmp), "<TMP>"),
@@ -268,10 +271,6 @@ def _learn_paths(site: Site, ctx: Ctx, apply: dict[str, Any]) -> None:
 def _yaml_runs(site: Site) -> list[dict[str, Any]]:
     good = inp.good_text()
     _learn_paths(site, _materialise(site, "learn", "file", good), {})
-    reals = []
-    for rid, path in inp.real_inputs(site.repo):
-        with sandbox.original("open")(path, encoding="utf-8") as fh:
-            reals.append((rid, fh.read()))
     # The block a site reads is learned from the synthetic document only: a key the
     # site asks for is seen even when absent, and nothing a real seat authors (a
     # person's address used as a key, a block one seat added) reaches the table or
@@ -288,7 +287,7 @@ def _yaml_runs(site: Site) -> list[dict[str, Any]]:
             )
         else:
             rows.append({"input": input_id, **run_input(site, _materialise(site, input_id, "file", text), {})})
-    for rid, text in reals:
+    for rid, text in site.reals:
         rows.append({"input": rid, "real": True, **run_input(site, _materialise(site, rid, "file", text), {})})
     observed = sorted(".".join(map(str, p)) for p in accessed if p and p[-1] != "*")
     rows.append({"input": "$observed-keys", "keys": observed})
@@ -319,6 +318,8 @@ def main(spec_path: str) -> None:
     spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
     site = Site(spec)
     loader.setup_path(site.repo)
+    if spec["concept"] == "customer-yaml":
+        site.reals = [(rid, path.read_text(encoding="utf-8")) for rid, path in inp.real_inputs(site.repo)]
     sandbox.install(str(site.tmp))
     yamltrack.install()
     _set_env(site, {})
