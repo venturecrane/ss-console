@@ -13,6 +13,7 @@
  * this module writes D1.
  */
 
+import { LANE_EMAIL_LABEL } from './job-lanes.generated'
 import {
   jobsQueued,
   LANE_WHY,
@@ -47,15 +48,11 @@ function couldNotLines(card: RequestCard): string[] {
   ]
 }
 
-/** What a person calls a lane's work. An unknown lane reads as its own name. */
-const LANE_WORDS: Record<string, string> = {
-  medchron: 'chronology',
-  demand: 'demand',
-  drafting: 'drafting',
-  litigation: 'litigation list',
-  negotiation: 'negotiation',
-  casefile: 'case file',
-}
+/**
+ * What a person calls a lane's work (the email_label column of
+ * operator/contracts/job-lanes.yaml). An unknown lane reads as its own name.
+ */
+const LANE_WORDS: Readonly<Record<string, string>> = LANE_EMAIL_LABEL
 
 function laneWords(card: RequestCard): string {
   const lane = card.job?.lane

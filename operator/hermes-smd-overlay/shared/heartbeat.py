@@ -49,6 +49,8 @@ from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
+from shared import job_lanes
+
 logger = logging.getLogger("hermes-smd-heartbeat")
 
 DEFAULT_INGEST_URL = "https://smd.services/api/internal/heartbeat"
@@ -813,11 +815,10 @@ DELIVERY_PROOF_CODES = frozenset(
     }
 )
 
-#: The job lanes that write a delivery-proof row (``delivery_proof.LANES``).
-#: An event's tool is ``<lane>_job``, the lane's own status tool's prefix.
-DELIVERY_PROOF_LANES = frozenset(
-    {"medchron", "demand", "drafting", "litigation", "negotiation", "note", "casefile", "records"}
-)
+#: The job lanes that write a delivery-proof row (``delivery_proof.LANES``):
+#: every lane in operator/contracts/job-lanes.yaml. An event's tool is
+#: ``<lane>_job``, the lane's own status tool's prefix.
+DELIVERY_PROOF_LANES = frozenset(job_lanes.JOB_LANES)
 
 #: The ``tool`` a delivery-proof event carries when its lane is not one above.
 PROOF_TOOL = "delivery_proof"

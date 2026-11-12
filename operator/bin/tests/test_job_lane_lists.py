@@ -25,7 +25,9 @@ def test_work_health_reads_each_lanes_audit_prefix() -> None:
 
 
 def test_preflight_knows_each_firm_input_lanes_vault_marker() -> None:
-    expected = {lane: f"{lane}-firm.yaml" if lane in jl.FIRM_INPUT_FILE_LANES else f"{lane}/" for lane in jl.FIRM_INPUT_LANES}
+    expected = {
+        lane: f"{lane}-firm.yaml" if lane in jl.FIRM_INPUT_FILE_LANES else f"{lane}/" for lane in jl.FIRM_INPUT_LANES
+    }
     assert LANE_VAULT_MARKERS == expected
 
 
@@ -35,6 +37,7 @@ def test_lane_validate_judges_each_firm_input_lane_with_its_module() -> None:
 
 def test_build_hashes_each_firm_input_lanes_schema_module() -> None:
     expected = {
-        lane: "operator/runners/jobs/" + jl.LANE_FIRM_MODULE[lane].replace(".", "/") + ".py" for lane in jl.FIRM_INPUT_LANES
+        lane: "operator/runners/jobs/" + jl.LANE_FIRM_MODULE[lane].replace(".", "/") + ".py"
+        for lane in jl.FIRM_INPUT_LANES
     }
     assert LANE_SCHEMA_MODULES == expected

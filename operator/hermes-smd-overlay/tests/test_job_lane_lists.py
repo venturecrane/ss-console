@@ -50,7 +50,9 @@ def test_the_firm_inputs_applier_lanes() -> None:
         lane = by_name[name]
         assert lane.marker == f"{name}-firm.yaml"
         assert lane.single_file is (name in jl.FIRM_INPUT_FILE_LANES)
-        assert lane.broker_copy == (f"{name}-broker-firm.yaml" if name in jl.BROKER_FIRM_COPY_LANES else None)
+        assert lane.broker_copy == (
+            f"{name}-broker-firm.yaml" if name in jl.BROKER_FIRM_COPY_LANES else None
+        )
 
 
 def test_the_lanes_plugin_offers_tools_for_every_lane() -> None:

@@ -34,31 +34,15 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import lane_proof, proof_run, seat_layout
+from . import job_lanes, lane_proof, proof_run, seat_layout
 
 DEFAULT_RUN_DIR = seat_layout.JOBS_RUN
 #: Each daemon lane's queue under the run dir (the entrypoints' exports).
-QUEUES = {
-    "medchron": "queue",
-    "demand": "demand-queue",
-    "drafting": "drafting-queue",
-    "litigation": "litigation-queue",
-    "negotiation": "negotiation-queue",
-    "casefile": "casefile-queue",
-    "records": "records-queue",
-}
+QUEUES = dict(job_lanes.LANE_QUEUE_DIR)
 
 
 #: Each daemon lane's job dirs (a finished job's envelope, kept 72 h).
-JOBS = {
-    "medchron": "jobs",
-    "demand": "demand-jobs",
-    "drafting": "drafting-jobs",
-    "litigation": "litigation-jobs",
-    "negotiation": "negotiation-jobs",
-    "casefile": "casefile-jobs",
-    "records": "records-jobs",
-}
+JOBS = dict(job_lanes.LANE_JOBS_DIR)
 
 
 def _lane_of(run_dir: Path, job_id: str, *, finished: bool = False) -> str | None:

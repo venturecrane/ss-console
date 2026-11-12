@@ -37,7 +37,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from . import resume as resume_mod, smd_stop, spend
+from . import job_lanes, resume as resume_mod, smd_stop, spend
 from .daemon import DEFAULT_RUN_DIR, RUN_DIR_ENV, TERMINAL
 from .lane_proof_cli import QUEUES
 
@@ -45,13 +45,7 @@ from .lane_proof_cli import QUEUES
 #: ``jobs`` property and ``run_child`` pidfile; the chronology's predate the
 #: other lanes and carry no prefix).
 LANES: dict[str, tuple[str, str]] = {
-    "medchron": ("jobs", "child.pid"),
-    "demand": ("demand-jobs", "demand-child.pid"),
-    "drafting": ("drafting-jobs", "drafting-child.pid"),
-    "litigation": ("litigation-jobs", "litigation-child.pid"),
-    "negotiation": ("negotiation-jobs", "negotiation-child.pid"),
-    "casefile": ("casefile-jobs", "casefile-child.pid"),
-    "records": ("records-jobs", "records-child.pid"),
+    lane: (job_lanes.LANE_JOBS_DIR[lane], job_lanes.LANE_CHILD_PID[lane]) for lane in job_lanes.QUEUED_LANES
 }
 DEFAULT_WAIT_SECONDS = 90.0
 POLL_SECONDS = 1.0

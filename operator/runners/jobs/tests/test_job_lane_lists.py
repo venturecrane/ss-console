@@ -9,7 +9,7 @@ list edited alone, fails.
 from __future__ import annotations
 
 from jobs import job_lanes as jl
-from jobs import lane_proof, lane_proof_cli, stop
+from jobs import lane_proof, lane_proof_cli, lanes, stop
 from jobs.proof import watch
 
 
@@ -28,3 +28,13 @@ def test_the_stop_tool_knows_each_queued_lanes_dirs_and_pid() -> None:
 
 def test_the_watch_answers_each_lane_under_its_job_kind() -> None:
     assert watch.REPLY_KIND == jl.LANE_JOB_KIND
+
+
+def test_the_daemon_starts_a_module_for_every_declared_lane() -> None:
+    named = {
+        cls.__dict__["LANE"]
+        for name in lanes.LANES
+        for cls in vars(lanes._module(name)).values()
+        if isinstance(cls, type) and cls.__module__ == lanes._module(name).__name__ and "LANE" in cls.__dict__
+    }
+    assert named == set(jl.JOB_LANES)
