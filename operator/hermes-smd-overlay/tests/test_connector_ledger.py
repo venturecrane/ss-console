@@ -79,6 +79,24 @@ def test_error_message_truncated_at_write(_ledger_in_tmp):
     assert len(entry["last_error_message"]) == cl.MAX_ERROR_CHARS
 
 
+def test_truncation_keeps_the_http_verdict_past_the_cut(_ledger_in_tmp):
+    # 2026-11-12: a Graph delta URL filled the whole budget and the 502 was lost.
+    url = "https://graph.microsoft.com/v1.0/users/x/messages/delta?$deltatoken=" + "k" * 300
+    message = f"MSGraph GET {url} -> HTTP 502: UnknownError"
+    cl.record_call("msgraph_mail", ok=False, error_message=message, now=100.0)
+    kept = _read(_ledger_in_tmp)["servers"]["msgraph_mail"]["last_error_message"]
+    assert len(kept) <= cl.MAX_ERROR_CHARS
+    assert kept.startswith("MSGraph GET https://graph.microsoft.com")
+    assert "-> HTTP 502: UnknownError" in kept
+
+
+def test_short_or_verdictless_messages_cut_as_before():
+    assert cl.bounded_error("x -> HTTP 401: y") == "x -> HTTP 401: y"
+    assert cl.bounded_error("y" * 500) == "y" * cl.MAX_ERROR_CHARS
+    early = "z -> HTTP 503: " + "b" * 500
+    assert cl.bounded_error(early) == early[: cl.MAX_ERROR_CHARS]
+
+
 def test_servers_are_independent(_ledger_in_tmp):
     cl.record_call("smokeball", ok=False, now=100.0)
     cl.record_call("agentmail", ok=True, now=100.0)
