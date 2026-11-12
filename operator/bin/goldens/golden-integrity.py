@@ -121,7 +121,7 @@ def compare(out: Path) -> dict[str, dict[str, list[str]]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("--base", required=True, help="the merge-base commit")
     ap.add_argument("--python", help="a venv python with the BASE runner installed (default: build one with uv)")
     a = ap.parse_args(argv)

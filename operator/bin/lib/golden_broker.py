@@ -68,13 +68,19 @@ def build_broker(root: Path, audit_db: Path, queues: dict[str, Path], *, slug: s
     b.msgraph = None
     b.establishment = None
     db = str(audit_db)
-    b.medchron = MedchronVerbs.build(b, audit_db_path=db, queue_dir=str(queues["medchron"]))
-    b.demand = DemandVerbs.build(b, audit_db_path=db, queue_dir=str(queues["demand"]))
-    b.drafting = DraftingVerbs.build(b, audit_db_path=db, queue_dir=str(queues["drafting"]))
-    b.litigation = LitigationVerbs.build(b, audit_db_path=db, queue_dir=str(queues["litigation"]))
-    b.negotiation = NegotiationVerbs.build(b, audit_db_path=db, queue_dir=str(queues["negotiation"]))
-    b.casefile = CasefileVerbs.build(b, audit_db_path=db, queue_dir=str(queues["casefile"]))
-    b.records = RecordsVerbs.build(b, audit_db_path=db, queue_dir=str(queues["records"]))
+    # Each lane's verbs on the broker attribute ``Broker.__init__`` sets: the
+    # class name less ``Verbs`` (the lane list itself lives in job-lanes.yaml).
+    for verbs in (
+        MedchronVerbs,
+        DemandVerbs,
+        DraftingVerbs,
+        LitigationVerbs,
+        NegotiationVerbs,
+        CasefileVerbs,
+        RecordsVerbs,
+    ):
+        lane = verbs.__name__.removesuffix("Verbs").lower()
+        setattr(b, lane, verbs.build(b, audit_db_path=db, queue_dir=str(queues[lane])))
     return b
 
 

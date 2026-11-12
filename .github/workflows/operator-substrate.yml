@@ -393,7 +393,7 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
         env:
-          BASE_SHA: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha || github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.event.merge_group.base_sha }}
         run: |
           set -euo pipefail
           base="$(git merge-base "${BASE_SHA:-HEAD~1}" HEAD)"
