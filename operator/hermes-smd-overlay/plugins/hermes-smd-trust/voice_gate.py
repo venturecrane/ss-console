@@ -54,8 +54,8 @@ ride the existing ``reason`` field (``no_spec`` | ``spec_not_read`` |
 ``spec_hash_mismatch`` alongside ``no_voice_spec_declared`` | ``gate_error``). ANY internal error in a bound gate
 downgrades. The gate never silently passes.
 
-Overlay-only (like the content floor, ADR 0031 §5). NOT mirrored into
-ss-console's ``trust_ceiling.py`` adapter.
+Overlay-only (like the content floor, ADR 0031 §5); the gateway's trust rule is
+the only one.
 """
 
 import logging

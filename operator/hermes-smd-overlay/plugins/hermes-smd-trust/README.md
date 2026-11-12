@@ -10,7 +10,7 @@ Content-class trust ceiling enforcement.
 
 ## Status
 
-Stub. Real implementation ports from `ss-console/operator/adapter/trust_ceiling.py` in §7 of the build plan.
+Implemented: `enforce.py` is the one trust rule (the ss-console adapter copy, `operator/adapter/trust_ceiling.py`, was removed 2026-11-12).
 
 ## Trust ceilings (planned, not yet implemented)
 

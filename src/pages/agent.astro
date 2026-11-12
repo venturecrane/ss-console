@@ -180,7 +180,7 @@ const checkoutStatus = Astro.url.searchParams.get('checkout')
     </section>
 
     <!-- Permission bands: what it does on its own, what waits for you, what it never does.
-         Grounded in the trust-ceiling enforcement (operator/adapter/trust_ceiling.py) and the
+         Grounded in the trust-ceiling enforcement (hermes-smd-trust enforce.py) and the
          self-serve preset's authored entitlements (external_send: confirm). This copy is
          deliberately NOT framed as staging/prod/go-live or a "tap to approve spend" flow: the
          self-serve preset has no deployment surface and no purchasing tool, so those bands would be

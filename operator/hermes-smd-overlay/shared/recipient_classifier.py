@@ -89,9 +89,8 @@ import unicodedata
 from collections.abc import Iterable, Sequence
 
 # Action-class strings the send router selects. These MUST equal the
-# ``ActionClass`` ``.value`` strings in ``operator/adapter/trust_ceiling.py`` (ss)
-# and ``shared/action_classes.py`` (overlay) — the shared vocabulary carried
-# across the twins. A rostered/internal send resolves to ``external_send_internal``
+# ``ActionClass`` ``.value`` strings in ``shared/action_classes.py``, the
+# vocabulary the gateway's trust rule (hermes-smd-trust enforce.py) reads. A rostered/internal send resolves to ``external_send_internal``
 # (its own authored, fail-closed exposure ceiling); anyone else to ``external_send``
 # (the outside ceiling, unchanged).
 ACTION_CLASS_EXTERNAL_SEND_INTERNAL = "external_send_internal"

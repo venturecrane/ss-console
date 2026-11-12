@@ -40,6 +40,6 @@
   },
   "enforcement_floor": {
     "commitment_never_autonomous_source": "operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py",
-    "note": "The tool-to-action-class map that pins payments_* / trust-ledger / create_matter as COMMITMENT-class lives overlay-side (shared/action_classes.py), outside this repo, so there is no ss-side BANNED_TOOLS list to assert against. The ss-reachable floor is trust_ceiling.enforce(): a COMMITMENT action is never allowed without explicit current-turn approval, even at ceiling=autonomous. Test (e) source-guards that invariant against silent removal and asserts no persona authors commitment: autonomous."
+    "note": "The tool-to-action-class map that pins payments_* / trust-ledger / create_matter as COMMITMENT-class lives in the overlay (operator/hermes-smd-overlay/shared/action_classes.py). The floor is the gateway's enforce() (operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py): a COMMITMENT action is never allowed without explicit current-turn approval, even at ceiling=autonomous. Test (e) source-guards that invariant against silent removal and asserts no persona authors commitment: autonomous."
   }
 }

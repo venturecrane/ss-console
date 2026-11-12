@@ -50,7 +50,7 @@ Frozen dataclass the overlay constructs per tool call. Fields:
 - `customer` (required) - customer slug; matches the D1 binding tenant.
 - `skill_name` (required) - from SKILL.md frontmatter.
 - `tool_name` (required) - the tool being invoked (e.g. `Email.create_draft`).
-- `action_class` (required) - `HookActionClass` enum value (string values mirror `adapter.trust_ceiling.ActionClass`).
+- `action_class` (required) - `HookActionClass` enum value (string values mirror `ActionClass` in `operator/hermes-smd-overlay/shared/action_classes.py`).
 - `ceiling_level` (required) - string value of the ceiling configured for the skill at dispatch time.
 - `skill_version` (optional) - content-hash SHA or version pin per §7.4 of the platform PRD.
 - `matter_ref` (optional) - per-vertical opaque reference (matter id, lead id).
@@ -60,7 +60,7 @@ Frozen dataclass the overlay constructs per tool call. Fields:
 
 ### 3.2 `HookActionClass`
 
-Closed enum with string values matching `adapter.trust_ceiling.ActionClass`: `read`, `internal_write`, `external_send`, `commitment`, `destructive`. Held as a separate enum so the overlay does not need to import adapter internals.
+Closed enum with string values matching `ActionClass` in `operator/hermes-smd-overlay/shared/action_classes.py`: `read`, `internal_write`, `external_send`, `commitment`, `destructive`. Held as a separate enum so the overlay does not need to import adapter internals.
 
 ### 3.3 `BlockedToolCall`
 
@@ -109,7 +109,7 @@ class TrustCeilingEnforcer(Protocol):
     ) -> EnforcementDecision: ...
 ```
 
-`DefaultTrustCeilingEnforcer` is the v1 implementation. It wraps `adapter.trust_ceiling.enforce()` (PR #812) and accepts the PRD-shape arguments. A future fork-side implementation can subclass or replace it without changing the hook surface.
+`DefaultTrustCeilingEnforcer` was the v1 implementation; it and the adapter rule it wrapped (`operator/adapter/trust_ceiling.py`) were removed on 2026-11-12. The live rule is `enforce()` in `operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py`, called by the overlay's `pre_tool_call` hook. As first built it wrapped the adapter's `enforce()` (PR #812) and accepts the PRD-shape arguments. A future fork-side implementation can subclass or replace it without changing the hook surface.
 
 ## 4. `register()` contract
 
@@ -186,7 +186,7 @@ These are filed as separate issues against ADR 0015's overlay-implementation wor
 Issue #841 acceptance criteria:
 
 - [x] `aie_adapter.register()` actually hooks into Hermes' `agent/tool_guardrails.py` dispatch - `register()` installs four hooks against a `HookRegistry` typed to mirror that seam. The fork-side overlay (separate PR) plugs the registry into the actual `tool_guardrails.py` dispatch path.
-- [x] Every tool call routes through `trust_ceiling.enforce()` before execution - the pre-tool hook calls `TrustCeilingEnforcer.enforce()` for every dispatch; the default enforcer wraps `adapter.trust_ceiling.enforce()`.
+- [x] Every tool call routes through `trust_ceiling.enforce()` before execution - the pre-tool hook calls `TrustCeilingEnforcer.enforce()` for every dispatch; the default enforcer wrapped the adapter's `enforce()` (removed 2026-11-12; the live rule is `operator/hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py`).
 - [x] Refusals + draft-routed actions logged to per-customer audit log - the post-tool hook emits `per_tool_audit` rows for every outcome; the refusal hook delegates to `RefusalHandler.handle()` which writes the canonical decision + notification rows.
 - [x] Compaction event re-injects pinned slots (invariant #4) - the compaction hook reads the `PinnedSlots` snapshot; v1 logs the slot set, fork-side overlay handles the actual context-injection.
 - [x] Integration test confirms a forbidden action is actually blocked at runtime - `test_forbidden_action_is_blocked_audit_row_records_outcome_blocked` asserts the tool function never ran.

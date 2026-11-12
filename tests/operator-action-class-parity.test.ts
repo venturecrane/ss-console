@@ -4,7 +4,7 @@
  * The TS authoring surface (`ACCEPTED_ACTION_CLASSES` / `SEND_ACTION_CLASSES`) and
  * the gateway's Python vocabulary (`operator/hermes-smd-overlay/shared/action_classes.py`'s
  * `ActionClass`, which the live `hermes-smd-trust` `enforce()` imports) must agree
- * on the action-class vocabulary — the overlay materializer carries the authored
+ * on the action-class vocabulary: the overlay materializer carries the authored
  * strings across the seam to the runtime `enforce()` call. (Until 2026-11-12 this
  * read `operator/adapter/trust_ceiling.py`, a second copy of the rule no seat ran;
  * that copy was deleted and this now reads the module the gateway imports.) If a send class exists on one side and not the other, an
