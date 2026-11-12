@@ -75,11 +75,8 @@
         "branches_covered": 2,
         "branches_not_taken": [],
         "lines": 15,
-        "lines_covered": 13,
-        "uncovered": [
-          "293: except BrokerError as exc:",
-          "294: logger.error(\"could not record %s for %s: %s (the state file keeps it)\", state, job_id, exc)"
-        ]
+        "lines_covered": 15,
+        "uncovered": []
       },
       "CasefileLane._spawn": {
         "branches": 2,
@@ -209,18 +206,12 @@
       },
       "Daemon.claim_next": {
         "branches": 10,
-        "branches_covered": 7,
-        "branches_not_taken": ["227->228", "236->237", "246->247"],
+        "branches_covered": 8,
+        "branches_not_taken": ["227->228", "246->247"],
         "lines": 30,
-        "lines_covered": 21,
+        "lines_covered": 27,
         "uncovered": [
           "228: return None",
-          "237: q = self.queue / \"quarantine\"",
-          "238: q.mkdir(exist_ok=True, mode=0o700)",
-          "239: env_path.replace(q / env_path.name)",
-          "240: retention.mark_set_aside(q / env_path.name)",
-          "241: logger.error(\"quarantined %s: the broker has no ledger row for it\", job_id)",
-          "242: continue",
           "247: smd_stop.set_aside(self, env_path, job_id, why)",
           "248: continue"
         ]
@@ -340,12 +331,8 @@
         "branches_covered": 7,
         "branches_not_taken": ["213->214"],
         "lines": 26,
-        "lines_covered": 23,
-        "uncovered": [
-          "214: fields[\"delivery\"][\"library_edit\"] = edit",
-          "218: except BrokerError as exc:",
-          "219: logger.error(\"could not record %s for %s: %s (the state file keeps it)\", state, job_id, exc)"
-        ]
+        "lines_covered": 25,
+        "uncovered": ["214: fields[\"delivery\"][\"library_edit\"] = edit"]
       },
       "DemandLane._seed_from_superseded": {
         "branches": 4,
@@ -503,14 +490,12 @@
         "branches_covered": 11,
         "branches_not_taken": ["287->289", "292->294", "300->301"],
         "lines": 32,
-        "lines_covered": 26,
+        "lines_covered": 28,
         "uncovered": [
           "289: logger.error(\"drafting job %s left a caption correction not fully put back\", job_id)",
           "294: with (Path(self.run_dir) / RELEASES).open(\"a\", encoding=\"utf-8\") as fh:",
           "295: fh.write(json.dumps({\"job_id\": job_id, \"at\": self.clock()}) + \"\\n\")",
-          "301: fields[\"delivery\"][\"library_edit\"] = edit",
-          "305: except BrokerError as exc:",
-          "306: logger.error(\"could not record %s for %s: %s (the state file keeps it)\", state, job_id, exc)"
+          "301: fields[\"delivery\"][\"library_edit\"] = edit"
         ]
       },
       "DraftingLane._write_job": {
@@ -577,14 +562,12 @@
         "branches_covered": 6,
         "branches_not_taken": ["164->165", "177->181"],
         "lines": 27,
-        "lines_covered": 21,
+        "lines_covered": 23,
         "uncovered": [
           "157: except BrokerError as exc:",
           "158: logger.warning(\"broker not ready for library setup %s, deferring: %s\", job_id, exc)",
           "159: return \"deferred\"",
-          "165: state, fields = library_setup_handoff.hand_over(lane, job_id, jd, v)",
-          "172: except BrokerError as exc:",
-          "173: logger.error(\"could not record %s for library setup %s: %s\", state, job_id, exc)"
+          "165: state, fields = library_setup_handoff.hand_over(lane, job_id, jd, v)"
         ]
       }
     },
@@ -754,12 +737,10 @@
         "branches_covered": 10,
         "branches_not_taken": ["347->348", "349->350"],
         "lines": 26,
-        "lines_covered": 22,
+        "lines_covered": 24,
         "uncovered": [
           "348: fields[\"counts\"] = {str(k): int(n) for k, n in v[\"counts\"].items() if isinstance(n, int)}",
-          "350: fields[\"writes\"] = [w for w in v[\"writes\"] if isinstance(w, dict)]",
-          "356: except BrokerError as exc:",
-          "357: logger.error(\"could not record %s for %s: %s (the state file keeps it)\", state, job_id, exc)"
+          "350: fields[\"writes\"] = [w for w in v[\"writes\"] if isinstance(w, dict)]"
         ]
       },
       "LitigationLane._spawn": {
@@ -835,12 +816,8 @@
         "branches_covered": 9,
         "branches_not_taken": ["244->245"],
         "lines": 25,
-        "lines_covered": 22,
-        "uncovered": [
-          "245: return \"requeued\"",
-          "252: except BrokerError as exc:",
-          "253: logger.error(\"could not record %s for %s: %s (the state file keeps it)\", state, job_id, exc)"
-        ]
+        "lines_covered": 24,
+        "uncovered": ["245: return \"requeued\""]
       },
       "MedchronLane._write_job_yaml": {
         "branches": 4,
@@ -926,12 +903,8 @@
         "branches_covered": 9,
         "branches_not_taken": ["247->248"],
         "lines": 26,
-        "lines_covered": 23,
-        "uncovered": [
-          "239: except BrokerError as exc:",
-          "240: logger.error(\"could not record %s for %s: %s (the state file keeps it)\", state, job_id, exc)",
-          "248: self._notice_wake(nid)"
-        ]
+        "lines_covered": 25,
+        "uncovered": ["248: self._notice_wake(nid)"]
       },
       "NegotiationLane._spawn": {
         "branches": 2,
@@ -1064,14 +1037,11 @@
         "branches_covered": 11,
         "branches_not_taken": ["378->380", "384->385", "404->405", "408->409", "433->435"],
         "lines": 39,
-        "lines_covered": 27,
+        "lines_covered": 30,
         "uncovered": [
           "380: return self._fail(",
           "385: self._write_state(job_id, state=\"failed\", finished_at=self.clock())",
           "386: return \"failed\"",
-          "400: except (BrokerError, OSError) as exc:",
-          "401: logger.error(\"could not spool %s's cuts: %s (re-entered next tick)\", job_id, exc)",
-          "402: return \"deferred\"",
           "405: self._write_state(job_id, state=verdict, finished_at=self.clock())",
           "406: return verdict",
           "409: decision = self._decide(job_id, row)",
@@ -1162,8 +1132,8 @@
   },
   "total": {
     "branches": 364,
-    "branches_covered": 271,
-    "covered": 1021,
+    "branches_covered": 272,
+    "covered": 1044,
     "lines": 1254
   }
 }
