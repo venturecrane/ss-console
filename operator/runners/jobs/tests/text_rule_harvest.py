@@ -27,8 +27,8 @@ from typing import Any, Callable
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import goldens_kit as gk  # noqa: E402
-import text_rule_kit as kit  # noqa: E402
+import goldens_kit as gk  # noqa: E402 - run as a script, so the tests dir goes on sys.path just above
+import text_rule_kit as kit  # noqa: E402 - run as a script, so the tests dir goes on sys.path just above
 
 OUT = gk.GOLDENS / "text_rules"
 
