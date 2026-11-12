@@ -76,7 +76,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          set -u
+          set -eu
           # Evaluating runs only (schedule / dispatch): a pull_request run tests
           # code and reads no seat, so it must never count as "the last run".
           PREV="$(gh run list --repo "$REPO" --workflow work-health.yml --status success --limit 20 \
@@ -105,7 +105,7 @@ jobs:
           STATE_IN: ${{ steps.prev.outputs.state }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          set -u
+          set -eu
           mkdir -p state
           ARGS=(--state-out state/state.json)
           if [ -n "${SINCE:-}" ]; then ARGS+=(--since "$SINCE"); fi

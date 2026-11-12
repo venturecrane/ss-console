@@ -83,7 +83,7 @@ jobs:
           PROBE_KIND: ${{ github.event.inputs.kind }}
           PROBE_SEAT: ${{ github.event.inputs.seat }}
         run: |
-          set -u
+          set -eu
           ARGS="--kind ${PROBE_KIND:-local}"
           if [ -n "${PROBE_SEAT:-}" ]; then ARGS="${ARGS} --seat ${PROBE_SEAT}"; fi
           # `|| STATUS=$?` is load-bearing: the body runs under `bash -e`, so an

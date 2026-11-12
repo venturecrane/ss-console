@@ -45,7 +45,7 @@ jobs:
       # the same search with no network dependency.
       - name: Scan for law-pi- prefix in active paths
         run: |
-          set -uo pipefail
+          set -euo pipefail
           # ADR files are exempt — they describe the historical state.
           # Active paths: src/, tests/, operator/skills/, operator/bundles/,
           # operator/fixtures/ (sans the moved law-firm/pi/ subtree which

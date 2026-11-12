@@ -111,7 +111,7 @@ jobs:
           # shell-injection seam.
           SS_RECONCILE_DRY_RUN: ${{ github.event.inputs.dry_run && '1' || '' }}
         run: |
-          set -u
+          set -eu
           # Redirect rather than pipe: `$?` after `| tee` reports TEE's status,
           # not the script's, and this control would then never fire.
           #
@@ -137,7 +137,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          set -u
+          set -eu
           MARKER="reconcile-series: obligation-register"
           {
             echo "The obligation reconciler found work that is overdue, unverifiable, or uncaptured."
@@ -183,7 +183,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          set -u
+          set -eu
           STATUS=0
           node scripts/ci-reconcile-deferrals.mjs > deferrals.txt 2>&1 || STATUS=$?
           cat deferrals.txt
@@ -200,7 +200,7 @@ jobs:
           STATUS: ${{ steps.deferrals.outputs.status }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          set -u
+          set -eu
           MARKER="reconcile-series: runtime-deferrals"
           LABEL="process-deferral"
           gh label create "${LABEL}" --color BFD4F2 \

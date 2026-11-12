@@ -166,7 +166,7 @@ jobs:
           # input is user-supplied and would otherwise be a shell-injection seam.
           RECONCILE_DAYS: ${{ github.event.inputs.days }}
         run: |
-          set -u
+          set -eu
           ARGS=""
           if [ -n "${RECONCILE_DAYS:-}" ]; then
             ARGS="--days ${RECONCILE_DAYS}"
@@ -230,7 +230,7 @@ jobs:
           AGENTMAIL_API_KEY__BROKERY: ${{ secrets.AGENTMAIL_API_KEY__BROKERY }}
           AGENTMAIL_API_KEY__SCOTT: ${{ secrets.AGENTMAIL_API_KEY__SCOTT }}
         run: |
-          set -u
+          set -eu
           # Same `|| STATUS=$?` discipline as the reconcile step (ss#2309):
           # exit 1 is the findings path and must not abort the step under -e.
           STATUS=0
@@ -249,7 +249,7 @@ jobs:
           REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          set -u
+          set -eu
           # The reconciler prints this for exactly this purpose (ss#2386). No
           # fingerprint on a findings run means the report is not the shape this
           # step was written against, and filing blind would restart the flood.
@@ -390,7 +390,7 @@ jobs:
       - name: Fail the run when an inbox could not be evaluated
         if: github.event_name != 'pull_request' && !cancelled()
         run: |
-          set -u
+          set -eu
           if [ ! -s holds.txt ]; then
             echo "Every inbox was evaluated."
             exit 0

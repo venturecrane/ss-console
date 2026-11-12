@@ -110,7 +110,7 @@ jobs:
           # input is user-supplied and would otherwise be a shell-injection seam.
           RECONCILE_DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          set -u
+          set -eu
           # Redirect rather than pipe: `$?` after `| tee` reports TEE's status,
           # not the script's, and this control would then never fire.
           #
@@ -222,7 +222,7 @@ jobs:
           # repository variable gates the publisher's key in deploy.yml.
           SEAT_SPEC_ENABLED: ${{ vars.SEAT_SPEC_ENABLED }}
         run: |
-          set -u
+          set -eu
           # `|| STATUS=$?` is load-bearing, not style (ss#2307). GitHub runs this
           # body under `bash -e`, so an unguarded non-zero exit aborts the step
           # HERE — before the report is printed and before `status` reaches
