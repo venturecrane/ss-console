@@ -14,7 +14,6 @@ import {
   FIRM_INPUT_EXTRAS,
   FIRM_INPUT_FILE_LANES,
   FIRM_INPUT_LANES,
-  JOB_LANES,
   LANE_EMAIL_LABEL,
   LANE_FIRM_MODULE,
   LANE_SKILL,
@@ -24,6 +23,8 @@ import type { RequestCard } from '../src/lib/operator/request-card'
 import { LANE_INPUTS } from '../scripts/lib/seat-spec'
 
 const ENTRY = { verdict: 'fetched', etag8: '1a2b3c4d', applied_at: null }
+/** Every job lane, in declared order (LANE_SKILL names each one). */
+const JOB_LANES = Object.keys(LANE_SKILL)
 
 describe('the console job-lane lists equal the declaration', () => {
   it('the capability table names every lane with its skill, in declared order', () => {

@@ -25,6 +25,17 @@ TEST_REL = "operator/bin/tests/test_job_lanes_generation.py"
 
 SHELL_REL = "operator/templates/_job-lanes.generated.sh"
 TS_REL = "src/lib/operator/job-lanes.generated.ts"
+#: The constants the console reads. The dead-export gate (knip --production)
+#: refuses an export nothing in production imports, so the TypeScript output
+#: carries only these; add a name here when a console module needs another.
+TS_CONSTANTS = (
+    "LANE_SKILL",
+    "LANE_EMAIL_LABEL",
+    "FIRM_INPUT_LANES",
+    "FIRM_INPUT_FILE_LANES",
+    "LANE_FIRM_MODULE",
+    "FIRM_INPUT_EXTRAS",
+)
 PYTHON_RELS = (
     "operator/runners/jobs/jobs/job_lanes.py",
     "operator/workspace_broker/job_lanes.py",
@@ -99,8 +110,10 @@ def _str(name: str, spec: dict, key: str, pattern: re.Pattern[str]) -> str | Non
 def _lane(name: object, spec: object) -> Lane:
     if not isinstance(name, str) or not _LANE.match(name):
         raise ValueError(f"job lanes: lane name {name!r} is not lower_snake_case")
-    if not isinstance(spec, dict) or not set(spec) <= _FIELDS:
-        raise ValueError(f"job lanes: {name} has unknown fields {sorted(set(spec or {}) - _FIELDS)}")
+    if not isinstance(spec, dict):
+        raise ValueError(f"job lanes: {name} must map its columns")
+    if not set(spec) <= _FIELDS:
+        raise ValueError(f"job lanes: {name} has unknown fields {sorted(set(spec) - _FIELDS)}")
     for flag in _FLAGS:
         if flag in spec and spec[flag] is not True:
             raise ValueError(f"job lanes: {name}.{flag} is a flag: write `true` or leave it out")
@@ -315,6 +328,8 @@ def render_ts(decl: Declaration) -> str:
     """The console's copy (src/), prettier-stable."""
     parts = [_header("//"), f"/** The job lanes, generated from {CONTRACT_REL}. */\n"]
     for name, comment, value in constants(decl):
+        if name not in TS_CONSTANTS:
+            continue
         if isinstance(value, dict):
             # `as const` keeps the literal keys, so `keyof typeof` names the lanes.
             parts.append(f"\n/** {comment} */\nexport const {name} = {_ts_value(value)} as const\n")

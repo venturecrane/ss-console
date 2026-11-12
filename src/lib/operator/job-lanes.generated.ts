@@ -3,18 +3,6 @@
 // CI checks it is in sync (operator/bin/tests/test_job_lanes_generation.py).
 /** The job lanes, generated from operator/contracts/job-lanes.yaml. */
 
-/** Every job lane, in declared order. */
-export const JOB_LANES: readonly string[] = [
-  'medchron',
-  'demand',
-  'drafting',
-  'litigation',
-  'casefile',
-  'negotiation',
-  'note',
-  'records',
-]
-
 /** Job lane -> the skill whose being enabled authors it. */
 export const LANE_SKILL = {
   medchron: 'medical-chronology-maintainer',
@@ -27,91 +15,6 @@ export const LANE_SKILL = {
   records: 'matter-records',
 } as const
 
-/** Job lane -> its job kind (the broker's reply kind). */
-export const LANE_JOB_KIND = {
-  medchron: 'medchron_job',
-  demand: 'demand_job',
-  drafting: 'drafting_job',
-  litigation: 'litigation_job',
-  casefile: 'casefile_job',
-  negotiation: 'negotiation_job',
-  note: 'note_job',
-  records: 'records_job',
-} as const
-
-/** Lanes whose jobs the runner takes from a queue under the run dir. */
-export const QUEUED_LANES: readonly string[] = [
-  'medchron',
-  'demand',
-  'drafting',
-  'litigation',
-  'casefile',
-  'negotiation',
-  'records',
-]
-
-/** Queued lane -> its queue under the run dir. */
-export const LANE_QUEUE_DIR = {
-  medchron: 'queue',
-  demand: 'demand-queue',
-  drafting: 'drafting-queue',
-  litigation: 'litigation-queue',
-  casefile: 'casefile-queue',
-  negotiation: 'negotiation-queue',
-  records: 'records-queue',
-} as const
-
-/** Queued lane -> its job dirs under the run dir. */
-export const LANE_JOBS_DIR = {
-  medchron: 'jobs',
-  demand: 'demand-jobs',
-  drafting: 'drafting-jobs',
-  litigation: 'litigation-jobs',
-  casefile: 'casefile-jobs',
-  negotiation: 'negotiation-jobs',
-  records: 'records-jobs',
-} as const
-
-/** Queued lane -> its child pid file under the run dir. */
-export const LANE_CHILD_PID = {
-  medchron: 'child.pid',
-  demand: 'demand-child.pid',
-  drafting: 'drafting-child.pid',
-  litigation: 'litigation-child.pid',
-  casefile: 'casefile-child.pid',
-  negotiation: 'negotiation-child.pid',
-  records: 'records-child.pid',
-} as const
-
-/** The word a completion wake uses -> the job kind it names. */
-export const WAKE_WORD_JOB_KIND = {
-  chronology: 'medchron_job',
-  demand: 'demand_job',
-  drafting: 'drafting_job',
-  litigation: 'litigation_job',
-  casefile: 'casefile_job',
-  negotiation: 'negotiation_job',
-  note: 'note_job',
-} as const
-
-/** Job kinds whose wake may be a scheduled run's (no request email). */
-export const SCHEDULED_JOB_KINDS: readonly string[] = [
-  'litigation_job',
-  'casefile_job',
-  'negotiation_job',
-  'note_job',
-]
-
-/** Lanes that write a request card row. */
-export const REQUEST_CARD_LANES: readonly string[] = [
-  'medchron',
-  'demand',
-  'drafting',
-  'litigation',
-  'casefile',
-  'records',
-]
-
 /** Lane -> what a person calls its work in a card email. */
 export const LANE_EMAIL_LABEL = {
   medchron: 'chronology',
@@ -120,16 +23,6 @@ export const LANE_EMAIL_LABEL = {
   litigation: 'litigation list',
   casefile: 'case file',
   negotiation: 'negotiation',
-} as const
-
-/** Audit action_type prefix the broker writes -> its lane. */
-export const AUDIT_PREFIX_LANE = {
-  MEDCHRON: 'medchron',
-  DEMAND: 'demand',
-  DRAFTING: 'drafting',
-  LITIGATION: 'litigation',
-  CASEFILE: 'casefile',
-  NEGOTIATION: 'negotiation',
 } as const
 
 /** Lanes with firm inputs in the vault. */
@@ -145,15 +38,6 @@ export const FIRM_INPUT_LANES: readonly string[] = [
 /** Firm-input lanes whose inputs are one file, <lane>-firm.yaml. */
 export const FIRM_INPUT_FILE_LANES: readonly string[] = ['medchron']
 
-/** Firm-input lanes whose inputs are a directory, <lane>/. */
-export const FIRM_INPUT_DIR_LANES: readonly string[] = [
-  'demand',
-  'drafting',
-  'litigation',
-  'casefile',
-  'records',
-]
-
 /** Firm-input lane -> the runner module whose validate() judges its inputs. */
 export const LANE_FIRM_MODULE = {
   medchron: 'jobs.medchron.config',
@@ -163,9 +47,6 @@ export const LANE_FIRM_MODULE = {
   casefile: 'jobs.casefile.firm',
   records: 'jobs.records.firm',
 } as const
-
-/** Lanes whose firm inputs the applier also copies for the broker. */
-export const BROKER_FIRM_COPY_LANES: readonly string[] = ['litigation', 'casefile', 'records']
 
 /** Firm inputs that are not job lanes. */
 export const FIRM_INPUT_EXTRAS: readonly string[] = ['attorneys']
