@@ -1,0 +1,1938 @@
+{
+  "matrix": {
+    "delivered": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notices_count": 1,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": 0,
+            "docs_read": 2,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices_count": 1,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": 0,
+            "docs_read": 2,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices_count": 1,
+            "reason": null,
+            "reply_sent_at": null,
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          },
+          "notice_ids": ["01KTJ0BX000000000000000003"],
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notice": false,
+          "notices_count": 1,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": 0,
+              "docs_read": 2,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": 0,
+              "matters_total": 9,
+              "notices_count": 1,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": "report",
+              "state": "delivered",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "negotiation_notices": [
+            {
+              "created_at": "2026-10-20T17:00:03.000Z",
+              "id": "01KTJ0BX000000000000000003",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "m",
+              "matter_number": "1",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "requester": "admin@firm.example",
+              "status": "entered",
+              "text": "x",
+              "wake_failed": 0
+            }
+          ],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notices_count": 1,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": 0,
+            "docs_read": 2,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices_count": 1,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> failed",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notice": false,
+          "notices_count": 1,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": 0,
+              "docs_read": 2,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": 0,
+              "matters_total": 9,
+              "notices_count": 1,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": "report",
+              "state": "delivered",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "negotiation_notices": [
+            {
+              "created_at": "2026-10-20T17:00:03.000Z",
+              "id": "01KTJ0BX000000000000000003",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "m",
+              "matter_number": "1",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "requester": "admin@firm.example",
+              "status": "entered",
+              "text": "x",
+              "wake_failed": 0
+            }
+          ],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notices_count": 1,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": 0,
+            "docs_read": 2,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices_count": 1,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> queued",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notice": false,
+          "notices_count": 1,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": 0,
+              "docs_read": 2,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": 0,
+              "matters_total": 9,
+              "notices_count": 1,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": "report",
+              "state": "delivered",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "negotiation_notices": [
+            {
+              "created_at": "2026-10-20T17:00:03.000Z",
+              "id": "01KTJ0BX000000000000000003",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "m",
+              "matter_number": "1",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "requester": "admin@firm.example",
+              "status": "entered",
+              "text": "x",
+              "wake_failed": 0
+            }
+          ],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notices_count": 1,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": 0,
+            "docs_read": 2,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices_count": 1,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> running",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notice": false,
+          "notices_count": 1,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": 0,
+              "docs_read": 2,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": 0,
+              "matters_total": 9,
+              "notices_count": 1,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": "report",
+              "state": "delivered",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "negotiation_notices": [
+            {
+              "created_at": "2026-10-20T17:00:03.000Z",
+              "id": "01KTJ0BX000000000000000003",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "m",
+              "matter_number": "1",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "requester": "admin@firm.example",
+              "status": "entered",
+              "text": "x",
+              "wake_failed": 0
+            }
+          ],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "failed": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> delivered",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "failed",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "failed",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> queued",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "failed",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "NEGOTIATION_JOB_RUNNING",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "docs_failed": null,
+              "docs_read": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices": 0,
+              "reason": "unexpected: a matrix failure",
+              "stage": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 2,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "row": {
+          "attempt": 2,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "running",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 2,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "running",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "queued": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "queued",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "queued",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:00.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition queued -> delivered",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "queued",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "queued",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:00.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": []
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "NEGOTIATION_JOB_FAILED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "docs_failed": null,
+              "docs_read": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices": 0,
+              "reason": "unexpected: a matrix failure",
+              "stage": null,
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "failed",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "queued",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "queued",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "queued",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "queued",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "queued",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": []
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "NEGOTIATION_JOB_RUNNING",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 0,
+              "docs_failed": null,
+              "docs_read": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices": 0,
+              "reason": null,
+              "stage": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "running",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "running",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": []
+        }
+      }
+    },
+    "running": {
+      "delivered": {
+        "audit": [
+          {
+            "action_type": "NEGOTIATION_JOB_DELIVERED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 500,
+              "docs_failed": 0,
+              "docs_read": 2,
+              "job_id": "01KTJ0BX000000000000000001",
+              "matters_seeded": 0,
+              "matters_total": 9,
+              "notices": 1,
+              "reason": null,
+              "stage": "report",
+              "state": "delivered"
+            }
+          }
+        ],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notices_count": 1,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": 0,
+            "docs_read": 2,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices_count": 1,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": 0,
+            "docs_read": 2,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices_count": 1,
+            "reason": null,
+            "reply_sent_at": null,
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "notice_ids": ["01KTJ0BX000000000000000003"],
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": 0,
+          "docs_read": 2,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notice": false,
+          "notices_count": 1,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": "report",
+          "state": "delivered",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": 0,
+              "docs_read": 2,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": 0,
+              "matters_total": 9,
+              "notices_count": 1,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": "report",
+              "state": "delivered",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "negotiation_notices": [
+            {
+              "created_at": "2026-10-20T17:00:03.000Z",
+              "id": "01KTJ0BX000000000000000003",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "m",
+              "matter_number": "1",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "requester": "admin@firm.example",
+              "status": "entered",
+              "text": "x",
+              "wake_failed": 0
+            }
+          ],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "NEGOTIATION_JOB_FAILED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "docs_failed": null,
+              "docs_read": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices": 0,
+              "reason": "unexpected: a matrix failure",
+              "stage": null,
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "failed",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "failed",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition running -> queued",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "running",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "running",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": []
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "01KTJ0BX000000000000000001",
+          "kind": "job",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices_count": null,
+          "reason": null,
+          "reply_sent_at": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+            "id": "01KTJ0BX000000000000000001",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "scheduled:2026-10-11T08",
+            "requester": "admin@firm.example",
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "01KTJ0BX000000000000000001",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "docs_failed": null,
+          "docs_read": null,
+          "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+          "id": "01KTJ0BX000000000000000001",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notice": false,
+          "notices_count": null,
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "scheduled:2026-10-11T08",
+          "requester": "admin@firm.example",
+          "stage": null,
+          "state": "running",
+          "trigger": "scheduled",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "negotiation_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+              "id": "01KTJ0BX000000000000000001",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "running",
+              "trigger": "scheduled",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "negotiation_notices": [],
+          "negotiation_spend": []
+        }
+      }
+    }
+  },
+  "never_reached": [],
+  "reached_by": {
+    "delivered": ["running", "delivered"],
+    "failed": ["failed"],
+    "queued": [],
+    "running": ["running"]
+  },
+  "start": "queued",
+  "states": ["queued", "running", "delivered", "failed"]
+}

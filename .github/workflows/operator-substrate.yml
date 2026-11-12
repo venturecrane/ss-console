@@ -346,12 +346,66 @@ jobs:
           # and a four-worker probe passed 3544/3544, the serial count, in 356 s vs 735 s.
           /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml runners/jobs/tests -q -rs --numprocesses=4 --dist=loadfile
 
+      # Every broker verb the runner's source names is frozen in the wire
+      # snapshot (runners/jobs/tests/goldens/wire.json, test_wire_snapshot.py).
+      - name: Runner-to-broker wire census
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: |
+          set -euo pipefail
+          /tmp/jobsv/bin/python bin/goldens/wire-census.py
+
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'
         run: >-
           echo "No file under .github/operator-substrate-paths.txt changed;
           the jobs runner suite did not need to run. This job still reports so
           the required check is satisfied."
+
+  # The goldens hold the OLD code's behaviour (wave 2, Phase A). The job host
+  # matrix and the broker ledger goldens are regenerated from the merge-base
+  # tree, with THIS PR's harness laid over it, and compared with the goldens
+  # the PR commits: any difference outside each set's allowed-changes.json
+  # fails, so a PR cannot change a host or a ledger and rewrite its golden to
+  # match. operator/bin/goldens/golden-integrity.py says how. Same gating shape
+  # as `runner`.
+  goldens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect substrate-relevant changes
+        id: changes
+        run: >-
+          python3 operator/bin/substrate-paths-changed.py
+          --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
+          --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Set up uv
+        if: steps.changes.outputs.relevant == 'true'
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
+      - name: Regenerate the goldens from the merge-base tree and compare
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.event.merge_group.base_sha }}
+        run: |
+          set -euo pipefail
+          base="$(git merge-base "${BASE_SHA:-HEAD~1}" HEAD)"
+          echo "merge base: $base"
+          python3 bin/goldens/golden-integrity.py --base "$base"
+
+      - name: No substrate paths changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: >-
+          echo "No file under .github/operator-substrate-paths.txt changed;
+          the goldens did not need regenerating. This job still reports so
+          the check is satisfied."
 
   # The seat runtime's own suite (operator/hermes-smd-overlay, ADR 0095). Until
   # 2026-10-22 this ran as the standalone overlay repo's CI (Python 3.11, Hermes

@@ -1,0 +1,506 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/queue/<ULID1>.json",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "MEDCHRON_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": "m-1",
+        "metadata": {
+          "cents": 0,
+          "documents": 0,
+          "folder_id": null,
+          "job_id": "<ULID1>",
+          "pages": 0,
+          "reason": null,
+          "state": "running"
+        },
+        "skill": "medical-chronology-maintainer"
+      },
+      {
+        "action_type": "MEDCHRON_JOB_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": "m-1",
+        "metadata": {
+          "cents": 0,
+          "documents": 0,
+          "folder_id": null,
+          "job_id": "<ULID1>",
+          "pages": 0,
+          "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+          "state": "failed"
+        },
+        "skill": "medical-chronology-maintainer"
+      },
+      {
+        "action_type": "DELIVERY_PROOF_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "attempt": 1,
+          "code": "job_stopped",
+          "detail": "failed (failed): the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON); the requester was not told (by design: SMD only, while the lane is refined)",
+          "job_id": "<ULID1>",
+          "lane": "medchron"
+        },
+        "skill": null
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "medchron/cgroup.procs": "<PID>",
+      "medchron/memory.max": "2684354560"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "run",
+          "<TMP>/seat/run/jobs/<ULID1>",
+          "--json"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/jobs/<ULID1>",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "<TMP>/seat/inputs/medchron/firm.yaml",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
+          "SMOKEBALL_API_KEY": "<SECRET:present>",
+          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
+          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "<SECRET:present>"
+        },
+        "job_id": "<ULID1>",
+        "lane": "medchron",
+        "pidfile": "<TMP>/seat/run/child.pid"
+      }
+    ],
+    "daemon": {
+      "jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "proof_alerts": {
+          "job_stopped:medchron_job:<ULID1>:1:failed": "<CLOCK+0.0>"
+        },
+        "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "state": "failed"
+      }
+    },
+    "job_files": {
+      "jobs/<ULID1>/job.yaml": "slug: example\nmatter:\n  id: m-1\n  number: 2026-PI-102\n  title: Example v. Example\nunits:\n- client_name: Alpha Example\n  dob: 01/02/1980\n  name_token: Example\n  surname: Example\n  unit: alpha\nincident:\n  date: '2026-01-15'\n  source: administrator_request\ndata_root: <TMP>/seat/run/jobs/<ULID1>/data\ninstall_root: <TMP>/seat/run\ncap_usd: 25.0\nallowance_remaining_documents: 40\nallowance_remaining_pages: 0\nrequested_by: admin@firm.example\nrequest_ref: <req-1@firm.example>\nallowance_pages: 0\nmonth_pages_used: 0\nmonth_cents_used: 0\nallowance_month: <MONTH>\nallowance_cycle_start: '<TS>'\nallowance_cycle_end: '<TS>'\n"
+    },
+    "log": [
+      "WARNING jobs.daemon medchron job <ULID1>: proof alert job_stopped raised (failed (failed): the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON); the requester was not told (by design: SMD only, while )"
+    ],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "failed",
+    "step": "run",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/medchron/",
+      "cgroup/medchron/cgroup.procs",
+      "cgroup/medchron/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/heartbeat.json",
+      "run/jobs/",
+      "run/jobs/<ULID1>/",
+      "run/jobs/<ULID1>/daemon.json",
+      "run/jobs/<ULID1>/daemon.log",
+      "run/jobs/<ULID1>/data/",
+      "run/jobs/<ULID1>/data/example/",
+      "run/jobs/<ULID1>/data/example/runs/",
+      "run/jobs/<ULID1>/data/example/runs/alpha/",
+      "run/jobs/<ULID1>/data/example/runs/alpha/usage-ledger.jsonl",
+      "run/jobs/<ULID1>/envelope.json",
+      "run/jobs/<ULID1>/job.yaml",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json",
+      "run/tick"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "<TS>",
+            "documents": 0,
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_number": "2026-PI-102",
+            "pages": 0,
+            "reason": null,
+            "smd_page_credit_pages": 0,
+            "state": "submitted",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "<TS>",
+            "work_digest": "sha256:<HEX>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "medchron_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "allowance": null,
+          "authored": false,
+          "cents_used": 0,
+          "cycle_anchored": false,
+          "cycle_end": "<TS>",
+          "cycle_start": "<TS>",
+          "documents_used": 0,
+          "job_pages_credited": 0,
+          "month": "<MONTH>",
+          "ok": true,
+          "pages_credited": 0,
+          "pages_debited": 0,
+          "pages_remaining": 0,
+          "pages_used": 0,
+          "remaining": 0,
+          "unit": "pages",
+          "used": 0
+        },
+        "request": {
+          "action": "medchron_allowance",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "<TS>",
+            "documents": 0,
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_number": "2026-PI-102",
+            "pages": 0,
+            "reason": null,
+            "state": "running",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "<TS>",
+            "work_digest": "sha256:<HEX>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "medchron_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "<TS>",
+            "documents": 0,
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_number": "2026-PI-102",
+            "pages": 0,
+            "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+            "state": "failed",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "<TS>",
+            "work_digest": "sha256:<HEX>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "medchron_job_record",
+          "fields": {
+            "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)"
+          },
+          "job_id": "<ULID1>",
+          "state": "failed"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "<TS>",
+            "documents": 0,
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_number": "2026-PI-102",
+            "pages": 0,
+            "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+            "smd_page_credit_pages": 0,
+            "state": "failed",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "<TS>",
+            "work_digest": "sha256:<HEX>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "medchron_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "audit_id": "<ULID2>",
+          "ok": true
+        },
+        "request": {
+          "action": "delivery_proof_alert",
+          "attempt": 1,
+          "code": "job_stopped",
+          "detail": "failed (failed): the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON); the requester was not told (by design: SMD only, while the lane is refined)",
+          "job_id": "<ULID1>",
+          "lane": "medchron"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "proof_alerts": {
+          "job_stopped:medchron_job:<ULID1>:1:failed": "<CLOCK+0.0>"
+        },
+        "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "state": "failed"
+      }
+    },
+    "job_files": {
+      "jobs/<ULID1>/job.yaml": "slug: example\nmatter:\n  id: m-1\n  number: 2026-PI-102\n  title: Example v. Example\nunits:\n- client_name: Alpha Example\n  dob: 01/02/1980\n  name_token: Example\n  surname: Example\n  unit: alpha\nincident:\n  date: '2026-01-15'\n  source: administrator_request\ndata_root: <TMP>/seat/run/jobs/<ULID1>/data\ninstall_root: <TMP>/seat/run\ncap_usd: 25.0\nallowance_remaining_documents: 40\nallowance_remaining_pages: 0\nrequested_by: admin@firm.example\nrequest_ref: <req-1@firm.example>\nallowance_pages: 0\nmonth_pages_used: 0\nmonth_cents_used: 0\nallowance_month: <MONTH>\nallowance_cycle_start: '<TS>'\nallowance_cycle_end: '<TS>'\n"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "wake",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/medchron/",
+      "cgroup/medchron/cgroup.procs",
+      "cgroup/medchron/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/heartbeat.json",
+      "run/jobs/",
+      "run/jobs/<ULID1>/",
+      "run/jobs/<ULID1>/daemon.json",
+      "run/jobs/<ULID1>/daemon.log",
+      "run/jobs/<ULID1>/data/",
+      "run/jobs/<ULID1>/data/example/",
+      "run/jobs/<ULID1>/data/example/runs/",
+      "run/jobs/<ULID1>/data/example/runs/alpha/",
+      "run/jobs/<ULID1>/data/example/runs/alpha/usage-ledger.jsonl",
+      "run/jobs/<ULID1>/envelope.json",
+      "run/jobs/<ULID1>/job.yaml",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json",
+      "run/tick"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "credits": [],
+          "jobs": [
+            {
+              "cents": 0,
+              "covered_count": null,
+              "created_at": "<TS>",
+              "documents": 0,
+              "folder_id": null,
+              "id": "<ULID1>",
+              "matter_number": "2026-PI-102",
+              "pages": 0,
+              "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+              "state": "failed",
+              "uncovered_count": null,
+              "updated_at": "<TS>",
+              "work_digest": "sha256:<HEX>"
+            }
+          ],
+          "ok": true
+        },
+        "request": {
+          "action": "medchron_job_list"
+        }
+      }
+    ]
+  }
+]

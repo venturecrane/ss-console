@@ -1,0 +1,68 @@
+{
+  "note_job_status | gateway | empty": {
+    "error": "ValueError",
+    "message": "note_job_status requires the note job's id",
+    "ok": false
+  },
+  "note_job_status | gateway | known job": {
+    "job": {
+      "job_id": "01KTJ0BX000000000000000001",
+      "state": "delivered",
+      "text": "A note."
+    },
+    "ok": true
+  },
+  "note_job_status | root | empty": {
+    "error": "ValueError",
+    "message": "note_job_status requires the note job's id",
+    "ok": false
+  },
+  "note_job_status | root | known job": {
+    "job": {
+      "job_id": "01KTJ0BX000000000000000001",
+      "state": "delivered",
+      "text": "A note."
+    },
+    "ok": true
+  },
+  "note_preview | gateway | empty": {
+    "error": "PermissionError",
+    "message": "note_preview is not permitted for this caller",
+    "ok": false
+  },
+  "note_preview | gateway | known job": {
+    "error": "PermissionError",
+    "message": "note_preview is not permitted for this caller",
+    "ok": false
+  },
+  "note_preview | root | empty": {
+    "error": "ValueError",
+    "message": "note verbs need the msgraph transmit and the audit ledger on a Graph seat",
+    "ok": false
+  },
+  "note_preview | root | known job": {
+    "error": "ValueError",
+    "message": "note verbs need the msgraph transmit and the audit ledger on a Graph seat",
+    "ok": false
+  },
+  "note_record | gateway | empty": {
+    "error": "PermissionError",
+    "message": "note_record is not permitted for this caller",
+    "ok": false
+  },
+  "note_record | gateway | known job": {
+    "error": "PermissionError",
+    "message": "note_record is not permitted for this caller",
+    "ok": false
+  },
+  "note_record | root | empty": {
+    "error": "ValueError",
+    "message": "note verbs need the msgraph transmit and the audit ledger on a Graph seat",
+    "ok": false
+  },
+  "note_record | root | known job": {
+    "error": "ValueError",
+    "message": "note verbs need the msgraph transmit and the audit ledger on a Graph seat",
+    "ok": false
+  }
+}

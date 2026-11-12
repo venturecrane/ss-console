@@ -1,0 +1,616 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/records-queue/<ULID1>.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "RECORDS_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 0,
+          "job_id": "<ULID1>",
+          "prev_state": "queued",
+          "reason": null,
+          "review_id": null,
+          "stage": null,
+          "state": "running"
+        },
+        "skill": "matter-records"
+      },
+      {
+        "action_type": "RECORDS_JOB_REVIEW",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 500,
+          "job_id": "<ULID1>",
+          "prev_state": "running",
+          "reason": "matter_files_review",
+          "review_id": "<HEX>",
+          "stage": "verdict",
+          "state": "review"
+        },
+        "skill": "matter-records"
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "demand/cgroup.procs": "<PID>",
+      "demand/memory.max": "1073741824"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "records",
+          "<TMP>/seat/run/records-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/records-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/records-jobs/<ULID1>",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_RECORDS_INPUTS_DIR": "<TMP>/seat/inputs/records",
+          "JOBS_RECORDS_STATE_DIR": "<TMP>/seat/state/records",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
+          "SMOKEBALL_API_KEY": "<SECRET:present>",
+          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
+          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_PAGE_INDEX_DIR": "<TMP>/seat/page-index",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "<SECRET:present>"
+        },
+        "job_id": "<ULID1>",
+        "lane": "records",
+        "pidfile": "<TMP>/seat/run/records-child.pid"
+      }
+    ],
+    "daemon": {
+      "records-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "held_paused": false,
+        "reported": {
+          "verdict": {
+            "cents": 500,
+            "cuts": [
+              {
+                "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+                "k": 1,
+                "n": 1,
+                "page_count": 4,
+                "pages": "1-4",
+                "sha256": "<HEX>",
+                "size": 5020
+              }
+            ],
+            "items": [
+              {
+                "files": 1,
+                "n": 1,
+                "outcome": "attached"
+              }
+            ],
+            "proof": {
+              "files": [
+                {
+                  "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+                  "name": "1-1.pdf",
+                  "sha256": "<HEX>",
+                  "size": 5020
+                }
+              ],
+              "readback": "confirmed",
+              "review": "code_only",
+              "review_cents": 0,
+              "review_model": ""
+            },
+            "stage": "verdict",
+            "verdict": "delivered"
+          }
+        },
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "review_watch": {
+          "alerted": false,
+          "id": "<HEX>",
+          "since": "<CLOCK+0.0>"
+        },
+        "row": {
+          "batches": [
+            [
+              {
+                "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+                "handle": "<HEX>",
+                "name": "Clinic records pp. 1-4.pdf",
+                "page_count": 4,
+                "pages": "1-4",
+                "sha256": "<HEX>",
+                "size": 5020
+              }
+            ]
+          ],
+          "created_at": "<CLOCK+0.0>",
+          "digest": "<HEX>",
+          "html": "<p>x</p>",
+          "id": "<HEX>",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_id": "AAMkAGraphMessageId0001",
+          "reason": "",
+          "session_id": "records:<ULID1>",
+          "status": "review",
+          "text": "Here is what we found.\n\nAttached:\n- a",
+          "to": "pat.lane@example-firm.test"
+        },
+        "spooled": {
+          "1-1": "<HEX>"
+        },
+        "started": true,
+        "state": "review"
+      }
+    },
+    "job_files": {
+      "records-jobs/<ULID1>/job.json": "{\n \"ack\": \"turn\",\n \"internet_message_id\": \"\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"records\",\n \"matter_id\": \"11111111-2222-3333-4444-555555555555\",\n \"message_ref\": \"AAMkAGraphMessageId0001\",\n \"request_ref\": \"AAMkAGraphMessageId0001\",\n \"request_text\": \"the clinic visit\",\n \"requester\": \"pat.lane@example-firm.test\",\n \"trigger\": \"request\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"per_job_cap_usd\": 5.0,\n \"monthly_budget_usd\": 100.0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "records-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["records-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "review",
+    "step": "run",
+    "tree": [
+      "audit/",
+      "audit/attachment-spool/",
+      "audit/attachment-spool/<HEX>.bin",
+      "audit/attachment-spool/<HEX>.json",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "matter-file-review/",
+      "matter-file-review/<HEX>.json",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-heartbeat.json",
+      "run/records-jobs/",
+      "run/records-jobs/<ULID1>/",
+      "run/records-jobs/<ULID1>/daemon.json",
+      "run/records-jobs/<ULID1>/daemon.log",
+      "run/records-jobs/<ULID1>/data/",
+      "run/records-jobs/<ULID1>/data/cuts.json",
+      "run/records-jobs/<ULID1>/data/cuts/",
+      "run/records-jobs/<ULID1>/data/cuts/1-1.pdf",
+      "run/records-jobs/<ULID1>/data/facts.json",
+      "run/records-jobs/<ULID1>/envelope.json",
+      "run/records-jobs/<ULID1>/job.json",
+      "run/records-jobs/<ULID1>/verdict.json",
+      "run/records-queue/",
+      "run/records-tick",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "items": [],
+            "job_id": "<ULID1>",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "row": {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "<TS>",
+              "delivery_json": null,
+              "envelope_digest": "<HEX>",
+              "job_id": "<ULID1>",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "<TS>"
+            },
+            "stage": null,
+            "state": "queued",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "records_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "jobs": [
+            {
+              "cents": 0,
+              "created_at": "<TS>",
+              "job_id": "<ULID1>",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "reason": null,
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "<TS>"
+            }
+          ],
+          "month": "<MONTH>",
+          "month_cents": 0,
+          "monthly_budget_cents": null,
+          "ok": true
+        },
+        "request": {
+          "action": "records_job_status",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "job_id": "<ULID1>",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "records_job_record",
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "handle": "<HEX>",
+          "ok": true,
+          "sha256": "<HEX>",
+          "size": 5020
+        },
+        "request": {
+          "action": "attachment_put",
+          "payload": {
+            "chunk_b64": "JVBERi0xLjQgbWF0cml4IGN1dCB4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA==",
+            "final": true,
+            "offset": 0,
+            "sha256": "<HEX>"
+          }
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "<TS>",
+            "job_id": "<ULID1>",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "matter_files_review",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "<HEX>",
+            "stage": "verdict",
+            "state": "review",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "records_job_record",
+          "cents": 500,
+          "delivery": {
+            "digest": "<HEX>",
+            "review_id": "<HEX>"
+          },
+          "items": [
+            {
+              "files": 1,
+              "n": 1,
+              "outcome": "attached"
+            }
+          ],
+          "job_id": "<ULID1>",
+          "stage": "verdict",
+          "verdict": "delivered"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "records-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "held_paused": false,
+        "reported": {
+          "verdict": {
+            "cents": 500,
+            "cuts": [
+              {
+                "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+                "k": 1,
+                "n": 1,
+                "page_count": 4,
+                "pages": "1-4",
+                "sha256": "<HEX>",
+                "size": 5020
+              }
+            ],
+            "items": [
+              {
+                "files": 1,
+                "n": 1,
+                "outcome": "attached"
+              }
+            ],
+            "proof": {
+              "files": [
+                {
+                  "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+                  "name": "1-1.pdf",
+                  "sha256": "<HEX>",
+                  "size": 5020
+                }
+              ],
+              "readback": "confirmed",
+              "review": "code_only",
+              "review_cents": 0,
+              "review_model": ""
+            },
+            "stage": "verdict",
+            "verdict": "delivered"
+          }
+        },
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "review_watch": {
+          "alerted": false,
+          "id": "<HEX>",
+          "since": "<CLOCK+0.0>"
+        },
+        "row": {
+          "batches": [
+            [
+              {
+                "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
+                "handle": "<HEX>",
+                "name": "Clinic records pp. 1-4.pdf",
+                "page_count": 4,
+                "pages": "1-4",
+                "sha256": "<HEX>",
+                "size": 5020
+              }
+            ]
+          ],
+          "created_at": "<CLOCK+0.0>",
+          "digest": "<HEX>",
+          "html": "<p>x</p>",
+          "id": "<HEX>",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_id": "AAMkAGraphMessageId0001",
+          "reason": "",
+          "session_id": "records:<ULID1>",
+          "status": "review",
+          "text": "Here is what we found.\n\nAttached:\n- a",
+          "to": "pat.lane@example-firm.test"
+        },
+        "spooled": {
+          "1-1": "<HEX>"
+        },
+        "started": true,
+        "state": "review"
+      }
+    },
+    "job_files": {
+      "records-jobs/<ULID1>/job.json": "{\n \"ack\": \"turn\",\n \"internet_message_id\": \"\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"records\",\n \"matter_id\": \"11111111-2222-3333-4444-555555555555\",\n \"message_ref\": \"AAMkAGraphMessageId0001\",\n \"request_ref\": \"AAMkAGraphMessageId0001\",\n \"request_text\": \"the clinic visit\",\n \"requester\": \"pat.lane@example-firm.test\",\n \"trigger\": \"request\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"per_job_cap_usd\": 5.0,\n \"monthly_budget_usd\": 100.0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "records-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "wake",
+    "tree": [
+      "audit/",
+      "audit/attachment-spool/",
+      "audit/attachment-spool/<HEX>.bin",
+      "audit/attachment-spool/<HEX>.json",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "matter-file-review/",
+      "matter-file-review/<HEX>.json",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-heartbeat.json",
+      "run/records-jobs/",
+      "run/records-jobs/<ULID1>/",
+      "run/records-jobs/<ULID1>/daemon.json",
+      "run/records-jobs/<ULID1>/daemon.log",
+      "run/records-jobs/<ULID1>/data/",
+      "run/records-jobs/<ULID1>/data/cuts.json",
+      "run/records-jobs/<ULID1>/data/cuts/",
+      "run/records-jobs/<ULID1>/data/cuts/1-1.pdf",
+      "run/records-jobs/<ULID1>/data/facts.json",
+      "run/records-jobs/<ULID1>/envelope.json",
+      "run/records-jobs/<ULID1>/job.json",
+      "run/records-jobs/<ULID1>/verdict.json",
+      "run/records-queue/",
+      "run/records-tick",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  }
+]

@@ -1,0 +1,3929 @@
+{
+  "matrix": {
+    "delivered": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 500,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 500,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "records_lines": [
+            {
+              "files": 1,
+              "job_id": "01KTJ0BX000000000000000001",
+              "n": 1,
+              "outcome": "attached",
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 500,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> failed",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 500,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [
+            {
+              "files": 1,
+              "job_id": "01KTJ0BX000000000000000001",
+              "n": 1,
+              "outcome": "attached",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 500,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> held",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 500,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [
+            {
+              "files": 1,
+              "job_id": "01KTJ0BX000000000000000001",
+              "n": 1,
+              "outcome": "attached",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 500,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> queued",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 500,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [
+            {
+              "files": 1,
+              "job_id": "01KTJ0BX000000000000000001",
+              "n": 1,
+              "outcome": "attached",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "review": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 500,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> review",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 500,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [
+            {
+              "files": 1,
+              "job_id": "01KTJ0BX000000000000000001",
+              "n": 1,
+              "outcome": "attached",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 500,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> running",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 500,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [
+            {
+              "files": 1,
+              "job_id": "01KTJ0BX000000000000000001",
+              "n": 1,
+              "outcome": "attached",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "failed": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> delivered",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> held",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> queued",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "review": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> review",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_RUNNING",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "failed",
+              "reason": "unexpected: a matrix failure",
+              "review_id": null,
+              "stage": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 2,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 2,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 2,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "running",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "held": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "limit_held: a matrix hold",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> delivered",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "held",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_FAILED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "held",
+              "reason": "unexpected: a matrix failure",
+              "review_id": null,
+              "stage": null,
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "limit_held: a matrix hold",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "limit_held: a matrix hold",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "held",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "limit_held: a matrix hold",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> queued",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "held",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "review": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "limit_held: a matrix hold",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> review",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "held",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "limit_held: a matrix hold",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> running",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "held",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "queued": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "queued",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 0,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "queued",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:00.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition queued -> delivered",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 0,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "queued",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:00.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": []
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_FAILED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "queued",
+              "reason": "unexpected: a matrix failure",
+              "review_id": null,
+              "stage": null,
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_HELD",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "queued",
+              "reason": "limit_held: a matrix hold",
+              "review_id": null,
+              "stage": null,
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "limit_held: a matrix hold",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "limit_held: a matrix hold",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "held",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "queued",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 0,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "queued",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "queued",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 0,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "queued",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": []
+        }
+      },
+      "review": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "queued",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 0,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "queued",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:00.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition queued -> review",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 0,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "queued",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:00.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": []
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_RUNNING",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 0,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "queued",
+              "reason": null,
+              "review_id": null,
+              "stage": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 0,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 0,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "running",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": []
+        }
+      }
+    },
+    "review": {
+      "delivered": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_DELIVERED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "review",
+              "reason": null,
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered"
+            }
+          }
+        ],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 500,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 500,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "records_lines": [
+            {
+              "files": 1,
+              "job_id": "01KTJ0BX000000000000000001",
+              "n": 1,
+              "outcome": "attached",
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            },
+            {
+              "at": "2026-10-20T17:00:05.000Z",
+              "cents": 400,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_FAILED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "review",
+              "reason": "unexpected: a matrix failure",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": null,
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "review",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition review -> held",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": null,
+              "state": "review",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "review",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition review -> queued",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": null,
+              "state": "review",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "review": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "review",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "review",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": null,
+              "state": "review",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "review",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition review -> running",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": null,
+              "state": "review",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "running": {
+      "delivered": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_DELIVERED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "running",
+              "reason": null,
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered"
+            }
+          }
+        ],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 500,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": "verdict",
+            "state": "delivered",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 500,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": "verdict",
+          "state": "delivered",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 500,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": "verdict",
+              "state": "delivered",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [
+            {
+              "files": 1,
+              "job_id": "01KTJ0BX000000000000000001",
+              "n": 1,
+              "outcome": "attached",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_FAILED",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "running",
+              "reason": "unexpected: a matrix failure",
+              "review_id": null,
+              "stage": null,
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "unexpected: a matrix failure",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "failed",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "failed",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_HELD",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "running",
+              "reason": "limit_held: a matrix hold",
+              "review_id": null,
+              "stage": null,
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": "limit_held: a matrix hold",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "limit_held: a matrix hold",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "held",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "held",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "held",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "queued": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 0,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition running -> queued",
+          "ok": false
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 0,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "running",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": []
+        }
+      },
+      "review": {
+        "audit": [
+          {
+            "action_type": "RECORDS_JOB_REVIEW",
+            "matter_ref": null,
+            "metadata": {
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001",
+              "prev_state": "running",
+              "reason": null,
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": null,
+              "state": "review"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 100,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "review",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": "dddddddddddddddddddddddd",
+            "stage": null,
+            "state": "review",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 100,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": "dddddddddddddddddddddddd",
+          "stage": null,
+          "state": "review",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 100,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": "dddddddddddddddddddddddd",
+              "stage": null,
+              "state": "review",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "reason": null,
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "ack": "turn",
+            "attempt": 1,
+            "cents": 0,
+            "close_reason": null,
+            "close_ref": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "message_ref": "AAMkAGraphMessageId0001",
+            "reason": null,
+            "request_ref": "AAMkAGraphMessageId0001",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": null,
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "ack": "turn",
+          "attempt": 1,
+          "cents": 0,
+          "close_reason": null,
+          "close_ref": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+          "job_id": "01KTJ0BX000000000000000001",
+          "matter_id": "11111111-2222-3333-4444-555555555555",
+          "message_ref": "AAMkAGraphMessageId0001",
+          "reason": null,
+          "request_ref": "AAMkAGraphMessageId0001",
+          "requester": "pat.lane@example-firm.test",
+          "review_id": null,
+          "stage": null,
+          "state": "running",
+          "trigger": "request",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "records_jobs": [
+            {
+              "ack": "turn",
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+              "job_id": "01KTJ0BX000000000000000001",
+              "matter_id": "11111111-2222-3333-4444-555555555555",
+              "message_ref": "AAMkAGraphMessageId0001",
+              "reason": null,
+              "request_ref": "AAMkAGraphMessageId0001",
+              "requester": "pat.lane@example-firm.test",
+              "review_id": null,
+              "stage": null,
+              "state": "running",
+              "trigger": "request",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "records_lines": [],
+          "records_spend": []
+        }
+      }
+    }
+  },
+  "never_reached": [],
+  "reached_by": {
+    "delivered": ["running", "delivered"],
+    "failed": ["failed"],
+    "held": ["held"],
+    "queued": [],
+    "review": ["running", "review"],
+    "running": ["running"]
+  },
+  "start": "queued",
+  "states": ["queued", "running", "held", "review", "delivered", "failed"]
+}

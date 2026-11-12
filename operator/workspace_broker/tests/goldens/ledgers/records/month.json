@@ -1,0 +1,462 @@
+{
+  "jobs": ["01KTJ0BX000000000000000001", "01KTJ0BX000000000000000004"],
+  "reads": [
+    {
+      "exclude": "",
+      "now": "2026-10-27T06:59:59+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-10",
+        "month_cents": 100,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "01KTJ0BX000000000000000001",
+      "now": "2026-10-27T06:59:59+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-10",
+        "month_cents": 0,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "",
+      "now": "2026-11-01T06:59:59+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-10",
+        "month_cents": 100,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "01KTJ0BX000000000000000001",
+      "now": "2026-11-01T06:59:59+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-10",
+        "month_cents": 0,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "",
+      "now": "2026-11-01T07:00:00+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-11",
+        "month_cents": 100,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "01KTJ0BX000000000000000001",
+      "now": "2026-11-01T07:00:00+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-11",
+        "month_cents": 100,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "",
+      "now": "2026-12-01T07:59:59+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-11",
+        "month_cents": 100,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "01KTJ0BX000000000000000001",
+      "now": "2026-12-01T07:59:59+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-11",
+        "month_cents": 100,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "",
+      "now": "2026-12-01T08:00:00+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-12",
+        "month_cents": 0,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "01KTJ0BX000000000000000001",
+      "now": "2026-12-01T08:00:00+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-12",
+        "month_cents": 0,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "",
+      "now": "2026-11-15T07:00:00+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-11",
+        "month_cents": 100,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    },
+    {
+      "exclude": "01KTJ0BX000000000000000001",
+      "now": "2026-11-15T07:00:00+00:00",
+      "reply": {
+        "jobs": [
+          {
+            "cents": 100,
+            "created_at": "2026-11-01T07:00:01.000Z",
+            "job_id": "01KTJ0BX000000000000000004",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T07:00:00.000Z"
+          },
+          {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "job_id": "01KTJ0BX000000000000000001",
+            "matter_id": "11111111-2222-3333-4444-555555555555",
+            "reason": "unexpected: a matrix failure",
+            "requester": "pat.lane@example-firm.test",
+            "review_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "2026-11-01T06:59:59.000Z"
+          }
+        ],
+        "month": "2026-11",
+        "month_cents": 100,
+        "monthly_budget_cents": null,
+        "ok": true
+      }
+    }
+  ],
+  "spend_at": ["2026-11-01T06:59:59+00:00", "2026-11-01T07:00:00+00:00"]
+}

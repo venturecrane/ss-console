@@ -1,0 +1,548 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/negotiation-queue/<ULID1>.json",
+      "run/queue/",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [
+      "WARNING jobs.daemon broker unreachable while claiming <ULID1>: broker socket: [Errno 2] No such file or directory"
+    ],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 1,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 1,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "broker down",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-queue/",
+      "run/negotiation-queue/<ULID1>.json",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "NEGOTIATION_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 0,
+          "docs_failed": null,
+          "docs_read": null,
+          "job_id": "<ULID1>",
+          "matters_seeded": null,
+          "matters_total": null,
+          "notices": 0,
+          "reason": null,
+          "stage": null,
+          "state": "running"
+        },
+        "skill": "negotiation-watch"
+      },
+      {
+        "action_type": "DELIVERY_PROVEN",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "attempt": 1,
+          "files": [],
+          "job_id": "<ULID1>",
+          "lane": "negotiation",
+          "review": "code_only",
+          "review_cents": 0,
+          "review_model": "",
+          "rows": 1
+        },
+        "skill": null
+      },
+      {
+        "action_type": "NEGOTIATION_JOB_DELIVERED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 500,
+          "docs_failed": 0,
+          "docs_read": 2,
+          "job_id": "<ULID1>",
+          "matters_seeded": 0,
+          "matters_total": 9,
+          "notices": 0,
+          "reason": null,
+          "stage": "report",
+          "state": "delivered"
+        },
+        "skill": "negotiation-watch"
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "demand/cgroup.procs": "<PID>",
+      "demand/memory.max": "1073741824"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "negotiate",
+          "<TMP>/seat/run/negotiation-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/negotiation-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/negotiation-jobs/<ULID1>",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_NEGOTIATION_STATE_DIR": "<TMP>/seat/state/negotiation",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
+          "SMOKEBALL_API_KEY": "<SECRET:present>",
+          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
+          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "<SECRET:present>"
+        },
+        "job_id": "<ULID1>",
+        "lane": "negotiation",
+        "pidfile": "<TMP>/seat/run/negotiation-child.pid"
+      }
+    ],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": null,
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "delivered"
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["negotiation-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "delivered",
+    "step": "broker back",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "<ULID1>",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_sent_at": null,
+            "row": {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "<TS>",
+              "docs_failed": null,
+              "docs_read": null,
+              "envelope_digest": "<HEX>",
+              "id": "<ULID1>",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notice": false,
+              "notices_count": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "scheduled:2026-10-11T08",
+              "requester": "admin@firm.example",
+              "stage": null,
+              "state": "queued",
+              "trigger": "scheduled",
+              "updated_at": "<TS>"
+            },
+            "stage": null,
+            "state": "queued",
+            "trigger": "scheduled",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "jobs": [
+            {
+              "cents": 0,
+              "created_at": "<TS>",
+              "docs_failed": null,
+              "docs_read": null,
+              "job_id": "<ULID1>",
+              "kind": "job",
+              "matters_seeded": null,
+              "matters_total": null,
+              "notices_count": null,
+              "reason": null,
+              "reply_sent_at": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "scheduled",
+              "updated_at": "<TS>"
+            }
+          ],
+          "month": "<MONTH>",
+          "month_cents": 0,
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_status",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "docs_failed": null,
+            "docs_read": null,
+            "job_id": "<ULID1>",
+            "kind": "job",
+            "matters_seeded": null,
+            "matters_total": null,
+            "notices_count": null,
+            "reason": null,
+            "reply_sent_at": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "scheduled",
+            "updated_at": "<TS>"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "audit_id": "<ULID2>",
+          "ok": true
+        },
+        "request": {
+          "action": "delivery_proof_record",
+          "attempt": 1,
+          "files": [],
+          "job_id": "<ULID1>",
+          "lane": "negotiation",
+          "review": "code_only",
+          "review_cents": 0,
+          "review_model": "",
+          "rows": 1
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "<TS>",
+            "docs_failed": 0,
+            "docs_read": 2,
+            "job_id": "<ULID1>",
+            "kind": "job",
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices_count": 0,
+            "reason": null,
+            "reply_sent_at": null,
+            "stage": "report",
+            "state": "delivered",
+            "trigger": "scheduled",
+            "updated_at": "<TS>"
+          },
+          "notice_ids": [],
+          "ok": true
+        },
+        "request": {
+          "action": "negotiation_job_record",
+          "fields": {
+            "cents": 500,
+            "docs_failed": 0,
+            "docs_read": 2,
+            "matters_seeded": 0,
+            "matters_total": 9,
+            "notices": [],
+            "stage": "report"
+          },
+          "job_id": "<ULID1>",
+          "state": "delivered"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "negotiation-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": null,
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "delivered"
+      }
+    },
+    "job_files": {
+      "negotiation-jobs/<ULID1>/job.json": "{\n \"firm_words\": [\n  \"example\"\n ],\n \"job_id\": \"<ULID1>\",\n \"kind\": \"negotiation\",\n \"matter_statuses\": [\n  \"Open\"\n ],\n \"message_ref\": \"scheduled:2026-10-11T08\",\n \"monthly_budget_usd\": 25.0,\n \"negotiation_design\": \"\",\n \"per_job_cap_usd\": 8.0,\n \"request_text\": \"negotiation watch\",\n \"requester\": \"admin@firm.example\",\n \"seed_saved_before\": \"\",\n \"trigger\": \"scheduled\",\n \"slug\": \"example\",\n \"month_cents_used\": 0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "negotiation-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "wake",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-heartbeat.json",
+      "run/negotiation-jobs/",
+      "run/negotiation-jobs/<ULID1>/",
+      "run/negotiation-jobs/<ULID1>/daemon.json",
+      "run/negotiation-jobs/<ULID1>/daemon.log",
+      "run/negotiation-jobs/<ULID1>/data/",
+      "run/negotiation-jobs/<ULID1>/envelope.json",
+      "run/negotiation-jobs/<ULID1>/job.json",
+      "run/negotiation-jobs/<ULID1>/verdict.json",
+      "run/negotiation-queue/",
+      "run/negotiation-tick",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  }
+]

@@ -1,0 +1,170 @@
+{
+  "negotiation_job_record | gateway | empty": {
+    "error": "PermissionError",
+    "message": "negotiation_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "negotiation_job_record | gateway | known job": {
+    "error": "PermissionError",
+    "message": "negotiation_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "negotiation_job_record | root | empty": {
+    "error": "ValueError",
+    "message": "negotiation_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "negotiation_job_record | root | known job": {
+    "error": "ValueError",
+    "message": "negotiation_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "negotiation_job_resume | gateway | empty": {
+    "error": "PermissionError",
+    "message": "negotiation_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "negotiation_job_resume | gateway | known job": {
+    "error": "PermissionError",
+    "message": "negotiation_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "negotiation_job_resume | root | empty": {
+    "error": "ValueError",
+    "message": "negotiation_job_resume requires job_id and a reason",
+    "ok": false
+  },
+  "negotiation_job_resume | root | known job": {
+    "error": "ValueError",
+    "message": "negotiation_job_resume requires job_id and a reason",
+    "ok": false
+  },
+  "negotiation_job_status | gateway | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "docs_failed": null,
+        "docs_read": null,
+        "job_id": "01KTJ0BX000000000000000001",
+        "kind": "job",
+        "matters_seeded": null,
+        "matters_total": null,
+        "notices_count": null,
+        "reason": null,
+        "reply_sent_at": null,
+        "stage": null,
+        "state": "queued",
+        "trigger": "scheduled",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      }
+    ],
+    "ok": true
+  },
+  "negotiation_job_status | gateway | known job": {
+    "job": {
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "docs_failed": null,
+      "docs_read": null,
+      "job_id": "01KTJ0BX000000000000000001",
+      "kind": "job",
+      "matters_seeded": null,
+      "matters_total": null,
+      "notices_count": null,
+      "reason": null,
+      "reply_sent_at": null,
+      "stage": null,
+      "state": "queued",
+      "trigger": "scheduled",
+      "updated_at": "2026-10-20T17:00:00.000Z"
+    },
+    "ok": true
+  },
+  "negotiation_job_status | root | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "docs_failed": null,
+        "docs_read": null,
+        "job_id": "01KTJ0BX000000000000000001",
+        "kind": "job",
+        "matters_seeded": null,
+        "matters_total": null,
+        "notices_count": null,
+        "reason": null,
+        "reply_sent_at": null,
+        "stage": null,
+        "state": "queued",
+        "trigger": "scheduled",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      }
+    ],
+    "month": "2026-11",
+    "month_cents": 0,
+    "ok": true
+  },
+  "negotiation_job_status | root | known job": {
+    "job": {
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "docs_failed": null,
+      "docs_read": null,
+      "job_id": "01KTJ0BX000000000000000001",
+      "kind": "job",
+      "matters_seeded": null,
+      "matters_total": null,
+      "notices_count": null,
+      "reason": null,
+      "reply_sent_at": null,
+      "row": {
+        "attempt": 1,
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "docs_failed": null,
+        "docs_read": null,
+        "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+        "id": "01KTJ0BX000000000000000001",
+        "matters_seeded": null,
+        "matters_total": null,
+        "notice": false,
+        "notices_count": null,
+        "reason": null,
+        "reply_key": null,
+        "reply_sent_at": null,
+        "request_ref": "scheduled:2026-10-11T08",
+        "requester": "admin@firm.example",
+        "stage": null,
+        "state": "queued",
+        "trigger": "scheduled",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      },
+      "stage": null,
+      "state": "queued",
+      "trigger": "scheduled",
+      "updated_at": "2026-10-20T17:00:00.000Z"
+    },
+    "ok": true
+  },
+  "negotiation_job_submit | gateway | empty": {
+    "error": "PermissionError",
+    "message": "negotiation_job_submit is not permitted for this caller",
+    "ok": false
+  },
+  "negotiation_job_submit | gateway | known job": {
+    "error": "PermissionError",
+    "message": "negotiation_job_submit is not permitted for this caller",
+    "ok": false
+  },
+  "negotiation_job_submit | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a negotiation envelope is exactly {\"trigger\": \"scheduled\"}; nothing was queued"
+  },
+  "negotiation_job_submit | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a negotiation envelope is exactly {\"trigger\": \"scheduled\"}; nothing was queued"
+  }
+}

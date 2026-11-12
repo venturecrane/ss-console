@@ -1,0 +1,435 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/demand-queue/<ULID1>.json",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "DEMAND_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+        "metadata": {
+          "cents": 0,
+          "folder_id": null,
+          "job_id": "<ULID1>",
+          "reason": null,
+          "state": "running"
+        },
+        "skill": "demand-letter-drafter"
+      },
+      {
+        "action_type": "DEMAND_JOB_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+        "metadata": {
+          "cents": 0,
+          "folder_id": null,
+          "job_id": "<ULID1>",
+          "reason": "the runner exited 1 without a verdict",
+          "state": "failed"
+        },
+        "skill": "demand-letter-drafter"
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "demand/cgroup.procs": "<PID>",
+      "demand/memory.max": "1073741824"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "demand",
+          "<TMP>/seat/run/demand-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/demand-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/demand-jobs/<ULID1>",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_DEMAND_INPUTS": "<TMP>/seat/inputs/demand",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "RECORDS_VENDOR_API_TOKEN": "<SECRET:present>",
+          "RECORDS_VENDOR_API_URL": "<SECRET:present>",
+          "RECORDS_VENDOR_NAME": "<SECRET:present>",
+          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
+          "SMOKEBALL_API_KEY": "<SECRET:present>",
+          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
+          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
+          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "<SECRET:present>"
+        },
+        "job_id": "<ULID1>",
+        "lane": "demand",
+        "pidfile": "<TMP>/seat/run/demand-child.pid"
+      }
+    ],
+    "daemon": {
+      "demand-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "the runner exited 1 without a verdict",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 0,
+          "pending": true,
+          "task": "Run the demand-letter-drafter skill's DELIVER mode for demand job <ULID1>.\nLoad it first: your first call is read_file on demand-letter-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: demand.\nOutcome: failed.\nSpend cents: 0.\nMatter number: 100001.\nFolder id: none.\nFiles: none.\nRequested by: admin@firm.example.\nReason: stopped at the runner (no verdict)."
+        }
+      }
+    },
+    "job_files": {
+      "demand-jobs/<ULID1>/job.json": "{\n \"deliverables\": [\n  \"gap_audit\",\n  \"demand\"\n ],\n \"file_to\": null,\n \"job_id\": \"<ULID1>\",\n \"kind\": \"demand\",\n \"matter\": {\n  \"id\": \"0f0f0f0f-0000-4000-8000-000000000001\",\n  \"number\": \"100001\"\n },\n \"request_ref\": \"<req-1@firm.example>\",\n \"request_text\": \"DELIVERABLE 1: gap audit sections A-F. DELIVERABLE 2: draft demand, rules 1-10.\",\n \"requested_by\": \"admin@firm.example\",\n \"submitted_at\": \"<TS>\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"allowance_remaining\": 0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "demand-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["demand-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "failed",
+    "step": "run",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-heartbeat.json",
+      "run/demand-jobs/",
+      "run/demand-jobs/<ULID1>/",
+      "run/demand-jobs/<ULID1>/daemon.json",
+      "run/demand-jobs/<ULID1>/daemon.log",
+      "run/demand-jobs/<ULID1>/data/",
+      "run/demand-jobs/<ULID1>/data/usage-ledger.jsonl",
+      "run/demand-jobs/<ULID1>/envelope.json",
+      "run/demand-jobs/<ULID1>/job.json",
+      "run/demand-queue/",
+      "run/demand-tick",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "<TS>",
+            "delivery_json": null,
+            "envelope_digest": "<HEX>",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "submitted",
+            "supersedes": null,
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "demand_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "allowance": null,
+          "authored": false,
+          "cents_month": "<MONTH>",
+          "cents_used": 0,
+          "cycle": "<MONTH>",
+          "cycle_start": "<TS>",
+          "ok": true,
+          "remaining": 0,
+          "unit": "demands",
+          "used": 0
+        },
+        "request": {
+          "action": "demand_allowance",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "demand_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "the runner exited 1 without a verdict",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "demand_job_record",
+          "fields": {
+            "cents": 0,
+            "reason": "the runner exited 1 without a verdict"
+          },
+          "job_id": "<ULID1>",
+          "state": "failed"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "demand-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "the runner exited 1 without a verdict",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "failed",
+        "wake": {
+          "attempts": 0,
+          "outcome": "delivered",
+          "pending": false,
+          "sent_at": "<CLOCK+0.0>",
+          "seq": 1,
+          "task": "Run the demand-letter-drafter skill's DELIVER mode for demand job <ULID1>.\nLoad it first: your first call is read_file on demand-letter-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: demand.\nOutcome: failed.\nSpend cents: 0.\nMatter number: 100001.\nFolder id: none.\nFiles: none.\nRequested by: admin@firm.example.\nReason: stopped at the runner (no verdict)."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "demand-jobs/<ULID1>/job.json": "{\n \"deliverables\": [\n  \"gap_audit\",\n  \"demand\"\n ],\n \"file_to\": null,\n \"job_id\": \"<ULID1>\",\n \"kind\": \"demand\",\n \"matter\": {\n  \"id\": \"0f0f0f0f-0000-4000-8000-000000000001\",\n  \"number\": \"100001\"\n },\n \"request_ref\": \"<req-1@firm.example>\",\n \"request_text\": \"DELIVERABLE 1: gap audit sections A-F. DELIVERABLE 2: draft demand, rules 1-10.\",\n \"requested_by\": \"admin@firm.example\",\n \"submitted_at\": \"<TS>\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"allowance_remaining\": 0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "demand-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": [
+            {
+              "file": "demand-jobs/<ULID1>",
+              "reply_open": false,
+              "sent_ago_s": 0.0
+            }
+          ]
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "wake",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-heartbeat.json",
+      "run/demand-jobs/",
+      "run/demand-jobs/<ULID1>/",
+      "run/demand-jobs/<ULID1>/daemon.json",
+      "run/demand-jobs/<ULID1>/daemon.log",
+      "run/demand-jobs/<ULID1>/data/",
+      "run/demand-jobs/<ULID1>/data/usage-ledger.jsonl",
+      "run/demand-jobs/<ULID1>/envelope.json",
+      "run/demand-jobs/<ULID1>/job.json",
+      "run/demand-queue/",
+      "run/demand-tick",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [
+      {
+        "auth": true,
+        "body": {
+          "handoff_id": "demand-<ULID1>",
+          "task": "Run the demand-letter-drafter skill's DELIVER mode for demand job <ULID1>.\nLoad it first: your first call is read_file on demand-letter-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: demand.\nOutcome: failed.\nSpend cents: 0.\nMatter number: 100001.\nFolder id: none.\nFiles: none.\nRequested by: admin@firm.example.\nReason: stopped at the runner (no verdict)."
+        },
+        "path": "/webhooks/handoff"
+      }
+    ],
+    "wire": []
+  }
+]

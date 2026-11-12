@@ -1,0 +1,3 @@
+{
+  "_why": "Dotted paths (list indexes as numbers; a path ending .* allows everything under it) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered). Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else."
+}

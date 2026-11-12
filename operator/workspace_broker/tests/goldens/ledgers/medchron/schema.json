@@ -1,0 +1,533 @@
+{
+  "aged": [
+    {
+      "after_today_opened_it": {
+        "medchron_jobs": {
+          "index_list": [
+            ["idx_medchron_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+            ["idx_medchron_jobs_work", 0, "c", 0, [[0, 15, "work_digest"]]],
+            ["sqlite_autoindex_medchron_jobs_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_jobs_created",
+              "CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)"
+            ],
+            [
+              "index",
+              "idx_medchron_jobs_work",
+              "CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)"
+            ],
+            [
+              "table",
+              "medchron_jobs",
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "updated_at", "TEXT", 1, null, 0],
+            [3, "state", "TEXT", 1, null, 0],
+            [4, "matter_id", "TEXT", 1, null, 0],
+            [5, "matter_number", "TEXT", 1, null, 0],
+            [6, "requester", "TEXT", 0, null, 0],
+            [7, "request_ref", "TEXT", 0, null, 0],
+            [8, "envelope_digest", "TEXT", 1, null, 0],
+            [9, "documents", "INTEGER", 1, "0", 0],
+            [10, "pages", "INTEGER", 1, "0", 0],
+            [11, "cents", "INTEGER", 1, "0", 0],
+            [12, "reason", "TEXT", 0, null, 0],
+            [13, "folder_id", "TEXT", 0, null, 0],
+            [14, "delivery_json", "TEXT", 0, null, 0],
+            [15, "work_digest", "TEXT", 0, null, 0],
+            [16, "covered_json", "TEXT", 0, null, 0],
+            [17, "client_keys", "TEXT", 0, null, 0]
+          ]
+        },
+        "medchron_page_credits": {
+          "index_list": [
+            ["idx_medchron_page_credits_applies", 0, "c", 0, [[0, 2, "applies_at"]]],
+            ["sqlite_autoindex_medchron_page_credits_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_page_credits_applies",
+              "CREATE INDEX idx_medchron_page_credits_applies ON medchron_page_credits(applies_at)"
+            ],
+            [
+              "table",
+              "medchron_page_credits",
+              "CREATE TABLE medchron_page_credits (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, applies_at TEXT NOT NULL, pages INTEGER NOT NULL CHECK (pages > 0), by_name TEXT NOT NULL, why TEXT NOT NULL, job_id TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "applies_at", "TEXT", 1, null, 0],
+            [3, "pages", "INTEGER", 1, null, 0],
+            [4, "by_name", "TEXT", 1, null, 0],
+            [5, "why", "TEXT", 1, null, 0],
+            [6, "job_id", "TEXT", 0, null, 0]
+          ]
+        }
+      },
+      "commit": "dee2e9292e36"
+    },
+    {
+      "after_today_opened_it": {
+        "medchron_jobs": {
+          "index_list": [
+            ["idx_medchron_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+            ["idx_medchron_jobs_work", 0, "c", 0, [[0, 15, "work_digest"]]],
+            ["sqlite_autoindex_medchron_jobs_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_jobs_created",
+              "CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)"
+            ],
+            [
+              "index",
+              "idx_medchron_jobs_work",
+              "CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)"
+            ],
+            [
+              "table",
+              "medchron_jobs",
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "updated_at", "TEXT", 1, null, 0],
+            [3, "state", "TEXT", 1, null, 0],
+            [4, "matter_id", "TEXT", 1, null, 0],
+            [5, "matter_number", "TEXT", 1, null, 0],
+            [6, "requester", "TEXT", 0, null, 0],
+            [7, "request_ref", "TEXT", 0, null, 0],
+            [8, "envelope_digest", "TEXT", 1, null, 0],
+            [9, "documents", "INTEGER", 1, "0", 0],
+            [10, "pages", "INTEGER", 1, "0", 0],
+            [11, "cents", "INTEGER", 1, "0", 0],
+            [12, "reason", "TEXT", 0, null, 0],
+            [13, "folder_id", "TEXT", 0, null, 0],
+            [14, "delivery_json", "TEXT", 0, null, 0],
+            [15, "work_digest", "TEXT", 0, null, 0],
+            [16, "covered_json", "TEXT", 0, null, 0],
+            [17, "client_keys", "TEXT", 0, null, 0]
+          ]
+        },
+        "medchron_page_credits": {
+          "index_list": [
+            ["idx_medchron_page_credits_applies", 0, "c", 0, [[0, 2, "applies_at"]]],
+            ["sqlite_autoindex_medchron_page_credits_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_page_credits_applies",
+              "CREATE INDEX idx_medchron_page_credits_applies ON medchron_page_credits(applies_at)"
+            ],
+            [
+              "table",
+              "medchron_page_credits",
+              "CREATE TABLE medchron_page_credits (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, applies_at TEXT NOT NULL, pages INTEGER NOT NULL CHECK (pages > 0), by_name TEXT NOT NULL, why TEXT NOT NULL, job_id TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "applies_at", "TEXT", 1, null, 0],
+            [3, "pages", "INTEGER", 1, null, 0],
+            [4, "by_name", "TEXT", 1, null, 0],
+            [5, "why", "TEXT", 1, null, 0],
+            [6, "job_id", "TEXT", 0, null, 0]
+          ]
+        }
+      },
+      "commit": "297e36cc506b"
+    },
+    {
+      "after_today_opened_it": {
+        "medchron_jobs": {
+          "index_list": [
+            ["idx_medchron_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+            ["idx_medchron_jobs_work", 0, "c", 0, [[0, 15, "work_digest"]]],
+            ["sqlite_autoindex_medchron_jobs_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_jobs_created",
+              "CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)"
+            ],
+            [
+              "index",
+              "idx_medchron_jobs_work",
+              "CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)"
+            ],
+            [
+              "table",
+              "medchron_jobs",
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "updated_at", "TEXT", 1, null, 0],
+            [3, "state", "TEXT", 1, null, 0],
+            [4, "matter_id", "TEXT", 1, null, 0],
+            [5, "matter_number", "TEXT", 1, null, 0],
+            [6, "requester", "TEXT", 0, null, 0],
+            [7, "request_ref", "TEXT", 0, null, 0],
+            [8, "envelope_digest", "TEXT", 1, null, 0],
+            [9, "documents", "INTEGER", 1, "0", 0],
+            [10, "pages", "INTEGER", 1, "0", 0],
+            [11, "cents", "INTEGER", 1, "0", 0],
+            [12, "reason", "TEXT", 0, null, 0],
+            [13, "folder_id", "TEXT", 0, null, 0],
+            [14, "delivery_json", "TEXT", 0, null, 0],
+            [15, "work_digest", "TEXT", 0, null, 0],
+            [16, "covered_json", "TEXT", 0, null, 0],
+            [17, "client_keys", "TEXT", 0, null, 0]
+          ]
+        },
+        "medchron_page_credits": {
+          "index_list": [
+            ["idx_medchron_page_credits_applies", 0, "c", 0, [[0, 2, "applies_at"]]],
+            ["sqlite_autoindex_medchron_page_credits_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_page_credits_applies",
+              "CREATE INDEX idx_medchron_page_credits_applies ON medchron_page_credits(applies_at)"
+            ],
+            [
+              "table",
+              "medchron_page_credits",
+              "CREATE TABLE medchron_page_credits (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, applies_at TEXT NOT NULL, pages INTEGER NOT NULL CHECK (pages > 0), by_name TEXT NOT NULL, why TEXT NOT NULL, job_id TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "applies_at", "TEXT", 1, null, 0],
+            [3, "pages", "INTEGER", 1, null, 0],
+            [4, "by_name", "TEXT", 1, null, 0],
+            [5, "why", "TEXT", 1, null, 0],
+            [6, "job_id", "TEXT", 0, null, 0]
+          ]
+        }
+      },
+      "commit": "67bc52b0ab24"
+    },
+    {
+      "after_today_opened_it": {
+        "medchron_jobs": {
+          "index_list": [
+            ["idx_medchron_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+            ["idx_medchron_jobs_work", 0, "c", 0, [[0, 16, "work_digest"]]],
+            ["sqlite_autoindex_medchron_jobs_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_jobs_created",
+              "CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)"
+            ],
+            [
+              "index",
+              "idx_medchron_jobs_work",
+              "CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)"
+            ],
+            [
+              "table",
+              "medchron_jobs",
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, work_digest TEXT, client_keys TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "updated_at", "TEXT", 1, null, 0],
+            [3, "state", "TEXT", 1, null, 0],
+            [4, "matter_id", "TEXT", 1, null, 0],
+            [5, "matter_number", "TEXT", 1, null, 0],
+            [6, "requester", "TEXT", 0, null, 0],
+            [7, "request_ref", "TEXT", 0, null, 0],
+            [8, "envelope_digest", "TEXT", 1, null, 0],
+            [9, "documents", "INTEGER", 1, "0", 0],
+            [10, "pages", "INTEGER", 1, "0", 0],
+            [11, "cents", "INTEGER", 1, "0", 0],
+            [12, "reason", "TEXT", 0, null, 0],
+            [13, "folder_id", "TEXT", 0, null, 0],
+            [14, "delivery_json", "TEXT", 0, null, 0],
+            [15, "covered_json", "TEXT", 0, null, 0],
+            [16, "work_digest", "TEXT", 0, null, 0],
+            [17, "client_keys", "TEXT", 0, null, 0]
+          ]
+        },
+        "medchron_page_credits": {
+          "index_list": [
+            ["idx_medchron_page_credits_applies", 0, "c", 0, [[0, 2, "applies_at"]]],
+            ["sqlite_autoindex_medchron_page_credits_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_page_credits_applies",
+              "CREATE INDEX idx_medchron_page_credits_applies ON medchron_page_credits(applies_at)"
+            ],
+            [
+              "table",
+              "medchron_page_credits",
+              "CREATE TABLE medchron_page_credits (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, applies_at TEXT NOT NULL, pages INTEGER NOT NULL CHECK (pages > 0), by_name TEXT NOT NULL, why TEXT NOT NULL, job_id TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "applies_at", "TEXT", 1, null, 0],
+            [3, "pages", "INTEGER", 1, null, 0],
+            [4, "by_name", "TEXT", 1, null, 0],
+            [5, "why", "TEXT", 1, null, 0],
+            [6, "job_id", "TEXT", 0, null, 0]
+          ]
+        }
+      },
+      "commit": "ad5e2369c42f"
+    },
+    {
+      "after_today_opened_it": {
+        "medchron_jobs": {
+          "index_list": [
+            ["idx_medchron_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+            ["idx_medchron_jobs_work", 0, "c", 0, [[0, 17, "work_digest"]]],
+            ["sqlite_autoindex_medchron_jobs_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_jobs_created",
+              "CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)"
+            ],
+            [
+              "index",
+              "idx_medchron_jobs_work",
+              "CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)"
+            ],
+            [
+              "table",
+              "medchron_jobs",
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "updated_at", "TEXT", 1, null, 0],
+            [3, "state", "TEXT", 1, null, 0],
+            [4, "matter_id", "TEXT", 1, null, 0],
+            [5, "matter_number", "TEXT", 1, null, 0],
+            [6, "requester", "TEXT", 0, null, 0],
+            [7, "request_ref", "TEXT", 0, null, 0],
+            [8, "envelope_digest", "TEXT", 1, null, 0],
+            [9, "documents", "INTEGER", 1, "0", 0],
+            [10, "pages", "INTEGER", 1, "0", 0],
+            [11, "cents", "INTEGER", 1, "0", 0],
+            [12, "reason", "TEXT", 0, null, 0],
+            [13, "folder_id", "TEXT", 0, null, 0],
+            [14, "delivery_json", "TEXT", 0, null, 0],
+            [15, "covered_json", "TEXT", 0, null, 0],
+            [16, "client_keys", "TEXT", 0, null, 0],
+            [17, "work_digest", "TEXT", 0, null, 0]
+          ]
+        },
+        "medchron_page_credits": {
+          "index_list": [
+            ["idx_medchron_page_credits_applies", 0, "c", 0, [[0, 2, "applies_at"]]],
+            ["sqlite_autoindex_medchron_page_credits_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_page_credits_applies",
+              "CREATE INDEX idx_medchron_page_credits_applies ON medchron_page_credits(applies_at)"
+            ],
+            [
+              "table",
+              "medchron_page_credits",
+              "CREATE TABLE medchron_page_credits (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, applies_at TEXT NOT NULL, pages INTEGER NOT NULL CHECK (pages > 0), by_name TEXT NOT NULL, why TEXT NOT NULL, job_id TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "applies_at", "TEXT", 1, null, 0],
+            [3, "pages", "INTEGER", 1, null, 0],
+            [4, "by_name", "TEXT", 1, null, 0],
+            [5, "why", "TEXT", 1, null, 0],
+            [6, "job_id", "TEXT", 0, null, 0]
+          ]
+        }
+      },
+      "commit": "8095cde7d042"
+    },
+    {
+      "after_today_opened_it": {
+        "medchron_jobs": {
+          "index_list": [
+            ["idx_medchron_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+            ["idx_medchron_jobs_work", 0, "c", 0, [[0, 17, "work_digest"]]],
+            ["sqlite_autoindex_medchron_jobs_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_jobs_created",
+              "CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)"
+            ],
+            [
+              "index",
+              "idx_medchron_jobs_work",
+              "CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)"
+            ],
+            [
+              "table",
+              "medchron_jobs",
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "updated_at", "TEXT", 1, null, 0],
+            [3, "state", "TEXT", 1, null, 0],
+            [4, "matter_id", "TEXT", 1, null, 0],
+            [5, "matter_number", "TEXT", 1, null, 0],
+            [6, "requester", "TEXT", 0, null, 0],
+            [7, "request_ref", "TEXT", 0, null, 0],
+            [8, "envelope_digest", "TEXT", 1, null, 0],
+            [9, "documents", "INTEGER", 1, "0", 0],
+            [10, "pages", "INTEGER", 1, "0", 0],
+            [11, "cents", "INTEGER", 1, "0", 0],
+            [12, "reason", "TEXT", 0, null, 0],
+            [13, "folder_id", "TEXT", 0, null, 0],
+            [14, "delivery_json", "TEXT", 0, null, 0],
+            [15, "covered_json", "TEXT", 0, null, 0],
+            [16, "client_keys", "TEXT", 0, null, 0],
+            [17, "work_digest", "TEXT", 0, null, 0]
+          ]
+        },
+        "medchron_page_credits": {
+          "index_list": [
+            ["idx_medchron_page_credits_applies", 0, "c", 0, [[0, 2, "applies_at"]]],
+            ["sqlite_autoindex_medchron_page_credits_1", 1, "pk", 0, [[0, 0, "id"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_medchron_page_credits_applies",
+              "CREATE INDEX idx_medchron_page_credits_applies ON medchron_page_credits(applies_at)"
+            ],
+            [
+              "table",
+              "medchron_page_credits",
+              "CREATE TABLE medchron_page_credits (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, applies_at TEXT NOT NULL, pages INTEGER NOT NULL CHECK (pages > 0), by_name TEXT NOT NULL, why TEXT NOT NULL, job_id TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "id", "TEXT", 0, null, 1],
+            [1, "created_at", "TEXT", 1, null, 0],
+            [2, "applies_at", "TEXT", 1, null, 0],
+            [3, "pages", "INTEGER", 1, null, 0],
+            [4, "by_name", "TEXT", 1, null, 0],
+            [5, "why", "TEXT", 1, null, 0],
+            [6, "job_id", "TEXT", 0, null, 0]
+          ]
+        }
+      },
+      "commit": "ed31819b2586"
+    }
+  ],
+  "fresh": {
+    "medchron_jobs": {
+      "index_list": [
+        ["idx_medchron_jobs_created", 0, "c", 0, [[0, 1, "created_at"]]],
+        ["idx_medchron_jobs_work", 0, "c", 0, [[0, 17, "work_digest"]]],
+        ["sqlite_autoindex_medchron_jobs_1", 1, "pk", 0, [[0, 0, "id"]]]
+      ],
+      "sqlite_master": [
+        [
+          "index",
+          "idx_medchron_jobs_created",
+          "CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)"
+        ],
+        [
+          "index",
+          "idx_medchron_jobs_work",
+          "CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)"
+        ],
+        [
+          "table",
+          "medchron_jobs",
+          "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT)"
+        ]
+      ],
+      "table_info": [
+        [0, "id", "TEXT", 0, null, 1],
+        [1, "created_at", "TEXT", 1, null, 0],
+        [2, "updated_at", "TEXT", 1, null, 0],
+        [3, "state", "TEXT", 1, null, 0],
+        [4, "matter_id", "TEXT", 1, null, 0],
+        [5, "matter_number", "TEXT", 1, null, 0],
+        [6, "requester", "TEXT", 0, null, 0],
+        [7, "request_ref", "TEXT", 0, null, 0],
+        [8, "envelope_digest", "TEXT", 1, null, 0],
+        [9, "documents", "INTEGER", 1, "0", 0],
+        [10, "pages", "INTEGER", 1, "0", 0],
+        [11, "cents", "INTEGER", 1, "0", 0],
+        [12, "reason", "TEXT", 0, null, 0],
+        [13, "folder_id", "TEXT", 0, null, 0],
+        [14, "delivery_json", "TEXT", 0, null, 0],
+        [15, "covered_json", "TEXT", 0, null, 0],
+        [16, "client_keys", "TEXT", 0, null, 0],
+        [17, "work_digest", "TEXT", 0, null, 0]
+      ]
+    },
+    "medchron_page_credits": {
+      "index_list": [
+        ["idx_medchron_page_credits_applies", 0, "c", 0, [[0, 2, "applies_at"]]],
+        ["sqlite_autoindex_medchron_page_credits_1", 1, "pk", 0, [[0, 0, "id"]]]
+      ],
+      "sqlite_master": [
+        [
+          "index",
+          "idx_medchron_page_credits_applies",
+          "CREATE INDEX idx_medchron_page_credits_applies ON medchron_page_credits(applies_at)"
+        ],
+        [
+          "table",
+          "medchron_page_credits",
+          "CREATE TABLE medchron_page_credits (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, applies_at TEXT NOT NULL, pages INTEGER NOT NULL CHECK (pages > 0), by_name TEXT NOT NULL, why TEXT NOT NULL, job_id TEXT)"
+        ]
+      ],
+      "table_info": [
+        [0, "id", "TEXT", 0, null, 1],
+        [1, "created_at", "TEXT", 1, null, 0],
+        [2, "applies_at", "TEXT", 1, null, 0],
+        [3, "pages", "INTEGER", 1, null, 0],
+        [4, "by_name", "TEXT", 1, null, 0],
+        [5, "why", "TEXT", 1, null, 0],
+        [6, "job_id", "TEXT", 0, null, 0]
+      ]
+    }
+  }
+}

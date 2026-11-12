@@ -1,0 +1,217 @@
+{
+  "aged": [
+    {
+      "after_today_opened_it": {
+        "records_jobs": {
+          "index_list": [
+            ["idx_records_jobs_created", 0, "c", 0, [[0, 8, "created_at"]]],
+            ["idx_records_jobs_state", 0, "c", 0, [[0, 5, "state"]]],
+            ["sqlite_autoindex_records_jobs_1", 1, "pk", 0, [[0, 0, "job_id"]]],
+            ["uq_records_jobs_message_ref", 1, "c", 0, [[0, 2, "message_ref"]]],
+            ["uq_records_jobs_request_ref", 1, "c", 0, [[0, 1, "request_ref"]]]
+          ],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_records_jobs_created",
+              "CREATE INDEX idx_records_jobs_created ON records_jobs(created_at)"
+            ],
+            [
+              "index",
+              "idx_records_jobs_state",
+              "CREATE INDEX idx_records_jobs_state ON records_jobs(state)"
+            ],
+            [
+              "index",
+              "uq_records_jobs_message_ref",
+              "CREATE UNIQUE INDEX uq_records_jobs_message_ref ON records_jobs(message_ref)"
+            ],
+            [
+              "index",
+              "uq_records_jobs_request_ref",
+              "CREATE UNIQUE INDEX uq_records_jobs_request_ref ON records_jobs(request_ref)"
+            ],
+            [
+              "table",
+              "records_jobs",
+              "CREATE TABLE records_jobs (job_id TEXT PRIMARY KEY, request_ref TEXT NOT NULL, message_ref TEXT NOT NULL, matter_id TEXT, requester TEXT NOT NULL, state TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, review_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, trigger TEXT NOT NULL, ack TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, reason TEXT, delivery_json TEXT, attempt INTEGER NOT NULL DEFAULT 1, close_reason TEXT, close_ref TEXT)"
+            ]
+          ],
+          "table_info": [
+            [0, "job_id", "TEXT", 0, null, 1],
+            [1, "request_ref", "TEXT", 1, null, 0],
+            [2, "message_ref", "TEXT", 1, null, 0],
+            [3, "matter_id", "TEXT", 0, null, 0],
+            [4, "requester", "TEXT", 1, null, 0],
+            [5, "state", "TEXT", 1, null, 0],
+            [6, "cents", "INTEGER", 1, "0", 0],
+            [7, "review_id", "TEXT", 0, null, 0],
+            [8, "created_at", "TEXT", 1, null, 0],
+            [9, "updated_at", "TEXT", 1, null, 0],
+            [10, "trigger", "TEXT", 1, null, 0],
+            [11, "ack", "TEXT", 1, null, 0],
+            [12, "envelope_digest", "TEXT", 1, null, 0],
+            [13, "stage", "TEXT", 0, null, 0],
+            [14, "reason", "TEXT", 0, null, 0],
+            [15, "delivery_json", "TEXT", 0, null, 0],
+            [16, "attempt", "INTEGER", 1, "1", 0],
+            [17, "close_reason", "TEXT", 0, null, 0],
+            [18, "close_ref", "TEXT", 0, null, 0]
+          ]
+        },
+        "records_lines": {
+          "index_list": [
+            [
+              "sqlite_autoindex_records_lines_1",
+              1,
+              "pk",
+              0,
+              [
+                [0, 0, "job_id"],
+                [1, 1, "n"]
+              ]
+            ]
+          ],
+          "sqlite_master": [
+            [
+              "table",
+              "records_lines",
+              "CREATE TABLE records_lines (job_id TEXT NOT NULL, n INTEGER NOT NULL, outcome TEXT NOT NULL, files INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY (job_id, n))"
+            ]
+          ],
+          "table_info": [
+            [0, "job_id", "TEXT", 1, null, 1],
+            [1, "n", "INTEGER", 1, null, 2],
+            [2, "outcome", "TEXT", 1, null, 0],
+            [3, "files", "INTEGER", 1, "0", 0],
+            [4, "updated_at", "TEXT", 1, null, 0]
+          ]
+        },
+        "records_spend": {
+          "index_list": [["idx_records_spend_at", 0, "c", 0, [[0, 1, "at"]]]],
+          "sqlite_master": [
+            [
+              "index",
+              "idx_records_spend_at",
+              "CREATE INDEX idx_records_spend_at ON records_spend(at)"
+            ],
+            [
+              "table",
+              "records_spend",
+              "CREATE TABLE records_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+            ]
+          ],
+          "table_info": [
+            [0, "job_id", "TEXT", 1, null, 0],
+            [1, "at", "TEXT", 1, null, 0],
+            [2, "cents", "INTEGER", 1, null, 0]
+          ]
+        }
+      },
+      "commit": "935072dcd408"
+    }
+  ],
+  "fresh": {
+    "records_jobs": {
+      "index_list": [
+        ["idx_records_jobs_created", 0, "c", 0, [[0, 8, "created_at"]]],
+        ["idx_records_jobs_state", 0, "c", 0, [[0, 5, "state"]]],
+        ["sqlite_autoindex_records_jobs_1", 1, "pk", 0, [[0, 0, "job_id"]]],
+        ["uq_records_jobs_message_ref", 1, "c", 0, [[0, 2, "message_ref"]]],
+        ["uq_records_jobs_request_ref", 1, "c", 0, [[0, 1, "request_ref"]]]
+      ],
+      "sqlite_master": [
+        [
+          "index",
+          "idx_records_jobs_created",
+          "CREATE INDEX idx_records_jobs_created ON records_jobs(created_at)"
+        ],
+        [
+          "index",
+          "idx_records_jobs_state",
+          "CREATE INDEX idx_records_jobs_state ON records_jobs(state)"
+        ],
+        [
+          "index",
+          "uq_records_jobs_message_ref",
+          "CREATE UNIQUE INDEX uq_records_jobs_message_ref ON records_jobs(message_ref)"
+        ],
+        [
+          "index",
+          "uq_records_jobs_request_ref",
+          "CREATE UNIQUE INDEX uq_records_jobs_request_ref ON records_jobs(request_ref)"
+        ],
+        [
+          "table",
+          "records_jobs",
+          "CREATE TABLE records_jobs (job_id TEXT PRIMARY KEY, request_ref TEXT NOT NULL, message_ref TEXT NOT NULL, matter_id TEXT, requester TEXT NOT NULL, state TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0, review_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, trigger TEXT NOT NULL, ack TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, reason TEXT, delivery_json TEXT, attempt INTEGER NOT NULL DEFAULT 1, close_reason TEXT, close_ref TEXT)"
+        ]
+      ],
+      "table_info": [
+        [0, "job_id", "TEXT", 0, null, 1],
+        [1, "request_ref", "TEXT", 1, null, 0],
+        [2, "message_ref", "TEXT", 1, null, 0],
+        [3, "matter_id", "TEXT", 0, null, 0],
+        [4, "requester", "TEXT", 1, null, 0],
+        [5, "state", "TEXT", 1, null, 0],
+        [6, "cents", "INTEGER", 1, "0", 0],
+        [7, "review_id", "TEXT", 0, null, 0],
+        [8, "created_at", "TEXT", 1, null, 0],
+        [9, "updated_at", "TEXT", 1, null, 0],
+        [10, "trigger", "TEXT", 1, null, 0],
+        [11, "ack", "TEXT", 1, null, 0],
+        [12, "envelope_digest", "TEXT", 1, null, 0],
+        [13, "stage", "TEXT", 0, null, 0],
+        [14, "reason", "TEXT", 0, null, 0],
+        [15, "delivery_json", "TEXT", 0, null, 0],
+        [16, "attempt", "INTEGER", 1, "1", 0],
+        [17, "close_reason", "TEXT", 0, null, 0],
+        [18, "close_ref", "TEXT", 0, null, 0]
+      ]
+    },
+    "records_lines": {
+      "index_list": [
+        [
+          "sqlite_autoindex_records_lines_1",
+          1,
+          "pk",
+          0,
+          [
+            [0, 0, "job_id"],
+            [1, 1, "n"]
+          ]
+        ]
+      ],
+      "sqlite_master": [
+        [
+          "table",
+          "records_lines",
+          "CREATE TABLE records_lines (job_id TEXT NOT NULL, n INTEGER NOT NULL, outcome TEXT NOT NULL, files INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY (job_id, n))"
+        ]
+      ],
+      "table_info": [
+        [0, "job_id", "TEXT", 1, null, 1],
+        [1, "n", "INTEGER", 1, null, 2],
+        [2, "outcome", "TEXT", 1, null, 0],
+        [3, "files", "INTEGER", 1, "0", 0],
+        [4, "updated_at", "TEXT", 1, null, 0]
+      ]
+    },
+    "records_spend": {
+      "index_list": [["idx_records_spend_at", 0, "c", 0, [[0, 1, "at"]]]],
+      "sqlite_master": [
+        ["index", "idx_records_spend_at", "CREATE INDEX idx_records_spend_at ON records_spend(at)"],
+        [
+          "table",
+          "records_spend",
+          "CREATE TABLE records_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+        ]
+      ],
+      "table_info": [
+        [0, "job_id", "TEXT", 1, null, 0],
+        [1, "at", "TEXT", 1, null, 0],
+        [2, "cents", "INTEGER", 1, null, 0]
+      ]
+    }
+  }
+}

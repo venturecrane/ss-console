@@ -1,0 +1,2189 @@
+{
+  "matrix": {
+    "delivered": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "demand",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": [
+              {
+                "name": "Out.docx",
+                "role": "demand",
+                "size": 41000
+              }
+            ],
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "demand",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> failed",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "demand",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> held",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "demand",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> running",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "demand",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> submitted",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "failed": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> delivered",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> held",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "DEMAND_JOB_RUNNING",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 2,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 2,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> submitted",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "held": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> delivered",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "DEMAND_JOB_FAILED",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> running",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> submitted",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "running": {
+      "delivered": {
+        "audit": [
+          {
+            "action_type": "DEMAND_JOB_DELIVERED",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 500,
+              "coverage_report": false,
+              "files": [
+                {
+                  "name": "Out.docx",
+                  "size": 41000
+                }
+              ],
+              "folder_id": "folder-7",
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": null,
+              "state": "delivered"
+            }
+          }
+        ],
+        "project": {
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "demand",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": [
+              {
+                "name": "Out.docx",
+                "role": "demand",
+                "size": 41000
+              }
+            ],
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"cents\": 500, \"coverage_report\": false, \"files\": [{\"name\": \"Out.docx\", \"role\": \"demand\", \"size\": 41000}]}",
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "DEMAND_JOB_FAILED",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "DEMAND_JOB_HELD",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "limit_held: a matrix hold",
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "demand_spend": []
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition running -> submitted",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": []
+        }
+      }
+    },
+    "submitted": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "submitted",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition submitted -> delivered",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "submitted",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "submitted",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:00.000Z"
+            }
+          ],
+          "demand_spend": []
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "DEMAND_JOB_FAILED",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "DEMAND_JOB_HELD",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "limit_held: a matrix hold",
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "DEMAND_JOB_RUNNING",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": []
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "submitted",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": null,
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "submitted",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "submitted",
+          "supersedes": null,
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "demand_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "envelope_digest": "6e07201333d307c86b7adf837adfacfd593e991cecfb9498a2d1a2e2b696368e",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "submitted",
+              "supersedes": null,
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "demand_spend": []
+        }
+      }
+    }
+  },
+  "never_reached": [],
+  "reached_by": {
+    "delivered": ["running", "delivered"],
+    "failed": ["failed"],
+    "held": ["held"],
+    "running": ["running"],
+    "submitted": []
+  },
+  "start": "submitted",
+  "states": ["submitted", "running", "held", "delivered", "failed"]
+}

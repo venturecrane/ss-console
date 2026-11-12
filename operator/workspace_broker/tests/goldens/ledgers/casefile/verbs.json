@@ -1,0 +1,241 @@
+{
+  "casefile_apply_submit | gateway | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "only a Named Administrator's approval is applied; nothing was queued"
+  },
+  "casefile_apply_submit | gateway | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "only a Named Administrator's approval is applied; nothing was queued"
+  },
+  "casefile_apply_submit | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "only a Named Administrator's approval is applied; nothing was queued"
+  },
+  "casefile_apply_submit | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "only a Named Administrator's approval is applied; nothing was queued"
+  },
+  "casefile_job_close | gateway | empty": {
+    "error": "PermissionError",
+    "message": "casefile_job_close is not permitted for this caller",
+    "ok": false
+  },
+  "casefile_job_close | gateway | known job": {
+    "error": "PermissionError",
+    "message": "casefile_job_close is not permitted for this caller",
+    "ok": false
+  },
+  "casefile_job_close | root | empty": {
+    "error": "ValueError",
+    "message": "casefile_job_close requires job_id, a reason and a source_ref (vfy_<ULID> or a ULID)",
+    "ok": false
+  },
+  "casefile_job_close | root | known job": {
+    "error": "ValueError",
+    "message": "casefile_job_close requires job_id, a reason and a source_ref (vfy_<ULID> or a ULID)",
+    "ok": false
+  },
+  "casefile_job_record | gateway | empty": {
+    "error": "PermissionError",
+    "message": "casefile_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "casefile_job_record | gateway | known job": {
+    "error": "PermissionError",
+    "message": "casefile_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "casefile_job_record | root | empty": {
+    "error": "ValueError",
+    "message": "casefile_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "casefile_job_record | root | known job": {
+    "error": "ValueError",
+    "message": "casefile_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "casefile_job_resume | gateway | empty": {
+    "error": "PermissionError",
+    "message": "casefile_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "casefile_job_resume | gateway | known job": {
+    "error": "PermissionError",
+    "message": "casefile_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "casefile_job_resume | root | empty": {
+    "error": "ValueError",
+    "message": "casefile_job_resume requires job_id and a reason",
+    "ok": false
+  },
+  "casefile_job_resume | root | known job": {
+    "error": "ValueError",
+    "message": "casefile_job_resume requires job_id and a reason",
+    "ok": false
+  },
+  "casefile_job_status | gateway | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "file": null,
+        "files": [],
+        "folder_id": null,
+        "job_id": "01KTJ0BX000000000000000001",
+        "lines_proposed": null,
+        "matters_current": null,
+        "matters_held": null,
+        "matters_read": null,
+        "matters_total": null,
+        "mode": "full",
+        "reason": null,
+        "reply_sent_at": null,
+        "requester": "admin@firm.example",
+        "source_job_id": null,
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      }
+    ],
+    "ok": true
+  },
+  "casefile_job_status | gateway | known job": {
+    "job": {
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "file": null,
+      "files": [],
+      "folder_id": null,
+      "job_id": "01KTJ0BX000000000000000001",
+      "lines_proposed": null,
+      "matters_current": null,
+      "matters_held": null,
+      "matters_read": null,
+      "matters_total": null,
+      "mode": "full",
+      "reason": null,
+      "reply_sent_at": null,
+      "requester": "admin@firm.example",
+      "source_job_id": null,
+      "stage": null,
+      "state": "queued",
+      "trigger": "request",
+      "updated_at": "2026-10-20T17:00:00.000Z"
+    },
+    "ok": true
+  },
+  "casefile_job_status | root | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "file": null,
+        "files": [],
+        "folder_id": null,
+        "job_id": "01KTJ0BX000000000000000001",
+        "lines_proposed": null,
+        "matters_current": null,
+        "matters_held": null,
+        "matters_read": null,
+        "matters_total": null,
+        "mode": "full",
+        "reason": null,
+        "reply_sent_at": null,
+        "requester": "admin@firm.example",
+        "source_job_id": null,
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      }
+    ],
+    "month": "2026-11",
+    "month_cents": 0,
+    "monthly_budget_cents": null,
+    "ok": true
+  },
+  "casefile_job_status | root | known job": {
+    "job": {
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "file": null,
+      "files": [],
+      "folder_id": null,
+      "job_id": "01KTJ0BX000000000000000001",
+      "lines_proposed": null,
+      "matters_current": null,
+      "matters_held": null,
+      "matters_read": null,
+      "matters_total": null,
+      "mode": "full",
+      "reason": null,
+      "reply_sent_at": null,
+      "requester": "admin@firm.example",
+      "row": {
+        "attempt": 1,
+        "cents": 0,
+        "close_reason": null,
+        "close_ref": null,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "delivery_json": null,
+        "envelope_digest": "cc56fab4d52189a586b3e13e59b989f3d8f80e769ac0164c6f77e4963acb65f1",
+        "file_to_matter_id": "99999999-9999-4999-8999-999999999999",
+        "folder_id": null,
+        "id": "01KTJ0BX000000000000000001",
+        "lines_proposed": null,
+        "matters_current": null,
+        "matters_held": null,
+        "matters_read": null,
+        "matters_total": null,
+        "metrics_json": null,
+        "mode": "full",
+        "outcomes_json": null,
+        "reason": null,
+        "reply_key": null,
+        "reply_sent_at": null,
+        "request_ref": "<req-1@firm.example>",
+        "requester": "admin@firm.example",
+        "scope_json": "{\"assisting\": {\"names\": [\"Pat Example1\"]}}",
+        "scope_key": "casefile:fdaadafd2f2fe39eef0da9464c785e4e",
+        "source_job_id": null,
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      },
+      "source_job_id": null,
+      "stage": null,
+      "state": "queued",
+      "trigger": "request",
+      "updated_at": "2026-10-20T17:00:00.000Z"
+    },
+    "ok": true
+  },
+  "casefile_job_submit | gateway | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a request envelope carries exactly ['message_ref', 'request_text', 'requester', 'scope', 'trigger'], trigger request"
+  },
+  "casefile_job_submit | gateway | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a request envelope carries exactly ['message_ref', 'request_text', 'requester', 'scope', 'trigger'], trigger request"
+  },
+  "casefile_job_submit | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a request envelope carries exactly ['message_ref', 'request_text', 'requester', 'scope', 'trigger'], trigger request"
+  },
+  "casefile_job_submit | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a request envelope carries exactly ['message_ref', 'request_text', 'requester', 'scope', 'trigger'], trigger request"
+  }
+}

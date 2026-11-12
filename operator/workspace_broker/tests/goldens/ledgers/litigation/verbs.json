@@ -1,0 +1,215 @@
+{
+  "litigation_job_close | gateway | empty": {
+    "error": "PermissionError",
+    "message": "litigation_job_close is not permitted for this caller",
+    "ok": false
+  },
+  "litigation_job_close | gateway | known job": {
+    "error": "PermissionError",
+    "message": "litigation_job_close is not permitted for this caller",
+    "ok": false
+  },
+  "litigation_job_close | root | empty": {
+    "error": "ValueError",
+    "message": "litigation_job_close requires job_id",
+    "ok": false
+  },
+  "litigation_job_close | root | known job": {
+    "error": "ValueError",
+    "message": "litigation_job_close requires a reason: what SMD did, and how the requester was told",
+    "ok": false
+  },
+  "litigation_job_record | gateway | empty": {
+    "error": "PermissionError",
+    "message": "litigation_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "litigation_job_record | gateway | known job": {
+    "error": "PermissionError",
+    "message": "litigation_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "litigation_job_record | root | empty": {
+    "error": "ValueError",
+    "message": "litigation_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "litigation_job_record | root | known job": {
+    "error": "ValueError",
+    "message": "litigation_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "litigation_job_resume | gateway | empty": {
+    "error": "PermissionError",
+    "message": "litigation_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "litigation_job_resume | gateway | known job": {
+    "error": "PermissionError",
+    "message": "litigation_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "litigation_job_resume | root | empty": {
+    "error": "ValueError",
+    "message": "litigation_job_resume requires job_id",
+    "ok": false
+  },
+  "litigation_job_resume | root | known job": {
+    "error": "ValueError",
+    "message": "litigation_job_resume requires a reason: what was fixed, and why the done stages still hold",
+    "ok": false
+  },
+  "litigation_job_status | gateway | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "counts": {},
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "file": null,
+        "files": [],
+        "flags_new": null,
+        "folder_id": null,
+        "job_id": "01KTJ0BX000000000000000001",
+        "matters_reread": null,
+        "matters_total": null,
+        "reason": null,
+        "reply_sent_at": null,
+        "report": "status",
+        "requester": "admin@firm.example",
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      }
+    ],
+    "ok": true
+  },
+  "litigation_job_status | gateway | known job": {
+    "job": {
+      "cents": 0,
+      "counts": {},
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "file": null,
+      "files": [],
+      "flags_new": null,
+      "folder_id": null,
+      "job_id": "01KTJ0BX000000000000000001",
+      "matters_reread": null,
+      "matters_total": null,
+      "reason": null,
+      "reply_sent_at": null,
+      "report": "status",
+      "requester": "admin@firm.example",
+      "stage": null,
+      "state": "queued",
+      "trigger": "request",
+      "updated_at": "2026-10-20T17:00:00.000Z"
+    },
+    "ok": true
+  },
+  "litigation_job_status | root | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "counts": {},
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "file": null,
+        "files": [],
+        "flags_new": null,
+        "folder_id": null,
+        "job_id": "01KTJ0BX000000000000000001",
+        "matters_reread": null,
+        "matters_total": null,
+        "reason": null,
+        "reply_sent_at": null,
+        "report": "status",
+        "requester": "admin@firm.example",
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      }
+    ],
+    "list_allowance": {
+      "authored": false
+    },
+    "month": "2026-11",
+    "month_cents": 0,
+    "monthly_budget_cents": null,
+    "ok": true
+  },
+  "litigation_job_status | root | known job": {
+    "job": {
+      "cents": 0,
+      "counts": {},
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "file": null,
+      "files": [],
+      "flags_new": null,
+      "folder_id": null,
+      "job_id": "01KTJ0BX000000000000000001",
+      "matters_reread": null,
+      "matters_total": null,
+      "reason": null,
+      "reply_sent_at": null,
+      "report": "status",
+      "requester": "admin@firm.example",
+      "row": {
+        "attempt": 1,
+        "cents": 0,
+        "close_reason": null,
+        "close_ref": null,
+        "counts_json": null,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "delivery_json": null,
+        "envelope_digest": "8bff475c03e4126fa862e09d5cbd4bdc31d820500ccfdbb6eb7f17fad6fa0815",
+        "file_to_matter_id": "99999999-9999-4999-8999-999999999999",
+        "flags_new": null,
+        "folder_id": null,
+        "folder_name": "Litigation Status",
+        "id": "01KTJ0BX000000000000000001",
+        "matters_reread": null,
+        "matters_total": null,
+        "over_allowance_ref": null,
+        "reason": null,
+        "reassign_json": null,
+        "reply_key": null,
+        "reply_sent_at": null,
+        "report": "status",
+        "request_ref": "<list-1@firm.example>",
+        "requester": "admin@firm.example",
+        "scope_json": "{\"paralegal_staff_ids\": [\"11111111-2222-3333-4444-555555555501\"]}",
+        "scope_key": "paralegal:11111111-2222-3333-4444-555555555501",
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      },
+      "stage": null,
+      "state": "queued",
+      "trigger": "request",
+      "updated_at": "2026-10-20T17:00:00.000Z"
+    },
+    "ok": true
+  },
+  "litigation_job_submit | gateway | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "litigation_job_submit requires an envelope object"
+  },
+  "litigation_job_submit | gateway | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "litigation_job_submit requires an envelope object"
+  },
+  "litigation_job_submit | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "litigation_job_submit requires an envelope object"
+  },
+  "litigation_job_submit | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "litigation_job_submit requires an envelope object"
+  }
+}

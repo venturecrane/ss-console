@@ -1,0 +1,184 @@
+{
+  "records_job_close | gateway | empty": {
+    "error": "PermissionError",
+    "message": "records_job_close is not permitted for this caller",
+    "ok": false
+  },
+  "records_job_close | gateway | known job": {
+    "error": "PermissionError",
+    "message": "records_job_close is not permitted for this caller",
+    "ok": false
+  },
+  "records_job_close | root | empty": {
+    "error": "ValueError",
+    "message": "records_job_close requires job_id, a reason and a source_ref (vfy_<ULID> or a ULID)",
+    "ok": false
+  },
+  "records_job_close | root | known job": {
+    "error": "ValueError",
+    "message": "records_job_close requires job_id, a reason and a source_ref (vfy_<ULID> or a ULID)",
+    "ok": false
+  },
+  "records_job_record | gateway | empty": {
+    "error": "PermissionError",
+    "message": "records_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "records_job_record | gateway | known job": {
+    "error": "PermissionError",
+    "message": "records_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "records_job_record | root | empty": {
+    "error": "ValueError",
+    "message": "records_job_record requires job_id",
+    "ok": false
+  },
+  "records_job_record | root | known job": {
+    "job": {
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "job_id": "01KTJ0BX000000000000000001",
+      "matter_id": "11111111-2222-3333-4444-555555555555",
+      "reason": null,
+      "requester": "pat.lane@example-firm.test",
+      "review_id": null,
+      "stage": null,
+      "state": "queued",
+      "trigger": "request",
+      "updated_at": "2026-11-12T18:00:00.000Z"
+    },
+    "ok": true
+  },
+  "records_job_resume | gateway | empty": {
+    "error": "PermissionError",
+    "message": "records_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "records_job_resume | gateway | known job": {
+    "error": "PermissionError",
+    "message": "records_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "records_job_resume | root | empty": {
+    "error": "ValueError",
+    "message": "records_job_resume requires job_id and a reason",
+    "ok": false
+  },
+  "records_job_resume | root | known job": {
+    "error": "ValueError",
+    "message": "records_job_resume requires job_id and a reason",
+    "ok": false
+  },
+  "records_job_status | gateway | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "job_id": "01KTJ0BX000000000000000001",
+        "matter_id": "11111111-2222-3333-4444-555555555555",
+        "requester": "pat.lane@example-firm.test",
+        "review_id": null,
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-11-12T18:00:00.000Z"
+      }
+    ],
+    "ok": true
+  },
+  "records_job_status | gateway | known job": {
+    "job": {
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "job_id": "01KTJ0BX000000000000000001",
+      "matter_id": "11111111-2222-3333-4444-555555555555",
+      "requester": "pat.lane@example-firm.test",
+      "review_id": null,
+      "stage": null,
+      "state": "queued",
+      "trigger": "request",
+      "updated_at": "2026-11-12T18:00:00.000Z"
+    },
+    "ok": true
+  },
+  "records_job_status | root | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "job_id": "01KTJ0BX000000000000000001",
+        "matter_id": "11111111-2222-3333-4444-555555555555",
+        "reason": null,
+        "requester": "pat.lane@example-firm.test",
+        "review_id": null,
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-11-12T18:00:00.000Z"
+      }
+    ],
+    "month": "2026-11",
+    "month_cents": 0,
+    "monthly_budget_cents": null,
+    "ok": true
+  },
+  "records_job_status | root | known job": {
+    "job": {
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "items": [],
+      "job_id": "01KTJ0BX000000000000000001",
+      "matter_id": "11111111-2222-3333-4444-555555555555",
+      "reason": null,
+      "requester": "pat.lane@example-firm.test",
+      "review_id": null,
+      "row": {
+        "ack": "turn",
+        "attempt": 1,
+        "cents": 0,
+        "close_reason": null,
+        "close_ref": null,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "delivery_json": null,
+        "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+        "job_id": "01KTJ0BX000000000000000001",
+        "matter_id": "11111111-2222-3333-4444-555555555555",
+        "message_ref": "AAMkAGraphMessageId0001",
+        "reason": null,
+        "request_ref": "AAMkAGraphMessageId0001",
+        "requester": "pat.lane@example-firm.test",
+        "review_id": null,
+        "stage": null,
+        "state": "queued",
+        "trigger": "request",
+        "updated_at": "2026-11-12T18:00:00.000Z"
+      },
+      "stage": null,
+      "state": "queued",
+      "trigger": "request",
+      "updated_at": "2026-11-12T18:00:00.000Z"
+    },
+    "ok": true
+  },
+  "records_job_submit | gateway | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a records envelope is an object"
+  },
+  "records_job_submit | gateway | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a records envelope is an object"
+  },
+  "records_job_submit | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a records envelope is an object"
+  },
+  "records_job_submit | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a records envelope is an object"
+  }
+}

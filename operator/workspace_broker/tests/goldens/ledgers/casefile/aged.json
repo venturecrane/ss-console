@@ -1,0 +1,18 @@
+{
+  "_why": "Each schema an empty file got from one historical version of this lane's ledger (bin/goldens/ledger-aged-schemas.py, from git history). test_ledger_goldens.py opens each with today's ledger class and compares the migrated schema with its golden.",
+  "steps": [
+    {
+      "commit": "df12dd51209f",
+      "method": "import",
+      "schema": [
+        "index idx_casefile_jobs_created: CREATE INDEX idx_casefile_jobs_created ON casefile_jobs(created_at)",
+        "index idx_casefile_lines_thread: CREATE INDEX idx_casefile_lines_thread ON casefile_lines(thread_ref)",
+        "index idx_casefile_spend_at: CREATE INDEX idx_casefile_spend_at ON casefile_spend(at)",
+        "index uq_casefile_jobs_request_ref_live: CREATE UNIQUE INDEX uq_casefile_jobs_request_ref_live ON casefile_jobs(request_ref) WHERE NOT (state = 'failed' AND trigger = 'request')",
+        "table casefile_jobs: CREATE TABLE casefile_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, mode TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, scope_key TEXT NOT NULL, scope_json TEXT NOT NULL, file_to_matter_id TEXT, envelope_digest TEXT NOT NULL, source_job_id TEXT, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_read INTEGER, matters_current INTEGER, matters_held INTEGER, lines_proposed INTEGER, reason TEXT, folder_id TEXT, delivery_json TEXT, metrics_json TEXT, outcomes_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, close_reason TEXT, close_ref TEXT)",
+        "table casefile_lines: CREATE TABLE casefile_lines (job_id TEXT NOT NULL, n INTEGER NOT NULL, kind TEXT NOT NULL, matter_id TEXT NOT NULL, source_id TEXT NOT NULL, sha256 TEXT NOT NULL, state TEXT NOT NULL, thread_ref TEXT, dispatch_ref TEXT, apply_job_id TEXT, outcome TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (job_id, n))",
+        "table casefile_spend: CREATE TABLE casefile_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    }
+  ]
+}
