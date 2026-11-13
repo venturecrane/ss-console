@@ -36,10 +36,10 @@ import hashlib
 import json
 import re
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
+from .lane_ledger import ReplyOnce, StateRecord
 
 JOB_KIND = "library_setup"
 #: Every kind the drafting job makes, in the document-kind registry's order
@@ -202,40 +202,25 @@ def queue_record(env: dict[str, Any], job_id: str, library_number: str, live: bo
     }
 
 
-class SetupLedger:
-    """Per-operation connections, ``journal_mode=DELETE``, as the drafting ledger."""
+class SetupLedger(StateRecord, ReplyOnce):
+    """The library setup lane on the shared ledger (``lane_ledger``), on the
+    drafting ledger's file: its table, its DDL, its row as the reply chain
+    reads it, and its UPDATE."""
 
-    def __init__(self, db_path: str, queue_dir: str | Path) -> None:
-        self._db_path = db_path
-        self.queue_dir = Path(queue_dir)
-        conn = self._connect()
-        try:
-            conn.execute(CREATE_SQL)
-            have = {r["name"] for r in conn.execute("PRAGMA table_info(library_setup_jobs)")}
-            for name, decl in ADDED_COLUMNS.items():
-                if name not in have:
-                    conn.execute(f"ALTER TABLE library_setup_jobs ADD COLUMN {name} {decl}")
-            conn.commit()
-        finally:
-            conn.close()
+    JOBS = "library_setup_jobs"
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
+    def _create(self, conn: sqlite3.Connection) -> None:
+        conn.execute(CREATE_SQL)
+        have = {r["name"] for r in conn.execute("PRAGMA table_info(library_setup_jobs)")}
+        for name, decl in ADDED_COLUMNS.items():
+            if name not in have:
+                conn.execute(f"ALTER TABLE library_setup_jobs ADD COLUMN {name} {decl}")
+
+    def _row_sql(self) -> str:
+        return _SELECT
 
     def owns(self, job_id: str) -> bool:
         return bool(_ULID_RE.match(job_id or "")) and self.read(job_id) is not None
-
-    def read(self, job_id: str) -> dict[str, Any] | None:
-        conn = self._connect()
-        try:
-            row = conn.execute(_SELECT, (job_id,)).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
 
     @staticmethod
     def project(row: dict[str, Any]) -> dict[str, Any]:
@@ -274,68 +259,29 @@ class SetupLedger:
             conn.commit()
         finally:
             conn.close()
-        self.queue_dir.mkdir(parents=True, exist_ok=True)
-        tmp = self.queue_dir / f".{job_id}.json.tmp"
-        record = queue_record(env, job_id, library_number, live)
-        tmp.write_text(json.dumps(record, indent=1, sort_keys=True), encoding="utf-8")
-        tmp.chmod(0o640)
-        tmp.replace(self.queue_dir / f"{job_id}.json")
+        self._write_queue(job_id, queue_record(env, job_id, library_number, live))
         return job_id
 
-    def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
-        """One transition (a same-state record is a note); the row after."""
+    def _check(self, state: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """A ``report``, when present, is an object."""
         if state not in STATES:
             raise ValueError(f"unknown state {state!r}")
         report = fields.get("report")
         if report is not None and not isinstance(report, dict):
             raise ValueError("report must be an object")
-        conn = self._connect()
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            cur = conn.execute("SELECT state FROM library_setup_jobs WHERE id=?", (job_id,)).fetchone()
-            if cur is None:
-                conn.rollback()
-                raise ValueError(f"no such job {job_id}")
-            if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
-                conn.rollback()
-                raise ValueError(f"illegal transition {cur['state']} -> {state}")
-            conn.execute(
-                "UPDATE library_setup_jobs SET state=?, updated_at=?, "
-                "reason=CASE WHEN ? THEN ? ELSE reason END, "
-                "report_json=CASE WHEN ? THEN ? ELSE report_json END WHERE id=?",
-                (state, _iso_utc(), "reason" in fields, str(fields.get("reason") or "")[:500] or None,
-                 report is not None, json.dumps(report, sort_keys=True) if report is not None else None, job_id),
-            )  # fmt: skip
-            conn.commit()
-        finally:
-            conn.close()
-        row = self.read(job_id) or {}
-        row["prev_state"] = cur["state"]
-        return row
+        return fields
 
-    def mark_replied(self, job_id: str, key: str = "reply") -> bool:
-        conn = self._connect()
-        try:
-            cur = conn.execute(
-                "UPDATE library_setup_jobs SET reply_sent_at=?, reply_key=? WHERE id=? "
-                "AND (reply_key IS NULL OR reply_key != ?) AND NOT (reply_key IS NULL AND reply_sent_at IS NOT NULL)",
-                (_iso_utc(), key, job_id, key),
-            )
-            conn.commit()
-            return cur.rowcount == 1
-        finally:
-            conn.close()
-
-    def unmark_replied(self, job_id: str, key: str) -> None:
-        conn = self._connect()
-        try:
-            conn.execute(
-                "UPDATE library_setup_jobs SET reply_sent_at=NULL, reply_key=NULL WHERE id=? AND reply_key=?",
-                (job_id, key),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+    def _apply(
+        self, conn: sqlite3.Connection, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any], now: str
+    ) -> None:
+        report = fields.get("report")
+        conn.execute(
+            "UPDATE library_setup_jobs SET state=?, updated_at=?, "
+            "reason=CASE WHEN ? THEN ? ELSE reason END, "
+            "report_json=CASE WHEN ? THEN ? ELSE report_json END WHERE id=?",
+            (state, now, "reason" in fields, str(fields.get("reason") or "")[:500] or None,
+             report is not None, json.dumps(report, sort_keys=True) if report is not None else None, job_id),
+        )  # fmt: skip
 
 
 class DraftingOrSetup:

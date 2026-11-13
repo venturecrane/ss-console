@@ -34,10 +34,10 @@ import hashlib
 import json
 import re
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
+from .lane_ledger import RecentJobs, SpendMeter, StateRecord
 
 STATES = ("queued", "running", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
@@ -237,41 +237,17 @@ def subject(row: dict[str, Any]) -> str:
     return f"New offer, matter {number}"
 
 
-class NegotiationLedger:
-    """Per-operation sqlite connections, ``journal_mode=DELETE``: the broker
-    and the runner reach this file as different uids."""
+class NegotiationLedger(StateRecord, RecentJobs, SpendMeter):
+    """The negotiation lane on the shared ledger (``lane_ledger``): its tables,
+    its DDL, its notices and its UPDATE. Its reply mark is its own (a job's or
+    a notice's, by id)."""
 
-    def __init__(self, db_path: str, queue_dir: str | Path) -> None:
-        self._db_path = db_path
-        self.queue_dir = Path(queue_dir)
-        self.ensure_schema()
+    JOBS = "negotiation_jobs"
+    SPEND = "negotiation_spend"
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
-
-    def ensure_schema(self) -> None:
-        conn = self._connect()
-        try:
-            for sql in CREATE_SQLS:
-                conn.execute(sql)
-            conn.commit()
-        finally:
-            conn.close()
-
-    def spend_between(self, start: str, end: str, exclude: str = "") -> int:
-        conn = self._connect()
-        try:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(cents), 0) AS c FROM negotiation_spend WHERE at >= ? AND at < ? AND job_id != ?",
-                (start, end, exclude),
-            ).fetchone()
-            return int(row["c"])
-        finally:
-            conn.close()
+    def _create(self, conn: sqlite3.Connection) -> None:
+        for sql in CREATE_SQLS:
+            conn.execute(sql)
 
     def unfinished(self) -> str | None:
         conn = self._connect()
@@ -310,20 +286,11 @@ class NegotiationLedger:
             conn.commit()
         finally:
             conn.close()
-        self.queue_dir.mkdir(parents=True, exist_ok=True)
-        tmp = self.queue_dir / f".{job_id}.json.tmp"
-        tmp.write_text(json.dumps(queue_record(env, job_id), indent=1, sort_keys=True), encoding="utf-8")
-        tmp.chmod(0o640)
-        tmp.replace(self.queue_dir / f"{job_id}.json")
+        self._write_queue(job_id, queue_record(env, job_id))
         return job_id
 
     def read_job(self, job_id: str) -> dict[str, Any] | None:
-        conn = self._connect()
-        try:
-            row = conn.execute("SELECT * FROM negotiation_jobs WHERE id=?", (job_id,)).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        return super().read(job_id)
 
     def read_notice(self, notice_id: str) -> dict[str, Any] | None:
         conn = self._connect()
@@ -361,16 +328,6 @@ class NegotiationLedger:
         finally:
             conn.close()
 
-    def recent(self, limit: int = 20) -> list[dict[str, Any]]:
-        conn = self._connect()
-        try:
-            return [
-                dict(r)
-                for r in conn.execute("SELECT * FROM negotiation_jobs ORDER BY created_at DESC LIMIT ?", (int(limit),))
-            ]
-        finally:
-            conn.close()
-
     @staticmethod
     def project(row: dict[str, Any]) -> dict[str, Any]:
         """A job's counts, or a notice's message: what the completion turn sends."""
@@ -400,68 +357,65 @@ class NegotiationLedger:
             raise ValueError(f"no such job or notice {ident}")
         return {**row, "prev_state": row["state"], "notice_ids": [], "wake": wake}
 
-    def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
-        """Apply one transition; returns the row after (``prev_state``, and
-        ``notice_ids`` for a delivery). A same-state record is a note."""
+    def _check(self, state: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """The fields, with ``notices`` checked and reduced."""
         _check_fields(state, fields)
+        return {**fields, "notices": _notices(fields["notices"])} if "notices" in fields else fields
+
+    def _early(self, job_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+        """A lost wake for an id that names no job (a notice's)."""
         if set(fields) == {"wake"} and self.read_job(job_id) is None:
             return self._record_wake(job_id, fields["wake"])
-        notices = _notices(fields["notices"]) if "notices" in fields else []
-        conn = self._connect()
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            cur = conn.execute("SELECT * FROM negotiation_jobs WHERE id=?", (job_id,)).fetchone()
-            if cur is None:
-                conn.rollback()
-                raise ValueError(f"no such job {job_id}")
-            if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
-                conn.rollback()
-                raise ValueError(f"illegal transition {cur['state']} -> {state}")
-            now = _iso_utc()
-            cents = fields.get("cents")
-            if isinstance(cents, int) and cents > int(cur["cents"] or 0):
-                conn.execute(
-                    "INSERT INTO negotiation_spend (job_id, at, cents) VALUES (?,?,?)",
-                    (job_id, now, cents - int(cur["cents"] or 0)),
-                )
-            first_delivery = state == "delivered" and cur["state"] != "delivered"
-            ids = _insert_notices(conn, job_id, now, cur["requester"], notices) if first_delivery else []
-            conn.execute(
-                "UPDATE negotiation_jobs SET state=?, updated_at=?, "
-                "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "
-                "cents=CASE WHEN ? THEN ? ELSE cents END, "
-                "matters_total=CASE WHEN ? THEN ? ELSE matters_total END, "
-                "matters_seeded=CASE WHEN ? THEN ? ELSE matters_seeded END, "
-                "docs_read=CASE WHEN ? THEN ? ELSE docs_read END, "
-                "docs_failed=CASE WHEN ? THEN ? ELSE docs_failed END, "
-                "reason=CASE WHEN ? THEN ? ELSE reason END, "
-                "stage=CASE WHEN ? THEN ? ELSE stage END, "
-                "notices_count=CASE WHEN ? THEN ? ELSE notices_count END "
-                "WHERE id=?",
-                (
-                    state,
-                    now,
-                    cur["state"] == "failed" and state == "running",
-                    *_pair(fields, "cents"),
-                    *_pair(fields, "matters_total"),
-                    *_pair(fields, "matters_seeded"),
-                    *_pair(fields, "docs_read"),
-                    *_pair(fields, "docs_failed"),
-                    "reason" in fields,
-                    str(fields.get("reason") or "")[:500] or None,
-                    "stage" in fields,
-                    str(fields.get("stage") or "")[:40] or None,
-                    first_delivery,
-                    len(ids),
-                    job_id,
-                ),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-        row = {**(self.read_job(job_id) or {}), "notice": False, "prev_state": cur["state"]}
-        row["notice_ids"] = ids if ids else [n["id"] for n in self.notices_of(job_id)] if state == "delivered" else []
-        return row
+        return None
+
+    def _apply(
+        self, conn: sqlite3.Connection, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any], now: str
+    ) -> list[str]:
+        """The notices a first delivery issues, then the row. Returns their ids."""
+        first_delivery = state == "delivered" and cur["state"] != "delivered"
+        notices = fields.get("notices") or []
+        ids = _insert_notices(conn, job_id, now, cur["requester"], notices) if first_delivery else []
+        conn.execute(
+            "UPDATE negotiation_jobs SET state=?, updated_at=?, "
+            "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "
+            "cents=CASE WHEN ? THEN ? ELSE cents END, "
+            "matters_total=CASE WHEN ? THEN ? ELSE matters_total END, "
+            "matters_seeded=CASE WHEN ? THEN ? ELSE matters_seeded END, "
+            "docs_read=CASE WHEN ? THEN ? ELSE docs_read END, "
+            "docs_failed=CASE WHEN ? THEN ? ELSE docs_failed END, "
+            "reason=CASE WHEN ? THEN ? ELSE reason END, "
+            "stage=CASE WHEN ? THEN ? ELSE stage END, "
+            "notices_count=CASE WHEN ? THEN ? ELSE notices_count END "
+            "WHERE id=?",
+            (
+                state,
+                now,
+                cur["state"] == "failed" and state == "running",
+                *_pair(fields, "cents"),
+                *_pair(fields, "matters_total"),
+                *_pair(fields, "matters_seeded"),
+                *_pair(fields, "docs_read"),
+                *_pair(fields, "docs_failed"),
+                "reason" in fields,
+                str(fields.get("reason") or "")[:500] or None,
+                "stage" in fields,
+                str(fields.get("stage") or "")[:40] or None,
+                first_delivery,
+                len(ids),
+                job_id,
+            ),
+        )
+        return ids
+
+    def _result(self, row: dict[str, Any], cur: sqlite3.Row, state: str, extra: Any) -> dict[str, Any]:
+        """The row after (``notice`` false, ``prev_state``), and ``notice_ids``
+        for a delivery: the ones it issued, or (a re-record) the job's."""
+        ids: list[str] = extra
+        out = {**row, "notice": False, "prev_state": cur["state"]}
+        out["notice_ids"] = (
+            ids if ids else [n["id"] for n in self.notices_of(row["id"])] if state == "delivered" else []
+        )
+        return out
 
     def mark_replied(self, ident: str, key: str = "reply") -> bool:
         """True exactly once per (notice or job, key)."""
