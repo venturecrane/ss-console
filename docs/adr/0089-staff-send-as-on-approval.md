@@ -86,6 +86,8 @@ SMD's own operations seat sends from the Captain's Google Workspace mailbox, whi
 
 **Reply-To is the owner alone** on this transport (section 6 sets the staff member and the Operator's mailbox on Graph). The other party is writing to a person, not to SMD's agent, and an AgentMail Reply-To on the Captain's own correspondence would put the agent in front of them. So an outside reply reaches only the owner's mailbox; the send-as reply notice fires only when an inbound to the seat names the sent message in its In-Reply-To or References.
 
+**Known gap: the reply-received notice does not fire on this transport.** Probed on real mail (2026-11-13): AgentMail's inbound message record carries no `in_reply_to` or `references` field, and its `headers` hold neither (nor a Message-ID). So an inbound to the seat cannot name the sent message, and the notice of section 6 never matches a Gmail row. The owner sees outside replies in his own inbox, where they land anyway. The approval itself is unaffected: it matches on the `[draft xxxxxxxx]` tag, and the forgery guard keys on the reply's AgentMail `message_id`, which the same probe showed is the Gmail RFC Message-ID (one hit in his SENT; AgentMail's `smtp_id` is an internal id and matches nothing).
+
 The Gmail transport is built in `operator/workspace_broker/gmail_send_as.py` and selected by `send_as_transport.transport_for`; the Graph transport behind the same protocol is a pure delegation to the code above, and `operator/workspace_broker/tests/test_send_as.py` passes unmodified. The seat registers no Gmail direct-send tool (`workspace_gmail_send` stays outside the broker's reviewed surface, and boot refuses a `via: gmail` seat that registers one).
 
 ## Consequences

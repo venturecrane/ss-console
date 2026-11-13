@@ -254,10 +254,10 @@ def _normalize_agentmail(payload: dict) -> InboundMessage | None:
         provider_refs["internet_message_id"] = message_id
     # What this message answers (ADR 0089 section 9). Read from a top-level
     # field when the vendor sends one, else from the header set. The captured
-    # message.received payload (attachment_spool.py) carries ``headers`` and no
-    # top-level ``in_reply_to``/``references``; whether its header set includes
-    # them is unproven on a live seat, so absent is the safe reading: a missing
-    # value matches no send-as row and sends nothing.
+    # message.received record carries neither, top-level or in ``headers``
+    # (probed on real mail 2026-11-13, ADR 0089 section 9 "Known gap"), so on
+    # AgentMail today these stay absent: a missing value matches no send-as row
+    # and sends nothing. Read here so a provider that does send them is used.
     for key, header in (("in_reply_to", "in-reply-to"), ("references", "references")):
         answered = _first_present(msg, key) or _header_value(msg.get("headers"), header)
         if answered:
