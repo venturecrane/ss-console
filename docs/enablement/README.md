@@ -13,6 +13,16 @@ For a sales representative getting to know SMD Services and its flagship, the Op
 
 The explainer is generated: edit `figures-src/gen3.body.html` (text) or `figures-src/gen3.py` (figures), then run `python3 docs/enablement/figures-src/gen3.py docs/enablement/how-the-operator-works.html`.
 
+## The NotebookLM training bundle
+
+The set of files a new representative loads into NotebookLM is generated from this repository, so it tells the same capability story as the site and the product guide and cannot drift from either:
+
+```bash
+npx tsx scripts/build-rep-bundle.ts [outDir]   # default ./dist/rep-bundle
+```
+
+It writes ten numbered files: a read-me, an overview, the website's main, industry, and security, trust and self-serve pages (read from the built site, with prices removed), the product library, this kit, the training and pitch practice, a glossary and common questions. The four files with no other home (read-me, overview, glossary, common questions) are authored in [bundle/](bundle/). Each output file opens with the repo paths and commit it was built from. `tests/rep-bundle.test.ts` builds it and checks it: ten files, no dollar amounts, no client names, no em dashes, none of the retired build-state disclaimers.
+
 ## Reading order for the law-firm overlay (v0)
 
 Parts 1 to 4 are the first draft, written for one industry (legal) before the product-level explainer above. Read them after it, as the example of how the general model is pitched in one vertical.
