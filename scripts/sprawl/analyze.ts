@@ -54,10 +54,13 @@ const TEST_PATH = /(^|\/)tests?\/|(^|\/)test_[^/]*$|\.test\.[a-z]+$|_test\.py$|(
  * seat-config caller capture (operator/bin/lib/seat_callers/, wave 2 A2)
  * executes each customer.yaml parser, broker socket client and slug read, so it
  * must name the slug variable, open sockets and parse the documents it feeds
- * them. Like concepts.ts stating its own vocabulary, it is the measure, not an
- * instance, and no census counts it.
+ * them. The golden broker (operator/bin/lib/golden_broker.py) is the same
+ * kind: it starts the real broker from the environment a seat's broker process
+ * reads, so it must name every variable Broker.__init__ reads. Like concepts.ts
+ * stating its own vocabulary, each is the measure, not an instance, and no
+ * census counts it.
  */
-export const INSTRUMENT_PATH = /^operator\/bin\/lib\/seat_callers\//
+export const INSTRUMENT_PATH = /^operator\/bin\/lib\/(seat_callers\/|golden_broker\.py$)/
 
 export function isTestPath(path: string): boolean {
   return TEST_PATH.test(path)
