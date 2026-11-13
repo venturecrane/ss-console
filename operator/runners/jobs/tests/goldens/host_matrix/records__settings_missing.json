@@ -190,7 +190,7 @@
               "close_ref": null,
               "created_at": "<TS>",
               "delivery_json": null,
-              "envelope_digest": "<HEX>",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
               "job_id": "<ULID1>",
               "matter_id": "11111111-2222-3333-4444-555555555555",
               "message_ref": "AAMkAGraphMessageId0001",

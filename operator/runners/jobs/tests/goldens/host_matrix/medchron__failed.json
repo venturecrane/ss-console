@@ -117,7 +117,7 @@
         "cgroup_preexec": true,
         "cwd": "<TMP>/seat/run/jobs/<ULID1>",
         "env": {
-          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "ANTHROPIC_API_KEY": "value-of-ANTHROPIC_API_KEY",
           "CUSTOMER_SLUG": "example",
           "HOME": "<TMP>/seat/run/jobs/<ULID1>",
           "JOBS_DAEMON_JOB_ID": "<ULID1>",
@@ -126,14 +126,14 @@
           "JOBS_SEAT": "client",
           "MEDCHRON_FIRM_CONFIG": "<TMP>/seat/inputs/medchron/firm.yaml",
           "PATH": "/usr/bin:/bin",
-          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
-          "SMOKEBALL_API_KEY": "<SECRET:present>",
-          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
-          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_ACCOUNT_ID": "value-of-SMOKEBALL_ACCOUNT_ID",
+          "SMOKEBALL_API_KEY": "value-of-SMOKEBALL_API_KEY",
+          "SMOKEBALL_AUTH_MODE": "value-of-SMOKEBALL_AUTH_MODE",
+          "SMOKEBALL_CLIENT_ID": "value-of-SMOKEBALL_CLIENT_ID",
+          "SMOKEBALL_CLIENT_SECRET": "value-of-SMOKEBALL_CLIENT_SECRET",
+          "SMOKEBALL_ENVIRONMENT": "value-of-SMOKEBALL_ENVIRONMENT",
           "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
-          "SMOKEBALL_REGION": "<SECRET:present>"
+          "SMOKEBALL_REGION": "value-of-SMOKEBALL_REGION"
         },
         "job_id": "<ULID1>",
         "lane": "medchron",
@@ -158,7 +158,7 @@
       }
     },
     "job_files": {
-      "jobs/<ULID1>/job.yaml": "slug: example\nmatter:\n  id: m-1\n  number: 2026-PI-102\n  title: Example v. Example\nunits:\n- client_name: Alpha Example\n  dob: 01/02/1980\n  name_token: Example\n  surname: Example\n  unit: alpha\nincident:\n  date: '2026-01-15'\n  source: administrator_request\ndata_root: <TMP>/seat/run/jobs/<ULID1>/data\ninstall_root: <TMP>/seat/run\ncap_usd: 25.0\nallowance_remaining_documents: 40\nallowance_remaining_pages: 0\nrequested_by: admin@firm.example\nrequest_ref: <req-1@firm.example>\nallowance_pages: 0\nmonth_pages_used: 0\nmonth_cents_used: 0\nallowance_month: <MONTH>\nallowance_cycle_start: '<TS>'\nallowance_cycle_end: '<TS>'\n"
+      "jobs/<ULID1>/job.yaml": "slug: example\nmatter:\n  id: m-1\n  number: 2026-PI-102\n  title: Example v. Example\nunits:\n- client_name: Alpha Example\n  dob: 01/02/1980\n  name_token: Example\n  surname: Example\n  unit: alpha\nincident:\n  date: '2026-01-15'\n  source: administrator_request\ndata_root: <TMP>/seat/run/jobs/<ULID1>/data\ninstall_root: <TMP>/seat/run\ncap_usd: 25.0\nallowance_remaining_documents: 40\nallowance_remaining_pages: 0\nrequested_by: admin@firm.example\nrequest_ref: <req-1@firm.example>\nallowance_pages: 0\nmonth_pages_used: 0\nmonth_cents_used: 0\nallowance_month: 2023-11\nallowance_cycle_start: '<TS>'\nallowance_cycle_end: '<TS>'\n"
     },
     "log": [
       "WARNING jobs.daemon medchron job <ULID1>: proof alert job_stopped raised (failed (failed): extract: a stage failed; the requester was not told (by design: SMD only, while the lane is refined))"
@@ -245,7 +245,7 @@
             "uncovered_document_ids": null,
             "uncovered_reasons": null,
             "updated_at": "<TS>",
-            "work_digest": "sha256:<HEX>"
+            "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
           },
           "ok": true
         },
@@ -264,7 +264,7 @@
           "cycle_start": "<TS>",
           "documents_used": 0,
           "job_pages_credited": 0,
-          "month": "<MONTH>",
+          "month": "2023-11",
           "ok": true,
           "pages_credited": 0,
           "pages_debited": 0,
@@ -296,7 +296,7 @@
             "uncovered_document_ids": null,
             "uncovered_reasons": null,
             "updated_at": "<TS>",
-            "work_digest": "sha256:<HEX>"
+            "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
           },
           "ok": true
         },
@@ -324,7 +324,7 @@
             "uncovered_document_ids": null,
             "uncovered_reasons": null,
             "updated_at": "<TS>",
-            "work_digest": "sha256:<HEX>"
+            "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
           },
           "ok": true
         },
@@ -358,7 +358,7 @@
             "uncovered_document_ids": null,
             "uncovered_reasons": null,
             "updated_at": "<TS>",
-            "work_digest": "sha256:<HEX>"
+            "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
           },
           "ok": true
         },
@@ -405,7 +405,7 @@
       }
     },
     "job_files": {
-      "jobs/<ULID1>/job.yaml": "slug: example\nmatter:\n  id: m-1\n  number: 2026-PI-102\n  title: Example v. Example\nunits:\n- client_name: Alpha Example\n  dob: 01/02/1980\n  name_token: Example\n  surname: Example\n  unit: alpha\nincident:\n  date: '2026-01-15'\n  source: administrator_request\ndata_root: <TMP>/seat/run/jobs/<ULID1>/data\ninstall_root: <TMP>/seat/run\ncap_usd: 25.0\nallowance_remaining_documents: 40\nallowance_remaining_pages: 0\nrequested_by: admin@firm.example\nrequest_ref: <req-1@firm.example>\nallowance_pages: 0\nmonth_pages_used: 0\nmonth_cents_used: 0\nallowance_month: <MONTH>\nallowance_cycle_start: '<TS>'\nallowance_cycle_end: '<TS>'\n"
+      "jobs/<ULID1>/job.yaml": "slug: example\nmatter:\n  id: m-1\n  number: 2026-PI-102\n  title: Example v. Example\nunits:\n- client_name: Alpha Example\n  dob: 01/02/1980\n  name_token: Example\n  surname: Example\n  unit: alpha\nincident:\n  date: '2026-01-15'\n  source: administrator_request\ndata_root: <TMP>/seat/run/jobs/<ULID1>/data\ninstall_root: <TMP>/seat/run\ncap_usd: 25.0\nallowance_remaining_documents: 40\nallowance_remaining_pages: 0\nrequested_by: admin@firm.example\nrequest_ref: <req-1@firm.example>\nallowance_pages: 0\nmonth_pages_used: 0\nmonth_cents_used: 0\nallowance_month: 2023-11\nallowance_cycle_start: '<TS>'\nallowance_cycle_end: '<TS>'\n"
     },
     "log": [],
     "readers": {
@@ -489,7 +489,7 @@
               "state": "failed",
               "uncovered_count": null,
               "updated_at": "<TS>",
-              "work_digest": "sha256:<HEX>"
+              "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
             }
           ],
           "ok": true

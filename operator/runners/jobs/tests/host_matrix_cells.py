@@ -24,8 +24,10 @@ from host_matrix_kit import (
     broker_down,
     broker_up,
     build_broker,
+    freeze_broker_clock,
     install_child,
     secret_names,
+    seed_random,
     serve,
 )
 from host_matrix_lanes import KITS, LaneKit, break_settings, remove
@@ -88,6 +90,10 @@ class Run:
         cg = seat.root / "cgroup"
         cg.mkdir()
         (cg / "cgroup.controllers").write_text("cpu memory pids\n")
+        # No secret from the shell running the tests reaches a child: every
+        # registry name is unset, then the passed names get their placeholders.
+        for name in sorted(self.norm.secrets):
+            mp.delenv(name, raising=False)
         for name in PASSED_ENV:
             mp.setenv(name, f"value-of-{name}")
         pricing = seat.root / "pricing.json"
@@ -240,6 +246,8 @@ def run_cell(tmp_path: Path, mp: Any, cell: str) -> list[dict[str, Any]]:
     r = Run(tmp_path, mp, lane_name, ending)
     r.setup()
     r.broker = build_broker(r.seat)
+    freeze_broker_clock(mp, r.seat)
+    seed_random(mp)
     try:
         with serve(r.seat, r.broker) as port:
             r.build(port)

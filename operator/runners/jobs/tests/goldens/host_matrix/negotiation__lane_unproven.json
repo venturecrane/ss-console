@@ -128,7 +128,7 @@
               "created_at": "<TS>",
               "docs_failed": null,
               "docs_read": null,
-              "envelope_digest": "<HEX>",
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
               "id": "<ULID1>",
               "matters_seeded": null,
               "matters_total": null,
@@ -330,7 +330,7 @@
         "cgroup_preexec": true,
         "cwd": "<TMP>/seat/run/negotiation-jobs/<ULID1>",
         "env": {
-          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "ANTHROPIC_API_KEY": "value-of-ANTHROPIC_API_KEY",
           "CUSTOMER_SLUG": "example",
           "HOME": "<TMP>/seat/run/negotiation-jobs/<ULID1>",
           "JOBS_DAEMON_JOB_ID": "<ULID1>",
@@ -340,14 +340,14 @@
           "JOBS_SEAT": "client",
           "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
           "PATH": "/usr/bin:/bin",
-          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
-          "SMOKEBALL_API_KEY": "<SECRET:present>",
-          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
-          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_ACCOUNT_ID": "value-of-SMOKEBALL_ACCOUNT_ID",
+          "SMOKEBALL_API_KEY": "value-of-SMOKEBALL_API_KEY",
+          "SMOKEBALL_AUTH_MODE": "value-of-SMOKEBALL_AUTH_MODE",
+          "SMOKEBALL_CLIENT_ID": "value-of-SMOKEBALL_CLIENT_ID",
+          "SMOKEBALL_CLIENT_SECRET": "value-of-SMOKEBALL_CLIENT_SECRET",
+          "SMOKEBALL_ENVIRONMENT": "value-of-SMOKEBALL_ENVIRONMENT",
           "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
-          "SMOKEBALL_REGION": "<SECRET:present>"
+          "SMOKEBALL_REGION": "value-of-SMOKEBALL_REGION"
         },
         "job_id": "<ULID1>",
         "lane": "negotiation",
@@ -458,7 +458,7 @@
               "created_at": "<TS>",
               "docs_failed": null,
               "docs_read": null,
-              "envelope_digest": "<HEX>",
+              "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
               "id": "<ULID1>",
               "matters_seeded": null,
               "matters_total": null,
@@ -538,7 +538,7 @@
               "updated_at": "<TS>"
             }
           ],
-          "month": "<MONTH>",
+          "month": "2023-11",
           "month_cents": 0,
           "ok": true
         },

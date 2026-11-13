@@ -1,0 +1,4 @@
+{
+  "_why": "Dotted paths (list indexes as numbers) that may differ from goldens/wire.json (the runner-to-broker wire: by_cell, direct, verbs), keyed wire. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes the wire on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared.",
+  "wire": []
+}

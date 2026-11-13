@@ -103,7 +103,7 @@
         "cgroup_preexec": true,
         "cwd": "<TMP>/seat/run/records-jobs/<ULID1>",
         "env": {
-          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "ANTHROPIC_API_KEY": "value-of-ANTHROPIC_API_KEY",
           "CUSTOMER_SLUG": "example",
           "HOME": "<TMP>/seat/run/records-jobs/<ULID1>",
           "JOBS_DAEMON_JOB_ID": "<ULID1>",
@@ -114,15 +114,15 @@
           "JOBS_SEAT": "client",
           "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
           "PATH": "/usr/bin:/bin",
-          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
-          "SMOKEBALL_API_KEY": "<SECRET:present>",
-          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
-          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_ACCOUNT_ID": "value-of-SMOKEBALL_ACCOUNT_ID",
+          "SMOKEBALL_API_KEY": "value-of-SMOKEBALL_API_KEY",
+          "SMOKEBALL_AUTH_MODE": "value-of-SMOKEBALL_AUTH_MODE",
+          "SMOKEBALL_CLIENT_ID": "value-of-SMOKEBALL_CLIENT_ID",
+          "SMOKEBALL_CLIENT_SECRET": "value-of-SMOKEBALL_CLIENT_SECRET",
+          "SMOKEBALL_ENVIRONMENT": "value-of-SMOKEBALL_ENVIRONMENT",
           "SMOKEBALL_PAGE_INDEX_DIR": "<TMP>/seat/page-index",
           "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
-          "SMOKEBALL_REGION": "<SECRET:present>"
+          "SMOKEBALL_REGION": "value-of-SMOKEBALL_REGION"
         },
         "job_id": "<ULID1>",
         "lane": "records",
@@ -243,7 +243,7 @@
               "close_ref": null,
               "created_at": "<TS>",
               "delivery_json": null,
-              "envelope_digest": "<HEX>",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
               "job_id": "<ULID1>",
               "matter_id": "11111111-2222-3333-4444-555555555555",
               "message_ref": "AAMkAGraphMessageId0001",
@@ -285,7 +285,7 @@
               "updated_at": "<TS>"
             }
           ],
-          "month": "<MONTH>",
+          "month": "2023-11",
           "month_cents": 0,
           "monthly_budget_cents": null,
           "ok": true

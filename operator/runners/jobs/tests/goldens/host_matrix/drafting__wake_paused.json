@@ -72,7 +72,7 @@
           "files": [
             {
               "file_id": "f1",
-              "sha256": "<HEX>",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "size": 10
             }
           ],
@@ -133,7 +133,7 @@
         "cgroup_preexec": true,
         "cwd": "<TMP>/seat/run/drafting-jobs/<ULID1>",
         "env": {
-          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "ANTHROPIC_API_KEY": "value-of-ANTHROPIC_API_KEY",
           "CUSTOMER_SLUG": "example",
           "HOME": "<TMP>/seat/run/drafting-jobs/<ULID1>",
           "JOBS_DAEMON_JOB_ID": "<ULID1>",
@@ -143,14 +143,14 @@
           "JOBS_SEAT": "client",
           "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
           "PATH": "/usr/bin:/bin",
-          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
-          "SMOKEBALL_API_KEY": "<SECRET:present>",
-          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
-          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_ACCOUNT_ID": "value-of-SMOKEBALL_ACCOUNT_ID",
+          "SMOKEBALL_API_KEY": "value-of-SMOKEBALL_API_KEY",
+          "SMOKEBALL_AUTH_MODE": "value-of-SMOKEBALL_AUTH_MODE",
+          "SMOKEBALL_CLIENT_ID": "value-of-SMOKEBALL_CLIENT_ID",
+          "SMOKEBALL_CLIENT_SECRET": "value-of-SMOKEBALL_CLIENT_SECRET",
+          "SMOKEBALL_ENVIRONMENT": "value-of-SMOKEBALL_ENVIRONMENT",
           "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
-          "SMOKEBALL_REGION": "<SECRET:present>"
+          "SMOKEBALL_REGION": "value-of-SMOKEBALL_REGION"
         },
         "job_id": "<ULID1>",
         "lane": "drafting",
@@ -254,7 +254,7 @@
             "created_at": "<TS>",
             "delivery_json": null,
             "document_class": "mediation_brief",
-            "envelope_digest": "<HEX>",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
             "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
             "folder_id": null,
             "id": "<ULID1>",
@@ -280,9 +280,9 @@
         "reply": {
           "allowance": null,
           "authored": false,
-          "cents_month": "<MONTH>",
+          "cents_month": "2023-11",
           "cents_used": 0,
-          "cycle": "<MONTH>",
+          "cycle": "2023-11",
           "cycle_start": "<TS>",
           "enabled_classes": [],
           "ok": true,
@@ -334,7 +334,7 @@
             {
               "file_id": "f1",
               "name": "x.docx",
-              "sha256": "<HEX>",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "size": 10
             }
           ],

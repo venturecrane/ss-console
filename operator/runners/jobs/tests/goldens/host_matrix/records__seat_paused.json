@@ -138,7 +138,7 @@
               "close_ref": null,
               "created_at": "<TS>",
               "delivery_json": null,
-              "envelope_digest": "<HEX>",
+              "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
               "job_id": "<ULID1>",
               "matter_id": "11111111-2222-3333-4444-555555555555",
               "message_ref": "AAMkAGraphMessageId0001",
@@ -264,7 +264,7 @@
           "job_id": "<ULID1>",
           "prev_state": "running",
           "reason": "matter_files_review",
-          "review_id": "<HEX>",
+          "review_id": "fbbb02efb20eef3e3d80191c",
           "stage": "verdict",
           "state": "review"
         },
@@ -294,7 +294,7 @@
         "cgroup_preexec": true,
         "cwd": "<TMP>/seat/run/records-jobs/<ULID1>",
         "env": {
-          "ANTHROPIC_API_KEY": "<SECRET:present>",
+          "ANTHROPIC_API_KEY": "value-of-ANTHROPIC_API_KEY",
           "CUSTOMER_SLUG": "example",
           "HOME": "<TMP>/seat/run/records-jobs/<ULID1>",
           "JOBS_DAEMON_JOB_ID": "<ULID1>",
@@ -305,15 +305,15 @@
           "JOBS_SEAT": "client",
           "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
           "PATH": "/usr/bin:/bin",
-          "SMOKEBALL_ACCOUNT_ID": "<SECRET:present>",
-          "SMOKEBALL_API_KEY": "<SECRET:present>",
-          "SMOKEBALL_AUTH_MODE": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_ID": "<SECRET:present>",
-          "SMOKEBALL_CLIENT_SECRET": "<SECRET:present>",
-          "SMOKEBALL_ENVIRONMENT": "<SECRET:present>",
+          "SMOKEBALL_ACCOUNT_ID": "value-of-SMOKEBALL_ACCOUNT_ID",
+          "SMOKEBALL_API_KEY": "value-of-SMOKEBALL_API_KEY",
+          "SMOKEBALL_AUTH_MODE": "value-of-SMOKEBALL_AUTH_MODE",
+          "SMOKEBALL_CLIENT_ID": "value-of-SMOKEBALL_CLIENT_ID",
+          "SMOKEBALL_CLIENT_SECRET": "value-of-SMOKEBALL_CLIENT_SECRET",
+          "SMOKEBALL_ENVIRONMENT": "value-of-SMOKEBALL_ENVIRONMENT",
           "SMOKEBALL_PAGE_INDEX_DIR": "<TMP>/seat/page-index",
           "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
-          "SMOKEBALL_REGION": "<SECRET:present>"
+          "SMOKEBALL_REGION": "value-of-SMOKEBALL_REGION"
         },
         "job_id": "<ULID1>",
         "lane": "records",
@@ -337,7 +337,7 @@
                 "n": 1,
                 "page_count": 4,
                 "pages": "1-4",
-                "sha256": "<HEX>",
+                "sha256": "1e058ca9fb01b9b6176a2c99936c10a9e6e44ac51d057bfae472fa1cb2fc45fd",
                 "size": 5020
               }
             ],
@@ -353,7 +353,7 @@
                 {
                   "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
                   "name": "1-1.pdf",
-                  "sha256": "<HEX>",
+                  "sha256": "1e058ca9fb01b9b6176a2c99936c10a9e6e44ac51d057bfae472fa1cb2fc45fd",
                   "size": 5020
                 }
               ],
@@ -372,7 +372,7 @@
         "retry_after": null,
         "review_watch": {
           "alerted": false,
-          "id": "<HEX>",
+          "id": "fbbb02efb20eef3e3d80191c",
           "since": "<CLOCK+0.0>"
         },
         "row": {
@@ -380,19 +380,19 @@
             [
               {
                 "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
-                "handle": "<HEX>",
+                "handle": "b087c6fbaa0b3bd1c14d322e18ff45dc",
                 "name": "Clinic records pp. 1-4.pdf",
                 "page_count": 4,
                 "pages": "1-4",
-                "sha256": "<HEX>",
+                "sha256": "1e058ca9fb01b9b6176a2c99936c10a9e6e44ac51d057bfae472fa1cb2fc45fd",
                 "size": 5020
               }
             ]
           ],
           "created_at": "<CLOCK+0.0>",
-          "digest": "<HEX>",
+          "digest": "6e182c74e2176a1b67f5c901a742774cea28f1cc27542995b4101b24828e3ec4",
           "html": "<p>x</p>",
-          "id": "<HEX>",
+          "id": "fbbb02efb20eef3e3d80191c",
           "matter_id": "11111111-2222-3333-4444-555555555555",
           "message_id": "AAMkAGraphMessageId0001",
           "reason": "",
@@ -402,7 +402,7 @@
           "to": "pat.lane@example-firm.test"
         },
         "spooled": {
-          "1-1": "<HEX>"
+          "1-1": "b087c6fbaa0b3bd1c14d322e18ff45dc"
         },
         "started": true,
         "state": "review"
@@ -445,8 +445,8 @@
     "tree": [
       "audit/",
       "audit/attachment-spool/",
-      "audit/attachment-spool/<HEX>.bin",
-      "audit/attachment-spool/<HEX>.json",
+      "audit/attachment-spool/b087c6fbaa0b3bd1c14d322e18ff45dc.bin",
+      "audit/attachment-spool/b087c6fbaa0b3bd1c14d322e18ff45dc.json",
       "audit/audit.db",
       "cgroup/",
       "cgroup/cgroup.controllers",
@@ -456,7 +456,7 @@
       "customer.yaml",
       "inputs/",
       "matter-file-review/",
-      "matter-file-review/<HEX>.json",
+      "matter-file-review/fbbb02efb20eef3e3d80191c.json",
       "pricing.json",
       "run/",
       "run/casefile-queue/",
@@ -503,7 +503,7 @@
               "updated_at": "<TS>"
             }
           ],
-          "month": "<MONTH>",
+          "month": "2023-11",
           "month_cents": 0,
           "monthly_budget_cents": null,
           "ok": true
@@ -538,9 +538,9 @@
       },
       {
         "reply": {
-          "handle": "<HEX>",
+          "handle": "b087c6fbaa0b3bd1c14d322e18ff45dc",
           "ok": true,
-          "sha256": "<HEX>",
+          "sha256": "1e058ca9fb01b9b6176a2c99936c10a9e6e44ac51d057bfae472fa1cb2fc45fd",
           "size": 5020
         },
         "request": {
@@ -549,7 +549,7 @@
             "chunk_b64": "JVBERi0xLjQgbWF0cml4IGN1dCB4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA==",
             "final": true,
             "offset": 0,
-            "sha256": "<HEX>"
+            "sha256": "1e058ca9fb01b9b6176a2c99936c10a9e6e44ac51d057bfae472fa1cb2fc45fd"
           }
         }
       },
@@ -562,7 +562,7 @@
             "matter_id": "11111111-2222-3333-4444-555555555555",
             "reason": "matter_files_review",
             "requester": "pat.lane@example-firm.test",
-            "review_id": "<HEX>",
+            "review_id": "fbbb02efb20eef3e3d80191c",
             "stage": "verdict",
             "state": "review",
             "trigger": "request",
@@ -574,8 +574,8 @@
           "action": "records_job_record",
           "cents": 500,
           "delivery": {
-            "digest": "<HEX>",
-            "review_id": "<HEX>"
+            "digest": "6e182c74e2176a1b67f5c901a742774cea28f1cc27542995b4101b24828e3ec4",
+            "review_id": "fbbb02efb20eef3e3d80191c"
           },
           "items": [
             {
@@ -612,7 +612,7 @@
                 "n": 1,
                 "page_count": 4,
                 "pages": "1-4",
-                "sha256": "<HEX>",
+                "sha256": "1e058ca9fb01b9b6176a2c99936c10a9e6e44ac51d057bfae472fa1cb2fc45fd",
                 "size": 5020
               }
             ],
@@ -628,7 +628,7 @@
                 {
                   "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
                   "name": "1-1.pdf",
-                  "sha256": "<HEX>",
+                  "sha256": "1e058ca9fb01b9b6176a2c99936c10a9e6e44ac51d057bfae472fa1cb2fc45fd",
                   "size": 5020
                 }
               ],
@@ -647,7 +647,7 @@
         "retry_after": null,
         "review_watch": {
           "alerted": false,
-          "id": "<HEX>",
+          "id": "fbbb02efb20eef3e3d80191c",
           "since": "<CLOCK+0.0>"
         },
         "row": {
@@ -655,19 +655,19 @@
             [
               {
                 "file_id": "00000001-aaaa-bbbb-cccc-dddddddddddd",
-                "handle": "<HEX>",
+                "handle": "b087c6fbaa0b3bd1c14d322e18ff45dc",
                 "name": "Clinic records pp. 1-4.pdf",
                 "page_count": 4,
                 "pages": "1-4",
-                "sha256": "<HEX>",
+                "sha256": "1e058ca9fb01b9b6176a2c99936c10a9e6e44ac51d057bfae472fa1cb2fc45fd",
                 "size": 5020
               }
             ]
           ],
           "created_at": "<CLOCK+0.0>",
-          "digest": "<HEX>",
+          "digest": "6e182c74e2176a1b67f5c901a742774cea28f1cc27542995b4101b24828e3ec4",
           "html": "<p>x</p>",
-          "id": "<HEX>",
+          "id": "fbbb02efb20eef3e3d80191c",
           "matter_id": "11111111-2222-3333-4444-555555555555",
           "message_id": "AAMkAGraphMessageId0001",
           "reason": "",
@@ -677,7 +677,7 @@
           "to": "pat.lane@example-firm.test"
         },
         "spooled": {
-          "1-1": "<HEX>"
+          "1-1": "b087c6fbaa0b3bd1c14d322e18ff45dc"
         },
         "started": true,
         "state": "review"
@@ -720,8 +720,8 @@
     "tree": [
       "audit/",
       "audit/attachment-spool/",
-      "audit/attachment-spool/<HEX>.bin",
-      "audit/attachment-spool/<HEX>.json",
+      "audit/attachment-spool/b087c6fbaa0b3bd1c14d322e18ff45dc.bin",
+      "audit/attachment-spool/b087c6fbaa0b3bd1c14d322e18ff45dc.json",
       "audit/audit.db",
       "cgroup/",
       "cgroup/cgroup.controllers",
@@ -731,7 +731,7 @@
       "customer.yaml",
       "inputs/",
       "matter-file-review/",
-      "matter-file-review/<HEX>.json",
+      "matter-file-review/fbbb02efb20eef3e3d80191c.json",
       "pricing.json",
       "run/",
       "run/casefile-queue/",

@@ -7,7 +7,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from bin.lib.golden_diff import compare_dirs, diffs, unexplained
+import pytest
+
+from bin.lib.golden_diff import (
+    AllowedListError,
+    compare_dirs,
+    diffs,
+    goldens,
+    inherited,
+    losses,
+    parse_allowed,
+    read_golden,
+    stale,
+    tree_diffs,
+    unallowed,
+    unexplained,
+)
 
 
 def _write(d: Path, name: str, doc: object) -> None:
@@ -23,8 +38,65 @@ def test_diffs_names_every_changed_path():
     assert diffs(a, {"x": [1, {"y": 2}]}) == ["z"]
 
 
-def test_unexplained_honours_exact_and_wildcard_paths():
-    assert unexplained(["a.b", "a.c.d", "e"], ["a.b", "a.c.*"]) == ["e"]
+def test_unexplained_honours_exact_paths_only():
+    assert unexplained(["a.b", "a.c.d", "e"], ["a.b", "a.c"]) == ["a.c.d", "e"]
+
+
+# ---- the integrity job's rules (H3, H4) -------------------------------------------
+
+
+def test_a_wildcard_entry_is_refused():
+    """FALSIFIER: an entry covering a subtree (``0.wire.*``) would let a later
+    change inside it through unreviewed; the list is refused outright."""
+    with pytest.raises(AllowedListError, match="wildcard"):
+        parse_allowed({"_why": "x", "medchron__delivered": ["0.wire.*"]})
+    with pytest.raises(AllowedListError):
+        parse_allowed({"medchron__delivered": "0.wire"})
+    assert parse_allowed({"_why": "x", "a": ["0.wire.1"]}) == {"a": ["0.wire.1"]}
+
+
+def test_losses_report_what_the_new_side_drops_and_never_an_addition():
+    """FALSIFIER for H4: a dropped step, key or list item, or a changed value,
+    is a loss; a key or a trailing item only the new side has is not."""
+    old = {"steps": [{"a": 1}, {"b": 2}], "k": "v"}
+    assert losses(old, old) == []
+    assert losses(old, {"steps": [{"a": 1}], "k": "v"}) == ["steps.1"]
+    assert losses(old, {"steps": [{"a": 1}, {"b": 2}]}) == ["k"]
+    assert losses(old, {"steps": [{"a": 9}, {"b": 2}], "k": "v"}) == ["steps.0.a"]
+    assert losses(old, {"steps": [{"a": 1}, {"b": 2}, {"c": 3}], "k": "v", "new": 1}) == []
+
+
+def test_a_file_the_base_held_and_the_pr_drops_is_a_loss(tmp_path):
+    base, pr = tmp_path / "base", tmp_path / "pr"
+    _write(base, "medchron__busy", {"x": 1})
+    _write(base, "medchron__held", {"x": 1})
+    _write(pr, "medchron__held", {"x": 1})
+    _write(pr, "medchron__new", {"x": 1})
+    found = tree_diffs(goldens(base), goldens(pr), only_losses=True)
+    assert found == {"medchron__busy": ["<file>"]}
+    assert unallowed(found, {"medchron__busy": ["<file>"]}) == {}
+
+
+def test_jsonl_and_nested_goldens_are_read(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "kit.json").write_text("{}")
+    (tmp_path / "medchron.jsonl").write_text('{"n": 1}\n{"n": 2}\n')
+    (tmp_path / "allowed-changes.json").write_text("{}")
+    assert sorted(goldens(tmp_path, "**/*")) == ["a/kit", "medchron"]
+    assert read_golden(tmp_path / "medchron.jsonl") == [{"n": 1}, {"n": 2}]
+
+
+def test_an_entry_that_explains_no_difference_is_stale():
+    """FALSIFIER for H3: an allowed path no difference names is reported."""
+    allowed = {"a": ["0.x", "0.y"], "b": []}
+    assert stale(allowed, {"a": ["0.x"]}, {}) == {"a": ["0.y"]}
+    assert stale(allowed, {"a": ["0.x"]}, {"a": ["0.y"]}) == {}
+
+
+def test_an_entry_the_base_already_carried_is_inherited():
+    """FALSIFIER for H3: an entry merged with an earlier change cannot excuse a later one."""
+    assert inherited({"a": ["0.x", "0.y"]}, {"a": ["0.x"]}) == {"a": ["0.x"]}
+    assert inherited({"a": ["0.y"]}, {"b": ["0.y"]}) == {}
 
 
 def test_a_rewritten_golden_is_reported_and_an_allowed_one_is_not(tmp_path):

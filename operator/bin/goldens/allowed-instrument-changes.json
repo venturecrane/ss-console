@@ -1,0 +1,5 @@
+{
+  "_why": "What the golden harness itself may stop pinning (bin/goldens/golden_manifest.py): <cases> names a dropped case or cell, or a cell newly declared not applicable, as <set>.<list>:<item> (e.g. host_matrix.cells:medchron/busy); <normaliser> names a normaliser added, changed or removed (e.g. host_matrix_normal._ULID). Each entry is exact, reviewed with the PR, and cleared after it merges.",
+  "<cases>": [],
+  "<normaliser>": []
+}

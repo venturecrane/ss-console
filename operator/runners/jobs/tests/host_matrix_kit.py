@@ -14,9 +14,9 @@ Each cell is a short list of steps. After every step the matrix records:
 * ``audit``: every audit row the broker appended (action type and metadata);
 * ``daemon``: every job dir's ``daemon.json``;
 * ``job_files``: ``job.json`` / ``job.yaml`` as the lane wrote them;
-* ``children``: each child launch: argv, env (registry secret values masked,
-  key presence only), cwd, pid file, whether a cgroup preexec ran, and the
-  cgroup tree after;
+* ``children``: each child launch: argv, env (verbatim: every secret is its
+  placeholder), cwd, pid file, whether a cgroup preexec ran, and the cgroup
+  tree after;
 * ``wake_posts``: each DELIVER wake the gateway received;
 * ``log``: the runner's warning and error lines;
 * ``tree``: the run dir's file names;
@@ -226,9 +226,57 @@ def build_broker(seat: Seat) -> Any:
     from jobs import job_lanes
 
     queues = {lane: seat.run_dir / job_lanes.LANE_QUEUE_DIR[lane] for lane in job_lanes.QUEUED_LANES}
-    b = build(seat.root, seat.audit_db, queues, slug=SLUG)
-    b.socket_path = seat.socket_path
-    return b
+    return build(seat.root, seat.audit_db, queues, slug=SLUG, socket_path=seat.socket_path)
+
+
+def freeze_broker_clock(mp: Any, seat: Seat) -> None:
+    """Every broker module's ``datetime.now`` reads the seat clock, so a month
+    window, a billing cycle or a staleness test the broker computes is the
+    same on every machine and every day (no month is normalised away)."""
+    import datetime as _dt
+
+    import workspace_broker.server  # noqa: F401 - imported so every lane module is loaded before the patch
+
+    class SeatClock(_dt.datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return _dt.datetime.fromtimestamp(seat.clock(), tz or _dt.timezone.utc)
+
+        @classmethod
+        def utcnow(cls) -> Any:
+            return _dt.datetime.fromtimestamp(seat.clock(), _dt.timezone.utc).replace(tzinfo=None)
+
+    for name, mod in list(sys.modules.items()):
+        if name.startswith("workspace_broker") and mod is not None and getattr(mod, "datetime", None) is _dt.datetime:
+            mp.setattr(mod, "datetime", SeatClock)
+
+
+def seed_random(mp: Any) -> None:
+    """The broker's random ids, made a fixed sequence for one cell: the
+    attachment spool's handles (``secrets.token_hex``) and a held review row's
+    id (``records_contract.review_row``, ``os.urandom``). Nothing random is
+    left for a normaliser to hide, so every digest over them is pinned too."""
+    import hashlib
+    import itertools
+    import secrets
+
+    from records_contract import review_row
+
+    counter = itertools.count(1)
+
+    def hex_of(nbytes: int) -> str:
+        return hashlib.sha256(f"host-matrix-{next(counter)}".encode()).hexdigest()[: 2 * nbytes]
+
+    class SeededOs:
+        def __getattr__(self, name: str) -> Any:
+            return getattr(os, name)
+
+        @staticmethod
+        def urandom(nbytes: int) -> bytes:
+            return bytes.fromhex(hex_of(nbytes))
+
+    mp.setattr(secrets, "token_hex", lambda nbytes=32: hex_of(nbytes))
+    mp.setattr(review_row, "os", SeededOs())
 
 
 @contextlib.contextmanager
@@ -364,6 +412,8 @@ __all__ = [
     "broker_down",
     "broker_up",
     "build_broker",
+    "freeze_broker_clock",
+    "seed_random",
     "diffs",
     "install_child",
     "load_allowed",

@@ -186,7 +186,7 @@
             "uncovered_document_ids": null,
             "uncovered_reasons": null,
             "updated_at": "<TS>",
-            "work_digest": "sha256:<HEX>"
+            "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
           },
           "ok": true
         },
@@ -287,7 +287,7 @@
               "state": "submitted",
               "uncovered_count": null,
               "updated_at": "<TS>",
-              "work_digest": "sha256:<HEX>"
+              "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
             }
           ],
           "ok": true

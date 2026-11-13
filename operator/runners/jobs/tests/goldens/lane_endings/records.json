@@ -11,7 +11,7 @@
       "delivery": {
         "decision": "approve",
         "digest": "d53950f6430a6afb1dec022d60481b4568ea1dfa69f56fcc655a232a79b794d9",
-        "review_id": "e6daedb02046c97c020e1460"
+        "review_id": "<ID>"
       },
       "items": [
         {
@@ -76,7 +76,7 @@
     "retry_after": null,
     "review_watch": {
       "alerted": false,
-      "id": "e6daedb02046c97c020e1460",
+      "id": "<ID>",
       "since": 1800000000.0
     },
     "row": {
@@ -96,7 +96,7 @@
       "created_at": 1800000000.0,
       "digest": "d53950f6430a6afb1dec022d60481b4568ea1dfa69f56fcc655a232a79b794d9",
       "html": "<p>x</p>",
-      "id": "e6daedb02046c97c020e1460",
+      "id": "<ID>",
       "matter_id": "11111111-2222-3333-4444-555555555555",
       "message_id": "AAMkAGraphMessageId0001",
       "reason": "",

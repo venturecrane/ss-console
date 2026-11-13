@@ -20,13 +20,9 @@ from host_matrix_kit import CLOCK, OPERATOR
 
 _ULID = re.compile(r"\b[0-9A-HJKMNP-TV-Z]{26}\b")
 _ISO = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
-_HEX24 = re.compile(r"\b[0-9a-f]{24,}\b")
 #: A process id in a sentence ("child pid 4242 alive"), and seconds a lane measured.
 _PID = re.compile(r"\b(pid) \d+\b")
 _SECONDS = re.compile(r"(\b)\d+s after")
-#: The current month (the broker's month window reads the wall clock); a full
-#: date is left alone.
-_MONTH = re.compile(r"\b20\d\d-[01]\d\b(?!-\d)")
 
 
 #: The resolved length every cell's root has, on every machine.
@@ -51,6 +47,17 @@ def fixed_root() -> Path:
     return Path(os.path.realpath(tempfile.mkdtemp(prefix=f"hm{pad}", dir=base)))
 
 
+_PLACEHOLDER = re.compile(r"value-of-[A-Z][A-Z0-9_]*")
+
+
+def placeholder(value: str) -> bool:
+    """A value the matrix gives a name (``value-of-<NAME>``, the wake secret),
+    or none at all: recorded verbatim, so an empty or swapped secret is a diff."""
+    from host_matrix_kit import WAKE_SECRET
+
+    return value in ("", WAKE_SECRET) or bool(_PLACEHOLDER.fullmatch(value))
+
+
 class Normal:
     """Volatile values to stable tokens, ULIDs numbered by first appearance."""
 
@@ -65,10 +72,8 @@ class Normal:
         s = s.replace(sys.executable, "<PYTHON>")
         s = _ULID.sub(lambda m: self.ids.setdefault(m.group(0), f"<ULID{len(self.ids) + 1}>"), s)
         s = _ISO.sub("<TS>", s)
-        s = _HEX24.sub("<HEX>", s)
         s = _PID.sub(r"\1 <PID>", s)
-        s = _SECONDS.sub(r"\1<N>s after", s)
-        return _MONTH.sub("<MONTH>", s)
+        return _SECONDS.sub(r"\1<N>s after", s)
 
     def number(self, key: str, v: float) -> Any:
         if key in ("pid", "started_at") or key.endswith("_pid"):
@@ -93,8 +98,15 @@ class Normal:
         return self.text(str(doc))
 
     def env(self, env: dict[str, str]) -> dict[str, str]:
-        """A child's env: a registry secret is named with its presence only."""
-        return {k: ("<SECRET:present>" if k in self.secrets else self.text(v)) for k, v in sorted(env.items())}
+        """A child's env, verbatim: every value the matrix gives a registry
+        secret is its placeholder (``value-of-<NAME>``, the wake secret), so an
+        empty, wrong or swapped secret shows as a diff. A secret holding any
+        other value came from the shell running the tests and is refused, never
+        written to a golden."""
+        for k, v in env.items():
+            if k in self.secrets and not placeholder(v):
+                raise AssertionError(f"{k} reached a child with a value that is not the matrix placeholder")
+        return {k: self.text(v) for k, v in sorted(env.items())}
 
 
 # ---------------------------------------------------------------------------

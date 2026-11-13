@@ -177,7 +177,7 @@
             "cents": 0,
             "created_at": "<TS>",
             "delivery_json": null,
-            "envelope_digest": "<HEX>",
+            "envelope_digest": "901936df147acee4d3b8e4f5b3cb196327bbaac1a0b7c625911069d4491f79d0",
             "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
             "folder_id": null,
             "id": "<ULID1>",
