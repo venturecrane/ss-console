@@ -10,10 +10,10 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
+from .lane_ledger import RecentJobs, SpendMeter
 from .records_ledger import (
     ALLOWED_NEXT,
     CLOSE_REF,
@@ -51,56 +51,23 @@ def queue_dir_from_env() -> str:
     return os.environ.get(QUEUE_DIR_ENV, "").strip() or DEFAULT_QUEUE_DIR
 
 
-class RecordsLedger:
-    def __init__(self, db_path: str, queue_dir: str | Path) -> None:
-        self._db_path = db_path
-        self.queue_dir = Path(queue_dir)
-        self.ensure_schema()
+class RecordsLedger(RecentJobs, SpendMeter):
+    """The records lane on the shared ledger (``lane_ledger``): its tables, its
+    DDL, its report-shaped record, SMD's close and its UPDATE. It carries no
+    reply-once mark (``ReplyOnce``): its reply is bound elsewhere."""
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
+    JOBS = "records_jobs"
+    ID = "job_id"
+    SPEND = "records_spend"
 
-    def ensure_schema(self) -> None:
-        conn = self._connect()
-        try:
-            for sql in (CREATE_SQL, CREATE_LINES_SQL, *CREATE_INDEXES):
-                conn.execute(sql)
-            conn.commit()
-        finally:
-            conn.close()
+    def _next(self) -> dict[str, set[str]]:
+        return ALLOWED_NEXT
+
+    def _create(self, conn: sqlite3.Connection) -> None:
+        for sql in (CREATE_SQL, CREATE_LINES_SQL, *CREATE_INDEXES):
+            conn.execute(sql)
 
     # ---- reads ---------------------------------------------------------------------
-    def spend_between(self, start: str, end: str, exclude: str = "") -> int:
-        conn = self._connect()
-        try:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(cents), 0) AS c FROM records_spend WHERE at >= ? AND at < ? AND job_id != ?",
-                (start, end, exclude),
-            ).fetchone()
-            return int(row["c"])
-        finally:
-            conn.close()
-
-    def read(self, job_id: str) -> dict[str, Any] | None:
-        conn = self._connect()
-        try:
-            row = conn.execute("SELECT * FROM records_jobs WHERE job_id=?", (job_id,)).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
-
-    def recent(self, limit: int = 20) -> list[dict[str, Any]]:
-        conn = self._connect()
-        try:
-            rows = conn.execute("SELECT * FROM records_jobs ORDER BY created_at DESC LIMIT ?", (int(limit),))
-            return [dict(r) for r in rows]
-        finally:
-            conn.close()
-
     def lines(self, job_id: str) -> list[dict[str, Any]]:
         conn = self._connect()
         try:
@@ -124,11 +91,7 @@ class RecordsLedger:
 
     # ---- the submit ------------------------------------------------------------------
     def _queue(self, env: dict[str, Any], job_id: str) -> None:
-        self.queue_dir.mkdir(parents=True, exist_ok=True)
-        tmp = self.queue_dir / f".{job_id}.json.tmp"
-        tmp.write_text(json.dumps({"kind": KIND, "job_id": job_id, **env}, indent=1, sort_keys=True), encoding="utf-8")
-        tmp.chmod(0o640)
-        tmp.replace(self.queue_dir / f"{job_id}.json")
+        self._write_queue(job_id, {"kind": KIND, "job_id": job_id, **env})
 
     def submit(self, envelope: dict[str, Any]) -> str:
         """The row, then the queue file. One email, one job, ever: a twin in
@@ -187,60 +150,39 @@ class RecordsLedger:
 
     # ---- the runner's record -----------------------------------------------------------
     def record(self, job_id: str, report: dict[str, Any]) -> dict[str, Any]:
-        """One transition (or a same-state note); the row after, with ``prev_state``."""
-        conn = self._connect()
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            cur = conn.execute("SELECT * FROM records_jobs WHERE job_id=?", (job_id,)).fetchone()
-            if cur is None:
-                conn.rollback()
-                raise ValueError(f"no such job {job_id}")
-            try:
-                state, f = resolve(report, cur["state"])
-            except ValueError:
-                conn.rollback()
-                raise
-            if state != cur["state"] and state not in ALLOWED_NEXT[cur["state"]]:
-                conn.rollback()
-                raise ValueError(f"illegal transition {cur['state']} -> {state}")
-            if cur["close_ref"] and state != cur["state"]:
-                conn.rollback()
-                raise ValueError(f"job {job_id} was closed by SMD ({cur['close_ref']}); it never moves again")
-            now = _iso_utc()
-            self._spend(conn, job_id, now, f.get("cents"), int(cur["cents"] or 0))
-            delivery = dict(json.loads(cur["delivery_json"]) if cur["delivery_json"] else {})
-            delivery.update(f.get("delivery") or {})
-            conn.execute(
-                "UPDATE records_jobs SET state=?, updated_at=?, attempt=attempt + ?, "
-                "cents=CASE WHEN ? THEN ? ELSE cents END, "
-                "reason=CASE WHEN ? THEN ? ELSE reason END, "
-                "stage=CASE WHEN ? THEN ? ELSE stage END, "
-                "review_id=COALESCE(?, review_id), "
-                "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END WHERE job_id=?",
-                (
-                    state, now, 1 if cur["state"] == "failed" and state == "running" else 0,
-                    "cents" in f, f.get("cents"), "reason" in f, f.get("reason"), "stage" in f, f.get("stage"),
-                    delivery.get("review_id"), "delivery" in f, json.dumps(delivery, sort_keys=True), job_id,
-                ),
-            )  # fmt: skip
-            for it in f.get("items") or []:
-                conn.execute(
-                    "INSERT INTO records_lines (job_id, n, outcome, files, updated_at) VALUES (?,?,?,?,?) "
-                    "ON CONFLICT(job_id, n) DO UPDATE SET outcome=excluded.outcome, files=excluded.files, "
-                    "updated_at=excluded.updated_at",
-                    (job_id, it["n"], it["outcome"], it["files"], now),
-                )
-            conn.commit()
-            row = dict(conn.execute("SELECT * FROM records_jobs WHERE job_id=?", (job_id,)).fetchone())
-            row["prev_state"] = cur["state"]
-            return row
-        finally:
-            conn.close()
+        """One transition (or a same-state note); the row after, with
+        ``prev_state``. The report is flat (the state is resolved from it
+        against the current row, inside the transaction)."""
+        return self._transition(job_id, lambda cur: resolve(report, cur["state"]))
 
-    @staticmethod
-    def _spend(conn: sqlite3.Connection, job_id: str, now: str, cents: Any, before: int) -> None:
-        if isinstance(cents, int) and cents > before:
-            conn.execute("INSERT INTO records_spend (job_id, at, cents) VALUES (?,?,?)", (job_id, now, cents - before))
+    def _guard(self, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any]) -> None:
+        self._closed_guard(job_id, cur, state)
+
+    def _apply(
+        self, conn: sqlite3.Connection, job_id: str, cur: sqlite3.Row, state: str, f: dict[str, Any], now: str
+    ) -> None:
+        delivery = dict(json.loads(cur["delivery_json"]) if cur["delivery_json"] else {})
+        delivery.update(f.get("delivery") or {})
+        conn.execute(
+            "UPDATE records_jobs SET state=?, updated_at=?, attempt=attempt + ?, "
+            "cents=CASE WHEN ? THEN ? ELSE cents END, "
+            "reason=CASE WHEN ? THEN ? ELSE reason END, "
+            "stage=CASE WHEN ? THEN ? ELSE stage END, "
+            "review_id=COALESCE(?, review_id), "
+            "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END WHERE job_id=?",
+            (
+                state, now, 1 if cur["state"] == "failed" and state == "running" else 0,
+                "cents" in f, f.get("cents"), "reason" in f, f.get("reason"), "stage" in f, f.get("stage"),
+                delivery.get("review_id"), "delivery" in f, json.dumps(delivery, sort_keys=True), job_id,
+            ),
+        )  # fmt: skip
+        for it in f.get("items") or []:
+            conn.execute(
+                "INSERT INTO records_lines (job_id, n, outcome, files, updated_at) VALUES (?,?,?,?,?) "
+                "ON CONFLICT(job_id, n) DO UPDATE SET outcome=excluded.outcome, files=excluded.files, "
+                "updated_at=excluded.updated_at",
+                (job_id, it["n"], it["outcome"], it["files"], now),
+            )
 
     # ---- SMD's close -----------------------------------------------------------------------
     def close(self, job_id: str, reason: str, source_ref: str) -> dict[str, Any]:

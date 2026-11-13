@@ -4,7 +4,7 @@
   "$lane-host-loops": "target 1 job host plus per-lane hooks. Non-test Python file under operator/runners/jobs/jobs/ defining a `run_job(self` or `tick(self` method.",
   "verdict-readers": 7,
   "$verdict-readers": "target 1 (one verdict shape, one reader). Non-test Python file under operator/runners/jobs/jobs/ defining read_verdict, read_verdicts or finished_verdict, or a module-level read( beside verdict.json.",
-  "lane-ledger-classes": 9,
+  "lane-ledger-classes": 3,
   "$lane-ledger-classes": "target 1 ledger class plus per-lane rules. Non-test Python file under operator/workspace_broker/ defining a `record(self, job_id` method.",
   "firm-settings-loaders": 2,
   "$firm-settings-loaders": "target 1 loader over declared keys. Non-test Python file under operator/runners/jobs/jobs/ declaring its own `*ConfigError` class and a module-level `load(`.",

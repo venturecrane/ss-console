@@ -49,6 +49,7 @@ from typing import Any
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
 from . import medchron_credits
+from .lane_ledger import StateRecord
 from .medchron_update import ADDED_COLUMNS, client_keys, update_block
 from .medchron_coverage import parse_covered, parse_why, union_coverage, validate_covered
 
@@ -442,57 +443,46 @@ def allowance_from_customer_yaml(path: str | Path) -> int | None:
     return None
 
 
-class MedchronLedger(medchron_credits.CreditLedger):
-    """Per-operation sqlite connections, ``journal_mode=DELETE`` — the same
-    discipline as ``JobLedgerWriter`` and for the same cross-uid reasons."""
+class MedchronLedger(StateRecord, medchron_credits.CreditLedger):
+    """The chronology lane on the shared ledger (``lane_ledger``): its table,
+    its DDL, its page credits and its UPDATE. Kept as they were: a record takes
+    no write lock first (``BEGIN = None``) and its row after carries no
+    ``prev_state``; there is no reply-once mark and no spend table (the
+    window's debits are its cents)."""
 
-    def __init__(self, db_path: str, queue_dir: str | Path) -> None:
-        self._db_path = db_path
-        self.queue_dir = Path(queue_dir)
-        self.ensure_schema()
+    JOBS = "medchron_jobs"
+    BEGIN = None
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
-
-    def ensure_schema(self) -> None:
-        conn = self._connect()
-        try:
-            conn.execute(CREATE_SQL)
-            conn.execute(CREATE_INDEX_SQL)
-            # CREATE TABLE IF NOT EXISTS does nothing to a table that already
-            # exists, so a seat whose ledger predates the duplicate guard needs
-            # the column added rather than declared. Adding it nullable is
-            # deliberate: rows written before this release have no work digest
-            # and must not be guessed at, and `active_duplicate` treats NULL as
-            # "not a match" so an old row can never masquerade as a duplicate.
-            #
-            # Same reason, 2026-09-17, for ``covered_json``: the covered/uncovered
-            # document id sets an UPDATE reads its delta from. Nullable on purpose
-            # — a job delivered before this release covered documents nobody
-            # recorded, and a guess would silently drop records from the next
-            # update (which is the whole defect this column exists to close). The
-            # skill treats NULL as "unknown", says so, and submits nothing.
-            #
-            # Same reason, 2026-10-17, for ``client_keys``: the clients a job is
-            # for (medchron_update.client_keys), so a joint matter's delivery
-            # refuses a RUN for its own clients only. NULL on an older row reads
-            # as every client.
-            have = {r["name"] for r in conn.execute("PRAGMA table_info(medchron_jobs)")}
-            for column, alter in ADDED_COLUMNS:
-                if column not in have:
-                    conn.execute(alter)
-            # After the column exists (the debit groups on it).
-            conn.execute(CREATE_WORK_INDEX_SQL)
-            # 2026-10-29: SMD's page credits (`medchron_credits`), created
-            # beside the jobs table so an existing seat's ledger gains it.
-            medchron_credits.ensure_schema(conn)
-            conn.commit()
-        finally:
-            conn.close()
+    def _create(self, conn: sqlite3.Connection) -> None:
+        conn.execute(CREATE_SQL)
+        conn.execute(CREATE_INDEX_SQL)
+        # CREATE TABLE IF NOT EXISTS does nothing to a table that already
+        # exists, so a seat whose ledger predates the duplicate guard needs
+        # the column added rather than declared. Adding it nullable is
+        # deliberate: rows written before this release have no work digest
+        # and must not be guessed at, and `active_duplicate` treats NULL as
+        # "not a match" so an old row can never masquerade as a duplicate.
+        #
+        # Same reason, 2026-09-17, for ``covered_json``: the covered/uncovered
+        # document id sets an UPDATE reads its delta from. Nullable on purpose
+        # — a job delivered before this release covered documents nobody
+        # recorded, and a guess would silently drop records from the next
+        # update (which is the whole defect this column exists to close). The
+        # skill treats NULL as "unknown", says so, and submits nothing.
+        #
+        # Same reason, 2026-10-17, for ``client_keys``: the clients a job is
+        # for (medchron_update.client_keys), so a joint matter's delivery
+        # refuses a RUN for its own clients only. NULL on an older row reads
+        # as every client.
+        have = {r["name"] for r in conn.execute("PRAGMA table_info(medchron_jobs)")}
+        for column, alter in ADDED_COLUMNS:
+            if column not in have:
+                conn.execute(alter)
+        # After the column exists (the debit groups on it).
+        conn.execute(CREATE_WORK_INDEX_SQL)
+        # 2026-10-29: SMD's page credits (`medchron_credits`), created
+        # beside the jobs table so an existing seat's ledger gains it.
+        medchron_credits.ensure_schema(conn)
 
     # -- the window's debits -----------------------------------------------
     # ONE rule for pages, documents and cents: a job DEBITS THE WINDOW when it
@@ -628,11 +618,7 @@ class MedchronLedger(medchron_credits.CreditLedger):
             conn.commit()
         finally:
             conn.close()
-        self.queue_dir.mkdir(parents=True, exist_ok=True)
-        tmp = self.queue_dir / f".{job_id}.json.tmp"
-        tmp.write_text(json.dumps(queued, indent=1, sort_keys=True), encoding="utf-8")
-        tmp.chmod(0o640)
-        tmp.replace(self.queue_dir / f"{job_id}.json")
+        self._write_queue(job_id, queued)
         return job_id
 
     def backfill_delivered(
@@ -781,14 +767,6 @@ class MedchronLedger(medchron_credits.CreditLedger):
             conn.close()
 
     # -- read --------------------------------------------------------------
-    def read(self, job_id: str) -> dict[str, Any] | None:
-        conn = self._connect()
-        try:
-            r = conn.execute("SELECT * FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
-            return dict(r) if r is not None else None
-        finally:
-            conn.close()
-
     def list_recent(self, limit: int = 20) -> list[dict[str, Any]]:
         conn = self._connect()
         try:
@@ -852,59 +830,46 @@ class MedchronLedger(medchron_credits.CreditLedger):
         return out
 
     # -- the runner's report ----------------------------------------------
-    def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
-        """Apply one transition. Returns the row after. Raises ValueError on an
-        unknown job or an illegal transition; the caller writes the audit row."""
-        if state not in STATES:
-            raise ValueError(f"unknown state {state!r}")
-        conn = self._connect()
-        try:
-            cur = conn.execute("SELECT state FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
-            if cur is None:
-                raise ValueError(f"no such job {job_id}")
-            # ss#2616: a same-state re-record is a NOTE (a lost deliver wake,
-            # for instance) — legal, merges fields, writes one audit row with
-            # the current state's type. Transitions stay monotonic otherwise.
-            if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
-                raise ValueError(f"illegal transition {cur['state']} -> {state}")
-            sets = ["state=?", "updated_at=?"]
-            vals: list[Any] = [state, _iso_utc()]
-            for col in ("documents", "pages", "cents"):
-                if col in fields:
-                    v = fields[col]
-                    if not isinstance(v, int) or isinstance(v, bool) or v < 0:
-                        raise ValueError(f"{col} must be a non-negative int")
-                    sets.append(f"{col}=?")
-                    vals.append(v)
-            if "reason" in fields:
-                sets.append("reason=?")
-                vals.append(str(fields["reason"] or "")[:500] or None)
-            elif state != cur["state"] and state in REASON_CLEARING:
-                # 2026-10-07: a job held at the audit gate was resumed and
-                # delivered, and its row still carried the hold's reason. The
-                # DELIVER turn read it and told the requester two entries
-                # needed attorney review; the delivered document had none.
-                # A reason describes the state that wrote it, so moving on
-                # without a new one leaves the row with none. The history
-                # stays where it belongs: on the earlier state's audit row.
-                sets.append("reason=?")
-                vals.append(None)
-            if "folder_id" in fields:
-                sets.append("folder_id=?")
-                vals.append(str(fields["folder_id"] or "") or None)
-            if "covered" in fields:
-                sets.append("covered_json=?")
-                vals.append(validate_covered(fields["covered"]))
-            if "delivery" in fields and isinstance(fields["delivery"], dict):
-                sets.append("delivery_json=?")
-                vals.append(json.dumps(fields["delivery"], sort_keys=True))
-            vals.append(job_id)
-            conn.execute(f"UPDATE medchron_jobs SET {', '.join(sets)} WHERE id=?", vals)  # noqa: S608 - sets holds only the literal 'col=?' fragments built above; values are bound
-            conn.commit()
-            row = conn.execute("SELECT * FROM medchron_jobs WHERE id=?", (job_id,)).fetchone()
-            return dict(row)
-        finally:
-            conn.close()
+    def _apply(
+        self, conn: sqlite3.Connection, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any], now: str
+    ) -> None:
+        sets = ["state=?", "updated_at=?"]
+        vals: list[Any] = [state, now]
+        for col in ("documents", "pages", "cents"):
+            if col in fields:
+                v = fields[col]
+                if not isinstance(v, int) or isinstance(v, bool) or v < 0:
+                    raise ValueError(f"{col} must be a non-negative int")
+                sets.append(f"{col}=?")
+                vals.append(v)
+        if "reason" in fields:
+            sets.append("reason=?")
+            vals.append(str(fields["reason"] or "")[:500] or None)
+        elif state != cur["state"] and state in REASON_CLEARING:
+            # 2026-10-07: a job held at the audit gate was resumed and
+            # delivered, and its row still carried the hold's reason. The
+            # DELIVER turn read it and told the requester two entries
+            # needed attorney review; the delivered document had none.
+            # A reason describes the state that wrote it, so moving on
+            # without a new one leaves the row with none. The history
+            # stays where it belongs: on the earlier state's audit row.
+            sets.append("reason=?")
+            vals.append(None)
+        if "folder_id" in fields:
+            sets.append("folder_id=?")
+            vals.append(str(fields["folder_id"] or "") or None)
+        if "covered" in fields:
+            sets.append("covered_json=?")
+            vals.append(validate_covered(fields["covered"]))
+        if "delivery" in fields and isinstance(fields["delivery"], dict):
+            sets.append("delivery_json=?")
+            vals.append(json.dumps(fields["delivery"], sort_keys=True))
+        vals.append(job_id)
+        conn.execute(f"UPDATE medchron_jobs SET {', '.join(sets)} WHERE id=?", vals)  # noqa: S608 - sets holds only the literal 'col=?' fragments built above; values are bound
+
+    def _result(self, row: dict[str, Any], cur: sqlite3.Row, state: str, extra: Any) -> dict[str, Any]:
+        """The row after, as it is: this lane's record never carried ``prev_state``."""
+        return row
 
 
 def now_utc() -> datetime:
