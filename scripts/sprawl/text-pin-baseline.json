@@ -147,7 +147,7 @@
   "tests/operator-fixture-contract.test.ts": 7,
   "tests/operator-help.test.ts": 64,
   "tests/operator-lane-inputs-fetch.test.ts": 47,
-  "tests/operator-litigation-textcache.test.ts": 6,
+  "tests/operator-litigation-textcache.test.ts": 5,
   "tests/operator-pack-kit-grammar.test.ts": 4,
   "tests/operator-section-badges.test.ts": 2,
   "tests/operator-self-test-step4.test.ts": 5,

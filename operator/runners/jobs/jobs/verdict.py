@@ -75,6 +75,71 @@ def read(job_dir: Path, out: str) -> list[Any]:
     return []
 
 
+#: A real ending: recorded even when the Machine's stop lands as it is
+#: written, never run again (``resume.cut_short_by_stop``, ``finished``).
+FINISHED_OUTCOMES = frozenset({"delivered", "dry_run", "held", "refused"})
+
+
+def one(job_dir: Path, out: str, verdicts: tuple[str, ...]) -> dict[str, Any] | None:
+    """A runner that writes ONE verdict object (case file, negotiation,
+    litigation, records): the file first, then stdout's last line; the first
+    that parses as an object whose ``verdict`` is one of ``verdicts``."""
+    texts = []
+    try:
+        texts.append((Path(job_dir) / NAME).read_text(encoding="utf-8"))
+    except OSError:
+        pass
+    lines = [ln for ln in (out or "").splitlines() if ln.strip()]
+    if lines:
+        texts.append(lines[-1])
+    for t in texts:
+        try:
+            v = json.loads(t)
+        except ValueError:
+            continue
+        if isinstance(v, dict) and v.get("verdict") in verdicts:
+            return v
+    return None
+
+
+def every(job_dir: Path) -> list[Any]:
+    """Every verdict a run wrote, in either shape a lane's runner emits.
+
+    WHY (2026-10-13, the A&P litigation proof). The chronology, demand and
+    drafting runners write a JSON LIST to ``verdict.json``; the litigation and
+    negotiation runners write ONE JSON OBJECT (``__main__._cmd_litigate`` and
+    ``_cmd_negotiate``, read back by ``one``). ``read`` keeps only a list, so a
+    litigation proof run that wrote ``{"verdict": "dry_run", ...}`` read back as
+    ``[]`` and its proof was recorded ``failed``, "the runner wrote no dry_run
+    verdict", stages [] and 0 cents. A single object is one verdict, judged
+    exactly as a one-item list (``proof_run.judge``)."""
+    listed = read(job_dir, "")
+    if listed:
+        return listed
+    try:
+        parsed = json.loads((Path(job_dir) / NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [parsed] if isinstance(parsed, dict) else []
+
+
+def finished(v: Any) -> bool:
+    """For a runner that writes ONE verdict object (``one``): True when it is a
+    real ending that must be recorded even mid-stop, never re-run.
+    ``resume.cut_short_by_stop`` reads list-shaped outcomes and cannot see this
+    shape, so these lanes ask here first. A ``failed`` that carries a paged
+    reason (``review_held:``, ``readback_mismatch:``, ``update_held:``) is the
+    work's own ending and pages SMD; any other ``failed`` written as the stop
+    landed is the stop."""
+    from .medchron.unit_proof import PAGED_PREFIXES
+
+    if not isinstance(v, dict):
+        return False
+    if v.get("verdict") in FINISHED_OUTCOMES:
+        return True
+    return v.get("verdict") == "failed" and str(v.get("reason") or "").startswith(PAGED_PREFIXES)
+
+
 def _from_file(path: Path) -> list[Any]:
     try:
         parsed = json.loads(path.read_text(encoding="utf-8"))

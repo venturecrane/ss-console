@@ -50,6 +50,7 @@ from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, job_lanes, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
 from . import resume as resume_mod, retention, spend, verdict as verdict_mod
+from .back_off import BackOff
 from .proof import watch as proof_watch
 from . import seat_layout
 
@@ -100,7 +101,7 @@ TERMINAL = frozenset({"delivered", "failed", "stopped_by_smd", "observed"})
 
 
 @dataclass
-class Daemon:
+class Daemon(BackOff):
     run_dir: Path
     broker: Any
     runner_cmd: list[str]
@@ -142,8 +143,11 @@ class Daemon:
     #: ``tick``, from when it was this class).
     TICK = ""
     #: The logger the lane's own lines go to (``jobs.<lane>``; the chronology's
-    #: is ``jobs.daemon``, from when it was this class).
+    #: is ``jobs.daemon``, from when it was this class), and the one its loop's
+    #: lines go to when that differs (the drafting family's loop logs as
+    #: ``jobs.drafting``, whose loop it was).
     LOGGER = "jobs.daemon"
+    LOOP_LOGGER = ""
     #: The host's loop policy (``tick``), the lane's own. A lane that does not
     #: CLAIM (the note lane) runs no job: each tick wipes, wakes and beats. A
     #: lane that BACKS_OFF (demand, drafting) holds a held job final (a resume
@@ -162,6 +166,10 @@ class Daemon:
     #: names it gets from the daemon's own environment beyond ``CHILD_ENV_PASS``.
     CHILD_ARGS: ClassVar[tuple[str, ...]] = ()
     ENV_PASS: ClassVar[tuple[str, ...]] = ()
+    #: A lane whose runner writes ONE verdict object names the verdicts it may
+    #: carry (``verdict.one``); a real ending reached as the Machine's stop
+    #: landed is then recorded, never left to run again (``verdict.finished``).
+    ONE_VERDICT: ClassVar[tuple[str, ...]] = ()
     #: The warnings a job deferred at its start logs, each taking the job id and
     #: the broker's error: (its job file could not be written, its running could
     #: not be recorded).
@@ -179,6 +187,10 @@ class Daemon:
     @property
     def _log(self) -> logging.Logger:
         return logging.getLogger(self.LOGGER)
+
+    @property
+    def _loop_log(self) -> logging.Logger:
+        return logging.getLogger(self.LOOP_LOGGER or self.LOGGER)
 
     def job_dir(self, job_id: str) -> Path:
         return self.jobs / job_id
@@ -300,6 +312,7 @@ class Daemon:
         jd = self._start(job_id)
         if jd is None:
             return "deferred"
+        self._before_child(job_id)
         child_env = self._child_env(job_id, jd)
         verdict_mod.clear(jd)
         with (jd / "daemon.log").open("a", encoding="utf-8") as log:
@@ -315,7 +328,7 @@ class Daemon:
             )
         self.jobs_run += 1
         self._after_child(job_id)
-        if resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
+        if not self._ended(job_id, out or "") and resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
             self._after_ending(job_id)
             return "interrupted"
         state = self._report(job_id, code, out or "")
@@ -347,6 +360,7 @@ class Daemon:
         (smokeball_connector/write_record.py)."""
         out = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS or k in self.ENV_PASS}
         out.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
+        out.update(self._lane_env(job_id))
         out.setdefault("JOBS_SEAT", "client")
         out.setdefault("PATH", "/usr/bin:/bin")
         out.setdefault("HOME", str(jd))
@@ -364,8 +378,22 @@ class Daemon:
         every run and every resume; returns the job dir."""
         raise NotImplementedError(f"the {self.LANE or 'base'} lane defines no job file")
 
+    def _lane_env(self, job_id: str) -> dict[str, str]:
+        """HOOK. The lane's own child env: its firm inputs (pinned), state dirs."""
+        return {}
+
+    def _before_child(self, job_id: str) -> None:
+        """HOOK. What the lane checks just before its child starts (an alert)."""
+
     def _after_child(self, job_id: str) -> None:
         """HOOK. What the lane reads from its child's work before the ending."""
+
+    def _ended(self, job_id: str, out: str) -> bool:
+        """True when the child's verdict is a real ending, recorded even when the
+        Machine's stop landed as it was written (``ONE_VERDICT`` lanes)."""
+        if not self.ONE_VERDICT:
+            return False
+        return verdict_mod.finished(verdict_mod.one(self.job_dir(job_id), out, self.ONE_VERDICT))
 
     def _after_ending(self, job_id: str) -> None:
         """HOOK. What the lane hands over once the job's turn ended (a stop or a verdict)."""
@@ -587,45 +615,6 @@ class Daemon:
         if self._daemon_state(job_id).get("held_paused"):
             self._write_state(job_id, held_paused=False)
         return self.run_job(job_id)
-
-    # -- a backing-off lane: no head-of-line starvation, and held is final -----------
-    def _refuse_held_resumes(self) -> None:
-        """A held job is FINAL. Its ledger has no held -> running edge, and a
-        hold means a person must read the reason (a refused letter, a wrong
-        destination); resuming it would replay the same refusal or, worse,
-        file what was refused. A marker for one is removed, loudly."""
-        if not self.queue.is_dir():
-            return
-        for marker in self.queue.glob(f"{resume_mod.MARKER_PREFIX}*.json"):
-            job_id = marker.name[len(resume_mod.MARKER_PREFIX) : -len(".json")]
-            if self._daemon_state(job_id).get("state") == "held":
-                self._log.error(self.HELD_RESUME_REFUSED, job_id)
-                marker.unlink(missing_ok=True)
-
-    def _ready(self) -> list[str]:
-        now = self.clock()
-        return [j for j in self._in_progress() if float(self._daemon_state(j).get("retry_after") or 0) <= now]
-
-    def _defer(self, job_id: str) -> None:
-        """Back the job off (1, 2, 4 ... 60 minutes) so a job that keeps
-        deferring cannot hold the head of the queue: the next tick claims the
-        job behind it (review of #3074)."""
-        n = int(self._daemon_state(job_id).get("deferrals") or 0) + 1
-        self._write_state(job_id, deferrals=n, retry_after=self.clock() + min(60.0 * 2 ** (n - 1), 3600.0))
-
-    def _run_backing_off(self, job_id: str) -> str:
-        try:
-            result = self.run_job(job_id)
-        except Exception:  # noqa: BLE001 - one job's crash backs that job off (logged with its trace); it must not wedge the lane's head
-            self._log.exception("%s job %s could not be started; backing it off", self.JOB_WORD, job_id)
-            result = "deferred"
-        if result == "deferred":
-            self._defer(job_id)
-        elif result == "waiting":
-            pass  # another lane's child is running; the lane set retry_after itself
-        else:
-            self._write_state(job_id, deferrals=0, retry_after=None)
-        return result
 
     def run_forever(self, stop: Callable[[], bool], poll_seconds: float) -> None:
         self.stopping = stop

@@ -1,8 +1,8 @@
 {
   "$comment": "Written by scripts/sprawl-audit.ts --write-concept-baseline; gated by tests/sprawl-ratchet.test.ts. Lower only.",
-  "lane-host-loops": 6,
+  "lane-host-loops": 1,
   "$lane-host-loops": "target 1 job host plus per-lane hooks. Non-test Python file under operator/runners/jobs/jobs/ defining a `run_job(self` or `tick(self` method.",
-  "verdict-readers": 7,
+  "verdict-readers": 1,
   "$verdict-readers": "target 1 (one verdict shape, one reader). Non-test Python file under operator/runners/jobs/jobs/ defining read_verdict, read_verdicts or finished_verdict, or a module-level read( beside verdict.json.",
   "lane-ledger-classes": 3,
   "$lane-ledger-classes": "target 1 ledger class plus per-lane rules. Non-test Python file under operator/workspace_broker/ defining a `record(self, job_id` method.",

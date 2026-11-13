@@ -44,25 +44,24 @@ import re
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, ClassVar
 
 from . import (
+    child as child_mod,
     firm_wording,
     job_notes,
     library_setup_lane,
     request_additions,
-    resume as resume_mod,
     spend,
     verdict as verdict_mod,
 )
 from .broker_client import BrokerClient, BrokerError
-from .child import run_child
 from .drafting import firm_rules, layout_into_library, repair_budget
 from .firm_inputs import pin_env
 from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
 from .skill_load import load_line
-from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, memory_cap_mode, sticky_level
+from .daemon import RUNNER_BIN, TERMINAL, Daemon, memory_cap_mode
 from . import seat_layout
 
 logger = logging.getLogger("jobs.drafting")
@@ -137,16 +136,27 @@ class DraftingLane(Daemon):
     inputs_dir: str | None = None
     LANE = "drafting"
     HEARTBEAT = "drafting-heartbeat"
+    LOGGER = LOOP_LOGGER = "jobs.drafting"
+    BACKS_OFF = True
+    JOB_WORD = "drafting"
+    HELD_RESUME_REFUSED = "resume of held drafting job %s refused: a held job is final; ask again"
+    #: The warning the first deferral on unusable firm inputs logs (job id, error).
+    INPUTS_DEFERRED = "drafting inputs not usable yet, deferring %s once: %s"
+    #: How long a job that found another lane's child running waits.
+    BUSY_RETRY_SECONDS = DEMAND_BUSY_RETRY_SECONDS
+    #: The child pid files a job does not START while one is live (``_busy``).
+    BUSY_PIDS: ClassVar[tuple[str, ...]] = ()
+    #: The drafting lane's own steps around its child: a library setup job
+    #: handed to ``library_setup_lane`` first, the firm rule and wording alerts
+    #: before the child, the repair, layout and refusal alerts after it, and the
+    #: library hand-overs once it ended. The lanes built on this one have none.
+    DRAFTING_STEPS = True
 
     @property
     def queue(self) -> Path:
         return self.queue_dir
 
-    @property
-    def jobs(self) -> Path:
-        return self.run_dir / "drafting-jobs"
-
-    # -- one job -------------------------------------------------------------------
+    # -- one job (the host runs it: ``Daemon.run_job``) ---------------------------
     def _write_job(self, job_id: str) -> Path:
         jd = self.job_dir(job_id)
         env = json.loads((jd / "envelope.json").read_text(encoding="utf-8"))
@@ -165,64 +175,70 @@ class DraftingLane(Daemon):
         self._chown_child(jd)
         return jd
 
-    def run_job(self, job_id: str) -> str:
-        from .drafting import firm as drafting_firm
-
-        if library_setup_lane.is_setup(self, job_id):
+    def _before_start(self, job_id: str) -> str | None:
+        if self.DRAFTING_STEPS and library_setup_lane.is_setup(self, job_id):
             return library_setup_lane.run(self, job_id)
-        try:
-            drafting_firm.load(self.inputs_dir)
-        except drafting_firm.DraftingConfigError as exc:
-            st = self._daemon_state(job_id)
-            if not st.get("config_deferred"):
-                logger.warning("drafting inputs not usable yet, deferring %s once: %s", job_id, exc)
+        return self._gate(job_id)
+
+    def _gate(self, job_id: str) -> str | None:
+        """Unusable firm inputs defer a job once, then fail it (``config_missing``,
+        ``_fail_unconfigured``); a job waits while another lane's child it
+        yields to is running (``waiting``, retried after ``BUSY_RETRY_SECONDS``)."""
+        exc = self._inputs_error()
+        if exc is not None:
+            if not self._daemon_state(job_id).get("config_deferred"):
+                self._log.warning(self.INPUTS_DEFERRED, job_id, exc)
                 self._write_state(job_id, config_deferred=True)
                 return "deferred"
             return self._fail_unconfigured(job_id, exc)
-        if (self.run_dir / DEMAND_CHILD_PID).is_file():
-            self._write_state(job_id, retry_after=self.clock() + DEMAND_BUSY_RETRY_SECONDS)
+        if self._waits(job_id):
+            self._write_state(job_id, retry_after=self.clock() + self.BUSY_RETRY_SECONDS)
             return "waiting"
+        return None
+
+    def _inputs_error(self) -> Exception | None:
+        """The firm inputs' load error, or None when they load."""
+        from .drafting import firm as drafting_firm
+
         try:
-            jd = self._write_job(job_id)
-            self.broker.record(job_id, "running", {})
-        except BrokerError as exc:
-            logger.warning("broker not ready for %s, deferring: %s", job_id, exc)
-            return "deferred"
-        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
-        env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
+            drafting_firm.load(self.inputs_dir)
+        except drafting_firm.DraftingConfigError as exc:
+            return exc
+        return None
+
+    def _busy(self) -> bool:
+        """The drafting child waits while a demand child runs (it shares that
+        cgroup); the lanes built on this one wait on any of ``BUSY_PIDS`` live."""
+        if self.DRAFTING_STEPS:
+            return (self.run_dir / DEMAND_CHILD_PID).is_file()
+        return any(child_mod.live(self.run_dir / p) for p in self.BUSY_PIDS)
+
+    def _waits(self, job_id: str) -> bool:
+        return self._busy()
+
+    def _before_child(self, job_id: str) -> None:
+        if self.DRAFTING_STEPS:
+            firm_rules.alert_unusable(self, job_id)
+            firm_wording.alert_unusable(self, job_id)
+
+    def _lane_env(self, job_id: str) -> dict[str, str]:
+        out: dict[str, str] = {}
         if os.environ.get(firm_rules.PINS_ENV):
-            env[firm_rules.PINS_ENV] = os.environ[firm_rules.PINS_ENV]
-        firm_rules.alert_unusable(self, job_id)
-        firm_wording.alert_unusable(self, job_id)
+            out[firm_rules.PINS_ENV] = os.environ[firm_rules.PINS_ENV]
         if self.inputs_dir:
-            env[INPUTS_ENV] = str(pin_env(self.inputs_dir))
-        env.setdefault("JOBS_SEAT", "client")
-        env.setdefault("PATH", "/usr/bin:/bin")
-        env.setdefault("HOME", str(jd))
-        verdict_mod.clear(jd)
-        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
-            code, out = run_child(
-                self,
-                job_id,
-                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd)]),
-                cwd=jd,
-                env=env,
-                log=log,
-                pidfile=self.run_dir / "drafting-child.pid",
-                preexec=self._cgroup_preexec(),
-            )
-        self.jobs_run += 1
-        firm_rules.alert_refused(self, job_id)
-        repair_budget.alert_exhausted(self, job_id)
-        layout_into_library.alert_unplaced(self, job_id)  # a rule the ledger could not place (piece 5)
-        if resume_mod.cut_short_by_stop(self, job_id, code, out):
-            library_edit_handoff.hand_over(self, job_id)
-            layout_into_library.hand_over(self, job_id)
-            return "interrupted"
-        state = self._report(job_id, code, out)
-        library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
-        layout_into_library.hand_over(self, job_id)  # a layout rule written into the library file (piece 5)
-        return state
+            out[INPUTS_ENV] = str(pin_env(self.inputs_dir))
+        return out
+
+    def _after_child(self, job_id: str) -> None:
+        if self.DRAFTING_STEPS:
+            firm_rules.alert_refused(self, job_id)
+            repair_budget.alert_exhausted(self, job_id)
+            layout_into_library.alert_unplaced(self, job_id)  # a rule the ledger could not place (piece 5)
+
+    def _after_ending(self, job_id: str) -> None:
+        if self.DRAFTING_STEPS:
+            library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
+            layout_into_library.hand_over(self, job_id)  # a layout rule written into the library file (piece 5)
 
     def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:
         """Our cause, said once: the seat has no usable drafting inputs. Failed
@@ -346,55 +362,8 @@ class DraftingLane(Daemon):
             lines.append(f"Reason: stopped at {stage or 'the runner (no verdict)'}.")
         return "\n".join(lines)
 
-    def _paused(self, job_id: str) -> bool:
-        return sticky_level(self.sticky_db) == "HARD_STOP"
-
-    # -- the loop: no head-of-line starvation, and held is final ---------------------
-    def _refuse_held_resumes(self) -> None:
-        if not self.queue.is_dir():
-            return
-        for marker in self.queue.glob(f"{resume_mod.MARKER_PREFIX}*.json"):
-            job_id = marker.name[len(resume_mod.MARKER_PREFIX) : -len(".json")]
-            if self._daemon_state(job_id).get("state") == "held":
-                logger.error("resume of held drafting job %s refused: a held job is final; ask again", job_id)
-                marker.unlink(missing_ok=True)
-
-    def _ready(self) -> list[str]:
-        now = self.clock()
-        return [j for j in self._in_progress() if float(self._daemon_state(j).get("retry_after") or 0) <= now]
-
-    def _defer(self, job_id: str) -> None:
-        n = int(self._daemon_state(job_id).get("deferrals") or 0) + 1
-        self._write_state(job_id, deferrals=n, retry_after=self.clock() + min(60.0 * 2 ** (n - 1), 3600.0))
-
     def poll_requests(self) -> None:
         request_additions.take(self)
-
-    def tick(self) -> str | None:
-        request_additions.take(self)
-        self._refuse_held_resumes()
-        resume_mod.take_requests(self)
-        self.wipe_expired()
-        self.dispatch_wakes()
-        ready = self._ready()
-        job_id = ready[0] if ready else self.claim_next()
-        self.heartbeat(running=job_id)
-        if job_id is None:
-            return None
-        if self._paused(job_id):
-            return "paused"
-        try:
-            result = self.run_job(job_id)
-        except Exception:  # one job's crash backs that job off; it must not wedge the lane's head
-            logger.exception("drafting job %s could not be started; backing it off", job_id)
-            result = "deferred"
-        if result == "deferred":
-            self._defer(job_id)
-        elif result == "waiting":
-            pass  # a demand child is running; retry_after is already set
-        else:
-            self._write_state(job_id, deferrals=0, retry_after=None)
-        return result
 
 
 def build_lane(d: Daemon) -> DraftingLane | None:

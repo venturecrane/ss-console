@@ -48,7 +48,7 @@ TESTS = Path(__file__).resolve().parent
 NEW = TESTS.parents[2]
 WORKER = TESTS / "host_cross_version_worker.py"
 #: The lanes whose host this check holds (the families moved onto the one host).
-LANES = ("medchron", "demand", "note")
+LANES = ("medchron", "demand", "note", "drafting", "library_setup", "litigation", "casefile", "negotiation", "records")
 
 #: Ticks per cell's steps (``host_matrix_cells.STEPS``); a run that ticks a
 #: different number of times fails, so a changed step list cannot go unseen.
@@ -92,7 +92,13 @@ def _ticks(cell: str) -> int:
 #: Without an old tree both sides are this one: the suite then runs one
 #: restart per checked lane, enough to keep the instrument honest at a fraction
 #: of the cost (the full set runs against the merge-base in the goldens job).
-SAMPLE = {"medchron/delivered": 1, "demand/delivered": 1, "note/wake_paused": 1}
+SAMPLE = {
+    "medchron/delivered": 1,
+    "demand/delivered": 1,
+    "note/wake_paused": 1,
+    "drafting/delivered": 1,
+    "records/delivered": 1,
+}
 
 
 def _cases() -> list[tuple[str, int]]:

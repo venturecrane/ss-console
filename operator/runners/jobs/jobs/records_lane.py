@@ -50,11 +50,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import resume as resume_mod, seat_layout, spend, verdict as verdict_mod
+from . import seat_layout, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
-from .child import run_child
 from .firm_inputs import pin_env
-from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon
+from .daemon import RUNNER_BIN, TERMINAL, Daemon
 from .drafting_lane import DraftingLane
 from .proof import holds as proof_holds, watch as proof_watch
 from . import seat_layout
@@ -75,7 +74,6 @@ DEFAULT_CUSTOMER_YAML = seat_layout.CUSTOMER_YAML
 CONFIG_BLOCK = "matter_file_delivery"
 #: The env the child gets beyond the daemon's allow-list.
 CHILD_ENV = (INPUTS_ENV, STATE_ENV, INDEX_ENV, "SMOKEBALL_PAGE_FINDER_MODEL", "SMOKEBALL_VISION_MODEL")
-CHILD_PID = "records-child.pid"
 #: A job does not START while any of these is live: the case file lane's set
 #: (it shares the demand cgroup, and a chronology or litigation child shares
 #: the Machine), plus the case file child itself, which waits on this lane's.
@@ -151,40 +149,6 @@ def records_runner_cmd() -> list[str]:
     return [*privs, "nice", "-n", "10", RUNNER_BIN, "records"]
 
 
-def _live(pidfile: Path) -> bool:
-    try:
-        pid = int(pidfile.read_text().strip())
-    except (OSError, ValueError):
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def read_verdict(job_dir: Path, out: str) -> dict[str, Any] | None:
-    """The runner's one JSON object: the file first, then stdout's last line."""
-    texts = []
-    try:
-        texts.append((job_dir / verdict_mod.NAME).read_text(encoding="utf-8"))
-    except OSError:
-        pass
-    lines = [ln for ln in (out or "").splitlines() if ln.strip()]
-    if lines:
-        texts.append(lines[-1])
-    for t in texts:
-        try:
-            v = json.loads(t)
-        except ValueError:
-            continue
-        if isinstance(v, dict) and v.get("verdict") in VERDICTS:
-            return v
-    return None
-
-
 def review_by_smd(doc: Any, released_so_far: int) -> bool:
     """The reply plugin's own rule (``matter_file_reply.review_by_smd``): ``review: smd``
     holds every files reply; ``review_first: N`` holds until SMD released N."""
@@ -225,10 +189,13 @@ class RecordsLane(DraftingLane):
     gateway_ids: Callable[[], tuple[int, int]] = _gateway_ids
     LANE = "records"
     HEARTBEAT = "records-heartbeat"
-
-    @property
-    def jobs(self) -> Path:
-        return self.run_dir / "records-jobs"
+    LOGGER = "jobs.records"
+    DRAFTING_STEPS = False
+    ONE_VERDICT = VERDICTS
+    ENV_PASS = CHILD_ENV
+    INPUTS_DEFERRED = "records inputs not usable yet, deferring %s once: %s"
+    BUSY_RETRY_SECONDS = BUSY_RETRY_SECONDS
+    BUSY_PIDS = BUSY_PIDS
 
     def _envelope(self, job_id: str) -> dict[str, Any]:
         try:
@@ -275,20 +242,25 @@ class RecordsLane(DraftingLane):
         self._chown_child(jd)
         return jd
 
-    def run_job(self, job_id: str) -> str:
+    def _inputs_error(self) -> Exception | None:
         from .records import firm as rec_firm
 
         try:
             rec_firm.load(self.inputs_dir)
         except rec_firm.RecordsConfigError as exc:
-            if not self._daemon_state(job_id).get("config_deferred"):
-                logger.warning("records inputs not usable yet, deferring %s once: %s", job_id, exc)
-                self._write_state(job_id, config_deferred=True)
-                return "deferred"
-            return self._fail(job_id, "config", "config_missing: the records inputs are not usable on this seat")
-        if any(_live(self.run_dir / p) for p in BUSY_PIDS) or self._same_matter_busy(job_id):
-            self._write_state(job_id, retry_after=self.clock() + BUSY_RETRY_SECONDS)
-            return "waiting"
+            return exc
+        return None
+
+    def _fail_unconfigured(self, job_id: str, exc: Exception) -> str:
+        return self._fail(job_id, "config", "config_missing: the records inputs are not usable on this seat")
+
+    def _waits(self, job_id: str) -> bool:
+        return self._busy() or self._same_matter_busy(job_id)
+
+    def _before_start(self, job_id: str) -> str | None:
+        gated = self._gate(job_id)
+        if gated is not None:
+            return gated
         reported = (self._daemon_state(job_id).get("reported") or {}).get("verdict") or {}
         if str(reported.get("verdict")) in ("delivered", "held", "dry_run"):
             # A reply was composed and its report did not finish (the broker
@@ -299,58 +271,37 @@ class RecordsLane(DraftingLane):
             # A failed attempt being resumed (resume.take_requests re-queued
             # it): nothing of its report is reused, so the child runs again.
             self._write_state(job_id, reported=None, row=None, spooled=None, review_watch=None)
-        try:
-            jd = self._write_job(job_id)
-            self.broker.record(job_id, "running", {})
-        except BrokerError as exc:
-            logger.warning("broker not ready for %s, deferring: %s", job_id, exc)
-            return "deferred"
-        self._write_state(job_id, started=True)
-        return self._spawn(job_id, jd)
+        return None
 
-    def _child_env(self, job_id: str, jd: Path) -> dict[str, str]:
-        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS or k in CHILD_ENV}
-        env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
+    def _start(self, job_id: str) -> Path | None:
+        jd = super()._start(job_id)
+        if jd is not None:
+            self._write_state(job_id, started=True)
+        return jd
+
+    def _lane_env(self, job_id: str) -> dict[str, str]:
+        out: dict[str, str] = {}
         for key, value in (
             (INPUTS_ENV, pin_env(self.inputs_dir)),
             (STATE_ENV, self.state_dir),
             (INDEX_ENV, self.index_dir),
         ):
             if value:
-                env[key] = str(value)
-        env.setdefault("JOBS_SEAT", "client")
-        env.setdefault("PATH", "/usr/bin:/bin")
-        env.setdefault("HOME", str(jd))
-        return env
+                out[key] = str(value)
+        return out
 
-    def _spawn(self, job_id: str, jd: Path) -> str:
-        verdict_mod.clear(jd)
-        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
-            code, out = run_child(
-                self,
-                job_id,
-                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd)]),
-                cwd=jd,
-                env=self._child_env(job_id, jd),
-                log=log,
-                pidfile=self.run_dir / CHILD_PID,
-                preexec=self._cgroup_preexec(),
-            )
-        self.jobs_run += 1
-        finished = resume_mod.finished_verdict(read_verdict(jd, out))
-        if not finished and resume_mod.cut_short_by_stop(self, job_id, code, out):
-            return "interrupted"
-        v = read_verdict(jd, out) or {
+    def _report(self, job_id: str, code: int, out: str) -> str:
+        v = verdict_mod.one(self.job_dir(job_id), out, self.ONE_VERDICT) or {
             "verdict": "failed",
             "stage": None,
             "reason": f"no_verdict: the runner exited {code} without a verdict",
         }
         self._write_state(job_id, reported={"verdict": v})
-        return self._report(job_id, v)
+        return self._report_verdict(job_id, v)
 
     def _report_reentry(self, job_id: str) -> str:
         v = (self._daemon_state(job_id).get("reported") or {}).get("verdict") or {}
-        return self._report(job_id, v)
+        return self._report_verdict(job_id, v)
 
     def _fail(self, job_id: str, stage: str, reason: str, cents: int = 0) -> str:
         try:
@@ -372,7 +323,7 @@ class RecordsLane(DraftingLane):
         return "failed"
 
     # -- the report: spool, row, decision, record ---------------------------------------
-    def _report(self, job_id: str, v: dict[str, Any]) -> str:
+    def _report_verdict(self, job_id: str, v: dict[str, Any]) -> str:
         verdict = str(v.get("verdict") or "failed")
         proof = proof_watch.in_proof_run(self)
         if verdict == "dry_run" and not proof:
@@ -634,4 +585,4 @@ def start_lane(d: Daemon, *, stop: Callable[[], bool], poll_seconds: float) -> t
     return t
 
 
-__all__ = ["RecordsBroker", "RecordsLane", "build_lane", "read_verdict", "review_by_smd", "start_lane"]
+__all__ = ["RecordsBroker", "RecordsLane", "build_lane", "review_by_smd", "start_lane"]
