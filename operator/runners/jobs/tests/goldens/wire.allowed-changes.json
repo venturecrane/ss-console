@@ -30,6 +30,12 @@
     "by_cell.records/settings_missing.records_job_status.replies.0.job.row.reply_key",
     "by_cell.records/settings_missing.records_job_status.replies.0.job.row.reply_sent_at",
     "by_cell.records/stopped_by_smd_running.records_job_status.replies.0.job.row.reply_key",
-    "by_cell.records/stopped_by_smd_running.records_job_status.replies.0.job.row.reply_sent_at"
+    "by_cell.records/stopped_by_smd_running.records_job_status.replies.0.job.row.reply_sent_at",
+    "verbs.records_job_status.replies.1.job.row.reply_key",
+    "verbs.records_job_status.replies.1.job.row.reply_sent_at",
+    "verbs.records_job_status.replies.2.job.row.reply_key",
+    "verbs.records_job_status.replies.2.job.row.reply_sent_at",
+    "verbs.records_job_status.replies.3.job.row.reply_key",
+    "verbs.records_job_status.replies.3.job.row.reply_sent_at"
   ]
 }
