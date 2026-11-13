@@ -20,7 +20,7 @@
 
 ### Who We Work With
 
-$750k-$5M revenue businesses that have outgrown their current operations. Phoenix-based, but the problems are universal: you're past the startup phase and the way things run today won't get you where you're going.
+Growing businesses that have outgrown their current operations. Phoenix-based, but the problems are universal: you're past the startup phase and the way things run today won't get you where you're going.
 
 ---
 

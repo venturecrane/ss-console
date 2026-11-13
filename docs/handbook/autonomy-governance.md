@@ -97,7 +97,7 @@ The specs mark several seams **TARGET STATE - not yet wired**; the code has sinc
 
 - **Decision logging is live.** The overlay's `plugins/hermes-smd-trust/enforce.py` hands every decision's action class, authored ceiling, vertical floor, effective ceiling, decision, and reason to `shared.trust_decision`, so the audit row each tool call produces carries them (#2122). It is wired inside the trust plugin rather than through the spec's standalone `log_decision` wrapper (`operator/safety_substrate/trust_ceiling_log.py`), which nothing in the overlay calls.
 - **The storage-binding boot check is live.** `operator/templates/entrypoint.sh` runs `operator/safety_substrate/invariants/invariant_7.py` as the first of two root gates before the privilege drop and refuses boot (exit 3) on a foreign-slug binding or a missing module (ADR 0009, wired 2026-07-13 under SEC-22). The spec's "not yet wired" banner predates that.
-- **Citation enforcement (`enforce_citations`, safety invariant #6 in `operator/safety_substrate/invariants/invariant_6.py`) is not wired.** Nothing in the overlay calls it.
+- **Citation enforcement is live on law-firm seats.** The outbound gate runs the law-vertical citation scan from `operator/hermes-smd-overlay/shared/citation_filter.py` inside the trust plugin, and the seat's boot invariant imports the same module. The standalone `enforce_citations` wrapper (safety invariant #6, `operator/safety_substrate/invariants/invariant_6.py`) is not what runs; nothing in the overlay calls it.
 
 The other live, deployed controls are the `pre_tool_call` trust gate, the inbound fence, and the taint gate.
 
