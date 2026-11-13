@@ -7,9 +7,12 @@ what every lane shares: it watches the lane's queue the broker writes
 (``<queue>/<job_id>.json``), runs one job at a time as the dedicated `jobs`
 uid under the lane's memory cap, and reports every transition back through
 the broker (each lane's ``*_job_record`` verb, root only), which writes the
-ledger row and the audit row under its own uid. What a job IS (its input file,
-its child, its verdict, its wake) is the lane's: ``run_job``, ``_report`` and
-``_compose_wake`` are hooks each lane defines. This module imports no lane.
+ledger row and the audit row under its own uid. It is the one job host: its
+``run_job`` and ``tick`` run every lane's jobs. What a job IS (its gate, its
+input file, its child's env and argv, its verdict, its wake) is the lane's:
+``_before_start``, ``_write_job``, ``_child_env``, ``_report`` and
+``_compose_wake`` are hooks each lane defines, and ``CLAIMS`` / ``BACKS_OFF``
+declare its loop. This module imports no lane.
 
 What every lane holds itself to:
 
