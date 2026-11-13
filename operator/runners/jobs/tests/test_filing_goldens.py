@@ -14,8 +14,12 @@ right after that call returned, then resumed over the same matter.
 
 ``resume/<state>.json`` loads a send record frozen in a state the code writes
 (``frozen-*.json``, the matrix's ``frozen`` block names each record and what the
-vendor holds) and must make ZERO ``add_file`` calls: a record that names a
-send must never send it again.
+vendor holds) and must send NONE of the files it names again (zero ``add_file``
+or ``add_file_version`` calls on them): a record that names a send must never
+send it twice. The ``new-*`` states load the records the one
+filing module (wave 3) writes, captured from it by ``JOBS_WRITE_FILING_FROZEN=new``:
+the integrity job runs them on the merge-base's code, so a rollback to it must
+load what the new code wrote and send nothing again.
 
 The goldens hold the code: a change to how a file is sent, recorded, read back
 or named must leave every cell equal except the paths
