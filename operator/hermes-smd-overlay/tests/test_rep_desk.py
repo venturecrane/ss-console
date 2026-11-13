@@ -311,6 +311,32 @@ def test_the_receipt_date_is_provenance_for_the_reply(desk, monkeypatch) -> None
     assert identifier_filter.unverified_identifiers(out["receipt"], reg) == []
 
 
+def _freeze_trust_clock(trust: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the trust plugin's clock to NOW, as reminders.local_now is pinned.
+
+    The identifier gate exempts UTC today and yesterday as "ambient" dates
+    (outbound._ambient_dates reads datetime.now). Left on the real clock, the
+    receipt's Friday, November 13, 2026 became ambient at 00:00 UTC on that
+    day, the gate correctly stopped refusing it, and this test's "refused
+    before reminder_set" assertion failed on every branch. The same class of
+    time bomb as test_outbound_gate's 2026-08-26 date: the assertion must be
+    about provenance, not about the calendar.
+    """
+
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: ANN001
+            return NOW.astimezone(tz) if tz is not None else NOW.replace(tzinfo=None)
+
+    class _FrozenDate(date):
+        @classmethod
+        def today(cls):  # noqa: ANN206
+            return NOW.date()
+
+    monkeypatch.setattr(trust.outbound, "datetime", _FrozenDatetime)
+    monkeypatch.setattr(trust.outbound, "date", _FrozenDate)
+
+
 def test_the_drafted_reply_with_the_receipt_passes_the_trust_gate(desk, monkeypatch) -> None:
     """The live reply path: the model drafts the reply with AgentMail's
     create_draft, and the trust plugin's identifier gate scans it. With a
@@ -322,6 +348,7 @@ def test_the_drafted_reply_with_the_receipt_passes_the_trust_gate(desk, monkeypa
     monkeypatch.setattr(reminders, "local_now", lambda zone, now=None: NOW.astimezone(_zone(zone)))
     monkeypatch.delenv("SMD_IDENTIFIER_GATE_MODE", raising=False)
     trust = load_plugin("hermes-smd-trust")
+    _freeze_trust_clock(trust, monkeypatch)
     trust.outbound._AUDIT_CLIENT = _FakeD1Client()
     trust.outbound._AUDIT_CUSTOMER_SLUG = "guide-test"
     trust.outbound._AUDIT_WIRED = True
