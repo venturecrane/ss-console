@@ -63,6 +63,7 @@ from . import (
     delivery_proof,
     help_signals,
     job_notes,
+    mailbox_keeper_verbs,
     msgraph_drafts,
     note_verbs,
     records_order_acts,
@@ -293,6 +294,13 @@ VERBS: tuple[Verb, ...] = (
     # 2026-11-06): a held, failed or waiting drafting job's note, or any reply
     # whose DELIVER wake was lost. Root only: the runner daemon, never a turn.
     Verb("job_note_send", _only(ROOT), job_notes.send_verb),
+    # The mailbox keeper (mailbox_keeper_verbs.py, Class N, 2026-11-13): trash
+    # settled SMD Ops alert threads and send the one daily list, all decided in
+    # code. The cron pre_run's agent uid or root (the $0 dry-run rehearsal). The
+    # caller names only the mode; the recipient is the skill's authored
+    # digest_recipient and the email is code-rendered, sent through the fenced
+    # audited transmit, at most once per seat-local day.
+    Verb("mailbox_keeper_run", ROOT_OR_AGENT, mailbox_keeper_verbs.run_verb),
     # Gateway-only from here down.
     Verb("audit_append", _only(GATEWAY), audit_verbs.audit_append),
     Verb("agentmail_send", _only(GATEWAY), transmit_verbs.agentmail),

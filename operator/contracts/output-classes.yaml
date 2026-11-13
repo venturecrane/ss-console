@@ -726,6 +726,13 @@ skill_bindings:
   connector-auth-check:
     internal: []
     outbound: none # never sends; action_class is read-only
+  # The mailbox keeper (2026-11-13): Class N, no turn. Moving a settled alert
+  # thread to Trash is a mailbox label change, not an artifact; the one daily
+  # list is rendered by code in the broker (mailbox_keeper_verbs.py) and sent
+  # through the audited transmit to the skill's authored digest_recipient.
+  mailbox-keeper:
+    internal: []
+    outbound: derived # the code-rendered daily list to the authored digest_recipient, no one else
 
   # ---- product ops: the initiation card's Stage A (ss#2216) ----
   # Both are reactive replies to a firm requester (RecipientClass.INTERNAL →

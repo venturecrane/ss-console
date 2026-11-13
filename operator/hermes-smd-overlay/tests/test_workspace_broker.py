@@ -54,6 +54,43 @@ def test_plugin_registers_only_the_reviewed_surface() -> None:
     assert "workspace_drive_share" not in ctx.tools
 
 
+def test_trash_thread_is_destructive() -> None:
+    classification = classify_tool("workspace_gmail_trash_thread")
+    assert classification.action_class is ActionClass.DESTRUCTIVE
+    assert classification.unmapped is False
+
+
+def _seat(tmp_path, monkeypatch, skills: list[dict]) -> None:
+    import yaml
+
+    path = tmp_path / "customer.yaml"
+    path.write_text(
+        yaml.safe_dump({"schema_version": 1, "personas": [{"name": "p", "skills": skills}]})
+    )
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(path))
+
+
+def test_trash_tool_registers_only_where_the_seat_keeps_a_mailbox(tmp_path, monkeypatch) -> None:
+    plugin = load_plugin("hermes-smd-workspace")
+    _seat(tmp_path, monkeypatch, [{"name": "workspace", "enabled": True}])
+    ctx = ToolContext()
+    plugin.register(ctx)
+    assert "workspace_gmail_trash_thread" not in ctx.tools
+
+    _seat(tmp_path, monkeypatch, [{"name": "mailbox-keeper", "enabled": False}])
+    ctx = ToolContext()
+    plugin.register(ctx)
+    assert "workspace_gmail_trash_thread" not in ctx.tools
+
+    _seat(tmp_path, monkeypatch, [{"name": "mailbox-keeper", "enabled": True}])
+    ctx = ToolContext()
+    plugin.register(ctx)
+    assert set(ctx.tools) == set(WORKSPACE_CLASSES) | {"workspace_gmail_trash_thread"}
+    params = ctx.tools["workspace_gmail_trash_thread"]["schema"]["parameters"]
+    assert params["required"] == ["thread_id"]
+    assert "mailbox" in params["properties"]
+
+
 def test_gmail_tools_expose_managed_mailbox_targeting() -> None:
     plugin = load_plugin("hermes-smd-workspace")
     ctx = ToolContext()

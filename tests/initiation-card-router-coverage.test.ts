@@ -173,6 +173,9 @@ describe('the neutral-vertical predicate selects the Operator product skills', (
       .sort()
     expect(neutral).toEqual([
       'connector-auth-check',
+      // 2026-11-13: SMD's own operations seat keeps the Captain's mailbox on a
+      // schedule (Class N, no turn); like the auth check, no card names it.
+      'mailbox-keeper',
       // ss-console#3423: "how do we work together?" names the Operator itself.
       'operator-help',
       'operator-introduce',

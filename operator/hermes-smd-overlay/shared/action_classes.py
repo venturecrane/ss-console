@@ -982,6 +982,11 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # but "silently buried real client mail" is the harm we gate.)
     "workspace_gmail_modify": ActionClass.DESTRUCTIVE,
     "workspace_gmail_archive": ActionClass.DESTRUCTIVE,
+    # Trashes a whole thread of the principal's real mailbox (recoverable from
+    # Trash for 30 days). DESTRUCTIVE like modify/archive. Registered only on a
+    # seat that lists the mailbox-keeper skill; the keeper itself trashes
+    # broker-side in code (mailbox_keeper_run) and never through this tool.
+    "workspace_gmail_trash_thread": ActionClass.DESTRUCTIVE,
     "workspace_calendar_list": ActionClass.READ,
     "workspace_calendar_get": ActionClass.READ,
     "workspace_calendar_create_draft": ActionClass.INTERNAL_WRITE,

@@ -54,6 +54,7 @@ class WorkspaceOperations:
             "workspace_gmail_create_draft": self.gmail_create_draft,
             "workspace_gmail_modify": self.gmail_modify,
             "workspace_gmail_archive": self.gmail_archive,
+            "workspace_gmail_trash_thread": self.gmail_trash_thread,
             "workspace_calendar_list": self.calendar_list,
             "workspace_calendar_get": self.calendar_get,
             "workspace_calendar_create_draft": self.calendar_create_draft,
@@ -78,18 +79,59 @@ class WorkspaceOperations:
         # most recent messages across the mailbox), so default to "" rather than
         # KeyError on a missing key — listing is a first-class use of this tool,
         # not only term searches.
+        #
+        # PAGING (2026-11-13, the mailbox keeper). A payload that carries a
+        # `page_token` key (``""`` for the first page) gets the page as an
+        # object, ``{"messages", "next_page_token"}``, so a caller can read
+        # every page and can tell the last page (no token) from a page. Without
+        # the key the answer is the bare list it has always been.
+        params: dict[str, Any] = {
+            "userId": "me",
+            "q": str(payload.get("query") or ""),
+            "maxResults": int(payload.get("max_results", 25)),
+        }
+        token = str(payload.get("page_token") or "")
+        if token:
+            params["pageToken"] = token
+        response = (
+            self._service("gmail", "v1", str(payload.get("mailbox") or "")).users().messages().list(**params).execute()
+        )
+        messages = response.get("messages", [])
+        if "page_token" not in payload:
+            return messages
+        return {"messages": messages, "next_page_token": str(response.get("nextPageToken") or "")}
+
+    def gmail_get_thread(self, payload: dict[str, Any]) -> Any:
+        """One whole thread, every message in full. Not in ``_handlers``: the
+        mailbox keeper (``mailbox_keeper_verbs``) reads it broker-side, and no
+        tool hands a whole thread's bodies to a turn."""
         return (
             self._service("gmail", "v1", str(payload.get("mailbox") or ""))
             .users()
-            .messages()
-            .list(
-                userId="me",
-                q=str(payload.get("query") or ""),
-                maxResults=int(payload.get("max_results", 25)),
-            )
+            .threads()
+            .get(userId="me", id=str(payload["thread_id"]), format="full")
             .execute()
-            .get("messages", [])
         )
+
+    def gmail_trash_thread(self, payload: dict[str, Any]) -> Any:
+        """Move one whole thread to Trash (``threads.trash``).
+
+        The whole thread in one call, so a failure cannot leave half a
+        conversation in the inbox, and Gmail keeps it in Trash for 30 days, so
+        it is recoverable. The mailbox passes the authored subject check in
+        ``google_auth.credentials`` like every other operation here."""
+        thread_id = str(payload.get("thread_id") or "").strip()
+        if not thread_id:
+            raise ValueError("gmail_trash_thread requires a thread_id")
+        result = (
+            self._service("gmail", "v1", str(payload.get("mailbox") or ""))
+            .users()
+            .threads()
+            .trash(userId="me", id=thread_id)
+            .execute()
+        )
+        messages = result.get("messages") if isinstance(result, dict) else None
+        return {"thread_id": thread_id, "trashed": True, "messages": len(messages or [])}
 
     def gmail_get(self, payload: dict[str, Any]) -> Any:
         return (

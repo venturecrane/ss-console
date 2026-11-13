@@ -163,6 +163,11 @@ const EXPECTED_VERBS = [
   'litigation_job_resume',
   'litigation_job_status',
   'litigation_job_submit',
+  // The mailbox keeper (mailbox_keeper_verbs.py, 2026-11-13): trashes settled
+  // SMD Ops alert threads and sends the one daily list to the authored
+  // digest_recipient, all decided in code. Agent uid (the cron pre_run) or root
+  // (the $0 dry-run rehearsal); the caller names only the mode.
+  'mailbox_keeper_run',
   // ss#2614 routine 11: the chronology-package job seam. Bodies live in
   // operator/workspace_broker/medchron_verbs.py; the table declares the
   // compound gates (submit: gateway or root; record: root only).

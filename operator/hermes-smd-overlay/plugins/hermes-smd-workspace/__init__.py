@@ -47,10 +47,22 @@ SEND_AS = {
     ),
 }
 
+PAGE_TOKEN = {
+    "type": "string",
+    "description": (
+        "Pass an empty string for the first page; the answer is then an object with "
+        "messages and next_page_token. Pass that token for the next page; an empty "
+        "token means there are no more pages."
+    ),
+}
+
 TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
     "workspace_gmail_search": (
         "Search a Gmail mailbox (Crane's own, or an authored managed mailbox).",
-        _schema({"query": STRING, "max_results": INTEGER, "mailbox": MAILBOX}, ["query"]),
+        _schema(
+            {"query": STRING, "max_results": INTEGER, "mailbox": MAILBOX, "page_token": PAGE_TOKEN},
+            ["query"],
+        ),
     ),
     "workspace_gmail_get": (
         "Read one Gmail message by ID.",
@@ -197,9 +209,49 @@ def _handler(operation: str):
     return handle
 
 
+#: Trash a whole thread (the broker's ``threads.trash``; Gmail keeps it 30 days).
+#: DESTRUCTIVE in ``shared/action_classes.py``. Registered ONLY on a seat that
+#: keeps a mailbox, i.e. lists the ``mailbox-keeper`` skill enabled, so no other
+#: seat's tool menu changes (tests/test_authored_seat_registration_unchanged.py).
+#: It is not in the activation hook's required set for the same reason.
+TRASH_TOOL = "workspace_gmail_trash_thread"
+TRASH_TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
+    TRASH_TOOL: (
+        "Move one whole Gmail thread to Trash (recoverable for 30 days).",
+        _schema({"thread_id": STRING, "mailbox": MAILBOX}, ["thread_id"]),
+    ),
+}
+KEEPER_SKILL = "mailbox-keeper"
+
+
+def _keeps_a_mailbox() -> bool:
+    """True only when the seat's config lists ``mailbox-keeper`` and does not
+    disable it. A config this process cannot read registers nothing extra:
+    the closed side of "could not tell"."""
+    from shared.customer_config import CustomerConfig
+
+    try:
+        personas = CustomerConfig.from_volume().raw.get("personas")
+    except Exception:  # noqa: BLE001 - unreadable registers no extra tool
+        return False
+    for persona in personas if isinstance(personas, list) else []:
+        skills = persona.get("skills") if isinstance(persona, dict) else None
+        for skill in skills if isinstance(skills, list) else []:
+            if (
+                isinstance(skill, dict)
+                and skill.get("name") == KEEPER_SKILL
+                and skill.get("enabled") is not False
+            ):
+                return True
+    return False
+
+
 def register(ctx: Any) -> None:
     """Register every reviewed Workspace operation as its own Hermes tool."""
-    for name, (description, schema) in TOOLS.items():
+    tools = dict(TOOLS)
+    if _keeps_a_mailbox():
+        tools.update(TRASH_TOOLS)
+    for name, (description, schema) in tools.items():
         register_wrapped_tool(
             ctx,
             name=name,
@@ -210,4 +262,4 @@ def register(ctx: Any) -> None:
             description=description,
             emoji="",
         )
-    logger.info("hermes-smd-workspace registered %d mediated tools", len(TOOLS))
+    logger.info("hermes-smd-workspace registered %d mediated tools", len(tools))
