@@ -1,10 +1,10 @@
 """One job ledger for every lane: the connection discipline, the schema run,
 the row read, the queue file and the transition every lane's record takes.
 
-Before wave 2 each lane (medchron, demand, drafting, library setup,
-litigation, case file, negotiation, records, note) carried its own copy of
-all of it, and a change to how a job moves had to be made nine times. Now a
-lane declares what is its own and nothing else:
+Before wave 2 each of the nine lane ledgers (the ``*Ledger`` classes beside
+this file) carried its own copy of all of it, and a change to how a job
+moves had to be made nine times. Now a lane declares what is its own and
+nothing else:
 
 * ``JOBS`` and ``ID``: its jobs table and that table's key column;
 * ``_create(conn)``: its DDL, verbatim (no statement text changes here; a
