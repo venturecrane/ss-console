@@ -1244,7 +1244,7 @@ def test_a_real_broker_envelope_round_trips_into_a_job_the_runner_parses(tmp_pat
     broker.rows["01Q"] = {"state": "submitted"}
     (d.queue / "01Q.json").write_text(json.dumps(envelope))
     assert d.claim_next() == "01Q"
-    jd = d._write_job_yaml("01Q")
+    jd = d._write_job("01Q")
     job = job_mod.load(jd)
     assert job.allowance_remaining_pages == 40 and job.allowance_remaining_documents == 40
     assert job.month_cents_used == 0 and job.allowance_month == "2026-09"
@@ -1272,6 +1272,6 @@ def test_an_update_job_names_the_delivered_jobs_on_its_matter_and_a_run_does_not
         broker.rows[jid] = {"state": "submitted"}
         (d.queue / f"{jid}.json").write_text(json.dumps(envelope))
         assert d.claim_next() == jid
-        job = job_mod.load(d._write_job_yaml(jid))
+        job = job_mod.load(d._write_job(jid))
         want = ["01M5BASE00000000000000000B", "01M5BASE00000000000000000A"] if update else []
         assert job.prior_delivered == want

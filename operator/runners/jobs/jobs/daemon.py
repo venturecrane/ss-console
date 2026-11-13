@@ -7,9 +7,12 @@ what every lane shares: it watches the lane's queue the broker writes
 (``<queue>/<job_id>.json``), runs one job at a time as the dedicated `jobs`
 uid under the lane's memory cap, and reports every transition back through
 the broker (each lane's ``*_job_record`` verb, root only), which writes the
-ledger row and the audit row under its own uid. What a job IS (its input file,
-its child, its verdict, its wake) is the lane's: ``run_job``, ``_report`` and
-``_compose_wake`` are hooks each lane defines. This module imports no lane.
+ledger row and the audit row under its own uid. It is the one job host: its
+``run_job`` and ``tick`` run every lane's jobs. What a job IS (its gate, its
+input file, its child's env and argv, its verdict, its wake) is the lane's:
+``_before_start``, ``_write_job``, ``_child_env``, ``_report`` and
+``_compose_wake`` are hooks each lane defines, and ``CLAIMS`` / ``BACKS_OFF``
+declare its loop. This module imports no lane.
 
 What every lane holds itself to:
 
@@ -40,13 +43,13 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, ClassVar
 
 from .broker_client import BrokerClient, BrokerError
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
-from . import child as child_mod, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
-from . import resume as resume_mod, retention, spend
+from . import child as child_mod, job_lanes, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
+from . import resume as resume_mod, retention, spend, verdict as verdict_mod
 from .proof import watch as proof_watch
 from . import seat_layout
 
@@ -138,15 +141,44 @@ class Daemon:
     #: The tick file's name when it is not ``<LANE>-tick`` (the chronology's is
     #: ``tick``, from when it was this class).
     TICK = ""
+    #: The logger the lane's own lines go to (``jobs.<lane>``; the chronology's
+    #: is ``jobs.daemon``, from when it was this class).
+    LOGGER = "jobs.daemon"
+    #: The host's loop policy (``tick``), the lane's own. A lane that does not
+    #: CLAIM (the note lane) runs no job: each tick wipes, wakes and beats. A
+    #: lane that BACKS_OFF (demand, drafting) holds a held job final (a resume
+    #: of one is refused, and a seat pause records no hold, since a recorded
+    #: hold could never resume), retries a deferred job after a growing wait
+    #: instead of at its queue's head, and backs off a job whose start raised.
+    #: Any other lane takes its due requeued job first and clears a pause hold
+    #: when the pause lifts.
+    CLAIMS = True
+    BACKS_OFF = False
+    #: A backing-off lane's log lines: the word naming its job, and the line a
+    #: refused resume of a held job logs (it takes the job id).
+    JOB_WORD = ""
+    HELD_RESUME_REFUSED = ""
+    #: The child's argv after its job dir (the chronology's ``--json``), and the
+    #: names it gets from the daemon's own environment beyond ``CHILD_ENV_PASS``.
+    CHILD_ARGS: ClassVar[tuple[str, ...]] = ()
+    ENV_PASS: ClassVar[tuple[str, ...]] = ()
+    #: The warnings a job deferred at its start logs, each taking the job id and
+    #: the broker's error: (its job file could not be written, its running could
+    #: not be recorded).
+    START_DEFERRED = ("broker not ready for %s, deferring: %s", "broker not ready for %s, deferring: %s")
 
     # -- paths -------------------------------------------------------------
     @property
     def queue(self) -> Path:
-        return self.run_dir / f"{self.LANE}-queue"
+        return self.run_dir / job_lanes.LANE_QUEUE_DIR.get(self.LANE, f"{self.LANE}-queue")
 
     @property
     def jobs(self) -> Path:
-        return self.run_dir / f"{self.LANE}-jobs"
+        return self.run_dir / job_lanes.LANE_JOBS_DIR.get(self.LANE, f"{self.LANE}-jobs")
+
+    @property
+    def _log(self) -> logging.Logger:
+        return logging.getLogger(self.LOGGER)
 
     def job_dir(self, job_id: str) -> Path:
         return self.jobs / job_id
@@ -255,12 +287,88 @@ class Daemon:
             return job_id
         return None
 
-    # -- one job: the lane's own (each lane defines these) -------------------
+    # -- one job ------------------------------------------------------------------
     def run_job(self, job_id: str) -> str:
-        """HOOK. Run one claimed job to a ledger state: write the job's input
-        file, record running, spawn the child (``child.run_child``) and report.
-        Returns the state, or ``deferred`` / ``interrupted`` / ``requeued``."""
-        raise NotImplementedError(f"the {self.LANE or 'base'} lane defines no job")
+        """Run one claimed job to a ledger state: the lane's gate
+        (``_before_start``), its input file and the ``running`` record
+        (``_start``), the child (``child.run_child``) and the lane's verdict
+        mapping (``_report``). Returns the state, or ``deferred`` /
+        ``interrupted`` / ``requeued`` (or a lane's own word, ``waiting``)."""
+        early = self._before_start(job_id)
+        if early is not None:
+            return early
+        jd = self._start(job_id)
+        if jd is None:
+            return "deferred"
+        child_env = self._child_env(job_id, jd)
+        verdict_mod.clear(jd)
+        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
+            code, out = child_mod.run_child(
+                self,
+                job_id,
+                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd), *self.CHILD_ARGS]),
+                cwd=jd,
+                env=child_env,
+                log=log,
+                pidfile=self.run_dir / job_lanes.LANE_CHILD_PID[self.LANE],
+                preexec=self._cgroup_preexec(),
+            )
+        self.jobs_run += 1
+        self._after_child(job_id)
+        if resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
+            self._after_ending(job_id)
+            return "interrupted"
+        state = self._report(job_id, code, out or "")
+        self._after_ending(job_id)
+        return state
+
+    def _start(self, job_id: str) -> Path | None:
+        """The job's input file, written fresh (``_write_job``), and its
+        ``running`` record; None when the broker could not answer (deferred)."""
+        try:
+            jd = self._write_job(job_id)
+        except BrokerError as exc:
+            self._log.warning(self.START_DEFERRED[0], job_id, exc)
+            return None
+        try:
+            self.broker.record(job_id, "running", {})
+        except BrokerError as exc:
+            self._log.warning(self.START_DEFERRED[1], job_id, exc)
+            return None
+        return jd
+
+    def _child_env(self, job_id: str, jd: Path) -> dict[str, str]:
+        """The child's allow-listed environment: ``CHILD_ENV_PASS`` and the
+        lane's ``ENV_PASS`` from the daemon's own, the lane's ``child_env``, and
+        the job marker. The Smokeball connector exempts the jobs uid from
+        recording each write in the audit ledger ONLY on a job this daemon
+        launched, because the job's own rows record it; a person running as
+        jobs by hand has no marker and must name themselves or is refused
+        (smokeball_connector/write_record.py)."""
+        out = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS or k in self.ENV_PASS}
+        out.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
+        out.setdefault("JOBS_SEAT", "client")
+        out.setdefault("PATH", "/usr/bin:/bin")
+        out.setdefault("HOME", str(jd))
+        return out
+
+    # -- one job: the lane's own (each lane defines these) -------------------
+    def _before_start(self, job_id: str) -> str | None:
+        """HOOK. The lane's gate before anything is written: a state word ends
+        this job's turn (its firm inputs not usable yet: ``deferred``), None
+        runs it."""
+        return None
+
+    def _write_job(self, job_id: str) -> Path:
+        """HOOK. Write the job's input file from its envelope, fresh before
+        every run and every resume; returns the job dir."""
+        raise NotImplementedError(f"the {self.LANE or 'base'} lane defines no job file")
+
+    def _after_child(self, job_id: str) -> None:
+        """HOOK. What the lane reads from its child's work before the ending."""
+
+    def _after_ending(self, job_id: str) -> None:
+        """HOOK. What the lane hands over once the job's turn ended (a stop or a verdict)."""
 
     def _report(self, job_id: str, code: int, out: str) -> str:
         """HOOK. Map the child's verdict onto the ledger and the wake."""
@@ -426,6 +534,8 @@ class Daemon:
         level = sticky_level(self.sticky_db)
         if level != "HARD_STOP":
             return False
+        if self.BACKS_OFF:
+            return True
         if not self._daemon_state(job_id).get("held_paused"):
             try:
                 self.broker.record(job_id, "held", {"reason": "seat paused (sticky stop HARD_STOP)"})
@@ -449,20 +559,73 @@ class Daemon:
         must not raise (``request_additions.take`` does not)."""
 
     def tick(self) -> str | None:
-        """One iteration: resume requests, heartbeat, wipe, wakes, then one job."""
+        """One iteration: resume requests, heartbeat, wipe, wakes, then one job
+        (the lane's loop policy: ``CLAIMS``, ``BACKS_OFF``)."""
+        if not self.CLAIMS:
+            self.wipe_expired()
+            self.dispatch_wakes()
+            self.heartbeat(running=None)
+            return None
+        self.poll_requests()
+        if self.BACKS_OFF:
+            self._refuse_held_resumes()
         resume_mod.take_requests(self)
         self.wipe_expired()
         self.dispatch_wakes()
-        current = requeue.due(self, self._in_progress())
+        if self.BACKS_OFF:
+            current = self._ready()
+        else:
+            current = requeue.due(self, self._in_progress())
         job_id = current[0] if current else self.claim_next()
         self.heartbeat(running=job_id)
         if job_id is None:
             return None
         if self._paused(job_id):
             return "paused"
+        if self.BACKS_OFF:
+            return self._run_backing_off(job_id)
         if self._daemon_state(job_id).get("held_paused"):
             self._write_state(job_id, held_paused=False)
         return self.run_job(job_id)
+
+    # -- a backing-off lane: no head-of-line starvation, and held is final -----------
+    def _refuse_held_resumes(self) -> None:
+        """A held job is FINAL. Its ledger has no held -> running edge, and a
+        hold means a person must read the reason (a refused letter, a wrong
+        destination); resuming it would replay the same refusal or, worse,
+        file what was refused. A marker for one is removed, loudly."""
+        if not self.queue.is_dir():
+            return
+        for marker in self.queue.glob(f"{resume_mod.MARKER_PREFIX}*.json"):
+            job_id = marker.name[len(resume_mod.MARKER_PREFIX) : -len(".json")]
+            if self._daemon_state(job_id).get("state") == "held":
+                self._log.error(self.HELD_RESUME_REFUSED, job_id)
+                marker.unlink(missing_ok=True)
+
+    def _ready(self) -> list[str]:
+        now = self.clock()
+        return [j for j in self._in_progress() if float(self._daemon_state(j).get("retry_after") or 0) <= now]
+
+    def _defer(self, job_id: str) -> None:
+        """Back the job off (1, 2, 4 ... 60 minutes) so a job that keeps
+        deferring cannot hold the head of the queue: the next tick claims the
+        job behind it (review of #3074)."""
+        n = int(self._daemon_state(job_id).get("deferrals") or 0) + 1
+        self._write_state(job_id, deferrals=n, retry_after=self.clock() + min(60.0 * 2 ** (n - 1), 3600.0))
+
+    def _run_backing_off(self, job_id: str) -> str:
+        try:
+            result = self.run_job(job_id)
+        except Exception:  # noqa: BLE001 - one job's crash backs that job off (logged with its trace); it must not wedge the lane's head
+            self._log.exception("%s job %s could not be started; backing it off", self.JOB_WORD, job_id)
+            result = "deferred"
+        if result == "deferred":
+            self._defer(job_id)
+        elif result == "waiting":
+            pass  # another lane's child is running; the lane set retry_after itself
+        else:
+            self._write_state(job_id, deferrals=0, retry_after=None)
+        return result
 
     def run_forever(self, stop: Callable[[], bool], poll_seconds: float) -> None:
         self.stopping = stop

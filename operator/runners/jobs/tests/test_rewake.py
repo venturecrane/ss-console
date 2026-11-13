@@ -228,6 +228,7 @@ def _drafting_like(tmp_path, gate, answer):
     """A daemon whose lane is drafting, so its DELIVER wake asks first."""
     d, broker = _wake_daemon(tmp_path, gate.url)
     d.LANE = "drafting"
+    d.queue.mkdir(parents=True, exist_ok=True)  # the lane's own queue, by its name
     calls = []
 
     def _request(req):
