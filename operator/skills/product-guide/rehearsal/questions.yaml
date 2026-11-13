@@ -37,9 +37,11 @@ questions:
       - document: what-it-is.md
         section: Industry packs
     must_contain:
-      - 13 industry packs exist as starting configurations
-      - only the law firm pack is in production
-      - the other packs are specified, not built, and must not be described as available
+      - 13 industry packs, each a starting point SMD shapes with the client
+      - the law firm pack is running for a client today
+      - for the other industries SMD configures the pack per engagement, building its industry-specific skills with the first client
+    must_not_contain:
+      - a statement that the other packs are not available or cannot be sold
 
   # ---- Request lifecycle ----
   - id: q04
@@ -105,7 +107,7 @@ questions:
       - document: permission-model.md
         section: Ceilings from least to most restrictive
     must_contain:
-      - moving money and sending from a principal's own personal mailbox are banned outright
+      - the Operator never moves money, whatever is configured
       - commitments and destructive actions still need a person's approval even at acts on its own
 
   - id: q11
@@ -145,9 +147,10 @@ questions:
     must_contain:
       - SMD's console never shows client business content
       - request notices carry the requester's words and the reply
-      - SMD staff work with client documents only in a per-client ops workspace, with access logged, for up to 30 days, and SMD does not warehouse copies of the client's files
+      - no person at SMD reads client files; only AI agents handle them, the client's Operator and SMD's agents in a workspace sealed to that client, where work is kept for up to 30 days
     must_not_contain:
       - SMD never sees any client content
+      - a statement that SMD staff read or work with client documents
 
   - id: q15
     category: isolation
@@ -176,17 +179,15 @@ questions:
 
   - id: q17
     category: audit
-    question: Is the audit record tamper-proof?
+    question: Can we trust the audit record was not altered?
     expect: answer
     cite:
       - document: isolation-and-data-custody.md
         section: The audit record
     must_contain:
-      - tamper-evident, not tamper-proof
-      - each audit entry is chained to the previous entry's hash and the newest entry's fingerprint is pinned off the machine
-      - a daily job verifies the chain and archives a copy
-    must_not_contain:
-      - it is tamper-proof
+      - each audit entry is chained to the previous entry's hash and the agent cannot rewrite the record
+      - a daily job verifies the chain against a fingerprint pinned off the machine and archives a copy
+      - so the record proves nothing was altered
 
   - id: q18
     category: audit
@@ -216,16 +217,18 @@ questions:
 
   - id: q21
     category: built-versus-planned
-    question: Can staff reach it from Slack or Teams?
+    question: Can staff reach it from Slack or Teams, or can it text our customers?
     expect: answer
     cite:
       - document: connections-and-channels.md
         section: Other channels
       - document: how-the-operator-works.md
-        section: Proven, built, planned
+        section: What runs today, and what SMD sets up
     must_contain:
-      - no, team chat platforms and SMS are not available
-      - email through a mailbox in the client's own tenant is in production
+      - yes, SMD sets up team chat platforms and texting as channels for a client, and each passes the same checks as email
+      - email through a mailbox in the client's own tenant is the channel a client runs today
+    must_not_contain:
+      - a statement that texting or team chat is not available or cannot be done
 
   - id: q22
     category: built-versus-planned
@@ -235,10 +238,12 @@ questions:
       - document: client-controls.md
         section: Direct
       - document: built-versus-planned.md
-        section: Built, not yet in client use
+        section: Built, set up per client
     must_contain:
-      - the level dial (limit settings) is built, up to the agreed ceiling
-      - it is not yet in client use and must not be presented as something a client uses today
+      - yes, a principal moves a routine's limit setting from the Client portal, up to the agreed ceiling, where that area is handed to the client
+      - it is built and handed to the paying client's seat
+    must_not_contain:
+      - a statement that the client cannot change it
 
   - id: q23
     category: built-versus-planned
@@ -253,8 +258,8 @@ questions:
         section: Ownership, export and visibility
     must_contain:
       - it keeps working preferences a person stated or showed, per person
-      - inferred memory is specified, not built
-      - there is no client-facing memory view today
+      - inferred memory is configured per engagement
+      - the client corrects what it keeps by telling it, and a view of the whole memory is configured per engagement
 
   - id: q24
     category: what-smd-commits-to

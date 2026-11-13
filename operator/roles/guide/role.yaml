@@ -1,13 +1,15 @@
 # The guide role (ADR 0105): answers questions from an authored library.
 #
-# A seat selects it with `seat.role: guide`. The role has two jobs, both general
-# in shape. ANSWER: the seat answers questions from the library its skill
+# A seat selects it with `seat.role: guide`. The role's jobs are general in
+# shape. ANSWER: the seat answers questions from the library its skill
 # ships, cites the document and the section every answer came from, says
 # plainly when the library does not cover a question, and never answers from
 # outside the library. PRACTICE: on request it plays an authored buyer
 # scenario, raises that scenario's objections one turn at a time, then steps
 # out of role and gives feedback under an authored rubric, each point cited to
-# the library (skill pitch-practice). The first
+# the library (skill pitch-practice). TRAINING: guided lessons, a quiz and
+# readiness worked out by code (skill rep-training). DESK: a representative's
+# own notes, leads and reminders (skill rep-desk). The first
 # seat is SMD's own `smd-guide`, whose library is the Operator product
 # reference for outside sales representatives (skill product-guide); a later
 # seat could carry another library under its own skill.
@@ -17,7 +19,7 @@
 #   - the role's seats drop the native web toolset and the establishment and
 #     memory toolsets (overlay bootstrap translate, _GUIDE_REFUSED_TOOLSETS),
 #     so there is no outside source and nothing a conversation could teach it;
-#   - the seat enables only the role's two skills, so the omitted-skill read
+#   - the seat enables only the role's four skills, so the omitted-skill read
 #     fence refuses every other skill's files
 #     (plugins/hermes-smd-initiation/skill_fence.py);
 #   - the seat authors no connector but its own mailbox and no code
@@ -28,9 +30,10 @@
 #     through the recipient-locked reply relay (fabrication markers and the
 #     output checklist run on every one); every other send is unauthored and
 #     so refused;
-#   - a chat answer is the conversation itself, on the seat's own bot, to an
-#     id on the authored chat allowlist only; it is not a send tool, so the
-#     email relay's content gates do not run on it (ADR 0105 records this).
+#   - where chat is switched on, a chat answer is the conversation itself, on
+#     the seat's own bot, to an id on the authored chat allowlist only; it is
+#     not a send tool, so the email relay's content gates do not run on it
+#     (ADR 0105 records this). smd-guide has chat off today.
 
 role: guide
 schema_version: 1

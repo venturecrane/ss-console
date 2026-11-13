@@ -28,7 +28,7 @@ scenarios:
       - says: 'Who else is running this today?'
         answer:
           - document: built-versus-planned.md
-            section: In production
+            section: Running for a client today
           - document: what-it-is.md
             section: Industry packs
       - says: 'When it gets something wrong, whose problem is that, mine or yours?'
@@ -187,7 +187,7 @@ scenarios:
           - document: connections-and-channels.md
             section: Other channels
           - document: built-versus-planned.md
-            section: 'Built, not yet in client use'
+            section: 'Built, set up per client'
       - says: 'Does it replace the system we keep our records in?'
         answer:
           - document: what-smd-commits-to.md
