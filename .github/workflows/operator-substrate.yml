@@ -456,6 +456,7 @@ jobs:
         id: changes
         run: >-
           python3 operator/bin/substrate-paths-changed.py
+          --paths .github/cross-version-host-paths.txt
           --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
           --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
 
@@ -476,7 +477,7 @@ jobs:
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'
         run: >-
-          echo "No file under .github/operator-substrate-paths.txt changed;
+          echo "No file under .github/cross-version-host-paths.txt changed;
           the cross-version check did not need running. This job still reports
           so the check is satisfied."
 

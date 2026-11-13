@@ -1,0 +1,26 @@
+# Paths whose change makes the `cross-version-hosts` job run its check
+# (operator/bin/goldens/cross-version-hosts.py, about 40 minutes).
+#
+# The check restarts every host-matrix cell onto the other version after each
+# tick, so it can only see a change to what a job host writes, reads or sends:
+# the host and lane-host modules (top level of the jobs package, not the lanes'
+# own pipelines in its subpackages), the lane-proof gate, the broker on the
+# other end of the socket, the lane list, the runner's pins, and the check
+# itself. Before 2026-11-13 it ran on the whole operator-substrate list, which
+# added ~40 minutes to every operator PR for changes it cannot see.
+#
+# Same glob shapes as .github/operator-substrate-paths.txt.
+operator/runners/jobs/jobs/*.py
+operator/runners/jobs/jobs/proof/**
+operator/runners/jobs/tests/test_host_cross_version.py
+operator/runners/jobs/tests/host_cross_version_worker.py
+operator/runners/jobs/tests/conftest.py
+operator/runners/jobs/tests/goldens/host_matrix/**
+operator/runners/jobs/pyproject.toml
+operator/workspace_broker/**
+operator/contracts/job-lanes.yaml
+operator/requirements/jobs.txt
+operator/requirements/broker.txt
+operator/bin/goldens/cross-version-hosts.py
+.github/workflows/operator-substrate.yml
+.github/cross-version-host-paths.txt
