@@ -2584,6 +2584,18 @@
      "symbol": "skill_enabled"
     },
     {
+     "file": "operator/workspace_broker/mailbox_keeper_verbs.py",
+     "labels": [
+      "fails-open-on-block-malformed",
+      "fails-open-on-block-malformed-deep",
+      "fails-open-on-empty",
+      "fails-open-on-not-mapping",
+      "fails-open-on-unreadable",
+      "fails-open-on-yaml-syntax-error"
+     ],
+     "symbol": "skill_entry"
+    },
+    {
      "file": "operator/workspace_broker/medchron_ledger.py",
      "labels": [
       "fails-open-on-block-malformed-deep",
@@ -2737,6 +2749,7 @@
     "operator/workspace_broker/establishment_acts.py",
     "operator/workspace_broker/google_auth.py",
     "operator/workspace_broker/library_setup_verbs.py",
+    "operator/workspace_broker/mailbox_keeper_verbs.py",
     "operator/workspace_broker/medchron_ledger.py",
     "operator/workspace_broker/msgraph_auth.py",
     "operator/workspace_broker/negotiation_intake.py",
@@ -5790,7 +5803,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/runners/jobs/jobs/records_lane.py:205 seat_config.parse(fh)"
+      "operator/runners/jobs/jobs/records_lane.py:169 seat_config.parse(fh)"
      ],
      "file": "operator/runners/jobs/jobs/records_lane.py",
      "kind": "function",
@@ -6915,6 +6928,60 @@
      ],
      "status": "executable",
      "symbol": "skill_enabled",
+     "tree": "broker"
+    },
+    {
+     "behaviour": {
+      "block-malformed": "return none 74234e98afe7498f reads=1",
+      "block-malformed-deep": "return none 74234e98afe7498f reads=1",
+      "block-missing": "return none 74234e98afe7498f reads=1",
+      "empty": "return none 74234e98afe7498f reads=1",
+      "good": "return none 74234e98afe7498f reads=1",
+      "missing": "return none 74234e98afe7498f reads=1",
+      "not-mapping": "return none 74234e98afe7498f reads=1",
+      "real-0e29268fcb": "return none reads=1",
+      "real-12a303c224": "return none reads=1",
+      "real-5c81ccbc83": "return none reads=1",
+      "real-7380b64d88": "return none reads=1",
+      "real-87c9d88a05": "return none reads=1",
+      "real-931453a391": "return none reads=1",
+      "real-b02aa60269": "return none reads=1",
+      "real-c388304bc1": "return none reads=1",
+      "real-c3de4c838e": "return none reads=1",
+      "unreadable": "return none 74234e98afe7498f reads=1",
+      "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
+     },
+     "calls": [
+      "operator/workspace_broker/mailbox_keeper_verbs.py:80 seat_config.load(customer_path, encoding=\"utf-8\", on_missing=\"raise\")"
+     ],
+     "file": "operator/workspace_broker/mailbox_keeper_verbs.py",
+     "kind": "function",
+     "modes": [
+      "fails-open-on-block-malformed",
+      "fails-open-on-block-malformed-deep",
+      "fails-open-on-empty",
+      "fails-open-on-not-mapping",
+      "fails-open-on-unreadable",
+      "fails-open-on-yaml-syntax-error",
+      "returns-as-good-on-block-malformed",
+      "returns-as-good-on-block-malformed-deep",
+      "returns-as-good-on-block-missing",
+      "returns-as-good-on-empty",
+      "returns-as-good-on-missing",
+      "returns-as-good-on-not-mapping",
+      "returns-as-good-on-unreadable",
+      "returns-as-good-on-yaml-syntax-error",
+      "treats-malformed-as-absent"
+     ],
+     "observed_keys": [
+      "personas",
+      "personas.[]",
+      "personas.[].skills",
+      "personas.[].skills.[]",
+      "personas.[].skills.[].name"
+     ],
+     "status": "executable",
+     "symbol": "skill_entry",
      "tree": "broker"
     },
     {
@@ -8428,7 +8495,7 @@
       "name": "CUSTOMER_SLUG"
      },
      "calls": [
-      "operator/runners/jobs/jobs/daemon.py:498 _require(\"CUSTOMER_SLUG\")"
+      "operator/runners/jobs/jobs/daemon.py:650 _require(\"CUSTOMER_SLUG\")"
      ],
      "file": "operator/runners/jobs/jobs/daemon.py",
      "kind": "function",
@@ -9048,11 +9115,11 @@
   },
   "customer-yaml": {
    "by_status": {
-    "executable": 92
+    "executable": 93
    },
    "by_tree": {
     "bin": 20,
-    "broker": 20,
+    "broker": 21,
     "connector": 16,
     "overlay": 17,
     "rehearsal": 1,
@@ -9060,9 +9127,9 @@
     "skill": 5,
     "templates": 10
    },
-   "fail_open": 55,
-   "files": 81,
-   "sites": 92
+   "fail_open": 56,
+   "files": 82,
+   "sites": 93
   },
   "slug": {
    "by_status": {

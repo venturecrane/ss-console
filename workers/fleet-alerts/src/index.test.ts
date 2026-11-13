@@ -515,6 +515,13 @@ describe('runOnce edge triggering', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
     expect(body.subject).toContain('smd: cleared: the Operator may be down')
     expect(body.html).toContain('<strong>WHAT YOU NEED TO DO:</strong> Nothing.')
+    // The mailbox keeper on the SMD operations seat trashes a settled alert
+    // thread only when the recovery's FIRST paragraph is exactly this
+    // (operator/workspace_broker/mailbox_keeper.py RECOVERY_PARAGRAPH). Change
+    // these words and the keeper stops trashing; change both together.
+    expect(body.html.startsWith('<p><strong>WHAT HAPPENED:</strong> This has cleared.</p>')).toBe(
+      true
+    )
     expect(state.alertState.get('smd:heartbeat_red')).toBe('resolved')
   })
 
@@ -533,7 +540,12 @@ describe('runOnce edge triggering', () => {
     expect(messageId).toMatch(/^<smd-alert\.[0-9a-f-]+@smd\.services>$/)
     expect(state.messageIds?.get('smd:heartbeat_red')).toBe(messageId)
     expect(recovery.subject).toBe(`Re: ${alert.subject}`)
-    expect(recovery.headers).toEqual({ 'In-Reply-To': messageId, References: messageId })
+    expect(recovery.headers).toEqual({
+      'In-Reply-To': messageId,
+      References: messageId,
+      'X-SMD-Alert-State': 'resolved',
+    })
+    expect(alert.headers['X-SMD-Alert-State']).toBeUndefined()
   })
 
   it('an alert opened before migration 0120 recovers with the standalone subject', async () => {
@@ -546,7 +558,8 @@ describe('runOnce edge triggering', () => {
     await runOnce(makeEnv(state), NOW)
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body))
     expect(body.subject).toContain('[SMD Ops] smd: cleared: ')
-    expect(body.headers).toBeUndefined()
+    // Not threaded (no stored Message-ID), but still stamped as a recovery.
+    expect(body.headers).toEqual({ 'X-SMD-Alert-State': 'resolved' })
   })
 
   it('HARD_STOP opens its own condition independently of the heartbeat', async () => {

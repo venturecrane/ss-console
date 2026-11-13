@@ -23,12 +23,24 @@ export function mintAlertMessageId(): string {
   return `<smd-alert.${crypto.randomUUID()}@${MESSAGE_ID_DOMAIN}>`
 }
 
+/**
+ * Stamped on every RECOVERED email, threaded or standalone (2026-11-13). The
+ * mailbox keeper on the SMD operations seat (operator/workspace_broker/
+ * mailbox_keeper.py) trashes a settled alert thread only on code-checked
+ * signals; once this worker change is live, a seat that authors
+ * `require_alert_state_header: true` also requires this header on the newest
+ * message. A reminder and an alert never carry it.
+ */
+const ALERT_STATE_HEADER = 'X-SMD-Alert-State'
+
 /** Headers for the Resend `headers` field: the alert names itself; a recovery or reminder replies to it. */
 export function threadHeaders(
   kind: 'opened' | 'resolved' | 'reminder',
   messageId: string | null
 ): Record<string, string> | undefined {
-  if (!messageId) return undefined
+  const state: Record<string, string> =
+    kind === 'resolved' ? { [ALERT_STATE_HEADER]: 'resolved' } : {}
+  if (!messageId) return kind === 'resolved' ? state : undefined
   if (kind === 'opened') return { 'Message-ID': messageId }
-  return { 'In-Reply-To': messageId, References: messageId }
+  return { 'In-Reply-To': messageId, References: messageId, ...state }
 }

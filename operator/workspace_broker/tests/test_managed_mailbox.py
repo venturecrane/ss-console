@@ -178,3 +178,90 @@ def test_supported_operations_handshake_lists_gmail(tmp_path: Path) -> None:
     assert supported == sorted(supported)
     # Wave A does not add send — guards against the doc-vs-code drift the plan warns of.
     assert "workspace_gmail_send" not in supported
+
+
+# ---- Slice 1 (2026-11-13): whole-thread trash and search paging -------------
+
+
+def test_trash_thread_refuses_an_unauthored_mailbox(tmp_path: Path, monkeypatch) -> None:
+    # The subject check runs in credentials(), before any Google call, so an
+    # unauthored mailbox can never have a thread trashed.
+    cred = tmp_path / "google.json"
+    cred.write_text(json.dumps({"type": "service_account", "client_email": "x@y.iam"}))
+
+    def fake_service(api, version, cred_path, customer, subject=""):
+        credentials(cred_path, customer, subject=subject)
+        return MagicMock()
+
+    monkeypatch.setattr(ops_mod, "service", fake_service)
+    with pytest.raises(RuntimeError, match="not an authored impersonation target"):
+        _ops(tmp_path).gmail_trash_thread({"thread_id": "t1", "mailbox": "intruder@evil.com"})
+
+
+def test_trash_thread_trashes_the_whole_thread(tmp_path: Path, monkeypatch) -> None:
+    svc = MagicMock()
+    captured: dict = {}
+
+    def fake_service(api, version, cred, customer, subject=""):
+        captured["subject"] = subject
+        return svc
+
+    trash = svc.users.return_value.threads.return_value.trash
+    trash.return_value.execute.return_value = {"id": "t1", "messages": [{"id": "a"}, {"id": "b"}]}
+    monkeypatch.setattr(ops_mod, "service", fake_service)
+    out = _ops(tmp_path).gmail_trash_thread({"thread_id": "t1", "mailbox": MANAGED})
+    assert captured["subject"] == MANAGED
+    assert trash.call_args.kwargs == {"userId": "me", "id": "t1"}
+    assert out == {"thread_id": "t1", "trashed": True, "messages": 2}
+    # Never a per-message call: a thread is trashed whole or not at all.
+    assert not svc.users.return_value.messages.return_value.trash.called
+
+
+def test_trash_thread_requires_a_thread_id(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="thread_id"):
+        _ops(tmp_path).gmail_trash_thread({"mailbox": MANAGED})
+
+
+def test_trash_thread_is_in_the_reviewed_surface_and_send_is_not(tmp_path: Path) -> None:
+    supported = _ops(tmp_path).supported_operations()
+    assert "workspace_gmail_trash_thread" in supported
+    assert "workspace_gmail_send" not in supported
+
+
+def test_gmail_search_pages_return_every_page(tmp_path: Path, monkeypatch) -> None:
+    pages = {
+        "": {"messages": [{"id": "1", "threadId": "a"}], "nextPageToken": "p2"},
+        "p2": {"messages": [{"id": "2", "threadId": "b"}], "nextPageToken": "p3"},
+        "p3": {"messages": [{"id": "3", "threadId": "c"}]},
+    }
+    seen: list[str] = []
+    svc = MagicMock()
+
+    def fake_list(**kwargs):
+        token = kwargs.get("pageToken", "")
+        seen.append(token)
+        call = MagicMock()
+        call.execute.return_value = pages[token]
+        return call
+
+    svc.users.return_value.messages.return_value.list.side_effect = fake_list
+    monkeypatch.setattr(ops_mod, "service", lambda *a, **k: svc)
+    ops = _ops(tmp_path)
+    token, ids = "", []
+    while True:
+        page = ops.gmail_search({"query": "in:inbox", "mailbox": MANAGED, "page_token": token})
+        ids += [m["id"] for m in page["messages"]]
+        token = page["next_page_token"]
+        if not token:
+            break
+    assert ids == ["1", "2", "3"]
+    assert seen == ["", "p2", "p3"]
+
+
+def test_gmail_search_without_page_token_keeps_the_bare_list(tmp_path: Path, monkeypatch) -> None:
+    svc = MagicMock()
+    listed = svc.users.return_value.messages.return_value.list
+    listed.return_value.execute.return_value = {"messages": [{"id": "1"}], "nextPageToken": "p2"}
+    monkeypatch.setattr(ops_mod, "service", lambda *a, **k: svc)
+    assert _ops(tmp_path).gmail_search({"query": "x"}) == [{"id": "1"}]
+    assert "pageToken" not in listed.call_args.kwargs
