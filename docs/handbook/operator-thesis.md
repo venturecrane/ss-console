@@ -64,7 +64,7 @@ ADR 0040 turns the thesis into the words we use with law firms, the first market
 Cite the tenet number when you or an agent reason from it.
 
 1. **It competes with a hire, not with software.** Incumbent systems are things we connect to; price against a salary.
-2. **It is configurable, not a tool with one use.** Each client's Operator is authored across skills, limits, voice, connections and memory. The only hard limit is whether we can connect to a system.
+2. **It is configurable, not a tool with one use.** Each client's Operator is authored across skills, limits, voice, connections and memory. If we can connect to a system, the Operator can work with it, inside limits no configuration lifts: it never moves money, and licensed judgment stays with the client's licensed people (`operator/skills/product-guide/references/permission-model.md`, "The banned list").
 3. **No imposed defaults.** If something has not been configured, the Operator refuses it. That is a safety property, not what the product is. Ask "what did this client authorize?", never "what does the system assume?"
 4. **The moat is the harness plus the guide plus the memory.** Code-enforced limits (the harness), the SMD people who configure it well for a specific business (the guide), and the client's own memory. Never one feature.
 5. **Packs make it recognizable.** A pack tailors the Operator to an industry ([ADR 0022](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0022-vertical-pack-architecture.md)); packs share parts, so each one makes the next easier. See [Vertical Packs](/admin/playbook/vertical-packs).

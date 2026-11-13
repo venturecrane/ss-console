@@ -149,7 +149,7 @@ class ApplyRun:
             return {"outcome": "refused_no_staff"}
         if proof_mode.active():
             return {"outcome": "would_complete"}
-        from smokeball_connector.task_update import merge_task_update
+        from smokeball_connector.task_update import full_replace_body
 
         old = str(cur.get("note") or "")
         source = self.job.apply.source_job_id if self.job.apply is not None else ""
@@ -157,13 +157,9 @@ class ApplyRun:
             f"[Operator] Completed on approval of change {line.n} (Case File Manager job {source}). "
             f"Proof: {'; '.join(facts.get('proof_names') or [])[:300]}"
         )
-        body, _ = merge_task_update(
-            cur, subject=None, note=f"{old}\n{mark}" if old.strip() else mark, due_date=None,
-            is_completed=True, assignee_ids=None, staff_id=owner, stamp=lambda s: s,
-        )  # fmt: skip
-        body["completedByStaffId"] = staff
-        if cur.get("categories"):  # a full replace clears what it omits
-            body["categories"] = cur["categories"]
+        body = full_replace_body(
+            cur, note=f"{old}\n{mark}" if old.strip() else mark, is_completed=True, staff_id=owner, completed_by=staff
+        )
         self._note(line.n, intent="PUT")
         self.client.request("PUT", f"/tasks/{tid}", json=body)
         return self._task_readback(tid, line.n)
@@ -173,7 +169,7 @@ class ApplyRun:
         (``createdBy``): the task's current assignee stays its owner, and with
         no assignee the matter's responsible staff member is (the staff
         reassignment's rule). ``assigneeIds`` are re-sent unchanged by
-        ``merge_task_update``, so completing a task never reassigns it."""
+        ``full_replace_body``, so completing a task never reassigns it."""
         for a in cur.get("assignees") or []:
             sid = a.get("id") if isinstance(a, dict) else a
             if isinstance(sid, str) and sid:

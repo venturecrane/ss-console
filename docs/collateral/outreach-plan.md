@@ -84,7 +84,7 @@ Before anyone looks you up — and they will — the profile needs to match the 
 **How to show up:**
 
 - Use the vertical-appropriate one-liner from your intro
-- When asked "who's a good referral for you": "A business owner doing somewhere between $750k and $5M who says 'I can't take a day off' or 'our tools don't talk to each other.' Someone who knows the business has outgrown the way things run but hasn't had time to fix it."
+- When asked "who's a good referral for you": "A business owner who says 'I can't take a day off' or 'our tools don't talk to each other.' Someone who knows the business has outgrown the way things run but hasn't had time to fix it."
 
 ---
 
@@ -164,7 +164,7 @@ Until the client portal pipeline is live, track in a simple spreadsheet or note:
 
 ### Why Peer Groups Matter
 
-Vistage and EO (Entrepreneurs' Organization) are where business owners in the revenue band talk to each other. A speaking slot at a peer group meeting puts you in front of 12-20 qualified buyers at once, with built-in credibility from the chair's invitation.
+Vistage and EO (Entrepreneurs' Organization) are where owners of growing businesses talk to each other. A speaking slot at a peer group meeting puts you in front of 12-20 qualified buyers at once, with built-in credibility from the chair's invitation.
 
 ### Getting Invited to Speak
 
@@ -185,7 +185,7 @@ Keep it practical. No slides if you can help it.
 1. Open with a question: "What's the one thing in your business that would break if you took two weeks off?"
 2. Walk through 2-3 of the six solution categories (process design, custom internal tools, systems integration, operational visibility, vendor/platform selection, AI & automation) with real examples (anonymized client stories when available)
 3. Give each person one concrete thing to look at this week
-4. Close with an open offer: "If any of this sounds familiar, we start with a conversation. No charge for that."
+4. Close with an open offer: "If any of this sounds familiar, we start with a conversation."
 
 ### Conversion Path
 
@@ -218,7 +218,7 @@ What we see in growing businesses. Not sales. Not pitching. Just describing the 
 What it actually looks like to sort out operations for a growing business. Anonymized, real situations. What we found, what we built, what changed.
 
 **Tools and process takes (20% of posts):**
-Practical opinions on tools, integrations, and how to think about technology decisions. Not product reviews. Just honest takes from someone who's configured hundreds of these things.
+Practical opinions on tools, integrations, and how to think about technology decisions. Not product reviews. Just honest takes from people who configure these things for a living.
 
 **Local business engagement (10% of posts):**
 Phoenix business community, something a local owner posted that resonated, a pattern you're seeing locally.
@@ -235,13 +235,13 @@ Phoenix business community, something a local owner posted that resonated, a pat
 
 ## Remote Assessment
 
-### Default: Zoom-First
+### Default: In Person in Phoenix, Remote When It Fits
 
-Assessment calls default to Zoom. The "show me how you do X" part of the call works over screenshare: the owner shares their screen and walks through their actual workflow, their actual tools, their actual spreadsheets. This is where the real signal comes from.
+For Phoenix-area clients in Phase 1, assessments default to in person (Decision Stack, Layer 1 geography). Remote calls work when the owner prefers them or is outside the metro. The "show me how you do X" part of the call works over screenshare: the owner shares their screen and walks through their actual workflow, their actual tools, their actual spreadsheets. This is where the real signal comes from.
 
-### When In-Person Makes Sense
+### Where In-Person Adds the Most
 
-In-person is optional for Phoenix-area clients, not required. Some situations where it adds value:
+Some situations where being there matters most:
 
 - The business has a physical workflow you need to see (warehouse, shop floor, front desk operations)
 - The owner is not comfortable with video calls

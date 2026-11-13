@@ -4,7 +4,7 @@ section: product
 order: 0
 owner: captain
 review_every: 90
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-11-13"
 summary: What the Operator is, the shapes it is sold in, what a client's Operator does day to day, how its limits work, and where the engineering detail lives.
 sources:
   - label: ADR 0037 The Operator Thesis
@@ -39,6 +39,10 @@ sources:
     href: docs/runbooks/operator/lane-proof.md
   - label: Operator context for engineers
     href: operator/CLAUDE.md
+  - label: The product library, what runs today and what SMD sets up
+    href: operator/skills/product-guide/references/built-versus-planned.md
+  - label: The product library, the permission model
+    href: operator/skills/product-guide/references/permission-model.md
 ---
 
 The Operator is the main thing SMD sells: an AI worker that does a business's coordinator and paralegal-style work inside that business's own systems, within limits the client sets. This page explains it without engineering terms, so you can describe it to a client, read an agent's report about it, and know which page holds the detail.
@@ -49,17 +53,17 @@ The Operator competes with a hire, not with software. Every system a business ru
 
 It has no fixed job. Each client's Operator is set up for that client: which skills it has, what it may do, how it writes, which systems it reaches, and what it remembers (ADR 0037, Tenet 2). Industry starting points are called packs ([Vertical Packs](/admin/playbook/vertical-packs)).
 
-How SMD talks about it is set by ADR 0040. The line is "it runs on your firm's expertise and gets better at your firm every week": the client is the expert, SMD builds and runs the worker, and the firm teaches it. For a law firm it does paralegal and coordinator work, never independent legal judgment, advice or representation. In sales and marketing, do not open with "AI employee"; lead with the role it fills and the outcome ([Positioning & Voice](/admin/playbook/positioning-voice)). Inside SMD, and in the portal design, "the client's AI employee" is used as plain shorthand (ADR 0052).
+How SMD talks about it is set by ADR 0040. The line is "it runs on your firm's expertise and keeps getting better at your firm": the client is the expert, SMD builds and runs the worker, and the firm teaches it. It keeps what the firm's people teach it, so a correction holds the next time. For a law firm it does paralegal and coordinator work, never independent legal judgment, advice or representation. In sales and marketing, do not open with "AI employee"; lead with the role it fills and the outcome ([Positioning & Voice](/admin/playbook/positioning-voice)). Inside SMD, and in the portal design, "the client's AI employee" is used as plain shorthand (ADR 0052).
 
 ## The shapes it comes in
 
 | Shape | What it is | Source |
 |---|---|---|
-| **The Operator** | A governed worker for a business, set up with the client and run by SMD as a managed service. The law-firm Operator is the one in production. | ADR 0004, ADR 0040 |
+| **The Operator** | A governed worker for a business, set up with the client and run by SMD as a managed service. The law-firm Operator is running for a client today. | ADR 0004, ADR 0040 |
 | **The Operator, self-serve** | The same Operator, bought self-serve as an always-on personal agent for a person or a household rather than a firm (ADR 0100: one product; ADR 0067 terms). It is reached over Telegram and email from approved senders only. | ADR 0067 |
 | **A role** | A packaged job for an Operator, chosen per seat. The first role is `couples`, a shared agent for two people; SMD sets each one up by hand and all setup happens in the agent's own channels. | ADR 0090 |
 
-Prices are never published and are not in this handbook; see [Pricing & Economics](/admin/playbook/pricing-economics) for where they live.
+Apart from the self-serve price on `/agent`, prices are never published, and none is in this handbook; see [Pricing & Economics](/admin/playbook/pricing-economics) for where they live.
 
 ## What a seat is
 
@@ -75,7 +79,7 @@ Each client's Operator runs on its own **seat**: one isolated machine with its o
 | prepare-and-route | "Prepares it for you" | It drafts the work for a person to check and send |
 | auto-handle | "Handles it" | It does the work on its own |
 
-The client-facing words come from `src/lib/portal/operator/tier-language.ts`; the internal names never appear on a client page. Some routines are fixed at one level by the agreement, and some kinds of work never auto-handle ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator), section 2).
+The client-facing words come from `src/lib/portal/operator/tier-language.ts`; the internal names never appear on a client page. Said accurately, "Surfaces it" is a rule the skill follows and the audit record checks; the hard enforcement is the limit check at every tool call. Some routines are fixed at one level by the agreement, and some kinds of work never auto-handle ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator), section 2).
 
 **Requests by email.** People the client has authorized can email their Operator and ask for things. It answers if the request is within what it is allowed to do. For every such request, the seat sends SMD a **request card**: what was asked and how it was answered, or an alarm if nothing answered within 30 minutes ([Glossary](/admin/playbook/glossary), [The Administrator's Week](/admin/playbook/administrators-week)).
 
@@ -87,10 +91,17 @@ The client-facing words come from `src/lib/portal/operator/tier-language.ts`; th
 
 - **The client authors what it may do.** There is no built-in posture. Every kind of action is either allowed, allowed with a person's check, or refused, as written into that client's configuration (ADR 0037, Tenet 3; ADR 0035).
 - **Unset means refused.** An action nobody configured is refused: no send, no draft. Reading is the one thing that does not need to be granted (ADR 0035, ADR 0056).
+- **Some things are not settings.** The Operator never moves money, whatever a configuration says: moving money is refused before any limit is read. Licensed and professional judgment stays with the client's licensed people.
 - **A person's check comes in two forms** (ADR 0071). With **confirm**, the Operator asks a person in the same conversation and sends only after they say yes. With **draft for review**, it leaves a draft and the person sends it themselves. An email in a staff member's own name goes out only after that person approves the exact draft by replying to it (ADR 0089).
 - **It cannot raise its own limits.** A client's administrator may move a routine's level within the ceiling the agreement sets; anything above that is a change to the agreement ([Who Does What](/admin/playbook/who-does-what)).
-- **Everything it does is recorded.** Each action is written to an audit record the Operator itself cannot change or delete. The client can read it in the portal at any time ([Security & Trust](/admin/playbook/security-trust)).
+- **Everything it does is recorded.** Each action is written to an audit record the Operator itself cannot change or delete. A client administrator looks up the record for any reference in the portal and downloads it ([Security & Trust](/admin/playbook/security-trust)).
 - **It can be stopped.** A seat can be paused by SMD, by the client where the agreement gives them that control, and it stops itself when it hits a cost or safety limit ([Changing a Client's Operator](/admin/playbook/changing-a-clients-operator), section 6).
+
+## Describing what it can do
+
+The Operator is SMD's configurable product. A capability is true of it if SMD can configure or change the Operator to do it, whether or not a client runs it yet. Describe each one in the present tense, as something the Operator does once SMD sets it up for a client. Where it stands for clients today is knowledge for answering "what does a client have today?", in three labels from the product library (`operator/skills/product-guide/references/built-versus-planned.md`): running for a client today; built, set up per client; configured per engagement. A label never means the Operator cannot do something.
+
+No person at SMD reads a client's files. They are handled only by AI agents: the client's own Operator, and SMD's agents in a workspace sealed to that client.
 
 ## What can go wrong, as the client sees it
 

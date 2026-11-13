@@ -100,12 +100,12 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
 
 <div class="wrap">
 <header class="top">
-  <div class="eyebrow">SMD Services · sales enablement · version 3</div>
+  <div class="eyebrow">SMD Services · sales enablement · version 3.1</div>
   <h1>How the Operator Works</h1>
-  <p class="lede">The Operator is a managed worker that SMD builds for one business and runs for it. It does the connecting work between that business's people and its systems, inside limits the business writes down, and it keeps an audit record of every action. This page explains the product in seven views, each with one figure, from the idea to the mechanism.</p>
+  <p class="lede">The Operator is a managed worker that SMD builds for one business and runs for it. It does the connecting work between that business's people and its systems, inside limits the business writes down, and it keeps an audit record of every action. This page explains the product in seven views, each with one figure, from the idea to the mechanism, followed by the service around it, what runs today and what SMD sets up, and one industry example.</p>
 </header>
 <nav class="toc" aria-label="Seven views, seven figures">
-  <span>7 views · 7 figures</span><a href="#idea">1 Before and after</a><a href="#context">2 System context</a><a href="#lifecycle">3 Life of a request</a><a href="#limits">4 Permission model</a><a href="#jobs">5 Queued jobs</a><a href="#isolation">6 Isolation</a><a href="#trust">7 Data and audit record</a><a href="#service">The service</a><a href="#edges">Proven, built, planned</a>
+  <span>7 views · 7 figures</span><a href="#idea">1 Before and after</a><a href="#context">2 System context</a><a href="#lifecycle">3 Life of a request</a><a href="#limits">4 Permission model</a><a href="#jobs">5 Queued jobs</a><a href="#isolation">6 Isolation</a><a href="#trust">7 Data and audit record</a><a href="#service">The service</a><a href="#edges">What runs today, what SMD sets up</a>
 </nav>
 
 <section class="view">
@@ -240,7 +240,7 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="756" y="200" class="s">watches every seat</text>
     <rect x="742" y="234" width="186" height="44" class="smd"/><rect x="742" y="234" width="4" height="44" class="bar"/>
     <text x="756" y="252" class="t">Per-client ops workspace</text>
-    <text x="756" y="268" class="s">one per client; access logged</text>
+    <text x="756" y="268" class="s">sealed to one seat; SMD's agents</text>
     <rect x="742" y="302" width="186" height="44" class="smd"/><rect x="742" y="302" width="4" height="44" class="bar"/>
     <text x="756" y="320" class="t">Releases + config</text>
     <text x="756" y="336" class="s">by reviewed change only</text>
@@ -277,7 +277,7 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="688" y="180" class="lb m">health, notices</text>
     <circle cx="634" cy="160" r="9" class="b"/><text x="634" y="164" class="bn">6</text>
     <line x1="738" y1="256" x2="624" y2="256" class="ln" marker-end="url(#a2)"/>
-    <text x="663" y="248" class="lb m">logged access</text>
+    <text x="663" y="248" class="lb m">sealed access</text>
     <circle cx="716" cy="256" r="9" class="b"/><text x="716" y="260" class="bn">8</text>
     <line x1="738" y1="324" x2="612" y2="324" class="ln" marker-end="url(#a2)"/>
     <text x="663" y="316" class="lb m">config changes</text>
@@ -301,15 +301,15 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="740" y="524" class="s">see note n below</text>
     </svg></div>
   <ol class="steps">
-    <li><span class="n">1</span><span><b>Staff ask by email.</b> A request is an email to the Operator's own mailbox, which sits in the client's mail tenant. Only people on the client's staff list are answered.</span></li>
+    <li><span class="n">1</span><span><b>Staff ask by email.</b> A request is an email to the Operator's own mailbox, which sits in the client's mail tenant where the client has one, otherwise in a mailbox SMD hosts. Only people on the client's staff list are answered.</span></li>
     <li><span class="n">2</span><span><b>Mail is pulled in and verified.</b> The seat pulls new mail from that mailbox, and the front door verifies every inbound message before any work starts.</span></li>
-    <li><span class="n">3</span><span><b>It works in the client's systems.</b> It reads what the task needs and writes results back. SMD does not warehouse copies of the client's files. Work SMD staff must look at stays in that client's own ops workspace and is deleted after 30 days.</span></li>
-    <li><span class="n">4</span><span><b>Sending is held apart.</b> The agent cannot send on its own keys. A separate broker holds the send credentials, checks every recipient, and writes each action to the audit record.</span></li>
-    <li><span class="n">5</span><span><b>The portal directs, it does not hold data.</b> Administrators see what the Operator is set up to do and the audit record of what it did, move limit settings up to the agreed ceiling, and pause it.</span></li>
+    <li><span class="n">3</span><span><b>It works in the client's systems.</b> It reads what the task needs and writes results back, where granted. SMD does not warehouse copies of the client's files. Where a client's documents need work beyond the seat, SMD's agents do it in that client's own ops workspace, and work there is kept for up to 30 days. No person at SMD reads client files.</span></li>
+    <li><span class="n">4</span><span><b>Sending is held apart.</b> The agent cannot send on its own keys. A separate broker holds the send credentials, checks every recipient, and is the sole writer of the audit record, with one entry for each action.</span></li>
+    <li><span class="n">5</span><span><b>The portal directs, it does not hold data.</b> Administrators see what the Operator is set up to do and its activity, look up the audit record for any reference, move limit settings up to the agreed ceiling, and pause it.</span></li>
     <li><span class="n">6</span><span><b>The seat reports out.</b> A health signal every minute, the newest audit entry's fingerprint, and a notice for each staff request.</span></li>
     <li><span class="n">7</span><span><b>Changes come in one way.</b> Configuration is written by SMD as a reviewed change and published to the seat. The agent cannot edit its own limits.</span></li>
-    <li><span class="n">8</span><span><b>SMD's access is fenced too.</b> When a person at SMD must look at a client's work, it is from a workspace that reaches that one seat, and the access is logged.</span></li>
-    <li><span class="n">9</span><span><b>The model provider processes, and does not keep.</b> Task content is sent for processing under terms that bar training on it. Changing the provider takes 30 days' notice to the client. Some seats also use a speech-to-text and a web-search service.</span></li>
+    <li><span class="n">8</span><span><b>SMD's access is fenced too.</b> When a client's documents need work beyond the seat, SMD's agents do it from a workspace sealed to that one seat. No person at SMD reads client files.</span></li>
+    <li><span class="n">9</span><span><b>The model provider processes the task and does not train on it.</b> Task content is sent for processing under terms that bar training on it. The standard agreement states 30 days' notice before the provider changes. Some seats also use a speech-to-text service and a web-search service.</span></li>
   </ol>
 </section>
 
@@ -355,13 +355,13 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="334" y="215" class="s">The matching skill loads. The agent is told who is asking.</text>
     <text x="658" y="199" class="tag">AGENT</text>
     <line x1="674" y1="203" x2="708" y2="203" class="lr" marker-end="url(#r3)"/>
-    <text x="716" y="199" class="x">Skill not enabled on this seat:</text>
-    <text x="716" y="215" class="x">declined.</text>
+    <text x="716" y="199" class="x">Skill not switched on: not there;</text>
+    <text x="716" y="215" class="x">admin-only skill: declined.</text>
     <line x1="480" y1="230" x2="480" y2="244" class="ln" marker-end="url(#a3)"/>
     <rect x="290" y="248" width="380" height="46" class="seat"/>
     <circle cx="312" cy="271" r="11" class="b"/><text x="312" y="275" class="bn">4</text>
     <text x="334" y="267" class="t">Tool lookup</text>
-    <text x="334" y="283" class="s">Each of 299 tools has one fixed kind of action.</text>
+    <text x="334" y="283" class="s">Every tool has one fixed kind of action.</text>
     <text x="658" y="267" class="tag">AGENT</text>
     <line x1="674" y1="271" x2="708" y2="271" class="lr" marker-end="url(#r3)"/>
     <text x="716" y="267" class="x">Not in the registry:</text>
@@ -427,10 +427,10 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <li><span class="n">1</span><span><b>Nothing unsigned gets in.</b> Email arrives through the Operator's mailbox; system events and schedules arrive by their own doors. A bad or stale signature is rejected before any work.</span></li>
     <li><span class="n">2</span><span><b>Outside content is fenced.</b> Text from an unlisted sender is quarantined so that instructions hidden in it cannot drive actions. A turn that read untrusted content cannot send, commit or delete.</span></li>
     <li><span class="n">3</span><span><b>Skills guide, the checks enforce.</b> A skill tells the agent how to do a kind of work. It is not the control. The control is at every tool call, in steps 4 to 6.</span></li>
-    <li><span class="n">4</span><span><b>Every tool is classified once.</b> Each of the 299 tools has one fixed kind of action. A tool that is not in the registry never runs.</span></li>
+    <li><span class="n">4</span><span><b>Every tool is classified once.</b> Each tool has one fixed kind of action. A tool that is not in the registry never runs.</span></li>
     <li><span class="n">5</span><span><b>Unwritten means refused.</b> The kind of action is checked against the limit the client wrote for it. Where no limit is written, the call is refused.</span></li>
-    <li><span class="n">6</span><span><b>Content is checked before it leaves.</b> A number or date that does not trace to something the agent read blocks the call. Money or contract content going outside the client's staff becomes a draft for a person.</span></li>
-    <li><span class="n">7</span><span><b>The action and its audit entry go together.</b> The tool runs in the client's system and the broker writes one audit entry for it. A check that cannot run blocks the call. Long or costly work is not done here: it is queued as a job, as in View 5.</span></li>
+    <li><span class="n">6</span><span><b>Content is checked before it leaves.</b> A reference number or date that cannot be traced to something the agent read blocks the action. Money or contract content going outside the client's staff becomes a draft for a person.</span></li>
+    <li><span class="n">7</span><span><b>The action and its audit entry go together.</b> The tool runs in the client's system and the broker writes one audit entry for that tool call. A check that cannot run blocks the call. Long or costly work is not done here: it is queued as a job, as in View 5.</span></li>
     <li><span class="n">8</span><span><b>Approvals cannot be faked by the agent.</b> A yes counts only from an administrator, or from the named person whose approval is needed, through their own channel.</span></li>
     <li><span class="n">9</span><span><b>Silence is a failure.</b> If a listed person's request has no sent reply, no queued job and no held reply after 30 minutes, SMD is paged. The hourly triage catches it again.</span></li>
   </ol>
@@ -484,7 +484,6 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <rect x="330" y="248" width="300" height="44" class="seat"/>
     <text x="342" y="267" class="t">Commitment</text>
     <text x="342" y="283" class="vi">limit: asks first</text>
-    <text x="618" y="283" class="mu e">built, not yet proven in client use</text>
     <line x1="634" y1="270" x2="706" y2="270" class="lp" marker-end="url(#a4)"/>
     <rect x="710" y="248" width="230" height="44" class="pd"/>
     <text x="722" y="275" class="t">Held for an administrator</text>
@@ -531,13 +530,15 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
       <tr><th>Internal writes</th><td class="yes">Runs</td><td>Not offered</td><td class="yes">Runs</td><td class="no">Refused</td></tr>
       <tr><th>Commitments</th><td>Still needs a yes in the moment</td><td>Held for an administrator</td><td class="no">Blocked</td><td class="no">Refused</td></tr>
       <tr><th>Destructive actions</th><td>Still needs a yes in the moment</td><td>One narrow case only</td><td class="no">Refused</td><td class="no">Refused</td></tr>
+      <tr><th>Sending as a staff member</th><td class="no">Refused</td><td>Proposed to the named person, who approves the exact draft</td><td class="no">Refused</td><td class="no">Refused</td></tr>
+      <tr><th>Code execution</th><td class="yes">Runs</td><td class="no">Refused</td><td class="no">Refused</td><td class="no">Refused</td></tr>
       <tr><th>Reading</th><td class="yes" colspan="4">Always allowed inside the systems the client connected. It is the only thing that needs no grant.</td></tr>
     </tbody>
   </table></div>
   <ul class="plain">
-    <li><b>Who writes the rule:</b> the client decides, SMD records it as a reviewed change. <b>Where it is enforced:</b> on the client's seat, at every tool call. <b>The default:</b> refused.</li>
+    <li><b>Who writes the rule:</b> the client decides, and SMD records it as a reviewed change. <b>Where it is enforced:</b> on the client's seat, at every tool call. <b>The default:</b> refused.</li>
     <li><b>Sends are split by recipient:</b> the client's own staff, the client's customers, its vendors, and everyone else. Each has its own limit.</li>
-    <li><b>Some things are banned outright,</b> whatever the client writes: moving money, and sending from a principal's own mailbox. Sending in a staff member's name happens only when that person approves the exact draft.</li>
+    <li><b>Moving money is banned outright,</b> whatever the client writes. Sending in a staff member's name happens only when that person approves the exact draft.</li>
     <li><b>The portal shows each limit as one of three plain settings per routine:</b> "Surfaces it," "Prepares it for you," "Handles it." Each routine has a starting setting and a ceiling taken from the agreement.</li>
     <li><b>Ceilings hold.</b> An administrator can raise a routine up to its ceiling. Nobody, including SMD and the Operator, can go above it without changing the agreement.</li>
     <li><b>Said accurately:</b> "Surfaces it" rests on the skill's instructions and is checked in the audit record. The hard enforcement is at each tool call, as in View 3.</li>
@@ -647,8 +648,8 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     </svg></div>
   <ol class="steps">
     <li><span class="n">2</span><span><b>Proof before first use.</b> A kind of job never run for this client does not run on a real request. It waits while SMD runs it on that client's own data, stopped before anything is written, and a person at SMD accepts the result.</span></li>
-    <li><span class="n">4</span><span><b>Cost has a limit.</b> A per-job limit and a monthly limit are checked before every paid step. Over the limit, the job holds and SMD is paged.</span></li>
-    <li><span class="n">7</span><span><b>Delivery is proven, not assumed.</b> A job counts as delivered only when the delivered file has been fetched from the client's system of record and matches what was built.</span></li>
+    <li><span class="n">4</span><span><b>Cost has a limit.</b> A per-job cost limit and a monthly cost limit are checked before every paid step. Over the limit, the job holds and SMD is paged.</span></li>
+    <li><span class="n">7</span><span><b>Delivery is proven, not assumed.</b> A queued job counts as delivered only when the delivered file has been fetched from the client's system of record and matches what was built.</span></li>
     <li><span class="n">8</span><span><b>If the reply does not go out,</b> SMD is paged after 20 minutes.</span></li>
   </ol>
 </section>
@@ -689,7 +690,7 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="232" y="346" class="t m">Ops workspace</text>
     <text x="232" y="362" class="s m">one per client</text>
     <line x1="258" y1="324" x2="258" y2="296" class="ln" marker-end="url(#a6)"/>
-    <text x="250" y="314" class="lb e">logged access</text>
+    <text x="250" y="314" class="lb e">sealed access</text>
     </g>
     <g>
     <rect x="340" y="40" width="280" height="252" class="zone"/>
@@ -720,7 +721,7 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="552" y="346" class="t m">Ops workspace</text>
     <text x="552" y="362" class="s m">one per client</text>
     <line x1="578" y1="324" x2="578" y2="296" class="ln" marker-end="url(#a6)"/>
-    <text x="570" y="314" class="lb e">logged access</text>
+    <text x="570" y="314" class="lb e">sealed access</text>
     </g>
     <g>
     <rect x="660" y="40" width="280" height="252" class="zone"/>
@@ -751,7 +752,7 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="872" y="346" class="t m">Ops workspace</text>
     <text x="872" y="362" class="s m">one per client</text>
     <line x1="898" y1="324" x2="898" y2="296" class="ln" marker-end="url(#a6)"/>
-    <text x="890" y="314" class="lb e">logged access</text>
+    <text x="890" y="314" class="lb e">sealed access</text>
     </g>
     <rect x="20" y="400" width="920" height="56" class="smd"/><rect x="20" y="400" width="4" height="56" class="bar"/>
     <text x="36" y="423" class="t">SMD Services · one, shared across clients</text>
@@ -765,7 +766,7 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="358" y="508" class="s">zone boundary</text>
     </svg></div>
   <ul class="plain">
-    <li><b>Never shared:</b> the machine, its storage volume, connection credentials, memory, the audit record, and the Operator's mailbox (which lives in the client's own mail tenant).</li>
+    <li><b>Never shared:</b> the machine, its storage volume, connection credentials, memory, the audit record, and the Operator's mailbox (in the client's own mail tenant where the client has one, otherwise a mailbox SMD hosts for that seat alone).</li>
     <li><b>Shared, and kept apart by client:</b> the Client portal, SMD's console, the pager and hourly triage, releases and configuration, and the daily audit archive.</li>
     <li><b>What one client's Operator learns never benefits another client.</b> That is a term of the service agreement and a property of the layout.</li>
   </ul>
@@ -797,10 +798,10 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <text x="576" y="112" class="s">can read it; cannot rewrite it</text>
     <rect x="560" y="148" width="380" height="52" class="bx"/>
     <text x="576" y="170" class="t">Client administrator</text>
-    <text x="576" y="188" class="s">sees it in the Client portal</text>
+    <text x="576" y="188" class="s">looks it up by reference in the portal</text>
     <rect x="560" y="224" width="380" height="52" class="smd"/><rect x="560" y="224" width="4" height="52" class="bar"/>
     <text x="576" y="246" class="t">Daily verifier</text>
-    <text x="576" y="264" class="s">checks the chain every day; a break raises an alarm</text>
+    <text x="576" y="264" class="s">checks the chain every day; a break pages SMD</text>
     <rect x="560" y="300" width="380" height="52" class="smd"/><rect x="560" y="300" width="4" height="52" class="bar"/>
     <text x="576" y="322" class="t">SMD operations</text>
     <text x="576" y="340" class="s">reads each notice; paged when a reply is missing</text>
@@ -832,31 +833,33 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     </svg></div>
   <ol class="steps">
     <li><span class="n">1</span><span><b>The agent reads, the broker writes.</b> The agent can read the audit record and cannot rewrite it. Only the broker writes it.</span></li>
-    <li><span class="n">2</span><span><b>The client can see it.</b> An administrator views the audit record in the Client portal.</span></li>
+    <li><span class="n">2</span><span><b>The client can see it.</b> An administrator looks up the audit record for any reference in the Client portal and downloads it.</span></li>
     <li><span class="n">3</span><span><b>A fingerprint leaves every minute.</b> The fingerprint of the newest audit entry is sent to SMD's console and kept there.</span></li>
     <li><span class="n">4</span><span><b>The whole record is checked daily.</b> A verifier pulls each seat's audit record once a day.</span></li>
-    <li><span class="n">5</span><span><b>The check has an outside anchor.</b> The last fingerprint held in SMD's console must be present in the record that was pulled. A break raises an alarm at SMD.</span></li>
+    <li><span class="n">5</span><span><b>The check has an outside anchor.</b> The last fingerprint held in SMD's console must be present in the record that was pulled. A break pages SMD.</span></li>
     <li><span class="n">6</span><span><b>A dated copy is kept.</b> The verifier writes each day's copy to an archive that refuses overwrites.</span></li>
-    <li><span class="n">7</span><span><b>SMD reads a notice per request.</b> Each notice carries who asked, the subject, their words, the Operator's reply and what it ran. Never a document.</span></li>
+    <li><span class="n">7</span><span><b>SMD reads a notice per request.</b> Request notices land in SMD's operations mailbox, one per staff request, and SMD operations is paged when a reply is missing. Each notice carries who asked, the subject, the request's own words and the first reply.</span></li>
   </ol>
+  <p>The record is cryptographically chained and verified every day, so it proves nothing was altered. Every read SMD's console makes of a seat is itself logged.</p>
   <div class="tbl"><table>
     <thead><tr><th>Kind of data</th><th>Where it lives</th></tr></thead>
     <tbody>
       <tr><th>The client's business files</th><td>In the client's own systems. Read through granted connections while a task runs. SMD does not warehouse copies.</td></tr>
-      <tr><th>The Operator's email</th><td>In the client's own mail tenant, under the client's retention and controls.</td></tr>
+      <tr><th>The Operator's email</th><td>In the client's own mail tenant where the client has one, under the client's retention and controls; otherwise a mailbox SMD hosts for that seat.</td></tr>
       <tr><th>Memory</th><td>On the client's dedicated machine. Owned by the client. Exported on exit.</td></tr>
-      <tr><th>Audit record</th><td>On the client's dedicated machine, viewable in the portal. A fingerprint of its newest entry leaves the machine every minute and is checked daily.</td></tr>
+      <tr><th>Audit record</th><td>On the client's dedicated machine, looked up by reference in the portal. A fingerprint of its newest entry leaves the machine every minute and is checked daily.</td></tr>
       <tr><th>Connection credentials</th><td>On the client's machine only. The ones that can send are held by the broker, where the agent cannot read them.</td></tr>
       <tr><th>Settings, staff names, billing</th><td>SMD's console and its listed sub-processors.</td></tr>
       <tr><th>Task content sent for AI processing</th><td>Processed by the model provider for the task and not used to train models.</td></tr>
     </tbody>
   </table></div>
   <div class="cols3">
-    <div><h4>The audit record</h4><ul><li>One entry per action.</li><li>Each entry is chained to the one before it, so a change shows.</li><li>The agent can read it and cannot rewrite it.</li><li>It holds what was done, by which skill, under which limit, and the outcome. It does not hold the text of the client's documents.</li><li>Say "tamper-evident." Do not say "tamper-proof."</li></ul></div>
-    <div><h4>What SMD can see</h4><ul><li>Health, settings, and the audit record of actions.</li><li>A notice per staff request: who asked, the subject, their words, the reply and what it ran. Never a document.</li><li>Client work itself only from a per-client ops workspace, with access logged.</li></ul></div>
-    <div><h4 class="k4">What never happens</h4><ul><li>The client's files are not copied into SMD's systems.</li><li>Send credentials never reach the agent.</li><li>Client content is not used to train models.</li><li>The Operator does not send from a principal's own mailbox.</li></ul></div>
+    <div><h4>The audit record</h4><ul><li>One entry per action.</li><li>Each entry is chained to the one before it by a cryptographic hash, and the chain is verified every day, so it proves nothing was altered.</li><li>The agent can read it and cannot rewrite it.</li><li>It holds what was done, by which skill, under which limit, and the outcome. It does not hold the text of the client's documents.</li></ul></div>
+    <div><h4>What SMD can see</h4><ul><li>Health, settings, and the audit record of actions.</li><li>A notice per staff request: who asked, the subject, the request's own words and the first reply.</li><li>Client work itself is handled only by AI agents: the client's Operator, and SMD's agents in a workspace sealed to that client, where work is kept for up to 30 days. No person at SMD reads client files.</li></ul></div>
+    <div><h4 class="k4">What never happens</h4><ul><li>SMD does not warehouse copies of the client's files. Work SMD's agents do on a client's documents stays in that client's own ops workspace for up to 30 days.</li><li>Send credentials never reach the agent.</li><li>Client content is not used to train models.</li></ul></div>
   </div>
   <h3>Standard terms</h3>
+  <p>These are what the standard agreement states. Each client's signed agreement governs.</p>
   <ul class="plain">
     <li>Security incident notice within 24 hours.</li>
     <li>On exit: the audit record and memory are exported within 14 days and everything is destroyed within 30, confirmed in writing.</li>
@@ -868,13 +871,15 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
 <section class="view" id="service">
   <div class="vnum">The service around it</div>
   <h2>What "managed" means</h2>
+  <p class="q">The service around the Operator runs in five phases. Each ends on proof, not on a calendar date.</p>
   <div class="tbl"><table>
-    <thead><tr><th>Stage</th><th>What happens</th><th>What must be true to move on</th></tr></thead>
+    <thead><tr><th>Phase</th><th>What happens</th><th>What must be true to move on</th></tr></thead>
     <tbody>
+      <tr><th>Prepare</th><td>SMD names the client's principal and system administrators and lists what is needed.</td><td>The client record.</td></tr>
       <tr><th>Explore</th><td>A working session on how the business runs. The client sets the limit for each kind of action.</td><td>A written configuration the client has signed off.</td></tr>
-      <tr><th>Build</th><td>SMD builds missing skills and connections, sets up the client's machine, and rehearses on practice data it owns, including hostile cases.</td><td>A rehearsal with no limit broken.</td></tr>
-      <tr><th>Go live</th><td>The client grants access to each real system. Areas of work come on one at a time.</td><td>The client confirms each area on its own work.</td></tr>
-      <tr><th>Run</th><td>Health checked every minute, work checked every hour, releases rolled out seat by seat with a rollback point. Staff correct the Operator directly and it keeps the correction.</td><td>Billing starts only after SMD says testing is complete and the client starts it.</td></tr>
+      <tr><th>Realize</th><td>SMD builds missing skills and connections, sets up the client's machine, and rehearses on practice data it owns, including hostile cases.</td><td>A rehearsal with no limit broken.</td></tr>
+      <tr><th>Deploy</th><td>The client grants access to each real system. Areas of work come on one at a time.</td><td>The client confirms each area on its own work.</td></tr>
+      <tr><th>Run</th><td>Health checked every minute, work checked every hour, releases rolled out seat by seat with a rollback point. Staff state how they like work done.</td><td>Billing starts only after SMD says testing is complete and the client starts it.</td></tr>
     </tbody>
   </table></div>
   <ul class="plain">
@@ -883,27 +888,28 @@ svg .m { text-anchor: middle; } svg .e { text-anchor: end; }
     <li><b>The client can always stop it:</b> pause in the portal, or cut its access in the client's own systems.</li>
     <li><b>AI output can be wrong.</b> The client's people review it before relying on it. The product is built so that review is the normal path.</li>
   </ul>
+  <p class="note">Pricing is set per engagement and is not covered here.</p>
 </section>
 
 <section class="view" id="edges">
   <div class="vnum">Know the edges</div>
-  <h2>Proven, built, planned</h2>
-  <p class="q">A technical buyer will test these. Present each thing as what it is.</p>
+  <h2>What runs today, and what SMD sets up</h2>
+  <p class="q">A technical buyer will test these. Describe each as a capability of the Operator. When the buyer asks what is live today, say which of these a client is running.</p>
   <div class="cols3">
-    <div><h4 class="k1">In production with a paying client</h4><ul>
-      <li>One isolated machine per client</li><li>Limits enforced at every tool call; unwritten means refused</li><li>Drafts for a person, and sends to listed staff, customers and vendors</li><li>Chained audit record with daily verification</li><li>Email through a mailbox in the client's own tenant</li><li>Queued jobs with proof gate, review and read-back</li><li>Pause in the portal</li><li>Pager, hourly work check, request notices</li><li>One industry delivered in depth</li></ul></div>
-    <div><h4 class="k2">Built, not yet proven in client use</h4><ul>
-      <li>"Ask first" approvals on sends</li><li>The level dial in the portal</li><li>Client-run connections, team access and compliance view</li><li>Chat and voice-note channels</li><li>The connector that lets staff reach it from their AI assistant</li><li>Self-serve purchase</li><li>More than one persona per seat</li></ul></div>
-    <div><h4 class="k3">Planned, not built</h4><ul>
-      <li>Memory inferred from behavior (today it remembers what it is told and shown)</li><li>Industry-specific skills for the other packs</li><li>A memory view for the client</li><li>Mailboxes in other mail systems</li><li>SMS, Slack and Teams</li><li>Signed audit entries</li></ul></div>
+    <div><h4 class="k1">Running for a client today</h4><ul>
+      <li>One isolated machine per client</li><li>Limits enforced at every tool call; unwritten means refused</li><li>Drafts for a person, and sends to listed staff, the client's customers and vendors</li><li>"Ask first" approvals on commitments, and sending as a staff member on that person's approval</li><li>Chained audit record with daily verification</li><li>Email through a mailbox in the client's own tenant</li><li>Queued jobs with proof gate, review and read-back</li><li>Pause in the portal</li><li>Pager, hourly work check, request notices</li><li>One industry delivered in depth</li></ul></div>
+    <div><h4 class="k2">Built, set up per client</h4><ul>
+      <li>"Ask first" approvals on sends</li><li>The level dial in the portal</li><li>Client-run connections, team access and a compliance view</li><li>Chat and voice-note channels</li><li>The connector that lets staff reach it from their AI assistant</li><li>Self-serve purchase</li><li>More than one persona per seat</li></ul></div>
+    <div><h4 class="k3">Configured per engagement</h4><ul>
+      <li>Texting, and team chat platforms such as Slack and Teams</li><li>Mailboxes in other mail systems</li><li>Industry-specific skills for the other industry packs</li><li>A memory view for the client</li><li>Memory inferred from behavior</li><li>Signed audit entries</li></ul></div>
   </div>
-  <p class="note">Industry packs are starting configurations for onboarding. The running product is the same for every business: nothing in it branches on industry.</p>
+  <p class="note">SMD sets up each item in the third column, and builds what it needs, when a client's engagement calls for it. Industry packs are starting configurations for onboarding. The running product is the same for every business: nothing in it branches on industry.</p>
 </section>
 
 <section class="view" id="example" style="border-bottom:0">
   <div class="vnum">One example</div>
   <h2>The same model, in one industry</h2>
-  <p>The first Operator runs for a personal-injury law firm. The system of record is the firm's practice-management system. Staff email requests, and the queued jobs produce medical chronologies and first drafts for an attorney to judge. So far: 18 chronologies from 29,000+ pages of records, every entry cited to the page it came from. Communications to a court or to opposing counsel are always prepared for a person to send, and nothing touching deadlines or money runs on its own. Swap the system of record, the skills and the limits, and the seven views above describe any other business.</p>
-  <footer>Version 3, 2026-11-09. Built from the product's code, its decision records and SMD's service agreement. Counts are as of this date. Owner: SMD Services.</footer>
+  <p>The first industry delivered in depth is a law practice. The system of record is the firm's practice-management system. Staff email requests, and the queued jobs produce medical chronologies and first drafts for an attorney to judge, every chronology entry cited to the page it came from. Communications to a court or to opposing counsel are always prepared for a person to send, and nothing touching deadlines or money runs on its own. Swap the system of record, the skills and the limits, and the seven views above describe any other business.</p>
+  <footer>Version 3.1, 2026-11-13. Built from the product's code, its decision records and SMD's service agreement. Counts are as of this date. Owner: SMD Services.</footer>
 </section>
 </div>

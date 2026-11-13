@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 import casefile_testkit as kit
+import goldens_kit as gk
 from jobs.casefile import apply as apply_mod, own_writes
 from jobs.casefile.apply import ApplyRun
 from jobs.casefile.run import CasefileRun
@@ -155,3 +156,25 @@ def test_completing_a_task_keeps_its_assignee_as_owner_and_never_reassigns_it(pr
     _method, _path, body = proposed["seat"].client.writes[-1]
     assert body["staffId"] == kit.STAFF_P and body["assigneeIds"] == [kit.STAFF_P]
     assert body["completedByStaffId"] == kit.STAFF_X
+
+
+# ---- the task PUT, pinned on the wire ----------------------------------------------
+# The completion PUT is a full replace (operator/CLAUDE.md, the task PUT), so its
+# body is pinned byte for byte: goldens/task_puts/casefile_<case>.json, the
+# method, path and JSON text sent. ``JOBS_WRITE_KIT_GOLDENS=1`` rewrites them.
+_TASK_PUT_CASES = {
+    "plain": {},  # no assignee: the matter's responsible staff member owns it
+    "assigned_with_categories": {"assignees": [{"id": kit.STAFF_P}], "categories": ["Police", "Liens"]},
+    "empty_categories": {"categories": []},  # an empty list is not re-sent
+}
+
+
+@pytest.mark.parametrize("case", sorted(_TASK_PUT_CASES))
+def test_the_task_completion_put_is_pinned_on_the_wire(proposed, case):
+    t = next(t for t in proposed["seat"].tasks if t["id"] == kit.TASK_OPEN)
+    t.update(_TASK_PUT_CASES[case])  # neither field is in the proposal's snapshot
+    _apply(proposed, [_task_line(proposed)])
+    puts = [w for w in proposed["seat"].client.writes if w[0] == "PUT"]
+    name = f"casefile_{case}"
+    got = gk.wire_writes(puts)
+    assert gk.write_or_compare(gk.GOLDENS / "task_puts" / f"{name}.json", got, gk.allowed("task_puts")[name]) == []

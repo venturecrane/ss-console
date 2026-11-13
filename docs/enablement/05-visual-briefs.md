@@ -84,7 +84,7 @@ Recommended sequence: make rough versions in the AI tools from these briefs, put
   - Operator to practice-management system: reads matters, files work.
   - Operator to email: sends and drafts from its own mailbox.
   - Portal to Operator: reads the record of actions, never the client files.
-  - SMD to Operator: system health and the record of actions only.
+  - SMD's console to Operator: system health and the record of actions only. No person at SMD reads client files.
 - **Emphasis:** a boundary drawn around the seat labelled "One firm. Isolated. Nothing shared with other clients."
 - **Form:** Eraser.
 
@@ -92,7 +92,7 @@ Recommended sequence: make rough versions in the AI tools from these briefs, put
 
 - **Goal:** show where the firm's controls and records live inside the seat.
 - **Standard:** C4 model, level 2 (containers).
-- **Elements, top to bottom:** Channels (email, chat, voice notes) → Worker (runs the best available AI models) ↔ Firm memory (its rules, voice, formats and corrections; belongs to the firm) → Limits the firm authored (enforced in code, not in the prompt) → Connectors (practice management, email, calendar). From Limits, a line to the Audit record (the worker cannot change or delete it).
+- **Elements, top to bottom:** Channels (email, chat, voice notes) → Worker (runs current AI models SMD chooses for this seat) ↔ Firm memory (its rules, voice, formats and corrections; belongs to the firm) → Limits the firm authored (enforced in code, not in the prompt) → Connectors (practice management, email, calendar, any system the firm runs). From Limits, a line to the Audit record (the worker cannot change or delete it).
 - **Emphasis:** the Limits box sits between the Worker and everything it can touch. Nothing reaches the connectors without passing it.
 - **Form:** Eraser.
 
@@ -104,7 +104,7 @@ Recommended sequence: make rough versions in the AI tools from these briefs, put
   1. First contact: the firm sends a wish list.
   2. We send something concrete back: one workflow mapped.
   3. Objectives surface in their corrections.
-  4. Control comes first: every routine starts by preparing work for a person.
+  4. Control comes first: each routine starts by surfacing work or preparing it for a person.
   5. Connected read-only: our observations prompt the firm to name its real priority.
   6. First solution on a real file, revised on their own example until approved.
   7. Expansion, one ask at a time (some asks parked, one later revived).

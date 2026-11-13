@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+import goldens_kit as gk
 from litigation_testkit import make_inputs, make_job
 from jobs.litigation import job as job_mod
 from jobs.litigation.reassign import run as run_mod, spec as spec_mod, wake as wake_mod
@@ -231,6 +232,17 @@ def test_the_straggler_put_keeps_co_assignees_categories_and_owner(tmp_path: Pat
     assert body["categories"] == ["Discovery"] and body["subject"] == "Draft responses"
     assert body["dueDateOnly"] == "2026-03-01" and body["matterId"] == mid(1)
     assert assignees(v, tid(2)) == [DANA, CHR] and assignees(v, tid(3)) == [DANA]
+
+
+def test_the_straggler_puts_are_pinned_on_the_wire(tmp_path: Path) -> None:
+    """Every task PUT the move sends (a full replace: operator/CLAUDE.md, the task
+    PUT), byte for byte: goldens/task_puts/litigation_reassign.json. One task
+    carries categories, one does not. ``JOBS_WRITE_KIT_GOLDENS=1`` rewrites it."""
+    v = Vendor(world())
+    verdict(make_run(tmp_path, v))
+    got = gk.wire_writes([w for w in v.writes if w[0] == "PUT"])
+    path = gk.GOLDENS / "task_puts" / "litigation_reassign.json"
+    assert gk.write_or_compare(path, got, gk.allowed("task_puts")["litigation_reassign"]) == []
 
 
 def test_a_task_that_takes_on_its_second_put_converges(tmp_path: Path) -> None:

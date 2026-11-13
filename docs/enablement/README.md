@@ -4,12 +4,12 @@ For a sales representative getting to know SMD Services and its flagship, the Op
 
 ## Start here: the product, for any business
 
-| File                                                  | What it is                                                                                                       |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| [How the Operator Works](how-the-operator-works.html) | The explainer: seven views, one figure each, vertical-neutral, with one industry example at the end.             |
-| [Product model](product-model.md)                     | The source the explainer rests on: every claim cited to code, config or a decision record, with maturity marked. |
-| [Exemplar research](research-exemplars.md)            | The published explainers the views were benchmarked against, and the conventions taken from them.                |
-| [Designer brief](designer-brief/figures-brief.html)   | The brief for the figures a designer redraws, built by `designer-brief/build_brief.py`.                          |
+| File                                                  | What it is                                                                                                                                      |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [How the Operator Works](how-the-operator-works.html) | The explainer: seven views, one figure each, vertical-neutral, with one industry example at the end.                                            |
+| [Product model](product-model.md)                     | The source the explainer rests on: every claim cited to code, config or a decision record, with where each capability stands for clients today. |
+| [Exemplar research](research-exemplars.md)            | The published explainers the views were benchmarked against, and the conventions taken from them.                                               |
+| [Designer brief](designer-brief/figures-brief.html)   | The brief for the figures a designer redraws, built by `designer-brief/build_brief.py`.                                                         |
 
 The explainer is generated: edit `figures-src/gen3.body.html` (text) or `figures-src/gen3.py` (figures), then run `python3 docs/enablement/figures-src/gen3.py docs/enablement/how-the-operator-works.html`.
 

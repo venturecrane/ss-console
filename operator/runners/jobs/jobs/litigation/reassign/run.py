@@ -175,7 +175,7 @@ class ReassignRun:
             self.sleep(self.settle_seconds)
 
     def _task_writer(self, owner_of: dict[str, str], from_ids: set[str], to: str) -> Callable[[str], None]:
-        from smokeball_connector.task_update import merge_task_update
+        from smokeball_connector.task_update import full_replace_body
 
         writer = self._writer()
 
@@ -184,11 +184,7 @@ class ReassignRun:
             ids = select_mod.task_ids(t)
             if not set(ids) & from_ids or not owner_of.get(tid):
                 return
-            body, _ = merge_task_update(t, subject=None, note=None, due_date=None, is_completed=None,
-                                        assignee_ids=swapped(ids, from_ids, to), staff_id=owner_of[tid],
-                                        stamp=lambda s: s)  # fmt: skip
-            if t.get("categories"):  # a full replace clears what it omits
-                body["categories"] = t["categories"]
+            body = full_replace_body(t, assignee_ids=swapped(ids, from_ids, to), staff_id=owner_of[tid])
             writer.send("PUT", f"/tasks/{tid}", body)
 
         return write

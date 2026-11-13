@@ -31,7 +31,7 @@ SMD runs on three layers: the Captain makes the decisions that bind the firm, yo
 | **You, the administrator** | The daily and weekly routine, directing agents, routine client emails, invoices at set prices, routing change requests | Keeps the business running and brings the Captain only what is the Captain's |
 | **AI agents** | Changes to the systems, live operations on client seats, investigation, drafting, monitoring | Do the work and prove it |
 
-A fourth party sits beside these: **each client** decides how far its own Operator may go, within what its agreement allows. Neither SMD nor an agent sets a client's limits for them; an unconfigured action is refused (ADR 0035).
+A fourth party sits beside these: **each client** decides how far its own Operator may go, within what its agreement allows. SMD writes each client's limits into its configuration on the client's decision; neither SMD nor an agent decides them for the client, and an unconfigured action is refused (ADR 0035).
 
 The rule underneath all of it is the first law of the agent doctrine: every call has exactly one owner, and the first step is to name it. Agents own execution and anything a repository or tool can answer; the Captain owns strategy, commitments and spend; the client owns its own posture (`docs/doctrine/agent-operating-doctrine.md`, Law 1).
 

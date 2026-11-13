@@ -4,7 +4,7 @@ section: product
 order: 4
 owner: captain
 review_every: 90
-last_reviewed: "2026-10-21"
+last_reviewed: "2026-11-13"
 summary: A pack is a quick-start template that makes the universal Operator recognizable as "exactly your thing" - not a claim that we are experts in the client's business
 sources:
   - label: Law-firm base pack manifest
@@ -25,11 +25,11 @@ sources:
     href: https://github.com/venturecrane/ss-console/blob/main/docs/specs/verticals/law-firm.md
 ---
 
-A pack is the industry starting point for a client's Operator, such as the law-firm pack: a ready set of skills, limits and connections that makes the Operator recognizable to that kind of business on day one. Twelve industries have a written pack and a public page, but only the law-firm pack serves a client today, so treat the others as offers SMD can build out when a client signs, not as finished products.
+A pack is the industry starting point for a client's Operator, such as the law-firm pack: a short list of suggested skills and connections, with the industry's lines named in words, that makes the Operator recognizable to that kind of business on day one. A pack sets no limits of its own; each seat's limits are written for that client. There are thirteen packs. Each one describes what SMD configures the Operator to do in that industry, which is true of the product whether or not a client there runs it yet. The law-firm pack is running for a client today; for the others, SMD builds the industry-specific skills with the first client in that industry (`operator/skills/product-guide/references/industry-packs.md`).
 
 ## What a pack is, and what it is not
 
-The Operator is a configurable substrate with no fixed function ([ADR 0037](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0037-operator-thesis.md), Tenet 2). "All things to all people" is the capability. "Exactly your thing" is how we sell it. A **pack** is the bridge: it refines the substrate for a vertical with a starting set of skills, entitlements, voices, connectors, compliance floors, and fixtures (Tenet 5).
+The Operator is a configurable substrate with no fixed function ([ADR 0037](https://github.com/venturecrane/ss-console/blob/main/docs/adr/0037-operator-thesis.md), Tenet 2). "All things to all people" is the capability. "Exactly your thing" is how we sell it. A **pack** is the bridge: it refines the substrate for a vertical with a starting set of skills, suggested connectors, named compliance lines, templates and fixtures (Tenet 5). Limits, voice and any industry floor are authored per seat, not set by the pack.
 
 A pack is a **quick-start template, not a claim of expertise in the client's business.** Tenet 5 makes packs the entry, not the substance: we enter through a sharp, narrow vertical because the platform underneath is unlimited and we lose nothing by starting narrow. Beyond the pack, what a client's Operator does is what that engagement authored (Tenet 3), and the client is the expert in their own business (ADR 0040, section 4). The marketing word "package" describes a recognizable wedge; the capability underneath does not shrink to fit it.
 
@@ -59,7 +59,7 @@ The vertical-specific skill **bodies** are not in this list. They live in this r
 
 ## The shared spine
 
-A pack is the shared spine plus a vertical skin. Generic connective skills already exist in `operator/skills/`: `inbox-triage`, `status-report-assembler`. (Four more generic skills, ar-chaser, asset-collection-follower, retainer-hours-reconciler and scope-creep-flagger, were retired 2026-09-29, and email-reply on 2026-11-10: no client ran them.) Reuse them; do not rebuild them. The vertical contributes its specific skills and its connector map; the spine stays shared. For Law, the base pack's `vertical.yaml` lists eighteen law skills (its own comment still says the brief specified twelve; more were added since), and the personal-injury add-on's `addon.yaml` lists twenty-seven more.
+A pack is the shared spine plus a vertical skin. Generic connective skills already exist in `operator/skills/`: `inbox-triage`, `status-report-assembler`. (Four more generic skills, ar-chaser, asset-collection-follower, retainer-hours-reconciler and scope-creep-flagger, were retired 2026-09-29, and email-reply on 2026-11-10: no client ran them.) Reuse them; do not rebuild them. The vertical contributes its specific skills and its connector map; the spine stays shared. For Law, the base pack's `vertical.yaml` lists fifteen law skills (its own comment still says the brief specified twelve; more were added since), and the personal-injury add-on's `addon.yaml` lists twenty-four more.
 
 ## The documented verticals
 
@@ -78,9 +78,9 @@ Twelve verticals are specified under `docs/specs/verticals/` (plus a `_template`
 - `title`
 - `veterinary`
 
-A documented spec is a brief, not a shipped pack. A pack page is published from its written spec, and building the pack out (its seat configuration and skills) starts with the first client in that vertical. The Captain amended the operating model to this on 2026-10-21 to match practice: all twelve pack pages are public, and only law has been delivered (`docs/pm/pack-production-operating-model.md`).
+A documented spec is the pack's brief. A pack page is published from its written spec, and SMD builds the pack's seat configuration and industry-specific skills with the first client in that vertical. The Captain amended the operating model to this on 2026-10-21 to match practice: all twelve pack pages are public, and law is the pack running for a client today (`docs/pm/pack-production-operating-model.md`).
 
-Current state, checked against the repo: all twelve pack pages are published (`src/pages/packs/<slug>.astro` exists for every vertical above), and only the law-firm pack serves a client (`vertical: law-firm` is the only vertical a client seat's `operator/customers/*/customer.yaml` names; one seat SMD pays for itself names `vertical: real-estate`, and the other seats are `vertical: mixed`). The published pages therefore run ahead of the rule as written; which of the two should change is a decision for the Captain and is not recorded.
+Current state, checked against the repo: all twelve pack pages are published (`src/pages/packs/<slug>.astro` exists for every vertical above), and only the law-firm pack serves a client (`vertical: law-firm` is the only vertical a client seat's `operator/customers/*/customer.yaml` names; one seat SMD pays for itself names `vertical: real-estate`, and the other seats are `vertical: mixed`). A published page describes what SMD configures the Operator to do in that industry, so it is true of the product before a client there runs it.
 
 ## How a pack is built (the motion, proven on Law)
 

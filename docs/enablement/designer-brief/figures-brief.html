@@ -131,7 +131,7 @@ a { color:var(--accent); }
       <tr><td>Jobs runner</td><td>queued jobs: cost-limited, reviewed, proven</td></tr>
       <tr><td rowspan="4">SMD SERVICES · RUN BY SMD</td><td>Client portal</td><td>pause, activity, limit settings</td></tr>
       <tr><td>Pager + hourly triage</td><td>watches every seat</td></tr>
-      <tr><td>Per-client ops workspace</td><td>one per client; access logged</td></tr>
+      <tr><td>Per-client ops workspace</td><td>sealed to one seat; SMD's agents</td></tr>
       <tr><td>Releases + config</td><td>by reviewed change only</td></tr>
       <tr><td>MODEL PROVIDER · EXTERNAL</td><td>AI processing</td><td>does not train on client content. Zone note: some seats also use a speech-to-text and a web-search service</td></tr>
     </tbody>
@@ -149,7 +149,7 @@ a { color:var(--accent); }
       <tr><td>5</td><td>Client portal</td><td>Front door</td><td>pause</td></tr>
       <tr><td>6</td><td>Front door</td><td>Pager + hourly triage</td><td>health, notices</td></tr>
       <tr><td>7</td><td>Releases + config</td><td>Memory + config</td><td>config changes</td></tr>
-      <tr><td>8</td><td>Per-client ops workspace</td><td>the seat</td><td>logged access</td></tr>
+      <tr><td>8</td><td>Per-client ops workspace</td><td>the seat</td><td>sealed access</td></tr>
       <tr><td>9</td><td>Agent</td><td>AI processing</td><td>task content</td></tr>
       <tr><td>9</td><td>Jobs runner</td><td>AI processing</td><td>task content</td></tr>
     </tbody>
@@ -165,7 +165,7 @@ a { color:var(--accent); }
       <tr><td>Files an internal note / e.g. a note in the system of record</td><td>Internal write / limit: acts on its own</td><td>✓ Runs</td><td class="yes">allowed</td></tr>
       <tr><td>Emails the client's staff / e.g. a morning digest to the team</td><td>Send to staff / limit: acts on its own</td><td>✓ Sent</td><td class="yes">allowed</td></tr>
       <tr><td>Emails the client's customers / e.g. a follow-up on a missing document</td><td>Send to the client's customers / limit: drafts for a person</td><td>Draft: a person sends it</td><td>waits for a person</td></tr>
-      <tr><td>Accepts a vendor's terms / e.g. agreeing to a delivery date</td><td>Commitment / limit: asks first (tag: built, not yet proven in client use)</td><td>Held for an administrator</td><td>waits for a person</td></tr>
+      <tr><td>Accepts a vendor's terms / e.g. agreeing to a delivery date</td><td>Commitment / limit: asks first</td><td>Held for an administrator</td><td>waits for a person</td></tr>
       <tr><td>Emails an outside party / e.g. someone on none of the client's lists</td><td>Send to outside parties / no limit written</td><td>✕ Refused</td><td class="no">refused</td></tr>
       <tr><td>Moves money / e.g. paying an invoice</td><td>Money movement / banned for every client</td><td>✕ Refused, whatever is written</td><td class="no">refused</td></tr>
     </tbody>

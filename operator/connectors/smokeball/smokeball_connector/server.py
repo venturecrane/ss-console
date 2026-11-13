@@ -55,7 +55,7 @@ from .task_update import PROVENANCE_MARK as _PROVENANCE_MARK
 from .memo_tools import _slim_memo, _slim_memos, upsert_memo  # noqa: F401 - _slim_memo re-exported for tests
 from .task_update import MatterReferenceMismatch, verify_unless_digest_home
 from .task_update import drop_probe_tasks as _drop_probe_tasks
-from .task_update import merge_task_update
+from .task_update import full_replace_body
 
 # ``fetch_bytes`` resolves an attachment reference in either form (a
 # ``spool:<token>`` the mail tool wrote on this machine, or an allowlisted
@@ -835,12 +835,12 @@ def update_task(
     ``CompletedByStaffId``, and any omitted field is CLEARED on the tenant (a
     bare completion PUT nulled the subject, due date, and matter link). So this
     tool reads the task first and re-sends its current subject/note/due
-    date/matter/assignees merged with the requested changes. ``staff_id`` names
-    the owning staff member: the task read never echoes ``staffId``, so pass it
-    (a deliver-mode caller already holds the matter's
-    ``personResponsibleStaffId``)."""
+    date/matter/assignees/categories merged with the requested changes
+    (``full_replace_body``). ``staff_id`` names the owning staff member: the
+    task read never echoes ``staffId``, so pass it (a deliver-mode caller
+    already holds the matter's ``personResponsibleStaffId``)."""
     client = _get_client()
-    body, matter_id = merge_task_update(
+    body = full_replace_body(
         client.get(f"/tasks/{task_id}"),
         subject=subject,
         note=note,
@@ -851,7 +851,7 @@ def update_task(
         stamp=_stamp,
     )
     if subject is not None or note is not None:
-        _verify_matter_reference(client, matter_id or "", subject, note)
+        _verify_matter_reference(client, str(body.get("matterId") or ""), subject, note)
     return prove_task(client, body, client.request("PUT", f"/tasks/{task_id}", json=body), task_id)
 
 

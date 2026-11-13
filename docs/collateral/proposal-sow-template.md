@@ -104,7 +104,9 @@ This start date is held for 5 business days from the date of this proposal. Afte
 
 [Define the support window and terms for this engagement. Default is two weeks, but adjust based on scope and complexity.]
 
-[Example: "For two weeks following the handoff session, our team is available for questions about the solutions we built, minor configuration adjustments, and one additional team member walkthrough if needed. Response time is within one business day via email."]
+[Example: "For two weeks following the handoff session, our team is available for questions about the solutions we built, minor configuration adjustments, and one additional team member walkthrough if needed."]
+
+[State a response time only if this engagement contracts one, and write the agreed figure here. Never paste a default.]
 
 Work outside the original scope — new problems, feature additions, or process changes beyond what was delivered — would go through a separate conversation.
 
