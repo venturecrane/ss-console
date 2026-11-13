@@ -1,3 +1,68 @@
 {
-  "not_applicable": "MedchronLedger has no reply-once mark (no mark_replied)"
+  "row": {
+    "cents": 500,
+    "client_keys": "[\"alpha example\"]",
+    "covered_json": null,
+    "created_at": "2026-10-20T17:00:00.000Z",
+    "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+    "documents": 4,
+    "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+    "folder_id": "folder-9",
+    "id": "01KTJ0BX000000000000000001",
+    "matter_id": "m-1",
+    "matter_number": "2026-PI-101",
+    "pages": 30,
+    "reason": null,
+    "reply_key": "reply",
+    "reply_sent_at": "2026-10-20T17:00:08.000Z",
+    "request_ref": "<req-1@firm.example>",
+    "requester": "admin@firm.example",
+    "state": "delivered",
+    "updated_at": "2026-10-20T17:00:03.000Z",
+    "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+  },
+  "rows": [
+    {
+      "call": "mark reply",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "mark reply again",
+      "result": {
+        "returned": false
+      }
+    },
+    {
+      "call": "mark another key",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark reply",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark reply after unmark",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark a key never marked",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark an unknown job",
+      "result": {
+        "returned": false
+      }
+    }
+  ]
 }

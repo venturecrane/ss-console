@@ -263,6 +263,8 @@
               "matter_id": "11111111-2222-3333-4444-555555555555",
               "message_ref": "AAMkAGraphMessageId0001",
               "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
               "request_ref": "AAMkAGraphMessageId0001",
               "requester": "pat.lane@example-firm.test",
               "review_id": null,

@@ -248,7 +248,7 @@ def test_the_stage_tool_is_refused_on_a_seat_and_stages_nothing(lane, monkeypatc
 # ---- a lane row through the review sweeper --------------------------------
 
 
-def _lane_row(n_files: int) -> dict:
+def _lane_row(n_files: int, session_id: str = "records:abc") -> dict:
     files = [
         {
             "file_id": f"f{i}",
@@ -268,7 +268,7 @@ def _lane_row(n_files: int) -> dict:
         html="",
         batches=contract_batches.batches(files),
         matter_id=MATTER,
-        session_id="records:abc",
+        session_id=session_id,
     )
     review_row.write_row(row)
     return row
@@ -312,3 +312,27 @@ def test_a_rejected_lane_row_sends_nothing(lane, monkeypatch) -> None:  # noqa: 
     mod._review_once()
     (row,) = rev.rows()
     assert sent == [] and row["status"] == rev.STATUS_REJECTED
+
+
+LANE_JOB = "01KTJ0BX000000000000000042"
+
+
+def test_a_lane_row_release_names_its_records_job_to_the_broker(lane, monkeypatch) -> None:  # noqa: F811 - the lane fixture, imported
+    """2026-11-13: records and medchron had no reply-once mark; a reply could go
+    out twice. The release of a lane row names the job its ``session_id`` names,
+    so the broker takes that job's reply-once mark at the send. Only the first
+    part carries it: the later parts are plain replies in the same thread.
+    FALSIFIER: on the code before this change no part names a job."""
+    mod, _d1, sent, _spool, _b = lane
+    _lane_row(4, session_id=f"records:{LANE_JOB}")
+    monkeypatch.setattr(rev, "decision", lambda r, **k: "approve")
+    mod._review_once()
+    assert [s.get("for_job") for s in sent] == [{"kind": "records_job", "job_id": LANE_JOB}, None]
+
+
+def test_a_row_whose_session_names_no_job_names_none(lane, monkeypatch) -> None:  # noqa: F811 - the lane fixture, imported
+    mod, _d1, sent, _spool, _b = lane
+    _lane_row(1, session_id="records:not-a-job-id")
+    monkeypatch.setattr(rev, "decision", lambda r, **k: "approve")
+    mod._review_once()
+    assert len(sent) == 1 and "for_job" not in sent[0]

@@ -86,6 +86,18 @@ def test_the_verdict_names_unnamed_stale_and_inherited_entries():
     assert "inherited" in gi.judge("hm", {"cell": ["0.wire.1"]}, {"cell": ["0.wire.1"]}, behaviour, lost)[0]
 
 
+def test_a_merged_changes_leftover_entries_block_no_peer_pr():
+    """FALSIFIER: an entry the base carried that explains nothing here is a merged
+    change's leftover and passes; one the PR itself added that explains nothing
+    still fails as stale; an inherited one that explains a difference still fails."""
+    gi = _integrity()
+    behaviour, lost = {"cell": ["0.wire.1"]}, {}
+    leftover = {"other": ["0.log.0"]}
+    assert gi.judge("hm", {"cell": ["0.wire.1"], **leftover}, leftover, behaviour, lost) == []
+    assert "stale" in gi.judge("hm", {"cell": ["0.wire.1", "0.log.0"]}, {}, behaviour, lost)[0]
+    assert "excuse" in gi.judge("hm", {"cell": ["0.wire.1"]}, {"cell": ["0.wire.1"]}, behaviour, lost)[0]
+
+
 def test_the_push_to_main_fails_while_an_allowed_list_names_a_path(tmp_path, monkeypatch):
     """FALSIFIER for "cleared once merged": a merged entry left in place fails the push run."""
     gi = _integrity()

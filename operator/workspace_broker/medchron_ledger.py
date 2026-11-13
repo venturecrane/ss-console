@@ -49,7 +49,7 @@ from typing import Any
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
 from . import medchron_credits
-from .lane_ledger import StateRecord
+from .lane_ledger import ReplyOnce, StateRecord
 from .medchron_update import ADDED_COLUMNS, client_keys, update_block
 from .medchron_coverage import parse_covered, parse_why, union_coverage, validate_covered
 from . import seat_config
@@ -438,12 +438,14 @@ def allowance_from_customer_yaml(path: str | Path) -> int | None:
     return None
 
 
-class MedchronLedger(StateRecord, medchron_credits.CreditLedger):
+class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
     """The chronology lane on the shared ledger (``lane_ledger``): its table,
     its DDL, its page credits and its UPDATE. Kept as they were: a record takes
     no write lock first (``BEGIN = None``) and its row after carries no
-    ``prev_state``; there is no reply-once mark and no spend table (the
-    window's debits are its cents)."""
+    ``prev_state``; there is no spend table (the window's debits are its
+    cents). The reply-once mark (``ReplyOnce``, 2026-11-13) is taken by the
+    broker's bound reply at its first POST, as on every other lane: before it,
+    a chronology's once-only rested on the bound-reply claim alone."""
 
     JOBS = "medchron_jobs"
     BEGIN = None
@@ -469,6 +471,9 @@ class MedchronLedger(StateRecord, medchron_credits.CreditLedger):
         # for (medchron_update.client_keys), so a joint matter's delivery
         # refuses a RUN for its own clients only. NULL on an older row reads
         # as every client.
+        #
+        # Same reason, 2026-11-13, for ``reply_sent_at`` / ``reply_key``: the
+        # reply-once mark. NULL on an older row reads "not yet replied".
         have = {r["name"] for r in conn.execute("PRAGMA table_info(medchron_jobs)")}
         for column, alter in ADDED_COLUMNS:
             if column not in have:
