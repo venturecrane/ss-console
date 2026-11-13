@@ -44,10 +44,10 @@ from . import filing, seat_config
 
 #: The seats this probe may write on: SMD's own staging twin, nothing else.
 ALLOWED_SEATS = frozenset({"ap-staging"})
-#: The one fictional matter on the staging tenant the probe files into. Empty
-#: until it is read off the tenant (read-only) and committed; the probe refuses
-#: while it is empty.
-PROBE_MATTER_ID = ""
+#: The one fictional matter on the staging tenant the probe files into
+#: (OPS-OPERATOR-LIBRARY, read off ap-staging read-only on 2026-11-13). The probe
+#: refuses while it is empty.
+PROBE_MATTER_ID = "84693f0c-ddc7-4d9d-8921-26dce238f96c"
 #: Polls of the listing, and the pause between them, before a deleted file
 #: that still reads present fails the probe.
 GONE_TRIES = 20

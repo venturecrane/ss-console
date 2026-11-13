@@ -29,10 +29,10 @@ def _client_seat(environment: str) -> Any:
     return ClientSeat(client)
 
 
-def test_the_committed_probe_refuses_until_its_matter_is_filled_in():
-    """The lead commits the fictional matter's id after reading it off the
-    staging tenant; until then the probe cannot file anywhere."""
-    assert probe.PROBE_MATTER_ID == ""
+def test_the_probe_refuses_while_its_matter_is_empty(monkeypatch):
+    """MUTATION: drop the check and an empty id reaches the filing."""
+    assert probe.PROBE_MATTER_ID, "the committed fictional matter is filled in"
+    monkeypatch.setattr(probe, "PROBE_MATTER_ID", "")
     assert "PROBE_MATTER_ID is empty" in probe.refusal("ap-staging")
 
 
