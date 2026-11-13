@@ -371,13 +371,17 @@ jobs:
           the jobs runner suite did not need to run. This job still reports so
           the required check is satisfied."
 
-  # The goldens hold the OLD code's behaviour (wave 2, Phase A). The job host
-  # matrix and the broker ledger goldens are regenerated from the merge-base
-  # tree, with THIS PR's harness laid over it, and compared with the goldens
-  # the PR commits: any difference outside each set's allowed-changes.json
-  # fails, so a PR cannot change a host or a ledger and rewrite its golden to
-  # match. operator/bin/goldens/golden-integrity.py says how. Same gating shape
-  # as `runner`.
+  # The goldens hold the OLD code's behaviour (wave 2, Phase A). EVERY golden
+  # set (the host matrix, the wire, the ledgers, the lane endings, the paid
+  # calls, the firm loaders, the text rules, the seat-config caller table) is
+  # regenerated from the merge-base tree, with THIS PR's harness laid over it,
+  # and compared with the goldens the PR commits; the PR's goldens and harness
+  # declarations are also held to the base's committed copies, so nothing
+  # pinned is dropped unseen. Any difference outside each set's allowed list
+  # fails, as does a stale, inherited or wildcard entry, so a PR cannot change
+  # the code and rewrite its golden to match.
+  # operator/bin/goldens/golden-integrity.py says how. Same gating shape as
+  # `runner`.
   goldens:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -403,11 +407,19 @@ jobs:
         working-directory: operator
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.event.merge_group.base_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        # Every golden set (bin/goldens/integrity_families.py), the caller
+        # capture included: the script builds the base runner's venv (3.13)
+        # and the capture's (3.14, the substrate job's packages). On the push
+        # to main, --require-empty fails while any allowed list still names a
+        # path, so a merged change's entries are cleared in a follow-up.
         run: |
           set -euo pipefail
           base="$(git merge-base "${BASE_SHA:-HEAD~1}" HEAD)"
           echo "merge base: $base"
-          python3 bin/goldens/golden-integrity.py --base "$base"
+          extra=()
+          if [ "$EVENT_NAME" = "push" ]; then extra=(--require-empty); fi
+          python3 bin/goldens/golden-integrity.py --base "$base" ${extra[@]+"${extra[@]}"}
 
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'
