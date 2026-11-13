@@ -31,4 +31,4 @@ seats:
     provisioned: true
   smd-office:
     purpose: internal
-    provisioned: false
+    provisioned: true

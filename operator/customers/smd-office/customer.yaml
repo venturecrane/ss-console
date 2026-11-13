@@ -7,10 +7,12 @@ schema_version: 1
 # decommissioned 2026-11-13; that seat's record is
 # operator/customers/scott.decommissioned.2026-11-13/.
 #
-# NOT YET PROVISIONED (seat.yaml fly_app: null). A merge of this file writes
-# nothing to R2 (ci-publish-customer-configs.sh never creates a seat's object)
-# and no D1 row (ci-sync-customer-configs.sh skips a slug with no
-# customer_configs row), so nothing runs until the Captain provisions it.
+# Fly app hermes-smd-office, AgentMail inbox smd-office@agentmail.to and its
+# webhook, the seat's Fly deploy token and its AgentMail keys exist
+# (2026-11-13). A merge of this file still writes nothing to R2
+# (ci-publish-customer-configs.sh never creates a seat's object) and no D1 row
+# (ci-sync-customer-configs.sh skips a slug with no customer_configs row), so
+# nothing runs on the seat until the Captain provisions it.
 #
 # What is deliberately absent here, each added by its own reviewed PR:
 # - the mailbox-keeper skill and the webhook trigger that wakes it on inbound
