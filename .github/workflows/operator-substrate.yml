@@ -392,7 +392,7 @@ jobs:
   # `runner`.
   goldens:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -429,11 +429,40 @@ jobs:
           if [ "$EVENT_NAME" = "push" ]; then extra=(--require-empty); fi
           python3 bin/goldens/golden-integrity.py --base "$base" ${extra[@]+"${extra[@]}"}
 
-      # A release restarts the jobs daemon between two ticks of a job: every
-      # host matrix cell of the lanes on the one job host is restarted after
-      # each of its ticks onto the other version (merge-base to this tree, and
-      # back), each host in its own interpreter over the real broker socket,
-      # and must record what the old version's own restart records.
+      - name: No substrate paths changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: >-
+          echo "No file under .github/operator-substrate-paths.txt changed;
+          the goldens did not need regenerating. This job still reports so
+          the check is satisfied."
+
+  # Cross-version job folders (bin/goldens/cross-version-hosts.py). A release
+  # restarts the jobs daemon between two ticks of a job: every host matrix
+  # cell of the lanes on the one job host is restarted after each of its
+  # ticks onto the other version (merge-base to this tree, and back), each
+  # host in its own interpreter over the real broker socket, and must record
+  # what the old version's own restart records. Its own job, beside
+  # `goldens`, so neither stretches the other's wall clock.
+  cross-version-hosts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect substrate-relevant changes
+        id: changes
+        run: >-
+          python3 operator/bin/substrate-paths-changed.py
+          --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
+          --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Set up uv
+        if: steps.changes.outputs.relevant == 'true'
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
       - name: Cross-version job folders
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
@@ -448,8 +477,8 @@ jobs:
         if: steps.changes.outputs.relevant != 'true'
         run: >-
           echo "No file under .github/operator-substrate-paths.txt changed;
-          the goldens did not need regenerating. This job still reports so
-          the check is satisfied."
+          the cross-version check did not need running. This job still reports
+          so the check is satisfied."
 
   # The seat runtime's own suite (operator/hermes-smd-overlay, ADR 0095). Until
   # 2026-10-22 this ran as the standalone overlay repo's CI (Python 3.11, Hermes
