@@ -255,7 +255,7 @@ def compare(old: dict[str, Any], new: dict[str, Any]) -> tuple[list[str], bool]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("--db", type=Path, help="a COPY of an audit.db (opened read-only)")
     ap.add_argument("--base", help="the commit whose classes are the OLD side (git archive)")
     ap.add_argument("--old-tree", type=Path, help="an operator/ dir whose classes are the OLD side")
