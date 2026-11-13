@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 ALLOWED = "allowed-changes.json"
 FILE = "<file>"
@@ -117,10 +117,18 @@ def goldens(root: Path, pattern: str = "**/*", skip: tuple[str, ...] = ()) -> di
     return out
 
 
-def tree_diffs(want: dict[str, Path], got: dict[str, Path], *, only_losses: bool = False) -> dict[str, list[str]]:
+def tree_diffs(
+    want: dict[str, Path],
+    got: dict[str, Path],
+    *,
+    only_losses: bool = False,
+    view: Callable[[Any], Any] | None = None,
+) -> dict[str, list[str]]:
     """Per golden name, every path where ``got`` differs from ``want`` (or, with
     ``only_losses``, every path ``got`` does not keep). A file on one side only
-    is ``<file>``, except a file only ``got`` has when only losses count."""
+    is ``<file>``, except a file only ``got`` has when only losses count.
+    ``view`` is the set's own comparison form of a document (the caller table
+    takes line numbers out), applied to both sides."""
     out: dict[str, list[str]] = {}
     for name in sorted(set(want) | set(got)):
         if name not in got or name not in want:
@@ -128,6 +136,8 @@ def tree_diffs(want: dict[str, Path], got: dict[str, Path], *, only_losses: bool
                 out[name] = [FILE]
             continue
         a, b = read_golden(want[name]), read_golden(got[name])
+        if view is not None:
+            a, b = view(a), view(b)
         found = losses(a, b) if only_losses else diffs(a, b)
         if found:
             out[name] = found

@@ -3022,7 +3022,7 @@
       "yaml-syntax-error": "raise ParserError reads=1"
      },
      "calls": [
-      "operator/bin/lib/fleet/smoke.py:224 yaml.safe_load(customer_yaml.read_text(encoding=\"utf-8\"))"
+      "operator/bin/lib/fleet/smoke.py:238 yaml.safe_load(customer_yaml.read_text(encoding=\"utf-8\"))"
      ],
      "file": "operator/bin/lib/fleet/smoke.py",
      "kind": "function",
@@ -6346,7 +6346,7 @@
       "yaml-syntax-error": "raise ParserError"
      },
      "calls": [
-      "operator/templates/msgraph-read-app-cannot-read-staff-probe.py:60 yaml.safe_load(yaml_text)"
+      "operator/templates/msgraph-read-app-cannot-read-staff-probe.py:217 yaml.safe_load(yaml_text)"
      ],
      "file": "operator/templates/msgraph-read-app-cannot-read-staff-probe.py",
      "kind": "function",

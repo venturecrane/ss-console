@@ -167,8 +167,13 @@ def regenerate(work: Path, py: Path, cap: Path | None, out: Path, names: set[str
     kit_env = {**code_path(work), "JOBS_WRITE_KIT_GOLDENS": "1", "JOBS_WRITE_LANE_GOLDENS": "1"}
     for test in (f"{RUNNER_TESTS}/{t}" for f in FAMILIES if f.name in names for t in f.tests):
         # One file at a time, in the family's order: the model facts read the
-        # paid-call goldens, which must be written first.
-        run([str(py), "-m", "pytest", *runner, test, "-q", "-n", "4", "-k", "not planted"], work, kit_env, check=False)
+        # paid-call goldens, which must be written first. Only the writers run:
+        # a set's completeness test (``every_golden_has_a_case``) reads the dir
+        # clear_outputs just emptied, before its writers have filled it, so it
+        # always saw an empty set there (``assert set() == {...}``); the
+        # committed set's completeness is judged below, file by file.
+        writers = "not planted and not every_golden and not every_target and not every_checker_was_fed"
+        run([str(py), "-m", "pytest", *runner, test, "-q", "-n", "4", "-k", writers], work, kit_env, check=False)
     if "seat_callers" in names and cap is not None:
         dest = out / "contracts" / "seat-config-callers.json"
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -224,11 +229,22 @@ def got_root(f: Family, work: Path, out: Path) -> Path:
     return out / f.out if f.regen == "out" else work / f.root
 
 
+def view_of(f: Family) -> Any:
+    """A set's own comparison form: the caller table is compared without line
+    numbers (a site a peer's merge moved down a file is the same site)."""
+    if f.name == "seat_callers":
+        from bin.lib.seat_callers.diff import comparable
+
+        return comparable
+    return None
+
+
 def check_family(f: Family, base: Path, work: Path, out: Path) -> list[str]:
     committed = gd.goldens(OPERATOR / f.root, f.pattern)
     regenerated = gd.goldens(got_root(f, work, out), f.pattern, f.inputs)
-    behaviour = gd.tree_diffs({k: v for k, v in committed.items() if v.name not in f.inputs}, regenerated)
-    lost = gd.tree_diffs(gd.goldens(base / f.root, f.pattern), committed, only_losses=True)
+    kept = {k: v for k, v in committed.items() if v.name not in f.inputs}
+    behaviour = gd.tree_diffs(kept, regenerated, view=view_of(f))
+    lost = gd.tree_diffs(gd.goldens(base / f.root, f.pattern), committed, only_losses=True, view=view_of(f))
     return judge(f.name, allowed_of(OPERATOR, f.allowed), allowed_of(base, f.allowed), behaviour, lost)
 
 
