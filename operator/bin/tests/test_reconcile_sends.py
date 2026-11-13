@@ -244,9 +244,7 @@ def test_slug_for_inbox_reads_the_real_seat_configs():
     the authored lookup existed). scott, the seat this first pinned
     (agentcrane@), was decommissioned 2026-11-13."""
     slugs = sorted(
-        d
-        for d in os.listdir(rec._customers_dir())
-        if not d.startswith(("_", ".")) and ".decommissioned." not in d
+        d for d in os.listdir(rec._customers_dir()) if not d.startswith(("_", ".")) and ".decommissioned." not in d
     )
     assert rec.slug_for_inbox("brokery-agent@agentmail.to", slugs) == "brokery"
 

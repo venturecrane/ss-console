@@ -854,8 +854,7 @@ def test_a_self_serve_seat_gets_the_same_checks_as_any_seat():
     hosted = [
         p.parent.name
         for p in customers.glob("[!_]*/customer.yaml")
-        if ".decommissioned." not in p.parent.name
-        and cli.seat_product(yaml.safe_load(p.read_text())) == "hosted-agent"
+        if ".decommissioned." not in p.parent.name and cli.seat_product(yaml.safe_load(p.read_text())) == "hosted-agent"
     ]
     assert "smd-office" in hosted
     rows = [_inbound(NOW - timedelta(hours=1)), _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=5))]
