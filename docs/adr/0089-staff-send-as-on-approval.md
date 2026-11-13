@@ -72,6 +72,24 @@ The broker consumes the row atomically with the transmit and records DISPATCHED 
 
 `external_send` keeps its authored ceiling (`draft_for_review` on the law-firm seat, and the letter's "a person sends it" cap). This ADR opens nothing for mail that goes out under the Operator's own name.
 
+### 9. A second transport: send from a Google Workspace mailbox (`via: gmail`) (amendment, 2026-11-13)
+
+SMD's own operations seat sends from the Captain's Google Workspace mailbox, which Graph cannot reach. A `scope.staff_send_as` entry may now author `via: gmail` and a `mailbox:` (the Google Workspace mailbox the address belongs to); absent `via` is `msgraph`, so every seat authored before this amendment is unchanged, and one seat authors one transport. Sections 1 to 8 hold except where this section says otherwise. Five decisions:
+
+1. **A draft is proposed only on the mailbox owner's emailed instruction to the seat.** The model writes the body, which is a value the owner approves, never a send.
+2. **The approval loop rides the seat's own AgentMail inbox.** The broker emails the exact draft to the owner from the seat's AgentMail address, through the same audited, recipient-fenced dispatch every other seat send uses, tagged `[draft <8hex>]`. The owner's reply is read only on AgentMail inbound, verified by `shared/sender_auth.py` (DKIM and DMARC), then by the establishment plugin's send-as reader, then by `send_as_decide`.
+3. **The approver is the mailbox owner, known by any of the addresses authored for that mailbox.** Every `via: gmail` entry naming the same `mailbox:` is one person's set of addresses, so a reply from either of the Captain's two addresses (`scott@smd.services`, an alias, and `smdurgan@smdurgan.com`) answers a draft sent as either. Any other address is refused, and an administrator still may cancel and never send.
+4. **The digest covers From, To, Cc, subject, thread and body, and is rechecked at send.** The thread is the Gmail thread id with the In-Reply-To and References the reply will carry, read by the broker from the mailbox at propose time. A changed draft is a new row with a new tag.
+5. **No approve links, and a two-sided forgery guard.** The seat can read the owner's mailbox (that is the job), so a link would be one the seat could lift and press, the reason `staff_mailbox_reads` may never name an approver (5a). Change, send and cancel are replies only. An answer counts only when it is in the owner's SENT mail (`rfc822msgid:<id> in:sent`) and is not a message the broker sent (it carries no `X-SMD-Audit-Row` header and is not a Gmail id the broker recorded). A lookup that errors refuses.
+
+**From is chosen in code: the authored alias the thread was received at.** On a reply in an existing thread the broker reads the thread and sets From to whichever of the owner's authored addresses the other party wrote to; a caller-supplied From that disagrees is refused. A new message with no thread carries the authored From the request names, which the approval email shows. Either way From is inside the digest.
+
+**Reply-To is the owner alone** on this transport (section 6 sets the staff member and the Operator's mailbox on Graph). The other party is writing to a person, not to SMD's agent, and an AgentMail Reply-To on the Captain's own correspondence would put the agent in front of them. So an outside reply reaches only the owner's mailbox; the send-as reply notice fires only when an inbound to the seat names the sent message in its In-Reply-To or References.
+
+**Known gap: the reply-received notice does not fire on this transport.** Probed on real mail (2026-11-13): AgentMail's inbound message record carries no `in_reply_to` or `references` field, and its `headers` hold neither (nor a Message-ID). So an inbound to the seat cannot name the sent message, and the notice of section 6 never matches a Gmail row. The owner sees outside replies in his own inbox, where they land anyway. The approval itself is unaffected: it matches on the `[draft xxxxxxxx]` tag, and the forgery guard keys on the reply's AgentMail `message_id`, which the same probe showed is the Gmail RFC Message-ID (one hit in his SENT; AgentMail's `smtp_id` is an internal id and matches nothing).
+
+The Gmail transport is built in `operator/workspace_broker/gmail_send_as.py` and selected by `send_as_transport.transport_for`; the Graph transport behind the same protocol is a pure delegation to the code above, and `operator/workspace_broker/tests/test_send_as.py` passes unmodified. The seat registers no Gmail direct-send tool (`workspace_gmail_send` stays outside the broker's reviewed surface, and boot refuses a `via: gmail` seat that registers one).
+
 ## Consequences
 
 - **A client firm's admin grants Send As on each staff member the Operator may send for.** It is one command per person. It gives the Operator no access to their mailbox.

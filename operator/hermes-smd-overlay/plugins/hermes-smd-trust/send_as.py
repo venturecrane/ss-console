@@ -242,6 +242,33 @@ def _run_gates(
     return None, matters
 
 
+def _may_ask(cfg: Any, instructed_by: str, requested: str) -> bool:
+    """Whether ``instructed_by`` may ask for a draft sent as ``requested``
+    (besides being that very address): an Operator administrator, or the same
+    person known by another authored address of one mailbox (ADR 0089 section
+    9, e.g. a Gmail alias and its primary). The broker re-checks both."""
+    if cfg.sender_is_admin(instructed_by):
+        return True
+    return instructed_by in cfg.staff_send_as_approvers(requested)
+
+
+def _payload(from_addr: str, scan_args: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    """The closed payload the broker stores. ``thread_id`` (a Gmail thread, ADR
+    0089 section 9) rides along only when given as a string: the broker reads
+    the thread itself, chooses the From from it, and ignores the key on Graph."""
+    payload: dict[str, Any] = {
+        "from": from_addr,
+        "to": list(scan_args["to"]),
+        "cc": list(scan_args["cc"]),
+        "subject": scan_args["subject"],
+        "body_text": scan_args["text"],
+    }
+    thread_id = args.get("thread_id")
+    if isinstance(thread_id, str) and thread_id.strip():
+        payload["thread_id"] = thread_id.strip()
+    return payload
+
+
 def propose(tool_name: str, args: dict[str, Any], session_id: str, tool_call_id: str = "") -> dict:
     """Run the send-as proposal for a ``from``-bearing send. Always a block.
 
@@ -265,7 +292,7 @@ def propose(tool_name: str, args: dict[str, Any], session_id: str, tool_call_id:
 
         cfg = CustomerConfig.from_volume()
         entry = cfg.staff_send_as_entry(requested)
-        is_admin = cfg.sender_is_admin(instructed_by)
+        may_ask = _may_ask(cfg, instructed_by, requested)
     except Exception:  # noqa: BLE001 — an unreadable config authorizes nobody
         logger.warning("trust: send-as config unreadable; refusing", exc_info=True)
         return _block(_UNREADABLE)
@@ -273,7 +300,7 @@ def propose(tool_name: str, args: dict[str, Any], session_id: str, tool_call_id:
         logger.info("trust: send-as refused; %r is not on scope.staff_send_as", requested)
         return _block(_NOT_ROSTERED.format(address=requested.strip() or "that address"))
     from_addr = entry["address"]
-    if from_addr != instructed_by and not is_admin:
+    if from_addr != instructed_by and not may_ask:
         logger.info("trust: send-as refused; %s asked to send as %s", instructed_by, from_addr)
         return _block(_NOT_INITIATOR.format(address=from_addr))
 
@@ -305,13 +332,7 @@ def propose(tool_name: str, args: dict[str, Any], session_id: str, tool_call_id:
     if block is not None:
         return block
 
-    payload = {
-        "from": from_addr,
-        "to": list(scan_args["to"]),
-        "cc": list(scan_args["cc"]),
-        "subject": scan_args["subject"],
-        "body_text": scan_args["text"],
-    }
+    payload = _payload(from_addr, scan_args, args)
     gate_pass = {"fabrication": True, "matter": True, "identifier": True, "matters": matters}
     try:
         response = msgraph_broker.send_as_propose(

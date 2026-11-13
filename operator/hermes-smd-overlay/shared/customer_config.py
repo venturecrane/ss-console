@@ -631,6 +631,34 @@ class CustomerConfig:
             out.append({"address": norm, "name": name.strip()})
         return out
 
+    def staff_send_as_approvers(self, address: object) -> set[str]:
+        """Every address that answers for ``address``'s drafts: one person.
+
+        ADR 0089 section 9. A ``via: gmail`` entry names the Google Workspace
+        ``mailbox`` its address belongs to, and every entry naming the same
+        mailbox is the same person (an alias and its primary, say), so a reply
+        or a request from any of them is that person's. Any other entry answers
+        only for itself. Empty for an address off the roster. The broker
+        re-derives the same set from the same file before it acts.
+        """
+        entry = self.staff_send_as_entry(address)
+        if entry is None:
+            return set()
+        scope = self._data.get("scope")
+        raw = scope.get("staff_send_as") if isinstance(scope, dict) else None
+        mailboxes: dict[str, str] = {}
+        for item in raw if isinstance(raw, list) else []:
+            if not isinstance(item, dict) or item.get("via") != "gmail":
+                continue
+            addr, box = item.get("address"), item.get("mailbox")
+            if isinstance(addr, str) and isinstance(box, str) and box.strip():
+                mailboxes[unicodedata.normalize("NFC", addr).strip().lower()] = box.strip().lower()
+        mine = mailboxes.get(entry["address"])
+        if not mine:
+            return {entry["address"]}
+        rostered = {e["address"] for e in self.staff_send_as}
+        return {a for a, box in mailboxes.items() if box == mine and a in rostered}
+
     def staff_send_as_entry(self, address: object) -> dict[str, str] | None:
         """The ``scope.staff_send_as`` entry for ``address`` (exact, case-
         insensitive), or ``None``. Fail-closed on a non-string address."""

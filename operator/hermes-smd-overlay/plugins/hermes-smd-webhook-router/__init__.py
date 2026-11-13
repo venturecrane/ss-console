@@ -279,24 +279,17 @@ def _origin_from_dto(
     message_id = dto.message_id
     if not sender or not message_id:
         return None
-    inbox_id = ""
-    if isinstance(dto.provider_refs, dict):
-        candidate = dto.provider_refs.get("inbox_id")
-        if isinstance(candidate, str):
-            inbox_id = candidate
-    if not inbox_id and isinstance(dto.mailbox, str):
-        inbox_id = dto.mailbox
-    internet_message_id = ""
-    conversation_id = ""
-    if isinstance(dto.provider_refs, dict):
-        candidate = dto.provider_refs.get("internet_message_id")
-        if isinstance(candidate, str):
-            internet_message_id = candidate
-        candidate = dto.provider_refs.get("conversation_id")
-        if isinstance(candidate, str):
-            conversation_id = candidate
-    if not conversation_id and isinstance(dto.thread_ref, str):
-        conversation_id = dto.thread_ref
+    refs = dto.provider_refs if isinstance(dto.provider_refs, dict) else {}
+
+    def ref(key: str) -> str:
+        value = refs.get(key)
+        return value if isinstance(value, str) else ""
+
+    inbox_id = ref("inbox_id") or (dto.mailbox if isinstance(dto.mailbox, str) else "")
+    internet_message_id = ref("internet_message_id")
+    conversation_id = ref("conversation_id") or (
+        dto.thread_ref if isinstance(dto.thread_ref, str) else ""
+    )
     return inbound.InboundOrigin(
         sender_address=sender,
         message_id=message_id,
@@ -304,6 +297,10 @@ def _origin_from_dto(
         inbox_id=inbox_id,
         internet_message_id=internet_message_id,
         conversation_id=conversation_id,
+        # What this message answers (ADR 0089 section 9: a Gmail send-as row
+        # is found by the sent message's RFC id an inbound names).
+        in_reply_to=ref("in_reply_to"),
+        references=ref("references"),
         # Plain-word digest replies (hermes-smd-escalation.reply_items): the
         # reader's own words and the RFC 3834 verdict, straight off the DTO.
         reply_text=dto.reply_text if isinstance(dto.reply_text, str) else "",
@@ -335,7 +332,7 @@ def _match_send_as_reply(origin: inbound.InboundOrigin) -> None:
     and dropped. Skipped outright on a seat that authors no ``staff_send_as``,
     so no other seat pays a socket round trip per inbound.
     """
-    if not origin.conversation_id:
+    if not (origin.conversation_id or origin.in_reply_to or origin.references):
         return
     try:
         if not CustomerConfig.from_volume(str(_YAML_PATH)).staff_send_as:
@@ -349,6 +346,8 @@ def _match_send_as_reply(origin: inbound.InboundOrigin) -> None:
                 conversation_id=origin.conversation_id,
                 internet_message_id=origin.internet_message_id,
                 from_addr=origin.sender_address,
+                in_reply_to=origin.in_reply_to,
+                references=origin.references,
             )
             if isinstance(result, dict) and result.get("matched"):
                 logger.info(

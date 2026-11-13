@@ -131,7 +131,16 @@ function staffEntry(
     })
     return null
   }
-  return { address, name: name.trim() }
+  // via / mailbox are validated by checkStaffSendAsTransport (ADR 0089 section
+  // 9); kept here verbatim so a round-tripped entry keeps its transport.
+  const via = raw['via']
+  const mailbox = raw['mailbox']
+  return {
+    address,
+    name: name.trim(),
+    ...(via === 'msgraph' || via === 'gmail' ? { via } : {}),
+    ...(typeof mailbox === 'string' ? { mailbox } : {}),
+  }
 }
 
 /**

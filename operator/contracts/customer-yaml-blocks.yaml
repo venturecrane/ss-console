@@ -91,7 +91,12 @@ top_level:
       live on the volume by overlay hermes-smd-reply on every draft — it
       authorizes the recipient-locked autonomous reply to a rostered inbound
       sender. Live-writable (config_applier), so authoring the roster takes
-      effect with no restart.
+      effect with no restart. scope.staff_send_as (ADR 0089) is read live by
+      the workspace broker (send_as_acts, send_as_transport.transport_for):
+      each entry's via (msgraph, the default, or gmail with a mailbox:, ADR 0089
+      section 9) selects the one transport the broker sends as staff through;
+      validated by bootstrap/validate_staff_send_as.py and the console's
+      sections-staff-send-as-transport.ts.
   safety:
     status: implemented
     materializer: >-

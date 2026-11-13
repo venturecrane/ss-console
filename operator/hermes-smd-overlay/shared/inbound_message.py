@@ -159,6 +159,26 @@ def _auto_submitted(headers: object) -> bool:
     return False
 
 
+def _header_value(headers: object, name: str) -> str:
+    """One header's value (case-insensitive name) from a mapping or a list of
+    ``{name, value}`` pairs, stripped; ``""`` when absent or not a string."""
+    values: list[object] = []
+    if isinstance(headers, dict):
+        values = [v for k, v in headers.items() if isinstance(k, str) and k.lower() == name]
+    elif isinstance(headers, list):
+        values = [
+            p.get("value")
+            for p in headers
+            if isinstance(p, dict) and str(p.get("name", "")).lower() == name
+        ]
+    for value in values:
+        if isinstance(value, list):
+            value = value[0] if value else ""
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
 def _authentication_results(msg: dict) -> dict | None:
     """AgentMail's ``authentication_results`` block, or ``None`` when absent.
 
@@ -232,6 +252,16 @@ def _normalize_agentmail(payload: dict) -> InboundMessage | None:
     # does. Without it no emailed request could queue on an AgentMail seat.
     if "@" in message_id:
         provider_refs["internet_message_id"] = message_id
+    # What this message answers (ADR 0089 section 9). Read from a top-level
+    # field when the vendor sends one, else from the header set. The captured
+    # message.received record carries neither, top-level or in ``headers``
+    # (probed on real mail 2026-11-13, ADR 0089 section 9 "Known gap"), so on
+    # AgentMail today these stay absent: a missing value matches no send-as row
+    # and sends nothing. Read here so a provider that does send them is used.
+    for key, header in (("in_reply_to", "in-reply-to"), ("references", "references")):
+        answered = _first_present(msg, key) or _header_value(msg.get("headers"), header)
+        if answered:
+            provider_refs[key] = answered
 
     return InboundMessage(
         provider=PROVIDER_AGENTMAIL,

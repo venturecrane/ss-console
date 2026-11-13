@@ -746,6 +746,11 @@ class InboundOrigin:
     inbox_id: str = ""
     internet_message_id: str = ""
     conversation_id: str = ""
+    #: The RFC 5322 ids this message answers (``In-Reply-To``, ``References``),
+    #: from the verified payload. A Gmail send-as row (ADR 0089 section 9) is
+    #: matched by them; empty when the provider did not say.
+    in_reply_to: str = ""
+    references: str = ""
     reply_text: str = field(default="", repr=False)
     auto_submitted: bool = False
     #: The message's own To and Cc, lower-cased, from the verified payload

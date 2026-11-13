@@ -18,7 +18,7 @@ out FROM a named staff member. The invariants:
 * the approver's answer is read from their OWN text only, tag required, and a
   commitment act's lane is untouched.
 
-The broker is mocked at the socket boundary (``msgraph_broker._verdict``) or at
+The broker is mocked at the socket boundary (``send_as_broker._verdict``) or at
 the client function, never by reaching into the plugins.
 """
 
@@ -33,7 +33,14 @@ from pathlib import Path
 
 import pytest
 
-from shared import act_broker, customer_config, matter_gate, msgraph_broker, rule_confirm
+from shared import (
+    act_broker,
+    customer_config,
+    matter_gate,
+    msgraph_broker,
+    rule_confirm,
+    send_as_broker,
+)
 from shared.action_classes import ActionClass
 
 # ``customer_config.CustomerConfig`` is patched by the autouse fixture below;
@@ -87,6 +94,12 @@ class _FakeConfig:
             return None
         wanted = address.strip().lower()
         return next((e for e in self.staff if e["address"] == wanted), None)
+
+    def staff_send_as_approvers(self, address: object) -> set[str]:
+        # A Graph seat: each entry answers for itself (the real accessor's
+        # via: gmail grouping is tested on the real class, test_send_as_gmail_gate).
+        entry = self.staff_send_as_entry(address)
+        return {entry["address"]} if entry else set()
 
     def sender_is_admin(self, sender: object) -> bool:
         return isinstance(sender, str) and sender.strip().lower() in self.admins
@@ -159,7 +172,7 @@ def gate(monkeypatch):
             }
         return {"ok": False, "reason": "unexpected verb"}
 
-    monkeypatch.setattr(msgraph_broker, "_verdict", fake_verdict)
+    monkeypatch.setattr(send_as_broker, "_verdict", fake_verdict)
     return trust, enforce, calls, exposure
 
 
@@ -402,7 +415,7 @@ def test_a_broker_refusal_is_relayed_and_nothing_is_claimed(gate, monkeypatch):
     _trust, enforce, _calls, _ = gate
     _email_turn()
     monkeypatch.setattr(
-        msgraph_broker,
+        send_as_broker,
         "_verdict",
         lambda payload, **_: {"ok": False, "reason": "staff member is not on the roster"},
     )
@@ -418,7 +431,7 @@ def test_an_unreachable_broker_proposes_nothing(gate, monkeypatch):
     def boom(payload, **_):
         raise msgraph_broker.MsGraphBrokerUnavailable("down")
 
-    monkeypatch.setattr(msgraph_broker, "_verdict", boom)
+    monkeypatch.setattr(send_as_broker, "_verdict", boom)
     result = _evaluate(enforce, _send_args())
     assert "could not record the draft" in result["message"]
 
@@ -537,7 +550,7 @@ def test_the_three_verbs_frame_the_contract_over_the_socket(monkeypatch):
 
 def test_an_unknown_decision_never_reaches_the_socket(monkeypatch):
     monkeypatch.setattr(
-        msgraph_broker, "_verdict", lambda *a, **k: pytest.fail("reached the socket")
+        send_as_broker, "_verdict", lambda *a, **k: pytest.fail("reached the socket")
     )
     with pytest.raises(ValueError):
         msgraph_broker.send_as_decide(
@@ -925,7 +938,14 @@ def test_an_inbound_on_a_conversation_asks_the_broker_to_match(router, monkeypat
     )
     router._match_send_as_reply(_outside_origin())
     assert seen == [
-        {"conversation_id": "conv-1", "internet_message_id": INTERNET_ID, "from_addr": ADJUSTER}
+        {
+            "conversation_id": "conv-1",
+            "internet_message_id": INTERNET_ID,
+            "from_addr": ADJUSTER,
+            # ADR 0089 section 9: what the inbound answers, empty when not said.
+            "in_reply_to": "",
+            "references": "",
+        }
     ]
 
 

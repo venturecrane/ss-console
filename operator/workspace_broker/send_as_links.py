@@ -152,8 +152,21 @@ def render_html(body_text: str) -> str:
 
 
 def approval_email(
-    row_id: str, msg: dict[str, Any], policy: Any, tainted: bool, sources: list[str], name: str
+    row_id: str,
+    msg: dict[str, Any],
+    policy: Any,
+    tainted: bool,
+    sources: list[str],
+    name: str,
+    *,
+    links: bool = True,
 ) -> dict[str, Any]:
+    """The approval email for one draft.
+
+    ``links=False`` (a Gmail-transport seat, ADR 0089 section 9) carries no
+    buttons at all: that seat reads the approver's mailbox, so a link in it is
+    one the seat could lift and press. The reply forms are the only way to answer.
+    """
     tag = tag_for(row_id)
     lines = [
         f"{name}, the Operator has drafted this email to send from your address. Nothing has been sent.",
@@ -163,7 +176,12 @@ def approval_email(
         for address in msg[field]:
             mark = "" if policy.allows_recipient(address) else "  (not on your firm's roster)"
             lines.append(f"{field.upper()}: {address}{mark}")
-    lines += [f"SUBJECT: {msg['subject']}", "Replies will come to you and to the Operator.", ""]
+    replies = (
+        "Replies will come to you and to the Operator."
+        if len(msg.get("reply_to") or []) > 1
+        else "Replies will come to you."
+    )
+    lines += [f"SUBJECT: {msg['subject']}", replies, ""]
     if tainted:
         shown = ", ".join(sources) if sources else "an outside message or document"
         lines += [f"Prepared after reading outside material: {shown}.", ""]
@@ -172,7 +190,7 @@ def approval_email(
     # stay listed as the exact way to answer when more than one draft is waiting
     # (the seat reads the tag from this email's subject and the quoted copy under
     # a reply, so an ordinary "send" resolves itself).
-    buttons = approval_buttons(row_id, msg["from"], time.time() + SEND_AS_TTL_SECONDS)
+    buttons = approval_buttons(row_id, msg["from"], time.time() + SEND_AS_TTL_SECONDS) if links else {}
     lines += [
         "Reply to this email with one of these:",
         "send",

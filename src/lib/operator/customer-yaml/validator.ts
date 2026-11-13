@@ -51,6 +51,7 @@ import { checkConnectors } from './sections-connectors'
 import { checkCustodyExceptions, checkCustodyGuard } from './sections-custody-guard'
 import { checkScope } from './sections-scope'
 import { checkStaffMailboxReads } from './sections-staff-send-as'
+import { checkStaffSendAsTransport } from './sections-staff-send-as-transport'
 import { checkCapabilityOwnedBlocks } from './sections-capabilities'
 import {
   checkBusinessHours,
@@ -287,6 +288,7 @@ function validateSections(
   const googleAuth = checkGoogleAuth(root, errors)
   const scope = checkScope(root, errors)
   checkStaffMailboxReads(root, scope.staff_send_as, errors) // ADR 0089 5a; validate-only
+  checkStaffSendAsTransport(root, errors) // ADR 0089 section 9; validate-only
   checkTelegram(root, errors) // optional telegram block; validate-only (ADR 0033)
   checkRecordStores(root, errors) // optional record_stores block; validate-only (#2793)
   checkGmailPush(root, errors) // optional gmail_push block; validate-only
