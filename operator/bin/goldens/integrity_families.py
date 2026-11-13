@@ -45,14 +45,34 @@ class Family:
     #: File names an in-place set keeps before regenerating: they hold the
     #: stored inputs the harness replays, and it rewrites their answers.
     keep: tuple[str, ...] = ()
-    #: The runner test files that write an in-place set.
+    #: The runner test files that write an in-place set, run in this order (the
+    #: model facts read the paid-call goldens, so they run after them).
     tests: tuple[str, ...] = ()
+    #: The set's own tests, under ``operator/``. A set the merge-base does not
+    #: have is introduced by the PR: nothing is regenerated against the base, and
+    #: these must pass on the PR's tree instead.
+    checks: tuple[str, ...] = ()
+    #: Which interpreter runs ``checks``: ``runner`` (the jobs venv, the runner's
+    #: pytest config), ``broker`` (the jobs venv, the operator's config) or
+    #: ``capture`` (the caller capture's venv).
+    check_with: str = "runner"
 
 
-_RG = "runners/jobs/tests/goldens"
+_RT = "runners/jobs/tests"
+_RG = f"{_RT}/goldens"
 FAMILIES: tuple[Family, ...] = (
-    Family("host_matrix", f"{_RG}/host_matrix", "*", f"{_RG}/host_matrix/allowed-changes.json", "out", "host_matrix"),
-    Family("wire", _RG, "wire.json", f"{_RG}/wire.allowed-changes.json", "out"),
+    Family(
+        "host_matrix",
+        f"{_RG}/host_matrix",
+        "*",
+        f"{_RG}/host_matrix/allowed-changes.json",
+        "out",
+        "host_matrix",
+        checks=(f"{_RT}/test_host_matrix_goldens.py",),
+    ),
+    Family(
+        "wire", _RG, "wire.json", f"{_RG}/wire.allowed-changes.json", "out", checks=(f"{_RT}/test_wire_snapshot.py",)
+    ),
     Family(
         "ledgers",
         "workspace_broker/tests/goldens/ledgers",
@@ -61,6 +81,8 @@ FAMILIES: tuple[Family, ...] = (
         "out",
         "ledgers",
         inputs=("aged.json",),
+        checks=("workspace_broker/tests/test_ledger_goldens.py",),
+        check_with="broker",
     ),
     Family(
         "lane_endings",
@@ -69,6 +91,7 @@ FAMILIES: tuple[Family, ...] = (
         f"{_RG}/lane_endings/allowed-changes.json",
         "inplace",
         tests=("test_lane_goldens.py",),
+        checks=(f"{_RT}/test_lane_goldens.py",),
     ),
     Family(
         "paid_calls",
@@ -77,6 +100,7 @@ FAMILIES: tuple[Family, ...] = (
         f"{_RG}/paid_calls/allowed-changes.json",
         "inplace",
         tests=("test_paid_call_goldens.py", "test_model_fact_goldens.py"),
+        checks=(f"{_RT}/test_paid_call_goldens.py", f"{_RT}/test_model_fact_goldens.py"),
     ),
     Family(
         "firm_config",
@@ -85,6 +109,7 @@ FAMILIES: tuple[Family, ...] = (
         f"{_RG}/firm_config/allowed-changes.json",
         "inplace",
         tests=("test_firm_config_goldens.py",),
+        checks=(f"{_RT}/test_firm_config_goldens.py",),
     ),
     Family(
         "text_rules",
@@ -94,6 +119,7 @@ FAMILIES: tuple[Family, ...] = (
         "inplace",
         keep=("jobs.*.json",),
         tests=("test_text_rule_goldens.py",),
+        checks=(f"{_RT}/test_text_rule_goldens.py",),
     ),
     Family(
         "seat_callers",
@@ -102,6 +128,8 @@ FAMILIES: tuple[Family, ...] = (
         "bin/goldens/allowed-seat-config-callers.json",
         "out",
         "contracts",
+        checks=("bin/tests/test_seat_config_callers.py",),
+        check_with="capture",
     ),
 )
 

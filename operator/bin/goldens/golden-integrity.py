@@ -15,7 +15,11 @@ Four checks, each a failure on its own:
 1. **Behaviour (H2).** The tree the PR branched from, with THIS PR's
    instrument laid over it (the measure is the PR's; the behaviour measured is
    the base's), regenerates each set; every difference from the goldens the
-   PR commits must be named in that set's allowed list.
+   PR commits must be named in that set's allowed list. A set the merge-base
+   has no golden of is INTRODUCED by the PR: there is no recorded behaviour to
+   hold it to, so nothing is regenerated against the base; its own tests must
+   pass on the PR's tree instead, and the job says so in a NOTICE line. A set
+   the base already has is never skipped.
 2. **Nothing pinned is lost (H4).** The PR's committed goldens against the
    base's committed goldens: a golden file, a key, a step or a list item the
    base held and the PR drops, or a value it changes (an aged schema, a stored
@@ -160,10 +164,11 @@ def regenerate(work: Path, py: Path, cap: Path | None, out: Path, names: set[str
     if "ledgers" in names:
         run([str(py), "-m", "pytest", "-p", "no:cacheprovider", "workspace_broker/tests/test_ledger_goldens.py", "-q",
              "-n", "4", "-k", "not every"], work, env, check=False)  # fmt: skip
-    kits = [f"{RUNNER_TESTS}/{t}" for f in FAMILIES if f.name in names for t in f.tests]
-    if kits:
-        kit_env = {**code_path(work), "JOBS_WRITE_KIT_GOLDENS": "1", "JOBS_WRITE_LANE_GOLDENS": "1"}
-        run([str(py), "-m", "pytest", *runner, *kits, "-q", "-n", "4", "-k", "not planted"], work, kit_env, check=False)
+    kit_env = {**code_path(work), "JOBS_WRITE_KIT_GOLDENS": "1", "JOBS_WRITE_LANE_GOLDENS": "1"}
+    for test in (f"{RUNNER_TESTS}/{t}" for f in FAMILIES if f.name in names for t in f.tests):
+        # One file at a time, in the family's order: the model facts read the
+        # paid-call goldens, which must be written first.
+        run([str(py), "-m", "pytest", *runner, test, "-q", "-n", "4", "-k", "not planted"], work, kit_env, check=False)
     if "seat_callers" in names and cap is not None:
         dest = out / "contracts" / "seat-config-callers.json"
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -246,34 +251,63 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
-def check(a: argparse.Namespace, tmp: Path) -> list[str]:
-    families = [f for f in FAMILIES if a.only is None or f.name in a.only]
-    names = {f.name for f in families}
+def introduced(f: Family, base: Path) -> bool:
+    """A set the merge-base has no golden of: the PR introduces it, so the
+    base has no recorded behaviour (and maybe no harness) to regenerate it from."""
+    return not gd.goldens(base / f.root, f.pattern)
+
+
+def own_tests(f: Family, py: Path, cap: Path | None) -> list[str]:
+    """An introduced set's own tests, on the PR's tree: they must pass."""
+    if f.check_with == "capture":
+        if cap is None:
+            return [f"{f.name}: introduced, but no capture interpreter to run its tests with"]
+        cmd = [str(cap), "-m", "pytest", *f.checks, "-q"]
+    elif f.check_with == "broker":
+        cmd = [str(py), "-m", "pytest", "-p", "no:cacheprovider", *f.checks, "-q", "-n", "4"]
+    else:
+        cmd = [str(py), "-m", "pytest", "-c", "runners/jobs/pyproject.toml", *f.checks, "-q", "-n", "4"]
+    if run(cmd, OPERATOR, code_path(OPERATOR), check=False) != 0:
+        return [f"{f.name}: introduced by this PR, and its own tests fail on the PR's tree ({', '.join(f.checks)})"]
+    return []
+
+
+def check(a: argparse.Namespace, tmp: Path) -> tuple[list[str], list[str]]:
+    """(problems, notices)."""
     base, work = extract(a.base, tmp / "base"), extract(a.base, tmp / "work")
+    families = [f for f in FAMILIES if a.only is None or f.name in a.only]
+    new = [f for f in families if introduced(f, base)]
+    present = [f for f in families if f not in new]
     overlay(work)
-    clear_outputs(work, families)
+    clear_outputs(work, present)
     index(work.parent)
     py = Path(a.python) if a.python else runner_venv(work, tmp / "venv")
     cap = None
-    if "seat_callers" in names:
+    if "seat_callers" in {f.name for f in families}:
         cap = Path(a.capture_python) if a.capture_python else capture_venv(work, tmp / "capv")
     out = tmp / "out"
-    regenerate(work, py, cap, out, names)
-    problems = [p for f in families for p in check_family(f, base, work, out)]
+    regenerate(work, py, cap, out, {f.name for f in present})
+    problems = [p for f in present for p in check_family(f, base, work, out)]
+    notices = []
+    for f in new:
+        problems += own_tests(f, py, cap) + judge(f.name, allowed_of(OPERATOR, f.allowed), {}, {}, {})
+        notices.append(f"{f.name}: introduced by this PR (the merge-base has none); its own tests ran on the PR's tree")
     found = manifest_losses(manifest(base, py), manifest(OPERATOR, py))
     problems += judge("instrument", allowed_of(OPERATOR, INSTRUMENT_ALLOWED), allowed_of(base, INSTRUMENT_ALLOWED), {}, found)  # fmt: skip
     if a.require_empty:
         problems += require_empty()
-    return problems
+    return problems, notices
 
 
 def main(argv: list[str] | None = None) -> int:
     a = parse(argv)
     with tempfile.TemporaryDirectory(prefix="goldens-base-") as tmp:
         try:
-            problems = check(a, Path(tmp))
+            problems, notices = check(a, Path(tmp))
         except gd.AllowedListError as exc:
-            problems = [str(exc)]
+            problems, notices = [str(exc)], []
+    for n in notices:
+        print(f"golden integrity: NOTICE {n}")
     if not problems:
         print("golden integrity: every golden equals the merge-base tree's behaviour, keeps what the base pinned, "
               "and every allowed entry explains a difference")  # fmt: skip

@@ -55,12 +55,24 @@ _TODAY_FORMATS = (
 )
 
 
+#: The date every case runs on. The demand run puts today in its prompts and
+#: hashes the prompt into its Batch ``custom_id`` (``gap-<sha>-<sha>-<n>``), so on
+#: the real clock the id changed every day (CI ran a day after the capture).
+FIXED_TODAY = time.strptime("2031-07-19 12:00", "%Y-%m-%d %H:%M")
+
+
 def _today_forms() -> list[str]:
-    now = time.localtime()
-    out = {time.strftime(f, now) for f in _TODAY_FORMATS}
-    # The unpadded forms (``11/2/26``) without a platform-specific strftime flag.
-    m, d, y = now.tm_mon, now.tm_mday, now.tm_year
-    out |= {f"{m}/{d}/{y}", f"{m}/{d}/{y % 100:02d}", f"{m}-{d}-{y % 100:02d}", f"{time.strftime('%B', now)} {d}, {y}"}
+    out: set[str] = set()
+    for now in (time.localtime(), FIXED_TODAY):
+        out |= {time.strftime(f, now) for f in _TODAY_FORMATS}
+        # The unpadded forms (``11/2/26``) without a platform-specific strftime flag.
+        m, d, y = now.tm_mon, now.tm_mday, now.tm_year
+        out |= {
+            f"{m}/{d}/{y}",
+            f"{m}/{d}/{y % 100:02d}",
+            f"{m}-{d}-{y % 100:02d}",
+            f"{time.strftime('%B', now)} {d}, {y}",
+        }
     return sorted(out, key=len, reverse=True)
 
 
@@ -436,7 +448,12 @@ CASES: dict[str, tuple[str, Callable[..., Any], bool]] = {
 
 def record_case(case: str, tmp: Path, mp: pytest.MonkeyPatch, rq: Any) -> list[dict[str, Any]]:
     lane, fn, ordered = CASES[case]
+    from jobs.demand.run import DemandRun
+    from jobs.drafting.run import DraftingRun
+
     tape = Tape(tmp)
+    for run_class in (DemandRun, DraftingRun):
+        mp.setitem(run_class.__init__.__kwdefaults__, "today", lambda: FIXED_TODAY)
     install(mp, tape, _run_classes()[lane])
     finder = fn(tmp, mp, rq)
     for body in finder or []:

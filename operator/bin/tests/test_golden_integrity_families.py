@@ -99,3 +99,16 @@ def test_the_push_to_main_fails_while_an_allowed_list_names_a_path(tmp_path, mon
     assert gi.require_empty() == []
     (tmp_path / FAMILIES[0].allowed).write_text(json.dumps({"medchron__delivered": ["0.wire.1"]}))
     assert len(gi.require_empty()) == 1
+
+
+def test_a_set_is_introduced_only_when_the_base_has_none_of_its_goldens(tmp_path):
+    """A set the base already has is never treated as introduced (never skipped)."""
+    gi = _integrity()
+    paid = next(f for f in FAMILIES if f.name == "paid_calls")
+    assert gi.introduced(paid, tmp_path)
+    (tmp_path / paid.root).mkdir(parents=True)
+    (tmp_path / paid.root / "allowed-changes.json").write_text("{}")
+    assert gi.introduced(paid, tmp_path), "an allowed list alone is not a golden"
+    (tmp_path / paid.root / "demand.jsonl").write_text("{}\n")
+    assert not gi.introduced(paid, tmp_path)
+    assert all(f.checks for f in FAMILIES), "an introduced set with no tests of its own would pass unchecked"
