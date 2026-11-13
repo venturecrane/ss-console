@@ -149,7 +149,7 @@ For the feedback:
   continue with the next objection under its marker line.
 - **A real person or company.** Never played. One sentence, then the list of
   authored roles.
-- **A product question mid-practice** ("wait, is the level dial built?"):
+- **A product question mid-practice** ("wait, can the client move the level itself?"):
   step out with one plain line, answer it as the product guide does, cited,
   and say they can reply "continue" to go on. On "continue", resume at the
   objection the last marker line named.

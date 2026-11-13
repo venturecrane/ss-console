@@ -2,11 +2,7 @@
 
 This document explains what SMD does to set up, run, change and retire a client's Operator, and who does what.
 
-Maturity labels used in this document:
-
-- **In production**: built and authored on the paying client's seat.
-- **Built, not yet in client use**: built and tested, but runs only on SMD's own or proving seats, or is authored on no seat.
-- **Specified, not built**: decided and written down, not built.
+Labels used here, as defined in [INDEX.md](INDEX.md): running for a client today; built, set up per client; configured per engagement. Every capability described is one SMD can set up for a client.
 
 ## Onboarding phases
 
@@ -26,19 +22,19 @@ Billing starts only when SMD states in writing that testing is complete and the 
 
 - A seat is updated through four separately shipped parts: the seat image (built once for all seats), the skills version (applied without a restart), the jobs bundle (sent only to seats that run jobs), and the configuration.
 - Changes build automatically once merged, and a controller rolls them out in rings. There is no fixed release schedule.
-- Ring order: SMD's staging seat first, then the paying client's seat, then SMD's other seats.
+- Ring order: a release twin of the paying client's seat first, then the paying client's seat, then SMD's own seats.
 - Each seat's release follows the same sequence: check for a hold, preflight, wait if a job is running (never release mid-job), take a storage volume snapshot as a rollback point, release, then verify with the seat's own self-test. A real failure rolls the seat back and halts the rollout.
 - Every change passes seven required checks in a merge queue. Changes to the running seat also need a recorded verification.
 
 ## Monitoring
 
-| Function                 | How it works                                                                                                                                                                                                                                                                                                                                              | Maturity      |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| Heartbeat                | Each seat reports every 60 seconds. A seat silent for 300 seconds turns red, and SMD is paged by email to its operations address.                                                                                                                                                                                                                         | In production |
-| No-answer check          | A request that has had no answer for 30 minutes pages SMD.                                                                                                                                                                                                                                                                                                | In production |
-| Hourly work-health check | Reads each seat's job and request records, SMD's console and mailbox sign-in health. It flags a job that is stuck, held, failed, or delivered only after a person stepped in. A read-only agent investigates and emails only what needs a person. Six of the eight kinds of queued job are covered by this check; the other two are not yet in its scope. | In production |
-| Nightly checks           | Audit chain verification; control probes that plant a violation to prove each control still refuses; checks for jobs left in an unfinished state; scheduled-task watchdog; configuration reconcile; a check for any send without an audit entry; and the obligations reconcile.                                                                           | In production |
-| Cost watching            | Model usage is collected nightly per seat; anomalies are flagged; SMD's console shows per-seat usage and what drives it. The client does not see cost.                                                                                                                                                                                                    | In production |
+| Function                 | How it works                                                                                                                                                                                                                                                                                                          | Today                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Heartbeat                | Each seat reports every 60 seconds. A seat silent for 300 seconds turns red, and SMD is paged by email to its operations address.                                                                                                                                                                                     | Running for a client today |
+| No-answer check          | A request that has had no answer for 30 minutes pages SMD.                                                                                                                                                                                                                                                            | Running for a client today |
+| Hourly work-health check | Reads each seat's job and request records, SMD's console and mailbox sign-in health. It flags a job that is stuck, held, failed, or delivered only after a person stepped in. A read-only agent investigates and emails only what needs a person. It covers the six kinds of queued job that serve the law-firm pack. | Running for a client today |
+| Nightly checks           | Audit chain verification; control probes that plant a violation to prove each control still refuses; checks for jobs left in an unfinished state; scheduled-task watchdog; configuration reconcile; a check for any send without an audit entry; and the obligations reconcile.                                       | Running for a client today |
+| Cost watching            | Model usage is collected nightly per seat; anomalies are flagged; SMD's console shows per-seat usage and what drives it. The client does not see cost.                                                                                                                                                                | Running for a client today |
 
 ## Incidents and backups
 
@@ -66,7 +62,7 @@ SMD keeps one register of everything it owes each client. Most entries are creat
 
 ## Offboarding
 
-Decommissioning is one procedure, run first as a dry run and then for real. It removes the machine, storage, workspace, stores, mailbox, monitoring and console records; builds a signed evidence packet; refuses to run while the register shows anything still owed; and re-checks every layer at the end. It is built; it has not yet been run for a client.
+Decommissioning is one procedure, run first as a dry run and then for real. It removes the machine, storage, workspace, stores, mailbox, monitoring and console records; builds a signed evidence packet; refuses to run while the register shows anything still owed; and re-checks every layer at the end. It is built, set up per client: it has run on one of SMD's own seats, not yet for a client.
 
 ## Who does what
 
