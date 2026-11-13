@@ -106,6 +106,16 @@ def test_update_task_completion_read_merges_and_stamps_completer(rec: _Recorder)
     }
 
 
+def test_update_task_keeps_the_tasks_categories(rec: _Recorder) -> None:
+    """A full-replace PUT clears what it omits, so an agent's update to a task
+    filed under categories (here a reassignment) re-sends them; before this,
+    every Operator task update cleared them on the firm's tenant."""
+    rec.responses["/tasks/t-7"] = {"id": "t-7", "matter": {"id": "m-9"}, "categories": ["Liens"]}
+    server.update_task(task_id="t-7", assignee_ids=["s-4"], staff_id="s-1")
+    put = next(c for c in rec.calls if c["method"] == "PUT")
+    assert put["json"]["categories"] == ["Liens"]
+
+
 def test_update_task_without_staff_id_refuses_before_the_wire(rec: _Recorder) -> None:
     """The task read never echoes staffId (proven live 2026-08-31), so a
     completion with no staff_id cannot form a valid PUT; refuse loudly instead

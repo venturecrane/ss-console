@@ -3,7 +3,7 @@
     {
       "method": "PUT",
       "path": "/tasks/t-7",
-      "wire": "{\"staffId\":\"s-1\",\"subject\":\"[Operator] Call the adjuster back\",\"note\":\"left a message\",\"dueDateOnly\":\"2026-09-01\",\"matterId\":\"m-9\",\"isCompleted\":true,\"completedByStaffId\":\"s-1\",\"assigneeIds\":[\"s-2\"]}"
+      "wire": "{\"staffId\":\"s-1\",\"subject\":\"[Operator] Call the adjuster back\",\"note\":\"left a message\",\"dueDateOnly\":\"2026-09-01\",\"matterId\":\"m-9\",\"isCompleted\":true,\"completedByStaffId\":\"s-1\",\"assigneeIds\":[\"s-2\"],\"categories\":[\"Liens\",\"Medical\"]}"
     }
   ],
   "without_categories": [

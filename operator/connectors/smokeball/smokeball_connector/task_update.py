@@ -8,8 +8,8 @@ subject, due date, and matter link). The task read never echoes ``staffId``,
 so the caller must supply the owner. This module builds the merged body from
 the task's current state plus the requested changes; ``server.update_task``
 owns the wire calls and the matter-reference guard. ``full_replace_body`` is
-the form the job lanes send: the merged body with the task's ``categories``
-kept.
+the body every task PUT sends (that tool and the job lanes): the merged body
+with the task's ``categories`` kept.
 """
 
 from __future__ import annotations
@@ -157,15 +157,18 @@ def full_replace_body(
     is_completed: bool | None = None,
     assignee_ids: list[str] | None = None,
     completed_by: str | None = None,
+    stamp: Callable[[str | None], str | None] | None = None,
 ) -> dict[str, Any]:
-    """The whole body for a job's ``PUT /tasks/{id}``: ``merge_task_update``'s
-    merged fields plus the task's ``categories``, re-sent when it has any,
-    because the full replace clears what it omits. The one home of that rule.
+    """The whole body for a ``PUT /tasks/{id}``: ``merge_task_update``'s merged
+    fields plus the task's ``categories``, re-sent when it has any, because the
+    full replace clears what it omits. The one home of that rule: the agent's
+    ``update_task`` tool and the job lanes all send this body.
 
-    A job writes the text it composed as given (no provenance stamp; the job
-    marks its own notes). ``completed_by`` names who completed the task when
-    that is not its owner (the case file apply completes as the approver); it
-    applies only to a body that completes the task."""
+    ``stamp`` marks a changed subject (``update_task`` passes the connector's
+    provenance stamp); with none, the text is written as given (a job marks its
+    own notes). ``completed_by`` names who completed the task when that is not
+    its owner (the case file apply completes as the approver); it applies only
+    to a body that completes the task."""
     body, _ = merge_task_update(
         current,
         subject=subject,
@@ -174,7 +177,7 @@ def full_replace_body(
         is_completed=is_completed,
         assignee_ids=assignee_ids,
         staff_id=staff_id,
-        stamp=_unstamped,
+        stamp=stamp or _unstamped,
     )
     if completed_by and body.get("isCompleted"):
         body["completedByStaffId"] = completed_by
