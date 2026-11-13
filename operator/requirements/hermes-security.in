@@ -48,3 +48,4 @@ pyasn1>=0.6.5
 # OAuth consent flow). A patch release with no API change Hermes calls, so the
 # override resolves without a Hermes promotion.
 oauthlib>=4.0.1
+opentelemetry-api>=1.45.2

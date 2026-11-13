@@ -584,10 +584,12 @@ describe('Operator Machine Python is pinned and hash-checked', () => {
     // exact floor pin, so tolerated in hermes_pip_check.py like brotlicffi.
     // oauthlib 4.0.1 (2026-11-05): CVE-2026-49272 on 4.0.0; only
     // requests-oauthlib requires it, unranged, so no pip-check exception.
+    // opentelemetry-api 1.45.2 (2026-11-13): CVE-2026-126360 on 1.45.1; a patch
+    // inside its requirers' ranges, so no pip-check exception either.
     expect(
       names,
-      'hermes-security.txt overrides only brotlicffi, oauthlib, pyasn1 and tornado'
-    ).toEqual(['brotlicffi', 'oauthlib', 'pyasn1', 'tornado'])
+      'hermes-security.txt overrides only brotlicffi, oauthlib, opentelemetry-api, pyasn1 and tornado'
+    ).toEqual(['brotlicffi', 'oauthlib', 'opentelemetry-api', 'pyasn1', 'tornado'])
   })
 
   it("compile.sh exports Hermes' lock with the same extras the image's uv sync installs", () => {
