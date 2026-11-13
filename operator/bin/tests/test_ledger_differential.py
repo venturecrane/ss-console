@@ -34,7 +34,9 @@ diff = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(diff)
 
 #: What a line of output may be: a table or class name and marks, or the result.
-LINE = re.compile(r"^(table [a-z_]+: rows=\d+(/\d+)?( (raw|read|project)=(PASS|FAIL)){3}|class [A-Za-z]+: schema\+reads=(PASS|FAIL)|RESULT: (PASS|FAIL))$")
+LINE = re.compile(
+    r"^(table [a-z_]+: rows=\d+(/\d+)?( (raw|read|project)=(PASS|FAIL)){3}|class [A-Za-z]+: schema\+reads=(PASS|FAIL)|RESULT: (PASS|FAIL))$"
+)
 
 
 def build_db(root: Path, mp: Any) -> Path:
@@ -117,7 +119,9 @@ def test_a_planted_read_difference_fails_on_its_table(seat_db, tmp_path, capsys)
     """MUTATION: one version's demand projection drops a key; that table's
     project read FAILS, every other table still passes, and the exit is 1."""
     tree = tmp_path / "planted" / "operator"
-    shutil.copytree(OPERATOR / "workspace_broker", tree / "workspace_broker", ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    shutil.copytree(
+        OPERATOR / "workspace_broker", tree / "workspace_broker", ignore=shutil.ignore_patterns("tests", "__pycache__")
+    )
     led = tree / "workspace_broker" / "demand_ledger.py"
     text = led.read_text(encoding="utf-8")
     assert '    "reply_sent_at",\n)' in text
@@ -127,7 +131,9 @@ def test_a_planted_read_difference_fails_on_its_table(seat_db, tmp_path, capsys)
     assert out[-1] == "RESULT: FAIL"
     demand = next(line for line in out if line.startswith("table demand_jobs:"))
     assert "project=FAIL" in demand and "raw=PASS" in demand, demand
-    assert all("FAIL" not in line for line in out if line.startswith("table ") and not line.startswith("table demand_jobs:"))
+    assert all(
+        "FAIL" not in line for line in out if line.startswith("table ") and not line.startswith("table demand_jobs:")
+    )
 
 
 def test_every_aged_schema_reads_the_same(tmp_path, capsys):
