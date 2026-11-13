@@ -29,6 +29,7 @@ The default for every area is managed. A seat's agreement decides which areas, i
 | The Operator's skills and what starts each one                                         | All roles, read only                                 | Running for a client today                                        |
 | Set each routine's limit setting, one of three, up to the agreed ceiling               | A principal, where this area is handed to the client | Built, set up per client; handed over to the paying client's seat |
 | Pause and resume the Operator, with a reason required                                  | A principal, where this area is handed to the client | Running for a client today                                        |
+| See when the Operator has stopped itself (the safety stop). A person clears it         | A principal                                          | Running for a client today                                        |
 | The established voice and output shapes, read only                                     | A principal                                          | Running for a client today                                        |
 
 ## Account

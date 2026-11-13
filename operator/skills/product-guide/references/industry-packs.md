@@ -34,7 +34,7 @@ This document says, for each industry SMD has mapped, what the Operator takes on
 
 ## Insurance
 
-- What it takes on: it works inside the agency management system and carries the service and renewal desk, so nothing slips.
+- What it takes on: it works inside the agency management system and carries the service and renewal desk, so nothing slips. It catches a cancellation or non-pay notice as it arrives and reaches the client with the exact cure amount and date before the policy lapses, relaying the carrier's cure terms exactly.
 - The line: it services the book. It never advises on coverage and never binds. Producers advise, quote and bind; licensed staff make the changes that need a license; the carrier decides the claim. A certificate reflects only the coverage already on the policy. It never binds, changes, cancels or reinstates a policy, and never tells a client a loss is covered.
 
 ## Marketing agency
