@@ -3,7 +3,7 @@ block a delivered unit carries to the daemon, and the reasons it pages on.
 
 Kept out of ``driver.py`` (which sits at the module-size ceiling) and apart
 from ``proof/`` (lane-agnostic): this module knows the chronology's own files,
-``runs/<unit>/delivery.json`` rows as ``stages/upload._prove`` leaves them, the
+``runs/<unit>/delivery.json`` rows as ``jobs/filing.prove`` leaves them, the
 unit's ``review.json`` and its usage ledger.
 """
 

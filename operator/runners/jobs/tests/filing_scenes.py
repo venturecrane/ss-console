@@ -48,6 +48,32 @@ class Scene:
     #: The name the fault and the corrupt bytes target: the first file sent.
     first: str
     root: Path
+    #: Rebuilds the first file with other bytes (and its manifest row), as a
+    #: lane re-run between two attempts would; None where nothing is rebuilt.
+    rebuild: Callable[[], None] | None = None
+
+
+REBUILT = b" (rebuilt)"
+
+
+def rebuild_row(manifest_path: Path, name: str) -> Callable[[], None]:
+    """Rewrite the manifest row ``name`` and its local file with other bytes."""
+
+    def go() -> None:
+        rows = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for m in rows:
+            if m["name"] == name:
+                local = Path(m["local_path"])
+                local.write_bytes(local.read_bytes() + REBUILT)
+                data = local.read_bytes()
+                m.update(sha256=hashlib.sha256(data).hexdigest(), bytes=len(data))
+        manifest_path.write_text(json.dumps(rows, indent=1), encoding="utf-8")
+
+    return go
+
+
+def rebuild_file(path: Path) -> Callable[[], None]:
+    return lambda: path.write_bytes(path.read_bytes() + REBUILT)
 
 
 def shaped(name: str, ending: str) -> str:
@@ -147,7 +173,8 @@ def chronology(root: Path, ending: str, _mp: Any) -> Scene:
     _manifest(sr.slug_dir / "out" / "alpha", CHRON_FOLDER, files)
     (sr.slug_dir / "runs" / "alpha").mkdir(parents=True, exist_ok=True)
     _dated(seat, record, CHRON_FOLDER, files[0], ending)
-    return Scene(seat, lambda: upload.run(sr, pause=0), files[0][0], root)
+    mpath = sr.slug_dir / "out" / "alpha" / "upload_manifest.json"
+    return Scene(seat, lambda: upload.run(sr, pause=0), files[0][0], root, rebuild_row(mpath, files[0][0]))
 
 
 def _deliver(root: Path, ending: str, folder: str, files: list[tuple[str, str, bytes]]) -> Scene:
@@ -171,7 +198,7 @@ def _deliver(root: Path, ending: str, folder: str, files: list[tuple[str, str, b
             return {"rec": rec}
         return {"rec": rec, "proof": deliver.prove(data, seat, MATTER, rec, manifest, seat.log, pause=0)}
 
-    return Scene(seat, run, files[0][1], root)
+    return Scene(seat, run, files[0][1], root, rebuild_row(out / "upload_manifest.json", files[0][1]))
 
 
 def demand(root: Path, ending: str, _mp: Any) -> Scene:
@@ -239,7 +266,8 @@ def update(root: Path, ending: str, _mp: Any) -> Scene:
     first = shaped(UP_NEW, ending)
     seat, sr, out = _update_scene(root, ending, first)
     _manifest(out, "CHRON", [(first, b"new chronology bytes"), (UP_EX2, b"%PDF new exhibit")])
-    return Scene(seat, lambda: update_upload.run(sr, pause=0, tries=3), first, root)
+    run = lambda: update_upload.run(sr, pause=0, tries=3)  # noqa: E731 - one call, named for the scene
+    return Scene(seat, run, first, root, rebuild_row(out / "upload_manifest.json", first))
 
 
 def update_review(root: Path, ending: str, _mp: Any) -> Scene:
@@ -249,7 +277,8 @@ def update_review(root: Path, ending: str, _mp: Any) -> Scene:
     seat, sr, out = _update_scene(root, ending, first)
     doc = out / first
     doc.write_bytes(b"records review bytes")
-    return Scene(seat, lambda: update_review_file.file(sr, doc, pause=0, tries=3), first, root)
+    run = lambda: update_review_file.file(sr, doc, pause=0, tries=3)  # noqa: E731 - one call, named for the scene
+    return Scene(seat, run, first, root, rebuild_file(doc))
 
 
 # ---- a standing folder ------------------------------------------------------------------
@@ -276,7 +305,7 @@ def _standing(root: Path, ending: str, calls: list[tuple[str, str, str, bytes, s
             for m, f, n, _b, r in calls
         ]
 
-    return Scene(seat, run, first, root)
+    return Scene(seat, run, first, root, rebuild_file(data / "out" / first))
 
 
 def litigation(root: Path, ending: str, _mp: Any) -> Scene:

@@ -146,9 +146,13 @@ class SendRecord:
     def pending(self) -> set[str]:
         return {str(f.get("name")) for f in self.files() if f.get("pending")}
 
+    def recorded(self) -> dict[str, dict[str, Any]]:
+        """Every row this record says was sent or started, by name."""
+        return {str(f.get("name")): f for f in self.files() if f.get("sent") or f.get("pending") or f.get("confirmed")}
+
     def ours(self) -> set[str]:
         """Every name this record says was sent or started."""
-        return {str(f.get("name")) for f in self.files() if f.get("sent") or f.get("pending") or f.get("confirmed")}
+        return set(self.recorded())
 
     def predates_sent_flag(self) -> bool:
         files = self.files()
@@ -166,8 +170,9 @@ class SendRecord:
 
     def write_readback(self, manifest: list[dict[str, Any]], present: dict[str, int]) -> set[str]:
         """Every manifest row from the read-back; returns the names still
-        pending going in. ``sent`` is carried forward, never recomputed, and a
-        pending send stays pending until the folder shows it at size."""
+        pending going in. ``sent`` is carried forward, never recomputed, a
+        pending send stays pending until the folder shows it at size, and a
+        sent or pending row for a name the manifest no longer carries is kept."""
         up_already, pending = set(self.sent_before()), self.pending()
 
         def final_row(m: dict[str, Any]) -> dict[str, Any]:
@@ -183,7 +188,11 @@ class SendRecord:
                 row["pending"] = True
             return row
 
-        self.doc["files"] = [final_row(m) for m in manifest]
+        names = {m["name"] for m in manifest}
+        # A row for a name the manifest no longer carries keeps its flags: a
+        # record that forgets a send is a record that can send it twice.
+        kept = [f for f in self.files() if str(f.get("name")) not in names and (f.get("sent") or f.get("pending"))]
+        self.doc["files"] = [final_row(m) for m in manifest] + kept
         self.save()
         return pending
 
@@ -268,19 +277,32 @@ def send_missing(
 ) -> tuple[Sent | None, str]:
     """Send whatever is not already up. ``(Sent, "ok")``; ``(None, "refused")``
     when a manifest row's local bytes no longer match its sha; ``(None, "held")``
-    when a send raised and its file is not proven on the matter.
+    when a send raised and its file is not proven on the matter, or when a name
+    the record says was sent or started now carries other bytes (wave 3: the
+    file was rebuilt after it was sent; never a second copy).
 
     A name this record says was sent, or whose send started, is NOT sent again:
     the vendor's list lags, so absence from ``present`` is not evidence the file
     is missing, and the record is. Each row is written through before the next
     send starts."""
     sent_before, pending_before, done = rec.sent_before(), rec.pending(), Sent()
+    recorded = rec.recorded()
     for m in manifest:
         data = Path(m["local_path"]).read_bytes()
         sha = hashlib.sha256(data).hexdigest()
         if sha != m["sha256"]:
             log(f"{m['name']}: local bytes changed since the manifest (sha mismatch); refusing")
             return None, "refused"
+        was = recorded.get(m["name"])
+        if was and (was.get("sha256") != sha or was.get("bytes") != len(data)):
+            # The record says this name went up (or started to) with other
+            # bytes: the file was rebuilt after it was sent. Sending it again
+            # puts a second file of that name on the firm's matter.
+            log(
+                f"{m['name']}: the built file changed after it was sent (the send record holds other bytes), so it "
+                f"is not sent again. Holding for a person to read folder {folder_id}."
+            )
+            return None, "held"
         if present.get(m["name"]) == len(data):
             log(f"  present  {m['name']}")
             continue

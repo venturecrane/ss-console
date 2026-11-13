@@ -107,9 +107,63 @@ def crash_cell(lane: str, root: Path, mp: Any) -> dict[str, Any]:
     return {"calls_in_a_clean_run": probe.seat.calls, "runs": runs}
 
 
+def _after_the_first_send(calls: list[dict[str, Any]], i: int) -> bool:
+    return i > 0 and calls[i - 1]["call"] == "add_file" and not any(c["call"] == "add_file" for c in calls[: i - 1])
+
+
+def rebuilt_cell(lane: str, root: Path, mp: Any) -> dict[str, Any]:
+    """The run killed once its first send is recorded sent, the first file
+    rebuilt with other bytes (a lane re-run between attempts), then resumed."""
+    sc = LANES[lane](root / "run", "clean", mp)
+    sc.seat.kill_after = _kill_index(lane, root / "probe", mp, _after_the_first_send, "clean")
+    first = _run(sc)
+    split = len(sc.seat.events)
+    assert sc.rebuild is not None
+    sc.rebuild()
+    sc.seat._last = None
+    end = _run(sc)
+    return {"first_file": sc.first, "killed": first, **_doc(sc, end, sc.seat.events[split:])}
+
+
+def resume_cell(lane: str, ending: str, root: Path, mp: Any) -> dict[str, Any]:
+    """A firm's file of the first name already in the folder; the first attempt
+    ends on a placeholder send or a short read-back; the resume runs once the
+    vendor has caught up. Both runs are recorded."""
+    sc = LANES[lane](root, "name_taken", mp)
+    seat = sc.seat
+    if ending.endswith("placeholder"):
+        seat.write_fault = "placeholder"
+    else:
+        seat.lag = 10**6
+    first = _run(sc)
+    split = len(seat.events)
+    seat.write_fault, seat.lag = None, 0
+    seat._pending = [(0, row) for _due, row in seat._pending]  # the vendor's index catches up
+    seat._last = None
+    end = _run(sc)
+    return {
+        "first_file": sc.first,
+        "first": {"end": first, "events": seat.events[:split]},
+        **_doc(sc, end, seat.events[split:]),
+    }
+
+
+def _copies(doc: dict[str, Any]) -> list[str]:
+    """Every name sent, in both runs, that is the first file or a numbered form of it."""
+    stem, dot, ext = str(doc["first_file"]).rpartition(".")
+    stem, ext = (stem, "." + ext) if dot else (str(doc["first_file"]), "")
+    events = [*(doc.get("first") or {}).get("events", []), *doc["events"]]
+    sent = [str(e.get("name")) for e in events if e.get("call") == "add_file"]
+    return [n for n in sent if n == doc["first_file"] or (n.startswith(stem + " (") and n.endswith(ext))]
+
+
 def cell(lane: str, ending: str, root: Path, mp: Any) -> dict[str, Any]:
     if ending == "crash":
         return crash_cell(lane, root, mp)
+    if ending == "rebuilt_after_send":
+        return rebuilt_cell(lane, root, mp)
+    if ending.startswith("resume_name_taken_after_"):
+        return resume_cell(lane, ending, root, mp)
     sc = LANES[lane](root, ending, mp)
     _fault(sc, ending)
     end = _run(sc)
@@ -189,9 +243,15 @@ def test_every_golden_cell_is_declared_and_recorded():
 @pytest.mark.parametrize("lane,ending", CELLS, ids=[f"{lane}/{e}" for lane, e in CELLS])
 def test_a_filing_cell_records_what_its_golden_holds(tmp_path, monkeypatch, lane, ending):
     """MUTATION: change how any lane sends, records, reads back or names a file and its cells fail."""
-    got = normal(cell(lane, ending, tmp_path, monkeypatch), tmp_path)
+    doc = cell(lane, ending, tmp_path, monkeypatch)
+    got = normal(doc, tmp_path)
     name = f"{lane}/{ending}"
     assert gk.write_or_compare(ROOT / f"{name}.json", got, ALLOWED.get(name, [])) == []
+    if ending == "rebuilt_after_send":
+        again = [e for e in doc["events"] if e.get("call") == "add_file" and e.get("name") == doc["first_file"]]
+        assert again == [], "a file rebuilt after it was sent must never be sent again"
+    if ending.startswith("resume_name_taken_after_"):
+        assert len(_copies(doc)) <= 1, f"one copy only, not {_copies(doc)}"
 
 
 @pytest.mark.parametrize("state", sorted(FROZEN))

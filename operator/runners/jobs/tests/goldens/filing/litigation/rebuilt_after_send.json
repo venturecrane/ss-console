@@ -1,0 +1,31 @@
+{
+  "end": {
+    "raised": {
+      "message": "stage_unfinished: file: the built workbook changed after a send was recorded; not resent",
+      "type": "LitigationFailed"
+    }
+  },
+  "events": [],
+  "first_file": "Litigation Status 2026-11-13 (Operator 0000c3).xlsx",
+  "killed": {
+    "killed_after": "list_files"
+  },
+  "records": {
+    "job-data/delivery-percase.json": null,
+    "job-data/delivery.json": {
+      "bytes": 7,
+      "folder_id": "folder-1",
+      "name": "Litigation Status 2026-11-13 (Operator 0000c3).xlsx",
+      "pending": false,
+      "sent": true,
+      "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+    }
+  },
+  "vendor": [
+    "up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 7 in folder-1 v1 sha 7961ce24b7773ef4"
+  ],
+  "writes": {
+    "add_file": 1,
+    "create_folder": 1
+  }
+}

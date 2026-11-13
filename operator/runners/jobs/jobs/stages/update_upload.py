@@ -36,6 +36,7 @@ retired.
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -98,6 +99,35 @@ def versioned(name: str, taken: set[str]) -> str:
         k += 1
 
 
+def _chosen_before(name: str, ours: set[str]) -> str | None:
+    """The numbered name an earlier attempt chose for ``name`` ("X (k).docx"),
+    when this run's own record carries one."""
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem, ext = name, ""
+    rx = re.compile(re.escape(stem) + r" \((\d+)\)" + (re.escape("." + ext) if ext else "") + "$", re.I)
+    found = sorted((int(m.group(1)), n) for n in ours if (m := rx.match(n)))
+    return found[0][1] if found else None
+
+
+def _keep_chosen(sr: StageRun, manifest: list[dict[str, Any]], ours: set[str]) -> bool:
+    """A manifest rebuilt under its intended name (the records review is
+    rebuilt every attempt) takes back the numbered name an earlier attempt
+    chose and sent or started, so a resume never numbers it again and files a
+    second copy (wave 3). True when any name was taken back."""
+    kept = False
+    for m in manifest:
+        if m["name"] in ours:
+            continue
+        before = _chosen_before(m["name"], ours)
+        if before:
+            sr.log(f"keeping the name {before} an earlier attempt of this update chose for {m['name']}")
+            m.setdefault("intended_name", m["name"])
+            m["name"] = before
+            kept = True
+    return kept
+
+
 def _version_clashes(
     sr: StageRun, out: Path, rows: list[dict[str, Any]], manifest: list[dict[str, Any]], ours: set[str]
 ) -> list[dict[str, Any]]:
@@ -107,8 +137,11 @@ def _version_clashes(
     file goes up as "<name> (2)<ext>" and nothing in the folder is written
     over or renamed. The manifest is rewritten before anything is sent, so a
     resume sends under the same name and never versions twice."""
+    kept = _keep_chosen(sr, manifest, ours)
     clash = set(_collisions(rows, manifest, ours))
     if not clash:
+        if kept:
+            (out / "upload_manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
         return manifest
     taken = {full_name(r) for r in rows} | {m["name"] for m in manifest}
     for m in manifest:

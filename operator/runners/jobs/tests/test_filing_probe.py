@@ -104,3 +104,16 @@ def test_a_path_that_raises_fails_the_probe_and_still_tears_down(matter):
     assert any(line.startswith("dated folder: FAILED") for line in said)
     assert any(line.startswith("teardown: the deletes stopped") for line in said)
     assert any("still read present: (the matter could not be read" in line for line in said), said
+
+
+def test_a_stamped_file_the_listing_shows_only_late_is_deleted_too():
+    """MUTATION: delete only what the first pass listed and a file the vendor
+    indexed a minute later stays on the staging matter while the probe passes."""
+    seat = RecordingSeat()
+    stamp = "[SMD-PROBE 20261113T000000]"
+    seat.docs.append({"id": "early", "name": f"{stamp} early", "ext": ".txt", "size": 1, "folderId": "f"})
+    late = {"id": "late", "name": f"{stamp} late", "ext": ".txt", "size": 1, "folderId": "f"}
+    seat._pending.append((seat._lists + 2, late))  # the vendor indexes it only on the second listing
+    said: list[str] = []
+    assert probe.teardown(seat, stamp, said.append, tries=4, pause=0) == []
+    assert seat.deleted == ["early", "late"]

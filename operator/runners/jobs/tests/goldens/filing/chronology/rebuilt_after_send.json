@@ -1,0 +1,79 @@
+{
+  "end": {
+    "returned": 3
+  },
+  "events": [
+    {
+      "log": "resuming into folder folder-1 ('MEDICAL CHRONOLOGY - Alpha Example 08-29-26') created by this run"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [
+            {
+              "bytes": 25,
+              "confirmed": false,
+              "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+              "sent": true,
+              "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+            },
+            {
+              "bytes": 20,
+              "confirmed": false,
+              "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+              "pending": true,
+              "sent": false,
+              "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+            }
+          ],
+          "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+          "folder_id": "folder-1"
+        }
+      },
+      "returned": [
+        "up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 25 in folder-1",
+        "up-2 'Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records)' '.pdf' 20 in folder-1"
+      ]
+    },
+    {
+      "log": "Alpha Example - Medical Chronology 08-29-26.docx: the built file changed after it was sent (the send record holds other bytes), so it is not sent again. Holding for a person to read folder folder-1."
+    }
+  ],
+  "first_file": "Alpha Example - Medical Chronology 08-29-26.docx",
+  "killed": {
+    "killed_after": "add_file"
+  },
+  "records": {
+    "data/example-matter/runs/alpha/delivery.json": {
+      "files": [
+        {
+          "bytes": 25,
+          "confirmed": false,
+          "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+          "sent": true,
+          "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+        },
+        {
+          "bytes": 20,
+          "confirmed": false,
+          "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+          "pending": true,
+          "sent": false,
+          "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+        }
+      ],
+      "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+      "folder_id": "folder-1"
+    }
+  },
+  "vendor": [
+    "up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 25 in folder-1 v1 sha b98ea9ea60112eca",
+    "up-2 'Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records)' '.pdf' 20 in folder-1 v1 sha 4017e5c7c14659ef"
+  ],
+  "writes": {
+    "add_file": 2,
+    "create_folder": 1
+  }
+}

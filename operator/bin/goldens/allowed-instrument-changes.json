@@ -1,5 +1,22 @@
 {
   "_why": "What the golden harness itself may stop pinning (bin/goldens/golden_manifest.py): <cases> names a dropped case or cell, or a cell newly declared not applicable, as <set>.<list>:<item> (e.g. host_matrix.cells:medchron/busy); <normaliser> names a normaliser added, changed or removed (e.g. host_matrix_normal._ULID). Each entry is exact, reviewed with the PR, and cleared after it merges.",
-  "<cases>": [],
+  "<cases>": [
+    "filing.not_applicable:casefile/resume_name_taken_after_placeholder",
+    "filing.not_applicable:casefile/resume_name_taken_after_short",
+    "filing.not_applicable:chronology/resume_name_taken_after_placeholder",
+    "filing.not_applicable:chronology/resume_name_taken_after_short",
+    "filing.not_applicable:demand/resume_name_taken_after_placeholder",
+    "filing.not_applicable:demand/resume_name_taken_after_short",
+    "filing.not_applicable:drafting/resume_name_taken_after_placeholder",
+    "filing.not_applicable:drafting/resume_name_taken_after_short",
+    "filing.not_applicable:library/rebuilt_after_send",
+    "filing.not_applicable:library/resume_name_taken_after_placeholder",
+    "filing.not_applicable:library/resume_name_taken_after_short",
+    "filing.not_applicable:litigation/resume_name_taken_after_placeholder",
+    "filing.not_applicable:litigation/resume_name_taken_after_short",
+    "filing.not_applicable:revise/rebuilt_after_send",
+    "filing.not_applicable:revise/resume_name_taken_after_placeholder",
+    "filing.not_applicable:revise/resume_name_taken_after_short"
+  ],
   "<normaliser>": []
 }

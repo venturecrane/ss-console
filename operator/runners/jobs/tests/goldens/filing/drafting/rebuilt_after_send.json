@@ -1,0 +1,103 @@
+{
+  "end": {
+    "returned": {
+      "rec": {
+        "exit": 3,
+        "files": [
+          {
+            "bytes": 18,
+            "confirmed": false,
+            "name": "Memo - Example points 11-13-26.docx",
+            "sent": true,
+            "sha256": "9db968ae03743c8ddeff909c34b6f4481f876f2e8a1d0e5339bd913c7cfb6162"
+          },
+          {
+            "bytes": 16,
+            "confirmed": false,
+            "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+            "pending": true,
+            "sent": false,
+            "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+          }
+        ],
+        "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+        "folder_id": "folder-1",
+        "said": "Memo - Example points 11-13-26.docx: the built file changed after it was sent (the send record holds other bytes), so it is not sent again. Holding for a person to read folder folder-1."
+      }
+    }
+  },
+  "events": [
+    {
+      "log": "resuming into folder folder-1 ('Draft 2099-EX-0001 11-13-26 (Operator 0000b2)') created by this run"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 18,
+              "confirmed": false,
+              "name": "Memo - Example points 11-13-26.docx",
+              "sent": true,
+              "sha256": "9db968ae03743c8ddeff909c34b6f4481f876f2e8a1d0e5339bd913c7cfb6162"
+            },
+            {
+              "bytes": 16,
+              "confirmed": false,
+              "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+              "pending": true,
+              "sent": false,
+              "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+            }
+          ],
+          "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+          "folder_id": "folder-1"
+        }
+      },
+      "returned": [
+        "up-1 'Memo - Example points 11-13-26' '.docx' 18 in folder-1",
+        "up-2 'Memo - Example points 11-13-26 - attorney notes' '.docx' 16 in folder-1"
+      ]
+    },
+    {
+      "log": "Memo - Example points 11-13-26.docx: the built file changed after it was sent (the send record holds other bytes), so it is not sent again. Holding for a person to read folder folder-1."
+    }
+  ],
+  "first_file": "Memo - Example points 11-13-26.docx",
+  "killed": {
+    "killed_after": "add_file"
+  },
+  "records": {
+    "job-data/runs/demand/delivery.json": {
+      "files": [
+        {
+          "bytes": 18,
+          "confirmed": false,
+          "name": "Memo - Example points 11-13-26.docx",
+          "sent": true,
+          "sha256": "9db968ae03743c8ddeff909c34b6f4481f876f2e8a1d0e5339bd913c7cfb6162"
+        },
+        {
+          "bytes": 16,
+          "confirmed": false,
+          "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+          "pending": true,
+          "sent": false,
+          "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+        }
+      ],
+      "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+      "folder_id": "folder-1"
+    }
+  },
+  "vendor": [
+    "up-1 'Memo - Example points 11-13-26' '.docx' 18 in folder-1 v1 sha 9db968ae03743c8d",
+    "up-2 'Memo - Example points 11-13-26 - attorney notes' '.docx' 16 in folder-1 v1 sha 0e01cd3cd9ffb986"
+  ],
+  "writes": {
+    "add_file": 2,
+    "create_folder": 1
+  }
+}

@@ -134,23 +134,36 @@ def _stamped(seat: Any, stamp: str) -> list[dict[str, Any]]:
     return [f for f in seat.list_files(PROBE_MATTER_ID) if not f.get("deleted") and stamp in filing.full_name(f)]
 
 
+def _delete_new(seat: Any, stamp: str, asked: set[str], say: Any) -> list[str]:
+    """Delete every stamped file not asked for yet (a file the vendor's index
+    shows only now is deleted too); returns the full names still listed."""
+    left = []
+    for f in _stamped(seat, stamp):
+        left.append(filing.full_name(f))
+        fid = str(f["id"])
+        if fid in asked:
+            continue
+        say(f"deleting {filing.full_name(f)} (id {fid})")
+        asked.add(fid)
+        seat.delete_file(PROBE_MATTER_ID, fid)
+    return left
+
+
 def teardown(
     seat: Any, stamp: str, say: Any, *, tries: int = GONE_TRIES, pause: float = GONE_PAUSE_SECONDS
 ) -> list[str]:
-    """Delete every stamped file by id, then poll until each reads gone;
-    returns the full names still present (empty is a clean teardown). A
-    listing that fails proves nothing gone, so it is reported as left."""
-    try:
-        for f in _stamped(seat, stamp):
-            say(f"deleting {filing.full_name(f)} (id {f.get('id')})")
-            seat.delete_file(PROBE_MATTER_ID, str(f["id"]))
-    except Exception as exc:  # noqa: BLE001 - the deletes stopped; the poll below reports what is left
-        say(f"teardown: the deletes stopped ({type(exc).__name__}: {str(exc)[:120]})")
+    """Delete every stamped file by id and poll until each reads gone,
+    deleting any stamped file that appears while it polls (the listing lags an
+    upload by minutes); returns the full names still present after the last
+    poll (empty is a clean teardown). A listing or a delete that fails proves
+    nothing gone, so it is reported as left."""
+    asked: set[str] = set()
     left: list[str] = []
     for attempt in range(tries):
         try:
-            left = [filing.full_name(f) for f in _stamped(seat, stamp)]
-        except Exception as exc:  # noqa: BLE001 - a teardown that cannot read the matter has not proven anything gone
+            left = _delete_new(seat, stamp, asked, say)
+        except Exception as exc:  # noqa: BLE001 - a teardown that cannot read or delete has not proven anything gone
+            say(f"teardown: the deletes stopped ({type(exc).__name__}: {str(exc)[:120]})")
             left = [f"(the matter could not be read: {type(exc).__name__}: {str(exc)[:120]})"]
         if not left:
             say("teardown: every stamped file reads deleted")

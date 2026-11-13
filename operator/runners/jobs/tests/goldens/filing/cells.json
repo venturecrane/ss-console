@@ -24,7 +24,10 @@
     "folder_taken",
     "shape_ext_on_name",
     "shape_upper_ext",
-    "shape_no_ext"
+    "shape_no_ext",
+    "rebuilt_after_send",
+    "resume_name_taken_after_placeholder",
+    "resume_name_taken_after_short"
   ],
   "not_applicable": {
     "update/folder_taken": "the update files into the delivered chronology's own folder, by its id; no folder is chosen or created by name",
@@ -34,7 +37,23 @@
     "revise/send_raises_placeholder": "a new version lands whole on its one PUT or not at all; there is no POST to leave a placeholder row",
     "library/folder_taken": "the library folder is the firm's standing Document Library, found by name and never created",
     "library/shape_upper_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed",
-    "library/shape_no_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed"
+    "library/shape_no_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed",
+    "revise/rebuilt_after_send": "revise files new versions by id under compare-and-stop; it keeps no per-name send record to rebuild against",
+    "library/rebuilt_after_send": "the library filing keeps no send record across attempts: each attempt reads the library afresh",
+    "chronology/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "chronology/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "demand/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "demand/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "drafting/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "drafting/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "litigation/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "litigation/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "casefile/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "casefile/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "revise/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "revise/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "library/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "library/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one"
   },
   "frozen": {
     "dated-pending-landed": {
