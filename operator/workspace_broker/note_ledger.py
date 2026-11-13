@@ -33,9 +33,9 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
-from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
+from .lane_ledger import ReplyOnce
 
 STATES = ("delivered",)
 SKILL_NAME = "smd-note"
@@ -90,37 +90,30 @@ class NoteExists(ValueError):
         self.job_id = job_id
 
 
-class NoteLedger:
+class NoteLedger(ReplyOnce):
+    """The note lane on the shared ledger (``lane_ledger``): its table, its
+    DDL and its one write (a note is born ``delivered``, so it has no
+    transition), with the reply-once mark."""
+
+    JOBS = "note_jobs"
+
     def __init__(self, db_path: str) -> None:
-        self._db_path = db_path
-        self.ensure_schema()
+        super().__init__(db_path)
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
-
-    def ensure_schema(self) -> None:
-        conn = self._connect()
-        try:
-            conn.execute(CREATE_SQL)
-            conn.execute(CREATE_INDEX_SQL)
-            have = {r["name"] for r in conn.execute("PRAGMA table_info(note_jobs)")}
-            for name, kind in ADDED_COLUMNS:
-                if name in have:
-                    continue
-                try:
-                    conn.execute(f"ALTER TABLE note_jobs ADD COLUMN {name} {kind}")
-                except sqlite3.OperationalError as exc:
-                    # The broker and the runner both construct the ledger: the
-                    # other may have added it between our read and the ALTER.
-                    if "duplicate column" not in str(exc).lower():
-                        raise
-            conn.commit()
-        finally:
-            conn.close()
+    def _create(self, conn: sqlite3.Connection) -> None:
+        conn.execute(CREATE_SQL)
+        conn.execute(CREATE_INDEX_SQL)
+        have = {r["name"] for r in conn.execute("PRAGMA table_info(note_jobs)")}
+        for name, kind in ADDED_COLUMNS:
+            if name in have:
+                continue
+            try:
+                conn.execute(f"ALTER TABLE note_jobs ADD COLUMN {name} {kind}")
+            except sqlite3.OperationalError as exc:
+                # The broker and the runner both construct the ledger: the
+                # other may have added it between our read and the ALTER.
+                if "duplicate column" not in str(exc).lower():
+                    raise
 
     def create(
         self,
@@ -158,14 +151,6 @@ class NoteLedger:
             conn.close()
         return job_id
 
-    def read(self, job_id: str) -> dict[str, Any] | None:
-        conn = self._connect()
-        try:
-            row = conn.execute("SELECT * FROM note_jobs WHERE id=?", (job_id,)).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
-
     def find(self, request_ref: str, text: str, subject: str | None = None) -> str | None:
         conn = self._connect()
         try:
@@ -174,33 +159,6 @@ class NoteLedger:
                 (request_ref, text_digest(text, subject)),
             ).fetchone()
             return row["id"] if row else None
-        finally:
-            conn.close()
-
-    def mark_replied(self, job_id: str, key: str = "reply") -> bool:
-        """True exactly once per (job, key); the reply binding's key is
-        ``<attempt>:<state>`` (``drafting_ledger.mark_replied``)."""
-        conn = self._connect()
-        try:
-            cur = conn.execute(
-                "UPDATE note_jobs SET reply_sent_at=?, reply_key=? WHERE id=? "
-                "AND (reply_key IS NULL OR reply_key != ?) AND NOT (reply_key IS NULL AND reply_sent_at IS NOT NULL)",
-                (_iso_utc(), key, job_id, key),
-            )
-            conn.commit()
-            return cur.rowcount == 1
-        finally:
-            conn.close()
-
-    def unmark_replied(self, job_id: str, key: str) -> None:
-        """Undo a mark whose send Graph refused outright (nothing was sent)."""
-        conn = self._connect()
-        try:
-            conn.execute(
-                "UPDATE note_jobs SET reply_sent_at=NULL, reply_key=NULL WHERE id=? AND reply_key=?",
-                (job_id, key),
-            )
-            conn.commit()
         finally:
             conn.close()
 

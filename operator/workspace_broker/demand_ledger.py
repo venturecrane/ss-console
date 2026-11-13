@@ -61,11 +61,11 @@ import hashlib
 import json
 import re
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import cycle_window
+from .lane_ledger import ReplyOnce, SpendMeter, StateRecord, require_cents
 
 STATES = ("submitted", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
@@ -209,40 +209,25 @@ def validate_envelope(req: Any) -> dict[str, Any]:
     }
 
 
-class DemandLedger:
-    """Per-operation sqlite connections, ``journal_mode=DELETE``, as
-    ``MedchronLedger``: the broker and the runner reach this file as different
-    uids, and the WAL's shared-memory file would need both to write it."""
+class DemandLedger(StateRecord, ReplyOnce, SpendMeter):
+    """The demand lane on the shared ledger (``lane_ledger``): its tables, its
+    DDL, its cents check and its UPDATE."""
 
-    def __init__(self, db_path: str, queue_dir: str | Path) -> None:
-        self._db_path = db_path
-        self.queue_dir = Path(queue_dir)
-        self.ensure_schema()
+    JOBS = "demand_jobs"
+    SPEND = "demand_spend"
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
-
-    def ensure_schema(self) -> None:
-        conn = self._connect()
-        try:
-            conn.execute(CREATE_SQL)
-            for alter in ALTERS:
-                try:
-                    conn.execute(alter)
-                except sqlite3.OperationalError:
-                    pass  # the column is already there
-            conn.execute(CREATE_INDEX_SQL)
-            conn.execute(DROP_OLD_UNIQUE_REF_SQL)
-            conn.execute(CREATE_UNIQUE_REF_SQL)
-            conn.execute(CREATE_SPEND_SQL)
-            conn.execute(CREATE_SPEND_INDEX_SQL)
-            conn.commit()
-        finally:
-            conn.close()
+    def _create(self, conn: sqlite3.Connection) -> None:
+        conn.execute(CREATE_SQL)
+        for alter in ALTERS:
+            try:
+                conn.execute(alter)
+            except sqlite3.OperationalError:
+                pass  # the column is already there
+        conn.execute(CREATE_INDEX_SQL)
+        conn.execute(DROP_OLD_UNIQUE_REF_SQL)
+        conn.execute(CREATE_UNIQUE_REF_SQL)
+        conn.execute(CREATE_SPEND_SQL)
+        conn.execute(CREATE_SPEND_INDEX_SQL)
 
     # -- the cycle's count -------------------------------------------------
     def allowance(
@@ -274,18 +259,6 @@ class DemandLedger:
             "AND (state IN ('submitted','running') OR cents > 0)",
             (start, end, exclude),
         ).fetchone()["n"]
-
-    def spend_between(self, start: str, end: str, exclude: str = "") -> int:
-        """Cents WRITTEN in [start, end), without ``exclude``'s."""
-        conn = self._connect()
-        try:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(cents), 0) AS c FROM demand_spend WHERE at >= ? AND at < ? AND job_id != ?",
-                (start, end, exclude),
-            ).fetchone()
-            return int(row["c"])
-        finally:
-            conn.close()
 
     # -- intake ------------------------------------------------------------
     def active_on_matter(self, matter_id: str) -> str | None:
@@ -369,25 +342,13 @@ class DemandLedger:
             conn.commit()
         finally:
             conn.close()
-        self.queue_dir.mkdir(parents=True, exist_ok=True)
         queued = {**env, "job_id": job_id, "kind": "demand", "submitted_at": now}
         if supersedes:
             queued["supersedes"] = supersedes
-        tmp = self.queue_dir / f".{job_id}.json.tmp"
-        tmp.write_text(json.dumps(queued, indent=1, sort_keys=True), encoding="utf-8")
-        tmp.chmod(0o640)
-        tmp.replace(self.queue_dir / f"{job_id}.json")
+        self._write_queue(job_id, queued)
         return job_id
 
     # -- reads -------------------------------------------------------------
-    def read(self, job_id: str) -> dict[str, Any] | None:
-        conn = self._connect()
-        try:
-            row = conn.execute("SELECT * FROM demand_jobs WHERE id=?", (job_id,)).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
-
     @staticmethod
     def project(row: dict[str, Any]) -> dict[str, Any]:
         """The row as the agent and console see it: no request text, no ref."""
@@ -396,94 +357,41 @@ class DemandLedger:
         out["files"] = (delivery or {}).get("files")
         return out
 
-    # -- the runner's report and the reply ---------------------------------
-    def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
-        """Apply one transition; returns the row after. A same-state record is a
-        note (merges fields). ValueError on an unknown job or an illegal move."""
-        if state not in STATES:
-            raise ValueError(f"unknown state {state!r}")
-        conn = self._connect()
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            cur = conn.execute("SELECT state, cents FROM demand_jobs WHERE id=?", (job_id,)).fetchone()
-            if cur is None:
-                conn.rollback()
-                raise ValueError(f"no such job {job_id}")
-            if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
-                conn.rollback()
-                raise ValueError(f"illegal transition {cur['state']} -> {state}")
-            cents = fields.get("cents")
-            if "cents" in fields and (not isinstance(cents, int) or isinstance(cents, bool) or cents < 0):
-                conn.rollback()
-                raise ValueError("cents must be a non-negative int")
-            now = _iso_utc()
-            if isinstance(cents, int) and cents > int(cur["cents"] or 0):
-                # The spend is dated when it is WRITTEN, not when the job began.
-                conn.execute(
-                    "INSERT INTO demand_spend (job_id, at, cents) VALUES (?,?,?)",
-                    (job_id, now, cents - int(cur["cents"] or 0)),
-                )
-            resumed = cur["state"] == "failed" and state == "running"
-            delivery = fields.get("delivery")
-            # One fixed statement: each optional column is written only when
-            # its flag is set, so nothing is composed into the SQL text.
-            conn.execute(
-                "UPDATE demand_jobs SET state=?, updated_at=?, "
-                "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "
-                "cents=CASE WHEN ? THEN ? ELSE cents END, "
-                "reason=CASE WHEN ? THEN ? ELSE reason END, "
-                "folder_id=CASE WHEN ? THEN ? ELSE folder_id END, "
-                "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END "
-                "WHERE id=?",
-                (
-                    state,
-                    now,
-                    resumed,
-                    "cents" in fields,
-                    cents,
-                    "reason" in fields or (state != cur["state"] and state in REASON_CLEARING),
-                    str(fields.get("reason") or "")[:500] or None,
-                    "folder_id" in fields,
-                    str(fields.get("folder_id") or "") or None,
-                    isinstance(delivery, dict),
-                    json.dumps(delivery, sort_keys=True) if isinstance(delivery, dict) else None,
-                    job_id,
-                ),
-            )
-            conn.commit()
-            row = dict(conn.execute("SELECT * FROM demand_jobs WHERE id=?", (job_id,)).fetchone())
-            row["prev_state"] = cur["state"]
-            return row
-        finally:
-            conn.close()
+    # -- the runner's report -----------------------------------------------
+    def _guard(self, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any]) -> None:
+        require_cents(fields)
 
-    def mark_replied(self, job_id: str, key: str = "reply") -> bool:
-        """True exactly once per (job, key): the compare-and-set the completion
-        reply takes AT its send. ``key`` is the outcome being reported (the
-        reply binding uses ``<attempt>:<state>``). False when that outcome was
-        already replied to (or no job)."""
-        conn = self._connect()
-        try:
-            cur = conn.execute(
-                "UPDATE demand_jobs SET reply_sent_at=?, reply_key=? WHERE id=? "
-                "AND (reply_key IS NULL OR reply_key != ?) AND NOT (reply_key IS NULL AND reply_sent_at IS NOT NULL)",
-                (_iso_utc(), key, job_id, key),
-            )
-            conn.commit()
-            return cur.rowcount == 1
-        finally:
-            conn.close()
-
-    def unmark_replied(self, job_id: str, key: str) -> None:
-        """Undo a mark whose send Graph refused outright (nothing was sent)."""
-        conn = self._connect()
-        try:
-            conn.execute(
-                "UPDATE demand_jobs SET reply_sent_at=NULL, reply_key=NULL WHERE id=? AND reply_key=?", (job_id, key)
-            )
-            conn.commit()
-        finally:
-            conn.close()
+    def _apply(
+        self, conn: sqlite3.Connection, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any], now: str
+    ) -> None:
+        cents = fields.get("cents")
+        resumed = cur["state"] == "failed" and state == "running"
+        delivery = fields.get("delivery")
+        # One fixed statement: each optional column is written only when
+        # its flag is set, so nothing is composed into the SQL text.
+        conn.execute(
+            "UPDATE demand_jobs SET state=?, updated_at=?, "
+            "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "
+            "cents=CASE WHEN ? THEN ? ELSE cents END, "
+            "reason=CASE WHEN ? THEN ? ELSE reason END, "
+            "folder_id=CASE WHEN ? THEN ? ELSE folder_id END, "
+            "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END "
+            "WHERE id=?",
+            (
+                state,
+                now,
+                resumed,
+                "cents" in fields,
+                cents,
+                "reason" in fields or (state != cur["state"] and state in REASON_CLEARING),
+                str(fields.get("reason") or "")[:500] or None,
+                "folder_id" in fields,
+                str(fields.get("folder_id") or "") or None,
+                isinstance(delivery, dict),
+                json.dumps(delivery, sort_keys=True) if isinstance(delivery, dict) else None,
+                job_id,
+            ),
+        )
 
 
 __all__ = [

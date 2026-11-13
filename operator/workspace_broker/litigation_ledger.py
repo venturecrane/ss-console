@@ -59,12 +59,12 @@ import hashlib
 import json
 import re
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
 from .litigation_scope import SCOPE_ID_KEYS, normalize as normalize_scope, scope_key
 from .litigation_report import EnvelopeError, counts as _counts, report_keys as _report_keys, writes as _writes
+from .lane_ledger import RecentJobs, ReplyOnce, SpendMeter, StateRecord
 
 STATES = ("queued", "running", "held", "delivered", "failed")
 TERMINAL = frozenset({"delivered", "failed"})
@@ -293,56 +293,30 @@ def _checked(state: str, fields: dict[str, Any]) -> tuple[list[dict[str, Any]] |
     return files, (_counts(fields["counts"]) if "counts" in fields else None)
 
 
-class LitigationLedger:
-    """Per-operation sqlite connections, ``journal_mode=DELETE``: the broker
-    and the runner reach this file as different uids."""
+class LitigationLedger(StateRecord, ReplyOnce, RecentJobs, SpendMeter):
+    """The litigation lane on the shared ledger (``lane_ledger``): its tables,
+    its DDL, its report check, SMD's close and its UPDATE."""
 
-    def __init__(self, db_path: str, queue_dir: str | Path) -> None:
-        self._db_path = db_path
-        self.queue_dir = Path(queue_dir)
-        self.ensure_schema()
+    JOBS = "litigation_jobs"
+    SPEND = "litigation_spend"
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
-
-    def ensure_schema(self) -> None:
-        conn = self._connect()
-        try:
-            for sql in (
-                CREATE_SQL,
-                CREATE_INDEX_SQL,
-                DROP_OLD_UNIQUE_REF_SQL,
-                CREATE_UNIQUE_REF_SQL,
-                CREATE_SPEND_SQL,
-                CREATE_SPEND_INDEX_SQL,
-            ):
-                conn.execute(sql)
-            have = {r["name"] for r in conn.execute("PRAGMA table_info(litigation_jobs)")}
-            for name, kind in ADDED_COLUMNS:
-                if name not in have:
-                    # name and kind come from ADDED_COLUMNS only (asserted plain identifiers at
-                    # import); DDL takes no bound parameters.
-                    # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query, python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
-                    conn.execute(f"ALTER TABLE litigation_jobs ADD COLUMN {name} {kind}")
-            conn.commit()
-        finally:
-            conn.close()
-
-    def spend_between(self, start: str, end: str, exclude: str = "") -> int:
-        """Cents WRITTEN in [start, end), without ``exclude``'s."""
-        conn = self._connect()
-        try:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(cents), 0) AS c FROM litigation_spend WHERE at >= ? AND at < ? AND job_id != ?",
-                (start, end, exclude),
-            ).fetchone()
-            return int(row["c"])
-        finally:
-            conn.close()
+    def _create(self, conn: sqlite3.Connection) -> None:
+        for sql in (
+            CREATE_SQL,
+            CREATE_INDEX_SQL,
+            DROP_OLD_UNIQUE_REF_SQL,
+            CREATE_UNIQUE_REF_SQL,
+            CREATE_SPEND_SQL,
+            CREATE_SPEND_INDEX_SQL,
+        ):
+            conn.execute(sql)
+        have = {r["name"] for r in conn.execute("PRAGMA table_info(litigation_jobs)")}
+        for name, kind in ADDED_COLUMNS:
+            if name not in have:
+                # name and kind come from ADDED_COLUMNS only (asserted plain identifiers at
+                # import); DDL takes no bound parameters.
+                # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query, python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+                conn.execute(f"ALTER TABLE litigation_jobs ADD COLUMN {name} {kind}")
 
     def delivered_lists(self, start: str, end: str, exclude: str = "") -> int:
         """Status lists that reached delivery (filed) among jobs created in
@@ -450,30 +424,8 @@ class LitigationLedger:
             conn.commit()
         finally:
             conn.close()
-        self.queue_dir.mkdir(parents=True, exist_ok=True)
-        tmp = self.queue_dir / f".{job_id}.json.tmp"
-        tmp.write_text(json.dumps(queue_record(env, job_id), indent=1, sort_keys=True), encoding="utf-8")
-        tmp.chmod(0o640)
-        tmp.replace(self.queue_dir / f"{job_id}.json")
+        self._write_queue(job_id, queue_record(env, job_id))
         return job_id
-
-    def read(self, job_id: str) -> dict[str, Any] | None:
-        conn = self._connect()
-        try:
-            row = conn.execute("SELECT * FROM litigation_jobs WHERE id=?", (job_id,)).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
-
-    def recent(self, limit: int = 20) -> list[dict[str, Any]]:
-        conn = self._connect()
-        try:
-            return [
-                dict(r)
-                for r in conn.execute("SELECT * FROM litigation_jobs ORDER BY created_at DESC LIMIT ?", (int(limit),))
-            ]
-        finally:
-            conn.close()
 
     @staticmethod
     def project(row: dict[str, Any]) -> dict[str, Any]:
@@ -497,78 +449,65 @@ class LitigationLedger:
         ]
         return out
 
-    def record(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
-        """Apply one transition; returns the row after (with ``prev_state``). A
-        same-state record is a note (merges fields)."""
+    def _check(self, state: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """The fields with ``files`` and ``counts`` reduced to what the ledger keeps."""
         files, counts = _checked(state, fields)
-        conn = self._connect()
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            cur = conn.execute("SELECT state, cents, close_ref FROM litigation_jobs WHERE id=?", (job_id,)).fetchone()
-            if cur is None:
-                conn.rollback()
-                raise ValueError(f"no such job {job_id}")
-            if state != cur["state"] and state not in _ALLOWED_NEXT[cur["state"]]:
-                conn.rollback()
-                raise ValueError(f"illegal transition {cur['state']} -> {state}")
-            if cur["close_ref"] and state != cur["state"]:
-                conn.rollback()
-                raise ValueError(f"job {job_id} was closed by SMD ({cur['close_ref']}); it never moves again")
-            now = _iso_utc()
-            cents = fields.get("cents")
-            if isinstance(cents, int) and cents > int(cur["cents"] or 0):
-                conn.execute(
-                    "INSERT INTO litigation_spend (job_id, at, cents) VALUES (?,?,?)",
-                    (job_id, now, cents - int(cur["cents"] or 0)),
-                )
+        out = dict(fields)
+        if "files" in fields:
+            out["files"] = files
+        if "counts" in fields:
+            out["counts"] = counts
+        return out
 
-            def text(key: str, limit: int) -> str | None:
-                return str(fields.get(key) or "")[:limit] or None
+    def _guard(self, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any]) -> None:
+        self._closed_guard(job_id, cur, state)
 
-            conn.execute(
-                "UPDATE litigation_jobs SET state=?, updated_at=?, "
-                "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "
-                "cents=CASE WHEN ? THEN ? ELSE cents END, "
-                "matters_total=CASE WHEN ? THEN ? ELSE matters_total END, "
-                "matters_reread=CASE WHEN ? THEN ? ELSE matters_reread END, "
-                "flags_new=CASE WHEN ? THEN ? ELSE flags_new END, "
-                "reason=CASE WHEN ? THEN ? ELSE reason END, "
-                "stage=CASE WHEN ? THEN ? ELSE stage END, "
-                "folder_id=CASE WHEN ? THEN ? ELSE folder_id END, "
-                "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END, "
-                "counts_json=CASE WHEN ? THEN ? ELSE counts_json END "
-                "WHERE id=?",
-                (
-                    state,
-                    now,
-                    cur["state"] == "failed" and state == "running",
-                    "cents" in fields,
-                    fields.get("cents"),
-                    "matters_total" in fields,
-                    fields.get("matters_total"),
-                    "matters_reread" in fields,
-                    fields.get("matters_reread"),
-                    "flags_new" in fields,
-                    fields.get("flags_new"),
-                    "reason" in fields,
-                    text("reason", 500),
-                    "stage" in fields,
-                    text("stage", 40),
-                    "folder_id" in fields,
-                    text("folder_id", 120),
-                    files is not None,
-                    json.dumps({"files": files}, sort_keys=True) if files is not None else None,
-                    counts is not None,
-                    json.dumps(counts, sort_keys=True) if counts is not None else None,
-                    job_id,
-                ),
-            )
-            conn.commit()
-            row = dict(conn.execute("SELECT * FROM litigation_jobs WHERE id=?", (job_id,)).fetchone())
-            row["prev_state"] = cur["state"]
-            return row
-        finally:
-            conn.close()
+    def _apply(
+        self, conn: sqlite3.Connection, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any], now: str
+    ) -> None:
+        files, counts = fields.get("files"), fields.get("counts")
+
+        def text(key: str, limit: int) -> str | None:
+            return str(fields.get(key) or "")[:limit] or None
+
+        conn.execute(
+            "UPDATE litigation_jobs SET state=?, updated_at=?, "
+            "attempt=attempt + CASE WHEN ? THEN 1 ELSE 0 END, "
+            "cents=CASE WHEN ? THEN ? ELSE cents END, "
+            "matters_total=CASE WHEN ? THEN ? ELSE matters_total END, "
+            "matters_reread=CASE WHEN ? THEN ? ELSE matters_reread END, "
+            "flags_new=CASE WHEN ? THEN ? ELSE flags_new END, "
+            "reason=CASE WHEN ? THEN ? ELSE reason END, "
+            "stage=CASE WHEN ? THEN ? ELSE stage END, "
+            "folder_id=CASE WHEN ? THEN ? ELSE folder_id END, "
+            "delivery_json=CASE WHEN ? THEN ? ELSE delivery_json END, "
+            "counts_json=CASE WHEN ? THEN ? ELSE counts_json END "
+            "WHERE id=?",
+            (
+                state,
+                now,
+                cur["state"] == "failed" and state == "running",
+                "cents" in fields,
+                fields.get("cents"),
+                "matters_total" in fields,
+                fields.get("matters_total"),
+                "matters_reread" in fields,
+                fields.get("matters_reread"),
+                "flags_new" in fields,
+                fields.get("flags_new"),
+                "reason" in fields,
+                text("reason", 500),
+                "stage" in fields,
+                text("stage", 40),
+                "folder_id" in fields,
+                text("folder_id", 120),
+                files is not None,
+                json.dumps({"files": files}, sort_keys=True) if files is not None else None,
+                counts is not None,
+                json.dumps(counts, sort_keys=True) if counts is not None else None,
+                job_id,
+            ),
+        )
 
     def close(self, job_id: str, reason: str, source_ref: str) -> dict[str, Any]:
         """SMD's close: ``held -> failed`` exactly once, in one write
@@ -598,32 +537,6 @@ class LitigationLedger:
             row = dict(conn.execute("SELECT * FROM litigation_jobs WHERE id=?", (job_id,)).fetchone())
             row["prev_state"] = cur["state"]
             return row
-        finally:
-            conn.close()
-
-    def mark_replied(self, job_id: str, key: str = "reply") -> bool:
-        """True exactly once per (job, key); the reply binding's key is
-        ``<attempt>:<state>``."""
-        conn = self._connect()
-        try:
-            cur = conn.execute(
-                "UPDATE litigation_jobs SET reply_sent_at=?, reply_key=? WHERE id=? "
-                "AND (reply_key IS NULL OR reply_key != ?) AND NOT (reply_key IS NULL AND reply_sent_at IS NOT NULL)",
-                (_iso_utc(), key, job_id, key),
-            )
-            conn.commit()
-            return cur.rowcount == 1
-        finally:
-            conn.close()
-
-    def unmark_replied(self, job_id: str, key: str) -> None:
-        conn = self._connect()
-        try:
-            conn.execute(
-                "UPDATE litigation_jobs SET reply_sent_at=NULL, reply_key=NULL WHERE id=? AND reply_key=?",
-                (job_id, key),
-            )
-            conn.commit()
         finally:
             conn.close()
 
