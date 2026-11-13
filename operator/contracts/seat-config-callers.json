@@ -7758,6 +7758,7 @@
     "operator/hermes-smd-overlay/spec_applier/__main__.py",
     "operator/hermes-smd-overlay/webhook_gate.py",
     "operator/runners/jobs/jobs/daemon.py",
+    "operator/runners/jobs/jobs/filing_probe.py",
     "operator/runners/jobs/jobs/note_by_smd.py",
     "operator/skills/case-file-manager/pre_run.py",
     "operator/skills/client-verification-tracker/pre_run.py",
@@ -8616,6 +8617,38 @@
     },
     {
      "behaviour": {
+      "both": "return value:int d4735e3a265e16ee",
+      "empty": "return value:int d4735e3a265e16ee",
+      "padded": "return value:int d4735e3a265e16ee",
+      "unset": "return value:int d4735e3a265e16ee",
+      "valid": "return value:int d4735e3a265e16ee",
+      "whitespace": "return value:int d4735e3a265e16ee"
+     },
+     "calls": [
+      "operator/runners/jobs/jobs/filing_probe.py:230 seat_config.slug(on_missing=\"none\")"
+     ],
+     "file": "operator/runners/jobs/jobs/filing_probe.py",
+     "kind": "function",
+     "modes": [
+      "input-insensitive"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG"
+     ],
+     "slug_values": {
+      "both": 2,
+      "empty": 2,
+      "padded": 2,
+      "unset": 2,
+      "valid": 2,
+      "whitespace": 2
+     },
+     "status": "executable",
+     "symbol": "main",
+     "tree": "runner"
+    },
+    {
+     "behaviour": {
       "both": "return value:NoteLane 08c7194606d1367b",
       "empty": "return value:NoteLane bc5c0b68988e2f20",
       "padded": "return value:NoteLane 4b6e6c439cf32498",
@@ -9226,20 +9259,20 @@
   },
   "slug": {
    "by_status": {
-    "executable": 38,
+    "executable": 39,
     "not-executable": 5
    },
    "by_tree": {
     "adapter": 1,
     "broker": 2,
     "overlay": 23,
-    "runner": 2,
+    "runner": 3,
     "skill": 13,
     "templates": 2
    },
    "fail_open": 14,
-   "files": 41,
-   "sites": 43
+   "files": 42,
+   "sites": 44
   }
  }
 }

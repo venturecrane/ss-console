@@ -1,0 +1,103 @@
+{
+  "end": {
+    "returned": {
+      "rec": {
+        "exit": 3,
+        "files": [
+          {
+            "bytes": 19,
+            "confirmed": false,
+            "name": "Demand - Alpha Example 11-13-26.docx",
+            "sent": true,
+            "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+          },
+          {
+            "bytes": 15,
+            "confirmed": false,
+            "name": "Gap audit 11-13-26.docx",
+            "pending": true,
+            "sent": false,
+            "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+          }
+        ],
+        "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
+        "folder_id": "folder-1",
+        "said": "Demand - Alpha Example 11-13-26.docx: the built file changed after it was sent (the send record holds other bytes), so it is not sent again. Holding for a person to read folder folder-1."
+      }
+    }
+  },
+  "events": [
+    {
+      "log": "resuming into folder folder-1 ('Demand 2099-EX-0001 11-13-26 (Operator 0000a1)') created by this run"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 19,
+              "confirmed": false,
+              "name": "Demand - Alpha Example 11-13-26.docx",
+              "sent": true,
+              "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+            },
+            {
+              "bytes": 15,
+              "confirmed": false,
+              "name": "Gap audit 11-13-26.docx",
+              "pending": true,
+              "sent": false,
+              "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+            }
+          ],
+          "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
+          "folder_id": "folder-1"
+        }
+      },
+      "returned": [
+        "up-1 'Demand - Alpha Example 11-13-26' '.docx' 19 in folder-1",
+        "up-2 'Gap audit 11-13-26' '.docx' 15 in folder-1"
+      ]
+    },
+    {
+      "log": "Demand - Alpha Example 11-13-26.docx: the built file changed after it was sent (the send record holds other bytes), so it is not sent again. Holding for a person to read folder folder-1."
+    }
+  ],
+  "first_file": "Demand - Alpha Example 11-13-26.docx",
+  "killed": {
+    "killed_after": "add_file"
+  },
+  "records": {
+    "job-data/runs/demand/delivery.json": {
+      "files": [
+        {
+          "bytes": 19,
+          "confirmed": false,
+          "name": "Demand - Alpha Example 11-13-26.docx",
+          "sent": true,
+          "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+        },
+        {
+          "bytes": 15,
+          "confirmed": false,
+          "name": "Gap audit 11-13-26.docx",
+          "pending": true,
+          "sent": false,
+          "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+        }
+      ],
+      "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
+      "folder_id": "folder-1"
+    }
+  },
+  "vendor": [
+    "up-1 'Demand - Alpha Example 11-13-26' '.docx' 19 in folder-1 v1 sha c8b3e4c01a4f49b6",
+    "up-2 'Gap audit 11-13-26' '.docx' 15 in folder-1 v1 sha 0776a93a74ccd552"
+  ],
+  "writes": {
+    "add_file": 2,
+    "create_folder": 1
+  }
+}

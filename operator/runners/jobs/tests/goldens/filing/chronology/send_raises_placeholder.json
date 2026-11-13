@@ -63,6 +63,49 @@
       "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
     },
     {
+      "log": "Alpha Example - Medical Chronology 08-29-26.docx: the send raised (the response was lost after the POST); reading that one name back by hash"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1"]
+    },
+    {
       "log": "Alpha Example - Medical Chronology 08-29-26.docx: the send failed (the response was lost after the POST); the file's record may already exist in folder folder-1, so it is not retried. Holding for a person to read the folder."
     }
   ],
@@ -83,7 +126,7 @@
     }
   },
   "vendor": [
-    "up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1 not indexed yet (no bytes)"
+    "up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1 v1 (no bytes)"
   ],
   "writes": {
     "add_file": 1,

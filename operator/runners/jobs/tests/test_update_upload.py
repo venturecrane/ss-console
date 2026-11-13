@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from jobs.medchron import config as config_mod, job as job_mod
-from jobs.stages import update_upload, upload
+from jobs.stages import update_upload
 from jobs.stages.base import StageRun
 from jobs_testkit import FakeSeat, doc_row
 
@@ -23,8 +23,7 @@ EX2 = "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf"
 
 @pytest.fixture(autouse=True)
 def _fast(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(update_upload.time, "sleep", lambda _s: None)
-    monkeypatch.setattr(upload.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(update_upload.time, "sleep", lambda _s: None)  # the one time module every filing sleeps on
 
 
 def _scene(job_dir: Path, firm: Path, data_root: Path, log: list[str]) -> tuple[StageRun, FakeSeat]:

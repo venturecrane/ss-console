@@ -14,8 +14,12 @@ right after that call returned, then resumed over the same matter.
 
 ``resume/<state>.json`` loads a send record frozen in a state the code writes
 (``frozen-*.json``, the matrix's ``frozen`` block names each record and what the
-vendor holds) and must make ZERO ``add_file`` calls: a record that names a
-send must never send it again.
+vendor holds) and must send NONE of the files it names again (zero ``add_file``
+or ``add_file_version`` calls on them): a record that names a send must never
+send it twice. The ``new-*`` states load the records the one
+filing module (wave 3) writes, captured from it by ``JOBS_WRITE_FILING_FROZEN=new``:
+the integrity job runs them on the merge-base's code, so a rollback to it must
+load what the new code wrote and send nothing again.
 
 The goldens hold the code: a change to how a file is sent, recorded, read back
 or named must leave every cell equal except the paths
@@ -103,9 +107,88 @@ def crash_cell(lane: str, root: Path, mp: Any) -> dict[str, Any]:
     return {"calls_in_a_clean_run": probe.seat.calls, "runs": runs}
 
 
+def _after_the_first_send(calls: list[dict[str, Any]], i: int) -> bool:
+    return i > 0 and calls[i - 1]["call"] == "add_file" and not any(c["call"] == "add_file" for c in calls[: i - 1])
+
+
+def rebuilt_cell(lane: str, root: Path, mp: Any) -> dict[str, Any]:
+    """The run killed once its first send is recorded sent, the first file
+    rebuilt with other bytes (a lane re-run between attempts), then resumed."""
+    sc = LANES[lane](root / "run", "clean", mp)
+    sc.seat.kill_after = _kill_index(lane, root / "probe", mp, _after_the_first_send, "clean")
+    first = _run(sc)
+    split = len(sc.seat.events)
+    assert sc.rebuild is not None
+    sc.rebuild()
+    sc.seat._last = None
+    end = _run(sc)
+    return {"first_file": sc.first, "killed": first, **_doc(sc, end, sc.seat.events[split:])}
+
+
+def resume_cell(lane: str, ending: str, root: Path, mp: Any) -> dict[str, Any]:
+    """A firm's file of the first name already in the folder; the first attempt
+    ends on a placeholder send or a short read-back; the resume runs once the
+    vendor has caught up. Both runs are recorded."""
+    sc = LANES[lane](root, "name_taken", mp)
+    seat = sc.seat
+    if ending.endswith("placeholder"):
+        seat.write_fault = "placeholder"
+    else:
+        seat.lag = 10**6
+    first = _run(sc)
+    split = len(seat.events)
+    seat.write_fault, seat.lag = None, 0
+    seat._pending = [(0, row) for _due, row in seat._pending]  # the vendor's index catches up
+    seat._last = None
+    end = _run(sc)
+    return {
+        "first_file": sc.first,
+        "first": {"end": first, "events": seat.events[:split]},
+        **_doc(sc, end, seat.events[split:]),
+    }
+
+
+def review_retry_cell(lane: str, ending: str, root: Path, mp: Any) -> dict[str, Any]:
+    """The records review's first attempt reads back short; the driver renders
+    it again (the same name with other bytes, or on a later day another name)
+    and the retry runs once the vendor has caught up. Both runs recorded."""
+    sc = LANES[lane](root, "clean", mp)
+    seat = sc.seat
+    seat.lag = 10**6
+    first = _run(sc)
+    split = len(seat.events)
+    seat.lag = 0
+    seat._pending = [(0, row) for _due, row in seat._pending]  # the vendor's index catches up
+    render = sc.later if ending.endswith("later_day") else sc.rebuild
+    assert render is not None
+    render()
+    seat._last = None
+    end = _run(sc)
+    return {
+        "first_file": sc.first,
+        "first": {"end": first, "events": seat.events[:split]},
+        **_doc(sc, end, seat.events[split:]),
+    }
+
+
+def _copies(doc: dict[str, Any]) -> list[str]:
+    """Every name sent, in both runs, that is the first file or a numbered form of it."""
+    stem, dot, ext = str(doc["first_file"]).rpartition(".")
+    stem, ext = (stem, "." + ext) if dot else (str(doc["first_file"]), "")
+    events = [*(doc.get("first") or {}).get("events", []), *doc["events"]]
+    sent = [str(e.get("name")) for e in events if e.get("call") == "add_file"]
+    return [n for n in sent if n == doc["first_file"] or (n.startswith(stem + " (") and n.endswith(ext))]
+
+
 def cell(lane: str, ending: str, root: Path, mp: Any) -> dict[str, Any]:
     if ending == "crash":
         return crash_cell(lane, root, mp)
+    if ending == "rebuilt_after_send":
+        return rebuilt_cell(lane, root, mp)
+    if ending.startswith("resume_name_taken_after_"):
+        return resume_cell(lane, ending, root, mp)
+    if ending.startswith("review_retry_"):
+        return review_retry_cell(lane, ending, root, mp)
     sc = LANES[lane](root, ending, mp)
     _fault(sc, ending)
     end = _run(sc)
@@ -185,9 +268,18 @@ def test_every_golden_cell_is_declared_and_recorded():
 @pytest.mark.parametrize("lane,ending", CELLS, ids=[f"{lane}/{e}" for lane, e in CELLS])
 def test_a_filing_cell_records_what_its_golden_holds(tmp_path, monkeypatch, lane, ending):
     """MUTATION: change how any lane sends, records, reads back or names a file and its cells fail."""
-    got = normal(cell(lane, ending, tmp_path, monkeypatch), tmp_path)
+    doc = cell(lane, ending, tmp_path, monkeypatch)
+    got = normal(doc, tmp_path)
     name = f"{lane}/{ending}"
     assert gk.write_or_compare(ROOT / f"{name}.json", got, ALLOWED.get(name, [])) == []
+    if ending == "rebuilt_after_send":
+        again = [e for e in doc["events"] if e.get("call") == "add_file" and e.get("name") == doc["first_file"]]
+        assert again == [], "a file rebuilt after it was sent must never be sent again"
+    if ending.startswith("resume_name_taken_after_"):
+        assert len(_copies(doc)) <= 1, f"one copy only, not {_copies(doc)}"
+    if ending.startswith("review_retry_"):
+        sent = [e for e in [*doc["first"]["events"], *doc["events"]] if e.get("call") == "add_file"]
+        assert len(sent) == 1, f"the review is filed once, not {[e.get('name') for e in sent]}"
 
 
 @pytest.mark.parametrize("state", sorted(FROZEN))
@@ -204,8 +296,9 @@ def test_a_frozen_record_loads_and_sends_nothing_again(tmp_path, monkeypatch, st
 
 
 # ---- recapturing the frozen records (never run by the integrity job) -------------------------
-def _kill_index(lane: str, root: Path, mp: Any, pick: Any) -> int:
-    probe = LANES[lane](root, "clean", mp)
+def _kill_index(lane: str, root: Path, mp: Any, pick: Any, ending: str) -> int:
+    probe = LANES[lane](root, ending, mp)
+    _fault(probe, ending)
     _run(probe)
     calls = _calls(probe.seat.events)
     return 1 + next(i for i, c in enumerate(calls) if pick(calls, i))
@@ -223,17 +316,26 @@ def _first_list_after_last(method: str) -> Any:
     return pick
 
 
-CAPTURE: dict[str, tuple[str, Any]] = {
-    "dated-pending": ("chronology", _after_nth("add_file")),
-    "dated-sent": ("chronology", _first_list_after_last("add_file")),
-    "dated-confirmed": ("chronology", _after_nth("mint")),
-    "dated-proven": ("chronology", None),
-    "standing-pending": ("litigation", _after_nth("add_file")),
-    "standing-sent": ("litigation", lambda calls, i: i > 0 and calls[i - 1]["call"] == "add_file"),
-    "standing-confirmed": ("litigation", None),
-    "update-proven": ("update", "delete_file"),
-    "update-retired": ("update", None),
-    "versions-sent": ("revise", _after_nth("add_file_version")),
+#: record -> (lane, where the run is killed, the ending it runs under).
+CAPTURE: dict[str, tuple[str, Any, str]] = {
+    "dated-pending": ("chronology", _after_nth("add_file"), "clean"),
+    "dated-sent": ("chronology", _first_list_after_last("add_file"), "clean"),
+    "dated-confirmed": ("chronology", _after_nth("mint"), "clean"),
+    "dated-proven": ("chronology", None, "clean"),
+    "standing-pending": ("litigation", _after_nth("add_file"), "clean"),
+    "standing-sent": ("litigation", lambda calls, i: i > 0 and calls[i - 1]["call"] == "add_file", "clean"),
+    "standing-confirmed": ("litigation", None, "clean"),
+    "update-proven": ("update", "delete_file", "clean"),
+    "update-retired": ("update", None, "clean"),
+    "versions-sent": ("revise", _after_nth("add_file_version"), "clean"),
+}
+#: The states only the one rule for a send that raises writes (wave 3): a row
+#: marked sent once its raised send read back by hash, and an update whose
+#: files are proven but left unretired because a send raised. Captured only
+#: under ``JOBS_WRITE_FILING_FROZEN=new``.
+CAPTURE_RAISED: dict[str, tuple[str, Any, str]] = {
+    "dated-raised-sent": ("chronology", _after_nth("add_file", 2), "send_raises_landed"),
+    "update-raised-proven": ("update", None, "send_raises_landed"),
 }
 
 
@@ -241,18 +343,22 @@ CAPTURE: dict[str, tuple[str, Any]] = {
 def test_planted_frozen_records_are_recaptured_from_this_code(tmp_path, monkeypatch):
     """Writes ``frozen-<record>.json``: the record each state's run leaves on
     disk, killed after the picked call, on entry to the named method, or run
-    to the end. ``dated-pre-flag``
-    is ``dated-confirmed`` with its ``sent`` and ``pending`` keys removed: the
-    shape the code wrote before ss#2901 and still reads."""
-    for record, (lane, pick) in CAPTURE.items():
-        sc = LANES[lane](tmp_path / record, "clean", monkeypatch)
+    to the end. ``dated-pre-flag`` is ``dated-confirmed`` with its ``sent`` and
+    ``pending`` keys removed: the shape the code wrote before ss#2901 and still
+    reads. ``JOBS_WRITE_FILING_FROZEN=new`` writes ``frozen-new-<record>.json``
+    instead, and the raised-send states too: the records a change writes, which
+    the integrity job then loads with the merge-base's code (the rollback)."""
+    new = os.environ.get(CAPTURE_ENV) == "new"
+    for record, (lane, pick, ending) in {**CAPTURE, **(CAPTURE_RAISED if new else {})}.items():
+        sc = LANES[lane](tmp_path / record, ending, monkeypatch)
+        _fault(sc, ending)
         if isinstance(pick, str):
             sc.seat.kill_before = pick
         elif pick is not None:
-            sc.seat.kill_after = _kill_index(lane, tmp_path / f"{record}-probe", monkeypatch, pick)
+            sc.seat.kill_after = _kill_index(lane, tmp_path / f"{record}-probe", monkeypatch, pick, ending)
         _run(sc)
         doc = json.loads(sc.seat.watch[0].read_text(encoding="utf-8"))
-        (ROOT / f"frozen-{record}.json").write_text(gk.dump(doc), encoding="utf-8")
-        if record == "dated-confirmed":
+        (ROOT / f"frozen-{'new-' if new else ''}{record}.json").write_text(gk.dump(doc), encoding="utf-8")
+        if record == "dated-confirmed" and not new:
             pre = {**doc, "files": [{k: v for k, v in f.items() if k not in ("sent", "pending")} for f in doc["files"]]}
             (ROOT / "frozen-dated-pre-flag.json").write_text(gk.dump(pre), encoding="utf-8")

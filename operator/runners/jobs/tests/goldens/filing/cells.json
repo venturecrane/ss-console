@@ -24,7 +24,12 @@
     "folder_taken",
     "shape_ext_on_name",
     "shape_upper_ext",
-    "shape_no_ext"
+    "shape_no_ext",
+    "rebuilt_after_send",
+    "resume_name_taken_after_placeholder",
+    "resume_name_taken_after_short",
+    "review_retry_after_short",
+    "review_retry_later_day"
   ],
   "not_applicable": {
     "update/folder_taken": "the update files into the delivered chronology's own folder, by its id; no folder is chosen or created by name",
@@ -34,33 +39,175 @@
     "revise/send_raises_placeholder": "a new version lands whole on its one PUT or not at all; there is no POST to leave a placeholder row",
     "library/folder_taken": "the library folder is the firm's standing Document Library, found by name and never created",
     "library/shape_upper_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed",
-    "library/shape_no_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed"
+    "library/shape_no_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed",
+    "revise/rebuilt_after_send": "revise files new versions by id under compare-and-stop; it keeps no per-name send record to rebuild against",
+    "library/rebuilt_after_send": "the library filing keeps no send record across attempts: each attempt reads the library afresh",
+    "chronology/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "chronology/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "demand/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "demand/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "drafting/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "drafting/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "litigation/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "litigation/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "casefile/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "casefile/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "revise/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "revise/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "library/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "library/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "chronology/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "chronology/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "update/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "update/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "demand/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "demand/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "drafting/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "drafting/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "litigation/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "litigation/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "casefile/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "casefile/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "revise/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "revise/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "library/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "library/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts"
   },
   "frozen": {
-    "dated-pending-landed": { "lane": "chronology", "record": "dated-pending", "vendor": "landed" },
+    "dated-pending-landed": {
+      "lane": "chronology",
+      "record": "dated-pending",
+      "vendor": "landed"
+    },
     "dated-pending-absent": {
       "lane": "chronology",
       "record": "dated-pending",
       "vendor": "absent-first"
     },
-    "dated-sent": { "lane": "chronology", "record": "dated-sent", "vendor": "landed" },
-    "dated-confirmed": { "lane": "chronology", "record": "dated-confirmed", "vendor": "landed" },
-    "dated-proven": { "lane": "chronology", "record": "dated-proven", "vendor": "landed" },
-    "dated-pre-flag": { "lane": "chronology", "record": "dated-pre-flag", "vendor": "landed" },
-    "standing-pending": { "lane": "litigation", "record": "standing-pending", "vendor": "landed" },
+    "dated-sent": {
+      "lane": "chronology",
+      "record": "dated-sent",
+      "vendor": "landed"
+    },
+    "dated-confirmed": {
+      "lane": "chronology",
+      "record": "dated-confirmed",
+      "vendor": "landed"
+    },
+    "dated-proven": {
+      "lane": "chronology",
+      "record": "dated-proven",
+      "vendor": "landed"
+    },
+    "dated-pre-flag": {
+      "lane": "chronology",
+      "record": "dated-pre-flag",
+      "vendor": "landed"
+    },
+    "standing-pending": {
+      "lane": "litigation",
+      "record": "standing-pending",
+      "vendor": "landed"
+    },
     "standing-pending-absent": {
       "lane": "litigation",
       "record": "standing-pending",
       "vendor": "absent-first"
     },
-    "standing-sent": { "lane": "litigation", "record": "standing-sent", "vendor": "landed" },
+    "standing-sent": {
+      "lane": "litigation",
+      "record": "standing-sent",
+      "vendor": "landed"
+    },
     "standing-confirmed": {
       "lane": "litigation",
       "record": "standing-confirmed",
       "vendor": "landed"
     },
-    "update-proven": { "lane": "update", "record": "update-proven", "vendor": "landed" },
-    "update-retired": { "lane": "update", "record": "update-retired", "vendor": "landed" },
-    "versions-sent": { "lane": "revise", "record": "versions-sent", "vendor": "landed" }
+    "update-proven": {
+      "lane": "update",
+      "record": "update-proven",
+      "vendor": "landed"
+    },
+    "update-retired": {
+      "lane": "update",
+      "record": "update-retired",
+      "vendor": "landed"
+    },
+    "versions-sent": {
+      "lane": "revise",
+      "record": "versions-sent",
+      "vendor": "landed"
+    },
+    "new-dated-pending-landed": {
+      "lane": "chronology",
+      "record": "new-dated-pending",
+      "vendor": "landed"
+    },
+    "new-dated-pending-absent": {
+      "lane": "chronology",
+      "record": "new-dated-pending",
+      "vendor": "absent-first"
+    },
+    "new-dated-sent": {
+      "lane": "chronology",
+      "record": "new-dated-sent",
+      "vendor": "landed"
+    },
+    "new-dated-confirmed": {
+      "lane": "chronology",
+      "record": "new-dated-confirmed",
+      "vendor": "landed"
+    },
+    "new-dated-proven": {
+      "lane": "chronology",
+      "record": "new-dated-proven",
+      "vendor": "landed"
+    },
+    "new-standing-pending": {
+      "lane": "litigation",
+      "record": "new-standing-pending",
+      "vendor": "landed"
+    },
+    "new-standing-pending-absent": {
+      "lane": "litigation",
+      "record": "new-standing-pending",
+      "vendor": "absent-first"
+    },
+    "new-standing-sent": {
+      "lane": "litigation",
+      "record": "new-standing-sent",
+      "vendor": "landed"
+    },
+    "new-standing-confirmed": {
+      "lane": "litigation",
+      "record": "new-standing-confirmed",
+      "vendor": "landed"
+    },
+    "new-update-proven": {
+      "lane": "update",
+      "record": "new-update-proven",
+      "vendor": "landed"
+    },
+    "new-update-retired": {
+      "lane": "update",
+      "record": "new-update-retired",
+      "vendor": "landed"
+    },
+    "new-versions-sent": {
+      "lane": "revise",
+      "record": "new-versions-sent",
+      "vendor": "landed"
+    },
+    "new-dated-raised-sent": {
+      "lane": "chronology",
+      "record": "new-dated-raised-sent",
+      "vendor": "landed"
+    },
+    "new-update-raised-proven": {
+      "lane": "update",
+      "record": "new-update-raised-proven",
+      "vendor": "landed"
+    }
   }
 }

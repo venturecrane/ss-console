@@ -1,0 +1,27 @@
+{
+  "files": [
+    {
+      "bytes": 25,
+      "confirmed": false,
+      "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+      "sent": true,
+      "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+    },
+    {
+      "bytes": 20,
+      "confirmed": false,
+      "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+      "sent": true,
+      "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+    },
+    {
+      "bytes": 21,
+      "confirmed": false,
+      "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+      "sent": true,
+      "sha256": "6e44a5ab275806624dffd2f67b7c86752e7fce8520d75c4f458ec3473c329720"
+    }
+  ],
+  "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+  "folder_id": "folder-1"
+}

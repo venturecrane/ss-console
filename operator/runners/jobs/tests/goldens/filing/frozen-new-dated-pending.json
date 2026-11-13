@@ -1,0 +1,14 @@
+{
+  "files": [
+    {
+      "bytes": 25,
+      "confirmed": false,
+      "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+      "pending": true,
+      "sent": false,
+      "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+    }
+  ],
+  "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+  "folder_id": "folder-1"
+}

@@ -1,0 +1,31 @@
+{
+  "end": {
+    "raised": {
+      "message": "stage_unfinished: file: the built workbook changed after a send was recorded; not resent",
+      "type": "LitigationFailed"
+    }
+  },
+  "events": [],
+  "first_file": "File Status 2099-EX-0001 2026-11-13.pdf",
+  "killed": {
+    "killed_after": "list_files"
+  },
+  "records": {
+    "job-data/delivery.json": {
+      "bytes": 16,
+      "folder_id": "folder-1",
+      "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+      "pending": false,
+      "sent": true,
+      "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+    },
+    "job-data/wb.json": null
+  },
+  "vendor": [
+    "up-1 'File Status 2099-EX-0001 2026-11-13' '.pdf' 16 in folder-1 v1 sha 755425c61a7cd316"
+  ],
+  "writes": {
+    "add_file": 1,
+    "create_folder": 1
+  }
+}
