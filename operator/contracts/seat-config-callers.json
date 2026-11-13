@@ -6939,7 +6939,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/medchron_ledger.py:369 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/medchron_ledger.py:370 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/medchron_ledger.py",
      "kind": "function",
@@ -6990,7 +6990,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/medchron_ledger.py:394 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/medchron_ledger.py:395 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/medchron_ledger.py",
      "kind": "function",
@@ -7040,7 +7040,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/medchron_ledger.py:426 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/medchron_ledger.py:427 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/medchron_ledger.py",
      "kind": "function",
