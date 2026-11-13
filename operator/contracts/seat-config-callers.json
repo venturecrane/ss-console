@@ -4143,7 +4143,7 @@
       "real-b02aa60269": "return value:_FrozenDate reads=1",
       "real-c388304bc1": "return value:date reads=1",
       "real-c3de4c838e": "return value:_FrozenDate reads=1",
-      "real-d91ae216e0": "return value:_FrozenDate reads=1",
+      "real-d91ae216e0": "return value:date reads=1",
       "unreadable": "return value:_FrozenDate a111d768ec663619 reads=1",
       "yaml-syntax-error": "return value:_FrozenDate a111d768ec663619 reads=1"
      },

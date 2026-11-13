@@ -1,6 +1,6 @@
 {
   "_comment": "Snapshot of every REAL seat's voice-gate-relevant config fields, generated from ss-console operator/customers/*/customer.yaml (underscore-prefixed template dirs excluded). Consumed by tests/test_voice_gate_binding_coverage.py to assert the gate is NEVER WEAKER since the sample-transform fallback was replaced by a fail-closed one (ADR 0083 decision 6): no (seat x class) loses its downgrade. REGENERATION IS CONSOLE-SIDE: ss-console's drift test (ss#2086 plan C3, following the validator_parity_fixtures precedent) regenerates this file when seat configs change; do not hand-edit. The generator emits it at ss-console operator/contracts/gate-coverage-snapshot.overlay.json; when ss-console's drift test fires, copy that file over this one in the same change that edits the seat configs.",
-  "generated_from": "venturecrane/ss-console@01db2b0f2d43af62732a336ccd70321e3f2a5694",
+  "generated_from": "venturecrane/ss-console@40584a16de9f5d922b99aaad843881ee1a0a68f9",
   "excluded_template_dirs": [
     "_template"
   ],
