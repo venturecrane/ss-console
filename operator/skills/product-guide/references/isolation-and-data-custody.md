@@ -1,22 +1,18 @@
 # Isolation and Data Custody
 
-This document explains how each client's Operator is kept apart from every other client, what SMD can and cannot see, where credentials live, how the audit record works, and what happens to data at the end.
+This document explains how each client's Operator is kept apart from every other client, what SMD's console and SMD's agents can and cannot see, where credentials live, how the audit record works, and what happens to data at the end.
 
-Maturity labels used in this document:
-
-- **In production**: built and authored on the paying client's seat.
-- **Built, not yet in client use**: built and tested, but runs only on SMD's own or proving seats, or is authored on no seat.
-- **Specified, not built**: decided and written down, not built.
+Labels used here, as defined in [INDEX.md](INDEX.md): running for a client today; built, set up per client; configured per engagement. Every capability described is one SMD can set up for a client.
 
 ## Isolation between clients
 
-- Each client gets its own seat: its own application, its own machine, its own storage volume and its own store for skill instructions. In production.
+- Each client gets its own seat: its own application, its own machine, its own storage volume and its own store for skill instructions. Running for a client today.
 - Two stores are shared and separated per client by key: the configuration store and the audit archive. SMD does not warehouse copies of the client's files in either.
-- A seat refuses to start if it is bound to another client's storage. In production.
+- A seat refuses to start if it is bound to another client's storage. Running for a client today.
 - Client machines may not query each other. SMD's control plane may read audit data across clients.
 - Only the gate's entry point is public. The agent runtime's own port is not exposed.
 - SMD's console finds a seat from an explicit list, never by deriving it from a client's name.
-- Each client's data lives on that seat's own machine-local storage. An earlier plan for a separate per-client database service was never built.
+- Each client's data lives on that seat's own machine-local storage.
 - Seats run in two west-coast United States regions, chosen per seat.
 
 ## How SMD's console reads a seat
@@ -36,10 +32,10 @@ SMD's console reads each seat through one narrow, read-only channel. Its rules:
 Stated plainly, so representatives do not overclaim:
 
 - **Request notices.** When someone asks the Operator for something, SMD's operations mailbox receives a request notice that carries the requester's words and the Operator's reply. This is how SMD watches that every request is answered.
-- **Per-client ops workspace.** When SMD staff need to work with a client's documents, they do it in that client's ops workspace, which reaches only that client's seat. Access is logged, and work SMD staff must look at sits there for up to 30 days before it is deleted. SMD does not warehouse copies of the client's files.
+- **Per-client ops workspace.** When a client's documents need work beyond the seat, SMD's agents do it in that client's ops workspace, which is sealed to that client's seat. Work there is kept for up to 30 days before it is deleted. No person at SMD reads client files, and SMD does not warehouse copies of them.
 - **Administrative access to the seat.** An SMD administrator with full access to a seat can reach that seat's connection credentials and send credentials.
 
-So the accurate statement is: SMD's console never shows client business content, and SMD staff see client content only through request notices and the logged per-client ops workspace.
+So the accurate statement is: SMD's console never shows client business content. Client files are handled only by AI agents: the client's own Operator, and SMD's agents in the workspace sealed to that client. What reaches SMD's operations mailbox is the request notice, with the requester's words and the reply.
 
 ## Credential custody
 
@@ -52,13 +48,13 @@ So the accurate statement is: SMD's console never shows client business content,
 
 ## The audit record
 
-| Property                 | Fact                                                                                                                                                                                                                                                                                     | Maturity      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| Chained                  | Each audit entry carries a hash that includes the previous entry's hash, so any change to an earlier entry breaks the chain.                                                                                                                                                             | In production |
-| One writer               | Only the broker writes it, one audit entry per tool call. The agent can read it but not change it. There is no update or delete operation.                                                                                                                                               | In production |
-| Pinned off the machine   | Every heartbeat sends the newest audit entry's fingerprint to SMD's console, which keeps the history.                                                                                                                                                                                    | In production |
-| Daily verify and archive | A daily job pulls each seat's record, checks that the pinned fingerprint is still there, pages SMD at the highest priority if not, and writes a dated copy to the audit archive, shared and keyed per client. The archive refuses overwrites and is described as locked for seven years. | In production |
-| Client-checkable sends   | Each reply's audit entry carries a fingerprint of the sent body that the client can recompute from its own mail system.                                                                                                                                                                  | In production |
+| Property                 | Fact                                                                                                                                                                                                                                                                                    | Today                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Chained                  | Each audit entry carries a hash that includes the previous entry's hash, so any change to an earlier entry breaks the chain.                                                                                                                                                            | Running for a client today |
+| One writer               | Only the broker writes it, one audit entry per tool call. The agent can read it but not change it. There is no update or delete operation.                                                                                                                                              | Running for a client today |
+| Pinned off the machine   | Every heartbeat sends the newest audit entry's fingerprint to SMD's console, which keeps the history.                                                                                                                                                                                   | Running for a client today |
+| Daily verify and archive | A daily job pulls each seat's record, checks that the pinned fingerprint is still there, pages SMD at the highest priority if not, and writes a dated copy to the audit archive, shared and keyed per client. The archive is locked so that no copy can be overwritten for seven years. | Running for a client today |
+| Client-checkable sends   | Each reply's audit entry carries a fingerprint of the sent body that the client can recompute from its own mail system.                                                                                                                                                                 | Running for a client today |
 
 The record is tamper-evident, not tamper-proof. Its stated limits:
 
@@ -75,7 +71,7 @@ The record is tamper-evident, not tamper-proof. Its stated limits:
 ## Model and provider posture
 
 - Language-model processing runs through a major model provider's commercial service. Content passes through transiently, and under the provider's commercial terms it is not used to train models.
-- The provider is fixed in code today. Models are chosen per seat, with a separate model for harder steps.
+- SMD chooses the model provider. Models are chosen per seat, with a separate model for harder steps.
 - Provisioning prefers a separate provider credential per seat.
 - Some seats also use a speech-to-text processor and a web-search processor.
 - SMD holds no SOC 2 or ISO 27001 certification of its own.

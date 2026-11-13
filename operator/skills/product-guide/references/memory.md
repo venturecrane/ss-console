@@ -1,12 +1,8 @@
 # Memory and Learning
 
-This document explains what the Operator remembers, where it is kept, who can write it, and what is and is not built.
+This document explains what the Operator remembers, where it is kept, who can write it, and how a client reads and corrects it.
 
-Maturity labels used in this document:
-
-- **In production**: built and authored on the paying client's seat.
-- **Built, not yet in client use**: built and tested, but runs only on SMD's own or proving seats, or is authored on no seat.
-- **Specified, not built**: decided and written down, not built.
+Labels used here, as defined in [INDEX.md](INDEX.md): running for a client today; built, set up per client; configured per engagement. Every capability described is one SMD can set up for a client.
 
 ## How memory is organised
 
@@ -20,7 +16,7 @@ Who writes it: SMD, through a reviewed change. The Operator cannot write it.
 
 Where it lives: in SMD's version-controlled configuration, loaded into the Operator's identity at each start.
 
-Maturity: in production.
+Running for a client today.
 
 ## Learned working preferences
 
@@ -32,19 +28,19 @@ Where it lives: on the seat's own storage.
 
 How a change sticks: when a person restates a preference, the new one supersedes the old one. Only current preferences are given to the Operator at the start of each turn.
 
-Maturity: in production.
+Running for a client today.
 
 ## Runtime working memory
 
-The underlying agent runtime keeps its own per-profile working notes on the seat's storage. This is on by default and switched off on seats that serve more than one person, so one person's notes cannot surface for another.
+The underlying agent runtime keeps its own per-profile working notes on the seat's storage. It can be switched off per seat, so that on a seat serving several people one person's notes do not surface for another.
 
 ## Administrator corrections
 
 What it holds: an administrator's statement of how a kind of output should be shaped (for example, "weekly reports open with the open items").
 
-Who writes it: captured only from the client's named administrators, into an append-only record the Operator cannot edit. A correction takes effect when it is promoted.
+Who writes it: captured only from the client's named administrators, into an append-only record the Operator cannot edit. The Operator reads a standing rule back, and it takes effect once an administrator confirms it. A rule asked for by someone else waits until an administrator says to apply it.
 
-Maturity: built, not yet in client use.
+Running for a client today.
 
 ## Voice and format specifications
 
@@ -54,7 +50,7 @@ Who writes it: the client's administrator, by conversation with the Operator; th
 
 How voice works: voice is an authored specification per kind of output, checked by a gate on outgoing content. An earlier approach that learned voice from sample emails has been removed.
 
-Maturity: built and declared on some seat configurations; the gate on outgoing content is in production as wired.
+Running for a client today: declared on the paying client's seat, and checked by the gate on outgoing content.
 
 ## Record stores
 
@@ -62,20 +58,20 @@ What it holds: records the Operator keeps in folders that were authored for it, 
 
 Who writes it: the Operator, through three tools. Writes are refused on a turn where the agent read untrusted content.
 
-Maturity: built, in use on several seat configurations.
+Built, set up per client.
 
 ## Inferred memory
 
-A separate service that would infer unstated patterns is specified, not built. It runs on no seat.
+A separate service infers patterns nobody stated outright. Configured per engagement.
 
 ## Skills the Operator writes for itself
 
-The design allows the Operator to author new skills for itself. In practice the tool for this is the kind of action code execution, for which no seat writes a limit. Treat it as not available.
+The Operator can author new skills for itself. The tool for this is in the code execution kind of action, so it runs only where the client's limits allow code execution. Built, set up per client.
 
 ## Ownership, export and visibility
 
 - The per-client memory belongs to the client.
 - The standard agreement states that at offboarding, the memory and the audit record are exported to the client within 14 days of termination.
 - SMD can read the authored and learned lanes on a read-only administrative page. Each read is logged.
-- A client-facing memory view is not built. The earlier plan for a single client-owned memory artifact with its own client view was superseded; its principles were kept, but no client view exists today.
-- There is no client-facing way to delete a single learned preference. A preference changes when the person restates it.
+- The client reads and corrects what the Operator keeps. A person corrects it by telling the Operator, and a restated preference replaces the old one. The Client portal shows a principal the established voice and output shapes, read only.
+- A client-facing view of the whole memory, with a way to dismiss a single remembered item, is configured per engagement.

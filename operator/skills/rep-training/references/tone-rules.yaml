@@ -61,7 +61,7 @@ rules:
   - id: no-guarantee
     kind: regex
     pattern: '\bguarantee[sd]?\b|\bpromise\s+you\b'
-    fix: Do not promise a result. Describe what the product does today, with its maturity label.
+    fix: Do not promise a result. Describe what the Operator does as a capability SMD configures for the client.
 
   - id: no-long-dash
     kind: literal

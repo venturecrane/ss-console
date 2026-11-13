@@ -80,23 +80,23 @@ lessons:
       - document: what-smd-commits-to.md
         section: Who owns the data
     exercise: >-
-      A security reviewer asks whether SMD staff can read the business's
+      A security reviewer asks whether anyone at SMD reads the business's
       email. Write an answer that is accurate and does not overclaim.
     requires: none
 
   - id: l06
-    title: What is real today
+    title: What it can do, and what runs today
     read:
       - document: what-it-is.md
-        section: How to read the maturity labels
+        section: How to read the labels
       - document: built-versus-planned.md
-        section: In production
+        section: Running for a client today
       - document: built-versus-planned.md
-        section: Built, not yet in client use
+        section: Configured per engagement
     exercise: >-
-      Name three things that are in production and one that is built but not
-      yet in client use, each with the label you would use for it with a
-      prospect.
+      Describe two capabilities in the present tense, as the site does: one a
+      client is running today and one SMD configures per engagement. Then say
+      how you would answer a buyer who asks which of them a client runs today.
     requires: none
 
   - id: l07
@@ -229,8 +229,8 @@ quiz:
       ask: Which is the accurate statement about what SMD can see?
       choices:
         A: SMD never sees any client content
-        B: SMD's console never shows business content, and SMD staff see content only through request notices and the logged per-client ops workspace
-        C: SMD staff read every email the Operator handles
+        B: SMD's console never shows business content, client files are handled only by AI agents, and a request notice with the requester's words reaches SMD's operations mailbox
+        C: A person at SMD reads every email the Operator handles
         D: SMD sees content only when the client sends it records
       answer: B
       source:
@@ -238,16 +238,16 @@ quiz:
         section: What SMD can see beyond the console
 
     - id: q08
-      ask: What may you describe to a prospect as something a client has today?
+      ask: A buyer asks whether the Operator can do something the library labels configured per engagement. What do you say?
       choices:
-        A: Anything that is built
-        B: Anything that is specified
-        C: Only capabilities marked in production
-        D: Anything on the plan for the year
+        A: That it is not available
+        B: That it is planned for later
+        C: That it can, because SMD configures it for the client, and that no client runs it yet if they ask what is live
+        D: That you cannot discuss it
       answer: C
       source:
         document: what-it-is.md
-        section: How to read the maturity labels
+        section: How to read the labels
 
     - id: q09
       ask: Which of these is a hard stop, not a fit today?

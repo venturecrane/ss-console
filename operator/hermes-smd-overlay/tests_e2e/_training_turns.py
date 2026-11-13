@@ -52,7 +52,7 @@ A_ANSWERS = (
     "It is a worker we run for your business, not another tool you run yourself.",
     "Your limits are written down and every action is checked against them before it runs.",
     "That is for SMD to price with you, and I can bring you to them for it.",
-    "It is early and selective, and I can show you what is in production today.",
+    "A client runs it today, and SMD sets it up for each new client it takes on.",
     "Your people review its work, and the agreement says plainly who is responsible.",
     "You can pause it, and the agreement covers ending the service and getting your data back.",
 )

@@ -52,7 +52,8 @@ themes:
       - says: 'Does anyone at your company read what goes through it?'
         covers:
           - SMD's console never shows business content
-          - SMD staff see content only through request notices and the logged per-client ops workspace
+          - no person at SMD reads client files; only AI agents handle them, the client's Operator and SMD's agents in a workspace sealed to that client
+          - a request notice with the requester's words reaches SMD's operations mailbox
         answer:
           - document: isolation-and-data-custody.md
             section: What SMD can see beyond the console
@@ -107,7 +108,7 @@ themes:
       - says: 'What happens when it gets stuck on a big piece of work?'
         covers:
           - big work runs as a queued job with its own checks and proof of delivery
-          - the client hears when a job stops
+          - when a job stops, SMD is paged and resolves it, and the requester hears nothing until the work is delivered
         answer:
           - document: jobs.md
             section: From request to delivery
@@ -115,8 +116,8 @@ themes:
             section: What the client hears when a job stops
       - says: 'Can people reach it some way other than email?'
         covers:
-          - email is the main channel today
-          - which other channels exist and which are not available
+          - email is the main channel, and a client running today uses email
+          - SMD sets up the other channels a client wants, such as chat, voice notes, texting or team chat, and each passes the same checks
         answer:
           - document: connections-and-channels.md
             section: Email channels

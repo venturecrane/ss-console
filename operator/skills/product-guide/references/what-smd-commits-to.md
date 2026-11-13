@@ -21,7 +21,7 @@ This document summarises, in plain words, the standard commitments SMD Services 
 - **The limits.** For every kind of action the Operator can take (reading, writing inside the business, sending, making commitments, destructive actions), the client writes the limit. A kind of action with nothing written for it is refused.
 - **The Operator cannot raise its own limits.** The limits are enforced in code, every action is recorded against them, and a change to them is made by the client's authorised person through SMD, never by the Operator.
 - **Sending identity.** For each kind of outside send, the client chooses whether the Operator sends on its own, prepares a draft for a person to send under their own name, or is refused. Every outside action is traceable in the audit record to a named person at the client.
-- **Floors for some professions.** For a regulated profession, the standard terms provide that outside sends can be fixed at "drafts for a person" as a floor the client's own settings cannot raise. In the product today that floor is set through each seat's own written limits; an industry-wide floor in code is built but empty (see the permission model, "Rules that hold everywhere").
+- **Floors for some professions.** For a regulated profession, the standard terms provide that outside sends can be fixed at "drafts for a person" as a floor the client's own settings cannot raise. In the product that floor is set through each seat's own written limits, and the gate can add an industry-wide floor on top of them (see the permission model, "Rules that hold everywhere").
 - **Commitments and destructive actions** keep a requirement for a person's yes at the time, even where the limit is acts on its own.
 - **Changes on request.** The client can ask for new skills, a different voice, or changed limits at any time during the term.
 - **Stopping it.** The client can pause the Operator in the Client portal, or cut its access in the client's own systems.
@@ -108,7 +108,7 @@ For clients who hold information protected by professional rules (for example, a
 ## Service levels and support
 
 - SMD's service commitment is about detection, response and communication, ranked by severity, rather than an uptime percentage.
-- Each client's seat reports its health every minute, work is checked every hour, and SMD is paged when a seat goes quiet or a request goes unanswered.
+- SMD watches every seat continuously: each seat reports its health, work is checked through the day, and SMD is paged when a seat goes quiet or a request goes unanswered. How often each check runs is how SMD watches, not a response-time commitment.
 - Releases are rolled out seat by seat, with a point to roll back to.
 
 ## Audits and evidence
