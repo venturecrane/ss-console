@@ -1,0 +1,16 @@
+{
+  "with_categories": [
+    {
+      "method": "PUT",
+      "path": "/tasks/t-7",
+      "wire": "{\"staffId\":\"s-1\",\"subject\":\"[Operator] Call the adjuster back\",\"note\":\"left a message\",\"dueDateOnly\":\"2026-09-01\",\"matterId\":\"m-9\",\"isCompleted\":true,\"completedByStaffId\":\"s-1\",\"assigneeIds\":[\"s-2\"]}"
+    }
+  ],
+  "without_categories": [
+    {
+      "method": "PUT",
+      "path": "/tasks/t-7",
+      "wire": "{\"staffId\":\"s-1\",\"subject\":\"[Operator] Order records\",\"matterId\":\"m-9\",\"isCompleted\":false,\"assigneeIds\":[\"s-4\"]}"
+    }
+  ]
+}
