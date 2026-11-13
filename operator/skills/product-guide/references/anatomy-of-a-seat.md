@@ -130,7 +130,7 @@ The routine grid lists each routine the client's agreement names, in the agreeme
 
 - the routine's name, the agreement section, and the agreement's own words for where it starts and how far it may go
 - the skills that carry it out
-- a starting setting and a ceiling, each exactly one of three limit settings. A start above the ceiling is refused. There is no default.
+- a starting setting and a ceiling, each exactly one of three limit settings. A start above the ceiling is refused. SMD's practice is to start a new routine at "Prepares it for you", so its sends are drafts for a person, and move it up as the client chooses. A kind of action with no limit written is still refused.
 - how each setting is actually enforced
 
 The three limit settings, in the words the client sees:
@@ -155,4 +155,4 @@ The three limit settings, in the words the client sees:
 | Pause and resume                                                        | The client's principal, where the agreement hands over pause                         | From the Client portal to the seat; recorded only once the seat confirms it                                                                           | Running for a client today |
 | Connection credentials and other secrets                                | SMD at provisioning, or the client through a write-only field                        | Kept in the hosting platform's secret store; never in a configuration file                                                                            | Running for a client today |
 
-A client's change to a routine's limit setting or a pause is a runtime override. It does not rewrite the seat configuration file. Voice is an authored specification per kind of output; the Operator does not learn voice from samples of past mail.
+A client's change to a routine's limit setting or a pause is a runtime override. It does not rewrite the seat configuration file. The Operator drafts in the firm's voice. The voice is written per kind of document from the firm's own examples, and past letters can be the source. It sharpens as the firm's people correct drafts and as administrators confirm standing rules.

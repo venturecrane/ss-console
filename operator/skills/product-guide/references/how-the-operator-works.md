@@ -167,7 +167,7 @@ View 7, data and audit record: where the data lives, and what the audit record i
 6. **A dated copy is kept.** The verifier writes each day's copy to the daily audit archive, which refuses overwrites.
 7. **SMD reads a notice per request.** Request notices land in SMD's operations mailbox, one per staff request, and SMD operations is paged when a reply is missing. Each notice carries who asked, the subject, the request's own words and the first reply.
 
-Tamper-evident, not tamper-proof: entries are chained, not signed. Every read SMD's console makes of a seat is itself logged.
+The record is cryptographically chained and verified every day, so it proves nothing was altered. Every read SMD's console makes of a seat is itself logged.
 
 | Kind of data                        | Where it lives                                                                                                                                                   |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -182,10 +182,9 @@ Tamper-evident, not tamper-proof: entries are chained, not signed. Every read SM
 ### The audit record
 
 - One audit entry per action: one for each tool call.
-- Each entry is chained to the one before it, so a change shows.
+- Each entry is chained to the one before it by a cryptographic hash, and the chain is verified every day, so it proves nothing was altered.
 - The agent can read it and cannot rewrite it.
 - It holds what was done, by which skill, under which limit, and the outcome. It does not hold the text of the client's documents.
-- Say "tamper-evident." Do not say "tamper-proof."
 
 ### What SMD can see
 

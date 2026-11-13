@@ -13,9 +13,9 @@ These are the headings the seat uses when it steps out of the buyer's role and g
 ## Accurate to the product reference
 
 - A good answer says only what the library says, and can name the document and section it came from. It describes what the Operator can do as a capability SMD configures for the client, in the present tense. See what-it-is.md, "How to read the labels".
-- Precision on the record: it is tamper-evident, with stated limits, never tamper-proof. See isolation-and-data-custody.md, "The audit record".
+- Precision on the record: it is cryptographically chained, verified every day, and the agent cannot rewrite it, so it proves nothing was altered. See isolation-and-data-custody.md, "The audit record".
 - Precision on approvals: commitments and deletions never run on the Operator's word alone. See permission-model.md, "Ceilings from least to most restrictive".
-- Precision on memory: it keeps the working preferences each person states and the standing rules an administrator confirms, and a person corrects it by telling it. It does not learn voice from samples; voice is an authored specification. See memory.md, "Learned working preferences", "Administrator corrections" and "Ownership, export and visibility".
+- Precision on memory: it keeps the working preferences each person states and the standing rules an administrator confirms, and a person corrects it by telling it. It drafts in the firm's voice, written per kind of document from the firm's own examples, and it sharpens as people correct drafts. See memory.md, "Learned working preferences", "Administrator corrections" and "Ownership, export and visibility".
 - Common miss: saying nothing about a client's requests ever reaches SMD. The accurate line is that SMD's console never shows business content, client files are handled only by AI agents (the client's Operator, and SMD's agents in a workspace sealed to that client), and a request notice with the requester's words reaches SMD's operations mailbox. See isolation-and-data-custody.md, "What SMD can see beyond the console".
 - Common miss: claiming a SOC 2 or ISO 27001 certification of SMD's own, or a documented zero-retention arrangement with the model provider. The library states neither. See isolation-and-data-custody.md, "Model and provider posture".
 

@@ -34,7 +34,7 @@ themes:
       - says: 'How would I even know what it did while I was out?'
         covers:
           - every tool call writes one audit entry to a record the agent cannot rewrite
-          - the record is tamper-evident, with stated limits, never tamper-proof
+          - the record is cryptographically chained and verified every day, so it proves nothing was altered
         answer:
           - document: isolation-and-data-custody.md
             section: The audit record

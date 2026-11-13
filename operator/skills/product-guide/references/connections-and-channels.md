@@ -53,6 +53,10 @@ The SMD-written connections together hold 91 tools. Any other system a client ru
 | System events in                                          | Other systems can notify the Operator of events, routed through the gate.                                                                                                                                     | Running for a client today |
 | Texting, team chat platforms, phone calls, spoken replies | SMD sets up the channel a client wants. It comes in through the same gate, so every rule below applies to it.                                                                                                 | Configured per engagement  |
 
+## When a connection drops
+
+When a connection to a client system drops, the Operator stops the action that needs it rather than work from stale data, and resumes when the connection is back. SMD's monitoring tracks failures for each connection, so a connection that stays down reaches SMD.
+
 ## Rules that apply to every channel
 
 A channel is only a pipe. Whatever comes in, on any channel, passes the same checks: where it came from, fencing of untrusted content, marking the turn as tainted when content is untrusted, classifying the sender against the client's list of people, and recipient-aware limits on any reply. An unknown sender's content is fenced: no reply, and no send, commitment or delete on that turn.

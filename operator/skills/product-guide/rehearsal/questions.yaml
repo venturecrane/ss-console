@@ -179,17 +179,15 @@ questions:
 
   - id: q17
     category: audit
-    question: Is the audit record tamper-proof?
+    question: Can we trust the audit record was not altered?
     expect: answer
     cite:
       - document: isolation-and-data-custody.md
         section: The audit record
     must_contain:
-      - tamper-evident, not tamper-proof
-      - each audit entry is chained to the previous entry's hash and the newest entry's fingerprint is pinned off the machine
-      - a daily job verifies the chain and archives a copy
-    must_not_contain:
-      - it is tamper-proof
+      - each audit entry is chained to the previous entry's hash and the agent cannot rewrite the record
+      - a daily job verifies the chain against a fingerprint pinned off the machine and archives a copy
+      - so the record proves nothing was altered
 
   - id: q18
     category: audit

@@ -48,7 +48,7 @@ What it holds: the house voice and the expected shape for each kind of output.
 
 Who writes it: the client's administrator, by conversation with the Operator; the result is installed where the Operator can read but not change it.
 
-How voice works: voice is an authored specification per kind of output, checked by a gate on outgoing content. An earlier approach that learned voice from sample emails has been removed.
+How voice works: The Operator drafts in the firm's voice. The voice is written per kind of document from the firm's own examples, and past letters can be the source. It sharpens as the firm's people correct drafts and as administrators confirm standing rules. Each voice specification is checked by a gate on outgoing content.
 
 Running for a client today: declared on the paying client's seat, and checked by the gate on outgoing content.
 

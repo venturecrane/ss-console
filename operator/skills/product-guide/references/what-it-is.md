@@ -38,6 +38,26 @@ SMD provisions the seat, releases updates to it, monitors it, and changes it as 
 
 Commercially, the Operator is positioned as an alternative to the next hire. The client's existing systems are things it connects to, not things it replaces.
 
+## A guide, not a vendor
+
+SMD does not sell a client something and leave. This is new ground, and it keeps shifting, so SMD stays in it with the client as it does. A vendor hands over a thing and moves on; a guide stays. Behind SMD is a founder who spent two decades building enterprise software for very large companies, and SMD brings that operational discipline to businesses that never had access to it.
+
+## Build it yourself, or have it built and run
+
+A business can build its own AI agent, and some teams do. The cost is rarely the build. It is keeping it working: wiring it into the tools, watching it, fixing what drifts, and keeping up as the technology changes every month. The Operator is built for the business and run for it. The business gives feedback to a worker instead of taking on a second job operating one.
+
+## The self-serve Operator
+
+SMD also offers a self-serve Operator for one person: an always-on personal agent on its own isolated machine, set up from a short questionnaire, and fenced by the same safety controls as every Operator SMD runs. SMD keeps it alive, updated and watched, and the person reaches it by chat and email.
+
+- It does standing work on its own: a morning digest of what landed and what needs the person, research briefs on a topic it keeps digging into on a schedule, and watching something that changes, such as a feed, a market or a competitor, and reporting when it moves.
+- On its own it reads and triages email, researches, writes drafts and notes, and sends the person their own digests and reports.
+- Anything bound for someone other than the person comes to them first as a draft.
+- It never agrees to or signs anything, never deletes anything it cannot take back, never runs unauthorized code, and never moves money.
+- It accepts mail only from senders the person lists, and its actions are recorded in an audit record the person can review.
+- The person brings their own model provider key, so model usage bills to their own account under a limit they set.
+- It is bought on SMD's site, and cancelled from the portal at any time.
+
 ## Industry packs
 
 An industry pack is a starting point for a client in a particular industry. It is used for onboarding and for selling. It is not a separate product, and nothing in the running seat behaves differently because of the pack's label. Every seat is still authored for its own client.
@@ -68,7 +88,7 @@ Besides packs, SMD has two other kinds of preset: role presets (a few standard w
 
 ### Which packs exist
 
-There are 13 industry packs: accounting, dental, home services, insurance, law firm, marketing agency, medical spa, mortgage, property management, real estate, registered investment advisers, title, and veterinary. Each one maps the seat the Operator fills in that industry, the work it takes on, and the line it does not cross, as a starting point SMD shapes with the client.
+There are 13 industry packs: accounting, dental, home services, insurance, law firm, marketing agency, medical spa, mortgage, property management, real estate, registered investment advisers, title, and veterinary. Each one maps the seat the Operator fills in that industry, the work it takes on, and the line it does not cross, as a starting point SMD shapes with the client. [industry-packs.md](industry-packs.md) gives, for each one, what the Operator takes on and the line it never crosses.
 
 | Pack             | Where it stands for clients today                                                                                                                |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |

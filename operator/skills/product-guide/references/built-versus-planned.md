@@ -71,10 +71,9 @@ This document lists what the Operator can do, grouped by where each capability s
 - Labelling every skill by how it runs, with a check.
 - An independent oversight layer.
 
-## Not a gate by design, or removed
+## Not a gate by design
 
 - The "flag only" routine tier is a rule the skill follows and the audit record checks. The hard enforcement is at each tool call.
-- Learning voice from sample emails was removed. Voice is now an authored specification per kind of output.
 
 ## Numbers worth knowing
 

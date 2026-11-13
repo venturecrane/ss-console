@@ -77,7 +77,7 @@ SMD may update these measures over time, but not in a way that materially reduce
 
 ## Confidentiality for privileged and professionally protected information
 
-For clients who hold information protected by professional rules (for example, a law firm's privileged communications and work product), a confidentiality addendum adds to the standard terms. It plays the role for that kind of information that a business associate agreement plays for health information. Where a client handles regulated health information, a separate business associate agreement may be needed in addition.
+For clients who hold information protected by professional rules (for example, a law firm's privileged communications and work product), a confidentiality addendum adds to the standard terms. It plays the role for that kind of information that a business associate agreement plays for health information. Where a client handles regulated health information, a separate business associate agreement may be needed in addition. For an accounting firm, the Operator works inside the firm's tax-return disclosure consents under section 7216 of the tax code: the firm holds the consents, and the seat's limits enforce them.
 
 - **Narrow use.** SMD uses protected information only to provide the service, never for its own development or marketing, never to train a model, never for another client's benefit, and never to build insight about the client's own clients, matters or adversaries.
 - **Sends stay with a person.** For a regulated profession, outside communications about a matter are prepared for a person at the client to send under their own name.

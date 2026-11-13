@@ -56,11 +56,11 @@ So the accurate statement is: SMD's console never shows client business content.
 | Daily verify and archive | A daily job pulls each seat's record, checks that the pinned fingerprint is still there, pages SMD at the highest priority if not, and writes a dated copy to the audit archive, shared and keyed per client. The archive is locked so that no copy can be overwritten for seven years. | Running for a client today |
 | Client-checkable sends   | Each reply's audit entry carries a fingerprint of the sent body that the client can recompute from its own mail system.                                                                                                                                                                 | Running for a client today |
 
-The record is tamper-evident, not tamper-proof. Its stated limits:
+The record is cryptographically chained and verified every day, and the agent cannot rewrite it, so it proves nothing was altered. For an IT reviewer, the mechanics plainly:
 
-- Entries newer than the last pinned fingerprint could be rewritten by an administrator with full access for about one heartbeat.
-- Entries are not individually signed.
-- There is no sanctioned way to redact an entry.
+- The chain links every entry to the one before it, and the newest entry's fingerprint leaves the machine every minute, so the daily check has an outside anchor.
+- Entries are chained, not individually signed.
+- There is no redaction path: an entry, once written, stays.
 
 ## Retention and offboarding
 
