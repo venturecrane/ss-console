@@ -931,6 +931,13 @@ export interface DeviceSenderEntry {
 export interface StaffSendAsEntry {
   address: string
   name: string
+  /**
+   * The transport (ADR 0089 section 9): absent means `msgraph`. Carried through
+   * so a save that round-trips the entry can never drop it.
+   */
+  via?: 'msgraph' | 'gmail'
+  /** The Google Workspace mailbox a `via: gmail` address belongs to. */
+  mailbox?: string
 }
 
 /**

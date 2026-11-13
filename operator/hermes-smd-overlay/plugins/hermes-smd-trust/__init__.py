@@ -50,7 +50,7 @@ from shared.spec_status import SPEC_STATUS
 from shared.tool_registration import register_wrapped_tool
 from shared.workspace_broker import GRANT_ARG, authorize
 
-from . import approval, enforce, outbound, outbound_send, spec_read
+from . import approval, enforce, outbound, outbound_send, send_tool, spec_read
 
 logger = logging.getLogger(__name__)
 
@@ -741,45 +741,9 @@ def on_post_tool_call(**kwargs: Any) -> None:
 # audit row itself.
 _SEND_TOOL_NAME = "smd_send_message"
 _BROKER_SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
-_SEND_TOOL_DESCRIPTION = (
-    "Send an email from this Operator's own mailbox. Recipients must be people "
-    "this engagement's configuration names; anyone else is refused. Subject to "
-    "the authored send posture — an external send may be held for the owner's "
-    "approval rather than sent immediately. To send AS a staff member instead, "
-    "set `from` to that person's address: the full draft is emailed to them and "
-    "it goes out from their address only when they reply to approve it."
-)
-_SEND_TOOL_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "to": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Recipient email addresses.",
-        },
-        "cc": {"type": "array", "items": {"type": "string"}},
-        "bcc": {"type": "array", "items": {"type": "string"}},
-        "subject": {"type": "string"},
-        "text": {"type": "string", "description": "Plain-text body."},
-        "html": {"type": "string", "description": "Optional HTML body."},
-        "reply_to": {"type": "string"},
-        # ss ADR 0089. Optional; absent means today's send, byte for byte. When
-        # present the gate PROPOSES rather than sends (trust ``send_as``), drops
-        # bcc / reply_to / html, and the broker transmits only on the named
-        # staff member's emailed approval.
-        "from": {
-            "type": "string",
-            "description": (
-                "Optional. A staff member's address to send AS, for a message that "
-                "person asked you to send for them. Only people this engagement "
-                "authorizes may be named. The draft is emailed to them for "
-                "approval and nothing is sent until they approve it. Omit to send "
-                "from the Operator's own mailbox."
-            ),
-        },
-    },
-    "required": ["to", "subject"],
-}
+# The tool's description and schema live in send_tool.py (module-size ratchet).
+_SEND_TOOL_DESCRIPTION = send_tool.SEND_TOOL_DESCRIPTION
+_SEND_TOOL_SCHEMA = send_tool.SEND_TOOL_SCHEMA
 
 
 #: Returned by :func:`_authored_email_adapter` when customer.yaml could not be

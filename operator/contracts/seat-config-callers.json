@@ -17,8 +17,8 @@
     "operator/hermes-smd-overlay/shared/job_ledger_client.py",
     "operator/hermes-smd-overlay/shared/job_worker_runtime.py",
     "operator/hermes-smd-overlay/shared/jobs_client.py",
-    "operator/hermes-smd-overlay/shared/msgraph_broker.py",
     "operator/hermes-smd-overlay/shared/prerendered_dispatch.py",
+    "operator/hermes-smd-overlay/shared/send_as_broker.py",
     "operator/hermes-smd-overlay/shared/workspace_broker.py",
     "operator/runners/jobs/jobs/broker_client.py",
     "operator/safety_substrate/invariants/invariant_7.py",
@@ -845,31 +845,31 @@
     },
     {
      "behaviour": {
-      "empty-reply/ascii": "raise MsGraphBrokerUnavailable connects=1",
-      "fault-after-send/ascii": "raise MsGraphBrokerUnavailable connects=1",
-      "no-socket/ascii": "raise MsGraphBrokerUnavailable connects=1",
-      "non-json/ascii": "raise MsGraphBrokerUnavailable connects=1",
+      "empty-reply/ascii": "raise JSONDecodeError connects=1",
+      "fault-after-send/ascii": "raise JSONDecodeError connects=1",
+      "no-socket/ascii": "raise FileNotFoundError connects=1",
+      "non-json/ascii": "raise JSONDecodeError connects=1",
       "not-ok/ascii": "return value:dict 7a6b2b49e18f1b62 connects=1",
       "ok/ascii": "return value:dict 5fba6d5555d91301 connects=1",
       "ok/non-ascii": "return value:dict 5fba6d5555d91301 connects=1",
-      "refused/ascii": "raise MsGraphBrokerUnavailable connects=1"
+      "refused/ascii": "raise ConnectionRefusedError connects=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/msgraph_broker.py:378 broker_socket.request(socket_path, payload, timeout=timeout, lone_surrogates=\"raise\")"
+      "operator/hermes-smd-overlay/shared/prerendered_dispatch.py:284 broker_socket.request(socket_path, payload, timeout=_APPEND_TIMEOUT_SECONDS)"
      ],
-     "file": "operator/hermes-smd-overlay/shared/msgraph_broker.py",
+     "file": "operator/hermes-smd-overlay/shared/prerendered_dispatch.py",
      "kind": "function",
      "modes": [
-      "raises-MsGraphBrokerUnavailable-on-empty-reply",
-      "raises-MsGraphBrokerUnavailable-on-fault-after-send",
-      "raises-MsGraphBrokerUnavailable-on-no-socket",
-      "raises-MsGraphBrokerUnavailable-on-non-json",
-      "raises-MsGraphBrokerUnavailable-on-refused",
+      "raises-ConnectionRefusedError-on-refused",
+      "raises-FileNotFoundError-on-no-socket",
+      "raises-JSONDecodeError-on-empty-reply",
+      "raises-JSONDecodeError-on-fault-after-send",
+      "raises-JSONDecodeError-on-non-json",
       "returns-value-on-not-ok",
       "wire-utf8"
      ],
      "status": "executable",
-     "symbol": "_verdict",
+     "symbol": "_broker_request",
      "tree": "overlay",
      "wire": {
       "empty-reply/ascii": [
@@ -912,31 +912,31 @@
     },
     {
      "behaviour": {
-      "empty-reply/ascii": "raise JSONDecodeError connects=1",
-      "fault-after-send/ascii": "raise JSONDecodeError connects=1",
-      "no-socket/ascii": "raise FileNotFoundError connects=1",
-      "non-json/ascii": "raise JSONDecodeError connects=1",
+      "empty-reply/ascii": "raise MsGraphBrokerUnavailable connects=1",
+      "fault-after-send/ascii": "raise MsGraphBrokerUnavailable connects=1",
+      "no-socket/ascii": "raise MsGraphBrokerUnavailable connects=1",
+      "non-json/ascii": "raise MsGraphBrokerUnavailable connects=1",
       "not-ok/ascii": "return value:dict 7a6b2b49e18f1b62 connects=1",
       "ok/ascii": "return value:dict 5fba6d5555d91301 connects=1",
       "ok/non-ascii": "return value:dict 5fba6d5555d91301 connects=1",
-      "refused/ascii": "raise ConnectionRefusedError connects=1"
+      "refused/ascii": "raise MsGraphBrokerUnavailable connects=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/prerendered_dispatch.py:284 broker_socket.request(socket_path, payload, timeout=_APPEND_TIMEOUT_SECONDS)"
+      "operator/hermes-smd-overlay/shared/send_as_broker.py:67 broker_socket.request(socket_path, payload, timeout=timeout, lone_surrogates=\"raise\")"
      ],
-     "file": "operator/hermes-smd-overlay/shared/prerendered_dispatch.py",
+     "file": "operator/hermes-smd-overlay/shared/send_as_broker.py",
      "kind": "function",
      "modes": [
-      "raises-ConnectionRefusedError-on-refused",
-      "raises-FileNotFoundError-on-no-socket",
-      "raises-JSONDecodeError-on-empty-reply",
-      "raises-JSONDecodeError-on-fault-after-send",
-      "raises-JSONDecodeError-on-non-json",
+      "raises-MsGraphBrokerUnavailable-on-empty-reply",
+      "raises-MsGraphBrokerUnavailable-on-fault-after-send",
+      "raises-MsGraphBrokerUnavailable-on-no-socket",
+      "raises-MsGraphBrokerUnavailable-on-non-json",
+      "raises-MsGraphBrokerUnavailable-on-refused",
       "returns-value-on-not-ok",
       "wire-utf8"
      ],
      "status": "executable",
-     "symbol": "_broker_request",
+     "symbol": "_verdict",
      "tree": "overlay",
      "wire": {
       "empty-reply/ascii": [
@@ -2744,6 +2744,7 @@
     "operator/workspace_broker/participant_fence.py",
     "operator/workspace_broker/recipient_policy.py",
     "operator/workspace_broker/records_verbs.py",
+    "operator/workspace_broker/send_as_transport.py",
     "operator/workspace_broker/sender_enrollment.py",
     "operator/workspace_broker/space_people.py"
    ],
@@ -4618,7 +4619,7 @@
       "yaml-syntax-error": "return value:list de91772994a3d1bd reads=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/bootstrap/validate.py:230 yaml.safe_load(raw_text)"
+      "operator/hermes-smd-overlay/bootstrap/validate.py:231 yaml.safe_load(raw_text)"
      ],
      "file": "operator/hermes-smd-overlay/bootstrap/validate.py",
      "kind": "function",
@@ -5790,7 +5791,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/runners/jobs/jobs/records_lane.py:205 seat_config.parse(fh)"
+      "operator/runners/jobs/jobs/records_lane.py:169 seat_config.parse(fh)"
      ],
      "file": "operator/runners/jobs/jobs/records_lane.py",
      "kind": "function",
@@ -7358,6 +7359,17 @@
      "tree": "broker"
     },
     {
+     "calls": [
+      "operator/workspace_broker/send_as_transport.py:102 seat_config.load(broker.customer_path, encoding=\"utf-8\", on_missing=\"raise\")"
+     ],
+     "file": "operator/workspace_broker/send_as_transport.py",
+     "kind": "function",
+     "reason": "no synthetic value for parameter broker",
+     "status": "not-executable",
+     "symbol": "seat_data",
+     "tree": "broker"
+    },
+    {
      "behaviour": {
       "block-malformed": "return false fcbcf165908dd18a reads=1",
       "block-malformed-deep": "return false fcbcf165908dd18a reads=1",
@@ -8428,7 +8440,7 @@
       "name": "CUSTOMER_SLUG"
      },
      "calls": [
-      "operator/runners/jobs/jobs/daemon.py:498 _require(\"CUSTOMER_SLUG\")"
+      "operator/runners/jobs/jobs/daemon.py:650 _require(\"CUSTOMER_SLUG\")"
      ],
      "file": "operator/runners/jobs/jobs/daemon.py",
      "kind": "function",
@@ -9048,11 +9060,12 @@
   },
   "customer-yaml": {
    "by_status": {
-    "executable": 92
+    "executable": 92,
+    "not-executable": 1
    },
    "by_tree": {
     "bin": 20,
-    "broker": 20,
+    "broker": 21,
     "connector": 16,
     "overlay": 17,
     "rehearsal": 1,
@@ -9061,8 +9074,8 @@
     "templates": 10
    },
    "fail_open": 55,
-   "files": 81,
-   "sites": 92
+   "files": 82,
+   "sites": 93
   },
   "slug": {
    "by_status": {

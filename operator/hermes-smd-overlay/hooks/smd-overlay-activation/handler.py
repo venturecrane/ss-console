@@ -429,6 +429,54 @@ def _webhook_expected_tools_check() -> None:
         logger.warning("webhook expected-tools: sentinel write failed", exc_info=True)
 
 
+def _registry_check(registered_tools: set[str]) -> bool:
+    """The live tool registry holds every mediated Workspace tool, and, on a
+    Gmail send-as seat, no Gmail send tool. False (after ``_die``) otherwise."""
+    missing_tools = _REQUIRED_WORKSPACE_TOOLS - registered_tools
+    if missing_tools:
+        _die(
+            "mediated Workspace tools absent from the live registry after force-discover: "
+            f"missing {sorted(missing_tools)}"
+        )
+        return False
+    return _gmail_send_tool_check(registered_tools) not in ("present", "unverified")
+
+
+def _gmail_send_tool_check(registered_tools: set[str]) -> str:
+    """Refuse to serve a Gmail send-as seat that registers a Gmail send tool.
+
+    ss-console ADR 0089 section 9. On a seat whose ``scope.staff_send_as``
+    authors ``via: gmail``, the broker holds a credential that can send from a
+    person's own Google mailbox, and the ONLY path to that send is an approved
+    send-as row. A registered tool whose name says it sends Gmail (a connector's
+    ``send_message``, a future ``workspace_gmail_send``) would be a second path
+    the approval never sees, so the seat does not serve with one. Fail-closed
+    on an unreadable config; a seat with no customer.yaml is not one that
+    authors the transport."""
+    try:
+        from shared.customer_config import CustomerConfig, CustomerConfigMissingError
+
+        try:
+            raw = CustomerConfig.from_volume().raw
+        except CustomerConfigMissingError:
+            return "not applicable (no customer.yaml)"
+    except Exception as e:  # noqa: BLE001
+        _die(f"cannot tell whether this seat sends as staff through Gmail: {type(e).__name__}: {e}")
+        return "unverified"
+    scope = raw.get("scope") if isinstance(raw, dict) else None
+    entries = scope.get("staff_send_as") if isinstance(scope, dict) else None
+    if not any(isinstance(e, dict) and e.get("via") == "gmail" for e in entries or []):
+        return "not applicable (no via: gmail)"
+    found = sorted(t for t in registered_tools if "gmail" in t.lower() and "send" in t.lower())
+    if found:
+        _die(
+            f"Gmail send tool(s) {found} registered on a seat that sends as staff through "
+            "Gmail (ADR 0089 section 9): a send there must come only from an approved draft"
+        )
+        return "present"
+    return "absent"
+
+
 def _unknown_dm_check() -> str:
     """Refuse to serve a space-mode seat whose Telegram answers strangers.
 
@@ -591,12 +639,7 @@ async def _handle_inner(event_type: str, context: dict | None = None) -> None:
     except Exception as e:  # noqa: BLE001
         _die(f"cannot inspect the live tool registry: {type(e).__name__}: {e}")
         return
-    missing_tools = _REQUIRED_WORKSPACE_TOOLS - registered_tools
-    if missing_tools:
-        _die(
-            "mediated Workspace tools absent from the live registry after force-discover: "
-            f"missing {sorted(missing_tools)}"
-        )
+    if not _registry_check(registered_tools):
         return
 
     # 2. LIVE self-check: drive the REAL dispatch fn + singleton with a banned tool

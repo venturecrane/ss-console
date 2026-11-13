@@ -35,7 +35,6 @@ import hashlib
 import json
 import re
 import secrets
-import sqlite3
 import time
 from pathlib import Path
 from typing import Any
@@ -52,13 +51,23 @@ from .send_as_links import (
     render_html,
     verify_link_token,
 )
-from .msgraph_ops import MsGraphRefused, MsGraphTransportError, collect_recipients
+from .msgraph_ops import collect_recipients
 from .recipient_policy import authored_policy, domain_of, normalize_address, split_blocks
 from .send_as_transport import NOT_CONFIGURED as _NOT_CONFIGURED
+from .send_as_transport import DraftRefused
 from .send_as_transport import audit as _audit
 from .send_as_transport import audited_send as _audited_send
-from .send_as_transport import graph_of as _graph
 from .send_as_transport import notice as _notice
+from .send_as_transport import transport_for as _transport
+from .send_as_store import (
+    STATUS_CANCELLED,
+    STATUS_DISPATCHED,
+    STATUS_FAILED,
+    STATUS_OPEN,
+    STATUS_REVISED,
+    STATUS_SENDING,
+    SendAsStore,
+)
 from .send_as_transport import require_configured as _require_configured
 from .send_as_transport import open_intent as _open_intent
 from .send_as_transport import settle as _settle
@@ -70,45 +79,16 @@ from .send_intent import NOT_SENT as _NOT_SENT
 #: ``tests/test_send_as.py`` pins the two together.
 SEND_AS_TTL_SECONDS = _LINK_TTL_SECONDS
 
-#: How far back a new proposal may claim to replace a revised one.
-_REVISE_LINK_WINDOW_S = SEND_AS_TTL_SECONDS
-
-STATUS_OPEN = "open"
-STATUS_REVISED = "revised"
-STATUS_CANCELLED = "cancelled"
-STATUS_DISPATCHED = "dispatched"
-STATUS_FAILED = "failed"
-STATUS_SENDING = "sending"
-
 DECISIONS = ("send", "change", "cancel")
+
+#: The Gmail transport's identity keys, joined onto SEND_AS_SENT like Graph's.
+_GMAIL_JOINS: tuple[str, ...] = ("gmail_message_id", "gmail_thread_id", "rfc_message_id")
 
 _TAG_RE = re.compile(r"^\s*(?:\[\s*draft\s+)?([0-9a-f]{8})\s*\]?\s*$", re.IGNORECASE)
 _MAX_SUBJECT = 998
 _MAX_BODY = 100_000
 _MAX_RECIPIENTS = 20
 _MAX_INSTRUCTION = 4_000
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS send_as_acts (
-    id TEXT PRIMARY KEY,
-    created_at REAL NOT NULL,
-    expires_at REAL NOT NULL,
-    status TEXT NOT NULL,
-    approver TEXT NOT NULL,
-    instructed_by TEXT NOT NULL,
-    session_id TEXT NOT NULL DEFAULT '',
-    payload_json TEXT NOT NULL,
-    digest TEXT NOT NULL,
-    tainted INTEGER NOT NULL DEFAULT 0,
-    sources_json TEXT NOT NULL DEFAULT '[]',
-    decided_by TEXT,
-    decided_at REAL,
-    instruction TEXT,
-    replaced_by TEXT,
-    conversation_id TEXT,
-    result TEXT
-)
-"""
 
 
 class SendAsRefused(ValueError):
@@ -152,7 +132,9 @@ def canonical_payload(payload: dict[str, Any], mailbox: str) -> dict[str, Any]:
         "subject": subject.strip(),
         "body_text": body_text,
         "html": render_html(body_text),
-        "reply_to": [sender, normalize_address(mailbox)],
+        # A transport with no seat mailbox to copy (Gmail, ADR 0089 section 9)
+        # passes "" and the staff member alone is the Reply-To.
+        "reply_to": [sender] + ([normalize_address(mailbox)] if mailbox else []),
     }
 
 
@@ -220,85 +202,6 @@ def _authors_confirm(data: dict[str, Any]) -> bool:
     return False
 
 
-class SendAsStore:
-    """The ``send_as_acts`` table, in the seat's audit database."""
-
-    def __init__(self, db_path: str | Path, *, now: Any | None = None) -> None:
-        self._db_path = str(db_path)
-        self._now = now or time.time
-        with self._connect() as db:
-            db.execute(_SCHEMA)
-
-    def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self._db_path, timeout=10, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        return db
-
-    def insert(self, row: dict[str, Any]) -> None:
-        with self._connect() as db:
-            db.execute(
-                "INSERT INTO send_as_acts (id, created_at, expires_at, status, approver, instructed_by,"
-                " session_id, payload_json, digest, tainted, sources_json)"
-                " VALUES (:id, :created_at, :expires_at, :status, :approver, :instructed_by,"
-                " :session_id, :payload_json, :digest, :tainted, :sources_json)",
-                row,
-            )
-
-    def get(self, act_id: str) -> dict[str, Any] | None:
-        with self._connect() as db:
-            found = db.execute("SELECT * FROM send_as_acts WHERE id = ?", (act_id,)).fetchone()
-        return dict(found) if found else None
-
-    def claim(self, act_id: str, *, from_status: str, to_status: str, fields: dict[str, Any]) -> bool:
-        """Move a row between states atomically; False if it was not in ``from_status``.
-
-        The consume-once property rests here: two answers racing for the same
-        row cannot both see it open, because the UPDATE's WHERE is the check.
-        """
-        assignments = ", ".join(f"{k} = :{k}" for k in fields)
-        with self._connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            cursor = db.execute(
-                f"UPDATE send_as_acts SET status = :to_status{', ' + assignments if assignments else ''}"  # noqa: S608 - keys are code-supplied
-                " WHERE id = :id AND status = :from_status",
-                {"id": act_id, "to_status": to_status, "from_status": from_status, **fields},
-            )
-            db.execute("COMMIT")
-            return cursor.rowcount == 1
-
-    def link_revision(self, approver: str, to: list[str], new_id: str) -> None:
-        """Close the draft this proposal replaces, and point it at the replacement.
-
-        The candidate is the newest OPEN row for this approver and these
-        recipients that carries a revision instruction. A revision request leaves
-        the row open on purpose (see ``_apply_change``), so this is the moment it
-        becomes REVISED: when the replacement exists, never before.
-        """
-        since = self._now() - _REVISE_LINK_WINDOW_S
-        with self._connect() as db:
-            rows = db.execute(
-                "SELECT id, payload_json FROM send_as_acts WHERE status = ? AND approver = ?"
-                " AND replaced_by IS NULL AND instruction IS NOT NULL AND instruction != ''"
-                " AND created_at >= ? ORDER BY created_at DESC",
-                (STATUS_OPEN, approver, since),
-            ).fetchall()
-            for row in rows:
-                if sorted(json.loads(row["payload_json"]).get("to") or []) == sorted(to):
-                    db.execute(
-                        "UPDATE send_as_acts SET replaced_by = ?, status = ? WHERE id = ? AND status = ?",
-                        (new_id, STATUS_REVISED, row["id"], STATUS_OPEN),
-                    )
-                    return
-
-    def dispatched_on(self, conversation_id: str) -> dict[str, Any] | None:
-        with self._connect() as db:
-            found = db.execute(
-                "SELECT * FROM send_as_acts WHERE status = ? AND conversation_id = ? ORDER BY created_at DESC",
-                (STATUS_DISPATCHED, conversation_id),
-            ).fetchone()
-        return dict(found) if found else None
-
-
 def _store(broker: BrokerContext) -> SendAsStore:
     if not broker.audit_db_path:
         raise ValueError(_NOT_CONFIGURED)
@@ -315,10 +218,16 @@ def _validated_draft(broker: BrokerContext, request: dict[str, Any], instructed_
     if not _authors_confirm(data):
         raise SendAsRefused("this seat authors no persona with exposure.external_send_as_staff: confirm")
     roster = staff_roster(data)
-    msg = canonical_payload(_mapping(request.get("payload")), _graph(broker).mailbox())
+    transport = _transport(broker)
+    msg = canonical_payload(_mapping(request.get("payload")), transport.reply_mailbox())
     if msg["from"] not in roster:
         raise SendAsRefused(f"{msg['from']} is not on scope.staff_send_as")
-    if not instructed_by or (instructed_by != msg["from"] and instructed_by not in _admins(data)):
+    try:
+        msg = transport.prepare(msg, request, data)
+    except DraftRefused as exc:
+        raise SendAsRefused(str(exc)) from exc
+    approvers = transport.approvers_for(msg["from"], data)
+    if not instructed_by or (instructed_by not in approvers and instructed_by not in _admins(data)):
         raise SendAsRefused(
             "a draft may be sent only as the staff member who asked for it, or at an administrator's request"
         )
@@ -370,10 +279,13 @@ def propose(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     sources = [s for s in (_clean(x, 200) for x in (request.get("sources") or [])) if s][:10]
     store = _store(broker)
     act_id, now = _insert_draft(store, msg, instructed_by, session_id, tainted, sources)
-    email = approval_email(act_id, msg, authored_policy(broker.customer_path), tainted, sources, name)
+    transport = _transport(broker)
+    email = approval_email(
+        act_id, msg, authored_policy(broker.customer_path), tainted, sources, name, links=transport.links
+    )
     try:
         _audited_send(broker, email, session_id)
-    except (MsGraphRefused, MsGraphTransportError) as exc:
+    except transport.failures as exc:
         store.claim(
             act_id,
             from_status=STATUS_OPEN,
@@ -455,18 +367,20 @@ def _authority_refusal(
     """
     decided_by = normalize_address(request.get("decided_by"))
     approver = row["approver"]
+    transport = _transport(broker)
+    data = _seat(broker.customer_path)
+    approvers = transport.approvers_for(approver, data)
     if request.get("decision") in ("send", "change"):
-        allowed = decided_by == approver
+        allowed = decided_by in approvers
     else:
-        allowed = decided_by in ({approver} | _admins(_seat(broker.customer_path)))
+        allowed = decided_by in (approvers | _admins(data))
     if not allowed:
         reason = "only the staff member this draft would be sent as may send or change it"
         _audit(broker, "SEND_AS_REFUSED", "send_as_decide", {**meta, "stage": "authority", "reason": reason})
         return reason
     try:
-        if _graph(broker).sent_items_holds(_clean(request.get("internet_message_id"), 998)):
-            raise SendAsRefused("that answer was sent from the Operator's own mailbox")
-    except (SendAsRefused, MsGraphTransportError, MsGraphRefused) as exc:
+        transport.check_answer_origin(request, approver)
+    except (SendAsRefused, *transport.failures) as exc:
         reason = f"the answer's origin could not be confirmed: {exc}"
         _audit(broker, "SEND_AS_REFUSED", "send_as_decide", {**meta, "stage": "origin", "reason": reason})
         return reason
@@ -537,13 +451,14 @@ def _report_failure(
     twice, so its approver is told "not confirmed" (never "not sent", which invites a resend)."""
     store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_FAILED, fields={"result": str(exc)[:500]})
     _settle(broker, "SEND_AS_FAILED", {**meta, "reason": str(exc)}, intent_id)
-    sure = isinstance(exc, MsGraphRefused)
+    transport = _transport(broker)
+    sure = isinstance(exc, transport.refused)
     said = f"was not sent: {exc}." if sure else f"did not complete ({exc}); SMD is checking whether it went out."
     subject = f"{'Not sent' if sure else 'Not confirmed'}: {msg['subject']} {tag_for(row['id'])}"
     body = f"The email {said} Nothing was retried. Look in your Sent folder before sending it again."
     try:
         _notice(broker, row["approver"], subject, body)
-    except (MsGraphRefused, MsGraphTransportError):
+    except transport.failures:
         pass
     return {**_BASE, "status": "FAILED", "reason": str(exc)}
 
@@ -576,18 +491,19 @@ def _apply_send(
     if not intent_id:
         store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_OPEN, fields={})
         return _refused(_NOT_SENT)
+    transport = _transport(broker)
     try:
-        result = _graph(broker).send_as_staff(msg, approver)
-    except (MsGraphRefused, MsGraphTransportError) as exc:
+        result = transport.send_as(msg, approver)
+    except transport.failures as exc:
         return _report_failure(broker, store, row, msg, exc, meta, intent_id)
-    conversation = _graph(broker).conversation_of(result.get("graph_message_id") or "")
+    conversation = transport.conversation_of(result)
     fields = {"conversation_id": conversation, "result": result.get("lookup") or ""}
     store.claim(row["id"], from_status=STATUS_SENDING, to_status=STATUS_DISPATCHED, fields=fields)
     # The reconciler's exact joins (reconcile-sends.py pass 1): the header value
     # stamped on the message itself, and the vendor id.
     joins = {
         k: result[k]
-        for k in ("audit_row_token", "vendor_message_id", "graph_message_id", "lookup")
+        for k in ("audit_row_token", "vendor_message_id", "graph_message_id", "lookup", *_GMAIL_JOINS)
         if isinstance(result.get(k), str) and result[k]
     }
     sent = {
@@ -639,6 +555,8 @@ def decide_link(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any
     visible to the person whose name is on the letter, within a minute.
     """
     _require_configured(broker)
+    if not _transport(broker).links:
+        return _refused("this seat takes approvals by reply only; approval links are not accepted")
     store = _store(broker)
     token = _clean(request.get("token"), 400)
     row_id = str(token).split(".")[0] if token else ""
@@ -664,14 +582,13 @@ def decide_link(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any
 def match_reply(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     """Tell the approver when an outside party answers a draft sent as them."""
     _require_configured(broker)
+    transport = _transport(broker)
     conversation = _clean(request.get("conversation_id"), 500)
-    if not conversation:
-        return {"matched": False, "tag": None}
-    row = _store(broker).dispatched_on(conversation)
+    row = _dispatched_for(_store(broker), [conversation, *transport.reply_keys(request)])
     if row is None:
         return {"matched": False, "tag": None}
     sender = normalize_address(request.get("from"))
-    if sender == row["approver"]:
+    if sender in transport.approvers_for(row["approver"], _seat(broker.customer_path)):
         return {"matched": False, "tag": None}
     msg = json.loads(row["payload_json"])
     tag = tag_for(row["id"])
@@ -682,10 +599,21 @@ def match_reply(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any
             f"Reply received: {msg['subject']} {tag}",
             f"{sender or 'The recipient'} replied to the email sent from your address ({tag}). The reply is in your inbox and the Operator's.",
         )
-    except (MsGraphRefused, MsGraphTransportError):
+    except transport.failures:
         return {"matched": True, "tag": tag}
     _audit(broker, "SEND_AS_REPLY_NOTICED", "send_as_match_reply", {"act": row["id"]})
     return {"matched": True, "tag": tag}
+
+
+def _dispatched_for(store: SendAsStore, keys: list[str]) -> dict[str, Any] | None:
+    """The dispatched row the first matching key names, or None. Graph keys on
+    its conversation id; Gmail on the sent message's RFC id, named by the
+    inbound's In-Reply-To or References."""
+    for key in keys:
+        row = store.dispatched_on(key) if key else None
+        if row is not None:
+            return row
+    return None
 
 
 def _verb(fn: Any) -> Any:

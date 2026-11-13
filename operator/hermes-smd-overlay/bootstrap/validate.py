@@ -37,6 +37,7 @@ except ImportError as exc:  # pragma: no cover - import-time guard
     ) from exc
 
 from bootstrap.secret_scan import finding_to_error, scan_parsed_value, scan_raw_yaml
+from bootstrap.validate_staff_send_as import validate_staff_send_as as _validate_staff_send_as
 
 logger = logging.getLogger(__name__)
 
@@ -1133,87 +1134,6 @@ def _validate_one_outbound_entry(
         )
         return
     seen_class[canon] = class_str
-
-
-def _validate_staff_send_as(cfg: dict[str, Any], errors: list[str]) -> None:
-    """Validate ``scope.staff_send_as`` (ss ADR 0089).
-
-    The staff a send may carry as ``from``, each ``{address, name}``. The
-    address is an EXACT person address (``local@domain``): sending as a domain
-    is meaningless, and a person is who approves. The name is required and
-    non-empty because it is what the approval email and the Operator call that
-    person, and a name the seat had to invent is not one it may show. Addresses
-    are compared case-insensitively and a duplicate is rejected so the list
-    stays reviewable as the literal set of people the Operator may write as.
-    Absent is valid (nobody may be sent as).
-
-    Each address must also be REACHABLE: covered, exactly or by an ``@domain``
-    grant, by ``scope.inbound_allow_from``, ``scope.admins`` or
-    ``scope.outbound_roster``. The approval arrives as an email from that person
-    and the approval request goes to them, so a staff member the seat can
-    neither hear from nor write to could never approve anything.
-    """
-    scope = cfg.get("scope")
-    if not isinstance(scope, dict):
-        return
-    raw = scope.get("staff_send_as")
-    if raw is None:
-        return
-    if not isinstance(raw, list):
-        _err(f"scope.staff_send_as must be a list; got {type(raw).__name__}", errors)
-        return
-    reachable = _staff_reachable_set(scope)
-    seen: set[str] = set()
-    for i, entry in enumerate(raw):
-        prefix = f"scope.staff_send_as[{i}]"
-        if not isinstance(entry, dict):
-            _err(f"{prefix}: must be a mapping with address and name", errors)
-            continue
-        address = entry.get("address")
-        name = entry.get("name")
-        if not isinstance(name, str) or not name.strip():
-            _err(f"{prefix}.name: required non-empty string", errors)
-        if not isinstance(address, str) or not address.strip():
-            _err(f"{prefix}.address: required non-empty string email address", errors)
-            continue
-        canon = _canon_roster_address(address)
-        if canon is None or canon.startswith("@"):
-            _err(
-                f"{prefix}.address: {address!r} must be an exact person address (local@domain)",
-                errors,
-            )
-            continue
-        if canon in seen:
-            _err(f"{prefix}.address: duplicate staff_send_as address {canon!r}", errors)
-            continue
-        seen.add(canon)
-        if canon not in reachable and f"@{canon.partition('@')[2]}" not in reachable:
-            _err(
-                f"{prefix}.address: {canon!r} is not covered by scope.inbound_allow_from, "
-                "scope.admins or scope.outbound_roster, so the seat could neither ask "
-                "them nor hear their approval",
-                errors,
-            )
-
-
-def _staff_reachable_set(scope: dict[str, Any]) -> set[str]:
-    """Canonical addresses and ``@domain`` grants the seat can exchange mail with."""
-    out: set[str] = set()
-    for key in ("inbound_allow_from", "admins"):
-        entries = scope.get(key)
-        if isinstance(entries, list):
-            for entry in entries:
-                canon = _canon_roster_address(entry) if isinstance(entry, str) else None
-                if canon:
-                    out.add(canon)
-    roster = scope.get("outbound_roster")
-    if isinstance(roster, list):
-        for entry in roster:
-            address = entry.get("address") if isinstance(entry, dict) else None
-            canon = _canon_roster_address(address) if isinstance(address, str) else None
-            if canon:
-                out.add(canon)
-    return out
 
 
 _DEVICE_SENDER_KEYS = frozenset({"address", "replies_to"})
