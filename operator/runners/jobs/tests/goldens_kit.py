@@ -150,6 +150,16 @@ def write_or_compare_jsonl(path: Path, lines: list[Any], allow: list[str]) -> li
     return compare_jsonl(path, lines, allow)
 
 
+def wire_writes(writes: Sequence[tuple[str, str, Any]]) -> list[dict[str, Any]]:
+    """Each recorded vendor write as its method, path and the exact JSON text
+    the client sends (httpx's encoding: the keys in the order the code built
+    them, no spaces), so a body golden pins the bytes on the wire."""
+    return [
+        {"method": m, "path": p, "wire": json.dumps(b, ensure_ascii=False, separators=(",", ":"), allow_nan=False)}
+        for m, p, b in writes
+    ]
+
+
 def sha_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 

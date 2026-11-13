@@ -1,0 +1,12 @@
+[
+  {
+    "method": "PUT",
+    "path": "/tasks/cccccccc-0000-4000-8000-000000000002",
+    "wire": "{\"staffId\":\"aaaaaaaa-0000-4000-8000-000000000004\",\"subject\":\"Draft responses\",\"dueDateOnly\":\"2026-03-01\",\"matterId\":\"bbbbbbbb-0000-4000-8000-000000000001\",\"assigneeIds\":[\"aaaaaaaa-0000-4000-8000-000000000003\",\"aaaaaaaa-0000-4000-8000-000000000006\"],\"categories\":[\"Discovery\"]}"
+  },
+  {
+    "method": "PUT",
+    "path": "/tasks/cccccccc-0000-4000-8000-000000000003",
+    "wire": "{\"staffId\":\"aaaaaaaa-0000-4000-8000-000000000005\",\"subject\":\"Serve the summons\",\"matterId\":\"bbbbbbbb-0000-4000-8000-000000000002\",\"assigneeIds\":[\"aaaaaaaa-0000-4000-8000-000000000003\"]}"
+  }
+]
