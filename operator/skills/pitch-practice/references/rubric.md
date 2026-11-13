@@ -12,12 +12,12 @@ These are the headings the seat uses when it steps out of the buyer's role and g
 
 ## Accurate to the product reference
 
-- A good answer says only what the library says, and can name the document and section it came from. Only what is in production is described as something a client has today. See what-it-is.md, "How to read the maturity labels".
-- Precision on the record: it is tamper-evident, with stated limits, never tamper-proof. See isolation-and-data-custody.md, "The audit record".
+- A good answer says only what the library says, and can name the document and section it came from. It describes what the Operator can do as a capability SMD configures for the client, in the present tense. See what-it-is.md, "How to read the labels".
+- Precision on the record: it is cryptographically chained, verified every day, and the agent cannot rewrite it, so it proves nothing was altered. See isolation-and-data-custody.md, "The audit record".
 - Precision on approvals: commitments and deletions never run on the Operator's word alone. See permission-model.md, "Ceilings from least to most restrictive".
-- Precision on memory: learned working preferences are in production; administrator corrections are built, not yet in client use; there is no client-facing memory view. See memory.md, "Learned working preferences", "Administrator corrections" and "Ownership, export and visibility".
-- Common miss: saying SMD never sees client content. The accurate line is that SMD's console never shows business content, and SMD staff see content only through request notices and a logged per-client ops workspace. See isolation-and-data-custody.md, "What SMD can see beyond the console".
-- Common miss: claiming a certification or a zero-retention arrangement. Neither exists. See isolation-and-data-custody.md, "Model and provider posture".
+- Precision on memory: it keeps the working preferences each person states and the standing rules an administrator confirms, and a person corrects it by telling it. It drafts in the firm's voice, written per kind of document from the firm's own examples, and it sharpens as people correct drafts. See memory.md, "Learned working preferences", "Administrator corrections" and "Ownership, export and visibility".
+- Common miss: saying nothing about a client's requests ever reaches SMD. The accurate line is that SMD's console never shows business content, client files are handled only by AI agents (the client's Operator, and SMD's agents in a workspace sealed to that client), and a request notice with the requester's words reaches SMD's operations mailbox. See isolation-and-data-custody.md, "What SMD can see beyond the console".
+- Common miss: claiming a SOC 2 or ISO 27001 certification of SMD's own, or a documented zero-retention arrangement with the model provider. The library states neither. See isolation-and-data-custody.md, "Model and provider posture".
 
 ## Objectives before problems
 
@@ -40,20 +40,20 @@ These are the headings the seat uses when it steps out of the buyer's role and g
 - Common miss: comparing feature lists with a chat assistant or an intake tool the buyer already has. Once the Operator is filed next to a software subscription, the conversation is lost.
 - Common miss: promising that nobody is replaced. The library says only that it is sold against the next hire and that the client's people judge the work.
 
-## Honest about what is not built
+## Capabilities, stated straight
 
-- A good answer describes as available today only what is in production. See built-versus-planned.md, "In production".
-- It names anything built but unused for what it is. For example, the client level dial, the chat channel and the connector for a client's own AI assistant are built, not yet in client use. See built-versus-planned.md, "Built, not yet in client use".
-- It names specified work as not built, such as a client-facing memory view, inferred memory and email for other mail systems. See built-versus-planned.md, "Specified, not built".
-- It is straight about references: one industry pack is in production, on one paying client's seat. See what-it-is.md, "Industry packs".
-- Common miss: presenting the other industry packs, other channels or "ask first" approvals as something a client has today.
+- A good answer describes what the Operator can do as a capability SMD sets up for the client, in the present tense, the way the site does. See built-versus-planned.md, "How to use this page".
+- When the buyer asks what a client runs today, it answers plainly from the library. For example, the law-firm pack, email in the client's own mail tenant and queued jobs are running for a client today; the client level dial and chat are built, set up per client; texting and the other industry packs' skills are configured per engagement. See built-versus-planned.md, "Running for a client today", "Built, set up per client" and "Configured per engagement".
+- It is straight about references: one industry pack is running for a client today, on one paying client's seat. See what-it-is.md, "Industry packs".
+- Common miss: telling a buyer the Operator cannot do something, or that it is not available, because no client runs it yet. If SMD can configure it, it is a capability.
+- Common miss: promising a start date for something SMD has not yet set up for any client. The capability is real; the timing is agreed per engagement.
 
 ## Boundaries stated correctly
 
 - A good answer states limits as settings the client writes, not as the product's fixed identity. Unset means refused, and the Operator cannot raise its own ceiling. See permission-model.md, "Rules that hold everywhere".
 - "Drafts for a person" is one limit the client can choose, not what the Operator is. See permission-model.md, "Ceilings from least to most restrictive".
 - For the law example, the line is paralegal and coordinator work, never legal judgment, advice or representation. See what-it-is.md, "A seat at work: one example".
-- It names what no authoring can turn on, such as moving money. See permission-model.md, "The banned list".
+- It names what no setting turns on: the Operator never moves money. See permission-model.md, "The banned list".
 - Who may pause it: a principal, and only where the agreement hands that area to the client; otherwise the client asks SMD. See client-controls.md, "Managed and client-operated controls".
 - Common miss: "we don't do legal work". That is inaccurate and undersells the product.
 - Say: paralegal and coordinator work, never legal judgment, advice or representation.

@@ -2,7 +2,7 @@
 
 This document explains how the Operator handles work that is too large or too costly for a chat reply: it runs it as a queued job. It covers how a job differs from a reply, each stage from request to delivery, the states a job can be in, and what the client is told when a job stops.
 
-Maturity labels used here: **In production** (built and used on a paying client's seat), **Built, not yet in client use** (merged code that no paying client's seat uses yet), **Specified, not built** (designed, not built). Queued jobs, with their proof gate, review, read-back and reply watch, are in production.
+Labels used here, as defined in [INDEX.md](INDEX.md): running for a client today; built, set up per client; configured per engagement. Queued jobs, with their proof gate, review, read-back and reply watch, are running for a client today.
 
 ## Job versus chat turn
 
@@ -18,12 +18,14 @@ The runner handles one queue per kind of queued job and runs one job at a time f
 
 ## Kinds of job
 
-There are 8 kinds of queued job.
+There are 7 kinds of queued job.
 
-- Two are general in shape: a note that SMD approves and that is sent as part of a digest, and a staff request for named records, answered with files after an SMD review.
-- Six serve one industry pack. In the pack that is in production, they cover a medical chronology, a demand, document drafting, a litigation status report, watching a negotiation, and reviewing a case file.
+- One is general in shape: a staff request for named records, answered with files, with an optional SMD review hold.
+- Six serve the law-firm industry pack: a medical chronology, a demand, document drafting, a litigation status report, watching a negotiation, and reviewing a case file.
 
-A separate, more general design for long-running agent work also exists in code. No client seat uses it: built, not yet in client use.
+A further kind of work runs through the same broker without a queue: a note that SMD approves and that is sent as part of a digest.
+
+Any other kind of long or costly work a client needs becomes a new kind of queued job, configured per engagement on the same stages. A separate, more general engine for long-running agent work is also built, set up per client.
 
 ## From request to delivery
 
@@ -61,13 +63,13 @@ A job can stop for any of these reasons:
 
 ## What the client hears when a job stops
 
-When a job stops, the client is generally told nothing, and SMD is paged once. SMD then resolves the stop.
+When a job stops, the requester hears nothing until the work is delivered. SMD is paged once and resolves the stop, and the reply goes out when the job delivers.
 
-The exception is a small set of holds where the decision genuinely belongs to the client. For those, the client receives a fixed message written in code, asking the one question only the client can answer.
+The one exception is a held demand: the requester is told it has not been drafted yet and that nothing is needed from them.
 
 If a person writes again in the thread of a held job, SMD receives a request notice with their words, because the Operator cannot record a decision on a held job itself.
 
-An hourly health check watches job outcomes and flags runs that failed, were held or stalled. It covers most, but not all, kinds of job.
+An hourly health check watches job outcomes and flags runs that failed, were held or stalled. It covers the six kinds of job that serve the law-firm pack.
 
 ## Rehearsals and proof runs
 
