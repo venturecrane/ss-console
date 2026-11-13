@@ -301,6 +301,19 @@ skills:
       the send is the woken turn's, not a pre_run dispatch, so the body-hash
       stamps do not apply; the cross-run invariants (one recipient) do.
 
+  # ---- smd-office cron rows ----
+  mailbox-keeper:
+    render: compositional
+    note: >-
+      The once-a-day list to the authored digest_recipient. No model composes
+      it: the broker renders it in code (mailbox_keeper_verbs.py
+      render_digest) and sends it through the audited transmit with
+      skill_name mailbox-keeper. Declared compositional because there is no
+      turn and no pre_run dispatch, so no EMITTED_WAKE body stamp exists for a
+      hash to be checked against; a templated declaration would grade every
+      list as "templated send with no wake hash". The cross-run invariants
+      (one recipient) apply.
+
   # ---- smd-guide cron rows ----
   rep-desk:
     render: templated

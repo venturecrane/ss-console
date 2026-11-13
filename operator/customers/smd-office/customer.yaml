@@ -14,9 +14,12 @@ schema_version: 1
 # (ci-sync-customer-configs.sh skips a slug with no customer_configs row), so
 # nothing runs on the seat until the Captain provisions it.
 #
-# What is deliberately absent here, each added by its own reviewed PR:
-# - the mailbox-keeper skill and the webhook trigger that wakes it on inbound
-#   mail (until then the seat acts only when the Captain asks, in workspace);
+# The mailbox keeper (operator/skills/mailbox-keeper/) keeps the Captain's
+# mailbox in code twice a day: trashes settled SMD Ops alert threads and, on
+# the day's first run, emails scott@smd.services one list of who is waiting on
+# a reply. No model reads a message.
+#
+# What is deliberately absent here, added by its own reviewed PR:
 # - any send FROM the Captain's mailbox. google_auth below lets the broker
 #   read, label and draft there; sending as smdurgan@smdurgan.com or
 #   scott@smd.services is a staff send-as and arrives only through an ADR 0089
@@ -95,6 +98,31 @@ personas:
           scheduled: false
           webhook: false
         enabled: true
+      # No turn: the cron row's pre_run makes one broker call
+      # (mailbox_keeper_run) and never wakes the model. The digest goes to
+      # scott@smd.services, which is on scope.inbound_allow_from (the seat's
+      # outbound surface), so the send is a rostered one.
+      - name: mailbox-keeper
+        version: pending
+        initiation:
+          manual: false
+          scheduled: true
+          webhook: false
+        enabled: true
+        settings:
+          mailbox: smdurgan@smdurgan.com
+          owner_addresses: 'smdurgan@smdurgan.com,scott@smd.services'
+          digest_recipient: scott@smd.services
+          needs_you_after_hours: 24
+          window_days: 14
+    cron:
+      # 06:47 and 12:47 UTC: 23:47 and 05:47 Arizona time. The keeper counts
+      # its day in America/Phoenix, so the 05:47 run is the day's first and
+      # sends the list; the 23:47 run only trashes.
+      - skill: mailbox-keeper
+        schedule: '47 6,12 * * *'
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
 
 # ---- CONNECTORS ----
 connectors:

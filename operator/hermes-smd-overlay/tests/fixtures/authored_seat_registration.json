@@ -3049,6 +3049,10 @@
     "plugin": "hermes-smd-workspace",
     "toolset": "workspace"
    },
+   "workspace_gmail_trash_thread": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
    "workspace_sheets_create": {
     "plugin": "hermes-smd-workspace",
     "toolset": "workspace"
