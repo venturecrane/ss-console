@@ -20,13 +20,18 @@
 # a lane-is-idle check FAILS at boot (nothing may be running on a fresh boot)
 # and WARNS hourly (a job may legitimately be running), and a check that asks a
 # vendor FAILS at boot and WARNS hourly (vendor weather must not page every seat
-# every hour). Everything else is a failure whenever it fails.
+# every hour). A vendor check whose vendor did not answer at all (its probe
+# exits VENDOR_INCONCLUSIVE_RC) WARNS at boot and hourly, and FAILS once it has
+# stayed that way for INCONCLUSIVE_FAIL_AFTER hourly runs. Everything else is a
+# failure whenever it fails.
 #
 # RESULTS. One JSON document, written to a temp file in the same directory and
 # renamed over results.json (readers never see half a file), mode 0644 so the
 # gate can read it: {schema_version, version, image_ref, hermes_sha,
 # expected_hermes_sha, run_kind, started_at, finished_at, checks: [{id, ok,
-# warn, detail}], failed, warned, total, failed_streak}. failed_streak is the
+# warn, detail, inconclusive_streak?}], failed, warned, total, failed_streak}.
+# inconclusive_streak appears only on a vendor check whose vendor did not
+# answer (see judge_inconclusive). failed_streak is the
 # number of consecutive runs, ending with this one, that had a failure. A
 # detail is at most 300 characters and is the check's own last words; the
 # probes it runs are written never to print a credential's value.
@@ -75,11 +80,13 @@ RECORDS=""
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [selftest] $*" >&2; }
 
 # ---------- recording ----------
-# record <id> <ok 0|1> <warn 0|1> <detail>: one tab-separated line per check.
+# record <id> <ok 0|1> <warn 0|1> <detail> [inconclusive_streak]: one
+# tab-separated line per check. The fifth field is set only by a vendor check
+# that got no answer (judge_inconclusive below).
 record() {
   local detail
   detail="$(printf '%s' "$4" | tr -d '\000-\010\013-\037' | tr '\t\n' '  ' | cut -c1-300)"
-  printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "${detail}" >> "${RECORDS}"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "${detail}" "${5:-}" >> "${RECORDS}"
 }
 
 # The last words of a check, for its detail: the final three non-empty lines.
@@ -100,6 +107,56 @@ judge() {
   fi
 }
 
+# ---------- a vendor that did not answer ----------
+# A vendor probe exits VENDOR_INCONCLUSIVE_RC when the vendor gave no answer
+# (a 5xx, a 429, a timeout, a dropped connection): neither a pass nor the
+# violation the probe exists to catch. The first user is
+# msgraph-read-app-cannot-read-staff-probe.py, whose Microsoft 503 on
+# 2026-11-12 read as "the read app can read the approver's inbox" and rolled
+# back every release on the twin. "Could not look" must never read as "none",
+# so it is never a pass: it is a WARNING that carries the probe's own words
+# (the HTTP status), at boot as well as hourly, so an outage does not roll a
+# release back. A probe exit of anything else is judged as before.
+#
+# Weather that does not clear is not weather. Each inconclusive record carries
+# inconclusive_streak, the consecutive runs (this one included) on which the
+# same check was inconclusive, read back from the previous results.json. On an
+# HOURLY run that reaches INCONCLUSIVE_FAIL_AFTER the check is recorded FAILED,
+# naming the streak, and the existing selftest_failing condition pages it once
+# two hourly runs in a row have failed (workers/fleet-alerts/src/selftest.ts,
+# SELFTEST_HOURLY_STREAK). A boot run never escalates: /run is a tmpfs, so a
+# release's boot run starts the streak at 1, and the release is not rolled back
+# for Microsoft's weather.
+VENDOR_INCONCLUSIVE_RC=3
+INCONCLUSIVE_FAIL_AFTER="${SMD_SELFTEST_INCONCLUSIVE_FAIL_AFTER:-4}"
+
+# The previous run's inconclusive_streak for <id>, or 0.
+previous_inconclusive_streak() {
+  "${PY}" -I -B - "${RESULTS}" "$1" <<'PY' 2>/dev/null || echo 0
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        doc = json.load(fh)
+    found = [c for c in doc.get("checks") or [] if isinstance(c, dict) and c.get("id") == sys.argv[2]]
+    print(max(0, int(found[0].get("inconclusive_streak") or 0)) if found else 0)
+except (OSError, ValueError, TypeError, AttributeError):
+    print(0)
+PY
+}
+
+judge_inconclusive() { # <id> <output>
+  local prev streak words
+  prev="$(previous_inconclusive_streak "$1")"
+  case "${prev}" in ''|*[!0-9]*) prev=0 ;; esac
+  streak=$((prev + 1))
+  words="$(last_words "$2")"
+  if [ "${RUN_KIND}" = hourly ] && [ "${streak}" -ge "${INCONCLUSIVE_FAIL_AFTER}" ]; then
+    record "$1" 0 0 "inconclusive on ${streak} consecutive runs, so the property is unproven: ${words}" "${streak}"
+  else
+    record "$1" 0 1 "inconclusive (${streak} in a row), not a pass: ${words}" "${streak}"
+  fi
+}
+
 run_cmd() { local out rc=0; out="$(cd / && with_budget sh -c "$3" 2>&1)" || rc=$?; judge "$1" "$2" "${rc}" "${out}"; }
 run_prog() { local out rc=0; out="$(cd / && printf '%s' "$3" | with_budget sh 2>&1)" || rc=$?; judge "$1" "$2" "${rc}" "${out}"; }
 
@@ -107,7 +164,11 @@ run_prog() { local out rc=0; out="$(cd / && printf '%s' "$3" | with_budget sh 2>
 check() { run_cmd "$1" strict "$2"; }
 check_script() { run_prog "$1" strict "$2"; }
 check_idle() { run_cmd "$1" soft "$2"; }
-check_vendor() { run_cmd "$1" soft "$2"; }
+check_vendor() {
+  local out rc=0
+  out="$(cd / && with_budget sh -c "$2" 2>&1)" || rc=$?
+  if [ "${rc}" -eq "${VENDOR_INCONCLUSIVE_RC}" ]; then judge_inconclusive "$1" "${out}"; else judge "$1" soft "${rc}" "${out}"; fi
+}
 check_note() { record "$1" 1 0 "$2"; }
 check_broken() { record "$1" 0 0 "$2"; }
 check_file() {
@@ -238,8 +299,11 @@ env = os.environ
 checks = []
 with open(env["SELFTEST_RECORDS"], encoding="utf-8", errors="replace") as fh:
     for line in fh:
-        cid, ok, warn, detail = (line.rstrip("\n").split("\t", 3) + ["", "", ""])[:4]
-        checks.append({"id": cid, "ok": ok == "1", "warn": warn == "1", "detail": detail[:300]})
+        cid, ok, warn, detail, streak = (line.rstrip("\n").split("\t", 4) + ["", "", "", ""])[:5]
+        check = {"id": cid, "ok": ok == "1", "warn": warn == "1", "detail": detail[:300]}
+        if streak.isdigit() and int(streak) > 0:
+            check["inconclusive_streak"] = int(streak)
+        checks.append(check)
 failed = sum(1 for c in checks if not c["ok"] and not c["warn"])
 streak = 0
 if failed:

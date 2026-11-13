@@ -18,7 +18,10 @@
 #   check_idle <id> <cmd>         a lane-is-idle check: the image fails it at
 #                                 boot and WARNS hourly (a job may be running)
 #   check_vendor <id> <cmd>       asks a vendor: the image fails it at boot and
-#                                 WARNS hourly (vendor weather must not page)
+#                                 WARNS hourly (vendor weather must not page).
+#                                 Exit 3 means the vendor did not answer: a
+#                                 WARNING at boot and hourly, never a pass, and
+#                                 a failure once it persists (selftest.sh)
 #   check_file <id> <interp> <f>  run probe operator/templates/<f> (= /app/<f>)
 #   check_report <id> <program>   as check_script, and its stdout is the detail
 #   check_lever <probe>           the identifier-gate lever verdict (warn-only)

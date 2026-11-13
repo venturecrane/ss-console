@@ -244,16 +244,34 @@ ssh_exec() {
   ssh_check "${step}" "$*" "$*"
 }
 
+# The vendor-did-not-answer contract (check_vendor below; selftest.sh carries the
+# same number). Only check_vendor's remote command prints the mark.
+VENDOR_INCONCLUSIVE_RC=3
+VENDOR_INCONCLUSIVE_MARK="SMD_VENDOR_INCONCLUSIVE"
+
+# vendor_inconclusive <step> <output>: true (and a WARNING recorded) when the
+# output carries the mark. The probe's own INCONCLUSIVE line is the detail.
+vendor_inconclusive() {
+  [[ "$2" == *"${VENDOR_INCONCLUSIVE_MARK}"* ]] || return 1
+  local said
+  said="$(printf '%s\n' "$2" | grep -m1 'INCONCLUSIVE:' || true)"
+  check_warn "$1: the vendor did not answer, so this is unproven, not passed: ${said:-no detail}"
+  return 0
+}
+
 ssh_check() { # <step> <command as reported> <command as run on the Machine>
   local step="$1" cmd="$2" remote="$3" out
   if out="$(ssh_run "${remote}")"; then
     pass "${step}"
     return
   fi
+  vendor_inconclusive "${step}" "${out}" && return
   if [[ "${out}" == *"${CHECK_FAILED_MARK}"* ]]; then
     # The check ran and said no. Retry only if the Machine was cycling under it.
-    if retry_if_machine_cycling && ssh_run "${remote}" >/dev/null; then
+    if retry_if_machine_cycling && out="$(ssh_run "${remote}")"; then
       pass "${step} (passed on retry; the Machine was cycling on the first attempt)"
+    elif vendor_inconclusive "${step}" "${out}"; then
+      return
     else
       check_fail "${step} — command failed: ${cmd}"
     fi
@@ -269,11 +287,25 @@ ssh_check() { # <step> <command as reported> <command as run on the Machine>
   retry_if_machine_cycling || true
   if out="$(ssh_run "${remote}")"; then
     pass "${step} (passed on retry; the first attempt returned no verdict)"
+  elif vendor_inconclusive "${step}" "${out}"; then
+    return
   elif [[ "${out}" == *"${CHECK_FAILED_MARK}"* ]]; then
     check_fail "${step} — command failed: ${cmd}"
   else
     check_fail "${step} — no verdict from the Machine on two attempts (ssh failed): ${cmd}"
   fi
+}
+
+# ssh_exec_vendor <step> <command>: as ssh_exec, for a probe that asks a vendor.
+# A vendor probe that exits VENDOR_INCONCLUSIVE_RC got no answer from the vendor
+# (a 5xx, a 429, a timeout): neither a pass nor the violation it looks for. ssh
+# does not carry an exit code through ssh_run's wrapper, so the Machine prints
+# VENDOR_INCONCLUSIVE_MARK for it and ssh_check records a WARNING carrying the
+# probe's own line (the HTTP status), never a pass and never a failure. Any
+# other exit is judged exactly as ssh_exec judges it. Same contract as
+# operator/templates/selftest.sh check_vendor.
+ssh_exec_vendor() {
+  ssh_check "$1" "$2" "( $2 ); smd_rc=\$?; [ \$smd_rc -ne ${VENDOR_INCONCLUSIVE_RC} ] || echo ${VENDOR_INCONCLUSIVE_MARK}; exit \$smd_rc"
 }
 
 ssh_exec_script() {
@@ -375,7 +407,7 @@ check_script() { ssh_exec_script "$@"; }
 # Over ssh a busy lane and a vendor probe are judged like any check: the laptop
 # smoke runs at provision and release, which are boot runs.
 check_idle() { ssh_exec "$@"; }
-check_vendor() { ssh_exec "$@"; }
+check_vendor() { ssh_exec_vendor "$@"; }
 check_note() { pass "$1 ($2)"; }
 check_broken() { check_fail "$1 — $2"; }
 

@@ -140,3 +140,30 @@ describe('selftest_failing', () => {
     expect(conditionLabel('selftest_failing')).toBe('Seat self-test failed a check')
   })
 })
+
+// 2026-11-12: a vendor that did not answer. The seat's self-test records a
+// probe exit 3 (Microsoft gave no answer) as a WARNING, and only once it has
+// persisted for SMD_SELFTEST_INCONCLUSIVE_FAIL_AFTER runs as a FAILED hourly
+// check (operator/templates/selftest.sh judge_inconclusive). These are the
+// heartbeats that sequence ships, as pinned end to end by
+// operator/bin/tests/test_msgraph_unknown_release_path.py.
+describe('selftest_failing for a vendor that did not answer', () => {
+  const CHECK = 'msgraph-read-app-cannot-read-staff-mailbox'
+
+  it('does not page while the outage is a warning, at boot or hourly', () => {
+    for (const run_kind of ['boot', 'hourly']) {
+      const s = state(verdict({ run_kind, warned_count: 1, warned: [CHECK] }))
+      expect(s?.active).toBe(false)
+    }
+  })
+
+  it('does not page on the first hourly run that escalated it', () => {
+    expect(state(failing({ failed: [CHECK], failed_streak: 1 }))?.active).toBe(false)
+  })
+
+  it('pages once the escalated check has failed two hourly runs in a row, naming it', () => {
+    const s = state(failing({ failed: [CHECK], failed_streak: SELFTEST_HOURLY_STREAK }))
+    expect(s?.active).toBe(true)
+    expect(s?.detail).toContain(CHECK)
+  })
+})
