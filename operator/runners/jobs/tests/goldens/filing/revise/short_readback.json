@@ -1,0 +1,346 @@
+{
+  "end": {
+    "raised": {
+      "message": "stage_unfinished: file: a new version did not read back as ours after its retries",
+      "type": "DraftingFailed"
+    }
+  },
+  "events": [
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/versions.json": null
+      },
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 11,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "mint",
+      "ids": ["draft-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "draft-1",
+          "size": 11,
+          "url": "https://fake.invalid/draft-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 11,
+      "url": "https://fake.invalid/draft-1"
+    },
+    {
+      "bytes": 13,
+      "call": "add_file_version",
+      "expected_folder": "fold-r",
+      "expected_name": "Brief.docx",
+      "expected_version": "draft-1-v1",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/versions.json": {
+          "draft": {
+            "at": "<AT>",
+            "sent": true,
+            "version_before": "draft-1-v1"
+          }
+        }
+      },
+      "returned": {
+        "fileId": "draft-1",
+        "uploaded": true,
+        "versionBefore": "draft-1-v1"
+      },
+      "sha256": "9af5e8be41c3560be429e8bcc763e1761a65c9784fabd1b3cde465095e4b6386"
+    },
+    {
+      "log": "  sent a new version of the draft"
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v1"
+      }
+    }
+  ],
+  "records": {
+    "job-data/versions.json": {
+      "draft": {
+        "at": "<AT>",
+        "sent": true,
+        "version_before": "draft-1-v1"
+      }
+    }
+  },
+  "vendor": [
+    "draft-1 'Brief' '.docx' 13 in fold-r v2 sha 9af5e8be41c3560b",
+    "notes-1 'Brief - attorney notes' '.docx' 20 in fold-r v1 sha 3612e7620e727ee0"
+  ],
+  "writes": {
+    "add_file_version": 1
+  }
+}

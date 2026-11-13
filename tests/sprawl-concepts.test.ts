@@ -418,6 +418,58 @@ describe('word-to-text', () => {
   })
 })
 
+describe('filename-rule-copies', () => {
+  const R = 'operator/runners/jobs/jobs/'
+  it('counts a runner module that joins name and extension unless the name already ends with it', () => {
+    const files = [
+      {
+        path: `${R}a.py`,
+        text: 'def full_name(f):\n    return name if not ext or name.lower().endswith(ext.lower()) else name + ext',
+      },
+      { path: `${R}b.py`, text: 'if not ext or name.lower().endswith(ext):\n    return name' },
+    ]
+    expect(found('filename-rule-copies', files)).toEqual([`${R}a.py`, `${R}b.py`])
+  })
+
+  it('ignores a caller, an unconditional join, a comment, a test and a file outside the runner', () => {
+    const files = [
+      { path: `${R}c.py`, text: 'from ..filing import full_name\nn = full_name(row)' },
+      { path: `${R}d.py`, text: 'return str(r.get("name") or "") + str(r.get("ext") or "")' },
+      { path: `${R}e.py`, text: '# name.lower().endswith(ext) is the rule' },
+      { path: `${R}../tests/test_f.py`, text: 'x = name.lower().endswith(ext)' },
+      { path: 'operator/connectors/g.py', text: 'x = name.lower().endswith(ext)' },
+    ]
+    expect(found('filename-rule-copies', files)).toEqual([])
+  })
+})
+
+describe('send-record-copies', () => {
+  const R = 'operator/runners/jobs/jobs/'
+  it('counts a runner module that writes a file and flags its own send record', () => {
+    const files = [
+      { path: `${R}a.py`, text: 'rec["pending"] = True\nseat.add_file(m, f, n, b)' },
+      {
+        path: `${R}b.py`,
+        text: 'rec.update(sent=True)\nseat.add_file_version(m, f, b, expected_version=v)',
+      },
+    ]
+    expect(found('send-record-copies', files)).toEqual([`${R}a.py`, `${R}b.py`])
+  })
+
+  it('ignores the seat backend, a write with no flags, flags with no write, and a test', () => {
+    const files = [
+      {
+        path: `${R}seat.py`,
+        text: 'r = self.client.add_file(matter_id, name, data, folder_id=folder_id)',
+      },
+      { path: `${R}c.py`, text: 'out = client.add_file(matter_id, name, data, folder_id=folder)' },
+      { path: `${R}d.py`, text: 'if row.get("sent"):\n    pass' },
+      { path: `${R}../tests/test_e.py`, text: 'rec["pending"] = True\nseat.add_file(m, f, n, b)' },
+    ]
+    expect(found('send-record-copies', files)).toEqual([])
+  })
+})
+
 describe('conceptRatchet', () => {
   const rows = conceptCensus(
     [{ path: 'a/x.py', text: 'L = ("medchron", "demand", "drafting", "records")' }],

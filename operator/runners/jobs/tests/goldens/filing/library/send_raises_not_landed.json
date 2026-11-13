@@ -1,0 +1,88 @@
+{
+  "end": {
+    "raised": {
+      "message": "connection dropped mid-upload",
+      "type": "RuntimeError"
+    }
+  },
+  "events": [
+    {
+      "Limit": "50",
+      "Offset": "0",
+      "Search": "LIB-EXAMPLE",
+      "call": "client.get",
+      "path": "/matters",
+      "records": {},
+      "returned": {
+        "value": [
+          {
+            "id": "00000000-0000-0000-0000-00000000a11b",
+            "number": "LIB-EXAMPLE"
+          }
+        ]
+      }
+    },
+    {
+      "Limit": "500",
+      "Offset": "0",
+      "call": "client.get",
+      "path": "/matters/00000000-0000-0000-0000-00000000a11b/documents/files",
+      "returned": {
+        "value": []
+      }
+    },
+    {
+      "Limit": "500",
+      "Offset": "0",
+      "call": "client.get",
+      "path": "/matters/00000000-0000-0000-0000-00000000a11b/documents/folders",
+      "returned": {
+        "value": [
+          {
+            "folders": [
+              {
+                "id": "00000000-0000-0000-0000-0000000f01de",
+                "name": "Document Library"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Limit": "500",
+      "Offset": "0",
+      "call": "client.get",
+      "path": "/matters/00000000-0000-0000-0000-00000000a11b/documents/folders",
+      "returned": {
+        "value": [
+          {
+            "folders": [
+              {
+                "id": "00000000-0000-0000-0000-0000000f01de",
+                "name": "Document Library"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "bytes": 22,
+      "call": "client.add_file",
+      "folder": "00000000-0000-0000-0000-0000000f01de",
+      "matter": "00000000-0000-0000-0000-00000000a11b",
+      "name": "Template - Memo.docx",
+      "raised": {
+        "message": "connection dropped mid-upload",
+        "type": "RuntimeError"
+      },
+      "sha256": "9bd04f8a4f6e6c3c775794f1b781f8486c45cae35f5ecf4de79e94f611967c27"
+    }
+  ],
+  "records": {},
+  "vendor": [],
+  "writes": {
+    "add_file": 1
+  }
+}

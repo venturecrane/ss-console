@@ -7,7 +7,7 @@ WHY. A golden test compares the code with the golden file next to it. A PR
 that changes the code AND rewrites the golden passes it, and then the golden
 proves nothing about the change. This job closes that, for EVERY golden set
 (``FAMILIES``): the job host matrix, the runner-to-broker wire, the broker
-ledgers, the lane endings, the paid calls, the firm loaders, the text rules
+ledgers, the lane endings, the paid calls, the firm loaders, the text rules, the filing paths
 and the seat-config caller table.
 
 Four checks, each a failure on its own:

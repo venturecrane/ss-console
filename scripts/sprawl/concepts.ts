@@ -208,6 +208,18 @@ function readsWordText(code: string[]): boolean {
   return code.some((l) => WORD_TO_TEXT.test(l))
 }
 
+/** The full-filename rule written in place: a vendor row's name and its extension joined unless the
+ * name already ends with it (`name.lower().endswith(ext...)`). */
+const FILENAME_RULE = /\.lower\(\)\.endswith\(\s*ext\b/
+
+/** A seat file write (`.add_file(` or `.add_file_version(`) and the send record's own flags. */
+const SEAT_FILE_WRITE = /\.add_file(_version)?\(/
+const SEND_FLAG = /["'](pending|sent)["']|\b(pending|sent)=/
+
+function keepsItsOwnSendRecord(code: string[]): boolean {
+  return code.some((l) => SEAT_FILE_WRITE.test(l)) && code.some((l) => SEND_FLAG.test(l))
+}
+
 export const CONCEPTS: Concept[] = [
   {
     id: 'lane-host-loops',
@@ -253,6 +265,20 @@ export const CONCEPTS: Concept[] = [
     rule: 'Non-test Python file under operator/ defining its own .docx-to-text function (a def named *docx_text* or *word_text*).',
     target: '1 Word reader',
     instances: (files) => matching(python(files, 'operator/'), readsWordText),
+  },
+  {
+    id: 'filename-rule-copies',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ writing the full-filename rule itself (`.lower().endswith(ext`: a vendor name and its extension joined unless the name already ends with it).',
+    target: '1 (jobs/filing.full_name)',
+    instances: (files) =>
+      matching(python(files, RUNNER), (code) => code.some((l) => FILENAME_RULE.test(l))),
+  },
+  {
+    id: 'send-record-copies',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ that calls a seat file write (`.add_file(` or `.add_file_version(`) and sets a `pending` or `sent` flag itself.',
+    target:
+      "2 (jobs/filing.SendRecord, and revise's version intent in drafting/revise/versions.py)",
+    instances: (files) => matching(python(files, RUNNER), keepsItsOwnSendRecord),
   },
   {
     id: 'job-lane-lists',

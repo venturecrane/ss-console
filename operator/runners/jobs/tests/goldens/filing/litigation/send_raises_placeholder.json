@@ -1,0 +1,126 @@
+{
+  "end": {
+    "raised": {
+      "message": "stage_unfinished: file: the read-back is short after its retries; the file may still be materializing",
+      "type": "LitigationFailed"
+    }
+  },
+  "events": [
+    {
+      "call": "folder_tree",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": null
+      },
+      "returned": []
+    },
+    {
+      "call": "create_folder",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "name": "Litigation Status",
+      "returned": {
+        "id": "folder-1"
+      }
+    },
+    {
+      "log": "created folder 'Litigation Status'"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).xlsx",
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": []
+    },
+    {
+      "bytes": 7,
+      "call": "add_file",
+      "folder": "folder-1",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "name": "Litigation Status 2026-11-13 (Operator 0000c3).xlsx",
+      "raised": {
+        "message": "the response was lost after the POST",
+        "type": "RuntimeError"
+      },
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).xlsx",
+          "pending": true,
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+    },
+    {
+      "log": "the send raised (RuntimeError); the read-back decides"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1"]
+    }
+  ],
+  "records": {
+    "job-data/delivery-percase.json": null,
+    "job-data/delivery.json": {
+      "bytes": 7,
+      "folder_id": "folder-1",
+      "name": "Litigation Status 2026-11-13 (Operator 0000c3).xlsx",
+      "pending": true,
+      "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+    }
+  },
+  "vendor": [
+    "up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 0 in folder-1 v1 (no bytes)"
+  ],
+  "writes": {
+    "add_file": 1,
+    "create_folder": 1
+  }
+}

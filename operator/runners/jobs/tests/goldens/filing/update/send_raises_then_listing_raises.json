@@ -1,0 +1,158 @@
+{
+  "end": {
+    "returned": 3
+  },
+  "events": [
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "data/example-matter/out/alpha/upload_manifest.json": [
+          {
+            "bytes": 20,
+            "folder": "CHRON",
+            "local_path": "<TMP>/data/example-matter/out/alpha/Alpha Example - Medical Chronology 10-13-26.docx",
+            "name": "Alpha Example - Medical Chronology 10-13-26.docx",
+            "sha256": "c203b9aa4cf1fd09baf1af038894e4724a2891d42671678a66ade5175fd58aee"
+          },
+          {
+            "bytes": 16,
+            "folder": "CHRON",
+            "local_path": "<TMP>/data/example-matter/out/alpha/Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+            "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+            "sha256": "71f35d4ed9b811d9e750171f4d5c41d4fb2318fc95f3c7a5f5fbdb036101c437"
+          }
+        ],
+        "data/example-matter/runs/alpha/delivery.json": null
+      },
+      "returned": [
+        "c1 'Alpha Example - Medical Chronology 09-01-26' '.docx' 15 in fold-chron",
+        "e1 'Exhibit 1 - x' '.pdf' 14 in fold-chron",
+        "a1 'Attorney notes' '.docx' 20 in fold-chron"
+      ]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "data/example-matter/out/alpha/upload_manifest.json": [
+          {
+            "bytes": 20,
+            "folder": "CHRON",
+            "local_path": "<TMP>/data/example-matter/out/alpha/Alpha Example - Medical Chronology 10-13-26.docx",
+            "name": "Alpha Example - Medical Chronology 10-13-26.docx",
+            "sha256": "c203b9aa4cf1fd09baf1af038894e4724a2891d42671678a66ade5175fd58aee"
+          },
+          {
+            "bytes": 16,
+            "folder": "CHRON",
+            "local_path": "<TMP>/data/example-matter/out/alpha/Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+            "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+            "sha256": "71f35d4ed9b811d9e750171f4d5c41d4fb2318fc95f3c7a5f5fbdb036101c437"
+          }
+        ],
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [],
+          "folder": "CHRON",
+          "folder_id": "fold-chron",
+          "update": true
+        }
+      },
+      "returned": [
+        "c1 'Alpha Example - Medical Chronology 09-01-26' '.docx' 15 in fold-chron",
+        "e1 'Exhibit 1 - x' '.pdf' 14 in fold-chron",
+        "a1 'Attorney notes' '.docx' 20 in fold-chron"
+      ]
+    },
+    {
+      "bytes": 20,
+      "call": "add_file",
+      "folder": "fold-chron",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "Alpha Example - Medical Chronology 10-13-26.docx",
+      "raised": {
+        "message": "the response was lost after the POST",
+        "type": "RuntimeError"
+      },
+      "records": {
+        "data/example-matter/out/alpha/upload_manifest.json": [
+          {
+            "bytes": 20,
+            "folder": "CHRON",
+            "local_path": "<TMP>/data/example-matter/out/alpha/Alpha Example - Medical Chronology 10-13-26.docx",
+            "name": "Alpha Example - Medical Chronology 10-13-26.docx",
+            "sha256": "c203b9aa4cf1fd09baf1af038894e4724a2891d42671678a66ade5175fd58aee"
+          },
+          {
+            "bytes": 16,
+            "folder": "CHRON",
+            "local_path": "<TMP>/data/example-matter/out/alpha/Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+            "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+            "sha256": "71f35d4ed9b811d9e750171f4d5c41d4fb2318fc95f3c7a5f5fbdb036101c437"
+          }
+        ],
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [
+            {
+              "bytes": 20,
+              "confirmed": false,
+              "name": "Alpha Example - Medical Chronology 10-13-26.docx",
+              "pending": true,
+              "sent": false,
+              "sha256": "c203b9aa4cf1fd09baf1af038894e4724a2891d42671678a66ade5175fd58aee"
+            }
+          ],
+          "folder": "CHRON",
+          "folder_id": "fold-chron",
+          "update": true
+        }
+      },
+      "sha256": "c203b9aa4cf1fd09baf1af038894e4724a2891d42671678a66ade5175fd58aee"
+    },
+    {
+      "log": "Alpha Example - Medical Chronology 10-13-26.docx: the send failed (the response was lost after the POST); the file's record may already exist in folder fold-chron, so it is not retried. Holding for a person to read the folder."
+    }
+  ],
+  "records": {
+    "data/example-matter/out/alpha/upload_manifest.json": [
+      {
+        "bytes": 20,
+        "folder": "CHRON",
+        "local_path": "<TMP>/data/example-matter/out/alpha/Alpha Example - Medical Chronology 10-13-26.docx",
+        "name": "Alpha Example - Medical Chronology 10-13-26.docx",
+        "sha256": "c203b9aa4cf1fd09baf1af038894e4724a2891d42671678a66ade5175fd58aee"
+      },
+      {
+        "bytes": 16,
+        "folder": "CHRON",
+        "local_path": "<TMP>/data/example-matter/out/alpha/Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+        "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+        "sha256": "71f35d4ed9b811d9e750171f4d5c41d4fb2318fc95f3c7a5f5fbdb036101c437"
+      }
+    ],
+    "data/example-matter/runs/alpha/delivery.json": {
+      "files": [
+        {
+          "bytes": 20,
+          "confirmed": false,
+          "name": "Alpha Example - Medical Chronology 10-13-26.docx",
+          "pending": true,
+          "sent": false,
+          "sha256": "c203b9aa4cf1fd09baf1af038894e4724a2891d42671678a66ade5175fd58aee"
+        }
+      ],
+      "folder": "CHRON",
+      "folder_id": "fold-chron",
+      "update": true
+    }
+  },
+  "vendor": [
+    "c1 'Alpha Example - Medical Chronology 09-01-26' '.docx' 15 in fold-chron v1 sha 747cde37d230ee43",
+    "e1 'Exhibit 1 - x' '.pdf' 14 in fold-chron v1 sha 23ad09fe9c7af434",
+    "a1 'Attorney notes' '.docx' 20 in fold-chron v1 sha 2076ab8aa90bb593",
+    "up-1 'Alpha Example - Medical Chronology 10-13-26' '.docx' 20 in fold-chron not indexed yet sha c203b9aa4cf1fd09"
+  ],
+  "writes": {
+    "add_file": 1
+  }
+}

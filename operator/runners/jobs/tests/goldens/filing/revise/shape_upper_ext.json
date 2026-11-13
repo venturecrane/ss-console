@@ -1,0 +1,264 @@
+{
+  "end": {
+    "returned": [
+      {
+        "file_id": "draft-1",
+        "name": "Brief.DOCX",
+        "sha256": "9af5e8be41c3560be429e8bcc763e1761a65c9784fabd1b3cde465095e4b6386",
+        "size": 13,
+        "version_id": "draft-1-v2"
+      },
+      {
+        "file_id": "notes-1",
+        "name": "Brief - attorney notes.DOCX",
+        "sha256": "b01b64920d2cf65e56fffd742b307d1fe3c26b60cd323b6c54b006a5b13544b6",
+        "size": 22,
+        "version_id": "notes-1-v2"
+      }
+    ]
+  },
+  "events": [
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/versions.json": null
+      },
+      "returned": {
+        "fileExtension": ".DOCX",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 11,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "mint",
+      "ids": ["draft-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "draft-1",
+          "size": 11,
+          "url": "https://fake.invalid/draft-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 11,
+      "url": "https://fake.invalid/draft-1"
+    },
+    {
+      "bytes": 13,
+      "call": "add_file_version",
+      "expected_folder": "fold-r",
+      "expected_name": "Brief.DOCX",
+      "expected_version": "draft-1-v1",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/versions.json": {
+          "draft": {
+            "at": "<AT>",
+            "sent": true,
+            "version_before": "draft-1-v1"
+          }
+        }
+      },
+      "returned": {
+        "fileId": "draft-1",
+        "uploaded": true,
+        "versionBefore": "draft-1-v1"
+      },
+      "sha256": "9af5e8be41c3560be429e8bcc763e1761a65c9784fabd1b3cde465095e4b6386"
+    },
+    {
+      "log": "  sent a new version of the draft"
+    },
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".DOCX",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief",
+        "sizeBytes": 13,
+        "versionId": "draft-1-v2"
+      }
+    },
+    {
+      "call": "mint",
+      "ids": ["draft-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "draft-1",
+          "size": 13,
+          "url": "https://fake.invalid/draft-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 13,
+      "url": "https://fake.invalid/draft-1"
+    },
+    {
+      "log": "  read back the draft by id: sha256 ours, version moved"
+    },
+    {
+      "call": "file_meta",
+      "id": "notes-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/versions.json": {
+          "draft": {
+            "at": "<AT>",
+            "proven": true,
+            "sent": true,
+            "version_after": "draft-1-v2",
+            "version_before": "draft-1-v1"
+          }
+        }
+      },
+      "returned": {
+        "fileExtension": ".DOCX",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "notes-1",
+        "isDeleted": false,
+        "name": "Brief - attorney notes",
+        "sizeBytes": 20,
+        "versionId": "notes-1-v1"
+      }
+    },
+    {
+      "call": "mint",
+      "ids": ["notes-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "notes-1",
+          "size": 20,
+          "url": "https://fake.invalid/notes-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 20,
+      "url": "https://fake.invalid/notes-1"
+    },
+    {
+      "bytes": 22,
+      "call": "add_file_version",
+      "expected_folder": "fold-r",
+      "expected_name": "Brief - attorney notes.DOCX",
+      "expected_version": "notes-1-v1",
+      "id": "notes-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/versions.json": {
+          "attorney_notes": {
+            "at": "<AT>",
+            "sent": true,
+            "version_before": "notes-1-v1"
+          },
+          "draft": {
+            "at": "<AT>",
+            "proven": true,
+            "sent": true,
+            "version_after": "draft-1-v2",
+            "version_before": "draft-1-v1"
+          }
+        }
+      },
+      "returned": {
+        "fileId": "notes-1",
+        "uploaded": true,
+        "versionBefore": "notes-1-v1"
+      },
+      "sha256": "b01b64920d2cf65e56fffd742b307d1fe3c26b60cd323b6c54b006a5b13544b6"
+    },
+    {
+      "log": "  sent a new version of the attorney_notes"
+    },
+    {
+      "call": "file_meta",
+      "id": "notes-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": {
+        "fileExtension": ".DOCX",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "notes-1",
+        "isDeleted": false,
+        "name": "Brief - attorney notes",
+        "sizeBytes": 22,
+        "versionId": "notes-1-v2"
+      }
+    },
+    {
+      "call": "mint",
+      "ids": ["notes-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "notes-1",
+          "size": 22,
+          "url": "https://fake.invalid/notes-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 22,
+      "url": "https://fake.invalid/notes-1"
+    },
+    {
+      "log": "  read back the attorney_notes by id: sha256 ours, version moved"
+    }
+  ],
+  "records": {
+    "job-data/versions.json": {
+      "attorney_notes": {
+        "at": "<AT>",
+        "proven": true,
+        "sent": true,
+        "version_after": "notes-1-v2",
+        "version_before": "notes-1-v1"
+      },
+      "draft": {
+        "at": "<AT>",
+        "proven": true,
+        "sent": true,
+        "version_after": "draft-1-v2",
+        "version_before": "draft-1-v1"
+      }
+    }
+  },
+  "vendor": [
+    "draft-1 'Brief' '.DOCX' 13 in fold-r v2 sha 9af5e8be41c3560b",
+    "notes-1 'Brief - attorney notes' '.DOCX' 22 in fold-r v2 sha b01b64920d2cf65e"
+  ],
+  "writes": {
+    "add_file_version": 2
+  }
+}
