@@ -116,9 +116,9 @@ personas:
           needs_you_after_hours: 24
           window_days: 14
     cron:
-      # 06:47 and 12:47 UTC: 23:47 and 05:47 Arizona time. The keeper counts
-      # its day in America/Phoenix, so the 05:47 run is the day's first and
-      # sends the list; the 23:47 run only trashes.
+      # 06:47 and 12:47 seat-local, America/Phoenix (business_hours.timezone
+      # below, exported as HERMES_TIMEZONE by bootstrap.sh). The 06:47 run is
+      # the day's first and sends the list; the 12:47 run only trashes.
       - skill: mailbox-keeper
         schedule: '47 6,12 * * *'
         pre_run: pre_run.py
@@ -169,6 +169,16 @@ scope:
   inbound_allow_from:
     - scott@smd.services
     - smdurgan@smdurgan.com
+
+# ---- BUSINESS HOURS ----
+# The seat's clock. operator/templates/bootstrap.sh exports
+# business_hours.timezone as HERMES_TIMEZONE, so every cron expression above
+# runs seat-local; unauthored, it would run in the container's UTC.
+business_hours:
+  timezone: America/Phoenix
+  days: [mon, tue, wed, thu, fri]
+  start: '08:00'
+  end: '18:00'
 
 # ---- ESCALATION ----
 escalation:
