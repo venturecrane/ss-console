@@ -1,3 +1,69 @@
 {
-  "not_applicable": "RecordsLedger has no reply-once mark (no mark_replied)"
+  "row": {
+    "ack": "turn",
+    "attempt": 1,
+    "cents": 500,
+    "close_reason": null,
+    "close_ref": null,
+    "created_at": "2026-10-20T17:00:00.000Z",
+    "delivery_json": "{\"digest\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"review_id\": \"dddddddddddddddddddddddd\"}",
+    "envelope_digest": "71edc6fda1413ee10af8b04f4c8da133f1c2f73fe4eb2bd41194cc461db8d192",
+    "job_id": "01KTJ0BX000000000000000001",
+    "matter_id": "11111111-2222-3333-4444-555555555555",
+    "message_ref": "AAMkAGraphMessageId0001",
+    "reason": null,
+    "reply_key": "reply",
+    "reply_sent_at": "2026-10-20T17:00:08.000Z",
+    "request_ref": "AAMkAGraphMessageId0001",
+    "requester": "pat.lane@example-firm.test",
+    "review_id": "dddddddddddddddddddddddd",
+    "stage": "verdict",
+    "state": "delivered",
+    "trigger": "request",
+    "updated_at": "2026-10-20T17:00:03.000Z"
+  },
+  "rows": [
+    {
+      "call": "mark reply",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "mark reply again",
+      "result": {
+        "returned": false
+      }
+    },
+    {
+      "call": "mark another key",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark reply",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark reply after unmark",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark a key never marked",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark an unknown job",
+      "result": {
+        "returned": false
+      }
+    }
+  ]
 }

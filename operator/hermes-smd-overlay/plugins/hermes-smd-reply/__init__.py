@@ -1228,6 +1228,31 @@ def _row_matter_ref(row: dict[str, Any]) -> str | None:
     return str(row.get("matter_id") or "") or None
 
 
+#: The job kind a records lane row's release is the reply of (the broker's
+#: ``records_reply.KIND``).
+_LANE_JOB_KIND = "records_job"
+
+
+def _row_for_job(row: dict[str, Any]) -> dict[str, str] | None:
+    """The job a release IS the reply of: the row's own ``job`` (SMD's
+    ``approve --job``), else, for a records lane row, the job its
+    ``session_id`` names. The broker takes that job's reply-once mark at the
+    send (2026-11-13: records and medchron had no reply-once mark; a reply
+    could go out twice)."""
+    job = matter_file_review.row_job(row)
+    if job is not None:
+        return job
+    session = str(row.get("session_id") or "")
+    if not session.startswith(LANE_SESSION_PREFIX):
+        return None
+    job_id = session[len(LANE_SESSION_PREFIX) :]
+    return (
+        {"kind": _LANE_JOB_KIND, "job_id": job_id}
+        if matter_file_review.JOB_ID_RE.fullmatch(job_id)
+        else None
+    )
+
+
 def _review_one(row: dict[str, Any]) -> None:
     if row.get("status") != matter_file_review.STATUS_REVIEW:
         return
@@ -1282,11 +1307,12 @@ def _review_one(row: dict[str, Any]) -> None:
             matter_ref=matter_ref,
             to=str(row.get("to") or "") if row.get("redirect") else None,
             attachments=matter_file_reply.Prepared.descriptors(first) if first else None,
-            # The job this release IS the reply of (``approve --job``): the
-            # broker records it as that job's bound reply, atomically with the
-            # send, so a later rewake cannot send a second completion (A&P,
-            # 2026-11-06).
-            for_job=matter_file_review.row_job(row),
+            # The job this release IS the reply of (``approve --job``, or a
+            # records lane row's own job): the broker records it as that job's
+            # reply, atomically with the send, so a later rewake or a second
+            # row cannot send a second completion (A&P, 2026-11-06; records,
+            # 2026-11-13).
+            for_job=_row_for_job(row),
         )
     except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
         matter_file_review.finish(row, matter_file_review.STATUS_FAILED, note=type(exc).__name__)

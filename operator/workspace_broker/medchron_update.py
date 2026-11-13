@@ -26,6 +26,11 @@ ADDED_COLUMNS = (
     ("work_digest", "ALTER TABLE medchron_jobs ADD COLUMN work_digest TEXT"),
     ("covered_json", "ALTER TABLE medchron_jobs ADD COLUMN covered_json TEXT"),
     ("client_keys", "ALTER TABLE medchron_jobs ADD COLUMN client_keys TEXT"),
+    # 2026-11-13: the reply-once mark (``lane_ledger.ReplyOnce``). Without it a
+    # chronology's reply rested on the bound-reply claim alone, and a reply
+    # could go out twice. NULL on an older row reads "not yet replied".
+    ("reply_sent_at", "ALTER TABLE medchron_jobs ADD COLUMN reply_sent_at TEXT"),
+    ("reply_key", "ALTER TABLE medchron_jobs ADD COLUMN reply_key TEXT"),
 )
 
 
