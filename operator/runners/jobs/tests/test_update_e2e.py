@@ -186,12 +186,10 @@ def _driver(job_dir: Path, firm: Path, pricing: Path, seat: FakeSeat, model: _Mo
 
 
 def _upload_pause(monkeypatch: pytest.MonkeyPatch) -> None:
-    from jobs import filing
     from jobs.stages import update_upload, upload
 
     monkeypatch.setattr(upload, "READBACK_PAUSE_SECONDS", 0.0)
-    monkeypatch.setattr(update_upload.time, "sleep", lambda _s: None)
-    monkeypatch.setattr(filing.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(update_upload.time, "sleep", lambda _s: None)  # the one time module every filing sleeps on
 
 
 def test_an_update_files_one_complete_document_into_the_delivered_folder(

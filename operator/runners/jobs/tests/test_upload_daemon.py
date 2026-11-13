@@ -14,7 +14,8 @@ import pytest
 import yaml
 
 from jobs.medchron import config as config_mod, job as job_mod
-from jobs import daemon as daemon_mod, filing, resume as resume_mod, wake_grace
+from jobs import daemon as daemon_mod, resume as resume_mod, wake_grace
+from jobs.proof import readback
 from jobs.daemon import BrokerError, memory_cap_mode, sticky_level
 from jobs.medchron.lane import MedchronLane
 from jobs.stages import upload
@@ -197,13 +198,13 @@ def test_the_read_back_matches_a_vendor_row_whose_name_carries_no_extension():
     356 rows on that live matter ALREADY ended with their own extension, and
     appending unconditionally moves the false negative rather than removing it.
     """
-    assert filing.full_name({"name": "Chronology 09-24-26", "ext": ".docx"}) == "Chronology 09-24-26.docx"
+    assert readback.vendor_name({"name": "Chronology 09-24-26", "ext": ".docx"}) == "Chronology 09-24-26.docx"
     # already suffixed (6 of 356 live rows): must not become `.pdf.pdf`
-    assert filing.full_name({"name": "Signed Agreement.pdf", "ext": ".pdf"}) == "Signed Agreement.pdf"
+    assert readback.vendor_name({"name": "Signed Agreement.pdf", "ext": ".pdf"}) == "Signed Agreement.pdf"
     # case-insensitively suffixed, and a row the vendor gave no extension at all
-    assert filing.full_name({"name": "Scan.PDF", "ext": ".pdf"}) == "Scan.PDF"
-    assert filing.full_name({"name": "no-extension", "ext": ""}) == "no-extension"
-    assert filing.full_name({"name": "no-extension", "ext": None}) == "no-extension"
+    assert readback.vendor_name({"name": "Scan.PDF", "ext": ".pdf"}) == "Scan.PDF"
+    assert readback.vendor_name({"name": "no-extension", "ext": ""}) == "no-extension"
+    assert readback.vendor_name({"name": "no-extension", "ext": None}) == "no-extension"
 
 
 def test_the_fake_seat_splits_a_filename_the_way_the_vendor_does(job_dir, firm_config_path, data_root):
