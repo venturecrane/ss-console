@@ -392,7 +392,7 @@ jobs:
   # `runner`.
   goldens:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -428,6 +428,21 @@ jobs:
           extra=()
           if [ "$EVENT_NAME" = "push" ]; then extra=(--require-empty); fi
           python3 bin/goldens/golden-integrity.py --base "$base" ${extra[@]+"${extra[@]}"}
+
+      # A release restarts the jobs daemon between two ticks of a job: every
+      # host matrix cell of the lanes on the one job host is restarted after
+      # each of its ticks onto the other version (merge-base to this tree, and
+      # back), each host in its own interpreter over the real broker socket,
+      # and must record what the old version's own restart records.
+      - name: Cross-version job folders
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.event.merge_group.base_sha }}
+        run: |
+          set -euo pipefail
+          base="$(git merge-base "${BASE_SHA:-HEAD~1}" HEAD)"
+          python3 bin/goldens/cross-version-hosts.py --base "$base"
 
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'
