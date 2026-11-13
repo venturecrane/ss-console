@@ -137,6 +137,22 @@ def test_classify_smoke_distinguishes_fail_from_no_verdict() -> None:
     assert classify_smoke(1, "Run ENDED EARLY at an unguarded error").cls == "tooling_error"
 
 
+def test_a_green_smoke_with_a_warning_passes_and_names_it() -> None:
+    # A vendor that did not answer is a WARNING in the summary (boot-smoke-test.sh
+    # ssh_exec_vendor): the seat is not rolled back, and the rollout line says why.
+    out = (
+        "[t] [smoke/x] warnings: 1\n"
+        "[t] [smoke/x]   WARNING: msgraph-read-app-cannot-read-staff-mailbox: the vendor did not answer, "
+        "so this is unproven, not passed: INCONCLUSIVE: Microsoft did not answer for a@b: HTTP 503\n"
+    )
+    got = classify_smoke(0, out)
+    assert got.cls == "pass"
+    assert got.detail.startswith("boot smoke green with 1 warning(s): msgraph-read-app-cannot-read-staff-mailbox")
+    assert "HTTP 503" in got.detail
+    # A warning never turns a failed smoke green.
+    assert classify_smoke(1, out + "[t] [smoke/x]   FAILED: a — command failed: c\n").cls == "fail"
+
+
 def test_classify_deploy() -> None:
     assert classify_deploy(Result(0, "", "")) == "ok"
     assert classify_deploy(Result(1, "", "Error: timeout reached waiting for health checks to pass")) == "fail"

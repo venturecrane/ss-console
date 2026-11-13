@@ -60,6 +60,7 @@ RECORDS_QUEUE_VOLUME = "/opt/data/jobs/records-queue"
 RECORDS_STATE = "/opt/data/jobs/records-state"
 REQUESTS_DB = "/opt/data/requests.db"
 SELFTEST_RESULTS = "/run/smd-selftest/results.json"
+SELFTEST_STATE = "/opt/data/selftest-state"
 SKILLS = "/opt/data/skills"
 SMD_CONFIG = "/var/lib/smd-config"
 SMOKEBALL_BUNDLE = "/opt/connectors/smokeball"
@@ -120,6 +121,7 @@ PATHS: dict[str, str] = {
     "records_state": RECORDS_STATE,
     "requests_db": REQUESTS_DB,
     "selftest_results": SELFTEST_RESULTS,
+    "selftest_state": SELFTEST_STATE,
     "skills": SKILLS,
     "smd_config": SMD_CONFIG,
     "smokeball_bundle": SMOKEBALL_BUNDLE,

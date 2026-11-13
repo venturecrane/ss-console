@@ -138,7 +138,7 @@ check |agentmail-webhook-read-key-stripped-from-agent| |/opt/hermes/.venv/bin/py
 check_vendor |agentmail-webhook-secret-matches-vendor| |/opt/hermes/.venv/bin/python3 /app/agentmail-webhook-secret-probe.py hermes-golden.fly.dev hermes|
 check |msgraph-send-credential-stripped-from-agent| |/opt/hermes/.venv/bin/python3 /app/r2-account-key-strip-probe.py hermes MSGRAPH_SEND_CLIENT_SECRET MSGRAPH_SEND_CLIENT_ID MSGRAPH_SEND_TENANT_ID|
 check_vendor |msgraph-read-app-cannot-send-on-send-as-seat| |/opt/hermes/.venv/bin/python3 /app/msgraph-read-app-cannot-send-probe.py /var/lib/smd-config/customer.yaml hermes|
-check_vendor |msgraph-read-app-cannot-read-staff-mailbox| |/opt/hermes/.venv/bin/python3 /app/msgraph-read-app-cannot-read-staff-probe.py /var/lib/smd-config/customer.yaml hermes|
+check_vendor_strict |msgraph-read-app-cannot-read-staff-mailbox| |/opt/hermes/.venv/bin/python3 /app/msgraph-read-app-cannot-read-staff-probe.py /var/lib/smd-config/customer.yaml hermes|
 check_lever |for e in /proc/[0-9]*/environ; do if tr "\000" "\n" 2>/dev/null < $e | grep -q ^SMD_IDENTIFIER_GATE_MODE=; then echo SMD_LEVER=set; exit 0; fi; done; echo SMD_LEVER=unset|
 check |jobs-uid-exists| |id -u jobs >/dev/null|
 check |jobs-daemon-ticking| |t=/run/smd-jobs/tick; [ -f $t ] && [ $(( $(date -u +%s) - $(stat -c %Y $t) )) -lt 90 ]|

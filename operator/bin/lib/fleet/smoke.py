@@ -51,8 +51,18 @@ class Check:
     detail: str
 
 
+def _smoke_warnings(output: str) -> list[str]:
+    """The summary's WARNING lines (boot-smoke-test.sh summarize), in order."""
+    return [ln.split("WARNING:", 1)[1].strip() for ln in output.splitlines() if "  WARNING:" in ln]
+
+
 def classify_smoke(rc: int, output: str) -> Check:
     if rc == 0:
+        # A warning never fails the smoke (a vendor that did not answer is one),
+        # but it is named so the rollout's detail line carries it.
+        warned = _smoke_warnings(output)
+        if warned:
+            return Check("pass", f"boot smoke green with {len(warned)} warning(s): " + "; ".join(warned[:5]))
         return Check("pass", "boot smoke green")
     failed = [ln.split("FAILED:", 1)[1].strip() for ln in output.splitlines() if "  FAILED:" in ln or "] FAILED:" in ln]
     if "FATAL: machine-state-started" in output:
@@ -206,10 +216,14 @@ def judge_selftest_row(
     hollow = _selftest_hollow(doc)
     if hollow:
         return Check("fail", f"self-test ({doc.get('run_kind')} run at {doc.get('finished_at')}) {hollow}")
+    # Warnings never fail a release (a vendor that did not answer is one), but
+    # they are named so the rollout's detail line says which check is unproven.
+    warned = [w for w in (doc.get("warned") or []) if isinstance(w, str)]
+    named = (": " + ", ".join(warned[:10])) if warned else ""
     return Check(
         "pass",
         f"self-test ({doc.get('run_kind')} run at {doc.get('finished_at')}) passed {doc.get('total')} checks"
-        f" with {doc.get('warned_count')} warning(s) on the release image",
+        f" with {doc.get('warned_count')} warning(s) on the release image{named}",
     )
 
 

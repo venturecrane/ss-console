@@ -467,6 +467,53 @@ def test_vendor_probe_failure_fails_at_boot_and_warns_hourly(seat: dict[str, Pat
     assert boot["ok"] is False and boot["warn"] is False
 
 
+VENDOR_PROBES = {
+    "agentmail-webhook-secret-matches-vendor": "agentmail-webhook-secret-probe.py",
+    "msgraph-read-app-cannot-send-on-send-as-seat": "msgraph-read-app-cannot-send-probe.py",
+    "msgraph-read-app-cannot-read-staff-mailbox": "msgraph-read-app-cannot-read-staff-probe.py",
+}
+STRICT_HOURLY = {"msgraph-read-app-cannot-read-staff-mailbox"}
+
+
+def _plant_vendor_exits(seat: dict[str, Path], code: int) -> None:
+    for probe in VENDOR_PROBES.values():
+        _write(
+            seat["root"] / "app" / probe,
+            f"print('INCONCLUSIVE: HTTP 503' if {code} == 3 else 'FAIL')\nraise SystemExit({code})\n",
+        )
+
+
+def test_the_vendor_group_on_the_real_list_hourly(seat: dict[str, Path]) -> None:
+    # 2026-11-12. Only the staff-mailbox check is strict hourly: its probe keeps
+    # Microsoft's weather on exit 3, so its exit 1 is Microsoft's YES (a breach
+    # between releases) and must page. The other two vendor checks keep their
+    # soft hourly judging. FALSIFIER: bind the staff check with check_vendor and
+    # its hourly exit 1 is a warning again.
+    _plant_vendor_exits(seat, 1)
+    doc = _once(seat, "hourly")
+    for cid in VENDOR_PROBES:
+        got = _check(doc, cid)
+        assert got["ok"] is False and got["warn"] is (cid not in STRICT_HOURLY), cid
+        assert "inconclusive_streak" not in got
+    # Exit 3 (the vendor did not answer) is a warning for every vendor check,
+    # hourly and at boot, carrying its streak.
+    _plant_vendor_exits(seat, 3)
+    for kind in ("boot", "hourly"):
+        doc = _once(seat, kind)
+        for cid in VENDOR_PROBES:
+            got = _check(doc, cid)
+            assert (got["ok"], got["warn"]) == (False, True), (kind, cid)
+            assert "HTTP 503" in got["detail"] and got["inconclusive_streak"] >= 1
+
+
+def test_the_vendor_group_on_the_real_list_at_boot(seat: dict[str, Path]) -> None:
+    # Unchanged: every vendor check's exit 1 fails a boot run.
+    _plant_vendor_exits(seat, 1)
+    doc = _once(seat, "boot")
+    for cid in VENDOR_PROBES:
+        assert (_check(doc, cid)["ok"], _check(doc, cid)["warn"]) == (False, False), cid
+
+
 # ---- runner mechanics, against a one-check list ----
 
 
