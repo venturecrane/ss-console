@@ -161,7 +161,7 @@ describe('sentry webhook replay window', () => {
   it('still refuses an unsigned body that is not a settings form', async () => {
     const request = new Request('https://smd.services/api/webhooks/sentry', {
       method: 'POST',
-      body: JSON.stringify(eventAlert([['tenant', 'scott']])),
+      body: JSON.stringify(eventAlert([['tenant', 'smd-guide']])),
     })
     const res = await POST({ request } as unknown as Parameters<typeof POST>[0])
     expect(res.status).toBe(401)
@@ -180,7 +180,7 @@ describe('sentry webhook pages every Operator error', () => {
       )
       .bind(ORG)
       .run()
-    await seedSeat(db, 'ent-smd', 'scott')
+    await seedSeat(db, 'ent-smd', 'smd-guide')
     await seedSeat(db, 'ent-firm', 'ashton-price')
     Object.assign(testEnv, { SENTRY_WEBHOOK_SECRET: SECRET, DB: db })
   })
@@ -244,43 +244,43 @@ describe('sentry webhook pages every Operator error', () => {
   })
 
   it('re-pages an issue emailed hours ago that fires again', async () => {
-    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    await post(eventAlert([['tenant', 'smd-guide']]), alertHeaders())
     await db
       .prepare(`UPDATE cost_anomaly_alerts SET notified_at = datetime('now', '-7 hours')`)
       .run()
-    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    await post(eventAlert([['tenant', 'smd-guide']]), alertHeaders())
     const all = await rows(db)
     expect(all).toHaveLength(1)
     expect(all[0].notified_at).toBeNull()
   })
 
   it('does not re-page a noisy issue inside the re-page window', async () => {
-    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    await post(eventAlert([['tenant', 'smd-guide']]), alertHeaders())
     await db.prepare(`UPDATE cost_anomaly_alerts SET notified_at = datetime('now')`).run()
-    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    await post(eventAlert([['tenant', 'smd-guide']]), alertHeaders())
     expect((await rows(db))[0].notified_at).not.toBeNull()
   })
 
   it('never re-pages an issue someone acknowledged', async () => {
-    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    await post(eventAlert([['tenant', 'smd-guide']]), alertHeaders())
     await db
       .prepare(
         `UPDATE cost_anomaly_alerts SET notified_at = datetime('now', '-7 hours'),
                 acknowledged_at = datetime('now')`
       )
       .run()
-    await post(eventAlert([['tenant', 'scott']]), alertHeaders())
+    await post(eventAlert([['tenant', 'smd-guide']]), alertHeaders())
     expect((await rows(db))[0].notified_at).not.toBeNull()
   })
 
   it('keeps two different issues on one seat on one day as two rows', async () => {
-    await post(eventAlert([['tenant', 'scott']], '1'), alertHeaders())
-    await post(eventAlert([['tenant', 'scott']], '2'), alertHeaders())
+    await post(eventAlert([['tenant', 'smd-guide']], '1'), alertHeaders())
+    await post(eventAlert([['tenant', 'smd-guide']], '2'), alertHeaders())
     expect((await rows(db)).map((r) => r.driver)).toEqual(['sentry:1', 'sentry:2'])
   })
 
   it('fails loudly when the fleet owner seat is missing', async () => {
-    await db.prepare(`DELETE FROM customer_configs WHERE customer_slug = 'scott'`).run()
+    await db.prepare(`DELETE FROM customer_configs WHERE customer_slug = 'smd-guide'`).run()
     const res = await post(eventAlert([]), alertHeaders())
     expect(res.status).toBe(500)
     expect(await rows(db)).toEqual([])
