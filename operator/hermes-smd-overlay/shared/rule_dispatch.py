@@ -59,7 +59,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from shared import wording_letter
+from shared import seat_config, wording_letter
 from shared.layout_rules import clause_truth
 from shared.output_classes import describe as describe_output_class
 from shared.output_classes import has_live_rule_reader
@@ -584,8 +584,6 @@ def _page_unread_rule(proposal_id: str, output_class: str) -> None:
         output_class,
     )
     try:
-        import os
-
         import sentry_sdk
 
         with sentry_sdk.new_scope() as scope:
@@ -594,7 +592,7 @@ def _page_unread_rule(proposal_id: str, output_class: str) -> None:
             scope.set_tag("output_class", output_class or "(none)")
             scope.set_tag(
                 "customer",
-                os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "",
+                seat_config.slug(on_missing="none", alternate="first") or "",
             )
             sentry_sdk.capture_message(UNREAD_RULE_PAGE, level="error")
     except Exception as exc:  # noqa: BLE001 - monitoring must never block the letter

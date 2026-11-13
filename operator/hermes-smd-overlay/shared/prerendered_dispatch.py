@@ -86,10 +86,10 @@ import hashlib
 import json
 import logging
 import os
-import socket
 from collections import OrderedDict
 
 from shared import (
+    broker_socket,
     casework_raises,
     cron_attribution,
     digest_reply_ref,
@@ -281,16 +281,7 @@ def _broker_request(payload: dict) -> dict:
     socket_path = os.environ.get(_SOCKET_ENV, "")
     if not socket_path:
         raise RuntimeError("broker socket unset")
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.settimeout(_APPEND_TIMEOUT_SECONDS)
-        sock.connect(socket_path)
-        sock.sendall(json.dumps(payload).encode("utf-8") + b"\n")
-        raw = b""
-        while not raw.endswith(b"\n"):
-            chunk = sock.recv(65_536)
-            if not chunk:
-                break
-            raw += chunk
+    raw = broker_socket.request(socket_path, payload, timeout=_APPEND_TIMEOUT_SECONDS)
     return json.loads(raw.decode("utf-8"))
 
 

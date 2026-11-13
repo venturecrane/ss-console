@@ -90,6 +90,7 @@ from bin.lib.decommission_inventory import (
     seat_webhook_host,
     shared_config_prefixes,
 )
+from bin.lib import seat_config
 
 # ---------------------------------------------------------------------------
 # Transports
@@ -316,9 +317,7 @@ def seat_inbox_address(customer_yaml_path: Path, customer_slug: str) -> str:
     grow a broker import path; the rule is three lines and pinned by test."""
     if customer_yaml_path.exists():
         try:
-            import yaml  # the CLI runs under `uv run --with pyyaml`
-
-            data = yaml.safe_load(customer_yaml_path.read_text(encoding="utf-8")) or {}
+            data = seat_config.load(customer_yaml_path, encoding="utf-8", on_missing="raise") or {}
         except Exception:  # noqa: BLE001 - an unreadable yaml falls back to the convention
             data = {}
         connectors = data.get("connectors") if isinstance(data, dict) else None

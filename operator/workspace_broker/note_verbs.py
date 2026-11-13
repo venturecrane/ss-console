@@ -82,6 +82,7 @@ from .msgraph_ops import MsGraphOps, MsGraphRefused
 from .note_ledger import AUDIT_TYPE, NEW_MESSAGE_REF_PREFIX, SKILL_NAME, NoteExists, NoteLedger, text_digest
 from .recipient_policy import authored_policy, normalize_address, sender_key
 from .reply_binding import RECENCY_DAYS
+from . import seat_config
 
 VERBS: tuple[str, ...] = ("note_preview", "note_record", "note_job_status")
 MAX_TEXT = 2000
@@ -144,11 +145,10 @@ def note_recipients(customer_path: Any) -> list[str] | None:
     """The smd-note skill's authored ``settings.scheduled_recipients``,
     canonical, or None when the yaml cannot be read. An unlisted or disabled
     skill authors nobody."""
-    import yaml
     from pathlib import Path
 
     try:
-        doc = yaml.safe_load(Path(str(customer_path)).read_text(encoding="utf-8")) or {}
+        doc = seat_config.load(Path(str(customer_path)), encoding="utf-8", on_missing="raise") or {}
     except Exception:  # noqa: BLE001 - unreadable config authors nobody, and says so
         return None
     for persona in (doc.get("personas") or []) if isinstance(doc, dict) else []:

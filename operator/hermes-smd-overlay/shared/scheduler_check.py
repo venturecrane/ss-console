@@ -59,7 +59,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from shared import seat_layout
+from shared import seat_config, seat_layout
 
 logger = logging.getLogger("hermes-smd-scheduler-check")
 
@@ -139,10 +139,8 @@ def _authored_cron_count(customer_yaml_path: str) -> int | None:
     caller skips the authored-vs-materialized comparison in that case.
     """
     try:
-        import yaml
-
         with open(customer_yaml_path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+            data = seat_config.parse(fh) or {}
     except Exception as exc:  # noqa: BLE001 — comparison is best-effort
         logger.warning(
             "scheduler-check: customer.yaml unreadable (%s) — authored check skipped", exc

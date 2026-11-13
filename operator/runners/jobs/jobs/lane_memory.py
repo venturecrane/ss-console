@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from . import seat_config
 
 #: Inclusive MiB bounds, identical to the console validator's.
 MIN_MIB = 256
@@ -73,7 +74,7 @@ def main(argv: list[str]) -> int:
     """Print the env words for the customer.yaml at ``argv[0]``; nothing (and
     exit 0) when it is unreadable, so the daemon starts on its defaults."""
     try:
-        doc = yaml.safe_load(Path(argv[0]).read_text())
+        doc = seat_config.load(Path(argv[0]), encoding=None, on_missing="raise")
     except (IndexError, OSError, yaml.YAMLError):
         return 0
     for word in env_words(doc):

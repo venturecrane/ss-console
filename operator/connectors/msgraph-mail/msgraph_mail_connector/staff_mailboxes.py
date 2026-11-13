@@ -24,6 +24,7 @@ from .staff_mailbox_rule import (
     parse_send_as_approvers,
     parse_staff_mailboxes,
 )
+from . import seat_config
 
 __all__ = [
     "CONFIG_BLOCK",
@@ -52,9 +53,7 @@ def load_staff_mailboxes(path: str | None = None) -> StaffMailboxes:
     except OSError:
         return StaffMailboxes()
     try:
-        import yaml
-
-        data = yaml.safe_load(raw) or {}
+        data = seat_config.parse(raw) or {}
     except Exception as exc:  # noqa: BLE001 - unparseable config refuses every read, reported
         return StaffMailboxes(error=f"customer.yaml not parseable: {exc.__class__.__name__}")
     return from_customer_yaml(data)

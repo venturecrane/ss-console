@@ -51,7 +51,7 @@ def test_a_changed_call_text_still_fails():
     row = next(
         r for r in changed["concepts"]["customer-yaml"]["rows"] if r["file"] == "operator/bin/lib/fleet/smoke.py"
     )
-    row["calls"] = [c.replace("yaml.safe_load(", "yaml.load(") for c in row["calls"]]
+    row["calls"] = [c.replace("(", "_planted(", 1) for c in row["calls"]]
     found = differences(doc, changed)
     assert any("smoke.py" in f and " calls:" in f for f in found), found
 

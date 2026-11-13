@@ -44,6 +44,7 @@ import os
 import re
 from typing import Any
 
+from shared import seat_config
 from shared.sentry_ratelimit import throttle_event
 
 logger = logging.getLogger("hermes_smd.sentry")
@@ -325,7 +326,7 @@ def init_sentry(component: str) -> bool:
         logger.warning("sentry: sentry-sdk unavailable (%s); monitoring off", exc)
         return False
 
-    slug = os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "unknown"
+    slug = seat_config.slug(on_missing="none", alternate="first") or "unknown"
     environment = os.environ.get("SMD_ENV") or os.environ.get("SENTRY_ENVIRONMENT") or "prod"
     release = os.environ.get("SMD_OVERLAY_REF") or None
     try:

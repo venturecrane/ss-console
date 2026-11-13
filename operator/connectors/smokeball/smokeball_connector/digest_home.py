@@ -22,16 +22,15 @@ import os
 from typing import Any
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
+from . import seat_config
 
 
 def digest_home_matter_id(path: str | None = None) -> str | None:
     """``digest.home_matter_id`` from the seat's live customer.yaml, or None."""
     path = path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
     try:
-        import yaml
-
         with open(path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+            data = seat_config.parse(fh) or {}
     except Exception:  # noqa: BLE001 - unreadable or unparseable config: no exemption
         return None
     block = data.get("digest") if isinstance(data, dict) else None

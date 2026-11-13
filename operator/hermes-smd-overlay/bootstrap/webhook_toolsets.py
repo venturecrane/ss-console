@@ -35,6 +35,7 @@ from typing import Any
 import yaml
 
 from bootstrap.translate import _materialize_webhook_platform, _sealed_reader_authored, _yaml_bytes
+from shared import seat_config
 from shared.webhook_read_surface import webhook_platform_toolsets
 
 
@@ -54,7 +55,7 @@ def _current(config: dict[str, Any]) -> Any:
 
 def reassert(customer_yaml: Path, profile_config: Path) -> list[str]:
     """Rewrite the profile's webhook list to the authored one; return the problems (empty is pass)."""
-    customer = yaml.safe_load(customer_yaml.read_text(encoding="utf-8")) or {}
+    customer = seat_config.load(customer_yaml, encoding="utf-8", on_missing="raise") or {}
     authored = authored_webhook_toolsets(customer)
     config = yaml.safe_load(profile_config.read_text(encoding="utf-8")) or {}
     current = _current(config)

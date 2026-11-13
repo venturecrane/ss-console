@@ -29,6 +29,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
+from . import seat_config
 
 DEFAULT_CUSTOMER_YAML = "/var/lib/smd-config/customer.yaml"
 CUSTOMER_YAML_ENV = "SMD_CUSTOMER_YAML_PATH"
@@ -88,9 +89,7 @@ def load_library_config(path: str | None = None) -> LibraryConfig:
     except OSError as exc:
         return LibraryConfig(authored=False, source=f"customer.yaml not readable at {path}: {exc.__class__.__name__}")
     try:
-        import yaml
-
-        data = yaml.safe_load(raw) or {}
+        data = seat_config.parse(raw) or {}
     except Exception as exc:  # noqa: BLE001 - an unparseable config is "not authored", reported
         return LibraryConfig(authored=False, source=f"customer.yaml not parseable: {exc.__class__.__name__}")
     block = ((data.get("self_initiation") or {}).get("document_library")) if isinstance(data, dict) else None

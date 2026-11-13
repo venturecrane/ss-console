@@ -55,6 +55,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from shared import seat_config
 from shared.ids import iso_utc
 
 logger = logging.getLogger(__name__)
@@ -117,7 +118,7 @@ def db_path() -> str:
 
 
 def _customer_slug() -> str:
-    return os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "_machine"
+    return seat_config.slug(on_missing="none", alternate="first") or "_machine"
 
 
 def _connect(path: str | None) -> sqlite3.Connection:

@@ -51,6 +51,7 @@ from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effectiv
 from . import medchron_credits
 from .medchron_update import ADDED_COLUMNS, client_keys, update_block
 from .medchron_coverage import parse_covered, parse_why, union_coverage, validate_covered
+from . import seat_config
 
 # Re-exported: `validate_covered` moved to medchron_coverage at ss#2834 when this
 # module crossed the size ceiling, and the runner, the verbs and the tests all
@@ -365,9 +366,7 @@ def _medchron_skill_settings(path: str | Path) -> dict[str, Any] | None:
     absent or disabled. One walk, so the allowance and the cycle keys can never
     be read off different skills."""
     try:
-        import yaml
-
-        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        doc = seat_config.load(Path(path), encoding="utf-8", on_missing="raise") or {}
     except Exception:  # noqa: BLE001 - an unreadable seat config is "nothing authored"
         return None
     for persona in doc.get("personas") or []:
@@ -392,9 +391,7 @@ def admins_from_customer_yaml(path: str | Path) -> tuple[str, ...] | None:
     different problems for the firm to fix.
     """
     try:
-        import yaml
-
-        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        doc = seat_config.load(Path(path), encoding="utf-8", on_missing="raise") or {}
     except Exception:  # noqa: BLE001 - an unreadable seat config is "cannot evaluate", never "permitted"
         return None
     scope = doc.get("scope")
@@ -426,9 +423,7 @@ def allowance_from_customer_yaml(path: str | Path) -> int | None:
     is absent, disabled, or carries no such key (fail closed: no allowance, no
     submission)."""
     try:
-        import yaml
-
-        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        doc = seat_config.load(Path(path), encoding="utf-8", on_missing="raise") or {}
     except Exception:  # noqa: BLE001 - an unreadable seat config is "no allowance"
         return None
     for persona in doc.get("personas") or []:

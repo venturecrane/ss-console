@@ -154,3 +154,29 @@ modules:
     source: operator/connectors/_sdk/operator_connector_sdk/library/roster.py
     copies:
       - operator/runners/jobs/jobs/attorneys/roster.py
+
+  # The seat's slug and customer.yaml reader (wave 2, B1): which seat this is,
+  # and the seat's YAML parsed, read the one way in every process. A caller
+  # names what a missing value does (`on_missing`, no default); every call site
+  # is held to its row in operator/contracts/seat-config-callers.json. No skill
+  # folder carries it: a pre_run.py is staged alone into the profile's scripts/
+  # dir, so a sibling module is not importable there by name.
+  seat_config:
+    source: operator/hermes-smd-overlay/shared/seat_config.py
+    copies:
+      - operator/workspace_broker/seat_config.py
+      - operator/runners/jobs/jobs/seat_config.py
+      - operator/connectors/smokeball/smokeball_connector/seat_config.py
+      - operator/connectors/msgraph-mail/msgraph_mail_connector/seat_config.py
+      - operator/bin/lib/seat_config.py
+      - operator/adapter/seat_config.py
+      - operator/rehearsal/seat_config.py
+
+  # The broker socket client (wave 2, B1): one newline-framed JSON request, one
+  # reply, UTF-8 on the wire. Every client of the broker sends through it.
+  broker_socket:
+    source: operator/hermes-smd-overlay/shared/broker_socket.py
+    copies:
+      - operator/workspace_broker/broker_socket.py
+      - operator/runners/jobs/jobs/broker_socket.py
+      - operator/connectors/smokeball/smokeball_connector/broker_socket.py

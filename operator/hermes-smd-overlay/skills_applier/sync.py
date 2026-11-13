@@ -53,6 +53,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from shared import seat_config
+
 logger = logging.getLogger("skills_applier.sync")
 
 _STAGE_PREFIX = ".smd-sync-"
@@ -240,13 +242,12 @@ def refresh_profiles(hermes_home: str | Path, customer_yaml: str | Path) -> list
     would land it, staged pre_run copies included. One persona failing is
     logged and does not stop the rest.
     """
-    import yaml
 
     from bootstrap import translate
 
     home = Path(hermes_home)
     skills_dir = home / "skills"
-    customer = yaml.safe_load(Path(customer_yaml).read_text(encoding="utf-8")) or {}
+    customer = seat_config.load(Path(customer_yaml), encoding="utf-8", on_missing="raise") or {}
     personas, unrunnable = translate._drop_unrunnable(customer.get("personas") or [], skills_dir)
     spec_block = translate._spec_pointer_block()
     refreshed: list[str] = []

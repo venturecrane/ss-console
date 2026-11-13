@@ -56,6 +56,7 @@ from typing import Optional
 import yaml
 
 from bin.lib import console_d1, cron_slots, seam_pull, seat_dirs
+from bin.lib import seat_config
 
 EXIT_CLEAN = 0
 EXIT_FINDING = 1
@@ -121,7 +122,7 @@ class SeatWakeReport:
 def load_customer_yaml(slug: str) -> Optional[dict]:
     path = customers_dir() / slug / "customer.yaml"
     try:
-        parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
+        parsed = seat_config.load(path, encoding="utf-8", on_missing="raise")
     except (OSError, yaml.YAMLError):
         return None
     return parsed if isinstance(parsed, dict) else None

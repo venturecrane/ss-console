@@ -299,7 +299,9 @@ def test_socket_creation_failure_is_counted(machine_home, broker, as_gateway, mo
         raise OSError(24, "Too many open files")
 
     c = _client(broker, _gap(machine_home))
-    monkeypatch.setattr(audit_client.socket, "socket", no_fds)
+    from shared import broker_socket
+
+    monkeypatch.setattr(broker_socket.socket, "socket", no_fds)
     with pytest.raises(AuditWriteError, match="Too many open files"):
         c.execute("INSERT", *_params(1))
     assert _tally(machine_home) == 1

@@ -2,12 +2,21 @@
 
 The FILE rules are the sprawl census's (scripts/sprawl/concepts.ts), restated
 here so the capture runs in the bare Python CI job; tests/
-seat-config-callers.test.ts holds the two lists equal. Within a file, a SITE is
+seat-config-callers.test.ts holds the two lists in step (a file whose every site
+now calls a shared reader stays here after the census drops it). Within a file, a SITE is
 the smallest callable unit around the call: a module-level function, or a
 method of a module-level class (a nested function is reached through the
 function that holds it). Code at module level is an `inline` site, run by
 importing the module (or running it as a script when it sits under
 `if __name__ == "__main__":`).
+
+A site migrated to the one shared reader (wave 2, B1) is the same site: a call
+to `seat_config.load(` / `seat_config.parse(` is a customer.yaml parse, a call
+to a `broker_socket` function that opens the socket is a broker socket client
+(the frame encoder and the reply reader are helpers, as json.dumps was), and a call to
+`seat_config.slug(` is a slug read. Only the call text in its row changes; what
+it does is held to the row it had. The readers' own sources
+(READER_MODULES in the manifest) are the readers, not callers, and are not sites.
 """
 
 from __future__ import annotations
@@ -31,6 +40,14 @@ MANIFEST = "operator/contracts/skill-shared-modules.yaml"
 SELF_DIR = "operator/bin/lib/seat_callers/"
 
 YAML_LOAD = re.compile(r"\b(yaml\.(safe_)?load|safe_load)\(")
+#: The shared readers (operator/contracts/skill-shared-modules.yaml modules) and the calls into them.
+READER_MODULES = ("seat_config", "broker_socket")
+READER_YAML = re.compile(r"\bseat_config\.(load|parse)\(")
+#: The broker_socket functions that open the socket: a call to one is a client site (encode and
+#: read_reply are helpers a site uses around its own connect, as a site used json.dumps before).
+SOCKET_TRANSPORT = ("connect", "request", "send_frame", "unix_stream")
+READER_SOCKET = re.compile(r"\bbroker_socket\.(" + "|".join(SOCKET_TRANSPORT) + r")\(")
+READER_SLUG = re.compile(r"\bseat_config\.slug\(")
 NAMES_CUSTOMER_YAML = re.compile(r"customer[._]ya?ml", re.I)
 SLUG = SLUG_VAR
 
@@ -53,9 +70,11 @@ def _stamped(repo: Path) -> set[str]:
     except (OSError, yaml.YAMLError):
         return set()
     out: set[str] = set()
-    for body in ((doc or {}).get("modules") or {}).values():
+    for name, body in ((doc or {}).get("modules") or {}).items():
         if not isinstance(body, dict):
             continue
+        if name in READER_MODULES and isinstance(body.get("source"), str):
+            out.add(body["source"])
         if isinstance(body.get("copy_as"), str) and isinstance(body.get("skills"), list):
             out |= {f"operator/skills/{s}/{body['copy_as']}" for s in body["skills"] if isinstance(s, str)}
         out |= {p for p in body.get("copies") or [] if isinstance(p, str)}
@@ -96,14 +115,33 @@ def _code(text: str) -> str:
 def file_matches(concept: str, text: str) -> bool:
     code = _code(text)
     if concept == "customer-yaml":
+        if READER_YAML.search(code):
+            return True
         return bool(YAML_LOAD.search(code)) and bool(NAMES_CUSTOMER_YAML.search(code))
     if concept == "broker-socket":
+        if READER_SOCKET.search(code):
+            return True
         lines = code.split("\n")
         return any("AF_UNIX" in line for line in lines) and any(".connect(" in line for line in lines)
+    if READER_SLUG.search(code):
+        return True
     return SLUG in code and ("environ" in code or "getenv" in code)
 
 
+def _reader_call(node: ast.Call, module: str, names: tuple[str, ...] | None = None) -> bool:
+    """``<module>.<name>(...)``: a call into one of the shared readers."""
+    f = node.func
+    return (
+        isinstance(f, ast.Attribute)
+        and isinstance(f.value, ast.Name)
+        and f.value.id == module
+        and (names is None or f.attr in names)
+    )
+
+
 def _is_yaml_load(node: ast.Call) -> bool:
+    if _reader_call(node, "seat_config", ("load", "parse")):
+        return True
     f = node.func
     if isinstance(f, ast.Attribute) and f.attr in ("load", "safe_load"):
         return isinstance(f.value, ast.Name) and "yaml" in f.value.id.lower()
@@ -111,6 +149,8 @@ def _is_yaml_load(node: ast.Call) -> bool:
 
 
 def _is_connect(node: ast.Call) -> bool:
+    if _reader_call(node, "broker_socket", SOCKET_TRANSPORT):
+        return True
     return isinstance(node.func, ast.Attribute) and node.func.attr == "connect"
 
 
@@ -216,6 +256,8 @@ def _hits(concept: str, unit: ast.AST, consts: dict[str, object], text: str) -> 
         if concept == "customer-yaml" and isinstance(node, ast.Call) and _is_yaml_load(node):
             found.append(node)
         elif concept == "broker-socket" and isinstance(node, ast.Call) and _is_connect(node):
+            found.append(node)
+        elif concept == "slug" and isinstance(node, ast.Call) and _reader_call(node, "seat_config", ("slug",)):
             found.append(node)
         elif concept == "slug":
             key = _env_key(node)

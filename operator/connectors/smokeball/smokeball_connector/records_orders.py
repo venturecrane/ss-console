@@ -42,6 +42,7 @@ from typing import Any
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
 from .records_vendor import MAX_UPLOAD_BYTES, RecordsVendorApiError, scrub
 from .records_patient import LANGUAGES, OrderRefused, read_matter_and_patient, require_matter_id
+from . import seat_config
 
 RECORD_TYPES = ("Medical", "Billing", "Radiology Image", "Radiology Record", "EHR", "Other")
 #: The firm's observed practice on its own portal orders (67 of 67 confirmation
@@ -165,10 +166,8 @@ def authored_custodian_fee(path: str | None = None) -> Any:
     (or the config cannot be read: "cannot tell" never becomes a figure)."""
     path = path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
     try:
-        import yaml
-
         with open(path, encoding="utf-8") as fh:
-            cfg = yaml.safe_load(fh) or {}
+            cfg = seat_config.parse(fh) or {}
     except Exception:  # noqa: BLE001 - unreadable config means nothing authored
         return None
     block = cfg.get(FEE_CONFIG_BLOCK) if isinstance(cfg, dict) else None
@@ -180,10 +179,8 @@ def authored_authorization(path: str | None = None) -> str:
     and what anything unreadable or unrecognized reads as)."""
     path = path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
     try:
-        import yaml
-
         with open(path, encoding="utf-8") as fh:
-            cfg = yaml.safe_load(fh) or {}
+            cfg = seat_config.parse(fh) or {}
     except Exception:  # noqa: BLE001 - unreadable config: the long-standing upload mode
         return "upload"
     block = cfg.get(FEE_CONFIG_BLOCK) if isinstance(cfg, dict) else None

@@ -38,6 +38,7 @@ import yaml
 from . import ids
 from .d1 import FleetStore
 from .runner import Runner, ToolingError
+from .. import seat_config
 
 SMOKE_TIMEOUT_S = 45 * 60
 READBACK_WINDOW_S = 6 * 60
@@ -235,7 +236,7 @@ def selftest_note(row: dict[str, Any] | None, since: datetime, release: dict[str
 
 def authored_guest(customer_yaml: Path) -> tuple[str, int, int]:
     """(cpu_kind, cpus, memory_mb) the seat authors, by lib/machine-size.sh's rule."""
-    doc = yaml.safe_load(customer_yaml.read_text(encoding="utf-8")) or {}
+    doc = seat_config.load(customer_yaml, encoding="utf-8", on_missing="raise") or {}
     machine = doc.get("machine") or {}
     size, mem = str(machine.get("size") or ""), int(machine.get("memory_mb") or 0)
     found = re.fullmatch(r"(shared-cpu|performance)-(\d+)x", size)

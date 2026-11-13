@@ -29,7 +29,6 @@ import atexit
 import json
 import logging
 import os
-import socket
 import threading
 import time
 from collections import deque
@@ -38,6 +37,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from shared import broker_socket
 from shared.audit_contract import COLUMNS
 from shared.audit_failure_counter import record_audit_write_failure
 from shared.gateway_identity import _env_says_gateway
@@ -502,10 +502,10 @@ class BrokerAuditClient:
 
     def _send(self, payload: dict[str, Any]) -> dict[str, Any]:
         """One request. :class:`_BrokerUnreachable` when nothing was delivered."""
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+        encoded = broker_socket.encode(payload, sort_keys=True, separators=(",", ":"))
         action_type = _action_type_of(payload)
         try:
-            client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            client = broker_socket.unix_stream(timeout=None)
         except OSError as exc:
             raise AuditWriteError(
                 f"audit broker socket error: {exc}", reason="broker_io", action_type=action_type
@@ -522,12 +522,7 @@ class BrokerAuditClient:
                 ) from exc
             try:
                 client.sendall(encoded)
-                buf = bytearray()
-                while not buf.endswith(b"\n"):
-                    chunk = client.recv(65_536)
-                    if not chunk:
-                        break
-                    buf.extend(chunk)
+                buf = broker_socket.read_reply(client)
             except OSError as exc:
                 raise AuditWriteError(
                     f"audit broker socket error: {exc}", reason="broker_io", action_type=action_type

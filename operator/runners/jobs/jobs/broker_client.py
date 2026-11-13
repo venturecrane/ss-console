@@ -5,8 +5,8 @@ request. Split out of ``daemon.py`` so the chronology daemon and the demand lane
 from __future__ import annotations
 
 import json
-import socket
 from typing import Any
+from . import broker_socket
 
 
 class BrokerError(RuntimeError):
@@ -20,18 +20,9 @@ class BrokerClient:
         self.socket_path, self.timeout = socket_path, timeout
 
     def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+        encoded = broker_socket.encode(payload, sort_keys=True, separators=(",", ":"))
         try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as c:
-                c.settimeout(self.timeout)
-                c.connect(self.socket_path)
-                c.sendall(encoded)
-                buf = bytearray()
-                while not buf.endswith(b"\n"):
-                    chunk = c.recv(65_536)
-                    if not chunk:
-                        break
-                    buf.extend(chunk)
+            buf = broker_socket.send_frame(self.socket_path, encoded, timeout=self.timeout)
         except OSError as exc:
             raise BrokerError(f"broker socket: {exc}") from exc
         try:

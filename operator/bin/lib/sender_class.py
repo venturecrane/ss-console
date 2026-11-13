@@ -12,9 +12,9 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 from workspace_broker.recipient_policy import sender_key as _sender_key
+from bin.lib import seat_config
 
 CUSTOMERS_DIR = Path(__file__).resolve().parents[2] / "customers"
 
@@ -56,7 +56,7 @@ def load_roster(slug: str, customers_dir: Path = CUSTOMERS_DIR) -> dict[str, str
     path = customers_dir / slug / "customer.yaml"
     if not path.is_file():
         return {}
-    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    doc = seat_config.load(path, encoding="utf-8", on_missing="raise") or {}
     roster: dict[str, str] = {}
     for user in doc.get("users") or []:
         email = (user or {}).get("email") if isinstance(user, dict) else None

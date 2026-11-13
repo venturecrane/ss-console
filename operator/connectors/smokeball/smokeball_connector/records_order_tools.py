@@ -28,6 +28,7 @@ from .records_vendor import (
 from .records_orders import prepare
 from .records_patient import require_matter_id
 from .records_place import place
+from . import seat_config
 
 
 def _sb() -> Any:
@@ -44,12 +45,11 @@ def _today() -> date:
     """Today on the firm's clock (``business_hours.timezone``), else the host's.
     A records range ending "today" must not end tomorrow in UTC."""
     try:
-        import yaml
         from zoneinfo import ZoneInfo
 
         path = os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
         with open(path, encoding="utf-8") as fh:
-            zone = ((yaml.safe_load(fh) or {}).get("business_hours") or {}).get("timezone")
+            zone = ((seat_config.parse(fh) or {}).get("business_hours") or {}).get("timezone")
         if not isinstance(zone, str) or not zone:
             return date.today()
         return datetime.now(ZoneInfo(zone)).date()

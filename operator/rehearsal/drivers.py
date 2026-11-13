@@ -37,10 +37,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import yaml
 
 from .scope import SEAT_TOKEN
 from .scoring import LegObservation
+from . import seat_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CUSTOMERS = REPO_ROOT / "operator" / "customers"
@@ -120,7 +120,7 @@ def load_seat_config(slug: str) -> dict:
     path = CUSTOMERS / slug / "customer.yaml"
     if not path.is_file():
         raise FileNotFoundError(f"no customer.yaml at {path}")
-    return yaml.safe_load(path.read_text()) or {}
+    return seat_config.load(path, encoding=None, on_missing="raise") or {}
 
 
 def seat_inbox(config: dict) -> str | None:

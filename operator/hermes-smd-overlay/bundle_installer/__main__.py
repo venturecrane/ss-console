@@ -23,6 +23,7 @@ from typing import Any
 
 from bundle_installer.installer import DEFAULT_HOME, Decision, decide
 from bundle_installer.manifest import SPECS
+from shared import seat_config
 
 logger = logging.getLogger("bundle_installer")
 
@@ -87,7 +88,7 @@ def main(
         decision = decide(
             s3_client=client,
             bucket=os.environ.get("R2_BUCKET_CONFIG", ""),
-            slug=os.environ.get("CUSTOMER_SLUG", ""),
+            slug=seat_config.slug(on_missing="empty"),
             spec=spec,
             home=os.environ.get("HERMES_HOME") or DEFAULT_HOME,
             **decide_kwargs,

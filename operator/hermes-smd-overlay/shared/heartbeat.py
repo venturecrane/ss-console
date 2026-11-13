@@ -49,7 +49,7 @@ from datetime import datetime, timedelta, timezone
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
-from shared import job_lanes
+from shared import job_lanes, seat_config
 
 logger = logging.getLogger("hermes-smd-heartbeat")
 
@@ -2710,7 +2710,7 @@ def emitter_from_env(audit_db_path_fn) -> HeartbeatEmitter:
     except ValueError:
         loop_debounce = 3
     return HeartbeatEmitter(
-        slug=os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG"),
+        slug=seat_config.slug(on_missing="none", alternate="first"),
         key=os.environ.get("MACHINE_HEARTBEAT_KEY"),
         ingest_url=os.environ.get("HEARTBEAT_INGEST_URL", DEFAULT_INGEST_URL),
         healthchecks_url=os.environ.get("HEALTHCHECKS_PING_URL"),

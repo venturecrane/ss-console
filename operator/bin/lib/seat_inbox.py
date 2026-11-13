@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 from typing import Callable, Optional
+from bin.lib import seat_config
 
 
 def authored_inbox(customers_dir: str, slug: str) -> Optional[str]:
@@ -23,10 +24,8 @@ def authored_inbox(customers_dir: str, slug: str) -> Optional[str]:
     is reported as unowned, never silently skipped.
     """
     try:
-        import yaml  # deferred: only this lookup needs it
-
         with open(os.path.join(customers_dir, slug, "customer.yaml"), encoding="utf-8") as fh:
-            config = yaml.safe_load(fh)
+            config = seat_config.parse(fh)
     except Exception:  # noqa: BLE001 - unreadable config falls back to the convention
         return None
     connectors = config.get("connectors") if isinstance(config, dict) else None

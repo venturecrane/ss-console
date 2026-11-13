@@ -30,9 +30,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-import socket
 import time
 from typing import Any
+
+from shared import broker_socket
 
 logger = logging.getLogger(__name__)
 
@@ -58,16 +59,9 @@ def _ask_broker(socket_path: str) -> bool | None:
     ``AuditWriteError``, whose constructor tallies a lost audit row, and a health
     probe that fails has lost nothing."""
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.settimeout(_TIMEOUT_SECONDS)
-            client.connect(socket_path)
-            client.sendall(b'{"action":"health"}\n')
-            buf = bytearray()
-            while not buf.endswith(b"\n"):
-                chunk = client.recv(65_536)
-                if not chunk:
-                    break
-                buf.extend(chunk)
+        buf = broker_socket.send_frame(
+            socket_path, b'{"action":"health"}\n', timeout=_TIMEOUT_SECONDS
+        )
         data: Any = json.loads(buf)
     except (OSError, ValueError):
         return None

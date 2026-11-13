@@ -24,6 +24,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
+from . import seat_config
 
 _GATE_PATH = "/webhooks/smokeball"
 
@@ -32,10 +33,8 @@ def seat_webhook_url(path: str | None = None) -> str | None:
     """The seat's authored Smokeball webhook gate URL, or None."""
     path = path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
     try:
-        import yaml
-
         with open(path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+            data = seat_config.parse(fh) or {}
     except Exception:  # noqa: BLE001 - unreadable or unparseable config: no target
         return None
     connectors = data.get("connectors") if isinstance(data, dict) else None

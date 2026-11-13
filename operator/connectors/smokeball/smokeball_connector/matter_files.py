@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Any
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML, _listing, _walk_folder_paths
+from . import seat_config
 
 CONFIG_BLOCK = "matter_file_delivery"
 
@@ -107,10 +108,8 @@ def load_recipients(path: str | None = None) -> tuple[str, ...]:
     ``@domain``; the overlay and the broker apply the same list as the fence."""
     path = path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
     try:
-        import yaml
-
         with open(path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+            data = seat_config.parse(fh) or {}
     except Exception:  # noqa: BLE001 - an unreadable config authors nothing
         return ()
     block = data.get(CONFIG_BLOCK) if isinstance(data, dict) else None

@@ -19,11 +19,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 from typing import Any
 
-from shared import sealed_reader
+from shared import sealed_reader, seat_config
 from shared.tool_registration import register_wrapped_tool
 
 logger = logging.getLogger(__name__)
@@ -92,7 +91,7 @@ def _breaker() -> Any:
             from shared.cost_breaker import build_breaker
             from shared.customer_config import CustomerConfig
 
-            slug = os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG")
+            slug = seat_config.slug(on_missing="none", alternate="first")
             if not slug:
                 logger.error("hermes-smd-research: no customer slug; cost breaker NOT built")
                 return None

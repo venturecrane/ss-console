@@ -58,6 +58,7 @@ from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon
 from .drafting_lane import DraftingLane
 from .proof import holds as proof_holds, watch as proof_watch
 from . import seat_layout
+from . import seat_config
 
 logger = logging.getLogger("jobs.records")
 
@@ -198,11 +199,10 @@ def review_by_smd(doc: Any, released_so_far: int) -> bool:
 
 
 def _seat_doc() -> Any:
-    import yaml
 
     try:
         with open(os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML, encoding="utf-8") as fh:
-            return yaml.safe_load(fh)
+            return seat_config.parse(fh)
     except Exception:  # noqa: BLE001 - an unreadable config means SMD reviews
         return None
 

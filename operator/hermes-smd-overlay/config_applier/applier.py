@@ -32,7 +32,7 @@ import yaml
 
 from bootstrap.validate import validate_customer_yaml
 from config_applier import safety
-from shared import seat_layout
+from shared import seat_config, seat_layout
 from shared.audit_contract import INSERT_SQL, agent_event_params
 from shared.ids import sha256
 
@@ -379,7 +379,7 @@ def _load_current(path: Path) -> dict[str, Any] | None:
     try:
         if not path.exists():
             return {}
-        data = yaml.safe_load(path.read_text())
+        data = seat_config.load(path, encoding=None, on_missing="raise")
     except (OSError, yaml.YAMLError, UnicodeDecodeError) as exc:
         logger.warning("config_applier: current config at %s unreadable (%s)", path, exc)
         return None
@@ -401,7 +401,7 @@ def _validate_and_parse(new_bytes: bytes) -> tuple[dict[str, Any] | None, ApplyR
     if errors:
         return None, ApplyResult(outcome=ApplyOutcome.REJECTED, reasons=tuple(errors))
     try:
-        cfg = yaml.safe_load(new_bytes.decode("utf-8"))
+        cfg = seat_config.parse(new_bytes.decode("utf-8"))
     except (UnicodeDecodeError, yaml.YAMLError) as exc:  # pragma: no cover - validate caught it
         return None, ApplyResult(
             outcome=ApplyOutcome.REJECTED, reasons=(f"post-validate parse failed: {exc}",)

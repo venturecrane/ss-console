@@ -32,7 +32,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import yaml
 
 # Re-exported for the callers and tests that predate the msgraph wave, when the
 # counterparty fence lived here. Its home is ``recipient_policy`` now — an
@@ -45,6 +44,7 @@ from .recipient_policy import (
     normalize_address,
     sender_key,
 )
+from . import seat_config
 
 #: Env var carrying the SEND-capable, inbox-scoped AgentMail key. Deliberately a
 #: DIFFERENT name from the gateway's ``AGENTMAIL_API_KEY``: the two keys are not
@@ -89,7 +89,7 @@ def seat_inbox_address(customer_path: Path, customer_slug: str) -> str:
     sending from whichever inbox the account listed first; here the identity is
     not something a caller can express, so that class cannot recur.
     """
-    data = yaml.safe_load(customer_path.read_text(encoding="utf-8")) or {}
+    data = seat_config.load(customer_path, encoding="utf-8", on_missing="raise") or {}
     connectors = data.get("connectors") or {}
     email = connectors.get("Email") if isinstance(connectors, dict) else None
     if isinstance(email, dict):

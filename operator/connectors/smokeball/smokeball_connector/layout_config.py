@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
+from . import seat_config
 
 CONFIG_BLOCK = "smokeball_layouts"
 NEGOTIATION_KEY = "settlement_negotiations_design"
@@ -56,9 +57,7 @@ def load_layout_config(path: str | None = None) -> LayoutConfig:
     except OSError:
         return LayoutConfig()
     try:
-        import yaml
-
-        data = yaml.safe_load(raw) or {}
+        data = seat_config.parse(raw) or {}
     except Exception as exc:  # noqa: BLE001 - an unparseable config is reported, never raised
         return LayoutConfig(error=f"customer.yaml not parseable: {exc.__class__.__name__}")
     return parse_layout_config(data.get(CONFIG_BLOCK) if isinstance(data, dict) else None)
