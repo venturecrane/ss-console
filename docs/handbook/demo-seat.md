@@ -29,8 +29,8 @@ sources:
 
 ## What it is
 
-The demo seat is a real Operator, running the same image, skills and gates a paying firm's
-seat runs, set up for a firm that does not exist: **Brannock & Ferreira LLP**, a fictional
+The demo seat is a real Operator, running the same image and gates a paying firm's seat runs,
+with the skills a demo needs and no job lanes, set up for a firm that does not exist: **Brannock & Ferreira LLP**, a fictional
 California personal-injury firm. Its matters live in SMD's own Smokeball staging tenant and
 every person, provider and number in them is invented. A sales representative emails it in
 front of a prospect, and every reply comes from the product itself. Nothing is staged and
@@ -115,21 +115,26 @@ Notes for each act:
 
 ## What not to show
 
-Show only what is in production, as listed in the product guide's "Built Versus Planned"
-(`operator/skills/product-guide/references/built-versus-planned.md`). In particular:
+Demonstrate what this seat runs. Describe every other capability as something SMD sets up for
+the firm; when a prospect asks what a client has today, use the labels in the product guide's
+`operator/skills/product-guide/references/built-versus-planned.md`. In particular:
 
-- **Never send to an outside party live, and never imply it can.** "Acts on its own for sends
-  to outside parties" is built but written on no seat. On this seat every outside send is a
-  draft.
+- **Never send to an outside party live in a demo.** On this seat every outside send is a
+  draft. Sending on its own to outside parties is a capability SMD sets up per client;
+  describe it, do not demonstrate it.
 - **Do not ask it to build a chronology, draft a demand or run any job.** Those are queued
   jobs that run for a long time and cost money; none is set up on this seat, and the
   request would wait unanswered while SMD is paged.
 - **Do not demonstrate chat, voice notes, the AI assistant connector, the client level dial,
-  Google Workspace, code execution or anything listed as built but not in client use, or as
-  specified.** If a prospect asks, use the guide's words: built but not yet in client use, or
-  specified and not built.
-- **Never say the Operator learns a firm's voice from its emails.** That approach was removed.
-  Voice is a written specification the firm approves.
+  Google Workspace or code execution.** This seat does not have them switched on. If a
+  prospect asks, describe the capability, and if asked what a client has today, use the
+  guide's labels: running for a client today, built and set up per client, or configured per
+  engagement.
+- **Describe voice the way the guide does.** The voice is written per kind of document from
+  the firm's own examples (past letters can be the source), it sharpens as the firm's people
+  correct drafts, and the firm's administrators confirm which corrections become standing
+  rules. Never say it picks up a voice on its own from sent mail; that mechanism was replaced
+  on 2026-11-07.
 - **Never quote a time.** No turnaround, no response time, no implementation length.
 - **Never use a real client's name, matter or result.** The seat holds none, and the demo
   never refers to one.

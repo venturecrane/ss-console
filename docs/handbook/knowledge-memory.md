@@ -35,9 +35,9 @@ The Operator's knowledge of a client composes three lanes into one human-readabl
 | --- | --- | --- | --- |
 | **Authored** | `customer.yaml`, Captain-set | How to work with each person; context; guardrails | Shipped - the seed |
 | **Learned** | Overlay `hermes-smd-peer-memory` plugin, keyed per peer, stored on the seat's volume | How each person actually works, observed over sessions | Shipped |
-| **Inferred** | `persona_observations` / Honcho | Unstated patterns from history | Deferred (Phase 2) |
+| **Inferred** | `persona_observations` / Honcho | Unstated patterns from history | Configured per engagement (Phase 2) |
 
-The operator **reads all three**. It **cannot write the authored lane and cannot raise its own ceiling** (ADR 0048 §2c; see `/admin/playbook/autonomy-governance`). Relationship state shapes help, style, and anticipation; it never self-grants capability or autonomy. A good employee learns your coffee order on their own; they do not start wiring money because they feel trusted (ADR 0048 §2c).
+The operator **reads the authored and learned lanes**; inferred conclusions are mirrored for review and never read at runtime (below). It **cannot write the authored lane and cannot raise its own ceiling** (ADR 0048 §2c; see `/admin/playbook/autonomy-governance`). Relationship state shapes help, style, and anticipation; it never self-grants capability or autonomy. A good employee learns your coffee order on their own; they do not start wiring money because they feel trusted (ADR 0048 §2c).
 
 ## The authored lane: customer.yaml is the guide
 
@@ -72,7 +72,7 @@ A note on what the learned lane is **not**: an earlier design modeled it as a dr
 
 The inferred lane would surface unstated patterns the agent infers from history. It is built on **Honcho**, the memory-inference engine Hermes ships first-class, which builds a per-peer model from session messages via LLM-driven reasoning loops (ADR 0016).
 
-Honcho is **not running today.** ADR 0016's 2026-05-30 revision deferred the inference engine to Phase 2 behind the owned-memory file; the in-container version was never booted, and a memory export on the live customer-zero Machine returns an empty set (ADR 0048 §Context; ADR 0016 Revision). So the automatic "infer unstated preferences from conversation" capability does not exist yet, and standing it up is a separate, heavy, per-Machine infrastructure effort (it requires a pgvector Postgres, a deriver worker, and a continuous-LLM-spend cost line that has to be priced).
+Honcho is **not running today.** ADR 0016's 2026-05-30 revision deferred the inference engine to Phase 2 behind the owned-memory file; the in-container version was never booted, and a memory export on the live customer-zero Machine returns an empty set (ADR 0048 §Context; ADR 0016 Revision). So inferring unstated preferences from conversation is configured per engagement: SMD stands it up for a seat when an engagement calls for it, as a separate, heavy, per-Machine infrastructure effort (it requires a pgvector Postgres, a deriver worker, and a continuous-LLM-spend cost line that has to be priced).
 
 When Honcho does land, the disposition is fixed: **mirror, don't gate.** Honcho runs from a pinned upstream image, byte-for-byte unmodified (preserving the AGPL safe harbor and zero rebase cost), and an overlay mirror plugin (the first one built, hermes-smd-memory-mirror, was removed 2026-11-10 unused and is rebuilt with Phase 2) copies its conclusions to the seat's Machine-local `persona_observations` store with full provenance and an `evidence_status` flag. The evidence flag is the defense against Honcho's documented hallucination failure mode (issue #626, where one mention of a dog produces "the user has a dog"): a fabricated conclusion has no valid source-message provenance and surfaces in a prominent Captain review queue before it can shape a draft. Captain dismissal physically deletes the conclusion from Honcho (working around Honcho's temporal-awareness bug, #658, by removal rather than contradiction), and a TTL archival job caps unbounded growth (ADR 0016).
 

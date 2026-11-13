@@ -6,7 +6,7 @@
 
 ## In one paragraph
 
-Every business has a layer of work that falls between its people and its software: the handoff, the follow-up, the reading nobody has time for. Today a person holds it together by hand. The Operator is a worker we build for one business and run for it. It works inside the systems the business already uses, does only what the business has authorized, keeps a tamper-evident record of everything it does, and gets better at that business over time because it learns from the firm's own corrections.
+Every business has a layer of work that falls between its people and its software: the handoff, the follow-up, the reading nobody has time for. Today a person holds it together by hand. The Operator is a worker we build for one business and run for it. It works inside the systems the business already uses, does only what the business has authorized, keeps a tamper-evident record of everything it does, and keeps what the firm's people teach it, so a correction holds the next time.
 
 ## Five things to remember
 

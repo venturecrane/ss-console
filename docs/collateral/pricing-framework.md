@@ -184,24 +184,20 @@ Rule of thumb: a "three problems identified on the assessment call" engagement i
 
 ## Pricing the assessment call itself
 
-- **First 3 paid assessments: free** (launch-period case-study builders).
-- **After that: $250 per assessment**, collected upfront via the booking flow.
+Decision #13 sets this: the assessment is free for the first 3 clients, then $250, applied toward the engagement that follows.
+
+- **First 3 clients: free** (launch-period case-study builders). Internal policy, never advertised.
+- **After that: $250 per assessment.**
 - **The $250 is applied as credit** against any engagement that follows within 30 days.
 - **If they don't engage**, the $250 is kept. The assessment is the product.
 
-Scheduling is already wired through `/book` with these rules encoded in booking logic.
+The booking flow at `/book` takes no payment today. Collecting the $250 there is to be built when the paid assessment starts.
 
 ---
 
-## Retainer structure (post-delivery)
+## After delivery
 
-After an engagement handoff, offer (don't push) a monthly retainer:
-
-- **$200/mo — lightweight support.** Async questions, minor tweaks, check-ins every 4-6 weeks.
-- **$350/mo — active support.** Up to 2 hours of hands-on work per month, weekly async check-ins.
-- **$500/mo — managed support.** Up to 4 hours, bi-weekly calls, priority response.
-
-Retainers are quoted in a separate short document, not in the engagement SOW. Decide the exact package shape after first delivery (we don't have enough post-engagement behavior data to commit a package yet — capture what retainer clients actually ask for and iterate).
+There is no post-delivery retainer ladder. Decision #12 was superseded on 2026-05-13 by Decision #44: the Operator is SMD's recurring-revenue product. After a handoff, the two-week async stabilization of Decision #27 applies. New work after that is a new scoped project or an Operator engagement, quoted in its own proposal.
 
 ---
 
@@ -233,8 +229,8 @@ Each phase gets its own SOW and its own deposit + balance structure. Phase 2 isn
 - **Never break out the hourly rate in a proposal.** The project price is the project price.
 - **Never itemize "hours per deliverable" in the client-facing SOW.** That invites line-item negotiation. Internal doc only.
 - **Never scope for free while "thinking about it."** Sending a detailed SOW draft without a signed proposal is free consulting — unpaid scoping is scope creep's first cousin.
-- **Never quote on the call.** "We'll design the solution and send you a scope and price within a couple of days" is the only close language (see `assessment-call-script.md`).
-- **Never give a ballpark without scope.** If they push ("roughly what are we talking about?"), say: "It depends on what we find. Engagements typically land between $5k and $25k, but we won't know until we design the solution."
+- **Never quote on the call.** "We'll design the solution and follow up with a scope and a price" is the only close language (see `assessment-call-script.md`).
+- **Never give a ballpark.** If they push ("roughly what are we talking about?"), say: "It depends on what we find. We won't know until we design the solution, and the proposal has the number." The assessment call script holds the same rule.
 - **Never round down under pressure.** The quote is the quote. If they can't afford it, offer a narrower scope, not a discount.
 
 ---
@@ -243,7 +239,7 @@ Each phase gets its own SOW and its own deposit + balance structure. Phase 2 isn
 
 **"How much does this cost?"** (on the assessment call)
 
-> "Depends on the scope. Most engagements land between $5k and $25k, but we won't know the exact number until we design the solution. You'll have a proposal within a couple of days."
+> "Depends on the scope. We won't know the number until we design the solution, and you'll see it in the proposal."
 
 **"Can you do it cheaper?"** (after proposal sent)
 
@@ -259,7 +255,7 @@ Each phase gets its own SOW and its own deposit + balance structure. Phase 2 isn
 
 **"Why is it so much for a few weeks of work?"**
 
-> "It's not a few weeks of work — it's 60+ hours of focused work compressed into a few weeks. The compression is part of what you're paying for. A larger firm would bill this at 2-3× and take 3× as long."
+> "It's not a few weeks of work. It's 60+ hours of focused work compressed into a few weeks. The compression is part of what you're paying for."
 
 ---
 
@@ -300,7 +296,7 @@ Financial visibility deferred to a Phase 2 SOW after bookkeeping is caught up. O
 
 - [Assessment Call Script](./assessment-call-script.md) — the conversation that produces the input to this framework
 - [Proposal / SOW Template](./proposal-sow-template.md) — the output document this framework feeds
-- [Decision Stack](../adr/decision-stack.md) — the 29 locked decisions behind this pricing model
+- [Decision Stack](../adr/decision-stack.md): the active decisions behind this pricing model
 
 ---
 

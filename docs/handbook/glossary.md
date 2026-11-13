@@ -183,7 +183,7 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **sticky stop / HARD_STOP / cost stop.** The seat's automated circuit breaker. It moves from `OK` to `HARD_STOP` on recorded conditions such as cost spend or repeated tool failures, and the stopped seat stays stopped until someone investigates and uses the **Clear stop** form in the admin console. A stop caused by spending is a cost stop, and only the Captain clears it (ADR 0062; `docs/runbooks/operator/sticky-stop-clear.md`).
 
-**routine level: flag-only, prepare-and-route, auto-handle.** How far one routine may go. Flag-only reads and tells someone; prepare-and-route drafts for a person to send; auto-handle acts on its own. Anything touching deadlines or money, or sending to opposing counsel or a court, never auto-handles (ADR 0075).
+**routine level: flag-only, prepare-and-route, auto-handle.** How far one routine may go. Flag-only reads and tells someone; prepare-and-route drafts for a person to send; auto-handle acts on its own. Anything touching deadlines or money, or sending to opposing counsel or a court, never auto-handles (ADR 0075). Flag-only is a rule the skill follows and the audit record checks; the hard enforcement is the limit check at every tool call.
 
 **draft-for-review and confirm.** Two settings for an outside email. Under draft-for-review the Operator drafts and a person at the client sends it themselves; under confirm the Operator asks a person yes or no in the same conversation and, on a yes, sends it itself (ADR 0071).
 
@@ -199,9 +199,9 @@ Definitions are short on purpose - one to three sentences each. Where a term car
 
 **MCP.** Model Context Protocol - the standard interface by which the Operator connects to external tools and services. The connector strategy is MCP-first: use a vendor or vetted-community MCP server where one exists (ADR 0020).
 
-**connector backends (`mcp:` / `build:` / `synthetic:`).** The three kinds of connector an Operator can wire, by `customer.yaml.connectors{}` prefix. `mcp:` is a vendor or vetted-community MCP server (preferred). `build:` is a Python adapter SMD maintains, used only when no acceptable MCP exists. `synthetic:` is the no-PM substrate (a stand-in when the customer has no practice-management system). Composio was dropped in the 2026-05-30 revision of ADR 0020.
+**connector backends (`mcp:` / `build:` / `synthetic:`).** The three kinds of connector an Operator can wire, by `customer.yaml.connectors{}` prefix. `mcp:` is a vendor or vetted-community MCP server (preferred). `build:` is an adapter SMD maintains for work that is not tool calls, configured per engagement; when no acceptable MCP server exists, SMD writes its own MCP server first. `synthetic:` is the no-PM substrate (a stand-in when the customer has no practice-management system). Composio was dropped in the 2026-05-30 revision of ADR 0020.
 
-**Honcho.** A memory subsystem within Hermes that draws conclusions about people the Operator interacts with. SMD's disposition is "mirror, don't gate": conclusions are mirrored to per-customer D1 with provenance, and Captain dismissal triggers a physical delete from Honcho (ADR 0016).
+**Honcho.** A memory subsystem within Hermes that draws conclusions about people the Operator interacts with. SMD's disposition is "mirror, don't gate": when SMD configures it for an engagement, conclusions are mirrored to the seat's Machine-local `persona_observations` store with provenance, and Captain dismissal deletes the conclusion from Honcho (ADR 0016; the per-customer D1 first named here was never built, ADR 0062).
 
 **D1.** Cloudflare's SQLite database service. The console's database is the D1 `ss-console-db`; see [Data Model](/admin/playbook/data-model).
 

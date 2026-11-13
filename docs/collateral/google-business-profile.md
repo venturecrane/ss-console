@@ -142,7 +142,7 @@ your team already uses so data flows instead of getting copied by hand.
 ```
 Not sure which platform or vendor to go with? We evaluate the options,
 make a recommendation, and handle the implementation. You get a decision
-in days instead of months of research.
+without a long research project.
 ```
 
 **Service 6: Team Training and Handoff**
@@ -185,7 +185,7 @@ Post this as your first update:
 **Body:**
 
 ```
-We just launched SMD Services to help growing Phoenix businesses
+SMD Services helps growing Phoenix businesses
 get their operations sorted out. If your business has outgrown
 the way things run and you don't have time to figure out what
 needs to change, that's what we do.

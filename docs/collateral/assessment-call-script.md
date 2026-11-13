@@ -122,14 +122,13 @@ Toward the end of the walkthrough, ask:
 
 As the conversation progresses, confirm these mentally:
 
-- [ ] Revenue roughly $750k-$5M (or close enough to proceed)
 - [ ] Owner is the decision-maker (or is on this call)
 - [ ] 2-3 clear operational problems surfaced
 - [ ] Owner articulated at least one objective beyond "fix this"
 - [ ] Books are reasonably current (if financial visibility is in scope: current within 30 days)
 - [ ] There's a plausible champion (owner or team member)
 
-If qualification fails on revenue range or decision-maker, the call is still valuable: it's a referral opportunity or a "not yet."
+If qualification fails on decision-maker, the call is still valuable: it's a referral opportunity or a "not yet."
 
 ---
 
@@ -141,7 +140,7 @@ Summarize what you heard. Use their words, not yours.
 
 Let them confirm, correct, or add. Then close:
 
-> "Based on what we've talked through today, we can see a clear path to fixing [problem 1], [problem 2], and [problem 3]. We'll design the solution and send you a scope and price within a couple of days. Sound good?"
+> "Based on what we've talked through today, we can see a clear path to fixing [problem 1], [problem 2], and [problem 3]. We'll design the solution and follow up with a scope and a price. Sound good?"
 
 **Do not:**
 

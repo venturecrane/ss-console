@@ -104,7 +104,7 @@ def fig2():
     for k, (t, s) in enumerate(mid):
         o += [R(362, ys[k], 246, 44, "seat"), T(372, ys[k] + 18, "t", t), T(372, ys[k] + 34, "s", s)]
     right = [("Client portal", "pause, activity, limit settings"), ("Pager + hourly triage", "watches every seat"),
-             ("Per-client ops workspace", "one per client; access logged"), ("Releases + config", "by reviewed change only")]
+             ("Per-client ops workspace", "sealed to one seat; SMD's agents"), ("Releases + config", "by reviewed change only")]
     for k, (t, s) in enumerate(right):
         o += [SMD(742, ys[k], 186, 44), T(756, ys[k] + 18, "t", t), T(756, ys[k] + 34, "s", s)]
     o += [R(742, 396, 186, 44, "ext"), T(754, 414, "t", "AI processing"), T(754, 430, "s", "does not train on client content"),
@@ -122,7 +122,7 @@ def fig2():
     # right gutter
     o += [L(738, 110, 612, 110, m="a2"), T(672, 102, "lb m", "pause"), C(716, 110, 5),
           P("M612,132 H634 V188 H738", m="a2"), T(688, 180, "lb m", "health, notices"), C(634, 160, 6),
-          L(738, 256, 624, 256, m="a2"), T(663, 248, "lb m", "logged access"), C(716, 256, 8),
+          L(738, 256, 624, 256, m="a2"), T(663, 248, "lb m", "sealed access"), C(716, 256, 8),
           L(738, 324, 612, 324, m="a2"), T(663, 316, "lb m", "config changes"), C(716, 324, 7),
           L(612, 406, 738, 406, m="a2"), T(686, 398, "lb m", "task content"), C(638, 406, 9),
           P("M612,452 H690 V428 H738", m="a2"), C(650, 452, 9)]
@@ -145,8 +145,8 @@ def fig3():
         ("Sender check", "Matched to the client's staff list.", "FRONT DOOR",
          ["Unknown sender: content fenced, no reply,", "no send, commitment or delete."]),
         ("Skill and sender's authority", "The matching skill loads. The agent is told who is asking.", "AGENT",
-         ["Skill not enabled on this seat:", "declined."]),
-        ("Tool lookup", "Each of 299 tools has one fixed kind of action.", "AGENT",
+         ["Skill not switched on: not there;", "admin-only skill: declined."]),
+        ("Tool lookup", "Every tool has one fixed kind of action.", "AGENT",
          ["Not in the registry:", "never runs."]),
         ("Limit check", "The kind of action, against the client's written limit.", "AGENT",
          ["No limit written for it:", "refused. That is the default."]),
@@ -207,8 +207,6 @@ def fig4():
         o += [R(20, y, 250, 44, "seat"), T(32, y + 19, "t", a), T(32, y + 35, "s", eg),
               L(274, y + 22, 326, y + 22, m="a4"),
               R(330, y, 300, 44, "seat"), T(342, y + 19, "t", kind), T(342, y + 35, vc, val)]
-        if i == 3:
-            o.append(T(618, y + 35, "mu e", "built, not yet proven in client use"))
         if oc == "g":
             o += [L(634, y + 22, 706, y + 22, "lg", "g4"), R(710, y, 230, 44, "bx"), T(722, y + 27, "tg", out)]
         elif oc == "p":
@@ -283,7 +281,7 @@ def fig6():
               L(x0 + 22, 296, x0 + 22, 396, m="a6"), T(x0 + 30, 366, "lb", "health every minute"), T(x0 + 30, 382, "lb", "audit copy daily"),
               L(x0 + 140, 396, x0 + 140, 296, m="a6"), T(x0 + 148, 391, "lb", "releases, config"),
               SMD(x0 + 152, 328, 116, 44), T(x0 + 212, 346, "t m", "Ops workspace"), T(x0 + 212, 362, "s m", "one per client"),
-              L(x0 + 238, 324, x0 + 238, 296, m="a6"), T(x0 + 230, 314, "lb e", "logged access"),
+              L(x0 + 238, 324, x0 + 238, 296, m="a6"), T(x0 + 230, 314, "lb e", "sealed access"),
               "</g>"]
     o += [SMD(20, 400, 920, 56), T(36, 423, "t", "SMD Services · one, shared across clients"),
           T(36, 442, "s", "Client portal, SMD's console, pager and hourly triage, releases and config, audit archive: each kept apart by client"),
@@ -308,8 +306,8 @@ def fig7():
     for y, (c, t, s) in zip(ys, stores):
         o += [SMD(20, y, 380, 52) if c == "smd" else R(20, y, 380, 52, c), T(36, y + 22, "t", t), T(36, y + 40, "s", s)]
     readers = [("seat", "Agent", "can read it; cannot rewrite it"),
-               ("bx", "Client administrator", "sees it in the Client portal"),
-               ("smd", "Daily verifier", "checks the chain every day; a break raises an alarm"),
+               ("bx", "Client administrator", "looks it up by reference in the portal"),
+               ("smd", "Daily verifier", "checks the chain every day; a break pages SMD"),
                ("smd", "SMD operations", "reads each notice; paged when a reply is missing")]
     for y, (c, t, s) in zip(ys, readers):
         o += [SMD(560, y, 380, 52) if c == "smd" else R(560, y, 380, 52, c), T(576, y + 22, "t", t), T(576, y + 40, "s", s)]
