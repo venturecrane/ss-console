@@ -7843,12 +7843,12 @@
     },
     {
      "behaviour": {
-      "both": "raise JobLedgerError connects=21",
-      "empty": "raise JobLedgerError connects=21",
-      "padded": "raise JobLedgerError connects=21",
+      "both": "raise JobLedgerError connects=retried",
+      "empty": "raise JobLedgerError connects=retried",
+      "padded": "raise JobLedgerError connects=retried",
       "unset": "raise KeyError",
-      "valid": "raise JobLedgerError connects=21",
-      "whitespace": "raise JobLedgerError connects=21"
+      "valid": "raise JobLedgerError connects=retried",
+      "whitespace": "raise JobLedgerError connects=retried"
      },
      "calls": [
       "operator/hermes-smd-overlay/plugins/hermes-smd-jobs/__init__.py:71 seat_config.slug(on_missing=\"raise\")"
@@ -8080,12 +8080,12 @@
     },
     {
      "behaviour": {
-      "both": "return value:HeartbeatEmitter 417e42488fd05b61",
-      "empty": "return value:HeartbeatEmitter 5c45162aafade192",
-      "padded": "return value:HeartbeatEmitter 07fb0f3333256ab5",
-      "unset": "return value:HeartbeatEmitter 64b7290ba9c74b6a",
-      "valid": "return value:HeartbeatEmitter 211bb7238cdadbe6",
-      "whitespace": "return value:HeartbeatEmitter d8a1cf38429a11bc"
+      "both": "return value:HeartbeatEmitter 9c176f4301d170d6",
+      "empty": "return value:HeartbeatEmitter 198f3d5f2c0d05f7",
+      "padded": "return value:HeartbeatEmitter 77b7fb0aa2e5322b",
+      "unset": "return value:HeartbeatEmitter 577a1f2ea5c410c5",
+      "valid": "return value:HeartbeatEmitter a7460bf91a75dd6c",
+      "whitespace": "return value:HeartbeatEmitter 0737ea95319900a2"
      },
      "calls": [
       "operator/hermes-smd-overlay/shared/heartbeat.py:2713 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
