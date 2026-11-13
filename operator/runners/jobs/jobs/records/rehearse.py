@@ -43,7 +43,7 @@ from typing import Any, Callable
 
 from smokeball_connector import matter_files as mf, page_finder as pf
 
-from .. import budget as budget_mod, limits as limits_mod
+from .. import budget as budget_mod, limits as limits_mod, paid
 from ..ledger import Ledger
 from . import assemble
 
@@ -206,10 +206,8 @@ def rehearse(
     out_dir.mkdir(exist_ok=True)
     ledger_path = out_dir / "usage-ledger.jsonl"
     prices = budget_mod.Pricing.load(_pricing_path(pricing))
-    budget = budget_mod.Budget(prices, cap_usd, [ledger_path], 1.0)
-    limits = limits_mod.Limits(
-        cap_usd=cap_usd, monthly_budget_usd=cap_usd, usd_per_scanned_page=0.0, usd_per_audit_claim=0.0
-    )
+    budget = paid.budget(prices, cap_usd, [ledger_path])
+    limits = paid.Caps(cap_usd=cap_usd, monthly_budget_usd=cap_usd).limits()
     hook = _Hook(limits, budget, Ledger(ledger_path), prices)
     reads = [0]
     stopped = ""

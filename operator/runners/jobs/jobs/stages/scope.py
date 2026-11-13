@@ -27,9 +27,8 @@ from typing import Any
 from .. import llm
 from ..medchron import prompts
 from .base import StageRun
+from ..text_rules import DATE_HEAD as DATE, ENTRY_START as ENTRY
 
-ENTRY = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
-DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 CITED = re.compile(r"\(Exhibit (\d+)\b")
 #: Per-exhibit citation counts in the full assembly, read by the coverage gate.
 FULL_CITES = "full_cites.json"

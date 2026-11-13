@@ -36,8 +36,8 @@ from typing import Any
 
 from .base import StageRun, read_json, read_jsonl
 from .group import PLACEHOLDER, Canon, index_rows, lane_name
+from ..text_rules import EXHIBIT_CITE as CITE
 
-CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
 # What can become exhibit pages: a PDF as it is, an image as one page. A
 # client's phone photo of a consent form or a lab header IS a record the
 # chronology cites; skipping it left the citation pointing at nothing

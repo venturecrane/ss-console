@@ -24,9 +24,10 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ..text_rules import ENTRY_START as ENTRY_SPLIT
+
 CLUSTER_HEAD = re.compile(r"^##### CLUSTER (\d{4}-\d{2}-\d{2}) \| (.*?) \((\d+) fragments?\)\s*$")
 CLUSTER_SPLIT = re.compile(r"(?m)^(?=##### CLUSTER )")
-ENTRY_SPLIT = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
 DATE_LINE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})\s*(\(.*\))?\s*$")
 # Every citation shape assemble can leave behind: exhibit with pages, exhibit
 # without pages, and an unresolved (FILE: ...) no exhibit number claimed.

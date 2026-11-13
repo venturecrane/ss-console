@@ -31,6 +31,7 @@ from ..medchron.audit import claims as CL
 from ..medchron.audit.page_text import PageIndex, exhibit_paths
 from ..medchron.gates import foreign_identity as FI
 from .base import StageRun
+from ..text_rules import EXHIBIT_PAGE_MENTION as _EXHIBIT_PAGE, US_DATE as _DATE
 
 #: Disclosures of entries left out by rule, beside the package (internal,
 #: never uploaded): {"unit", "entries": [{"date", "provider", "exhibit",
@@ -38,8 +39,6 @@ from .base import StageRun
 LEFT_OUT = "review-left-out.json"
 LEFT_OUT_REASON = FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]
 _DATED = re.compile(r"^(\d{2}/\d{2}/\d{4})\s*$")
-_DATE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
-_EXHIBIT_PAGE = re.compile(r"(?i)\bExhibit\s+(\d+)(?:\s*[,-]?\s*p(?:age|p)?\.?\s*(\d+))?")
 
 
 def _norm(s: str) -> str:

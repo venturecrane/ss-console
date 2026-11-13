@@ -4,6 +4,7 @@ an empty success."""
 from __future__ import annotations
 
 import json
+import shutil
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -93,7 +94,7 @@ def test_docx(tmp_path):
 
 
 def test_doc_without_antiword_is_a_failure_record(tmp_path, monkeypatch):
-    monkeypatch.setattr(extract.shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
     rec = _x(tmp_path, "old.doc", b"\xd0\xcf\x11\xe0 legacy word bytes")
     assert rec == {"ok": False, "problem": "doc_unreadable: antiword is not installed on this seat"}
 
