@@ -26,9 +26,8 @@ from .. import llm
 from ..medchron import prompts
 from ..limits import LimitHold
 from .base import StageRun
+from ..text_rules import ENTRY_START as ENTRY, EXHIBIT_CITE_PLAIN as CITE
 
-ENTRY = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
-CITE = re.compile(r"\(Exhibit \d+(?: - p\. [0-9,\s\-]+)?\)")
 SERIAL_PROVIDER = re.compile(r"(?i)physical therapy|chiropractic|\bPT\b|neurofeedback|massage|acupuncture|rehab")
 MAJOR_HEADER = re.compile(
     r"(?i)\b(emergency|\bED\b|admission|admitted|initial evaluation|initial consultation|consultation|imaging|"

@@ -38,16 +38,14 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import (
-    child as child_mod,
     daemon as daemon_mod,
     job_notes,
     requeue,
-    resume as resume_mod,
     spend,
     verdict as verdict_mod,
 )
 from ..broker_client import BrokerError
-from ..daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon
+from ..daemon import RUNNER_BIN, TERMINAL, Daemon
 from ..proof import holds as proof_holds, watch as proof_watch
 from ..skill_load import load_line
 from ..stages import vision_seed
@@ -82,17 +80,30 @@ class MedchronLane(Daemon):
     LANE = "medchron"
     HEARTBEAT = "heartbeat"
     TICK = "tick"
+    CHILD_ARGS = ("--json",)
+    START_DEFERRED = (
+        "could not read the month's allowance for %s, deferring: %s",
+        "could not record running for %s: %s",
+    )
 
-    @property
-    def queue(self) -> Path:
-        return self.run_dir / "queue"
+    # -- one job (the host runs it: ``Daemon.run_job``) ---------------------------
+    def _before_start(self, job_id: str) -> str | None:
+        # The firm config first, before anything is recorded. A seat whose
+        # firm.yaml has not caught up with this runner's schema DEFERS: the job
+        # stays claimed, nothing is written to the ledger, and the next tick
+        # tries again. That is what makes the rollout safe in either order --
+        # customer.yaml and firm.yaml can land minutes apart without a job
+        # failing in between.
+        try:
+            config_mod.load(self.firm_config)
+        except config_mod.ConfigError as exc:
+            logger.warning("firm config not usable yet, deferring %s: %s", job_id, exc)
+            return "deferred"
+        return None
 
-    @property
-    def jobs(self) -> Path:
-        return self.run_dir / "jobs"
-
-    # -- one job ---------------------------------------------------------------
-    def _write_job_yaml(self, job_id: str) -> Path:
+    def _write_job(self, job_id: str) -> Path:
+        """``job.yaml``, from the envelope, the staged vision seed and the
+        month's allowance read from the broker now."""
         jd = self.job_dir(job_id)
         env = json.loads((jd / "envelope.json").read_text(encoding="utf-8"))
         data_root = jd / "data"
@@ -137,59 +148,6 @@ class MedchronLane(Daemon):
         (jd / "job.yaml").write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
         self._chown_child(jd)
         return jd
-
-    def _child_env(self, job_id: str, jd: Path) -> dict[str, str]:
-        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
-        # The job marker: the Smokeball connector exempts the jobs uid from
-        # recording each write in the audit ledger ONLY on a job this daemon
-        # launched, because this job's own MEDCHRON_JOB_* rows record it. A person
-        # running as jobs by hand has no marker and must name themselves or
-        # is refused (smokeball_connector/write_record.py).
-        env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
-        env.setdefault("JOBS_SEAT", "client")
-        env.setdefault("PATH", "/usr/bin:/bin")
-        env.setdefault("HOME", str(jd))
-        return env
-
-    def run_job(self, job_id: str) -> str:
-        # The firm config first, before anything is recorded. A seat whose
-        # firm.yaml has not caught up with this runner's schema DEFERS: the job
-        # stays claimed, nothing is written to the ledger, and the next tick
-        # tries again. That is what makes the rollout safe in either order --
-        # customer.yaml and firm.yaml can land minutes apart without a job
-        # failing in between.
-        try:
-            config_mod.load(self.firm_config)
-        except config_mod.ConfigError as exc:
-            logger.warning("firm config not usable yet, deferring %s: %s", job_id, exc)
-            return "deferred"
-        try:
-            jd = self._write_job_yaml(job_id)
-        except BrokerError as exc:
-            logger.warning("could not read the month's allowance for %s, deferring: %s", job_id, exc)
-            return "deferred"
-        try:
-            self.broker.record(job_id, "running", {})
-        except BrokerError as exc:
-            logger.warning("could not record running for %s: %s", job_id, exc)
-            return "deferred"
-        env = self._child_env(job_id, jd)
-        verdict_mod.clear(jd)
-        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
-            code, out = child_mod.run_child(
-                self,
-                job_id,
-                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd), "--json"]),
-                cwd=jd,
-                env=env,
-                log=log,
-                pidfile=self.run_dir / "child.pid",
-                preexec=self._cgroup_preexec(),
-            )
-        self.jobs_run += 1
-        if resume_mod.cut_short_by_stop(self, job_id, code, out or ""):
-            return "interrupted"
-        return self._report(job_id, code, out or "")
 
     @staticmethod
     def _ledger_fields(outcomes: list[dict[str, Any]]) -> tuple[str, dict[str, Any], str | None]:

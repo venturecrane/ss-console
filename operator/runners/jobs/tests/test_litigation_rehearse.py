@@ -169,6 +169,7 @@ def test_a_read_limit_without_rehearse_is_refused(tmp_path, capsys):
 
 def test_rtf_and_doc_degrade_without_striprtf_or_antiword(tmp_path, monkeypatch):
     import builtins
+    import shutil
 
     from jobs.litigation import extract
 
@@ -180,7 +181,7 @@ def test_rtf_and_doc_degrade_without_striprtf_or_antiword(tmp_path, monkeypatch)
         return real_import(name, *a, **k)
 
     monkeypatch.setattr(builtins, "__import__", no_striprtf)
-    monkeypatch.setattr(extract.shutil, "which", lambda n: None)
+    monkeypatch.setattr(shutil, "which", lambda n: None)
     (tmp_path / "a.rtf").write_bytes(rb"{\rtf1\ansi Answer filed 04/30/2026\par}")
     rec = extract.extract_file(tmp_path / "a.rtf", ".rtf", tmp_path / "a.txt", None)
     assert rec["ok"] and "Answer filed" in (tmp_path / "a.txt").read_text()

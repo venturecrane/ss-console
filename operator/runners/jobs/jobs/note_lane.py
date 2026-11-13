@@ -24,7 +24,6 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable
 
 from .broker_client import BrokerClient
@@ -65,21 +64,9 @@ class NoteBroker:
 class NoteLane(Daemon):
     LANE = "note"
     HEARTBEAT = "note-heartbeat"
-
-    @property
-    def queue(self) -> Path:
-        # Never written: a note is recorded by root, not queued.
-        return self.run_dir / "note-queue"
-
-    @property
-    def jobs(self) -> Path:
-        return self.run_dir / "note-jobs"
-
-    def tick(self) -> str | None:
-        self.wipe_expired()
-        self.dispatch_wakes()
-        self.heartbeat(running=None)
-        return None
+    #: A note is recorded by root, never queued (its queue is never written):
+    #: each tick only wipes, dispatches the pending wakes and beats.
+    CLAIMS = False
 
 
 def build_lane(d: Daemon) -> NoteLane:

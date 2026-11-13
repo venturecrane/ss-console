@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import re
 
+from ...text_rules import EXHIBIT_CITE_LENIENT as CITE
+
 NUM = re.compile(r"\d+(?:[.,/:]\d+)*")
-CITE = re.compile(r"\(Exhibit (\d+)\s*(?:-\s*p\.\s*([0-9,\s\-]+?))?\s*(?:,\s*machine transcription)?\)")
 
 
 def norm_number(tok: str) -> str:

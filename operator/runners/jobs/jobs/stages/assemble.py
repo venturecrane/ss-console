@@ -24,6 +24,7 @@ from typing import Any
 from . import fileref
 from .base import StageRun, read_json
 from .compose import read_usage
+from ..text_rules import DATE_HEAD, ENTRY_START as ENTRY_SPLIT
 
 # File names contain commas, so the name cannot be [^,)]+. A plain lazy body is
 # not enough either: the model sometimes writes TWO page groups in one
@@ -34,8 +35,6 @@ CITE = re.compile(r"\(FILE:\s*((?:(?!,\s*p\.).)+?)((?:,\s*p\.\s*[0-9,\s\-]+)+)\)
 CITE_NOPAGE = re.compile(r"\(FILE:\s*(.+?)\)")
 # the chunk header as the model echoes it (chunking.py writes it; FILES-SEEN repeats it verbatim)
 FILE_HEADER = re.compile(r"=== FILE: (.+?) \(fileId ([\w.-]+)[,)]")
-ENTRY_SPLIT = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
-DATE_HEAD = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 MAP_FILE = re.compile(r"map-0*(\d+)(?:-(\d+))?\.md$")
 
 

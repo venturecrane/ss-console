@@ -33,10 +33,7 @@ import re
 from .. import llm
 from ..medchron import prompts
 from .base import StageRun
-
-ENTRY = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
-DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
-CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
+from ..text_rules import DATE_HEAD as DATE, ENTRY_START as ENTRY, EXHIBIT_CITE as CITE
 
 
 def pages_by_exhibit(text: str) -> dict[int, set[int]]:

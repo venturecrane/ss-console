@@ -35,14 +35,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import firm_wording, resume as resume_mod, spend, verdict as verdict_mod
+from . import firm_wording, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
-from .child import run_child
 from .firm_inputs import pin_env
 from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
 from .skill_load import load_line
-from .daemon import CHILD_ENV_PASS, RUNNER_BIN, TERMINAL, Daemon, sticky_level
+from .daemon import RUNNER_BIN, TERMINAL, Daemon
 from . import seat_layout
 
 logger = logging.getLogger("jobs.demand")
@@ -105,16 +104,19 @@ class DemandLane(Daemon):
     inputs_dir: str | None = None
     LANE = "demand"
     HEARTBEAT = "demand-heartbeat"
+    LOGGER = "jobs.demand"
+    BACKS_OFF = True
+    JOB_WORD = "demand"
+    HELD_RESUME_REFUSED = "resume of held demand %s refused: a held demand is final; ask again"
+    #: The demand child also reads the records vendor's directory (the gap
+    #: audit's missing providers): its three per-seat values, nothing more.
+    ENV_PASS = VENDOR_ENV_PASS
 
     @property
     def queue(self) -> Path:
         return self.queue_dir
 
-    @property
-    def jobs(self) -> Path:
-        return self.run_dir / "demand-jobs"
-
-    # -- one job -------------------------------------------------------------------
+    # -- one job (the host runs it: ``Daemon.run_job``) ---------------------------
     def _write_job(self, job_id: str) -> Path:
         jd = self.job_dir(job_id)
         env = json.loads((jd / "envelope.json").read_text(encoding="utf-8"))
@@ -147,7 +149,7 @@ class DemandLane(Daemon):
         carried = seed.seed(jd, old)
         logger.info("demand re-run %s seeded from %s: %s", jd.name, old_id, ", ".join(carried) or "nothing")
 
-    def run_job(self, job_id: str) -> str:
+    def _before_start(self, job_id: str) -> str | None:
         from .demand import firm as demand_firm
 
         try:
@@ -155,41 +157,17 @@ class DemandLane(Daemon):
         except demand_firm.DemandConfigError as exc:
             logger.warning("demand inputs not usable yet, deferring %s: %s", job_id, exc)
             return "deferred"
-        try:
-            jd = self._write_job(job_id)
-            self.broker.record(job_id, "running", {})
-        except BrokerError as exc:
-            logger.warning("broker not ready for %s, deferring: %s", job_id, exc)
-            return "deferred"
-        # The demand child also reads the records vendor's directory (the gap
-        # audit's missing providers): its three per-seat values, nothing more.
-        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS or k in VENDOR_ENV_PASS}
-        env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
+        return None
+
+    def _child_env(self, job_id: str, jd: Path) -> dict[str, str]:
+        out = super()._child_env(job_id, jd)
         if self.inputs_dir:
-            env[INPUTS_ENV] = str(pin_env(self.inputs_dir))
-        env.setdefault("JOBS_SEAT", "client")
-        env.setdefault("PATH", "/usr/bin:/bin")
-        env.setdefault("HOME", str(jd))
+            out[INPUTS_ENV] = str(pin_env(self.inputs_dir))
         firm_wording.alert_unusable(self, job_id)
-        verdict_mod.clear(jd)
-        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
-            code, out = run_child(
-                self,
-                job_id,
-                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd)]),
-                cwd=jd,
-                env=env,
-                log=log,
-                pidfile=self.run_dir / "demand-child.pid",
-                preexec=self._cgroup_preexec(),
-            )
-        self.jobs_run += 1
-        if resume_mod.cut_short_by_stop(self, job_id, code, out):
-            library_edit_handoff.hand_over(self, job_id)
-            return "interrupted"
-        state = self._report(job_id, code, out)
+        return out
+
+    def _after_ending(self, job_id: str) -> None:
         library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
-        return state
 
     def _report(self, job_id: str, code: int, out: str) -> str:
         outcomes = verdict_mod.read(self.job_dir(job_id), out)
@@ -266,59 +244,6 @@ class DemandLane(Daemon):
         if state != "delivered":
             lines.append(f"Reason: stopped at {stage or 'the runner (no verdict)'}.")
         return "\n".join(lines)
-
-    def _paused(self, job_id: str) -> bool:
-        return sticky_level(self.sticky_db) == "HARD_STOP"
-
-    # -- the loop: no head-of-line starvation, and held is final ---------------------
-    def _refuse_held_resumes(self) -> None:
-        """A held demand is FINAL. The ledger has no held -> running edge, and a
-        hold means a person must read the reason (a refused letter, a wrong
-        destination); resuming it would replay the same refusal or, worse,
-        file what was refused. A marker for one is removed, loudly."""
-        if not self.queue.is_dir():
-            return
-        for marker in self.queue.glob(f"{resume_mod.MARKER_PREFIX}*.json"):
-            job_id = marker.name[len(resume_mod.MARKER_PREFIX) : -len(".json")]
-            if self._daemon_state(job_id).get("state") == "held":
-                logger.error("resume of held demand %s refused: a held demand is final; ask again", job_id)
-                marker.unlink(missing_ok=True)
-
-    def _ready(self) -> list[str]:
-        now = self.clock()
-        return [j for j in self._in_progress() if float(self._daemon_state(j).get("retry_after") or 0) <= now]
-
-    def _defer(self, job_id: str) -> None:
-        """Back the job off (1, 2, 4 ... 60 minutes) so a job that keeps
-        deferring cannot hold the head of the queue: the next tick claims the
-        job behind it (review of #3074)."""
-        n = int(self._daemon_state(job_id).get("deferrals") or 0) + 1
-        self._write_state(job_id, deferrals=n, retry_after=self.clock() + min(60.0 * 2 ** (n - 1), 3600.0))
-
-    def tick(self) -> str | None:
-        self._refuse_held_resumes()
-        resume_mod.take_requests(self)
-        self.wipe_expired()
-        self.dispatch_wakes()
-        ready = self._ready()
-        job_id = ready[0] if ready else self.claim_next()
-        self.heartbeat(running=job_id)
-        if job_id is None:
-            return None
-        if self._paused(job_id):
-            return "paused"
-        try:
-            result = self.run_job(job_id)
-        except (
-            Exception
-        ):  # one job's crash backs that job off; it must not wedge the lane's head (logged with its trace)
-            logger.exception("demand job %s could not be started; backing it off", job_id)
-            result = "deferred"
-        if result == "deferred":
-            self._defer(job_id)
-        else:
-            self._write_state(job_id, deferrals=0, retry_after=None)
-        return result
 
 
 def build_lane(d: Daemon) -> DemandLane | None:

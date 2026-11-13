@@ -24,11 +24,8 @@ kind has its own reader and nothing falls through silently:
 
 from __future__ import annotations
 
-import io
 import json
 import re
-import shutil
-import subprocess
 import threading
 from email import policy
 from email.parser import BytesParser
@@ -40,17 +37,21 @@ from ..deadline import is_transient
 from ..limits import LimitHold
 from ..stages.base import append_jsonl, read_jsonl
 from ..stages.pleading_margin import strip_page
+from ..text_rules import (
+    OCR_PROMPT as OCR_PROMPT,  # the vision prompt the runner and the text cache key read from here
+    PASSWORD,
+    SCAN_FLOOR,
+    ExtractFailure,
+    Ocr,
+    doc_text,
+    docx_text,
+    html_text,
+    paged as _pages,
+)
 
-PAGE_MARK = "===== page {n} ====="
-SCAN_FLOOR = 25  # characters: a page with less carries no text layer
 HEAD, TAIL = 3, 2
 DEFERRED = "[scanned page {n}: not transcribed; call view_page with this doc and page {n} to see it]"
 MIN_TEXT = 1
-OCR_PROMPT = (
-    "Transcribe every word on this page exactly as printed, top to bottom, including stamps, handwriting you can "
-    "read, and form labels. For a checkbox write [X] when it is marked and [ ] when it is empty. Output the text only."
-)
-Ocr = Callable[[bytes], str]
 #: Bump by hand with ANY change to how a reader turns bytes into text (a new
 #: decoding, a new file kind, a fixed email body, a changed page rule): it is
 #: part of the text cache's method version (``textcache.method_version``), so
@@ -79,22 +80,6 @@ _STOP_PROBLEMS = frozenset(
 
 def _stop(exc: BaseException) -> bool:
     return isinstance(exc, LimitHold) or is_transient(exc)
-
-
-class ExtractFailure(RuntimeError):
-    def __init__(self, problem: str) -> None:
-        self.problem = problem
-        super().__init__(problem)
-
-
-#: The failure code of a PDF locked with a password (``unopened``). Without it
-#: a locked attachment raised out of its email and the whole email, body and
-#: every other attachment, became one unreadable file.
-PASSWORD = "pdf_password"
-
-
-def _pages(texts: list[str]) -> str:
-    return "\n".join(f"{PAGE_MARK.format(n=i)}\n{t.strip()}" for i, t in enumerate(texts, 1))
 
 
 # MEMORY (2026-10-13: A&P litigation job 01M4V2G6 was OOM-killed in its 1 GiB
@@ -214,17 +199,6 @@ def ocr_pages(texts: list[str]) -> list[int]:
     return [i for i in sorted(keep) if _no_text(texts[i]) and not texts[i].startswith("[scanned page")]
 
 
-def docx_text(data: bytes) -> str:
-    import docx
-
-    d = docx.Document(io.BytesIO(data))
-    parts = [p.text for p in d.paragraphs]
-    for table in d.tables:
-        for row in table.rows:
-            parts.append(" | ".join(c.text for c in row.cells))
-    return "\n".join(parts)
-
-
 def _attachment_text(name: str, blob: bytes, ocr: Ocr | None) -> str:
     low = name.lower()
     try:
@@ -257,15 +231,6 @@ def msg_text(path: Path, ocr: Ocr | None) -> str:
     sender, to = head_parties(m)
     head = {"From": sender, "To": to, "Date": m["date"], "Subject": m["subject"]}
     return _email(head, m["body"], m["attachments"], ocr)
-
-
-def html_text(raw: bytes | str) -> str:
-    from bs4 import BeautifulSoup
-
-    soup = BeautifulSoup(raw, "html.parser")
-    for tag in soup(["script", "style"]):
-        tag.decompose()
-    return "\n".join(line.strip() for line in soup.get_text("\n").splitlines() if line.strip())
 
 
 def eml_text(data: bytes, ocr: Ocr | None) -> str:
@@ -343,16 +308,6 @@ def rtf_text(data: bytes) -> str:
         return str(rtf_to_text(raw))
     except ImportError:
         return strip_rtf(raw)
-
-
-def doc_text(path: Path) -> str:
-    exe = shutil.which("antiword")
-    if not exe:
-        raise ExtractFailure("doc_unreadable: antiword is not installed on this seat")
-    r = subprocess.run([exe, str(path)], capture_output=True, text=True, timeout=120, check=False)  # noqa: S603 - fixed binary, a path we wrote
-    if r.returncode != 0:
-        raise ExtractFailure("doc_unreadable: antiword could not read the file")
-    return r.stdout
 
 
 def text_of(path: Path, ext: str, ocr: Ocr | None) -> tuple[str, int]:

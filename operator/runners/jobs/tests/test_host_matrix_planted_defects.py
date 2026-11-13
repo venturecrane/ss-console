@@ -57,7 +57,9 @@ def test_a_child_env_that_grew_a_name_fails_the_golden(tmp_path, monkeypatch, re
     monkeypatch.setattr(daemon, "CHILD_ENV_PASS", (*daemon.CHILD_ENV_PASS, "NOT_PASSED_TO_ANY_CHILD"))
     from jobs.medchron import lane as medchron_lane
 
-    monkeypatch.setattr(medchron_lane, "CHILD_ENV_PASS", daemon.CHILD_ENV_PASS)
+    # A host that kept its own copy of the list reads it from its module.
+    if hasattr(medchron_lane, "CHILD_ENV_PASS"):
+        monkeypatch.setattr(medchron_lane, "CHILD_ENV_PASS", daemon.CHILD_ENV_PASS)
     found = _differs(tmp_path, monkeypatch, "medchron/delivered")
     assert any(".env." in d for d in found), found
 

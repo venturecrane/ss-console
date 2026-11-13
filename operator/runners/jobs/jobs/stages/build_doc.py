@@ -27,10 +27,8 @@ from ..medchron.lane_ref import lane_references
 from .base import StageRun, read_json
 from .group import Canon, index_rows
 from .limitations import section as limitations_section
+from ..text_rules import DATE_HEAD as DATE, ENTRY_START as ENTRY, EXHIBIT_CITE as CITE
 
-ENTRY = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
-DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
-CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
 PRIOR_HEAD = re.compile(r"^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*Prior Medical History\s*(?:\*\*)?\s*$", re.IGNORECASE)
 # An ICD-10-CM code is a letter, exactly two digits, then at most four more
 # characters (with or without the dot); a shape that admitted three digits

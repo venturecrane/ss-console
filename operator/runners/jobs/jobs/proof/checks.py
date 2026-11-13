@@ -18,6 +18,8 @@ import re
 from datetime import date
 from typing import Iterable
 
+from ..text_rules import SENTINEL_LINE as _SENTINEL
+
 #: The system's own words, which never belong in what a firm reads. Each one
 #: reached a firm at least once: "this chunk" in delivered chronologies
 #: (eng#226), "Provider not identified in this chunk" as an exhibit title
@@ -65,7 +67,6 @@ _EXTRACTION = re.compile(
     r"|entries complete|^\d{1,2}/\d{1,2}/\d{2,4}(?:\s+and\s+\d{1,2}/\d{1,2}/\d{2,4})?\s+entries(?=:))\b"
     r"|^[ \t]*[-*][ \t]+(?-i:other):"
 )
-_SENTINEL = re.compile(r"(?m)^\W*===\s*[A-Z][A-Z ]+[^=\n]*===\s*$")
 _MONEY = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?")
 #: A bare figure ends at a digit boundary that is not a thousands group: the
 #: lookahead refuses ",\d" (still inside the number), never a plain comma, or

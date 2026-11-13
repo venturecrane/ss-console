@@ -19,7 +19,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
-CITE = re.compile(r"\(Exhibit (\d+)\s*(?:-\s*p\.\s*([0-9,\s\-]+?))?\s*(?:,\s*machine transcription)?\)")
+from ...text_rules import EXHIBIT_CITE_LENIENT as CITE
+
 BODY_START, BODY_END = "## Medical Chronology", "## Exhibit List"
 #: An [NTD: ...] span; unclosed when the citation sits inside the note.
 NTD = re.compile(r"\[NTD:[^\]]*(?:\]|$)")
