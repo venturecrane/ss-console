@@ -159,12 +159,11 @@ class DemandLane(Daemon):
             return "deferred"
         return None
 
-    def _child_env(self, job_id: str, jd: Path) -> dict[str, str]:
-        out = super()._child_env(job_id, jd)
-        if self.inputs_dir:
-            out[INPUTS_ENV] = str(pin_env(self.inputs_dir))
+    def _lane_env(self, job_id: str) -> dict[str, str]:
+        return {INPUTS_ENV: str(pin_env(self.inputs_dir))} if self.inputs_dir else {}
+
+    def _before_child(self, job_id: str) -> None:
         firm_wording.alert_unusable(self, job_id)
-        return out
 
     def _after_ending(self, job_id: str) -> None:
         library_edit_handoff.hand_over(self, job_id)  # a firm's own save of its library file (piece 4)
