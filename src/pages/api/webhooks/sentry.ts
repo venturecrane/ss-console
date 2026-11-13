@@ -59,7 +59,7 @@ export const FLEET_SLUG = 'fleet'
  * cannot be pinned to one client lands on SMD rather than on a client. Looked
  * up at runtime; a miss is a loud 500, never a silent drop.
  */
-export const FLEET_ENTITY_SEAT = 'scott'
+export const FLEET_ENTITY_SEAT = 'smd-guide'
 
 /** Issue actions that mean "something is broken now". */
 const PAGING_ISSUE_ACTIONS = new Set(['created', 'unresolved'])
