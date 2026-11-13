@@ -5,6 +5,10 @@ optional (None) args are dropped rather than sent as null."""
 
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+
 import pytest
 
 from smokeball_connector import server
@@ -102,6 +106,16 @@ def test_update_task_completion_read_merges_and_stamps_completer(rec: _Recorder)
     }
 
 
+def test_update_task_keeps_the_tasks_categories(rec: _Recorder) -> None:
+    """A full-replace PUT clears what it omits, so an agent's update to a task
+    filed under categories (here a reassignment) re-sends them; before this,
+    every Operator task update cleared them on the firm's tenant."""
+    rec.responses["/tasks/t-7"] = {"id": "t-7", "matter": {"id": "m-9"}, "categories": ["Liens"]}
+    server.update_task(task_id="t-7", assignee_ids=["s-4"], staff_id="s-1")
+    put = next(c for c in rec.calls if c["method"] == "PUT")
+    assert put["json"]["categories"] == ["Liens"]
+
+
 def test_update_task_without_staff_id_refuses_before_the_wire(rec: _Recorder) -> None:
     """The task read never echoes staffId (proven live 2026-08-31), so a
     completion with no staff_id cannot form a valid PUT; refuse loudly instead
@@ -110,6 +124,67 @@ def test_update_task_without_staff_id_refuses_before_the_wire(rec: _Recorder) ->
     with pytest.raises(ValueError, match="staff_id"):
         server.update_task(task_id="t-7", is_completed=True)
     assert [c for c in rec.calls if c["method"] == "PUT"] == []
+
+
+_UPDATE_TASK_GOLDEN = Path(__file__).resolve().parent / "goldens" / "update_task_puts.json"
+_UPDATE_TASK_CASES = {
+    # a stamped subject change and a completion, on a task filed under two categories
+    "with_categories": (
+        {"subject": "Call the adjuster", "note": "left a message", "dueDateOnly": "2026-09-01T00:00:00",
+         "isCompleted": False, "matter": {"id": "m-9"}, "assignees": [{"id": "s-2"}], "categories": ["Liens", "Medical"]},
+        {"subject": "Call the adjuster back", "is_completed": True, "staff_id": "s-1"},
+    ),
+    # a reassignment, on a task with no categories
+    "without_categories": (
+        {"subject": "[Operator] Order records", "isCompleted": False, "matter": {"id": "m-9"},
+         "assignees": [{"id": "s-2"}]},
+        {"assignee_ids": ["s-4"], "staff_id": "s-1"},
+    ),
+}  # fmt: skip
+
+
+def test_update_task_put_bodies_are_pinned_on_the_wire(rec: _Recorder) -> None:
+    """The agent tool's task PUT, byte for byte (the JSON text httpx sends, key
+    order included), per case in ``tests/goldens/update_task_puts.json``.
+    ``SMOKEBALL_WRITE_GOLDENS=1`` rewrites it."""
+    got = {}
+    for case, (task, args) in sorted(_UPDATE_TASK_CASES.items()):
+        rec.calls.clear()
+        rec.responses["/tasks/t-7"] = {"id": "t-7", **task}
+        server.update_task(task_id="t-7", **args)
+        puts = [c for c in rec.calls if c["method"] == "PUT"]
+        got[case] = [
+            {"method": c["method"], "path": c["path"], "wire": json.dumps(c["json"], ensure_ascii=False, separators=(",", ":"))}
+            for c in puts
+        ]  # fmt: skip
+    if os.environ.get("SMOKEBALL_WRITE_GOLDENS"):
+        _UPDATE_TASK_GOLDEN.parent.mkdir(exist_ok=True)
+        _UPDATE_TASK_GOLDEN.write_text(json.dumps(got, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    assert got == json.loads(_UPDATE_TASK_GOLDEN.read_text(encoding="utf-8"))
+
+
+def test_full_replace_body_keeps_categories_and_names_the_completer() -> None:
+    """The job lanes' task PUT body: the merged fields, the task's categories
+    re-sent (the full replace clears what it omits), the text unstamped, and
+    ``completed_by`` only on a body that completes the task."""
+    from smokeball_connector.task_update import full_replace_body
+
+    cur = {"subject": "Draft responses", "matter": {"id": "m-9"}, "assignees": [{"id": "s-2"}], "categories": ["D"]}
+    body = full_replace_body(cur, note="done", is_completed=True, staff_id="s-2", completed_by="s-3")
+    assert body == {
+        "staffId": "s-2",
+        "subject": "Draft responses",
+        "note": "done",
+        "matterId": "m-9",
+        "isCompleted": True,
+        "completedByStaffId": "s-3",
+        "assigneeIds": ["s-2"],
+        "categories": ["D"],
+    }
+    moved = full_replace_body({**cur, "categories": []}, assignee_ids=["s-4"], staff_id="s-1", completed_by="s-3")
+    assert moved == {"staffId": "s-1", "subject": "Draft responses", "matterId": "m-9", "assigneeIds": ["s-4"]}
+    with pytest.raises(ValueError, match="staff_id"):
+        full_replace_body(cur, staff_id=None)
 
 
 # ---- events ---------------------------------------------------------------

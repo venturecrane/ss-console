@@ -122,6 +122,15 @@ FAMILIES: tuple[Family, ...] = (
         checks=(f"{_RT}/test_text_rule_goldens.py",),
     ),
     Family(
+        "task_puts",
+        f"{_RG}/task_puts",
+        "*",
+        f"{_RG}/task_puts/allowed-changes.json",
+        "inplace",
+        tests=("test_casefile_apply.py", "test_litigation_reassign.py"),
+        checks=(f"{_RT}/test_casefile_apply.py", f"{_RT}/test_litigation_reassign.py"),
+    ),
+    Family(
         "seat_callers",
         "contracts",
         "seat-config-callers.json",

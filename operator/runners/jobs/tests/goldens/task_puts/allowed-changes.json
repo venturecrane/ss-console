@@ -1,0 +1,7 @@
+{
+  "_why": "Dotted paths that may differ from the captured task PUT goldens, per golden file. Captured on origin/main c65294ee9 before wave 3 PR C gives the full-replace task body (categories kept) one home in smokeball_connector.task_update. Each golden is the method, path and exact JSON text a caller sends, so the key order is pinned too. Every list is empty: any difference fails. An intended change adds its path here, in the PR that makes it.",
+  "casefile_assigned_with_categories": [],
+  "casefile_empty_categories": [],
+  "casefile_plain": [],
+  "litigation_reassign": []
+}
