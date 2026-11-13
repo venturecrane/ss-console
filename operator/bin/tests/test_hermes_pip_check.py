@@ -93,7 +93,8 @@ def test_the_tolerated_table_is_exactly_the_overrides_that_break_a_hermes_pin() 
         for line in (REQUIREMENTS / "hermes-security.txt").read_text(encoding="utf-8").splitlines()
         if line and line[0].isalnum()
     }
-    assert set(check.TOLERATED) == names - {"tornado", "oauthlib"}
+    # opentelemetry-api 1.45.2 is a patch inside its requirers' ranges (CVE-2026-126360).
+    assert set(check.TOLERATED) == names - {"tornado", "oauthlib", "opentelemetry-api"}
     assert set(check.TOLERATED) == {"brotlicffi", "pyasn1"}
 
 
