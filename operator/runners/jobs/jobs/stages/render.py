@@ -24,9 +24,8 @@ from ..medchron import docx_style as S, timeline
 from ..medchron.update.repeats import ADDITIONAL
 from .base import StageRun
 from .group import Canon
+from ..text_rules import DATE_HEAD, ENTRY_START as ENTRY_SPLIT
 
-ENTRY_SPLIT = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
-DATE_HEAD = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 LIMITS = "## Records Reviewed and Limitations"
 
 

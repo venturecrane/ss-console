@@ -18,40 +18,25 @@ never an empty document.
 
 from __future__ import annotations
 
-import io
-import shutil
-import subprocess
 from email import policy
 from email.parser import BytesParser
 from pathlib import Path
-from typing import Callable
 
 from .. import unopened
+from ..text_rules import (
+    OCR_PROMPT,
+    PASSWORD,
+    SCAN_FLOOR,
+    ExtractFailure,
+    Ocr,
+    doc_text,
+    docx_text,
+    html_text,
+    paged as _pages,
+)
 
-PAGE_MARK = "===== page {n} ====="
-SCAN_FLOOR = 25  # characters: a page with less carries no text layer
 HEAD, TAIL = 3, 2
 DEFERRED = "[scanned page {n}: not transcribed]"
-OCR_PROMPT = (
-    "Transcribe every word on this page exactly as printed, top to bottom, including stamps, handwriting you can "
-    "read, and form labels. For a checkbox write [X] when it is marked and [ ] when it is empty. Output the text only."
-)
-Ocr = Callable[[bytes], str]
-
-
-class ExtractFailure(RuntimeError):
-    def __init__(self, problem: str) -> None:
-        self.problem = problem
-        super().__init__(problem)
-
-
-#: The failure code of a PDF locked with a password (``unopened``): a locked
-#: attachment is named inside its email instead of making the email unreadable.
-PASSWORD = "pdf_password"
-
-
-def _pages(texts: list[str]) -> str:
-    return "\n".join(f"{PAGE_MARK.format(n=i)}\n{t.strip()}" for i, t in enumerate(texts, 1))
 
 
 def render_png(pdf_bytes: bytes, page: int, long_side: int = 1600) -> bytes:
@@ -100,17 +85,6 @@ def pdf_text(data: bytes, ocr: Ocr | None) -> tuple[str, int]:
     return _pages(texts), scanned
 
 
-def docx_text(data: bytes) -> str:
-    import docx
-
-    d = docx.Document(io.BytesIO(data))
-    parts = [p.text for p in d.paragraphs]
-    for table in d.tables:
-        for row in table.rows:
-            parts.append(" | ".join(c.text for c in row.cells))
-    return "\n".join(parts)
-
-
 def _attachment_text(name: str, blob: bytes, ocr: Ocr | None) -> str:
     low = name.lower()
     try:
@@ -144,15 +118,6 @@ def msg_text(path: Path, ocr: Ocr | None) -> str:
     return _email(head, m["body"], m["attachments"], ocr)
 
 
-def html_text(raw: bytes | str) -> str:
-    from bs4 import BeautifulSoup
-
-    soup = BeautifulSoup(raw, "html.parser")
-    for tag in soup(["script", "style"]):
-        tag.decompose()
-    return "\n".join(line.strip() for line in soup.get_text("\n").splitlines() if line.strip())
-
-
 def eml_text(data: bytes, ocr: Ocr | None) -> str:
     msg = BytesParser(policy=policy.default).parsebytes(data)
     body_part = msg.get_body(preferencelist=("plain", "html"))
@@ -167,16 +132,6 @@ def eml_text(data: bytes, ocr: Ocr | None) -> str:
             atts.append((part.get_filename() or "attachment", payload))
     head = {k: str(msg.get(k) or "") for k in ("From", "To", "Date", "Subject")}
     return _email(head, body, atts, ocr)
-
-
-def doc_text(path: Path) -> str:
-    exe = shutil.which("antiword")
-    if not exe:
-        raise ExtractFailure("doc_unreadable: antiword is not installed on this seat")
-    r = subprocess.run([exe, str(path)], capture_output=True, text=True, timeout=120, check=False)  # noqa: S603 - fixed binary, a path we wrote
-    if r.returncode != 0:
-        raise ExtractFailure("doc_unreadable: antiword could not read the file")
-    return r.stdout
 
 
 def text_of(path: Path, ext: str, ocr: Ocr | None) -> tuple[str, int]:

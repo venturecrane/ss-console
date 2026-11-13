@@ -14,10 +14,9 @@ sit inside a hospital's exhibit) keeps its first citation.
 
 from __future__ import annotations
 
-import re
 from collections import Counter
 
-CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
+from ..text_rules import EXHIBIT_CITE as CITE
 
 
 def lane_references(lanes: dict[str, list[str]]) -> dict[str, str]:

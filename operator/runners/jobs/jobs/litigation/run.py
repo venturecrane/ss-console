@@ -20,15 +20,12 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import json
-import os
 import re
 import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, limits as limits_mod, proof_mode
-from ..ledger import Ledger
-from ..llm import Doorway
+from .. import limits as limits_mod, paid, proof_mode
 from . import (
     extract as extract_mod,
     fetch as fetch_mod,
@@ -124,22 +121,19 @@ class LitigationRun(BookStages, RunBase):
         self.log = log
         cap = self.job.per_job_cap_usd or float(self.firm.data["per_job_cap_usd"])
         monthly = self.job.monthly_budget_usd or float(self.firm.data["monthly_budget_usd"])
-        self.pricing = budget_mod.Pricing.load(
-            Path(pricing or os.environ.get(budget_mod.PRICING_ENV) or budget_mod.PRICING_DEFAULT)
-        )
-        self.budget = budget_mod.Budget(self.pricing, cap, [self.data / "usage-ledger.jsonl"], 1.0)
-        self.limits = limits_mod.Limits(
-            cap_usd=cap,
-            monthly_budget_usd=monthly,
-            usd_per_scanned_page=0.0,
-            usd_per_audit_claim=0.0,
-            month_cents_used=self.job.month_cents_used,
-        )
-        self.doorway = Doorway(
-            ledger=Ledger(self.data / "usage-ledger.jsonl"),
+        session = paid.open_session(
+            self.data,
+            paid.Caps(cap_usd=cap, monthly_budget_usd=monthly, month_cents_used=self.job.month_cents_used),
+            pricing=pricing,
             client=client,
             log=log,
             before_request=self._before_call,
+        )
+        self.pricing, self.budget, self.limits, self.doorway = (
+            session.pricing,
+            session.budget,
+            session.limits,
+            session.doorway,
         )
         self._seat_factory, self._seat = seat_factory, None
         self.today = self._frozen_today(today)

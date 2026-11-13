@@ -55,6 +55,7 @@ from typing import Any, Callable, Mapping
 from ..proof import review as R
 from . import pleading, render, sets
 from .outcome import DraftingFailed
+from ..text_rules import SENTINEL_LINE as _SENTINEL
 
 MUST, SHOULD, NOTE = R.MUST, R.SHOULD, R.NOTE
 GRADES = R.GRADES
@@ -162,7 +163,6 @@ def complete(text: str) -> bool:
     return R.complete(text)
 
 
-_SENTINEL = re.compile(r"(?m)^\W*===\s*[A-Z][A-Z ]+[^=\n]*===\s*$")
 _LABEL_ALONE = re.compile(
     r"(?m)^\W*(SPECIAL INTERROGATORY|REQUEST FOR ADMISSION|REQUEST FOR PRODUCTION)\s+NO\.?\s*\d+\s*:?\s*$"
 )

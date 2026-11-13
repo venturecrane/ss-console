@@ -60,17 +60,13 @@ read in a job.
 
 from __future__ import annotations
 
-import os
 import re
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .. import seat_layout
-from ..firm_inputs import pin
+from ..firm_config import FirmConfigError, FirmFile
 
 ENV_DIR = "JOBS_CASEFILE_INPUTS_DIR"
 DEFAULT_DIR = seat_layout.CASEFILE_INPUTS
@@ -146,7 +142,7 @@ MAX_READ_WORKERS = 4
 _FOLDER = re.compile(r"^[A-Za-z0-9 ._()-]{1,80}$")
 
 
-class CasefileConfigError(ValueError):
+class CasefileConfigError(FirmConfigError):
     """The case file inputs are missing or malformed."""
 
 
@@ -378,11 +374,6 @@ class CasefileFirm:
         return [re.compile(p, re.I) for p in self.data["statute_reminder_patterns"]]
 
 
-def resolve_dir(explicit: str | Path | None = None) -> Path:
-    # Resolved once: the live path is a symlink the applier swaps (jobs/firm_inputs.py).
-    return pin(explicit or os.environ.get(ENV_DIR) or DEFAULT_DIR)
-
-
 def _prompts(root: Path) -> dict[str, str]:
     out: dict[str, str] = {}
     for name in PROMPTS:
@@ -397,34 +388,26 @@ def _prompts(root: Path) -> dict[str, str]:
     return out
 
 
-def load(explicit: str | Path | None = None) -> CasefileFirm:
-    root = resolve_dir(explicit)
-    path = root / CONFIG_NAME
-    if not path.is_file():
-        raise CasefileConfigError(f"{path} not found (set {ENV_DIR} or deliver vaults/<slug>/casefile/)")
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise CasefileConfigError(f"{path}: not valid YAML ({exc})") from exc
-    problems = validate(data)
-    if problems:
-        raise CasefileConfigError(f"{path}: " + "; ".join(problems))
-    return CasefileFirm(root=root, data=data, prompts=_prompts(root))
+FIRM_FILE: FirmFile[CasefileFirm] = FirmFile(
+    env=ENV_DIR,
+    default=DEFAULT_DIR,
+    name=CONFIG_NAME,
+    error=CasefileConfigError,
+    validate=lambda data, _path: validate(data),
+    build=lambda root, data: CasefileFirm(root=root, data=data, prompts=_prompts(root)),
+    missing="{path} not found (set {env} or deliver vaults/<slug>/casefile/)",
+)
+resolve_dir = FIRM_FILE.resolve
+load = FIRM_FILE.load
 
 
 def main(argv: list[str] | None = None) -> int:
     """``python -m jobs.casefile.firm <dir>``: the provisioning validator."""
-    args = argv if argv is not None else sys.argv[1:]
-    if len(args) != 1:
-        print("usage: python -m jobs.casefile.firm <casefile inputs dir>", file=sys.stderr)
-        return 2
-    try:
-        firm = load(args[0])
-    except CasefileConfigError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    print(f"{firm.root / CONFIG_NAME}: OK ({firm.data['firm']['slug']})")
-    return 0
+    return FIRM_FILE.main(
+        argv,
+        usage="usage: python -m jobs.casefile.firm <casefile inputs dir>",
+        ok=lambda firm: f"{firm.root / CONFIG_NAME}: OK ({firm.data['firm']['slug']})",
+    )
 
 
 if __name__ == "__main__":

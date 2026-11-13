@@ -19,16 +19,12 @@ under the cap.
 
 from __future__ import annotations
 
-import os
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .. import seat_layout
-from ..firm_inputs import pin
+from ..firm_config import FirmConfigError, FirmFile
 
 ENV_DIR = "JOBS_RECORDS_INPUTS_DIR"
 DEFAULT_DIR = seat_layout.RECORDS_INPUTS
@@ -36,7 +32,7 @@ CONFIG_NAME = "records-firm.yaml"
 KEYS = ("per_job_cap_usd", "monthly_budget_usd", "usd_per_page")
 
 
-class RecordsConfigError(ValueError):
+class RecordsConfigError(FirmConfigError):
     """The records inputs are missing or malformed."""
 
 
@@ -77,39 +73,26 @@ class RecordsFirm:
         return float(self.data["usd_per_page"])
 
 
-def resolve_dir(explicit: str | Path | None = None) -> Path:
-    # Resolved once: the live path is a symlink the applier swaps (jobs/firm_inputs.py).
-    return pin(explicit or os.environ.get(ENV_DIR) or DEFAULT_DIR)
-
-
-def load(explicit: str | Path | None = None) -> RecordsFirm:
-    root = resolve_dir(explicit)
-    path = root / CONFIG_NAME
-    if not path.is_file():
-        raise RecordsConfigError(f"{path} not found (set {ENV_DIR} or deliver vaults/<slug>/records/)")
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise RecordsConfigError(f"{path}: not valid YAML ({exc})") from exc
-    problems = validate(data)
-    if problems:
-        raise RecordsConfigError(f"{path}: " + "; ".join(problems))
-    return RecordsFirm(root=root, data=data)
+FIRM_FILE: FirmFile[RecordsFirm] = FirmFile(
+    env=ENV_DIR,
+    default=DEFAULT_DIR,
+    name=CONFIG_NAME,
+    error=RecordsConfigError,
+    validate=lambda data, _path: validate(data),
+    build=lambda root, data: RecordsFirm(root=root, data=data),
+    missing="{path} not found (set {env} or deliver vaults/<slug>/records/)",
+)
+resolve_dir = FIRM_FILE.resolve
+load = FIRM_FILE.load
 
 
 def main(argv: list[str] | None = None) -> int:
     """``python -m jobs.records.firm <dir>``: the boot and provisioning validator."""
-    args = argv if argv is not None else sys.argv[1:]
-    if len(args) != 1:
-        print("usage: python -m jobs.records.firm <records inputs dir>", file=sys.stderr)
-        return 2
-    try:
-        firm = load(args[0])
-    except RecordsConfigError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    print(f"{firm.root / CONFIG_NAME}: OK")
-    return 0
+    return FIRM_FILE.main(
+        argv,
+        usage="usage: python -m jobs.records.firm <records inputs dir>",
+        ok=lambda firm: f"{firm.root / CONFIG_NAME}: OK",
+    )
 
 
 if __name__ == "__main__":

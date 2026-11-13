@@ -33,9 +33,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import arrivals, budget as budget_mod, limits as limits_mod
-from ..ledger import Ledger
-from ..llm import Doorway
+from .. import arrivals, limits as limits_mod, paid
 from ..demand.pull import fetch_all
 from ..stages.base import read_jsonl
 from . import extract as read_mod, notice as notice_mod, offer_check, rows as rows_mod, summary as summary_mod
@@ -106,20 +104,19 @@ class NegotiationRun:
         self.data.mkdir(parents=True, exist_ok=True)
         self.state = Path(state_dir) if state_dir else default_state_dir()
         self.log = log
-        price_path = Path(pricing or os.environ.get(budget_mod.PRICING_ENV) or budget_mod.PRICING_DEFAULT)
-        self.budget = budget_mod.Budget(
-            budget_mod.Pricing.load(price_path), self.job.per_job_cap_usd, [self.data / "usage-ledger.jsonl"], 1.0
+        session = paid.open_session(
+            self.data,
+            paid.Caps(
+                cap_usd=self.job.per_job_cap_usd,
+                monthly_budget_usd=self.job.monthly_budget_usd,
+                month_cents_used=self.job.month_cents_used,
+            ),
+            pricing=pricing,
+            client=client,
+            log=log,
+            before_request=self._before_call,
         )
-        self.limits = limits_mod.Limits(
-            cap_usd=self.job.per_job_cap_usd,
-            monthly_budget_usd=self.job.monthly_budget_usd,
-            usd_per_scanned_page=0.0,
-            usd_per_audit_claim=0.0,
-            month_cents_used=self.job.month_cents_used,
-        )
-        self.doorway = Doorway(
-            ledger=Ledger(self.data / "usage-ledger.jsonl"), client=client, log=log, before_request=self._before_call
-        )
+        self.budget, self.limits, self.doorway = session.budget, session.limits, session.doorway
         self._seat_factory, self._seat = seat_factory, None
         self._layout = layout
         self.today = (today or (lambda: dt.date.today()))().isoformat()

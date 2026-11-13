@@ -15,16 +15,13 @@ as the chronology config: a misspelled key is an error, not a default.
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .. import seat_layout
-from ..firm_inputs import pin
+from ..firm_config import FirmConfigError, FirmFile
 
 ENV_DIR = "JOBS_DEMAND_INPUTS"
 DEFAULT_DIR = seat_layout.DEMAND_INPUTS
@@ -222,7 +219,7 @@ OPTIONAL_ATTORNEY_KEYS = ("format", "bar_number", "script")
 OPTIONAL_SECTIONS = ("formats",)
 
 
-class DemandConfigError(ValueError):
+class DemandConfigError(FirmConfigError):
     """The demand inputs are missing, malformed, or do not match their pins."""
 
 
@@ -477,45 +474,29 @@ def check_pins(root: Path, data: dict[str, Any]) -> list[str]:
     return out
 
 
-def resolve_dir(explicit: str | Path | None = None) -> Path:
-    # Resolved once: the live path is a symlink the applier swaps (jobs/firm_inputs.py).
-    return pin(explicit or os.environ.get(ENV_DIR) or DEFAULT_DIR)
-
-
-def load(explicit: str | Path | None = None) -> DemandFirm:
-    root = resolve_dir(explicit)
-    path = root / CONFIG_NAME
-    if not path.is_file():
-        raise DemandConfigError(f"{path} not found (set {ENV_DIR} or deliver vaults/<slug>/demand/); no built-in firm")
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise DemandConfigError(f"{path}: not valid YAML ({exc})") from exc
-    problems = validate(data)
-    if not problems:
-        problems = check_pins(root, data)
-    if problems:
-        raise DemandConfigError(f"{path}: " + "; ".join(problems))
-    return DemandFirm(root=root, data=data)
+FIRM_FILE: FirmFile[DemandFirm] = FirmFile(
+    env=ENV_DIR,
+    default=DEFAULT_DIR,
+    name=CONFIG_NAME,
+    error=DemandConfigError,
+    validate=lambda data, _path: validate(data),
+    build=lambda root, data: DemandFirm(root=root, data=data),
+    missing="{path} not found (set {env} or deliver vaults/<slug>/demand/); no built-in firm",
+    check=lambda root, data: check_pins(root, data),
+)
+resolve_dir = FIRM_FILE.resolve
+load = FIRM_FILE.load
 
 
 def main(argv: list[str] | None = None) -> int:
     """``python -m jobs.demand.firm <dir>``: the provisioning validator."""
-    import sys
-
-    args = argv if argv is not None else sys.argv[1:]
-    if len(args) != 1:
-        print("usage: python -m jobs.demand.firm <demand inputs dir>", file=sys.stderr)
-        return 2
-    try:
-        firm = load(args[0])
-    except DemandConfigError as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    print(
-        f"{firm.root / CONFIG_NAME}: OK ({firm.get('firm', 'slug')}, {len(firm.data['inputs'])} inputs pinned, {len(firm.data['variants'])} variant(s), {len(firm.data.get('formats') or {})} attorney format(s), {len(firm.data['attorneys'])} attorney(s) mapped)"
+    return FIRM_FILE.main(
+        argv,
+        usage="usage: python -m jobs.demand.firm <demand inputs dir>",
+        ok=lambda firm: (
+            f"{firm.root / CONFIG_NAME}: OK ({firm.get('firm', 'slug')}, {len(firm.data['inputs'])} inputs pinned, {len(firm.data['variants'])} variant(s), {len(firm.data.get('formats') or {})} attorney format(s), {len(firm.data['attorneys'])} attorney(s) mapped)"
+        ),
     )
-    return 0
 
 
 if __name__ == "__main__":

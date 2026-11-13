@@ -21,10 +21,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from ...text_rules import EXHIBIT_CITE_LENIENT as CITE, EXHIBIT_CITE_PLAIN as _PLAIN
+
 MIN_WORDS = 6
 SAID_TWICE = "removed: a sentence an entry stated twice"
-CITE = re.compile(r"\(Exhibit (\d+)\s*(?:-\s*p\.\s*([0-9,\s\-]+?))?\s*(?:,\s*machine transcription)?\)")
-_PLAIN = re.compile(r"\(Exhibit \d+(?: - p\. [0-9,\s\-]+)?\)")
 _PIECE = re.compile(r"(?<=[.!?;])\s+")
 
 
