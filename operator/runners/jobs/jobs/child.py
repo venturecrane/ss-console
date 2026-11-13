@@ -38,6 +38,24 @@ from . import smd_stop, stop_request
 logger = logging.getLogger("jobs.daemon")
 
 DRAIN_ENV = "SMD_DRAIN_SECONDS"
+
+
+def live(pidfile: Path) -> bool:
+    """True while the pid a lane's child pid file names is a live process (a
+    pid owned by another uid counts); no file, or a pid gone, is False."""
+    try:
+        pid = int(pidfile.read_text().strip())
+    except (OSError, ValueError):
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 DEFAULT_DRAIN_SECONDS = 220.0
 TERM_GRACE_SECONDS = 10.0
 #: Past the terminate grace, the time a lane gets to record what its child left.

@@ -17,7 +17,7 @@ import pytest
 import yaml
 
 from demand_testkit import job_doc, make_inputs
-from jobs import lane_proof, lane_proof_cli, proof_mode, proof_run
+from jobs import lane_proof, lane_proof_cli, proof_mode, proof_run, verdict
 from jobs.demand_lane import DemandBroker, DemandLane
 
 pytestmark = pytest.mark.usefixtures("real_lane_gate")
@@ -558,12 +558,12 @@ def test_a_litigation_proof_reads_the_runners_one_object_verdict(honest, status,
 def test_the_proof_reader_takes_either_verdict_shape(written, expect, tmp_path):
     p = tmp_path / "verdict.json"
     p.write_text(written if isinstance(written, str) else json.dumps(written))
-    passed, items = proof_run.judge(proof_run.read_verdicts(tmp_path))
+    passed, items = proof_run.judge(verdict.every(tmp_path))
     assert (passed, sorted({str(i.get("stage") or "") for i in items})) == expect
 
 
 def test_no_verdict_file_is_no_verdict(tmp_path):
-    assert proof_run.read_verdicts(tmp_path) == []
+    assert verdict.every(tmp_path) == []
 
 
 def test_a_kept_envelope_proves_again_after_the_job_dir_is_wiped(lane):

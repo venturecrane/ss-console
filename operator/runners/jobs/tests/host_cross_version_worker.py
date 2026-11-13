@@ -44,7 +44,7 @@ class _Lines(logging.Handler):
 
 def _build(init: dict[str, Any], now: dict[str, float]) -> tuple[Any, Any, _Lines]:
     import pytest
-    from host_matrix_kit import Launches, Seat, install_child
+    from host_matrix_kit import Launches, Seat, install_child, seed_random
     from host_matrix_lanes import KITS
 
     from jobs.broker_client import BrokerClient
@@ -52,7 +52,11 @@ def _build(init: dict[str, Any], now: dict[str, float]) -> tuple[Any, Any, _Line
 
     seat = Seat(root=Path(init["root"]), sock_dir=Path(init["sock_dir"]))
     launches = Launches()
-    install_child(pytest.MonkeyPatch(), launches, seat)
+    mp = pytest.MonkeyPatch()
+    install_child(mp, launches, seat)
+    # The records lane draws its review row's id in this process: the same
+    # fixed sequence the matrix uses, restarted with each worker.
+    seed_random(mp)
     handler = _Lines()
     logging.getLogger("jobs").addHandler(handler)
     d = Daemon(

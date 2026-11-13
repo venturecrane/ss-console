@@ -542,13 +542,20 @@ def test_a_resume_asks_only_the_refused_cases_missing_chunks_and_keeps_every_oth
 def test_the_wake_states_the_declined_count_and_no_matter(tmp_path):
     from jobs import litigation_lane
 
-    jd = tmp_path / "jobs" / "J1"
+    lane = litigation_lane.LitigationLane(
+        run_dir=tmp_path,
+        broker=None,
+        runner_cmd=[],
+        customer_slug="example",
+        sticky_db=str(tmp_path / "sticky.db"),
+        cgroup_root=tmp_path / "cg",
+    )
+    jd = lane.job_dir("J1")
     jd.mkdir(parents=True)
     env = {"trigger": "scheduled", "report": "discovery12", "requester": "a@x"}
     (jd / "envelope.json").write_text(json.dumps(env))
     (jd / "verdict.json").write_text(json.dumps({"verdict": "delivered", "counts": {"d12_declined": 2}}))
-    lane = SimpleNamespace(job_dir=lambda j: jd)
-    text = litigation_lane.LitigationLane._compose_wake(lane, "J1", "delivered", {"files": []})  # type: ignore[arg-type]
+    text = lane._compose_wake("J1", "delivered", {"files": []})
     assert "Declined by the reading service (marked for a hand check): 2." in text
 
 

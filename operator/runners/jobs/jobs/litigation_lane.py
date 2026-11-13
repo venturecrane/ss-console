@@ -43,11 +43,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import job_notes, resume as resume_mod, spend, verdict as verdict_mod
+from . import job_notes, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
-from .child import run_child
 from .firm_inputs import pin_env
-from .daemon import CHILD_ENV_PASS, RUNNER_BIN, Daemon
+from .daemon import RUNNER_BIN, Daemon
 from .proof import holds as proof_holds, watch as proof_watch
 from .skill_load import load_line
 from .drafting_lane import DraftingLane
@@ -67,7 +66,6 @@ DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "litigation-status"
 #: The demand cgroup's other children (the case file job shares it too).
 BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "casefile-child.pid", "records-child.pid")
-CHILD_PID = "litigation-child.pid"
 BUSY_RETRY_SECONDS = 30.0
 HEARTBEAT_SECONDS = 30.0
 #: The deadlines report's file names (``litigation/deadlines/book.py``), the
@@ -115,42 +113,6 @@ def litigation_runner_cmd() -> list[str]:
     return [*privs, "nice", "-n", "10", RUNNER_BIN, "litigate"]
 
 
-def _live(pidfile: Path) -> bool:
-    """A pid file names a running child. A stale file (a crashed child the
-    lane never cleaned up) must not stall this lane forever."""
-    try:
-        pid = int(pidfile.read_text().strip())
-    except (OSError, ValueError):
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def read_verdict(job_dir: Path, out: str) -> dict[str, Any] | None:
-    """The runner's one JSON object: the file first, then stdout's last line."""
-    texts = []
-    try:
-        texts.append((job_dir / verdict_mod.NAME).read_text(encoding="utf-8"))
-    except OSError:
-        pass
-    lines = [ln for ln in (out or "").splitlines() if ln.strip()]
-    if lines:
-        texts.append(lines[-1])
-    for t in texts:
-        try:
-            v = json.loads(t)
-        except ValueError:
-            continue
-        if isinstance(v, dict) and v.get("verdict") in ("delivered", "held", "failed"):
-            return v
-    return None
-
-
 @dataclass
 class LitigationLane(DraftingLane):
     queue_dir: Path = field(default_factory=lambda: Path(seat_layout.LITIGATION_QUEUE))
@@ -160,10 +122,12 @@ class LitigationLane(DraftingLane):
     heartbeat_seconds: float = HEARTBEAT_SECONDS
     LANE = "litigation"
     HEARTBEAT = "litigation-heartbeat"
-
-    @property
-    def jobs(self) -> Path:
-        return self.run_dir / "litigation-jobs"
+    LOGGER = "jobs.litigation"
+    DRAFTING_STEPS = False
+    ONE_VERDICT = ("delivered", "held", "failed")
+    INPUTS_DEFERRED = "litigation inputs not usable yet, deferring %s once: %s"
+    BUSY_RETRY_SECONDS = BUSY_RETRY_SECONDS
+    BUSY_PIDS = BUSY_PIDS
 
     def _write_job(self, job_id: str) -> Path:
         from .litigation import firm as lit_firm
@@ -185,69 +149,28 @@ class LitigationLane(DraftingLane):
         self._chown_child(jd)
         return jd
 
-    def _busy(self) -> bool:
-        return any(_live(self.run_dir / p) for p in BUSY_PIDS)
+    def _before_start(self, job_id: str) -> str | None:
+        gated = self._gate(job_id)
+        return gated if gated is not None else self._allowance_hold(job_id)
 
-    def run_job(self, job_id: str) -> str:
+    def _inputs_error(self) -> Exception | None:
         from .litigation import firm as lit_firm
 
         try:
             lit_firm.load(self.inputs_dir)
         except lit_firm.LitigationConfigError as exc:
-            if not self._daemon_state(job_id).get("config_deferred"):
-                logger.warning("litigation inputs not usable yet, deferring %s once: %s", job_id, exc)
-                self._write_state(job_id, config_deferred=True)
-                return "deferred"
-            return self._fail_unconfigured(job_id, exc)
-        if self._busy():
-            self._write_state(job_id, retry_after=self.clock() + BUSY_RETRY_SECONDS)
-            return "waiting"
-        held = self._allowance_hold(job_id)
-        if held is not None:
-            return held
-        try:
-            jd = self._write_job(job_id)
-            self.broker.record(job_id, "running", {})
-        except BrokerError as exc:
-            logger.warning("broker not ready for %s, deferring: %s", job_id, exc)
-            return "deferred"
-        return self._spawn(job_id, jd)
+            return exc
+        return None
 
-    def _child_env(self, job_id: str, jd: Path) -> dict[str, str]:
-        env = {k: v for k, v in os.environ.items() if k in CHILD_ENV_PASS}
-        env.update(self.child_env, JOBS_DAEMON_JOB_ID=str(job_id))
+    def _lane_env(self, job_id: str) -> dict[str, str]:
+        out: dict[str, str] = {}
         if self.inputs_dir:
-            env[INPUTS_ENV] = str(pin_env(self.inputs_dir))
+            out[INPUTS_ENV] = str(pin_env(self.inputs_dir))
         if self.state_dir:
-            env[STATE_ENV] = str(self.state_dir)
+            out[STATE_ENV] = str(self.state_dir)
         if self.textcache_dir:
-            env[TEXTCACHE_ENV] = str(self.textcache_dir)
-        env.setdefault("JOBS_SEAT", "client")
-        env.setdefault("PATH", "/usr/bin:/bin")
-        env.setdefault("HOME", str(jd))
-        return env
-
-    def _spawn(self, job_id: str, jd: Path) -> str:
-        verdict_mod.clear(jd)
-        with (jd / "daemon.log").open("a", encoding="utf-8") as log:
-            code, out = run_child(
-                self,
-                job_id,
-                resume_mod.start_run(self, job_id, [*self.runner_cmd, str(jd)]),
-                cwd=jd,
-                env=self._child_env(job_id, jd),
-                log=log,
-                pidfile=self.run_dir / CHILD_PID,
-                preexec=self._cgroup_preexec(),
-            )
-        self.jobs_run += 1
-        # A run the Machine's stop cut short is left claimed for the next boot,
-        # as in the other lanes; a real ending reached first is recorded and
-        # never runs twice (resume.finished_verdict reads this one-object shape).
-        finished = resume_mod.finished_verdict(read_verdict(self.job_dir(job_id), out))
-        if not finished and resume_mod.cut_short_by_stop(self, job_id, code, out):
-            return "interrupted"
-        return self._report(job_id, code, out)
+            out[TEXTCACHE_ENV] = str(self.textcache_dir)
+        return out
 
     def _allowance_reason(self, job_id: str) -> str | None:
         """The ``list_allowance:`` hold reason when this status list may not
@@ -331,7 +254,7 @@ class LitigationLane(DraftingLane):
         return "failed"
 
     def _report(self, job_id: str, code: int, out: str) -> str:
-        v = read_verdict(self.job_dir(job_id), out)
+        v = verdict_mod.one(self.job_dir(job_id), out, self.ONE_VERDICT)
         if v is None:
             v = {
                 "verdict": "failed",
@@ -385,7 +308,7 @@ class LitigationLane(DraftingLane):
         if env.get("report") == "reassign":
             from .litigation.reassign import wake as reassign_wake
 
-            verdict = read_verdict(self.job_dir(job_id), "") or {}
+            verdict = verdict_mod.one(self.job_dir(job_id), "", self.ONE_VERDICT) or {}
             return reassign_wake.compose(
                 job_id=job_id, skill=SKILL, state=state, fields=fields, env=env, trig=trig, stage=stage,
                 detail=verdict.get("reassign") or {},
@@ -405,7 +328,7 @@ class LitigationLane(DraftingLane):
         if env.get("report") == "discovery12":
             # A count, never a matter: files the reading service declined twice,
             # printed in the breakdown for a hand check (discovery12/run.py).
-            counts = (read_verdict(self.job_dir(job_id), "") or {}).get("counts") or {}
+            counts = (verdict_mod.one(self.job_dir(job_id), "", self.ONE_VERDICT) or {}).get("counts") or {}
             declined = int(counts.get("d12_declined") or 0)
             lines.append(f"Declined by the reading service (marked for a hand check): {declined}.")
         if state != "delivered":
@@ -488,4 +411,4 @@ def start_lane(d: Daemon, *, stop: Callable[[], bool], poll_seconds: float) -> t
     return t
 
 
-__all__ = ["LitigationBroker", "LitigationLane", "build_lane", "read_verdict", "start_lane"]
+__all__ = ["LitigationBroker", "LitigationLane", "build_lane", "start_lane"]

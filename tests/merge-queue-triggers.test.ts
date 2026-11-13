@@ -63,11 +63,11 @@ describe('merge queue: every required check reports on merge_group', () => {
     })
   }
 
-  it('every operator-substrate detect step diffs against the queue base (5 jobs)', () => {
+  it('every operator-substrate detect step diffs against the queue base (6 jobs)', () => {
     // Without merge_group.base_sha a queue run carries no base, the detect
     // step fails closed, and every suite runs (21 min) on every queued PR.
     const text = readFileSync(workflow('operator-substrate.yml'), 'utf8')
-    expect(text.match(/merge_group\.base_sha \|\|/g)?.length).toBe(5)
+    expect(text.match(/merge_group\.base_sha \|\|/g)?.length).toBe(6)
   })
 
   it('the Semgrep baseline has a merge_group case (no baseline = a full audit that blocks the queue)', () => {

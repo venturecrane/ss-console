@@ -11,7 +11,8 @@ import sys
 from pathlib import Path
 
 from litigation_testkit import JOB, envelope, make_inputs, make_job
-from jobs.litigation_lane import LitigationBroker, LitigationLane, read_verdict
+from jobs import verdict as verdict_mod
+from jobs.litigation_lane import LitigationBroker, LitigationLane
 from jobs.skill_load import load_line
 
 RUNNER = """
@@ -158,6 +159,9 @@ def test_unusable_inputs_defer_once_then_fail_config_missing(tmp_path):
 
 
 def test_read_verdict_prefers_the_file_and_ignores_noise(tmp_path):
+    def read_verdict(job_dir, out):
+        return verdict_mod.one(job_dir, out, LitigationLane.ONE_VERDICT)
+
     (tmp_path / "verdict.json").write_text(json.dumps({"verdict": "held", "stage": "gates"}))
     assert read_verdict(tmp_path, '{"verdict": "delivered"}')["verdict"] == "held"
     (tmp_path / "verdict.json").unlink()

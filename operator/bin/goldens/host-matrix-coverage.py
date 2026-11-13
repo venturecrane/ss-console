@@ -35,6 +35,7 @@ OUT = OPERATOR / "runners" / "jobs" / "tests" / "goldens" / "host_matrix_coverag
 #: transition (the claim, the run, the report, the wake, the loop's own steps).
 HOSTS = (
     "daemon.py",
+    "back_off.py",
     "medchron/lane.py",
     "demand_lane.py",
     "drafting_lane.py",
