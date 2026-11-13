@@ -1,0 +1,78 @@
+{
+  "row": {
+    "attempt": 1,
+    "attorney_key": null,
+    "attorney_name": null,
+    "attorney_named": null,
+    "cents": 0,
+    "choice_json": null,
+    "created_at": "2026-10-20T17:00:00.000Z",
+    "delivery_json": null,
+    "document_class": "memo",
+    "envelope_digest": "deb9b48e1fab9a114fbdbbc73e196f718b7e004cf3d385c5f70cadb82b03fac4",
+    "file_to_matter_id": "",
+    "folder_id": null,
+    "id": "01KTJ0BX000000000000000001",
+    "job_kind": "library_setup",
+    "live": 1,
+    "matter_id": "",
+    "matter_number": "OPS-LIBRARY",
+    "mode": "list",
+    "parent_id": null,
+    "pointed": null,
+    "reason": null,
+    "reply_key": "reply",
+    "reply_sent_at": "2026-10-20T17:00:07.000Z",
+    "report_json": "{\"counts\": {\"found\": 2}, \"setup_outcome\": \"proposed\"}",
+    "request_ref": "<setup-1@firm.example>",
+    "requester": "admin@firm.example",
+    "revise_of": null,
+    "run_id": null,
+    "state": "delivered",
+    "updated_at": "2026-10-20T17:00:02.000Z"
+  },
+  "rows": [
+    {
+      "call": "mark reply",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "mark reply again",
+      "result": {
+        "returned": false
+      }
+    },
+    {
+      "call": "mark another key",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark reply",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark reply after unmark",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark a key never marked",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark an unknown job",
+      "result": {
+        "returned": false
+      }
+    }
+  ]
+}

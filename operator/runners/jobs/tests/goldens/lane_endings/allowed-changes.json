@@ -1,5 +1,5 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the captured goldens for an ORDINARY completed job, per golden file. The goldens were captured on origin/main f72a4d411 before the wave 0 money fixes (0.1 spend recorded on a killed job, 0.2 a resumed job metered once, 0.5 one cache write per audit pass, 0.6 the handwriting field out of demand and drafting source text, 0.10 the unrecorded-spend sweep). None of those changes what an ordinary job records, so every list is empty: any difference fails. A future intended change adds its path here, in the PR that makes it. medchron_rehearsed (added in wave 0 review) is a chronology rehearsed and then resumed: its row records the job's own spend, never the rehearsal's copied ledger.",
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the captured goldens for an ORDINARY completed job, per golden file. The goldens were captured on origin/main f72a4d411 before the wave 0 money fixes (0.1 spend recorded on a killed job, 0.2 a resumed job metered once, 0.5 one cache write per audit pass, 0.6 the handwriting field out of demand and drafting source text, 0.10 the unrecorded-spend sweep). None of those changes what an ordinary job records, so every list is empty but one: any other difference fails. A future intended change adds its path here, in the PR that makes it. medchron_rehearsed (added in wave 0 review) is a chronology rehearsed and then resumed: its row records the job's own spend, never the rehearsal's copied ledger. records (wave 2 Phase A): the three random review ids were committed raw and compared normalised; the golden now stores them as <ID>, the form the test compares. The integrity job, which reads the files as committed, names those three paths here; clear them once this merges.",
   "casefile": [],
   "demand": [],
   "drafting": [],
@@ -8,5 +8,5 @@
   "medchron": [],
   "medchron_rehearsed": [],
   "negotiation": [],
-  "records": []
+  "records": ["records.1.delivery.review_id", "state.review_watch.id", "state.row.id"]
 }

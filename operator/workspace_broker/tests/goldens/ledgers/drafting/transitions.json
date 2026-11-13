@@ -1,0 +1,2862 @@
+{
+  "matrix": {
+    "delivered": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "caption_corrections": [],
+          "caption_discrepancies": [],
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "drafting",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "markers": [],
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "caption_corrections": [],
+            "caption_discrepancies": [],
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": [
+              {
+                "name": "Out.docx",
+                "role": "drafting",
+                "size": 41000
+              }
+            ],
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "markers": [],
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:05.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:05.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:05.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "caption_corrections": [],
+          "caption_discrepancies": [],
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "drafting",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "markers": [],
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> failed",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "caption_corrections": [],
+          "caption_discrepancies": [],
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "drafting",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "markers": [],
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> held",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "caption_corrections": [],
+          "caption_discrepancies": [],
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "drafting",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "markers": [],
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> running",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "caption_corrections": [],
+          "caption_discrepancies": [],
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "drafting",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "markers": [],
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> submitted",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "failed": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> delivered",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> held",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "DRAFTING_JOB_RUNNING",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "document_class": "mediation_brief",
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 2,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 2,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 2,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> submitted",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "held": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> delivered",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "DRAFTING_JOB_FAILED",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "document_class": "mediation_brief",
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> running",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> submitted",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      }
+    },
+    "running": {
+      "delivered": {
+        "audit": [
+          {
+            "action_type": "DRAFTING_JOB_DELIVERED",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "caption_corrections_count": 0,
+              "caption_discrepancies_count": 0,
+              "cents": 500,
+              "document_class": "mediation_brief",
+              "files": [
+                {
+                  "name": "Out.docx",
+                  "role": "drafting",
+                  "size": 41000
+                }
+              ],
+              "folder_id": "folder-7",
+              "job_id": "01KTJ0BX000000000000000001",
+              "markers_count": 0,
+              "reason": null,
+              "state": "delivered"
+            }
+          }
+        ],
+        "project": {
+          "caption_corrections": [],
+          "caption_discrepancies": [],
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": [
+            {
+              "name": "Out.docx",
+              "role": "drafting",
+              "size": 41000
+            }
+          ],
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "markers": [],
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "caption_corrections": [],
+            "caption_discrepancies": [],
+            "cents": 500,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": [
+              {
+                "name": "Out.docx",
+                "role": "drafting",
+                "size": 41000
+              }
+            ],
+            "folder_id": "folder-7",
+            "id": "01KTJ0BX000000000000000001",
+            "markers": [],
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 500,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": "folder-7",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 500,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"caption_corrections\": [], \"caption_discrepancies\": [], \"cents\": 500, \"files\": [{\"name\": \"Out.docx\", \"role\": \"drafting\", \"size\": 41000}], \"markers\": []}",
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": "folder-7",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 500,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "DRAFTING_JOB_FAILED",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "document_class": "mediation_brief",
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "DRAFTING_JOB_HELD",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "document_class": "mediation_brief",
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "limit_held: a matrix hold",
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:03.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:03.000Z"
+            }
+          ],
+          "drafting_spend": []
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition running -> submitted",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": []
+        }
+      }
+    },
+    "submitted": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "submitted",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "submitted",
+            "updated_at": "2026-10-20T17:00:00.000Z"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition submitted -> delivered",
+          "ok": false
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "submitted",
+          "updated_at": "2026-10-20T17:00:00.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "submitted",
+              "updated_at": "2026-10-20T17:00:00.000Z"
+            }
+          ],
+          "drafting_spend": []
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "DRAFTING_JOB_FAILED",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "document_class": "mediation_brief",
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "unexpected: a matrix failure",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "unexpected: a matrix failure",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "unexpected: a matrix failure",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "DRAFTING_JOB_HELD",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 100,
+              "document_class": "mediation_brief",
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": "limit_held: a matrix hold",
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "limit_held: a matrix hold",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 100,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": "limit_held: a matrix hold",
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 100,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": "limit_held: a matrix hold",
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": [
+            {
+              "at": "2026-10-20T17:00:01.000Z",
+              "cents": 100,
+              "job_id": "01KTJ0BX000000000000000001"
+            }
+          ]
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "DRAFTING_JOB_RUNNING",
+            "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+            "metadata": {
+              "cents": 0,
+              "document_class": "mediation_brief",
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "reason": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": []
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "document_class": "mediation_brief",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "files": null,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_sent_at": null,
+          "requester": "admin@firm.example",
+          "state": "submitted",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "recent": [
+          {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "submitted",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "submitted",
+            "updated_at": "2026-10-20T17:00:01.000Z"
+          },
+          "ok": true
+        },
+        "row": {
+          "attempt": 1,
+          "cents": 0,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "document_class": "mediation_brief",
+          "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+          "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+          "matter_number": "100001",
+          "reason": null,
+          "reply_key": null,
+          "reply_sent_at": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "revise_of": null,
+          "state": "submitted",
+          "updated_at": "2026-10-20T17:00:01.000Z"
+        },
+        "tables": {
+          "drafting_jobs": [
+            {
+              "attempt": 1,
+              "cents": 0,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "document_class": "mediation_brief",
+              "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+              "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+              "matter_number": "100001",
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "revise_of": null,
+              "state": "submitted",
+              "updated_at": "2026-10-20T17:00:01.000Z"
+            }
+          ],
+          "drafting_spend": []
+        }
+      }
+    }
+  },
+  "never_reached": [],
+  "reached_by": {
+    "delivered": ["running", "delivered"],
+    "failed": ["failed"],
+    "held": ["held"],
+    "running": ["running"],
+    "submitted": []
+  },
+  "start": "submitted",
+  "states": ["submitted", "running", "held", "delivered", "failed"]
+}

@@ -1,0 +1,90 @@
+{
+  "library_setup_accept_status | gateway | empty": {
+    "error": "PermissionError",
+    "message": "library_setup_accept_status is not permitted for this caller",
+    "ok": false
+  },
+  "library_setup_accept_status | gateway | known job": {
+    "error": "PermissionError",
+    "message": "library_setup_accept_status is not permitted for this caller",
+    "ok": false
+  },
+  "library_setup_accept_status | root | empty": {
+    "error": "ValueError",
+    "message": "library_setup_accept_status names no spooled accept job",
+    "ok": false
+  },
+  "library_setup_accept_status | root | known job": {
+    "error": "ValueError",
+    "message": "library_setup_accept_status names no spooled accept job",
+    "ok": false
+  },
+  "library_setup_accept_submit | gateway | empty": {
+    "error": "PermissionError",
+    "message": "library_setup_accept_submit is not permitted for this caller",
+    "ok": false
+  },
+  "library_setup_accept_submit | gateway | known job": {
+    "error": "PermissionError",
+    "message": "library_setup_accept_submit is not permitted for this caller",
+    "ok": false
+  },
+  "library_setup_accept_submit | root | empty": {
+    "error": "ValueError",
+    "message": "library_setup_accept_submit names no running accept job",
+    "ok": false
+  },
+  "library_setup_accept_submit | root | known job": {
+    "error": "ValueError",
+    "message": "library_setup_accept_submit names no running accept job",
+    "ok": false
+  },
+  "library_setup_choose | gateway | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "There is no list of documents in this thread to choose from.",
+    "reason_key": "refused_no_list"
+  },
+  "library_setup_choose | gateway | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "There is no list of documents in this thread to choose from.",
+    "reason_key": "refused_no_list"
+  },
+  "library_setup_choose | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "There is no list of documents in this thread to choose from.",
+    "reason_key": "refused_no_list"
+  },
+  "library_setup_choose | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "There is no list of documents in this thread to choose from.",
+    "reason_key": "refused_no_list"
+  },
+  "library_setup_submit | gateway | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "We can set up the firm's discovery sets, discovery responses, mediation briefs, memos and deposition outlines from the firm's own documents, one kind at a time or the whole document library at once.",
+    "reason_key": "refused_kind"
+  },
+  "library_setup_submit | gateway | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "We can set up the firm's discovery sets, discovery responses, mediation briefs, memos and deposition outlines from the firm's own documents, one kind at a time or the whole document library at once.",
+    "reason_key": "refused_kind"
+  },
+  "library_setup_submit | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "We can set up the firm's discovery sets, discovery responses, mediation briefs, memos and deposition outlines from the firm's own documents, one kind at a time or the whole document library at once.",
+    "reason_key": "refused_kind"
+  },
+  "library_setup_submit | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "We can set up the firm's discovery sets, discovery responses, mediation briefs, memos and deposition outlines from the firm's own documents, one kind at a time or the whole document library at once.",
+    "reason_key": "refused_kind"
+  }
+}

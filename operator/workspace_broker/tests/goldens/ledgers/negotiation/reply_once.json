@@ -1,0 +1,68 @@
+{
+  "row": {
+    "attempt": 1,
+    "cents": 500,
+    "created_at": "2026-10-20T17:00:00.000Z",
+    "docs_failed": 0,
+    "docs_read": 2,
+    "envelope_digest": "ae57df11fd3b6f856cee21591285069b5ac83f5f167337ec071f46d99aae769e",
+    "id": "01KTJ0BX000000000000000001",
+    "matters_seeded": 0,
+    "matters_total": 9,
+    "notice": false,
+    "notices_count": 1,
+    "reason": null,
+    "reply_key": "reply",
+    "reply_sent_at": "2026-10-20T17:00:08.000Z",
+    "request_ref": "scheduled:2026-10-11T08",
+    "requester": "admin@firm.example",
+    "stage": "report",
+    "state": "delivered",
+    "trigger": "scheduled",
+    "updated_at": "2026-10-20T17:00:03.000Z"
+  },
+  "rows": [
+    {
+      "call": "mark reply",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "mark reply again",
+      "result": {
+        "returned": false
+      }
+    },
+    {
+      "call": "mark another key",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark reply",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark reply after unmark",
+      "result": {
+        "returned": true
+      }
+    },
+    {
+      "call": "unmark a key never marked",
+      "result": {
+        "returned": null
+      }
+    },
+    {
+      "call": "mark an unknown job",
+      "result": {
+        "returned": false
+      }
+    }
+  ]
+}

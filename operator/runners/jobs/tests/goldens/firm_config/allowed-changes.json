@@ -1,0 +1,12 @@
+{
+  "_why": "Dotted paths that may differ from the captured firm-loader goldens, per <lane>/<fixture>. Captured on origin/main 4413e23e9 before wave 2 folds the six firm-settings loaders into one firm_config kit. Every list is empty: any difference in a problem list, a loaded value, a mutation's verdict or the CLI's exit code or words fails. An intended change adds its path here, in the PR that makes it.",
+  "casefile/kit": [],
+  "demand/crabtree": [],
+  "demand/crabtree_by_attorney": [],
+  "demand/kit": [],
+  "demand/numbered": [],
+  "drafting/kit": [],
+  "litigation/kit": [],
+  "medchron/probes_synthetic_firm": [],
+  "records/kit": []
+}

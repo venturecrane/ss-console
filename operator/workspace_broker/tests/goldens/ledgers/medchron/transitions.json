@@ -1,0 +1,2744 @@
+{
+  "matrix": {
+    "delivered": {
+      "delivered": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_DELIVERED",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 500,
+              "documents": 4,
+              "files": [
+                {
+                  "bytes": 10,
+                  "name": "A.docx",
+                  "sha256": "ab"
+                }
+              ],
+              "folder_id": "folder-9",
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 30,
+              "reason": null,
+              "state": "delivered"
+            }
+          }
+        ],
+        "project": {
+          "cents": 500,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 4,
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "state": "delivered",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:05.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 500,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+            "documents": 4,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": "folder-9",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 30,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:05.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 500,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 4,
+            "folder_id": "folder-9",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 30,
+            "reason": null,
+            "state": "delivered",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:05.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 500,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+          "documents": 4,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:05.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 500,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+              "documents": 4,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": "folder-9",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 30,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:05.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "failed": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 4,
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "state": "delivered",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 500,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+            "documents": 4,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": "folder-9",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 30,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> failed",
+          "ok": false
+        },
+        "row": {
+          "cents": 500,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+          "documents": 4,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 500,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+              "documents": 4,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": "folder-9",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 30,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 4,
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "state": "delivered",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 500,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+            "documents": 4,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": "folder-9",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 30,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> held",
+          "ok": false
+        },
+        "row": {
+          "cents": 500,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+          "documents": 4,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 500,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+              "documents": 4,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": "folder-9",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 30,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "running": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 4,
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "state": "delivered",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 500,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+            "documents": 4,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": "folder-9",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 30,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> running",
+          "ok": false
+        },
+        "row": {
+          "cents": 500,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+          "documents": 4,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 500,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+              "documents": 4,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": "folder-9",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 30,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 500,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 4,
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "state": "delivered",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 500,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+            "documents": 4,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": "folder-9",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 30,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition delivered -> submitted",
+          "ok": false
+        },
+        "row": {
+          "cents": 500,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+          "documents": 4,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 500,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+              "documents": 4,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": "folder-9",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 30,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      }
+    },
+    "failed": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "state": "failed",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> delivered",
+          "ok": false
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_FAILED",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "state": "failed",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "state": "failed",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "held": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "state": "failed",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> held",
+          "ok": false
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_RUNNING",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "state": "running",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "state": "running",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "state": "failed",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition failed -> submitted",
+          "ok": false
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      }
+    },
+    "held": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "state": "held",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> delivered",
+          "ok": false
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_FAILED",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "state": "failed",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "state": "failed",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_HELD",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": "limit_held: a matrix hold",
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "state": "held",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "limit_held: a matrix hold",
+            "state": "held",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_RUNNING",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "state": "running",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "state": "running",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "state": "held",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition held -> submitted",
+          "ok": false
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      }
+    },
+    "running": {
+      "delivered": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_DELIVERED",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 500,
+              "documents": 4,
+              "files": [
+                {
+                  "bytes": 10,
+                  "name": "A.docx",
+                  "sha256": "ab"
+                }
+              ],
+              "folder_id": "folder-9",
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 30,
+              "reason": null,
+              "state": "delivered"
+            }
+          }
+        ],
+        "project": {
+          "cents": 500,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 4,
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "state": "delivered",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 500,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+            "documents": 4,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": "folder-9",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 30,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "delivered",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 500,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 4,
+            "folder_id": "folder-9",
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 30,
+            "reason": null,
+            "state": "delivered",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 500,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+          "documents": 4,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": "folder-9",
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 30,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "delivered",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 500,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
+              "documents": 4,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": "folder-9",
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 30,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "delivered",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_FAILED",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "state": "failed",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "state": "failed",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_HELD",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": "limit_held: a matrix hold",
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "state": "held",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "limit_held: a matrix hold",
+            "state": "held",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_RUNNING",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 0,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 0,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "state": "running",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 0,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "state": "running",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:03.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 0,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:03.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 0,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:03.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "submitted": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "state": "running",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 0,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition running -> submitted",
+          "ok": false
+        },
+        "row": {
+          "cents": 0,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 0,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      }
+    },
+    "submitted": {
+      "delivered": {
+        "audit": [],
+        "project": {
+          "cents": 0,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "state": "submitted",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:00.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 0,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "submitted",
+            "updated_at": "2026-10-20T17:00:00.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "error": "ValueError",
+          "message": "illegal transition submitted -> delivered",
+          "ok": false
+        },
+        "row": {
+          "cents": 0,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "submitted",
+          "updated_at": "2026-10-20T17:00:00.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 0,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "submitted",
+              "updated_at": "2026-10-20T17:00:00.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "failed": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_FAILED",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "state": "failed"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "state": "failed",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "unexpected: a matrix failure",
+            "state": "failed",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "unexpected: a matrix failure",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "failed",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "unexpected: a matrix failure",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "failed",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "held": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_HELD",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 100,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": "limit_held: a matrix hold",
+              "state": "held"
+            }
+          }
+        ],
+        "project": {
+          "cents": 100,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "state": "held",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 100,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "limit_held: a matrix hold",
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "held",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 100,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": "limit_held: a matrix hold",
+            "state": "held",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 100,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": "limit_held: a matrix hold",
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "held",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 100,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": "limit_held: a matrix hold",
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "held",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "running": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_RUNNING",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 0,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": null,
+              "state": "running"
+            }
+          }
+        ],
+        "project": {
+          "cents": 0,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "state": "running",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 0,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "state": "running",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 0,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "running",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 0,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "running",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      },
+      "submitted": {
+        "audit": [
+          {
+            "action_type": "MEDCHRON_JOB_SUBMITTED",
+            "matter_ref": "m-1",
+            "metadata": {
+              "cents": 0,
+              "documents": 0,
+              "folder_id": null,
+              "job_id": "01KTJ0BX000000000000000001",
+              "pages": 0,
+              "reason": null,
+              "state": "submitted"
+            }
+          }
+        ],
+        "project": {
+          "cents": 0,
+          "covered_document_ids": null,
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "documents": 0,
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "state": "submitted",
+          "uncovered_document_ids": null,
+          "uncovered_reasons": null,
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "recent": [
+          {
+            "cents": 0,
+            "client_keys": "[\"alpha example\"]",
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "delivery_json": null,
+            "documents": 0,
+            "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "state": "submitted",
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          }
+        ],
+        "reply": {
+          "job": {
+            "cents": 0,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "2026-10-20T17:00:00.000Z",
+            "documents": 0,
+            "folder_id": null,
+            "id": "01KTJ0BX000000000000000001",
+            "matter_number": "2026-PI-101",
+            "pages": 0,
+            "reason": null,
+            "state": "submitted",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "2026-10-20T17:00:01.000Z",
+            "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+          },
+          "ok": true
+        },
+        "row": {
+          "cents": 0,
+          "client_keys": "[\"alpha example\"]",
+          "covered_json": null,
+          "created_at": "2026-10-20T17:00:00.000Z",
+          "delivery_json": null,
+          "documents": 0,
+          "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+          "folder_id": null,
+          "id": "01KTJ0BX000000000000000001",
+          "matter_id": "m-1",
+          "matter_number": "2026-PI-101",
+          "pages": 0,
+          "reason": null,
+          "request_ref": "<req-1@firm.example>",
+          "requester": "admin@firm.example",
+          "state": "submitted",
+          "updated_at": "2026-10-20T17:00:01.000Z",
+          "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+        },
+        "tables": {
+          "medchron_jobs": [
+            {
+              "cents": 0,
+              "client_keys": "[\"alpha example\"]",
+              "covered_json": null,
+              "created_at": "2026-10-20T17:00:00.000Z",
+              "delivery_json": null,
+              "documents": 0,
+              "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+              "folder_id": null,
+              "id": "01KTJ0BX000000000000000001",
+              "matter_id": "m-1",
+              "matter_number": "2026-PI-101",
+              "pages": 0,
+              "reason": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "state": "submitted",
+              "updated_at": "2026-10-20T17:00:01.000Z",
+              "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+            }
+          ],
+          "medchron_page_credits": []
+        }
+      }
+    }
+  },
+  "never_reached": [],
+  "reached_by": {
+    "delivered": ["running", "delivered"],
+    "failed": ["failed"],
+    "held": ["held"],
+    "running": ["running"],
+    "submitted": []
+  },
+  "start": "submitted",
+  "states": ["submitted", "running", "held", "delivered", "failed"]
+}

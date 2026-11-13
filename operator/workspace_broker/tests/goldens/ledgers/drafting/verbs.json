@@ -1,0 +1,221 @@
+{
+  "drafting_allowance | gateway | empty": {
+    "allowance": null,
+    "authored": false,
+    "cents_month": "2026-11",
+    "cents_used": 0,
+    "cycle": "2026-11",
+    "cycle_start": "2026-11-01T00:00:00.000Z",
+    "enabled_classes": [],
+    "ok": true,
+    "remaining": 0,
+    "unit": "drafts",
+    "used": 0
+  },
+  "drafting_allowance | gateway | known job": {
+    "allowance": null,
+    "authored": false,
+    "cents_month": "2026-11",
+    "cents_used": 0,
+    "cycle": "2026-11",
+    "cycle_start": "2026-11-01T00:00:00.000Z",
+    "enabled_classes": [],
+    "ok": true,
+    "remaining": 0,
+    "unit": "drafts",
+    "used": 0
+  },
+  "drafting_allowance | root | empty": {
+    "allowance": null,
+    "authored": false,
+    "cents_month": "2026-11",
+    "cents_used": 0,
+    "cycle": "2026-11",
+    "cycle_start": "2026-11-01T00:00:00.000Z",
+    "enabled_classes": [],
+    "ok": true,
+    "remaining": 0,
+    "unit": "drafts",
+    "used": 0
+  },
+  "drafting_allowance | root | known job": {
+    "allowance": null,
+    "authored": false,
+    "cents_month": "2026-11",
+    "cents_used": 0,
+    "cycle": "2026-11",
+    "cycle_start": "2026-11-01T00:00:00.000Z",
+    "enabled_classes": [],
+    "ok": true,
+    "remaining": 0,
+    "unit": "drafts",
+    "used": 0
+  },
+  "drafting_job_add_to_request | gateway | empty": {
+    "ok": true,
+    "result": "no_such_job"
+  },
+  "drafting_job_add_to_request | gateway | known job": {
+    "document_class": "mediation_brief",
+    "job_id": "01KTJ0BX000000000000000001",
+    "matter_number": "100001",
+    "ok": true,
+    "result": "not_requester"
+  },
+  "drafting_job_add_to_request | root | empty": {
+    "ok": true,
+    "result": "no_such_job"
+  },
+  "drafting_job_add_to_request | root | known job": {
+    "document_class": "mediation_brief",
+    "job_id": "01KTJ0BX000000000000000001",
+    "matter_number": "100001",
+    "ok": true,
+    "result": "not_requester"
+  },
+  "drafting_job_record | gateway | empty": {
+    "error": "PermissionError",
+    "message": "drafting_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "drafting_job_record | gateway | known job": {
+    "error": "PermissionError",
+    "message": "drafting_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "drafting_job_record | root | empty": {
+    "error": "ValueError",
+    "message": "drafting_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "drafting_job_record | root | known job": {
+    "error": "ValueError",
+    "message": "drafting_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "drafting_job_resume | gateway | empty": {
+    "error": "PermissionError",
+    "message": "drafting_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "drafting_job_resume | gateway | known job": {
+    "error": "PermissionError",
+    "message": "drafting_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "drafting_job_resume | root | empty": {
+    "error": "ValueError",
+    "message": "drafting_job_resume requires job_id",
+    "ok": false
+  },
+  "drafting_job_resume | root | known job": {
+    "error": "ValueError",
+    "message": "drafting_job_resume requires a reason: what was fixed, and why the done stages still hold",
+    "ok": false
+  },
+  "drafting_job_status | gateway | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "document_class": "mediation_brief",
+        "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+        "files": null,
+        "folder_id": null,
+        "id": "01KTJ0BX000000000000000001",
+        "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+        "matter_number": "100001",
+        "reason": null,
+        "reply_sent_at": null,
+        "requester": "admin@firm.example",
+        "state": "submitted",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      }
+    ],
+    "ok": true
+  },
+  "drafting_job_status | gateway | known job": {
+    "job": {
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "document_class": "mediation_brief",
+      "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+      "files": null,
+      "folder_id": null,
+      "id": "01KTJ0BX000000000000000001",
+      "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+      "matter_number": "100001",
+      "reason": null,
+      "reply_sent_at": null,
+      "requester": "admin@firm.example",
+      "state": "submitted",
+      "updated_at": "2026-10-20T17:00:00.000Z"
+    },
+    "ok": true
+  },
+  "drafting_job_status | root | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "document_class": "mediation_brief",
+        "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+        "files": null,
+        "folder_id": null,
+        "id": "01KTJ0BX000000000000000001",
+        "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+        "matter_number": "100001",
+        "reason": null,
+        "reply_sent_at": null,
+        "requester": "admin@firm.example",
+        "state": "submitted",
+        "updated_at": "2026-10-20T17:00:00.000Z"
+      }
+    ],
+    "ok": true
+  },
+  "drafting_job_status | root | known job": {
+    "job": {
+      "attempt": 1,
+      "cents": 0,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "delivery_json": null,
+      "document_class": "mediation_brief",
+      "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+      "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+      "folder_id": null,
+      "id": "01KTJ0BX000000000000000001",
+      "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+      "matter_number": "100001",
+      "reason": null,
+      "reply_key": null,
+      "reply_sent_at": null,
+      "request_ref": "<req-1@firm.example>",
+      "requester": "admin@firm.example",
+      "revise_of": null,
+      "state": "submitted",
+      "updated_at": "2026-10-20T17:00:00.000Z"
+    },
+    "ok": true
+  },
+  "drafting_job_submit | gateway | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a drafting envelope carries exactly ['document_class', 'file_to', 'matter', 'request_ref', 'request_text', 'requested_by'], and optionally attachments (and, from root, revise_of)"
+  },
+  "drafting_job_submit | gateway | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a drafting envelope carries exactly ['document_class', 'file_to', 'matter', 'request_ref', 'request_text', 'requested_by'], and optionally attachments (and, from root, revise_of)"
+  },
+  "drafting_job_submit | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a drafting envelope carries exactly ['document_class', 'file_to', 'matter', 'request_ref', 'request_text', 'requested_by'], and optionally attachments (and, from root, revise_of)"
+  },
+  "drafting_job_submit | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "a drafting envelope carries exactly ['document_class', 'file_to', 'matter', 'request_ref', 'request_text', 'requested_by'], and optionally attachments (and, from root, revise_of)"
+  }
+}

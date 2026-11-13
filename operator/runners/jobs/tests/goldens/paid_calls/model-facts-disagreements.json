@@ -1,0 +1,409 @@
+[
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "litigation", "medchron"],
+      "refused_somewhere_in": {
+        "drafting:models.audit": [
+          "models.audit: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-fable-5",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": "output ceiling 128000; the shipped card's rate_for refuses it (no row)",
+    "homes": ["demand.gapaudit.OUTPUT_MAX", "adapter rate card (budget.Pricing)"],
+    "id": "claude-fable-5-1",
+    "kind": "ceiling known, not priced"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "drafting", "litigation"],
+      "refused_somewhere_in": {
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-fable-5-1 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-fable-5-1",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": "output ceiling 128000; the shipped card's rate_for refuses it (no row)",
+    "homes": ["demand.gapaudit.OUTPUT_MAX", "adapter rate card (budget.Pricing)"],
+    "id": "claude-fable-5-2",
+    "kind": "ceiling known, not priced"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "drafting", "litigation"],
+      "refused_somewhere_in": {
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-fable-5-2 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-fable-5-2",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": {
+      "output_ceiling": null,
+      "validators_refusing": [
+        "drafting:models.audit",
+        "drafting:models.compose",
+        "drafting:models.digest",
+        "drafting:models.repair",
+        "drafting:models.transcription"
+      ]
+    },
+    "homes": ["adapter rate card (budget.Pricing)", "demand.gapaudit.OUTPUT_MAX"],
+    "id": "claude-haiku-4-5-20251001",
+    "kind": "priced, no ceiling"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "litigation", "medchron"],
+      "refused_somewhere_in": {
+        "drafting:models.audit": [
+          "models.audit: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-haiku-4-5-20251001",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": {
+      "output_ceiling": null,
+      "validators_refusing": [
+        "drafting:models.audit",
+        "drafting:models.compose",
+        "drafting:models.digest",
+        "drafting:models.repair",
+        "drafting:models.transcription"
+      ]
+    },
+    "homes": ["adapter rate card (budget.Pricing)", "demand.gapaudit.OUTPUT_MAX"],
+    "id": "claude-haiku-5-5",
+    "kind": "priced, no ceiling"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "litigation", "medchron"],
+      "refused_somewhere_in": {
+        "drafting:models.audit": [
+          "models.audit: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-haiku-5-5",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "litigation"],
+      "refused_somewhere_in": {
+        "drafting:models.audit": [
+          "models.audit: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-mythos-5-1 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-mythos-5-1",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": {
+      "output_ceiling": null,
+      "validators_refusing": [
+        "drafting:models.audit",
+        "drafting:models.compose",
+        "drafting:models.digest",
+        "drafting:models.repair",
+        "drafting:models.transcription"
+      ]
+    },
+    "homes": ["adapter rate card (budget.Pricing)", "demand.gapaudit.OUTPUT_MAX"],
+    "id": "claude-opus-4-7",
+    "kind": "priced, no ceiling"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "litigation", "medchron"],
+      "refused_somewhere_in": {
+        "drafting:models.audit": [
+          "models.audit: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-opus-4-7",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": {
+      "output_ceiling": null,
+      "validators_refusing": [
+        "drafting:models.audit",
+        "drafting:models.compose",
+        "drafting:models.digest",
+        "drafting:models.repair",
+        "drafting:models.transcription"
+      ]
+    },
+    "homes": ["adapter rate card (budget.Pricing)", "demand.gapaudit.OUTPUT_MAX"],
+    "id": "claude-opus-4-8",
+    "kind": "priced, no ceiling"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "litigation", "medchron"],
+      "refused_somewhere_in": {
+        "drafting:models.audit": [
+          "models.audit: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-opus-4-8",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": {
+      "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [500, 2500, null],
+      "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+      "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+        500,
+        2500,
+        null
+      ],
+      "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": null
+    },
+    "homes": [
+      "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json",
+      "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json",
+      "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json",
+      "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json"
+    ],
+    "id": "claude-opus-5",
+    "kind": "rate cards or loaders disagree"
+  },
+  {
+    "detail": {
+      "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [400, 2000, 0.05],
+      "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+      "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+        400, 2000, 0.05
+      ],
+      "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+        400,
+        2000,
+        null
+      ]
+    },
+    "homes": [
+      "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json",
+      "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json",
+      "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json",
+      "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json"
+    ],
+    "id": "claude-opus-5-5",
+    "kind": "rate cards or loaders disagree"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "drafting", "litigation"],
+      "refused_somewhere_in": {
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-opus-5-5 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-opus-5-5",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": {
+      "output_ceiling": null,
+      "validators_refusing": [
+        "drafting:models.audit",
+        "drafting:models.compose",
+        "drafting:models.digest",
+        "drafting:models.repair",
+        "drafting:models.transcription"
+      ]
+    },
+    "homes": ["adapter rate card (budget.Pricing)", "demand.gapaudit.OUTPUT_MAX"],
+    "id": "claude-sonnet-4-6",
+    "kind": "priced, no ceiling"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "litigation", "medchron"],
+      "refused_somewhere_in": {
+        "drafting:models.audit": [
+          "models.audit: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-sonnet-4-6",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": {
+      "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [200, 1000, null],
+      "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+      "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+        200,
+        1000,
+        null
+      ],
+      "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": null
+    },
+    "homes": [
+      "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json",
+      "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json",
+      "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json",
+      "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json"
+    ],
+    "id": "claude-sonnet-5",
+    "kind": "rate cards or loaders disagree"
+  },
+  {
+    "detail": {
+      "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [200, 1000, 0.05],
+      "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+      "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+        200, 1000, 0.05
+      ],
+      "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+        200,
+        1000,
+        null
+      ]
+    },
+    "homes": [
+      "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json",
+      "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json",
+      "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json",
+      "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json"
+    ],
+    "id": "claude-sonnet-5-5",
+    "kind": "rate cards or loaders disagree"
+  },
+  {
+    "detail": {
+      "accepted_everywhere_in": ["casefile", "demand", "drafting", "litigation"],
+      "refused_somewhere_in": {
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-sonnet-5-5 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ]
+      }
+    },
+    "homes": ["casefile", "demand", "drafting", "litigation", "medchron"],
+    "id": "claude-sonnet-5-5",
+    "kind": "firm validators disagree"
+  },
+  {
+    "detail": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+    "homes": ["budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json"],
+    "id": null,
+    "kind": "a loader refuses a card the other loads"
+  }
+]

@@ -1,0 +1,124 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "written",
+    "step": "orphan written",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/demand-queue/<ULID1>.json",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": ["ERROR jobs.daemon quarantined <ULID1>: the broker has no ledger row for it"],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "demand-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "claim",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-heartbeat.json",
+      "run/demand-queue/",
+      "run/demand-queue/quarantine/",
+      "run/demand-queue/quarantine/<ULID1>.json",
+      "run/demand-tick",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": null,
+          "ok": true
+        },
+        "request": {
+          "action": "demand_job_status",
+          "job_id": "<ULID1>"
+        }
+      }
+    ]
+  }
+]

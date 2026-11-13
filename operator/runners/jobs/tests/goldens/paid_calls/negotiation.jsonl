@@ -1,0 +1,4 @@
+{"batch": false, "body_sha256": "175418376ce3d90205ec7f23fa35fa1b650b69924a2931e572abef781c81ec9a", "cache_breakpoints": ["system.0"], "effort": "high", "event": "request", "max_tokens": 6000, "model": "claude-opus-5-5", "other_keys": [], "output_format": null, "output_format_sha256": null, "seam": "doorway", "stage": "review", "stream": true, "thinking": null, "tool_choice": null, "tools": [], "tools_sha256": null}
+{"args": {"spent_usd": 0.0, "stage": "review", "state": {"cap_usd": 5.0, "month_cents_used": 0, "monthly_budget_usd": 25.0}}, "check": "Limits.check_each_call", "event": "limit", "outcome": "pass"}
+{"batch": false, "cache": true, "cache_read": 0, "cache_write": 0, "custom_id": "review-f2-1", "effort": "high", "event": "ledger", "in": 2000, "ledger": "job/data/usage-ledger.jsonl", "model": "claude-opus-5-5", "out": 300, "pages": 0, "row": 0, "stage": "review"}
+{"event": "final", "money": [[["cents", 2], ["proof.review_cents", 2]]], "runs": 1}

@@ -1,0 +1,1157 @@
+{
+  "_as_date": [
+    {
+      "args": ["01/21/2099"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2099-01-21"
+      }
+    },
+    {
+      "args": ["12/01/2025"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2025-12-01"
+      }
+    },
+    {
+      "args": ["01/01/1970"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "1970-01-01"
+      }
+    },
+    {
+      "args": ["03/30/2026"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2026-03-30"
+      }
+    },
+    {
+      "args": ["01/21/2099 Clinic"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2099-01-21"
+      }
+    },
+    {
+      "args": ["02/10/2026"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2026-02-10"
+      }
+    },
+    {
+      "args": ["01/20/2099 (date as written on referral form) Clinic"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2099-01-20"
+      }
+    },
+    {
+      "args": ["11/03/2025"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2025-11-03"
+      }
+    },
+    {
+      "args": ["01/20/2099 (date as written on referral form)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2099-01-20"
+      }
+    },
+    {
+      "args": ["01/20/1960"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "1960-01-20"
+      }
+    },
+    {
+      "args": ["01/20/2026"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "2026-01-20"
+      }
+    },
+    {
+      "args": ["02/02/1980"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": {
+        "__date": "1980-02-02"
+      }
+    }
+  ],
+  "_date_forms": [
+    {
+      "args": [
+        {
+          "__date": "2099-01-20"
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "(?<!\\d)01\\s*[/.-]\\s*20\\s*[/.-]\\s*2099(?!\\d)|(?<!\\d)01\\s*[/.-]\\s*20\\s*[/.-]\\s*99(?!\\d)|(?<!\\d)1\\s*[/.-]\\s*20\\s*[/.-]\\s*2099(?!\\d)|(?<!\\d)1\\s*[/.-]\\s*20\\s*[/.-]\\s*99(?!\\d)"
+    }
+  ],
+  "_system_findings": [
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. The image carries no transcribed text. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n\nPain was rated 7 of 10 at triage. (Exhibit 1 - p. 2)\n\nPain was rated 4 of 10 at discharge. (Exhibit 1 - p. 3)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"the image carries no\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"transcribed text\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "file name Beta Example - Medical Billing Worksheet 11-12-26.docx",
+        "Beta Example - Medical Billing Worksheet 11-12-26.docx"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Exhibit 2 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records).pdf",
+        "Exhibit 2 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records).pdf"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy as noted in this chunk. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"in this chunk\" is the system's wording, not the record's",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic [NTD: A portion of the records were handwritten and illegible. Therefore, we were unable to annotate or decipher a portion of these records and were unable to draft a complete medical summary for this treatment.] | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "x\nText on the following page reads as follows: rest. (Exhibit 1 - p. 2)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"text on the following page\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": ["the chronology", "x\nPer the transcription, the score was 7. (Exhibit 1 - p. 2)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"the transcription\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic The records differ on this point. | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic marked as shown on the page | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 3 documents in the matter file, totalling approximately 9 pages.\nFolders reviewed: /MEDICAL.\nThe following documents were retrieved and not used as sources for this chronology, each for the reason stated:\n\"Retainer signed.pdf\" - engagement document, not a chronology source\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nThe patient reports neck pain after the collision rated 6 of 10. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 0 documents in the matter file.\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nExample Clinic\n03/30/2026\n1\nExhibit 1 - p. 3\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic (year not stated in the record) | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 1 document on the matter.\nOne record set was reviewed in full.\nUpdate of 11/12/2026: 2 medical record document(s) filed on the matter after the earlier delivery were reviewed. Of the 2 pages of new records, 2 pages were read. Visits they record that this chronology did not already list (dated before and after the incident) were added and are cited as Exhibit 2 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records). 1 was a copy and was not read again: Example Clinic refiled.pdf (duplicate copy of Exhibit 1). 1 requested document was not read (outside the firm's folder rules (an excluded folder or kind)): scene photo.pdf.\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nA routine visit recorded blood pressure 120/80 before the incident. (Exhibit 1 - p. 1)\nAdditional prior history from records filed since the prior chronology\nCervical radiographs before the incident showed straightening of the lordosis. (Exhibit 2 - p. 1)\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Imaging\n11/03/2025 - 02/10/2026\n2\nExhibit 2 - p. 1\nExample Clinic\n12/01/2025 - 01/20/2026\n2\nExhibit 1 - p. 1\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\nM50.20\nOther cervical disc displacement, unspecified cervical region\n02/10/2026\nExhibit 2 - p. 2\n11/03/2025\nExample Imaging\nMedical Diagnoses\nCervical radiographs showed straightening of the lordosis with no fracture seen. (Exhibit 2 - p. 1)\n12/01/2025\nExample Clinic\nMedical Diagnoses\nRoutine visit; blood pressure 120/80 recorded at the visit. (Exhibit 1 - p. 1)\n01/20/2026\nExample Clinic\nMedical Diagnoses\nCervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 1 - p. 2)\n\nAll Other Information\nReturn to clinic in four weeks for a recheck of the neck. (Exhibit 1 - p. 2)\n02/10/2026\nExample Imaging\nMedical Diagnoses\nMRI showed a disc protrusion measuring 3 mm at the fifth and sixth level. (Exhibit 2 - p. 2)\nExhibit No.\nDescription\n1\nExample Clinic - 12-01-2025 - 01-20-2026 (Medical Records)\n2\nExample Imaging - 11-03-2025 - 02-10-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy; the auditor noted a coding error on the claim form. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"the auditor\" reads as the system's wording",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "the chronology",
+        "Neck pain after the collision. (Exhibit 1 - p. 2, machine transcription)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Beta Example - Medical Chronology 11-12-26.docx",
+        "Beta Example - Medical Chronology 11-12-26.docx"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 1 document on the matter.\nOne record set was reviewed in full.\nUpdate of 11/12/2026: 2 medical record document(s) filed on the matter after the earlier delivery were reviewed. Of the 2 pages of new records, 2 pages were read. Visits they record that this chronology did not already list (dated before and after the incident) were added and are cited as Exhibit 2 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records). 1 was a copy and was not read again: Example Clinic refiled.pdf (duplicate copy of Exhibit 1). 1 requested document was not read (outside the firm's folder rules (an excluded folder or kind)): scene photo.pdf.\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nA routine visit recorded blood pressure 120/80 before the incident. (Exhibit 1 - p. 1)\nAdditional prior history from records filed since the prior chronology\nCervical radiographs before the incident showed straightening of the lordosis. (Exhibit 2 - p. 1)\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Imaging\n11/03/2025 - 02/10/2026\n2\nExhibit 2 - p. 1\nExample Clinic\n12/01/2025 - 01/20/2026\n2\nExhibit 1 - p. 1\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\nM50.20\nOther cervical disc displacement, unspecified cervical region\n02/10/2026\nExhibit 2 - p. 2\n11/03/2025\nExample Imaging\nMedical Diagnoses\nCervical radiographs showed straightening of the lordosis at 11:40. (Exhibit 2 - p. 1)\n12/01/2025\nExample Clinic\nMedical Diagnoses\nRoutine visit; blood pressure 120/80 recorded at the visit. (Exhibit 1 - p. 1)\n01/20/2026\nExample Clinic\nMedical Diagnoses\nCervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 1 - p. 2)\n\nAll Other Information\nReturn to clinic in four weeks for a recheck of the neck. (Exhibit 1 - p. 2)\n02/10/2026\nExample Imaging\nMedical Diagnoses\nMRI showed a disc protrusion measuring 3 mm at the fifth and sixth level. (Exhibit 2 - p. 2)\nExhibit No.\nDescription\n1\nExample Clinic - 12-01-2025 - 01-20-2026 (Medical Records)\n2\nExample Imaging - 11-03-2025 - 02-10-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 4 documents in the matter file, together with 1 record that existed only as attachments to email in the matter, totalling approximately 11 pages.\nFolders reviewed: /MEDICAL; /MISC SCANS.\nEmail in the matter file was reviewed: 1 messages were opened and their attachments extracted. 1 distinct attachments were found, of which 0 were copies of documents already in the reviewed set and 1 were new to it; it was left out, for the reason given below.\nThe following documents were retrieved and not used as sources for this chronology, each for the reason stated:\n\"Retainer signed.pdf\" - engagement document, not a chronology source\n\"records from another office.pdf\" - names a person other than the client, so it was left out of this chronology\nThe following documents were read in full and no entry in this chronology is drawn from them, each for the reason stated:\n\"intake scan.pdf\" - read in full; it contains no dated medical encounter\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nThe patient reports neck pain after the collision rated 6 of 10. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic a code the legend does not legibly define | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file Beta Example - Medical Billing Worksheet 11-12-26.docx",
+        "Beta Example - Medical Billing Summary\nPrepared November 12, 2026. Providers and treatment dates are taken from the medical chronology for this matter. Each amount names the document it was read from. No figure here was calculated by us except the totals, each the sum of the rows shown above it.\nINCOMPLETE: 1 of 1 providers have no total that can be supported from the documents on file. The subtotal below is therefore NOT this case's medical specials figure. The sections at the end say what is missing for each.\nBilling by Provider\nWhat Is Needed\nFor the providers below, no bill was found in the file. A current ledger from each provider, or a Lienholder and Balances report for this matter, would complete the chart.\nProvider\nFirst DOS\nLast DOS\nSource\nTotal Billed\nExample Clinic\n01/20/2026\n01/20/2026\nno bill located\nnot derivable\nSUBTOTAL\n$0.00\nProvider\nWhat is on file\nExample Clinic\nno bill located"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": ["file name Exhibit 1 - Clinic.pdf", "Exhibit 1 - Clinic.pdf"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\nM54.2\nCervicalgia\n03/30/2026\nExhibit 1 - p. 3\nZ99.9\nNot in the index\n03/30/2026\nExhibit 1 - p. 3\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Exhibit 1 - Example Clinic - 12-01-2025 - 01-20-2026 (Medical Records).pdf",
+        "Exhibit 1 - Example Clinic - 12-01-2025 - 01-20-2026 (Medical Records).pdf"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 1 document on the matter.\nOne record set was reviewed in full.\nUpdate of 11/12/2026: 2 medical record document(s) filed on the matter after the earlier delivery were reviewed. Of the 2 pages of new records, 2 pages were read. Visits they record that this chronology did not already list (dated before and after the incident) were added and are cited as Exhibit 3 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records). 1 was a copy and was not read again: Example Clinic refiled.pdf (duplicate copy of Exhibit 1). 1 requested document was not read (outside the firm's folder rules (an excluded folder or kind)): scene photo.pdf.\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nA routine visit recorded blood pressure 120/80 before the incident. (Exhibit 1 - p. 1)\nAdditional prior history from records filed since the prior chronology\nCervical radiographs before the incident showed straightening of the lordosis. (Exhibit 3 - p. 1)\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Imaging\n11/03/2025 - 02/10/2026\n2\nExhibit 3 - p. 1\nExample Clinic\n12/01/2025 - 01/20/2026\n2\nExhibit 1 - p. 1\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\nM50.20\nOther cervical disc displacement, unspecified cervical region\n02/10/2026\nExhibit 3 - p. 2\n11/03/2025\nExample Imaging\nMedical Diagnoses\nCervical radiographs showed straightening of the lordosis at 11:40. (Exhibit 3 - p. 1)\n12/01/2025\nExample Clinic\nMedical Diagnoses\nRoutine visit; blood pressure 120/80 recorded at the visit. (Exhibit 1 - p. 1)\n01/20/2026\nExample Clinic\nMedical Diagnoses\nCervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 1 - p. 2)\n\nAll Other Information\nReturn to clinic in four weeks for a recheck of the neck. (Exhibit 1 - p. 2)\n02/10/2026\nExample Imaging\nMedical Diagnoses\nMRI showed a disc protrusion measuring 3 mm at the fifth and sixth level. (Exhibit 3 - p. 2)\nExhibit No.\nDescription\n1\nExample Clinic - 12-01-2025 - 01-20-2026 (Medical Records)\n2\nExample Radiology\n3\nExample Imaging - 11-03-2025 - 02-10-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nThe image carries no transcribed text. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"the image carries no\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"transcribed text\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 1 document on the matter.\nOne record set was reviewed in full.\nUpdate of 11/12/2026: 3 medical record document(s) filed on the matter after the earlier delivery were reviewed. Of the 2 pages of new records, 2 pages were read. Visits they record that this chronology did not already list (dated before and after the incident) were added and are cited as Exhibit 2 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records). 2 were copies and were not read again: Example Clinic refiled.pdf (duplicate copy of Exhibit 1); Imaging refax.pdf (re-filed pages of Exhibit 2). 1 requested document was not read (outside the firm's folder rules (an excluded folder or kind)): scene photo.pdf.\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nA routine visit recorded blood pressure 120/80 before the incident. (Exhibit 1 - p. 1)\nAdditional prior history from records filed since the prior chronology\nCervical radiographs before the incident showed straightening of the lordosis. (Exhibit 2 - p. 1)\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Imaging\n11/03/2025 - 02/10/2026\n2\nExhibit 2 - p. 1\nExample Clinic\n12/01/2025 - 01/20/2026\n2\nExhibit 1 - p. 1\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\nM50.20\nOther cervical disc displacement, unspecified cervical region\n02/10/2026\nExhibit 2 - p. 2\n11/03/2025\nExample Imaging\nMedical Diagnoses\nCervical radiographs showed straightening of the lordosis at 11:40. (Exhibit 2 - p. 1)\n12/01/2025\nExample Clinic\nMedical Diagnoses\nRoutine visit; blood pressure 120/80 recorded at the visit. (Exhibit 1 - p. 1)\n01/20/2026\nExample Clinic\nMedical Diagnoses\nCervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 1 - p. 2)\n\nAll Other Information\nReturn to clinic in four weeks for a recheck of the neck. (Exhibit 1 - p. 2)\n02/10/2026\nExample Imaging\nMedical Diagnoses\nMRI showed a disc protrusion measuring 3 mm at the fifth and sixth level. (Exhibit 2 - p. 2)\nExhibit No.\nDescription\n1\nExample Clinic - 12-01-2025 - 01-20-2026 (Medical Records)\n2\nExample Imaging - 11-03-2025 - 02-10-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. The image carries no transcribed text. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"the image carries no\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"transcribed text\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "file name Alpha Example - Medical Billing Worksheet 10-13-26.docx",
+        "Alpha Example - Medical Billing Worksheet 10-13-26.docx"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Beta Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 3 documents in the matter file, totalling approximately 16 pages.\nFolders reviewed: /Alpha_Example; /Beta_Example; /Emails.\nThe following documents were retrieved and not used as sources for this chronology, each for the reason stated:\n\"Example Health Records 6.22.26.pdf\" - could not be placed with one client on this matter, so it was left out of this chronology\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nThe patient reports neck pain after the collision rated 6 of 10. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+        "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nOther Ortho\n02/14/2026\n1\nExhibit 1 - p. 3\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file Alpha Example - Medical Billing Worksheet 10-13-26.docx",
+        "Alpha Example - Medical Billing Summary\nPrepared November 12, 2026. Providers and treatment dates are taken from the medical chronology for this matter. Each amount names the document it was read from. No figure here was calculated by us except the totals, each the sum of the rows shown above it.\nBilling by Provider\nProvider\nFirst DOS\nLast DOS\nSource\nTotal Billed\nExample Clinic\n01/20/2026\n01/20/2026\nExample Clinic ledger\n$1,800.00\nOther Ortho\n03/30/2026\n03/30/2026\nOther Ortho ledger\n$900.00\nGRAND TOTAL\n$2,700.00"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": ["the chronology", "Example Clinic not legible | Patient Complaints & Limitations"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 2 - p. 1)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 4 documents in the matter file, totalling approximately 10 pages.\nFolders reviewed: /MEDICAL; /MISC SCANS.\nThe following documents were retrieved and not used as sources for this chronology, each for the reason stated:\n\"Retainer signed.pdf\" - engagement document, not a chronology source\nThe following documents were read in full and no entry in this chronology is drawn from them, each for the reason stated:\n\"intake scan.pdf\" - read in full; it contains no dated medical encounter\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nThe patient reports neck pain after the collision rated 6 of 10. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Alpha Example - Medical Billing Worksheet 11-12-26.docx",
+        "Alpha Example - Medical Billing Worksheet 11-12-26.docx"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": ["the chronology", "Billed by code 99213. Note continued in this chunk."],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"in this chunk\" is the system's wording, not the record's",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"by code\" reads as the system's wording",
+          "grade": "SHOULD-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nOther Ortho\n03/30/2026\n1\nExhibit 1 - p. 3\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nOther Ortho\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic (provider not stated in the record)\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 0 documents in the matter file.\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic (inpatient flowsheets, orders and medication administration record, multiple documenting staff)\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 4 documents in the matter file, totalling approximately 10 pages.\nFolders reviewed: /MEDICAL; /MISC SCANS.\nEmail in the matter file was reviewed: 1 messages were opened and their attachments extracted. 1 distinct attachments were found, of which 0 were copies of documents already in the reviewed set and 1 were new to it; it was left out, for the reason given below.\nThe following documents were retrieved and not used as sources for this chronology, each for the reason stated:\n\"Retainer signed.pdf\" - engagement document, not a chronology source\n\"records from another office.pdf\" - names a person other than the client, so it was left out of this chronology\nThe following documents were read in full and no entry in this chronology is drawn from them, each for the reason stated:\n\"intake scan.pdf\" - read in full; it contains no dated medical encounter\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nThe patient reports neck pain after the collision rated 6 of 10. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 3 documents in the matter file, totalling approximately 16 pages.\nFolders reviewed: /Alpha_Example; /Beta_Example; /Emails.\nThe following documents were retrieved and not used as sources for this chronology, each for the reason stated:\n\"Example Health Records 6.22.26.pdf\" - could not be placed with one client on this matter, so it was left out of this chronology\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nThe patient reports neck pain after the collision rated 6 of 10. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "x\nNo transcribed text was available for the page. (Exhibit 1 - p. 2)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"transcribed text\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic (provider not stated in the record) | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic (billing statement date) | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file Alpha Example - Medical Billing Worksheet 11-12-26.docx",
+        "Alpha Example - Medical Billing Summary\nPrepared November 12, 2026. Providers and treatment dates are taken from the medical chronology for this matter. Each amount names the document it was read from. No figure here was calculated by us except the totals, each the sum of the rows shown above it.\nINCOMPLETE: 1 of 1 providers have no total that can be supported from the documents on file. The subtotal below is therefore NOT this case's medical specials figure. The sections at the end say what is missing for each.\nBilling by Provider\nWhat Is Needed\nFor the providers below, no bill was found in the file. A current ledger from each provider, or a Lienholder and Balances report for this matter, would complete the chart.\nProvider\nFirst DOS\nLast DOS\nSource\nTotal Billed\nExample Clinic\n01/20/2026\n01/20/2026\nno bill located\nnot derivable\nSUBTOTAL\n$0.00\nProvider\nWhat is on file\nExample Clinic\nno bill located"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "x\nIn the transcription, the boxes for refusing were blank. (Exhibit 1 - p. 2)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"in the transcription\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue physical therapy twice weekly for four weeks. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Alpha Example - Medical Chronology 11-12-26.docx",
+        "Alpha Example - Medical Chronology 11-12-26.docx"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 1 document on the matter.\nOne record set was reviewed in full.\n1.  Treatment Timeline\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nA routine visit recorded blood pressure 120/80 before the incident. (Exhibit 1 - p. 1)\nAdditional prior history from records filed since the prior chronology\nCervical radiographs before the incident showed straightening of the lordosis. (Exhibit 2 - p. 1)\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Imaging\n11/03/2025 - 02/10/2026\n2\nExhibit 2 - p. 1\nExample Clinic\n12/01/2025 - 01/20/2026\n2\nExhibit 1 - p. 1\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\nM50.20\nOther cervical disc displacement, unspecified cervical region\n02/10/2026\nExhibit 2 - p. 2\n11/03/2025\nExample Imaging\nMedical Diagnoses\nCervical radiographs showed straightening of the lordosis at 11:40. (Exhibit 2 - p. 1)\n12/01/2025\nExample Clinic\nMedical Diagnoses\nRoutine visit; blood pressure 120/80 recorded at the visit. (Exhibit 1 - p. 1)\n01/20/2026\nExample Clinic\nMedical Diagnoses\nCervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 1 - p. 2)\n\nAll Other Information\nReturn to clinic in four weeks for a recheck of the neck. (Exhibit 1 - p. 2)\n02/10/2026\nExample Imaging\nMedical Diagnoses\nMRI showed a disc protrusion measuring 3 mm at the fifth and sixth level. (Exhibit 2 - p. 2)\nExhibit No.\nDescription\n1\nExample Clinic - 12-01-2025 - 01-20-2026 (Medical Records)\n2\nExample Radiology"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Exhibit 3 - Provider not identified in this chunk - 01-20-2026 (Medical Records).pdf",
+        "Exhibit 3 - Provider not identified in this chunk - 01-20-2026 (Medical Records).pdf"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "file name Exhibit 3 - Provider not identified in this chunk - 01-20-2026 (Medical Records).pdf",
+          "finding": "\"Provider not identified\" is the system's wording, not the record's",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "file name Exhibit 3 - Provider not identified in this chunk - 01-20-2026 (Medical Records).pdf",
+          "finding": "\"in this chunk\" is the system's wording, not the record's",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": ["file name Exhibit 2- Example Radiology.pdf", "Exhibit 2- Example Radiology.pdf"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": ["the chronology", "Seen. (Exhibit 1 - p. 1)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy in the referral pipeline at the spine center. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic the Subject Incident | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": ["the chronology", "x"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": ["the chronology", "x\nThe image carries no legible words. (Exhibit 1 - p. 2)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"the image carries no\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "file name Alpha Example - Records Review 11-12-26.docx",
+        "Alpha Example - Records Review 11-12-26.docx"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Alpha Example - Medical Chronology 10-13-26.docx",
+        "Alpha Example - Medical Chronology 10-13-26.docx"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Example Clinic as written on the page | Patient Complaints & Limitations"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nScope: This chronology was prepared from 1 document on the matter.\nOne record set was reviewed in full.\nUpdate of 11/12/2026: 2 medical record document(s) filed on the matter after the earlier delivery were reviewed. Of the 2 pages of new records, 2 pages were read. Visits they record that this chronology did not already list (dated before and after the incident) were added and are cited as Exhibit 2 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records). 1 was a copy and was not read again: Example Clinic refiled.pdf (duplicate copy of Exhibit 1). 1 requested document was not read (outside the firm's folder rules (an excluded folder or kind)): scene photo.pdf.\n1. Treatment Timeline\n2. Past Treatment History\n3. Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nCardiovascular: A routine visit recorded blood pressure 120/80 before the incident. (Exhibit 1 - p. 1)\nAdditional prior history from records filed since the prior chronology\nCervical radiographs before the incident showed straightening of the lordosis. (Exhibit 2 - p. 1)\n[NTD: 3 additional pre-incident encounters dated 2025-06-01 to 2025-09-30 were reviewed and are not itemized in this chronology. They record routine or unrelated care with no bearing on the claimed injuries. They remain in the exhibits and can be itemized on request.]\n5. Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Imaging\n11/03/2025 - 02/10/2026\n2\nExhibit 2 - p. 1\nExample Clinic\n12/01/2025 - 01/20/2026\n2\nExhibit 1 - p. 1\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine, initial encounter\n01/20/2026\nExhibit 1 - p. 2\nM50.20\nOther cervical disc displacement, unspecified cervical region\n02/10/2026\nExhibit 2 - p. 2\n11/03/2025\nExample Imaging\nMedical Diagnoses\nCervical radiographs showed straightening of the lordosis at 11:40. (Exhibit 2 - p. 1)\n12/01/2025\nExample Clinic\nMedical Diagnoses\nRoutine visit; blood pressure 120/80 recorded at the visit. (Exhibit 1 - p. 1)\n01/20/2026\nExample Clinic\nMedical Diagnoses\nCervical strain after the collision, pain rated 6 of 10 at intake. (Exhibit 1 - p. 2)\n\nAll Other Information\nReturn to clinic in four weeks for a recheck of the neck. (Exhibit 1 - p. 2)\n02/10/2026\nExample Imaging\nMedical Diagnoses\nMRI showed a disc protrusion measuring 3 mm at the fifth and sixth level. (Exhibit 2 - p. 2)\nExhibit No.\nDescription\n1\nExample Clinic - 12-01-2025 - 01-20-2026 (Medical Records)\n2\nExample Imaging - 11-03-2025 - 02-10-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 0 documents in the matter file.\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026\n1\nExhibit 1 - p. 2\nprovider not stated in the record\n03/30/2026\n1\nExhibit 1 - p. 3\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\n(provider not stated in the record)\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file name Exhibit 3 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records).pdf",
+        "Exhibit 3 - Example Imaging - 11-03-2025 - 02-10-2026 (Medical Records).pdf"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "file Alpha Example - Medical Billing Worksheet 11-12-26.docx",
+        "Alpha Example - Medical Billing Summary\nPrepared November 12, 2026. Providers and treatment dates are taken from the medical chronology for this matter. Each amount names the document it was read from. No figure here was calculated by us except the totals, each the sum of the rows shown above it.\nINCOMPLETE: 1 of 1 providers have no total that can be supported from the documents on file. The subtotal below is therefore NOT this case's medical specials figure. The sections at the end say what is missing for each.\nBilling by Provider\nWhat Is Needed\nFor the providers below, the file holds individual claim forms but no account ledger or statement of the total billed. Summing the claim forms is not reliable here because the same bills appear both individually and inside compiled record sets, so a sum would count them twice. A current ledger from each provider, or a Lienholder and Balances report for this matter, would complete the chart.\nProvider\nFirst DOS\nLast DOS\nSource\nTotal Billed\nExample Clinic\n01/20/2026\n01/20/2026\nNOT DERIVABLE - no ledger; 1 claim form(s) on file, overlapping\nnot derivable\nSUBTOTAL\n$0.00\nProvider\nWhat is on file\nExample Clinic\nNOT DERIVABLE - no ledger; 1 claim form(s) on file, overlapping"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "the chronology",
+        "Alpha Example - Medical Chronology\nRecords Reviewed and Limitations\nThis chronology was prepared from 2 documents in the matter file.\n\"stray.pdf\" (/MEDICAL) - could not be retrieved\nThe transcription of one scanned page was partial.\n1.  Treatment Timeline\nTreatment Gap  Jan 20, 2026 - Mar 30, 2026  (69 days)\n2.  Past Treatment History\n3.  Diagnostic Highlights\n4.  Medical Summary\nPrior Medical History\nNeck: chronic pain before the incident. (Exhibit 1 - p. 1)\n[NTD: 1 additional pre-incident encounter was reviewed and is not itemized.]\n5.  Exhibit List\nMedical Provider\nTreatment Period\nVisits\nReference\nExample Clinic\n01/20/2026 - 03/30/2026\n2\nExhibit 1 - p. 2\nICD Code\nDescription\nFirst Diagnosed\nReference\nS13.4XXA\nSprain of ligaments of cervical spine\n01/20/2026\nExhibit 1 - p. 2\n01/20/2026\nExample Clinic\nNeck pain after the collision. In the transcription, a box was blank. (Exhibit 1 - p. 2)\n\nMedical Diagnoses\n\nCervical strain. (Exhibit 1 - p. 2)\n03/30/2026\nExample Clinic\nContinue therapy. (Exhibit 1 - p. 3)\nExhibit No.\nDescription\n1\nExample Clinic - 01-20-2026 - 03-30-2026 (Medical Records)"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"the transcription\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "the chronology",
+          "finding": "\"in the transcription\" describes how the system read the record",
+          "grade": "MUST-FIX"
+        }
+      ]
+    }
+  ],
+  "heading_findings": [
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/2026", "Example Clinic"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": [
+              "01/20/2026",
+              "Example Clinic (inpatient flowsheets, orders and medication administration record, multiple documenting staff)"
+            ]
+          },
+          {
+            "__tuple": ["03/30/2026", "Example Clinic"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "entry 01/20/2026 Example Clinic (inpatient flowsheets, orders and medication administration record, multiple documenting staff)",
+          "finding": "the provider heading \"(inpatient flowsheets, orders and medication administration record, multiple documenting staff)\" names document types, not a provider",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": [
+              "01/20/2026",
+              "Example Hospital (inpatient flowsheets, orders and medication administration record, multiple documenting staff)"
+            ]
+          },
+          {
+            "__tuple": ["02/01/2026", "Example Clinic (orthopedics)"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "code",
+          "check": "3 system language",
+          "cite": "entry 01/20/2026 Example Hospital (inpatient flowsheets, orders and medication administration record, multiple documenting staff)",
+          "finding": "the provider heading \"(inpatient flowsheets, orders and medication administration record, multiple documenting staff)\" names document types, not a provider",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/2026", "Example Clinic"]
+          },
+          {
+            "__tuple": ["03/30/2026", "(provider not stated in the record)"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/2026", "Example Clinic"]
+          },
+          {
+            "__tuple": ["03/30/2026", "Example Clinic"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/1960", "Clinic"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [[]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/2026", "Example Clinic"]
+          },
+          {
+            "__tuple": ["03/30/2026", "Example Clinic (provider not stated in the record)"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/2026", "Clinic"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/2026", "Example Clinic"]
+          },
+          {
+            "__tuple": ["03/30/2026", "Other Ortho"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["11/03/2025", "Example Imaging"]
+          },
+          {
+            "__tuple": ["12/01/2025", "Example Clinic"]
+          },
+          {
+            "__tuple": ["01/20/2026", "Example Clinic"]
+          },
+          {
+            "__tuple": ["02/10/2026", "Example Imaging"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/2099 (date as written on referral form)", "Clinic"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        [
+          {
+            "__tuple": ["01/20/2099 (date as written on referral form)", "Clinic"]
+          },
+          {
+            "__tuple": ["01/21/2099", "Clinic"]
+          }
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "_why": "Each schema an empty file got from one historical version of this lane's ledger (bin/goldens/ledger-aged-schemas.py, from git history). test_ledger_goldens.py opens each with today's ledger class and compares the migrated schema with its golden.",
+  "steps": [
+    {
+      "commit": "9c0dabb9ea5f",
+      "method": "import",
+      "schema": [
+        "index idx_litigation_jobs_created: CREATE INDEX idx_litigation_jobs_created ON litigation_jobs(created_at)",
+        "index idx_litigation_spend_at: CREATE INDEX idx_litigation_spend_at ON litigation_spend(at)",
+        "index uq_litigation_jobs_request_ref: CREATE UNIQUE INDEX uq_litigation_jobs_request_ref ON litigation_jobs(request_ref)",
+        "table litigation_jobs: CREATE TABLE litigation_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, scope_key TEXT NOT NULL, scope_json TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_reread INTEGER, flags_new INTEGER, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT)",
+        "table litigation_spend: CREATE TABLE litigation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    },
+    {
+      "commit": "d531565e1fcf",
+      "method": "import",
+      "schema": [
+        "index idx_litigation_jobs_created: CREATE INDEX idx_litigation_jobs_created ON litigation_jobs(created_at)",
+        "index idx_litigation_spend_at: CREATE INDEX idx_litigation_spend_at ON litigation_spend(at)",
+        "index uq_litigation_jobs_request_ref_live: CREATE UNIQUE INDEX uq_litigation_jobs_request_ref_live ON litigation_jobs(request_ref) WHERE NOT (state = 'failed' AND trigger = 'request')",
+        "table litigation_jobs: CREATE TABLE litigation_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, scope_key TEXT NOT NULL, scope_json TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_reread INTEGER, flags_new INTEGER, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT)",
+        "table litigation_spend: CREATE TABLE litigation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    },
+    {
+      "commit": "eee7257ce596",
+      "method": "import",
+      "schema": [
+        "index idx_litigation_jobs_created: CREATE INDEX idx_litigation_jobs_created ON litigation_jobs(created_at)",
+        "index idx_litigation_spend_at: CREATE INDEX idx_litigation_spend_at ON litigation_spend(at)",
+        "index uq_litigation_jobs_request_ref_live: CREATE UNIQUE INDEX uq_litigation_jobs_request_ref_live ON litigation_jobs(request_ref) WHERE NOT (state = 'failed' AND trigger = 'request')",
+        "table litigation_jobs: CREATE TABLE litigation_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, scope_key TEXT NOT NULL, scope_json TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_reread INTEGER, flags_new INTEGER, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, close_reason TEXT, close_ref TEXT)",
+        "table litigation_spend: CREATE TABLE litigation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    },
+    {
+      "commit": "109d57885586",
+      "method": "import",
+      "schema": [
+        "index idx_litigation_jobs_created: CREATE INDEX idx_litigation_jobs_created ON litigation_jobs(created_at)",
+        "index idx_litigation_spend_at: CREATE INDEX idx_litigation_spend_at ON litigation_spend(at)",
+        "index uq_litigation_jobs_request_ref_live: CREATE UNIQUE INDEX uq_litigation_jobs_request_ref_live ON litigation_jobs(request_ref) WHERE NOT (state = 'failed' AND trigger = 'request')",
+        "table litigation_jobs: CREATE TABLE litigation_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, scope_key TEXT NOT NULL, scope_json TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_reread INTEGER, flags_new INTEGER, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, close_reason TEXT, close_ref TEXT, report TEXT, counts_json TEXT)",
+        "table litigation_spend: CREATE TABLE litigation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    },
+    {
+      "commit": "b18850220692",
+      "method": "import",
+      "schema": [
+        "index idx_litigation_jobs_created: CREATE INDEX idx_litigation_jobs_created ON litigation_jobs(created_at)",
+        "index idx_litigation_spend_at: CREATE INDEX idx_litigation_spend_at ON litigation_spend(at)",
+        "index uq_litigation_jobs_request_ref_live: CREATE UNIQUE INDEX uq_litigation_jobs_request_ref_live ON litigation_jobs(request_ref) WHERE NOT (state = 'failed' AND trigger = 'request')",
+        "table litigation_jobs: CREATE TABLE litigation_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, scope_key TEXT NOT NULL, scope_json TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_reread INTEGER, flags_new INTEGER, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, close_reason TEXT, close_ref TEXT, report TEXT, counts_json TEXT, reassign_json TEXT)",
+        "table litigation_spend: CREATE TABLE litigation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    },
+    {
+      "commit": "bfdade4d536a",
+      "method": "import",
+      "schema": [
+        "index idx_litigation_jobs_created: CREATE INDEX idx_litigation_jobs_created ON litigation_jobs(created_at)",
+        "index idx_litigation_spend_at: CREATE INDEX idx_litigation_spend_at ON litigation_spend(at)",
+        "index uq_litigation_jobs_request_ref_live: CREATE UNIQUE INDEX uq_litigation_jobs_request_ref_live ON litigation_jobs(request_ref) WHERE NOT (state = 'failed' AND trigger = 'request')",
+        "table litigation_jobs: CREATE TABLE litigation_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, scope_key TEXT NOT NULL, scope_json TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_reread INTEGER, flags_new INTEGER, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, close_reason TEXT, close_ref TEXT, report TEXT, counts_json TEXT, reassign_json TEXT, over_allowance_ref TEXT)",
+        "table litigation_spend: CREATE TABLE litigation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    },
+    {
+      "commit": "5adee7e3140c",
+      "method": "import",
+      "schema": [
+        "index idx_litigation_jobs_created: CREATE INDEX idx_litigation_jobs_created ON litigation_jobs(created_at)",
+        "index idx_litigation_spend_at: CREATE INDEX idx_litigation_spend_at ON litigation_spend(at)",
+        "index uq_litigation_jobs_request_ref_live: CREATE UNIQUE INDEX uq_litigation_jobs_request_ref_live ON litigation_jobs(request_ref) WHERE NOT (state = 'failed' AND trigger = 'request')",
+        "table litigation_jobs: CREATE TABLE litigation_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, trigger TEXT NOT NULL, requester TEXT NOT NULL, request_ref TEXT NOT NULL, scope_key TEXT NOT NULL, scope_json TEXT NOT NULL, file_to_matter_id TEXT NOT NULL, envelope_digest TEXT NOT NULL, stage TEXT, cents INTEGER NOT NULL DEFAULT 0, matters_total INTEGER, matters_reread INTEGER, flags_new INTEGER, reason TEXT, folder_id TEXT, delivery_json TEXT, reply_sent_at TEXT, attempt INTEGER NOT NULL DEFAULT 1, reply_key TEXT, close_reason TEXT, close_ref TEXT, report TEXT, counts_json TEXT, reassign_json TEXT, over_allowance_ref TEXT, folder_name TEXT)",
+        "table litigation_spend: CREATE TABLE litigation_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)"
+      ]
+    }
+  ]
+}

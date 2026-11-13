@@ -1,0 +1,1139 @@
+{
+  "_why": "Branch coverage of the job hosts' ending/wake/transition functions under the host matrix (bin/goldens/host-matrix-coverage.py). Every uncovered line is a cell the matrix does not hold; regenerate after adding cells.",
+  "hosts": {
+    "casefile_lane.py": {
+      "CasefileBroker.month_cents": {
+        "branches": 2,
+        "branches_covered": 1,
+        "branches_not_taken": ["104->105"],
+        "lines": 5,
+        "lines_covered": 4,
+        "uncovered": [
+          "105: raise BrokerError(\"casefile_job_status carried no month_cents; the job cannot be metered\")"
+        ]
+      },
+      "CasefileBroker.record": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "CasefileBroker.status": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "CasefileLane._busy": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "CasefileLane._child_env": {
+        "branches": 6,
+        "branches_covered": 4,
+        "branches_not_taken": ["220->215", "223->224"],
+        "lines": 13,
+        "lines_covered": 12,
+        "uncovered": ["224: env[LIT_INPUTS_ENV] = str(pin_env(os.environ[LIT_INPUTS_ENV]))"]
+      },
+      "CasefileLane._compose_wake": {
+        "branches": 8,
+        "branches_covered": 6,
+        "branches_not_taken": ["319->320", "335->338"],
+        "lines": 24,
+        "lines_covered": 19,
+        "uncovered": [
+          "307: except (OSError, ValueError):",
+          "308: pass",
+          "320: done = sum(1 for o in outcomes if o.get(\"outcome\") in DONE_OUTCOMES)",
+          "321: lines.append(f\"Changes applied: {done} of {len(outcomes)}; numbers applied: \"",
+          "338: lines.append("
+        ]
+      },
+      "CasefileLane._fail_unconfigured": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 13,
+        "lines_covered": 10,
+        "uncovered": [
+          "255: except BrokerError as err:",
+          "256: logger.error(\"could not record config_missing for %s: %s\", job_id, err)",
+          "257: return \"deferred\""
+        ]
+      },
+      "CasefileLane._report": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 15,
+        "lines_covered": 15,
+        "uncovered": []
+      },
+      "CasefileLane._spawn": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 9,
+        "lines_covered": 9,
+        "uncovered": []
+      },
+      "CasefileLane._write_job": {
+        "branches": 2,
+        "branches_covered": 1,
+        "branches_not_taken": ["177->180"],
+        "lines": 13,
+        "lines_covered": 11,
+        "uncovered": [
+          "180: owned = self.broker.owned_lines(job_id)",
+          "181: doc[\"apply\"] = {**doc[\"apply\"], \"lines\": [ln for ln in doc[\"apply\"][\"lines\"] if ln.get(\"n\") in owned]}"
+        ]
+      },
+      "CasefileLane.run_job": {
+        "branches": 4,
+        "branches_covered": 4,
+        "branches_not_taken": [],
+        "lines": 20,
+        "lines_covered": 17,
+        "uncovered": [
+          "207: except BrokerError as exc:",
+          "208: logger.warning(\"broker not ready for %s, deferring: %s\", job_id, exc)",
+          "209: return \"deferred\""
+        ]
+      },
+      "read_verdict": {
+        "branches": 6,
+        "branches_covered": 5,
+        "branches_not_taken": ["143->138"],
+        "lines": 17,
+        "lines_covered": 15,
+        "uncovered": ["141: except ValueError:", "142: continue"]
+      }
+    },
+    "daemon.py": {
+      "Daemon._cgroup_preexec": {
+        "branches": 4,
+        "branches_covered": 2,
+        "branches_not_taken": ["292->293", "294->298"],
+        "lines": 18,
+        "lines_covered": 11,
+        "uncovered": [
+          "293: return None",
+          "298: cg = self.cgroup_root / \"memory\" / self.LANE",
+          "299: limit_file, limit = cg / \"memory.limit_in_bytes\", str(self.memory_max)",
+          "303: except OSError as exc:",
+          "304: logger.error(\"cgroup setup failed (%s); running uncapped\", exc)",
+          "305: return None",
+          "308: (cg / \"cgroup.procs\").write_text(str(os.getpid()))"
+        ]
+      },
+      "Daemon._compose_wake": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 1,
+        "uncovered": [
+          "271: raise NotImplementedError(f\"the {self.LANE or 'base'} lane defines no wake\")"
+        ]
+      },
+      "Daemon._dispatch_wakes": {
+        "branches": 18,
+        "branches_covered": 15,
+        "branches_not_taken": ["361->362", "364->365", "399->400"],
+        "lines": 52,
+        "lines_covered": 46,
+        "uncovered": [
+          "362: logger.warning(\"no %s in the daemon env; wake for %s stays pending\", WAKE_SECRET_ENV, job_id)",
+          "363: return",
+          "365: continue",
+          "395: except Exception as exc:  # noqa: BLE001 - each shape maps to a wake decision",
+          "396: outcome = wake_grace.failed_outcome(exc, sent=sent)",
+          "400: continue"
+        ]
+      },
+      "Daemon._in_progress": {
+        "branches": 10,
+        "branches_covered": 9,
+        "branches_not_taken": ["210->211"],
+        "lines": 14,
+        "lines_covered": 13,
+        "uncovered": ["211: continue"]
+      },
+      "Daemon._paused": {
+        "branches": 4,
+        "branches_covered": 4,
+        "branches_not_taken": [],
+        "lines": 11,
+        "lines_covered": 9,
+        "uncovered": [
+          "432: except BrokerError as exc:",
+          "433: logger.warning(\"could not record the pause hold for %s: %s\", job_id, exc)"
+        ]
+      },
+      "Daemon._report": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 1,
+        "uncovered": [
+          "267: raise NotImplementedError(f\"the {self.LANE or 'base'} lane defines no verdict mapping\")"
+        ]
+      },
+      "Daemon._thread_already_answered": {
+        "branches": 6,
+        "branches_covered": 4,
+        "branches_not_taken": ["345->346", "350->351"],
+        "lines": 14,
+        "lines_covered": 8,
+        "uncovered": [
+          "346: wake.update(pending=False, outcome=\"refused: thread_answered\")",
+          "347: self._write_state(job_id, wake=wake)",
+          "348: logger.warning(\"%s job %s: DELIVER wake not sent: %s\", self.LANE, job_id, seen[\"answered\"])",
+          "349: return True",
+          "351: wake[\"thread_checked\"] = True",
+          "352: self._write_state(job_id, wake=wake)"
+        ]
+      },
+      "Daemon.claim_next": {
+        "branches": 10,
+        "branches_covered": 8,
+        "branches_not_taken": ["227->228", "246->247"],
+        "lines": 30,
+        "lines_covered": 27,
+        "uncovered": [
+          "228: return None",
+          "247: smd_stop.set_aside(self, env_path, job_id, why)",
+          "248: continue"
+        ]
+      },
+      "Daemon.dispatch_wakes": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 4,
+        "lines_covered": 4,
+        "uncovered": []
+      },
+      "Daemon.run_job": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 1,
+        "uncovered": [
+          "263: raise NotImplementedError(f\"the {self.LANE or 'base'} lane defines no job\")"
+        ]
+      },
+      "Daemon.tick": {
+        "branches": 6,
+        "branches_covered": 6,
+        "branches_not_taken": [],
+        "lines": 14,
+        "lines_covered": 14,
+        "uncovered": []
+      }
+    },
+    "demand_lane.py": {
+      "DemandBroker.month_cents": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 1,
+        "uncovered": ["84: return self.month_state(exclude_job_id)[0]"]
+      },
+      "DemandBroker.month_state": {
+        "branches": 4,
+        "branches_covered": 3,
+        "branches_not_taken": ["79->80"],
+        "lines": 7,
+        "lines_covered": 6,
+        "uncovered": [
+          "80: raise BrokerError(f\"demand_allowance carried no {name}; the job cannot be metered\")"
+        ]
+      },
+      "DemandBroker.record": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "DemandBroker.status": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "DemandLane._compose_wake": {
+        "branches": 4,
+        "branches_covered": 3,
+        "branches_not_taken": ["264->265"],
+        "lines": 13,
+        "lines_covered": 10,
+        "uncovered": [
+          "243: except (OSError, ValueError):",
+          "244: pass",
+          "265: lines.append(\"Coverage report: yes (the premise gate failed; no demand was drafted).\")"
+        ]
+      },
+      "DemandLane._defer": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 3,
+        "lines_covered": 3,
+        "uncovered": []
+      },
+      "DemandLane._paused": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "DemandLane._ready": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 3,
+        "lines_covered": 3,
+        "uncovered": []
+      },
+      "DemandLane._refuse_held_resumes": {
+        "branches": 6,
+        "branches_covered": 4,
+        "branches_not_taken": ["279->280", "283->284"],
+        "lines": 8,
+        "lines_covered": 5,
+        "uncovered": [
+          "280: return",
+          "284: logger.error(\"resume of held demand %s refused: a held demand is final; ask again\", job_id)",
+          "285: marker.unlink(missing_ok=True)"
+        ]
+      },
+      "DemandLane._report": {
+        "branches": 8,
+        "branches_covered": 7,
+        "branches_not_taken": ["213->214"],
+        "lines": 26,
+        "lines_covered": 25,
+        "uncovered": ["214: fields[\"delivery\"][\"library_edit\"] = edit"]
+      },
+      "DemandLane._seed_from_superseded": {
+        "branches": 4,
+        "branches_covered": 1,
+        "branches_not_taken": ["141->143", "144->145", "144->147"],
+        "lines": 10,
+        "lines_covered": 4,
+        "uncovered": [
+          "143: old = self.job_dir(old_id)",
+          "144: if not (old / \"data\").is_dir():",
+          "145: logger.info(\"demand re-run %s: superseded job %s has no data left; starting fresh\", jd.name, old_id)",
+          "146: return",
+          "147: carried = seed.seed(jd, old)",
+          "148: logger.info(\"demand re-run %s seeded from %s: %s\", jd.name, old_id, \", \".join(carried) or \"nothing\")"
+        ]
+      },
+      "DemandLane._write_job": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 9,
+        "lines_covered": 9,
+        "uncovered": []
+      },
+      "DemandLane.run_job": {
+        "branches": 4,
+        "branches_covered": 3,
+        "branches_not_taken": ["168->170"],
+        "lines": 31,
+        "lines_covered": 28,
+        "uncovered": [
+          "161: except BrokerError as exc:",
+          "162: logger.warning(\"broker not ready for %s, deferring: %s\", job_id, exc)",
+          "163: return \"deferred\""
+        ]
+      },
+      "DemandLane.tick": {
+        "branches": 6,
+        "branches_covered": 6,
+        "branches_not_taken": [],
+        "lines": 21,
+        "lines_covered": 18,
+        "uncovered": [
+          "312: except (",
+          "315: logger.exception(\"demand job %s could not be started; backing it off\", job_id)",
+          "316: result = \"deferred\""
+        ]
+      }
+    },
+    "drafting_lane.py": {
+      "DraftingBroker.month_state": {
+        "branches": 4,
+        "branches_covered": 3,
+        "branches_not_taken": ["124->125"],
+        "lines": 7,
+        "lines_covered": 6,
+        "uncovered": [
+          "125: raise BrokerError(f\"drafting_allowance carried no {name}; the job cannot be metered\")"
+        ]
+      },
+      "DraftingBroker.record": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "DraftingBroker.status": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "DraftingLane._cgroup_preexec": {
+        "branches": 6,
+        "branches_covered": 4,
+        "branches_not_taken": ["253->254", "255->258"],
+        "lines": 18,
+        "lines_covered": 11,
+        "uncovered": [
+          "254: return None",
+          "258: cg = self.cgroup_root / \"memory\" / CGROUP",
+          "259: limit_file = cg / \"memory.limit_in_bytes\"",
+          "264: except OSError as exc:",
+          "265: logger.error(\"cgroup setup failed (%s); running uncapped\", exc)",
+          "266: return None",
+          "269: (cg / \"cgroup.procs\").write_text(str(os.getpid()))"
+        ]
+      },
+      "DraftingLane._compose_wake": {
+        "branches": 4,
+        "branches_covered": 3,
+        "branches_not_taken": ["342->344"],
+        "lines": 14,
+        "lines_covered": 11,
+        "uncovered": [
+          "322: except (OSError, ValueError):",
+          "323: pass",
+          "344: lines.append(\"Mode: revision (new versions of the filed files, in place).\")"
+        ]
+      },
+      "DraftingLane._defer": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 3,
+        "lines_covered": 3,
+        "uncovered": []
+      },
+      "DraftingLane._fail_unconfigured": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 15,
+        "lines_covered": 12,
+        "uncovered": [
+          "239: except BrokerError as err:",
+          "240: logger.error(\"could not record config_missing for %s: %s\", job_id, err)",
+          "241: return \"deferred\""
+        ]
+      },
+      "DraftingLane._paused": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "DraftingLane._ready": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 3,
+        "lines_covered": 3,
+        "uncovered": []
+      },
+      "DraftingLane._refuse_held_resumes": {
+        "branches": 6,
+        "branches_covered": 4,
+        "branches_not_taken": ["354->355", "358->359"],
+        "lines": 8,
+        "lines_covered": 5,
+        "uncovered": [
+          "355: return",
+          "359: logger.error(\"resume of held drafting job %s refused: a held job is final; ask again\", job_id)",
+          "360: marker.unlink(missing_ok=True)"
+        ]
+      },
+      "DraftingLane._report": {
+        "branches": 14,
+        "branches_covered": 11,
+        "branches_not_taken": ["287->289", "292->294", "300->301"],
+        "lines": 32,
+        "lines_covered": 28,
+        "uncovered": [
+          "289: logger.error(\"drafting job %s left a caption correction not fully put back\", job_id)",
+          "294: with (Path(self.run_dir) / RELEASES).open(\"a\", encoding=\"utf-8\") as fh:",
+          "295: fh.write(json.dumps({\"job_id\": job_id, \"at\": self.clock()}) + \"\\n\")",
+          "301: fields[\"delivery\"][\"library_edit\"] = edit"
+        ]
+      },
+      "DraftingLane._write_job": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 9,
+        "lines_covered": 9,
+        "uncovered": []
+      },
+      "DraftingLane.run_job": {
+        "branches": 12,
+        "branches_covered": 10,
+        "branches_not_taken": ["193->194", "197->199"],
+        "lines": 48,
+        "lines_covered": 44,
+        "uncovered": [
+          "188: except BrokerError as exc:",
+          "189: logger.warning(\"broker not ready for %s, deferring: %s\", job_id, exc)",
+          "190: return \"deferred\"",
+          "194: env[firm_rules.PINS_ENV] = os.environ[firm_rules.PINS_ENV]"
+        ]
+      },
+      "DraftingLane.tick": {
+        "branches": 8,
+        "branches_covered": 8,
+        "branches_not_taken": [],
+        "lines": 24,
+        "lines_covered": 21,
+        "uncovered": [
+          "388: except Exception:  # one job's crash backs that job off; it must not wedge the lane's head",
+          "389: logger.exception(\"drafting job %s could not be started; backing it off\", job_id)",
+          "390: result = \"deferred\""
+        ]
+      }
+    },
+    "library_setup_lane.py": {
+      "_write_job": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 6,
+        "lines_covered": 6,
+        "uncovered": []
+      },
+      "compose_wake": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 3,
+        "lines_covered": 3,
+        "uncovered": []
+      },
+      "fields_of": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 6,
+        "lines_covered": 6,
+        "uncovered": []
+      },
+      "run": {
+        "branches": 8,
+        "branches_covered": 6,
+        "branches_not_taken": ["164->165", "177->181"],
+        "lines": 27,
+        "lines_covered": 23,
+        "uncovered": [
+          "157: except BrokerError as exc:",
+          "158: logger.warning(\"broker not ready for library setup %s, deferring: %s\", job_id, exc)",
+          "159: return \"deferred\"",
+          "165: state, fields = library_setup_handoff.hand_over(lane, job_id, jd, v)"
+        ]
+      }
+    },
+    "litigation_lane.py": {
+      "LitigationBroker.list_allowance": {
+        "branches": 2,
+        "branches_covered": 1,
+        "branches_not_taken": ["96->97"],
+        "lines": 5,
+        "lines_covered": 4,
+        "uncovered": [
+          "97: raise BrokerError(\"litigation_job_status carried no list_allowance; the list cannot be metered\")"
+        ]
+      },
+      "LitigationBroker.month_cents": {
+        "branches": 2,
+        "branches_covered": 1,
+        "branches_not_taken": ["108->109"],
+        "lines": 5,
+        "lines_covered": 4,
+        "uncovered": [
+          "109: raise BrokerError(\"litigation_job_status carried no month_cents; the job cannot be metered\")"
+        ]
+      },
+      "LitigationBroker.record": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "LitigationBroker.status": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "LitigationLane._allowance_hold": {
+        "branches": 4,
+        "branches_covered": 1,
+        "branches_not_taken": ["291->293", "305->308", "305->311"],
+        "lines": 21,
+        "lines_covered": 5,
+        "uncovered": [
+          "293: self.broker.record(job_id, \"running\", {})",
+          "294: except BrokerError as exc:",
+          "295: logger.warning(\"broker could not meter %s's list allowance, deferring: %s\", job_id, exc)",
+          "296: return \"deferred\"",
+          "297: cents = spend.recorded_cents(self.job_dir(job_id), self.LANE, 0)  # a resumed job keeps what it spent",
+          "298: fields: dict[str, Any] = {\"cents\": cents, \"reason\": reason[:500], \"stage\": \"allowance\"}",
+          "299: state, fields = proof_watch.settle(self, job_id, [], \"held\", fields)",
+          "300: try:",
+          "301: self.broker.record(job_id, state, fields)",
+          "302: except BrokerError as exc:",
+          "303: logger.error(\"could not record %s for %s: %s (the state file keeps it)\", state, job_id, exc)",
+          "304: self._write_state(job_id, state=state, finished_at=self.clock(), reason=fields.get(\"reason\"))",
+          "305: if state != \"delivered\":",
+          "308: job_notes.tell(",
+          "311: self._write_state(",
+          "314: return state"
+        ]
+      },
+      "LitigationLane._allowance_reason": {
+        "branches": 12,
+        "branches_covered": 3,
+        "branches_not_taken": [
+          "255->256",
+          "261->262",
+          "264->266",
+          "267->268",
+          "267->269",
+          "269->270",
+          "269->275",
+          "276->277",
+          "276->278"
+        ],
+        "lines": 22,
+        "lines_covered": 8,
+        "uncovered": [
+          "256: return None  # a proof run's twin files nothing and is never delivered",
+          "259: except (OSError, ValueError):",
+          "260: env = {}",
+          "262: return None  # the allowance is for status lists only",
+          "266: row = (self.broker.status(job_id) or {}).get(\"row\") or {}",
+          "267: if row.get(\"over_allowance_ref\"):",
+          "268: return None  # SMD quoted this list and the firm accepted (root's resubmit)",
+          "269: if not state.get(\"readable\"):",
+          "270: problem = str(state.get(\"problem\") or \"unreadable\")[:200]",
+          "271: return (",
+          "275: used, allowance = int(state.get(\"used\") or 0), int(state.get(\"allowance\") or 0)",
+          "276: if used < allowance:",
+          "277: return None",
+          "278: return ("
+        ]
+      },
+      "LitigationLane._busy": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "LitigationLane._child_env": {
+        "branches": 6,
+        "branches_covered": 3,
+        "branches_not_taken": ["219->221", "221->223", "223->225"],
+        "lines": 13,
+        "lines_covered": 13,
+        "uncovered": []
+      },
+      "LitigationLane._compose_wake": {
+        "branches": 10,
+        "branches_covered": 7,
+        "branches_not_taken": ["383->384", "385->386", "405->408"],
+        "lines": 25,
+        "lines_covered": 16,
+        "uncovered": [
+          "376: except (OSError, ValueError):",
+          "377: pass",
+          "384: return self._deadlines_wake(job_id, state, fields, env, trig, stage)",
+          "386: from .litigation.reassign import wake as reassign_wake",
+          "388: verdict = read_verdict(self.job_dir(job_id), \"\") or {}",
+          "389: return reassign_wake.compose(",
+          "408: counts = (read_verdict(self.job_dir(job_id), \"\") or {}).get(\"counts\") or {}",
+          "409: declined = int(counts.get(\"d12_declined\") or 0)",
+          "410: lines.append(f\"Declined by the reading service (marked for a hand check): {declined}.\")"
+        ]
+      },
+      "LitigationLane._deadlines_wake": {
+        "branches": 4,
+        "branches_covered": 0,
+        "branches_not_taken": ["445->446", "445->450", "450->451", "450->452"],
+        "lines": 12,
+        "lines_covered": 1,
+        "uncovered": [
+          "426: raw = fields.get(\"counts\")",
+          "427: counts: dict[str, Any] = raw if isinstance(raw, dict) else {}",
+          "428: folder = str(env.get(\"folder_name\") or \"\")  # authored config, the broker's copy (ledger _FOLDER)",
+          "429: names = [",
+          "434: lines = [",
+          "445: if state != \"delivered\":",
+          "446: where = str(fields.get(\"stage\") or stage or \"\")",
+          "447: lines.append(",
+          "450: if state == \"held\":",
+          "451: lines.append(proof_holds.wake_line(\"litigation\", fields.get(\"reason\")))",
+          "452: return \"\\n\".join(lines)"
+        ]
+      },
+      "LitigationLane._fail_unconfigured": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 14,
+        "lines_covered": 11,
+        "uncovered": [
+          "324: except BrokerError as err:",
+          "325: logger.error(\"could not record config_missing for %s: %s\", job_id, err)",
+          "326: return \"deferred\""
+        ]
+      },
+      "LitigationLane._report": {
+        "branches": 12,
+        "branches_covered": 10,
+        "branches_not_taken": ["347->348", "349->350"],
+        "lines": 26,
+        "lines_covered": 24,
+        "uncovered": [
+          "348: fields[\"counts\"] = {str(k): int(n) for k, n in v[\"counts\"].items() if isinstance(n, int)}",
+          "350: fields[\"writes\"] = [w for w in v[\"writes\"] if isinstance(w, dict)]"
+        ]
+      },
+      "LitigationLane._spawn": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 9,
+        "lines_covered": 9,
+        "uncovered": []
+      },
+      "LitigationLane._write_job": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 10,
+        "lines_covered": 10,
+        "uncovered": []
+      },
+      "LitigationLane.run_job": {
+        "branches": 6,
+        "branches_covered": 5,
+        "branches_not_taken": ["206->207"],
+        "lines": 23,
+        "lines_covered": 19,
+        "uncovered": [
+          "207: return held",
+          "211: except BrokerError as exc:",
+          "212: logger.warning(\"broker not ready for %s, deferring: %s\", job_id, exc)",
+          "213: return \"deferred\""
+        ]
+      },
+      "read_verdict": {
+        "branches": 6,
+        "branches_covered": 5,
+        "branches_not_taken": ["149->144"],
+        "lines": 17,
+        "lines_covered": 15,
+        "uncovered": ["147: except ValueError:", "148: continue"]
+      }
+    },
+    "medchron/lane.py": {
+      "MedchronLane._child_env": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 7,
+        "lines_covered": 7,
+        "uncovered": []
+      },
+      "MedchronLane._compose_wake": {
+        "branches": 6,
+        "branches_covered": 3,
+        "branches_not_taken": ["300->301", "302->303", "308->310"],
+        "lines": 23,
+        "lines_covered": 19,
+        "uncovered": [
+          "283: except (OSError, ValueError):",
+          "284: pass",
+          "301: lines.append(f\"Held at: {stage or 'runner (no verdict)'}.\")",
+          "303: lines.append(proof_holds.wake_line(self.LANE, fields.get(\"reason\")))"
+        ]
+      },
+      "MedchronLane._ledger_fields": {
+        "branches": 10,
+        "branches_covered": 9,
+        "branches_not_taken": ["210->211"],
+        "lines": 22,
+        "lines_covered": 21,
+        "uncovered": ["211: state, reason = \"held\", f\"refused: {reason}\""]
+      },
+      "MedchronLane._report": {
+        "branches": 10,
+        "branches_covered": 9,
+        "branches_not_taken": ["244->245"],
+        "lines": 25,
+        "lines_covered": 24,
+        "uncovered": ["245: return \"requeued\""]
+      },
+      "MedchronLane._write_job_yaml": {
+        "branches": 4,
+        "branches_covered": 4,
+        "branches_not_taken": [],
+        "lines": 15,
+        "lines_covered": 15,
+        "uncovered": []
+      },
+      "MedchronLane.run_job": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 24,
+        "lines_covered": 18,
+        "uncovered": [
+          "168: except BrokerError as exc:",
+          "169: logger.warning(\"could not read the month's allowance for %s, deferring: %s\", job_id, exc)",
+          "170: return \"deferred\"",
+          "173: except BrokerError as exc:",
+          "174: logger.warning(\"could not record running for %s: %s\", job_id, exc)",
+          "175: return \"deferred\""
+        ]
+      }
+    },
+    "negotiation_lane.py": {
+      "NegotiationBroker.month_cents": {
+        "branches": 2,
+        "branches_covered": 1,
+        "branches_not_taken": ["83->84"],
+        "lines": 5,
+        "lines_covered": 4,
+        "uncovered": [
+          "84: raise BrokerError(\"negotiation_job_status carried no month_cents; the job cannot be metered\")"
+        ]
+      },
+      "NegotiationBroker.record": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "NegotiationBroker.status": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "NegotiationLane._busy": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "NegotiationLane._child_env": {
+        "branches": 2,
+        "branches_covered": 1,
+        "branches_not_taken": ["188->190"],
+        "lines": 9,
+        "lines_covered": 9,
+        "uncovered": []
+      },
+      "NegotiationLane._notice_wake": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 4,
+        "lines_covered": 1,
+        "uncovered": [
+          "253: jd = self.job_dir(notice_id)",
+          "254: jd.mkdir(parents=True, exist_ok=True, mode=0o700)",
+          "255: self._write_state("
+        ]
+      },
+      "NegotiationLane._report": {
+        "branches": 10,
+        "branches_covered": 9,
+        "branches_not_taken": ["247->248"],
+        "lines": 26,
+        "lines_covered": 25,
+        "uncovered": ["248: self._notice_wake(nid)"]
+      },
+      "NegotiationLane._spawn": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 9,
+        "lines_covered": 9,
+        "uncovered": []
+      },
+      "NegotiationLane._write_job": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 8,
+        "lines_covered": 8,
+        "uncovered": []
+      },
+      "NegotiationLane.run_job": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 11,
+        "lines_covered": 8,
+        "uncovered": [
+          "180: except BrokerError as exc:",
+          "181: logger.warning(\"broker not ready for %s, deferring: %s\", job_id, exc)",
+          "182: return \"deferred\""
+        ]
+      },
+      "read_verdict": {
+        "branches": 6,
+        "branches_covered": 5,
+        "branches_not_taken": ["122->117"],
+        "lines": 17,
+        "lines_covered": 15,
+        "uncovered": ["120: except ValueError:", "121: continue"]
+      },
+      "wake_task": {
+        "branches": 2,
+        "branches_covered": 1,
+        "branches_not_taken": ["137->140"],
+        "lines": 6,
+        "lines_covered": 6,
+        "uncovered": []
+      }
+    },
+    "note_lane.py": {
+      "NoteBroker.record": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "NoteLane.tick": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 5,
+        "lines_covered": 5,
+        "uncovered": []
+      },
+      "wake_task": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 3,
+        "lines_covered": 3,
+        "uncovered": []
+      }
+    },
+    "records_lane.py": {
+      "RecordsBroker.month_cents": {
+        "branches": 2,
+        "branches_covered": 1,
+        "branches_not_taken": ["118->119"],
+        "lines": 5,
+        "lines_covered": 4,
+        "uncovered": [
+          "119: raise BrokerError(\"records_job_status carried no month_cents; the job cannot be metered\")"
+        ]
+      },
+      "RecordsBroker.record": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 5,
+        "lines_covered": 5,
+        "uncovered": []
+      },
+      "RecordsBroker.status": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "RecordsLane._child_env": {
+        "branches": 4,
+        "branches_covered": 3,
+        "branches_not_taken": ["319->314"],
+        "lines": 10,
+        "lines_covered": 10,
+        "uncovered": []
+      },
+      "RecordsLane._fail": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 9,
+        "lines_covered": 6,
+        "uncovered": [
+          "367: except BrokerError as exc:",
+          "368: logger.error(\"could not record failed for %s: %s\", job_id, exc)",
+          "369: return \"deferred\""
+        ]
+      },
+      "RecordsLane._in_progress": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "RecordsLane._report": {
+        "branches": 16,
+        "branches_covered": 11,
+        "branches_not_taken": ["378->380", "384->385", "404->405", "408->409", "433->435"],
+        "lines": 39,
+        "lines_covered": 30,
+        "uncovered": [
+          "380: return self._fail(",
+          "385: self._write_state(job_id, state=\"failed\", finished_at=self.clock())",
+          "386: return \"failed\"",
+          "405: self._write_state(job_id, state=verdict, finished_at=self.clock())",
+          "406: return verdict",
+          "409: decision = self._decide(job_id, row)",
+          "425: except BrokerError as exc:",
+          "426: logger.error(\"could not record review for %s: %s (re-entered next tick)\", job_id, exc)",
+          "427: return \"deferred\""
+        ]
+      },
+      "RecordsLane._report_reentry": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 3,
+        "lines_covered": 1,
+        "uncovered": [
+          "352: v = (self._daemon_state(job_id).get(\"reported\") or {}).get(\"verdict\") or {}",
+          "353: return self._report(job_id, v)"
+        ]
+      },
+      "RecordsLane._same_matter_busy": {
+        "branches": 10,
+        "branches_covered": 4,
+        "branches_not_taken": [
+          "246->247",
+          "249->251",
+          "252->253",
+          "252->254",
+          "254->248",
+          "254->255"
+        ],
+        "lines": 13,
+        "lines_covered": 7,
+        "uncovered": [
+          "247: return False",
+          "251: st = self._daemon_state(d.name)",
+          "252: if st.get(\"state\") in TERMINAL or st.get(\"state\") == \"review\" or not st.get(\"started\"):",
+          "253: continue",
+          "254: if str(self._envelope(d.name).get(\"matter_id\") or \"\").lower() == mine:",
+          "255: return True"
+        ]
+      },
+      "RecordsLane._spawn": {
+        "branches": 2,
+        "branches_covered": 2,
+        "branches_not_taken": [],
+        "lines": 11,
+        "lines_covered": 11,
+        "uncovered": []
+      },
+      "RecordsLane._write_job": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 9,
+        "lines_covered": 9,
+        "uncovered": []
+      },
+      "RecordsLane.dispatch_wakes": {
+        "branches": 0,
+        "branches_covered": 0,
+        "branches_not_taken": [],
+        "lines": 2,
+        "lines_covered": 2,
+        "uncovered": []
+      },
+      "RecordsLane.run_job": {
+        "branches": 8,
+        "branches_covered": 7,
+        "branches_not_taken": ["293->297"],
+        "lines": 26,
+        "lines_covered": 22,
+        "uncovered": [
+          "297: return self._report_reentry(job_id)",
+          "305: except BrokerError as exc:",
+          "306: logger.warning(\"broker not ready for %s, deferring: %s\", job_id, exc)",
+          "307: return \"deferred\""
+        ]
+      },
+      "read_verdict": {
+        "branches": 6,
+        "branches_covered": 5,
+        "branches_not_taken": ["183->178"],
+        "lines": 17,
+        "lines_covered": 15,
+        "uncovered": ["181: except ValueError:", "182: continue"]
+      }
+    }
+  },
+  "total": {
+    "branches": 364,
+    "branches_covered": 272,
+    "covered": 1044,
+    "lines": 1254
+  }
+}

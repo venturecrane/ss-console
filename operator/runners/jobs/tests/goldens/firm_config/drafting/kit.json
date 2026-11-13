@@ -1,0 +1,1643 @@
+{
+  "cli": {
+    "fixture": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "<TMP>/inputs/drafting-firm.yaml: OK (example, 28 inputs pinned, 5 classes)\n"
+    },
+    "no_argument": {
+      "exit": 2,
+      "stderr": "usage: python -m jobs.drafting.firm <drafting inputs dir>\n",
+      "stdout": ""
+    },
+    "without_firm": {
+      "exit": 1,
+      "stderr": "<TMP>/inputs/drafting-firm.yaml: firm: required section missing or not a map\n",
+      "stdout": ""
+    }
+  },
+  "load": {
+    "__type": "DraftingFirm",
+    "attorneys": [],
+    "data": {
+      "attachments": {
+        "decl_2030_050": "decl-2030-050.md",
+        "pos": "pos.md"
+      },
+      "budget": {
+        "monthly_budget_usd": 750.0,
+        "per_job_cap_usd": 100.0,
+        "usd_drafting_fixed": 8.0,
+        "usd_per_million_chars": 3.0,
+        "usd_per_scanned_page": 0.012
+      },
+      "classes": {
+        "depo_outline": {
+          "exemplars": [],
+          "prompts": {
+            "audit": "prompts/audit-depo_outline.md",
+            "compose": "prompts/compose-depo_outline.md",
+            "digest": "prompts/digest-depo_outline.md",
+            "repair": "prompts/repair-depo_outline.md"
+          },
+          "skeleton": "skeleton-depo_outline.md"
+        },
+        "discovery_response": {
+          "exemplars": [],
+          "prompts": {
+            "audit": "prompts/audit-discovery_response.md",
+            "compose": "prompts/compose-discovery_response.md",
+            "digest": "prompts/digest-discovery_response.md",
+            "repair": "prompts/repair-discovery_response.md"
+          },
+          "skeleton": "skeleton-discovery_response.md"
+        },
+        "discovery_set": {
+          "exemplars": [],
+          "prompts": {
+            "audit": "prompts/audit-discovery_set.md",
+            "compose": "prompts/compose-discovery_set.md",
+            "digest": "prompts/digest-discovery_set.md",
+            "repair": "prompts/repair-discovery_set.md"
+          },
+          "skeleton": "skeleton-discovery_set.md"
+        },
+        "mediation_brief": {
+          "exemplars": [],
+          "prompts": {
+            "audit": "prompts/audit-mediation_brief.md",
+            "compose": "prompts/compose-mediation_brief.md",
+            "digest": "prompts/digest-mediation_brief.md",
+            "repair": "prompts/repair-mediation_brief.md"
+          },
+          "skeleton": "skeleton-mediation_brief.md"
+        },
+        "memo": {
+          "exemplars": [],
+          "prompts": {
+            "audit": "prompts/audit-memo.md",
+            "compose": "prompts/compose-memo.md",
+            "digest": "prompts/digest-memo.md",
+            "repair": "prompts/repair-memo.md"
+          },
+          "skeleton": "skeleton-memo.md"
+        }
+      },
+      "delivery": {
+        "rehearsal_matters": ["OPS-LIBRARY"]
+      },
+      "firm": {
+        "display_name": "Example & Example, LLP",
+        "slug": "example"
+      },
+      "format": {
+        "depo_outline_page_numbers": true,
+        "discovery_label_style": "all caps, bold, underlined",
+        "font": "Times New Roman",
+        "layout": {
+          "depo_outline": {
+            "page_numbers_always": true
+          },
+          "discovery_response": {
+            "item_line_spacing": 2.0,
+            "item_space_after_pt": 0,
+            "line_spacing": 2.0
+          },
+          "discovery_set": {
+            "item_line_spacing": 2.0,
+            "item_space_after_pt": 0,
+            "line_spacing": 2.0
+          },
+          "mediation_brief": {
+            "bold_italic_heading_indent_in": 1.0,
+            "centered_court_lines": true,
+            "first_line_indent_in": 0.5,
+            "footer_title": "Plaintiff's Mediation Brief",
+            "heading_indent_in": [0, 0.5, 1.0],
+            "heading_underline": [false, true, true],
+            "justify": true,
+            "line_spacing_pt": 24,
+            "page_numbers_always": true
+          },
+          "memo": {}
+        },
+        "mediation_brief_sections": [
+          "I. INTRODUCTION",
+          "II. PARTIES AND COUNSEL",
+          "III. DAMAGES SUMMARY",
+          "IV. STATEMENT OF FACTS",
+          "V. LIABILITY",
+          "VI. DAMAGES",
+          "VII. CAUSATION",
+          "VIII. STATEMENT OF INSURANCE COVERAGE",
+          "IX. STATEMENT OF PRIOR NEGOTIATIONS",
+          "X. SUMMARY OF CASE VALUE",
+          "XI. CONCLUSION"
+        ],
+        "plain_letter_paper": true,
+        "pleading": {
+          "line_pitch_pt": 24,
+          "lines": 28,
+          "margins_in": [0.5, 0.5, 0.69, 1.5]
+        },
+        "size_pt": 12
+      },
+      "inputs": {
+        "decl-2030-050.md": "a9b6236d368624e9a6f3bcb6491979a77f39f628400bd5d5043a767dcf8e3498",
+        "house-style.md": "f51b404485d3f9ce0fb9151f66a7d1475630492e58088ff3601acfd8ed5bc0ce",
+        "pos.md": "6254a087e8c8ccb3e4d288c56c52afc9efbcc880c3776ead15662664d8e2d38a",
+        "prompts/audit-depo_outline.md": "24eb4881784eea920aac0279ddfe21002054c4df54dea27d118d5d1a0402e0e9",
+        "prompts/audit-discovery_response.md": "24eb4881784eea920aac0279ddfe21002054c4df54dea27d118d5d1a0402e0e9",
+        "prompts/audit-discovery_set.md": "24eb4881784eea920aac0279ddfe21002054c4df54dea27d118d5d1a0402e0e9",
+        "prompts/audit-mediation_brief.md": "24eb4881784eea920aac0279ddfe21002054c4df54dea27d118d5d1a0402e0e9",
+        "prompts/audit-memo.md": "24eb4881784eea920aac0279ddfe21002054c4df54dea27d118d5d1a0402e0e9",
+        "prompts/compose-depo_outline.md": "ce5370f3469b08f9e206b2ee84daa8afb19dcc607289197b828a62902baf126b",
+        "prompts/compose-discovery_response.md": "5d775cf79602206e01f31e10315809b79d746e947a36dd1f90d950645cae7642",
+        "prompts/compose-discovery_set.md": "9df17c750df616baa14bcad5d8bc0485145a214c6fa5ce0087e0f235225376f9",
+        "prompts/compose-mediation_brief.md": "c67713b023c3917813c4966579aa6140df4381d1b0142e5a165e5f8d0a9d2cd1",
+        "prompts/compose-memo.md": "87642fa7a1cceeba09764319d0f532daa33db88229c07b1c268ac44b2538a213",
+        "prompts/digest-depo_outline.md": "e7945cec37eace7911c316ea99b33bf8d45d46ee63a0477a86be55479b8a069d",
+        "prompts/digest-discovery_response.md": "e7945cec37eace7911c316ea99b33bf8d45d46ee63a0477a86be55479b8a069d",
+        "prompts/digest-discovery_set.md": "e7945cec37eace7911c316ea99b33bf8d45d46ee63a0477a86be55479b8a069d",
+        "prompts/digest-mediation_brief.md": "e7945cec37eace7911c316ea99b33bf8d45d46ee63a0477a86be55479b8a069d",
+        "prompts/digest-memo.md": "e7945cec37eace7911c316ea99b33bf8d45d46ee63a0477a86be55479b8a069d",
+        "prompts/repair-depo_outline.md": "1150fb9ae5b69655a3691cb4cc6b13daeee336d29e215969a2d94b6d2a405a7e",
+        "prompts/repair-discovery_response.md": "1150fb9ae5b69655a3691cb4cc6b13daeee336d29e215969a2d94b6d2a405a7e",
+        "prompts/repair-discovery_set.md": "1150fb9ae5b69655a3691cb4cc6b13daeee336d29e215969a2d94b6d2a405a7e",
+        "prompts/repair-mediation_brief.md": "1150fb9ae5b69655a3691cb4cc6b13daeee336d29e215969a2d94b6d2a405a7e",
+        "prompts/repair-memo.md": "1150fb9ae5b69655a3691cb4cc6b13daeee336d29e215969a2d94b6d2a405a7e",
+        "skeleton-depo_outline.md": "612e1f1266a133ce5ffc1e789b84d5b5e1377878b592f66d2878de32d50a6cdc",
+        "skeleton-discovery_response.md": "fad74de555f70d156d33969039d669c0e63c261804e3fc3fedfcc69a619f41b3",
+        "skeleton-discovery_set.md": "f6693acb009c953e05e4067a2cb2bba65880124b1e134ba56201e229f5475be9",
+        "skeleton-mediation_brief.md": "787bc3a7e80394a1a694e7ea7b2a53e6f132da61fc72d0617261bd123eee32d7",
+        "skeleton-memo.md": "a26f8edb5ee07ab858401d4001b10945ee1ada6f21357d32ae20641769e3a218"
+      },
+      "models": {
+        "audit": "claude-sonnet-5",
+        "compose": "claude-sonnet-5",
+        "digest": "claude-sonnet-5",
+        "repair": "claude-sonnet-5",
+        "transcription": "claude-sonnet-5"
+      },
+      "privilege": {
+        "consumer_domains": ["mail.example"],
+        "firm_domains": ["firm.example"]
+      },
+      "selection": {
+        "doc_extensions": [".pdf", ".docx", ".msg"],
+        "exclude_folder_patterns": ["(?i)chronology", "(?i)\\(operator"],
+        "exclude_name_patterns": ["(?i)\\bmemo\\b"]
+      },
+      "style": "house-style.md"
+    },
+    "firm_domains": ["firm.example"],
+    "rehearsal_matters": ["OPS-LIBRARY"],
+    "root": {
+      "__path": "<TMP>/inputs"
+    },
+    "style": "Times New Roman 12. Roman numerals centered and bold only."
+  },
+  "mutations": {
+    "<root> :: unknown_sibling": {
+      "problems": ["zz_unknown_key: unknown section (closed key set)"]
+    },
+    "attachments :: blank": {
+      "problems": ["attachments.decl_2030_050: required", "attachments.pos: required"]
+    },
+    "attachments :: missing": {
+      "problems": ["attachments: required section missing or not a map"]
+    },
+    "attachments :: unknown_sibling": {
+      "problems": ["attachments.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "attachments :: wrong_type": {
+      "problems": ["attachments: required section missing or not a map"]
+    },
+    "attachments.decl_2030_050 :: blank": {
+      "problems": ["attachments.decl_2030_050: expected str"]
+    },
+    "attachments.decl_2030_050 :: missing": {
+      "problems": ["attachments.decl_2030_050: required"]
+    },
+    "attachments.decl_2030_050 :: wrong_type": {
+      "problems": ["attachments.decl_2030_050: expected str"]
+    },
+    "attachments.pos :: blank": {
+      "problems": ["attachments.pos: expected str"]
+    },
+    "attachments.pos :: missing": {
+      "problems": ["attachments.pos: required"]
+    },
+    "attachments.pos :: wrong_type": {
+      "problems": ["attachments.pos: expected str"]
+    },
+    "budget :: blank": {
+      "problems": [
+        "budget.per_job_cap_usd: required",
+        "budget.monthly_budget_usd: required",
+        "budget.usd_per_million_chars: required",
+        "budget.usd_per_scanned_page: required",
+        "budget.usd_drafting_fixed: required"
+      ]
+    },
+    "budget :: missing": {
+      "problems": ["budget: required section missing or not a map"]
+    },
+    "budget :: unknown_sibling": {
+      "problems": ["budget.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "budget :: wrong_type": {
+      "problems": ["budget: required section missing or not a map"]
+    },
+    "budget.monthly_budget_usd :: blank": {
+      "problems": ["budget.monthly_budget_usd: expected float"]
+    },
+    "budget.monthly_budget_usd :: missing": {
+      "problems": ["budget.monthly_budget_usd: required"]
+    },
+    "budget.monthly_budget_usd :: wrong_type": {
+      "problems": ["budget.monthly_budget_usd: expected float"]
+    },
+    "budget.per_job_cap_usd :: blank": {
+      "problems": ["budget.per_job_cap_usd: expected float"]
+    },
+    "budget.per_job_cap_usd :: missing": {
+      "problems": ["budget.per_job_cap_usd: required"]
+    },
+    "budget.per_job_cap_usd :: wrong_type": {
+      "problems": ["budget.per_job_cap_usd: expected float"]
+    },
+    "budget.usd_drafting_fixed :: blank": {
+      "problems": ["budget.usd_drafting_fixed: expected float"]
+    },
+    "budget.usd_drafting_fixed :: missing": {
+      "problems": ["budget.usd_drafting_fixed: required"]
+    },
+    "budget.usd_drafting_fixed :: wrong_type": {
+      "problems": ["budget.usd_drafting_fixed: expected float"]
+    },
+    "budget.usd_per_million_chars :: blank": {
+      "problems": ["budget.usd_per_million_chars: expected float"]
+    },
+    "budget.usd_per_million_chars :: missing": {
+      "problems": ["budget.usd_per_million_chars: required"]
+    },
+    "budget.usd_per_million_chars :: wrong_type": {
+      "problems": ["budget.usd_per_million_chars: expected float"]
+    },
+    "budget.usd_per_scanned_page :: blank": {
+      "problems": ["budget.usd_per_scanned_page: expected float"]
+    },
+    "budget.usd_per_scanned_page :: missing": {
+      "problems": ["budget.usd_per_scanned_page: required"]
+    },
+    "budget.usd_per_scanned_page :: wrong_type": {
+      "problems": ["budget.usd_per_scanned_page: expected float"]
+    },
+    "classes :: blank": {
+      "problems": [
+        "classes.mediation_brief: required",
+        "classes.discovery_set: required",
+        "classes.discovery_response: required",
+        "classes.memo: required",
+        "classes.depo_outline: required"
+      ]
+    },
+    "classes :: missing": {
+      "problems": ["classes: required section missing or not a map"]
+    },
+    "classes :: unknown_sibling": {
+      "problems": [
+        "classes.zz_unknown_key: unknown class (expected ['mediation_brief', 'discovery_set', 'discovery_response', 'memo', 'depo_outline'])"
+      ]
+    },
+    "classes :: wrong_type": {
+      "problems": ["classes: required section missing or not a map"]
+    },
+    "classes.depo_outline :: blank": {
+      "problems": ["classes.depo_outline: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.depo_outline :: missing": {
+      "problems": ["classes.depo_outline: required"]
+    },
+    "classes.depo_outline :: unknown_sibling": {
+      "problems": ["classes.depo_outline: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.depo_outline :: wrong_type": {
+      "problems": ["classes.depo_outline: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.depo_outline.exemplars :: blank": {
+      "problems": []
+    },
+    "classes.depo_outline.exemplars :: missing": {
+      "problems": ["classes.depo_outline: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.depo_outline.exemplars :: wrong_type": {
+      "problems": ["classes.depo_outline.exemplars: expected a list of paths"]
+    },
+    "classes.depo_outline.prompts :: blank": {
+      "problems": [
+        "classes.depo_outline.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.depo_outline.prompts :: missing": {
+      "problems": ["classes.depo_outline: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.depo_outline.prompts :: unknown_sibling": {
+      "problems": [
+        "classes.depo_outline.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.depo_outline.prompts :: wrong_type": {
+      "problems": [
+        "classes.depo_outline.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.depo_outline.prompts.audit :: blank": {
+      "problems": ["classes.depo_outline.prompts.audit: expected a path"]
+    },
+    "classes.depo_outline.prompts.audit :: missing": {
+      "problems": [
+        "classes.depo_outline.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.depo_outline.prompts.audit :: wrong_type": {
+      "problems": ["classes.depo_outline.prompts.audit: expected a path"]
+    },
+    "classes.depo_outline.prompts.compose :: blank": {
+      "problems": ["classes.depo_outline.prompts.compose: expected a path"]
+    },
+    "classes.depo_outline.prompts.compose :: missing": {
+      "problems": [
+        "classes.depo_outline.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.depo_outline.prompts.compose :: wrong_type": {
+      "problems": ["classes.depo_outline.prompts.compose: expected a path"]
+    },
+    "classes.depo_outline.prompts.digest :: blank": {
+      "problems": ["classes.depo_outline.prompts.digest: expected a path"]
+    },
+    "classes.depo_outline.prompts.digest :: missing": {
+      "problems": [
+        "classes.depo_outline.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.depo_outline.prompts.digest :: wrong_type": {
+      "problems": ["classes.depo_outline.prompts.digest: expected a path"]
+    },
+    "classes.depo_outline.prompts.repair :: blank": {
+      "problems": ["classes.depo_outline.prompts.repair: expected a path"]
+    },
+    "classes.depo_outline.prompts.repair :: missing": {
+      "problems": [
+        "classes.depo_outline.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.depo_outline.prompts.repair :: wrong_type": {
+      "problems": ["classes.depo_outline.prompts.repair: expected a path"]
+    },
+    "classes.depo_outline.skeleton :: blank": {
+      "problems": ["classes.depo_outline.skeleton: expected a path"]
+    },
+    "classes.depo_outline.skeleton :: missing": {
+      "problems": ["classes.depo_outline: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.depo_outline.skeleton :: wrong_type": {
+      "problems": ["classes.depo_outline.skeleton: expected a path"]
+    },
+    "classes.discovery_response :: blank": {
+      "problems": ["classes.discovery_response: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_response :: missing": {
+      "problems": ["classes.discovery_response: required"]
+    },
+    "classes.discovery_response :: unknown_sibling": {
+      "problems": ["classes.discovery_response: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_response :: wrong_type": {
+      "problems": ["classes.discovery_response: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_response.exemplars :: blank": {
+      "problems": []
+    },
+    "classes.discovery_response.exemplars :: missing": {
+      "problems": ["classes.discovery_response: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_response.exemplars :: wrong_type": {
+      "problems": ["classes.discovery_response.exemplars: expected a list of paths"]
+    },
+    "classes.discovery_response.prompts :: blank": {
+      "problems": [
+        "classes.discovery_response.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_response.prompts :: missing": {
+      "problems": ["classes.discovery_response: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_response.prompts :: unknown_sibling": {
+      "problems": [
+        "classes.discovery_response.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_response.prompts :: wrong_type": {
+      "problems": [
+        "classes.discovery_response.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_response.prompts.audit :: blank": {
+      "problems": ["classes.discovery_response.prompts.audit: expected a path"]
+    },
+    "classes.discovery_response.prompts.audit :: missing": {
+      "problems": [
+        "classes.discovery_response.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_response.prompts.audit :: wrong_type": {
+      "problems": ["classes.discovery_response.prompts.audit: expected a path"]
+    },
+    "classes.discovery_response.prompts.compose :: blank": {
+      "problems": ["classes.discovery_response.prompts.compose: expected a path"]
+    },
+    "classes.discovery_response.prompts.compose :: missing": {
+      "problems": [
+        "classes.discovery_response.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_response.prompts.compose :: wrong_type": {
+      "problems": ["classes.discovery_response.prompts.compose: expected a path"]
+    },
+    "classes.discovery_response.prompts.digest :: blank": {
+      "problems": ["classes.discovery_response.prompts.digest: expected a path"]
+    },
+    "classes.discovery_response.prompts.digest :: missing": {
+      "problems": [
+        "classes.discovery_response.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_response.prompts.digest :: wrong_type": {
+      "problems": ["classes.discovery_response.prompts.digest: expected a path"]
+    },
+    "classes.discovery_response.prompts.repair :: blank": {
+      "problems": ["classes.discovery_response.prompts.repair: expected a path"]
+    },
+    "classes.discovery_response.prompts.repair :: missing": {
+      "problems": [
+        "classes.discovery_response.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_response.prompts.repair :: wrong_type": {
+      "problems": ["classes.discovery_response.prompts.repair: expected a path"]
+    },
+    "classes.discovery_response.skeleton :: blank": {
+      "problems": ["classes.discovery_response.skeleton: expected a path"]
+    },
+    "classes.discovery_response.skeleton :: missing": {
+      "problems": ["classes.discovery_response: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_response.skeleton :: wrong_type": {
+      "problems": ["classes.discovery_response.skeleton: expected a path"]
+    },
+    "classes.discovery_set :: blank": {
+      "problems": ["classes.discovery_set: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_set :: missing": {
+      "problems": ["classes.discovery_set: required"]
+    },
+    "classes.discovery_set :: unknown_sibling": {
+      "problems": ["classes.discovery_set: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_set :: wrong_type": {
+      "problems": ["classes.discovery_set: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_set.exemplars :: blank": {
+      "problems": []
+    },
+    "classes.discovery_set.exemplars :: missing": {
+      "problems": ["classes.discovery_set: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_set.exemplars :: wrong_type": {
+      "problems": ["classes.discovery_set.exemplars: expected a list of paths"]
+    },
+    "classes.discovery_set.prompts :: blank": {
+      "problems": [
+        "classes.discovery_set.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_set.prompts :: missing": {
+      "problems": ["classes.discovery_set: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_set.prompts :: unknown_sibling": {
+      "problems": [
+        "classes.discovery_set.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_set.prompts :: wrong_type": {
+      "problems": [
+        "classes.discovery_set.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_set.prompts.audit :: blank": {
+      "problems": ["classes.discovery_set.prompts.audit: expected a path"]
+    },
+    "classes.discovery_set.prompts.audit :: missing": {
+      "problems": [
+        "classes.discovery_set.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_set.prompts.audit :: wrong_type": {
+      "problems": ["classes.discovery_set.prompts.audit: expected a path"]
+    },
+    "classes.discovery_set.prompts.compose :: blank": {
+      "problems": ["classes.discovery_set.prompts.compose: expected a path"]
+    },
+    "classes.discovery_set.prompts.compose :: missing": {
+      "problems": [
+        "classes.discovery_set.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_set.prompts.compose :: wrong_type": {
+      "problems": ["classes.discovery_set.prompts.compose: expected a path"]
+    },
+    "classes.discovery_set.prompts.digest :: blank": {
+      "problems": ["classes.discovery_set.prompts.digest: expected a path"]
+    },
+    "classes.discovery_set.prompts.digest :: missing": {
+      "problems": [
+        "classes.discovery_set.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_set.prompts.digest :: wrong_type": {
+      "problems": ["classes.discovery_set.prompts.digest: expected a path"]
+    },
+    "classes.discovery_set.prompts.repair :: blank": {
+      "problems": ["classes.discovery_set.prompts.repair: expected a path"]
+    },
+    "classes.discovery_set.prompts.repair :: missing": {
+      "problems": [
+        "classes.discovery_set.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.discovery_set.prompts.repair :: wrong_type": {
+      "problems": ["classes.discovery_set.prompts.repair: expected a path"]
+    },
+    "classes.discovery_set.skeleton :: blank": {
+      "problems": ["classes.discovery_set.skeleton: expected a path"]
+    },
+    "classes.discovery_set.skeleton :: missing": {
+      "problems": ["classes.discovery_set: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.discovery_set.skeleton :: wrong_type": {
+      "problems": ["classes.discovery_set.skeleton: expected a path"]
+    },
+    "classes.mediation_brief :: blank": {
+      "problems": ["classes.mediation_brief: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.mediation_brief :: missing": {
+      "problems": ["classes.mediation_brief: required"]
+    },
+    "classes.mediation_brief :: unknown_sibling": {
+      "problems": ["classes.mediation_brief: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.mediation_brief :: wrong_type": {
+      "problems": ["classes.mediation_brief: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.mediation_brief.exemplars :: blank": {
+      "problems": []
+    },
+    "classes.mediation_brief.exemplars :: missing": {
+      "problems": ["classes.mediation_brief: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.mediation_brief.exemplars :: wrong_type": {
+      "problems": ["classes.mediation_brief.exemplars: expected a list of paths"]
+    },
+    "classes.mediation_brief.prompts :: blank": {
+      "problems": [
+        "classes.mediation_brief.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.mediation_brief.prompts :: missing": {
+      "problems": ["classes.mediation_brief: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.mediation_brief.prompts :: unknown_sibling": {
+      "problems": [
+        "classes.mediation_brief.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.mediation_brief.prompts :: wrong_type": {
+      "problems": [
+        "classes.mediation_brief.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.mediation_brief.prompts.audit :: blank": {
+      "problems": ["classes.mediation_brief.prompts.audit: expected a path"]
+    },
+    "classes.mediation_brief.prompts.audit :: missing": {
+      "problems": [
+        "classes.mediation_brief.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.mediation_brief.prompts.audit :: wrong_type": {
+      "problems": ["classes.mediation_brief.prompts.audit: expected a path"]
+    },
+    "classes.mediation_brief.prompts.compose :: blank": {
+      "problems": ["classes.mediation_brief.prompts.compose: expected a path"]
+    },
+    "classes.mediation_brief.prompts.compose :: missing": {
+      "problems": [
+        "classes.mediation_brief.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.mediation_brief.prompts.compose :: wrong_type": {
+      "problems": ["classes.mediation_brief.prompts.compose: expected a path"]
+    },
+    "classes.mediation_brief.prompts.digest :: blank": {
+      "problems": ["classes.mediation_brief.prompts.digest: expected a path"]
+    },
+    "classes.mediation_brief.prompts.digest :: missing": {
+      "problems": [
+        "classes.mediation_brief.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.mediation_brief.prompts.digest :: wrong_type": {
+      "problems": ["classes.mediation_brief.prompts.digest: expected a path"]
+    },
+    "classes.mediation_brief.prompts.repair :: blank": {
+      "problems": ["classes.mediation_brief.prompts.repair: expected a path"]
+    },
+    "classes.mediation_brief.prompts.repair :: missing": {
+      "problems": [
+        "classes.mediation_brief.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.mediation_brief.prompts.repair :: wrong_type": {
+      "problems": ["classes.mediation_brief.prompts.repair: expected a path"]
+    },
+    "classes.mediation_brief.skeleton :: blank": {
+      "problems": ["classes.mediation_brief.skeleton: expected a path"]
+    },
+    "classes.mediation_brief.skeleton :: missing": {
+      "problems": ["classes.mediation_brief: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.mediation_brief.skeleton :: wrong_type": {
+      "problems": ["classes.mediation_brief.skeleton: expected a path"]
+    },
+    "classes.memo :: blank": {
+      "problems": ["classes.memo: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.memo :: missing": {
+      "problems": ["classes.memo: required"]
+    },
+    "classes.memo :: unknown_sibling": {
+      "problems": ["classes.memo: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.memo :: wrong_type": {
+      "problems": ["classes.memo: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.memo.exemplars :: blank": {
+      "problems": []
+    },
+    "classes.memo.exemplars :: missing": {
+      "problems": ["classes.memo: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.memo.exemplars :: wrong_type": {
+      "problems": ["classes.memo.exemplars: expected a list of paths"]
+    },
+    "classes.memo.prompts :: blank": {
+      "problems": [
+        "classes.memo.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.memo.prompts :: missing": {
+      "problems": ["classes.memo: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.memo.prompts :: unknown_sibling": {
+      "problems": [
+        "classes.memo.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.memo.prompts :: wrong_type": {
+      "problems": [
+        "classes.memo.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.memo.prompts.audit :: blank": {
+      "problems": ["classes.memo.prompts.audit: expected a path"]
+    },
+    "classes.memo.prompts.audit :: missing": {
+      "problems": [
+        "classes.memo.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.memo.prompts.audit :: wrong_type": {
+      "problems": ["classes.memo.prompts.audit: expected a path"]
+    },
+    "classes.memo.prompts.compose :: blank": {
+      "problems": ["classes.memo.prompts.compose: expected a path"]
+    },
+    "classes.memo.prompts.compose :: missing": {
+      "problems": [
+        "classes.memo.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.memo.prompts.compose :: wrong_type": {
+      "problems": ["classes.memo.prompts.compose: expected a path"]
+    },
+    "classes.memo.prompts.digest :: blank": {
+      "problems": ["classes.memo.prompts.digest: expected a path"]
+    },
+    "classes.memo.prompts.digest :: missing": {
+      "problems": [
+        "classes.memo.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.memo.prompts.digest :: wrong_type": {
+      "problems": ["classes.memo.prompts.digest: expected a path"]
+    },
+    "classes.memo.prompts.repair :: blank": {
+      "problems": ["classes.memo.prompts.repair: expected a path"]
+    },
+    "classes.memo.prompts.repair :: missing": {
+      "problems": [
+        "classes.memo.prompts: expected exactly ['digest', 'compose', 'audit', 'repair']"
+      ]
+    },
+    "classes.memo.prompts.repair :: wrong_type": {
+      "problems": ["classes.memo.prompts.repair: expected a path"]
+    },
+    "classes.memo.skeleton :: blank": {
+      "problems": ["classes.memo.skeleton: expected a path"]
+    },
+    "classes.memo.skeleton :: missing": {
+      "problems": ["classes.memo: expected exactly {skeleton, prompts, exemplars}"]
+    },
+    "classes.memo.skeleton :: wrong_type": {
+      "problems": ["classes.memo.skeleton: expected a path"]
+    },
+    "delivery :: blank": {
+      "problems": ["delivery.rehearsal_matters: required"]
+    },
+    "delivery :: missing": {
+      "problems": []
+    },
+    "delivery :: unknown_sibling": {
+      "problems": ["delivery.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "delivery :: wrong_type": {
+      "problems": ["delivery: required section missing or not a map"]
+    },
+    "delivery.rehearsal_matters :: blank": {
+      "problems": []
+    },
+    "delivery.rehearsal_matters :: missing": {
+      "problems": ["delivery.rehearsal_matters: required"]
+    },
+    "delivery.rehearsal_matters :: wrong_type": {
+      "problems": ["delivery.rehearsal_matters: expected list[str]"]
+    },
+    "firm :: blank": {
+      "problems": ["firm.slug: required", "firm.display_name: required"]
+    },
+    "firm :: missing": {
+      "problems": ["firm: required section missing or not a map"]
+    },
+    "firm :: unknown_sibling": {
+      "problems": ["firm.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "firm :: wrong_type": {
+      "problems": ["firm: required section missing or not a map"]
+    },
+    "firm.display_name :: blank": {
+      "problems": ["firm.display_name: expected str"]
+    },
+    "firm.display_name :: missing": {
+      "problems": ["firm.display_name: required"]
+    },
+    "firm.display_name :: wrong_type": {
+      "problems": ["firm.display_name: expected str"]
+    },
+    "firm.slug :: blank": {
+      "problems": ["firm.slug: expected str"]
+    },
+    "firm.slug :: missing": {
+      "problems": ["firm.slug: required"]
+    },
+    "firm.slug :: wrong_type": {
+      "problems": ["firm.slug: expected str"]
+    },
+    "format :: blank": {
+      "problems": [
+        "format.font: required",
+        "format.size_pt: required",
+        "format.mediation_brief_sections: required",
+        "format.discovery_label_style: required",
+        "format.depo_outline_page_numbers: required"
+      ]
+    },
+    "format :: missing": {
+      "problems": ["format: required section missing or not a map"]
+    },
+    "format :: unknown_sibling": {
+      "problems": ["format.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format :: wrong_type": {
+      "problems": ["format: required section missing or not a map"]
+    },
+    "format.depo_outline_page_numbers :: blank": {
+      "problems": ["format.depo_outline_page_numbers: expected bool"]
+    },
+    "format.depo_outline_page_numbers :: missing": {
+      "problems": ["format.depo_outline_page_numbers: required"]
+    },
+    "format.depo_outline_page_numbers :: wrong_type": {
+      "problems": ["format.depo_outline_page_numbers: expected bool"]
+    },
+    "format.discovery_label_style :: blank": {
+      "problems": ["format.discovery_label_style: expected str"]
+    },
+    "format.discovery_label_style :: missing": {
+      "problems": ["format.discovery_label_style: required"]
+    },
+    "format.discovery_label_style :: wrong_type": {
+      "problems": ["format.discovery_label_style: expected str"]
+    },
+    "format.font :: blank": {
+      "problems": ["format.font: expected str"]
+    },
+    "format.font :: missing": {
+      "problems": ["format.font: required"]
+    },
+    "format.font :: wrong_type": {
+      "problems": ["format.font: expected str"]
+    },
+    "format.layout :: blank": {
+      "problems": []
+    },
+    "format.layout :: missing": {
+      "problems": []
+    },
+    "format.layout :: unknown_sibling": {
+      "problems": [
+        "format.layout.zz_unknown_key: unknown class (expected ['mediation_brief', 'discovery_set', 'discovery_response', 'memo', 'depo_outline'])"
+      ]
+    },
+    "format.layout :: wrong_type": {
+      "problems": ["format.layout: expected map"]
+    },
+    "format.layout.depo_outline :: blank": {
+      "problems": []
+    },
+    "format.layout.depo_outline :: missing": {
+      "problems": []
+    },
+    "format.layout.depo_outline :: unknown_sibling": {
+      "problems": ["format.layout.depo_outline.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format.layout.depo_outline :: wrong_type": {
+      "problems": ["format.layout.depo_outline: expected a map"]
+    },
+    "format.layout.depo_outline.page_numbers_always :: blank": {
+      "problems": ["format.layout.depo_outline.page_numbers_always: expected bool"]
+    },
+    "format.layout.depo_outline.page_numbers_always :: missing": {
+      "problems": []
+    },
+    "format.layout.depo_outline.page_numbers_always :: wrong_type": {
+      "problems": ["format.layout.depo_outline.page_numbers_always: expected bool"]
+    },
+    "format.layout.discovery_response :: blank": {
+      "problems": []
+    },
+    "format.layout.discovery_response :: missing": {
+      "problems": []
+    },
+    "format.layout.discovery_response :: unknown_sibling": {
+      "problems": ["format.layout.discovery_response.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format.layout.discovery_response :: wrong_type": {
+      "problems": ["format.layout.discovery_response: expected a map"]
+    },
+    "format.layout.discovery_response.item_line_spacing :: blank": {
+      "problems": ["format.layout.discovery_response.item_line_spacing: expected num"]
+    },
+    "format.layout.discovery_response.item_line_spacing :: missing": {
+      "problems": []
+    },
+    "format.layout.discovery_response.item_line_spacing :: wrong_type": {
+      "problems": ["format.layout.discovery_response.item_line_spacing: expected num"]
+    },
+    "format.layout.discovery_response.item_space_after_pt :: blank": {
+      "problems": ["format.layout.discovery_response.item_space_after_pt: expected num"]
+    },
+    "format.layout.discovery_response.item_space_after_pt :: missing": {
+      "problems": []
+    },
+    "format.layout.discovery_response.item_space_after_pt :: wrong_type": {
+      "problems": ["format.layout.discovery_response.item_space_after_pt: expected num"]
+    },
+    "format.layout.discovery_response.line_spacing :: blank": {
+      "problems": ["format.layout.discovery_response.line_spacing: expected num"]
+    },
+    "format.layout.discovery_response.line_spacing :: missing": {
+      "problems": []
+    },
+    "format.layout.discovery_response.line_spacing :: wrong_type": {
+      "problems": ["format.layout.discovery_response.line_spacing: expected num"]
+    },
+    "format.layout.discovery_set :: blank": {
+      "problems": []
+    },
+    "format.layout.discovery_set :: missing": {
+      "problems": []
+    },
+    "format.layout.discovery_set :: unknown_sibling": {
+      "problems": ["format.layout.discovery_set.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format.layout.discovery_set :: wrong_type": {
+      "problems": ["format.layout.discovery_set: expected a map"]
+    },
+    "format.layout.discovery_set.item_line_spacing :: blank": {
+      "problems": ["format.layout.discovery_set.item_line_spacing: expected num"]
+    },
+    "format.layout.discovery_set.item_line_spacing :: missing": {
+      "problems": []
+    },
+    "format.layout.discovery_set.item_line_spacing :: wrong_type": {
+      "problems": ["format.layout.discovery_set.item_line_spacing: expected num"]
+    },
+    "format.layout.discovery_set.item_space_after_pt :: blank": {
+      "problems": ["format.layout.discovery_set.item_space_after_pt: expected num"]
+    },
+    "format.layout.discovery_set.item_space_after_pt :: missing": {
+      "problems": []
+    },
+    "format.layout.discovery_set.item_space_after_pt :: wrong_type": {
+      "problems": ["format.layout.discovery_set.item_space_after_pt: expected num"]
+    },
+    "format.layout.discovery_set.line_spacing :: blank": {
+      "problems": ["format.layout.discovery_set.line_spacing: expected num"]
+    },
+    "format.layout.discovery_set.line_spacing :: missing": {
+      "problems": []
+    },
+    "format.layout.discovery_set.line_spacing :: wrong_type": {
+      "problems": ["format.layout.discovery_set.line_spacing: expected num"]
+    },
+    "format.layout.mediation_brief :: blank": {
+      "problems": []
+    },
+    "format.layout.mediation_brief :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief :: unknown_sibling": {
+      "problems": ["format.layout.mediation_brief.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format.layout.mediation_brief :: wrong_type": {
+      "problems": ["format.layout.mediation_brief: expected a map"]
+    },
+    "format.layout.mediation_brief.bold_italic_heading_indent_in :: blank": {
+      "problems": ["format.layout.mediation_brief.bold_italic_heading_indent_in: expected num"]
+    },
+    "format.layout.mediation_brief.bold_italic_heading_indent_in :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.bold_italic_heading_indent_in :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.bold_italic_heading_indent_in: expected num"]
+    },
+    "format.layout.mediation_brief.centered_court_lines :: blank": {
+      "problems": ["format.layout.mediation_brief.centered_court_lines: expected bool"]
+    },
+    "format.layout.mediation_brief.centered_court_lines :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.centered_court_lines :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.centered_court_lines: expected bool"]
+    },
+    "format.layout.mediation_brief.first_line_indent_in :: blank": {
+      "problems": ["format.layout.mediation_brief.first_line_indent_in: expected num"]
+    },
+    "format.layout.mediation_brief.first_line_indent_in :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.first_line_indent_in :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.first_line_indent_in: expected num"]
+    },
+    "format.layout.mediation_brief.footer_title :: blank": {
+      "problems": ["format.layout.mediation_brief.footer_title: expected str"]
+    },
+    "format.layout.mediation_brief.footer_title :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.footer_title :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.footer_title: expected str"]
+    },
+    "format.layout.mediation_brief.heading_indent_in :: blank": {
+      "problems": ["format.layout.mediation_brief.heading_indent_in: expected num3"]
+    },
+    "format.layout.mediation_brief.heading_indent_in :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.heading_indent_in :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.heading_indent_in: expected num3"]
+    },
+    "format.layout.mediation_brief.heading_underline :: blank": {
+      "problems": ["format.layout.mediation_brief.heading_underline: expected bool3"]
+    },
+    "format.layout.mediation_brief.heading_underline :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.heading_underline :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.heading_underline: expected bool3"]
+    },
+    "format.layout.mediation_brief.justify :: blank": {
+      "problems": ["format.layout.mediation_brief.justify: expected bool"]
+    },
+    "format.layout.mediation_brief.justify :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.justify :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.justify: expected bool"]
+    },
+    "format.layout.mediation_brief.line_spacing_pt :: blank": {
+      "problems": ["format.layout.mediation_brief.line_spacing_pt: expected num"]
+    },
+    "format.layout.mediation_brief.line_spacing_pt :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.line_spacing_pt :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.line_spacing_pt: expected num"]
+    },
+    "format.layout.mediation_brief.page_numbers_always :: blank": {
+      "problems": ["format.layout.mediation_brief.page_numbers_always: expected bool"]
+    },
+    "format.layout.mediation_brief.page_numbers_always :: missing": {
+      "problems": []
+    },
+    "format.layout.mediation_brief.page_numbers_always :: wrong_type": {
+      "problems": ["format.layout.mediation_brief.page_numbers_always: expected bool"]
+    },
+    "format.layout.memo :: blank": {
+      "problems": []
+    },
+    "format.layout.memo :: missing": {
+      "problems": []
+    },
+    "format.layout.memo :: unknown_sibling": {
+      "problems": ["format.layout.memo.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format.layout.memo :: wrong_type": {
+      "problems": ["format.layout.memo: expected a map"]
+    },
+    "format.mediation_brief_sections :: blank": {
+      "problems": ["format.mediation_brief_sections: expected exactly 11 section titles"]
+    },
+    "format.mediation_brief_sections :: missing": {
+      "problems": ["format.mediation_brief_sections: required"]
+    },
+    "format.mediation_brief_sections :: wrong_type": {
+      "problems": ["format.mediation_brief_sections: expected list[str]"]
+    },
+    "format.plain_letter_paper :: blank": {
+      "problems": ["format.plain_letter_paper: expected bool"]
+    },
+    "format.plain_letter_paper :: missing": {
+      "problems": []
+    },
+    "format.plain_letter_paper :: wrong_type": {
+      "problems": ["format.plain_letter_paper: expected bool"]
+    },
+    "format.pleading :: blank": {
+      "problems": [
+        "format.pleading.lines: required",
+        "format.pleading.line_pitch_pt: required",
+        "format.pleading.margins_in: required"
+      ]
+    },
+    "format.pleading :: missing": {
+      "problems": []
+    },
+    "format.pleading :: unknown_sibling": {
+      "problems": ["format.pleading.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format.pleading :: wrong_type": {
+      "problems": ["format.pleading: expected map"]
+    },
+    "format.pleading.line_pitch_pt :: blank": {
+      "raises": "TypeError: float() argument must be a string or a real number, not 'NoneType'"
+    },
+    "format.pleading.line_pitch_pt :: missing": {
+      "problems": ["format.pleading.line_pitch_pt: required"]
+    },
+    "format.pleading.line_pitch_pt :: wrong_type": {
+      "raises": "ValueError: could not convert string to float: 'not-a-number'"
+    },
+    "format.pleading.lines :: blank": {
+      "raises": "TypeError: unsupported operand type(s) for *: 'NoneType' and 'float'"
+    },
+    "format.pleading.lines :: missing": {
+      "problems": ["format.pleading.lines: required"]
+    },
+    "format.pleading.lines :: wrong_type": {
+      "raises": "TypeError: can't multiply sequence by non-int of type 'float'"
+    },
+    "format.pleading.margins_in :: blank": {
+      "problems": ["format.pleading.margins_in: expected [top, right, bottom, left] in inches"]
+    },
+    "format.pleading.margins_in :: missing": {
+      "problems": ["format.pleading.margins_in: required"]
+    },
+    "format.pleading.margins_in :: wrong_type": {
+      "problems": ["format.pleading.margins_in: expected [top, right, bottom, left] in inches"]
+    },
+    "format.size_pt :: blank": {
+      "problems": ["format.size_pt: expected float"]
+    },
+    "format.size_pt :: missing": {
+      "problems": ["format.size_pt: required"]
+    },
+    "format.size_pt :: wrong_type": {
+      "problems": ["format.size_pt: expected float"]
+    },
+    "inputs :: blank": {
+      "problems": [
+        "style: house-style.md is not pinned in inputs",
+        "attachments.decl_2030_050: decl-2030-050.md is not pinned in inputs",
+        "attachments.pos: pos.md is not pinned in inputs",
+        "classes.mediation_brief.skeleton: skeleton-mediation_brief.md is not pinned in inputs",
+        "classes.mediation_brief.prompts.digest: prompts/digest-mediation_brief.md is not pinned in inputs",
+        "classes.mediation_brief.prompts.compose: prompts/compose-mediation_brief.md is not pinned in inputs",
+        "classes.mediation_brief.prompts.audit: prompts/audit-mediation_brief.md is not pinned in inputs",
+        "classes.mediation_brief.prompts.repair: prompts/repair-mediation_brief.md is not pinned in inputs",
+        "classes.discovery_set.skeleton: skeleton-discovery_set.md is not pinned in inputs",
+        "classes.discovery_set.prompts.digest: prompts/digest-discovery_set.md is not pinned in inputs",
+        "classes.discovery_set.prompts.compose: prompts/compose-discovery_set.md is not pinned in inputs",
+        "classes.discovery_set.prompts.audit: prompts/audit-discovery_set.md is not pinned in inputs",
+        "classes.discovery_set.prompts.repair: prompts/repair-discovery_set.md is not pinned in inputs",
+        "classes.discovery_response.skeleton: skeleton-discovery_response.md is not pinned in inputs",
+        "classes.discovery_response.prompts.digest: prompts/digest-discovery_response.md is not pinned in inputs",
+        "classes.discovery_response.prompts.compose: prompts/compose-discovery_response.md is not pinned in inputs",
+        "classes.discovery_response.prompts.audit: prompts/audit-discovery_response.md is not pinned in inputs",
+        "classes.discovery_response.prompts.repair: prompts/repair-discovery_response.md is not pinned in inputs",
+        "classes.memo.skeleton: skeleton-memo.md is not pinned in inputs",
+        "classes.memo.prompts.digest: prompts/digest-memo.md is not pinned in inputs",
+        "classes.memo.prompts.compose: prompts/compose-memo.md is not pinned in inputs",
+        "classes.memo.prompts.audit: prompts/audit-memo.md is not pinned in inputs",
+        "classes.memo.prompts.repair: prompts/repair-memo.md is not pinned in inputs",
+        "classes.depo_outline.skeleton: skeleton-depo_outline.md is not pinned in inputs",
+        "classes.depo_outline.prompts.digest: prompts/digest-depo_outline.md is not pinned in inputs",
+        "classes.depo_outline.prompts.compose: prompts/compose-depo_outline.md is not pinned in inputs",
+        "classes.depo_outline.prompts.audit: prompts/audit-depo_outline.md is not pinned in inputs",
+        "classes.depo_outline.prompts.repair: prompts/repair-depo_outline.md is not pinned in inputs"
+      ]
+    },
+    "inputs :: missing": {
+      "problems": ["inputs: required section missing or not a map"]
+    },
+    "inputs :: unknown_sibling": {
+      "problems": ["inputs.zz_unknown_key: expected a 64-hex sha256"]
+    },
+    "inputs :: wrong_type": {
+      "problems": ["inputs: required section missing or not a map"]
+    },
+    "inputs.decl-2030-050.md :: blank": {
+      "problems": ["inputs.decl-2030-050.md: expected a 64-hex sha256"]
+    },
+    "inputs.decl-2030-050.md :: missing": {
+      "problems": ["attachments.decl_2030_050: decl-2030-050.md is not pinned in inputs"]
+    },
+    "inputs.decl-2030-050.md :: wrong_type": {
+      "problems": ["inputs.decl-2030-050.md: expected a 64-hex sha256"]
+    },
+    "inputs.house-style.md :: blank": {
+      "problems": ["inputs.house-style.md: expected a 64-hex sha256"]
+    },
+    "inputs.house-style.md :: missing": {
+      "problems": ["style: house-style.md is not pinned in inputs"]
+    },
+    "inputs.house-style.md :: wrong_type": {
+      "problems": ["inputs.house-style.md: expected a 64-hex sha256"]
+    },
+    "inputs.pos.md :: blank": {
+      "problems": ["inputs.pos.md: expected a 64-hex sha256"]
+    },
+    "inputs.pos.md :: missing": {
+      "problems": ["attachments.pos: pos.md is not pinned in inputs"]
+    },
+    "inputs.pos.md :: wrong_type": {
+      "problems": ["inputs.pos.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-depo_outline.md :: blank": {
+      "problems": ["inputs.prompts/audit-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-depo_outline.md :: missing": {
+      "problems": [
+        "classes.depo_outline.prompts.audit: prompts/audit-depo_outline.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/audit-depo_outline.md :: wrong_type": {
+      "problems": ["inputs.prompts/audit-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-discovery_response.md :: blank": {
+      "problems": ["inputs.prompts/audit-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-discovery_response.md :: missing": {
+      "problems": [
+        "classes.discovery_response.prompts.audit: prompts/audit-discovery_response.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/audit-discovery_response.md :: wrong_type": {
+      "problems": ["inputs.prompts/audit-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-discovery_set.md :: blank": {
+      "problems": ["inputs.prompts/audit-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-discovery_set.md :: missing": {
+      "problems": [
+        "classes.discovery_set.prompts.audit: prompts/audit-discovery_set.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/audit-discovery_set.md :: wrong_type": {
+      "problems": ["inputs.prompts/audit-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-mediation_brief.md :: blank": {
+      "problems": ["inputs.prompts/audit-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-mediation_brief.md :: missing": {
+      "problems": [
+        "classes.mediation_brief.prompts.audit: prompts/audit-mediation_brief.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/audit-mediation_brief.md :: wrong_type": {
+      "problems": ["inputs.prompts/audit-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-memo.md :: blank": {
+      "problems": ["inputs.prompts/audit-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/audit-memo.md :: missing": {
+      "problems": ["classes.memo.prompts.audit: prompts/audit-memo.md is not pinned in inputs"]
+    },
+    "inputs.prompts/audit-memo.md :: wrong_type": {
+      "problems": ["inputs.prompts/audit-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-depo_outline.md :: blank": {
+      "problems": ["inputs.prompts/compose-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-depo_outline.md :: missing": {
+      "problems": [
+        "classes.depo_outline.prompts.compose: prompts/compose-depo_outline.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/compose-depo_outline.md :: wrong_type": {
+      "problems": ["inputs.prompts/compose-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-discovery_response.md :: blank": {
+      "problems": ["inputs.prompts/compose-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-discovery_response.md :: missing": {
+      "problems": [
+        "classes.discovery_response.prompts.compose: prompts/compose-discovery_response.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/compose-discovery_response.md :: wrong_type": {
+      "problems": ["inputs.prompts/compose-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-discovery_set.md :: blank": {
+      "problems": ["inputs.prompts/compose-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-discovery_set.md :: missing": {
+      "problems": [
+        "classes.discovery_set.prompts.compose: prompts/compose-discovery_set.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/compose-discovery_set.md :: wrong_type": {
+      "problems": ["inputs.prompts/compose-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-mediation_brief.md :: blank": {
+      "problems": ["inputs.prompts/compose-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-mediation_brief.md :: missing": {
+      "problems": [
+        "classes.mediation_brief.prompts.compose: prompts/compose-mediation_brief.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/compose-mediation_brief.md :: wrong_type": {
+      "problems": ["inputs.prompts/compose-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-memo.md :: blank": {
+      "problems": ["inputs.prompts/compose-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/compose-memo.md :: missing": {
+      "problems": ["classes.memo.prompts.compose: prompts/compose-memo.md is not pinned in inputs"]
+    },
+    "inputs.prompts/compose-memo.md :: wrong_type": {
+      "problems": ["inputs.prompts/compose-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-depo_outline.md :: blank": {
+      "problems": ["inputs.prompts/digest-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-depo_outline.md :: missing": {
+      "problems": [
+        "classes.depo_outline.prompts.digest: prompts/digest-depo_outline.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/digest-depo_outline.md :: wrong_type": {
+      "problems": ["inputs.prompts/digest-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-discovery_response.md :: blank": {
+      "problems": ["inputs.prompts/digest-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-discovery_response.md :: missing": {
+      "problems": [
+        "classes.discovery_response.prompts.digest: prompts/digest-discovery_response.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/digest-discovery_response.md :: wrong_type": {
+      "problems": ["inputs.prompts/digest-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-discovery_set.md :: blank": {
+      "problems": ["inputs.prompts/digest-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-discovery_set.md :: missing": {
+      "problems": [
+        "classes.discovery_set.prompts.digest: prompts/digest-discovery_set.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/digest-discovery_set.md :: wrong_type": {
+      "problems": ["inputs.prompts/digest-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-mediation_brief.md :: blank": {
+      "problems": ["inputs.prompts/digest-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-mediation_brief.md :: missing": {
+      "problems": [
+        "classes.mediation_brief.prompts.digest: prompts/digest-mediation_brief.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/digest-mediation_brief.md :: wrong_type": {
+      "problems": ["inputs.prompts/digest-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-memo.md :: blank": {
+      "problems": ["inputs.prompts/digest-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/digest-memo.md :: missing": {
+      "problems": ["classes.memo.prompts.digest: prompts/digest-memo.md is not pinned in inputs"]
+    },
+    "inputs.prompts/digest-memo.md :: wrong_type": {
+      "problems": ["inputs.prompts/digest-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-depo_outline.md :: blank": {
+      "problems": ["inputs.prompts/repair-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-depo_outline.md :: missing": {
+      "problems": [
+        "classes.depo_outline.prompts.repair: prompts/repair-depo_outline.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/repair-depo_outline.md :: wrong_type": {
+      "problems": ["inputs.prompts/repair-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-discovery_response.md :: blank": {
+      "problems": ["inputs.prompts/repair-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-discovery_response.md :: missing": {
+      "problems": [
+        "classes.discovery_response.prompts.repair: prompts/repair-discovery_response.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/repair-discovery_response.md :: wrong_type": {
+      "problems": ["inputs.prompts/repair-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-discovery_set.md :: blank": {
+      "problems": ["inputs.prompts/repair-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-discovery_set.md :: missing": {
+      "problems": [
+        "classes.discovery_set.prompts.repair: prompts/repair-discovery_set.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/repair-discovery_set.md :: wrong_type": {
+      "problems": ["inputs.prompts/repair-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-mediation_brief.md :: blank": {
+      "problems": ["inputs.prompts/repair-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-mediation_brief.md :: missing": {
+      "problems": [
+        "classes.mediation_brief.prompts.repair: prompts/repair-mediation_brief.md is not pinned in inputs"
+      ]
+    },
+    "inputs.prompts/repair-mediation_brief.md :: wrong_type": {
+      "problems": ["inputs.prompts/repair-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-memo.md :: blank": {
+      "problems": ["inputs.prompts/repair-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.prompts/repair-memo.md :: missing": {
+      "problems": ["classes.memo.prompts.repair: prompts/repair-memo.md is not pinned in inputs"]
+    },
+    "inputs.prompts/repair-memo.md :: wrong_type": {
+      "problems": ["inputs.prompts/repair-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-depo_outline.md :: blank": {
+      "problems": ["inputs.skeleton-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-depo_outline.md :: missing": {
+      "problems": [
+        "classes.depo_outline.skeleton: skeleton-depo_outline.md is not pinned in inputs"
+      ]
+    },
+    "inputs.skeleton-depo_outline.md :: wrong_type": {
+      "problems": ["inputs.skeleton-depo_outline.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-discovery_response.md :: blank": {
+      "problems": ["inputs.skeleton-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-discovery_response.md :: missing": {
+      "problems": [
+        "classes.discovery_response.skeleton: skeleton-discovery_response.md is not pinned in inputs"
+      ]
+    },
+    "inputs.skeleton-discovery_response.md :: wrong_type": {
+      "problems": ["inputs.skeleton-discovery_response.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-discovery_set.md :: blank": {
+      "problems": ["inputs.skeleton-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-discovery_set.md :: missing": {
+      "problems": [
+        "classes.discovery_set.skeleton: skeleton-discovery_set.md is not pinned in inputs"
+      ]
+    },
+    "inputs.skeleton-discovery_set.md :: wrong_type": {
+      "problems": ["inputs.skeleton-discovery_set.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-mediation_brief.md :: blank": {
+      "problems": ["inputs.skeleton-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-mediation_brief.md :: missing": {
+      "problems": [
+        "classes.mediation_brief.skeleton: skeleton-mediation_brief.md is not pinned in inputs"
+      ]
+    },
+    "inputs.skeleton-mediation_brief.md :: wrong_type": {
+      "problems": ["inputs.skeleton-mediation_brief.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-memo.md :: blank": {
+      "problems": ["inputs.skeleton-memo.md: expected a 64-hex sha256"]
+    },
+    "inputs.skeleton-memo.md :: missing": {
+      "problems": ["classes.memo.skeleton: skeleton-memo.md is not pinned in inputs"]
+    },
+    "inputs.skeleton-memo.md :: wrong_type": {
+      "problems": ["inputs.skeleton-memo.md: expected a 64-hex sha256"]
+    },
+    "models :: blank": {
+      "problems": [
+        "models.transcription: required",
+        "models.digest: required",
+        "models.compose: required",
+        "models.audit: required",
+        "models.repair: required"
+      ]
+    },
+    "models :: missing": {
+      "problems": ["models: required section missing or not a map"]
+    },
+    "models :: unknown_sibling": {
+      "problems": ["models.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "models :: wrong_type": {
+      "problems": ["models: required section missing or not a map"]
+    },
+    "models.audit :: blank": {
+      "problems": ["models.audit: expected str"]
+    },
+    "models.audit :: missing": {
+      "problems": ["models.audit: required"]
+    },
+    "models.audit :: wrong_type": {
+      "problems": ["models.audit: expected str"]
+    },
+    "models.compose :: blank": {
+      "problems": ["models.compose: expected str"]
+    },
+    "models.compose :: missing": {
+      "problems": ["models.compose: required"]
+    },
+    "models.compose :: wrong_type": {
+      "problems": ["models.compose: expected str"]
+    },
+    "models.digest :: blank": {
+      "problems": ["models.digest: expected str"]
+    },
+    "models.digest :: missing": {
+      "problems": ["models.digest: required"]
+    },
+    "models.digest :: wrong_type": {
+      "problems": ["models.digest: expected str"]
+    },
+    "models.repair :: blank": {
+      "problems": ["models.repair: expected str"]
+    },
+    "models.repair :: missing": {
+      "problems": ["models.repair: required"]
+    },
+    "models.repair :: wrong_type": {
+      "problems": ["models.repair: expected str"]
+    },
+    "models.transcription :: blank": {
+      "problems": ["models.transcription: expected str"]
+    },
+    "models.transcription :: missing": {
+      "problems": ["models.transcription: required"]
+    },
+    "models.transcription :: wrong_type": {
+      "problems": ["models.transcription: expected str"]
+    },
+    "privilege :: blank": {
+      "problems": ["privilege.firm_domains: required", "privilege.consumer_domains: required"]
+    },
+    "privilege :: missing": {
+      "problems": ["privilege: required section missing or not a map"]
+    },
+    "privilege :: unknown_sibling": {
+      "problems": ["privilege.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "privilege :: wrong_type": {
+      "problems": ["privilege: required section missing or not a map"]
+    },
+    "privilege.consumer_domains :: blank": {
+      "problems": []
+    },
+    "privilege.consumer_domains :: missing": {
+      "problems": ["privilege.consumer_domains: required"]
+    },
+    "privilege.consumer_domains :: wrong_type": {
+      "problems": ["privilege.consumer_domains: expected list[str]"]
+    },
+    "privilege.firm_domains :: blank": {
+      "problems": []
+    },
+    "privilege.firm_domains :: missing": {
+      "problems": ["privilege.firm_domains: required"]
+    },
+    "privilege.firm_domains :: wrong_type": {
+      "problems": ["privilege.firm_domains: expected list[str]"]
+    },
+    "selection :: blank": {
+      "problems": [
+        "selection.doc_extensions: required",
+        "selection.exclude_folder_patterns: required",
+        "selection.exclude_name_patterns: required"
+      ]
+    },
+    "selection :: missing": {
+      "problems": ["selection: required section missing or not a map"]
+    },
+    "selection :: unknown_sibling": {
+      "problems": ["selection.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "selection :: wrong_type": {
+      "problems": ["selection: required section missing or not a map"]
+    },
+    "selection.doc_extensions :: blank": {
+      "problems": []
+    },
+    "selection.doc_extensions :: missing": {
+      "problems": ["selection.doc_extensions: required"]
+    },
+    "selection.doc_extensions :: wrong_type": {
+      "problems": ["selection.doc_extensions: expected list[str]"]
+    },
+    "selection.exclude_folder_patterns :: blank": {
+      "problems": []
+    },
+    "selection.exclude_folder_patterns :: missing": {
+      "problems": ["selection.exclude_folder_patterns: required"]
+    },
+    "selection.exclude_folder_patterns :: wrong_type": {
+      "problems": ["selection.exclude_folder_patterns: expected list[str]"]
+    },
+    "selection.exclude_name_patterns :: blank": {
+      "problems": []
+    },
+    "selection.exclude_name_patterns :: missing": {
+      "problems": ["selection.exclude_name_patterns: required"]
+    },
+    "selection.exclude_name_patterns :: wrong_type": {
+      "problems": ["selection.exclude_name_patterns: expected list[str]"]
+    },
+    "style :: blank": {
+      "problems": ["style: required, a path in inputs"]
+    },
+    "style :: missing": {
+      "problems": ["style: required, a path in inputs"]
+    },
+    "style :: wrong_type": {
+      "problems": ["style: required, a path in inputs"]
+    }
+  },
+  "validate": {
+    "problems": []
+  }
+}

@@ -1,0 +1,1428 @@
+{
+  "firm_words": [
+    {
+      "args": ["no such receipt in the record"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "no such receipt in the record"
+    },
+    {
+      "args": [
+        "the record describing this dependency is dated 4/1/2025 and 6/2/2025, when the patient was 75, not 74; also the cited note states he does NOT have , not that he  successfully"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the record describing this dependency is dated 4/1/2025 and 6/2/2025, when the patient was 75, not 74; also the cited note states he does NOT have , not that he  successfully"
+    },
+    {
+      "args": [
+        "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 4 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 4.\nItems that can follow the demand: 1, 2.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: Exampletown ER bill page 2.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 4 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 4.\nItems that can follow the demand: 1, 2.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: Exampletown ER bill page 2.\n"
+    },
+    {
+      "args": ["Provider5 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider5 visit 9"
+    },
+    {
+      "args": ["bill for Provider2 visit 4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider2 visit 4"
+    },
+    {
+      "args": ["bill for Provider4 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 7"
+    },
+    {
+      "args": ["Provider2 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 3"
+    },
+    {
+      "args": ["Past medical specials total '$9,876.54'"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Past medical specials total '$9,876.54'"
+    },
+    {
+      "args": ["none"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "none"
+    },
+    {
+      "args": ["Provider4 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider4 visit 3"
+    },
+    {
+      "args": ["one visit at $1,200.00"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "one visit at $1,200.00"
+    },
+    {
+      "args": [
+        "The record states \"the patient did not immediately initiate chiropractic care for weeks\" (ER record 1-15-26, p. 1)."
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "The record states \"the patient did not immediately initiate chiropractic care for weeks\" (ER record 1-15-26, p. 1)."
+    },
+    {
+      "args": ["Provider3 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3 visit 6"
+    },
+    {
+      "args": ["B. x"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "B. x"
+    },
+    {
+      "args": ["Provider0 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider0 visit 9"
+    },
+    {
+      "args": ["Provider4 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider4 visit 7"
+    },
+    {
+      "args": ["the bill reconciliation (Billing tab vs bills)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the bill reconciliation (Billing tab vs bills)"
+    },
+    {
+      "args": ["ER record 1-15-26, p. 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "ER record 1-15-26, p. 1"
+    },
+    {
+      "args": ["bill for Provider6 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider6 visit 5"
+    },
+    {
+      "args": ["Provider3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3"
+    },
+    {
+      "args": [
+        "Quoted text of Civil Code §2100 ('A carrier of persons for reward must use the utmost care')"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Quoted text of Civil Code §2100 ('A carrier of persons for reward must use the utmost care')"
+    },
+    {
+      "args": ["Provider0 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider0 visit 0"
+    },
+    {
+      "args": ["Provider0 visit 4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider0 visit 4"
+    },
+    {
+      "args": ["bill for Provider5 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 8"
+    },
+    {
+      "args": ["Provider1 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 8"
+    },
+    {
+      "args": ["Preflight counts the ledger as a bill"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "The bill reconciliation counts the ledger as a bill"
+    },
+    {
+      "args": ["bill for Provider1 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider1 visit 2"
+    },
+    {
+      "args": ["bill for Provider2 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider2 visit 8"
+    },
+    {
+      "args": ["Provider2 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 1"
+    },
+    {
+      "args": ["bill for Provider3 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider3 visit 1"
+    },
+    {
+      "args": ["visit notes"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "visit notes"
+    },
+    {
+      "args": ["ER record 1-15-26, p. 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "ER record 1-15-26, p. 2"
+    },
+    {
+      "args": ["Provider2 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 8"
+    },
+    {
+      "args": ["bill for Provider3 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider3 visit 3"
+    },
+    {
+      "args": ["prior records"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "prior records"
+    },
+    {
+      "args": ["Provider2 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 7"
+    },
+    {
+      "args": ["bill for Provider2 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider2 visit 6"
+    },
+    {
+      "args": ["Provider6 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 6"
+    },
+    {
+      "args": ["Provider1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1"
+    },
+    {
+      "args": ["Upper digestive tract normal (GI note)."],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Upper digestive tract normal (GI note)."
+    },
+    {
+      "args": ["bill for Provider4 visit 4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 4"
+    },
+    {
+      "args": ["B. Completeness"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "B. Completeness"
+    },
+    {
+      "args": ["the bill's lines sum to $1,100.00"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the bill's lines sum to $1,100.00"
+    },
+    {
+      "args": ["bill for Provider6 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider6 visit 1"
+    },
+    {
+      "args": ["bill for Provider0 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider0 visit 2"
+    },
+    {
+      "args": ["Provider3 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3 visit 0"
+    },
+    {
+      "args": ["Provider3 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3 visit 2"
+    },
+    {
+      "args": ["x"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "x"
+    },
+    {
+      "args": ["Provider2 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 5"
+    },
+    {
+      "args": ["bill for Provider3 visit 4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider3 visit 4"
+    },
+    {
+      "args": ["Provider1 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 0"
+    },
+    {
+      "args": ["Provider3 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3 visit 7"
+    },
+    {
+      "args": ["Provider6 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 5"
+    },
+    {
+      "args": ["records"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "records"
+    },
+    {
+      "args": ["Provider4 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider4 visit 9"
+    },
+    {
+      "args": ["bill for Provider1 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider1 visit 7"
+    },
+    {
+      "args": ["The digest states two visits."],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "The record states two visits."
+    },
+    {
+      "args": ["Provider1 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 5"
+    },
+    {
+      "args": ["bill for Provider0 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider0 visit 5"
+    },
+    {
+      "args": ["CACI No. 3928"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "CACI No. 3928"
+    },
+    {
+      "args": ["bill for Provider5 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 9"
+    },
+    {
+      "args": ["Provider6 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 2"
+    },
+    {
+      "args": ["Provider2 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 9"
+    },
+    {
+      "args": ["bill for Provider3 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider3 visit 5"
+    },
+    {
+      "args": ["bill for Provider5 visit 4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 4"
+    },
+    {
+      "args": ["The bill reconciliation counts the ledger as a bill"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "The bill reconciliation counts the ledger as a bill"
+    },
+    {
+      "args": [
+        "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n| 4 | Exampletown ER | The record states the patient did not immediately initiate chiropractic care for weeks (ER record 1-15-26, p. 1). | ER record 1-15-26, p. 1 | Referenced in record | records | Housekeeping |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 5 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 5.\nItems that can follow the demand: 1, 2, 4.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n| 4 | Exampletown ER | The record states the patient did not immediately initiate chiropractic care for weeks (ER record 1-15-26, p. 1). | ER record 1-15-26, p. 1 | Referenced in record | records | Housekeeping |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 5 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 5.\nItems that can follow the demand: 1, 2, 4.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+    },
+    {
+      "args": ["Provider3 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3 visit 5"
+    },
+    {
+      "args": ["bill for Provider2 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider2 visit 0"
+    },
+    {
+      "args": ["bill for Provider3 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider3 visit 6"
+    },
+    {
+      "args": ["Provider2 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 6"
+    },
+    {
+      "args": ["bill for Provider5 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 1"
+    },
+    {
+      "args": ["Provider6 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 1"
+    },
+    {
+      "args": ["bill for Provider0 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider0 visit 1"
+    },
+    {
+      "args": ["bill for Provider6 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider6 visit 6"
+    },
+    {
+      "args": ["bill for Provider4 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 5"
+    },
+    {
+      "args": ["Your insured, Beta Driver, is named in the carrier's letter under claim CLM-0001"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Your insured, Beta Driver, is named in the carrier's letter under claim CLM-0001"
+    },
+    {
+      "args": ["bill for Provider1 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider1 visit 3"
+    },
+    {
+      "args": ["bill for Provider4 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 9"
+    },
+    {
+      "args": ["bill for Provider6 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider6 visit 8"
+    },
+    {
+      "args": ["ER bill 1-15-26, p. 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "ER bill 1-15-26, p. 1"
+    },
+    {
+      "args": ["Referenced in the digest"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Referenced in the record"
+    },
+    {
+      "args": ["the preflight inspection of the aircraft (NTSB report, p. 3)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the preflight inspection of the aircraft (NTSB report, p. 3)"
+    },
+    {
+      "args": ["Provider2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2"
+    },
+    {
+      "args": ["bill for Provider5 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 3"
+    },
+    {
+      "args": ["radiology bill"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "radiology bill"
+    },
+    {
+      "args": ["total charges of $1,200.00"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "total charges of $1,200.00"
+    },
+    {
+      "args": ["Provider0 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider0 visit 3"
+    },
+    {
+      "args": ["Provider6 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 9"
+    },
+    {
+      "args": ["Provider1 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 1"
+    },
+    {
+      "args": ["bill for Provider4 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 0"
+    },
+    {
+      "args": ["no visit 01/01 to 03/01 (59 days)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "no visit 01/01 to 03/01 (59 days)"
+    },
+    {
+      "args": ["Provider2 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 0"
+    },
+    {
+      "args": ["C. Billing-to-record reconciliation"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "C. Billing-to-record reconciliation"
+    },
+    {
+      "args": ["Provider4 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider4 visit 2"
+    },
+    {
+      "args": [
+        "# Records and Billing Gap Audit\n\n## B. Completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Provider0 | bill for Provider0 visit 0 | Provider0 visit 0 | Referenced in record | records | Strengthens demand |\n| 2 | Provider0 | bill for Provider0 visit 1 | Provider0 visit 1 | Referenced in record | records | Strengthens demand |\n| 3 | Provider0 | bill for Provider0 visit 2 | Provider0 visit 2 | Referenced in record | records | Strengthens demand |\n| 4 | Provider0 | bill for Provider0 visit 3 | Provider0 visit 3 | Referenced in record | records | Strengthens demand |\n| 5 | Provider0 | bill for Provider0 visit 4 | Provider0 visit 4 | Referenced in record | records | Strengthens demand |\n| 6 | Provider0 | bill for Provider0 visit 5 | Provider0 visit 5 | Referenced in record | records | Strengthens demand |\n| 7 | Provider0 | bill for Provider0 visit 6 | Provider0 visit 6 | Referenced in record | records | Strengthens demand |\n| 8 | Provider0 | bill for Provider0 visit 7 | Provider0 visit 7 | Referenced in record | records | Strengthens demand |\n| 9 | Provider0 | bill for Provider0 visit 8 | Provider0 visit 8 | Referenced in record | records | Strengthens demand |\n| 10 | Provider0 | bill for Provider0 visit 9 | Provider0 visit 9 | Referenced in record | records | Strengthens demand |\n| 11 | Provider1 | bill for Provider1 visit 0 | Provider1 visit 0 | Referenced in record | records | Strengthens demand |\n| 12 | Provider1 | bill for Provider1 visit 1 | Provider1 visit 1 | Referenced in record | records | Strengthens demand |\n| 13 | Provider1 | bill for Provider1 visit 2 | Provider1 visit 2 | Referenced in record | records | Strengthens demand |\n| 14 | Provider1 | bill for Provider1 visit 3 | Provider1 visit 3 | Referenced in record | records | Strengthens demand |\n| 15 | Provider1 | bill for Provider1 visit 4 | Provider1 visit 4 | Referenced in record | records | Strengthens demand |\n| 16 | Provider1 | bill for Provider1 visit 5 | Provider1 visit 5 | Referenced in record | records | Strengthens demand |\n| 17 | Provider1 | bill for Provider1 visit 6 | Provider1 visit 6 | Referenced in record | records | Strengthens demand |\n| 18 | Provider1 | bill for Provider1 visit 7 | Provider1 visit 7 | Referenced in record | records | Strengthens demand |\n| 19 | Provider1 | bill for Provider1 visit 8 | Provider1 visit 8 | Referenced in record | records | Strengthens demand |\n| 20 | Provider1 | bill for Provider1 visit 9 | Provider1 visit 9 | Referenced in record | records | Strengthens demand |\n| 21 | Provider2 | bill for Provider2 visit 0 | Provider2 visit 0 | Referenced in record | records | Strengthens demand |\n| 22 | Provider2 | bill for Provider2 visit 1 | Provider2 visit 1 | Referenced in record | records | Strengthens demand |\n| 23 | Provider2 | bill for Provider2 visit 2 | Provider2 visit 2 | Referenced in record | records | Strengthens demand |\n| 24 | Provider2 | bill for Provider2 visit 3 | Provider2 visit 3 | Referenced in record | records | Strengthens demand |\n| 25 | Provider2 | bill for Provider2 visit 4 | Provider2 visit 4 | Referenced in record | records | Strengthens demand |\n| 26 | Provider2 | bill for Provider2 visit 5 | Provider2 visit 5 | Referenced in record | records | Strengthens demand |\n| 27 | Provider2 | bill for Provider2 visit 6 | Provider2 visit 6 | Referenced in record | records | Strengthens demand |\n| 28 | Provider2 | bill for Provider2 visit 7 | Provider2 visit 7 | Referenced in record | records | Strengthens demand |\n| 29 | Provider2 | bill for Provider2 visit 8 | Provider2 visit 8 | Referenced in record | records | Strengthens demand |\n| 30 | Provider2 | bill for Provider2 visit 9 | Provider2 visit 9 | Referenced in record | records | Strengthens demand |\n| 31 | Provider3 | bill for Provider3 visit 0 | Provider3 visit 0 | Referenced in record | records | Strengthens demand |\n| 32 | Provider3 | bill for Provider3 visit 1 | Provider3 visit 1 | Referenced in record | records | Strengthens demand |\n| 33 | Provider3 | bill for Provider3 visit 2 | Provider3 visit 2 | Referenced in record | records | Strengthens demand |\n| 34 | Provider3 | bill for Provider3 visit 3 | Provider3 visit 3 | Referenced in record | records | Strengthens demand |\n| 35 | Provider3 | bill for Provider3 visit 4 | Provider3 visit 4 | Referenced in record | records | Strengthens demand |\n| 36 | Provider3 | bill for Provider3 visit 5 | Provider3 visit 5 | Referenced in record | records | Strengthens demand |\n| 37 | Provider3 | bill for Provider3 visit 6 | Provider3 visit 6 | Referenced in record | records | Strengthens demand |\n| 38 | Provider3 | bill for Provider3 visit 7 | Provider3 visit 7 | Referenced in record | records | Strengthens demand |\n| 39 | Provider3 | bill for Provider3 visit 8 | Provider3 visit 8 | Referenced in record | records | Strengthens demand |\n| 40 | Provider3 | bill for Provider3 visit 9 | Provider3 visit 9 | Referenced in record | records | Strengthens demand |\n| 41 | Provider4 | bill for Provider4 visit 0 | Provider4 visit 0 | Referenced in record | records | Strengthens demand |\n| 42 | Provider4 | bill for Provider4 visit 1 | Provider4 visit 1 | Referenced in record | records | Strengthens demand |\n| 43 | Provider4 | bill for Provider4 visit 2 | Provider4 visit 2 | Referenced in record | records | Strengthens demand |\n| 44 | Provider4 | bill for Provider4 visit 3 | Provider4 visit 3 | Referenced in record | records | Strengthens demand |\n| 45 | Provider4 | bill for Provider4 visit 4 | Provider4 visit 4 | Referenced in record | records | Strengthens demand |\n| 46 | Provider4 | bill for Provider4 visit 5 | Provider4 visit 5 | Referenced in record | records | Strengthens demand |\n| 47 | Provider4 | bill for Provider4 visit 6 | Provider4 visit 6 | Referenced in record | records | Strengthens demand |\n| 48 | Provider4 | bill for Provider4 visit 7 | Provider4 visit 7 | Referenced in record | records | Strengthens demand |\n| 49 | Provider4 | bill for Provider4 visit 8 | Provider4 visit 8 | Referenced in record | records | Strengthens demand |\n| 50 | Provider4 | bill for Provider4 visit 9 | Provider4 visit 9 | Referenced in record | records | Strengthens demand |\n| 51 | Provider5 | bill for Provider5 visit 0 | Provider5 visit 0 | Referenced in record | records | Strengthens demand |\n| 52 | Provider5 | bill for Provider5 visit 1 | Provider5 visit 1 | Referenced in record | records | Strengthens demand |\n| 53 | Provider5 | bill for Provider5 visit 2 | Provider5 visit 2 | Referenced in record | records | Strengthens demand |\n| 54 | Provider5 | bill for Provider5 visit 3 | Provider5 visit 3 | Referenced in record | records | Strengthens demand |\n| 55 | Provider5 | bill for Provider5 visit 4 | Provider5 visit 4 | Referenced in record | records | Strengthens demand |\n| 56 | Provider5 | bill for Provider5 visit 5 | Provider5 visit 5 | Referenced in record | records | Strengthens demand |\n| 57 | Provider5 | bill for Provider5 visit 6 | Provider5 visit 6 | Referenced in record | records | Strengthens demand |\n| 58 | Provider5 | bill for Provider5 visit 7 | Provider5 visit 7 | Referenced in record | records | Strengthens demand |\n| 59 | Provider5 | bill for Provider5 visit 8 | Provider5 visit 8 | Referenced in record | records | Strengthens demand |\n| 60 | Provider5 | bill for Provider5 visit 9 | Provider5 visit 9 | Referenced in record | records | Strengthens demand |\n| 61 | Provider6 | bill for Provider6 visit 0 | Provider6 visit 0 | Referenced in record | records | Strengthens demand |\n| 62 | Provider6 | bill for Provider6 visit 1 | Provider6 visit 1 | Referenced in record | records | Strengthens demand |\n| 63 | Provider6 | bill for Provider6 visit 2 | Provider6 visit 2 | Referenced in record | records | Strengthens demand |\n| 64 | Provider6 | bill for Provider6 visit 3 | Provider6 visit 3 | Referenced in record | records | Strengthens demand |\n| 65 | Provider6 | bill for Provider6 visit 4 | Provider6 visit 4 | Referenced in record | records | Strengthens demand |\n| 66 | Provider6 | bill for Provider6 visit 5 | Provider6 visit 5 | Referenced in record | records | Strengthens demand |\n| 67 | Provider6 | bill for Provider6 visit 6 | Provider6 visit 6 | Referenced in record | records | Strengthens demand |\n| 68 | Provider6 | bill for Provider6 visit 7 | Provider6 visit 7 | Referenced in record | records | Strengthens demand |\n| 69 | Provider6 | bill for Provider6 visit 8 | Provider6 visit 8 | Referenced in record | records | Strengthens demand |\n| 70 | Provider6 | bill for Provider6 visit 9 | Provider6 visit 9 | Referenced in record | records | Strengthens demand |\n\n## D. Treatment timeline\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 71 | Provider0 | no visit 01/01 to 03/01 (59 days) | Provider0 visit 0 | Referenced in record | records | Strengthens demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: none.\nItems that can follow the demand: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "# Records and Billing Gap Audit\n\n## B. Completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Provider0 | bill for Provider0 visit 0 | Provider0 visit 0 | Referenced in record | records | Strengthens demand |\n| 2 | Provider0 | bill for Provider0 visit 1 | Provider0 visit 1 | Referenced in record | records | Strengthens demand |\n| 3 | Provider0 | bill for Provider0 visit 2 | Provider0 visit 2 | Referenced in record | records | Strengthens demand |\n| 4 | Provider0 | bill for Provider0 visit 3 | Provider0 visit 3 | Referenced in record | records | Strengthens demand |\n| 5 | Provider0 | bill for Provider0 visit 4 | Provider0 visit 4 | Referenced in record | records | Strengthens demand |\n| 6 | Provider0 | bill for Provider0 visit 5 | Provider0 visit 5 | Referenced in record | records | Strengthens demand |\n| 7 | Provider0 | bill for Provider0 visit 6 | Provider0 visit 6 | Referenced in record | records | Strengthens demand |\n| 8 | Provider0 | bill for Provider0 visit 7 | Provider0 visit 7 | Referenced in record | records | Strengthens demand |\n| 9 | Provider0 | bill for Provider0 visit 8 | Provider0 visit 8 | Referenced in record | records | Strengthens demand |\n| 10 | Provider0 | bill for Provider0 visit 9 | Provider0 visit 9 | Referenced in record | records | Strengthens demand |\n| 11 | Provider1 | bill for Provider1 visit 0 | Provider1 visit 0 | Referenced in record | records | Strengthens demand |\n| 12 | Provider1 | bill for Provider1 visit 1 | Provider1 visit 1 | Referenced in record | records | Strengthens demand |\n| 13 | Provider1 | bill for Provider1 visit 2 | Provider1 visit 2 | Referenced in record | records | Strengthens demand |\n| 14 | Provider1 | bill for Provider1 visit 3 | Provider1 visit 3 | Referenced in record | records | Strengthens demand |\n| 15 | Provider1 | bill for Provider1 visit 4 | Provider1 visit 4 | Referenced in record | records | Strengthens demand |\n| 16 | Provider1 | bill for Provider1 visit 5 | Provider1 visit 5 | Referenced in record | records | Strengthens demand |\n| 17 | Provider1 | bill for Provider1 visit 6 | Provider1 visit 6 | Referenced in record | records | Strengthens demand |\n| 18 | Provider1 | bill for Provider1 visit 7 | Provider1 visit 7 | Referenced in record | records | Strengthens demand |\n| 19 | Provider1 | bill for Provider1 visit 8 | Provider1 visit 8 | Referenced in record | records | Strengthens demand |\n| 20 | Provider1 | bill for Provider1 visit 9 | Provider1 visit 9 | Referenced in record | records | Strengthens demand |\n| 21 | Provider2 | bill for Provider2 visit 0 | Provider2 visit 0 | Referenced in record | records | Strengthens demand |\n| 22 | Provider2 | bill for Provider2 visit 1 | Provider2 visit 1 | Referenced in record | records | Strengthens demand |\n| 23 | Provider2 | bill for Provider2 visit 2 | Provider2 visit 2 | Referenced in record | records | Strengthens demand |\n| 24 | Provider2 | bill for Provider2 visit 3 | Provider2 visit 3 | Referenced in record | records | Strengthens demand |\n| 25 | Provider2 | bill for Provider2 visit 4 | Provider2 visit 4 | Referenced in record | records | Strengthens demand |\n| 26 | Provider2 | bill for Provider2 visit 5 | Provider2 visit 5 | Referenced in record | records | Strengthens demand |\n| 27 | Provider2 | bill for Provider2 visit 6 | Provider2 visit 6 | Referenced in record | records | Strengthens demand |\n| 28 | Provider2 | bill for Provider2 visit 7 | Provider2 visit 7 | Referenced in record | records | Strengthens demand |\n| 29 | Provider2 | bill for Provider2 visit 8 | Provider2 visit 8 | Referenced in record | records | Strengthens demand |\n| 30 | Provider2 | bill for Provider2 visit 9 | Provider2 visit 9 | Referenced in record | records | Strengthens demand |\n| 31 | Provider3 | bill for Provider3 visit 0 | Provider3 visit 0 | Referenced in record | records | Strengthens demand |\n| 32 | Provider3 | bill for Provider3 visit 1 | Provider3 visit 1 | Referenced in record | records | Strengthens demand |\n| 33 | Provider3 | bill for Provider3 visit 2 | Provider3 visit 2 | Referenced in record | records | Strengthens demand |\n| 34 | Provider3 | bill for Provider3 visit 3 | Provider3 visit 3 | Referenced in record | records | Strengthens demand |\n| 35 | Provider3 | bill for Provider3 visit 4 | Provider3 visit 4 | Referenced in record | records | Strengthens demand |\n| 36 | Provider3 | bill for Provider3 visit 5 | Provider3 visit 5 | Referenced in record | records | Strengthens demand |\n| 37 | Provider3 | bill for Provider3 visit 6 | Provider3 visit 6 | Referenced in record | records | Strengthens demand |\n| 38 | Provider3 | bill for Provider3 visit 7 | Provider3 visit 7 | Referenced in record | records | Strengthens demand |\n| 39 | Provider3 | bill for Provider3 visit 8 | Provider3 visit 8 | Referenced in record | records | Strengthens demand |\n| 40 | Provider3 | bill for Provider3 visit 9 | Provider3 visit 9 | Referenced in record | records | Strengthens demand |\n| 41 | Provider4 | bill for Provider4 visit 0 | Provider4 visit 0 | Referenced in record | records | Strengthens demand |\n| 42 | Provider4 | bill for Provider4 visit 1 | Provider4 visit 1 | Referenced in record | records | Strengthens demand |\n| 43 | Provider4 | bill for Provider4 visit 2 | Provider4 visit 2 | Referenced in record | records | Strengthens demand |\n| 44 | Provider4 | bill for Provider4 visit 3 | Provider4 visit 3 | Referenced in record | records | Strengthens demand |\n| 45 | Provider4 | bill for Provider4 visit 4 | Provider4 visit 4 | Referenced in record | records | Strengthens demand |\n| 46 | Provider4 | bill for Provider4 visit 5 | Provider4 visit 5 | Referenced in record | records | Strengthens demand |\n| 47 | Provider4 | bill for Provider4 visit 6 | Provider4 visit 6 | Referenced in record | records | Strengthens demand |\n| 48 | Provider4 | bill for Provider4 visit 7 | Provider4 visit 7 | Referenced in record | records | Strengthens demand |\n| 49 | Provider4 | bill for Provider4 visit 8 | Provider4 visit 8 | Referenced in record | records | Strengthens demand |\n| 50 | Provider4 | bill for Provider4 visit 9 | Provider4 visit 9 | Referenced in record | records | Strengthens demand |\n| 51 | Provider5 | bill for Provider5 visit 0 | Provider5 visit 0 | Referenced in record | records | Strengthens demand |\n| 52 | Provider5 | bill for Provider5 visit 1 | Provider5 visit 1 | Referenced in record | records | Strengthens demand |\n| 53 | Provider5 | bill for Provider5 visit 2 | Provider5 visit 2 | Referenced in record | records | Strengthens demand |\n| 54 | Provider5 | bill for Provider5 visit 3 | Provider5 visit 3 | Referenced in record | records | Strengthens demand |\n| 55 | Provider5 | bill for Provider5 visit 4 | Provider5 visit 4 | Referenced in record | records | Strengthens demand |\n| 56 | Provider5 | bill for Provider5 visit 5 | Provider5 visit 5 | Referenced in record | records | Strengthens demand |\n| 57 | Provider5 | bill for Provider5 visit 6 | Provider5 visit 6 | Referenced in record | records | Strengthens demand |\n| 58 | Provider5 | bill for Provider5 visit 7 | Provider5 visit 7 | Referenced in record | records | Strengthens demand |\n| 59 | Provider5 | bill for Provider5 visit 8 | Provider5 visit 8 | Referenced in record | records | Strengthens demand |\n| 60 | Provider5 | bill for Provider5 visit 9 | Provider5 visit 9 | Referenced in record | records | Strengthens demand |\n| 61 | Provider6 | bill for Provider6 visit 0 | Provider6 visit 0 | Referenced in record | records | Strengthens demand |\n| 62 | Provider6 | bill for Provider6 visit 1 | Provider6 visit 1 | Referenced in record | records | Strengthens demand |\n| 63 | Provider6 | bill for Provider6 visit 2 | Provider6 visit 2 | Referenced in record | records | Strengthens demand |\n| 64 | Provider6 | bill for Provider6 visit 3 | Provider6 visit 3 | Referenced in record | records | Strengthens demand |\n| 65 | Provider6 | bill for Provider6 visit 4 | Provider6 visit 4 | Referenced in record | records | Strengthens demand |\n| 66 | Provider6 | bill for Provider6 visit 5 | Provider6 visit 5 | Referenced in record | records | Strengthens demand |\n| 67 | Provider6 | bill for Provider6 visit 6 | Provider6 visit 6 | Referenced in record | records | Strengthens demand |\n| 68 | Provider6 | bill for Provider6 visit 7 | Provider6 visit 7 | Referenced in record | records | Strengthens demand |\n| 69 | Provider6 | bill for Provider6 visit 8 | Provider6 visit 8 | Referenced in record | records | Strengthens demand |\n| 70 | Provider6 | bill for Provider6 visit 9 | Provider6 visit 9 | Referenced in record | records | Strengthens demand |\n\n## D. Treatment timeline\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 71 | Provider0 | no visit 01/01 to 03/01 (59 days) | Provider0 visit 0 | Referenced in record | records | Strengthens demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: none.\nItems that can follow the demand: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+    },
+    {
+      "args": ["Duty paragraph relies on Civil Code §§ 2100, 2168 and CACI 902"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Duty paragraph relies on Civil Code §§ 2100, 2168 and CACI 902"
+    },
+    {
+      "args": ["Provider4 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider4 visit 5"
+    },
+    {
+      "args": ["bill for Provider4 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 2"
+    },
+    {
+      "args": ["bill for Provider0 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider0 visit 8"
+    },
+    {
+      "args": ["D. Treatment timeline"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "D. Treatment timeline"
+    },
+    {
+      "args": ["bill for Provider2 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider2 visit 3"
+    },
+    {
+      "args": ["per the record, 1/16"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "per the record, 1/16"
+    },
+    {
+      "args": ["Provider0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider0"
+    },
+    {
+      "args": ["The ER bill totals $500.00"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "The ER bill totals $500.00"
+    },
+    {
+      "args": ["Provider0 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider0 visit 7"
+    },
+    {
+      "args": ["bill for Provider1 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider1 visit 5"
+    },
+    {
+      "args": ["no cite in the record"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "no cite in the record"
+    },
+    {
+      "args": ["Provider6 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 7"
+    },
+    {
+      "args": ["the record's entry for 7/23"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the record's entry for 7/23"
+    },
+    {
+      "args": [
+        "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n| 4 | Exampletown ER | The record states the patient was \"seen 01/15/2026 for neck pain after a collision\" (ER record 1-15-26, p. 1). | ER record 1-15-26, p. 1 | Referenced in record | records | Housekeeping |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 5 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 5.\nItems that can follow the demand: 1, 2, 4.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n| 4 | Exampletown ER | The record states the patient was \"seen 01/15/2026 for neck pain after a collision\" (ER record 1-15-26, p. 1). | ER record 1-15-26, p. 1 | Referenced in record | records | Housekeeping |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 5 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 5.\nItems that can follow the demand: 1, 2, 4.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+    },
+    {
+      "args": ["bill for Provider6 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider6 visit 2"
+    },
+    {
+      "args": ["bill for Provider1 visit 4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider1 visit 4"
+    },
+    {
+      "args": ["the lines sum to $450.00"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the lines sum to $450.00"
+    },
+    {
+      "args": ["bill for Provider4 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 8"
+    },
+    {
+      "args": ["'Dr. Alpha,' 'Dr. Beta,' 'Dr. Gamma'"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "'Dr. Alpha,' 'Dr. Beta,' 'Dr. Gamma'"
+    },
+    {
+      "args": ["billing"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "billing"
+    },
+    {
+      "args": ["no such statement in the record"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "no such statement in the record"
+    },
+    {
+      "args": ["no cite in digest"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "no cite in the record"
+    },
+    {
+      "args": ["no cite in digest — the digest contains no such statement"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "no cite in the record — the record contains no such statement"
+    },
+    {
+      "args": ["Possible, needs paralegal check"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Possible, needs paralegal check"
+    },
+    {
+      "args": ["Provider5 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider5 visit 1"
+    },
+    {
+      "args": ["bill for Provider0 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider0 visit 0"
+    },
+    {
+      "args": ["bill for Provider0 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider0 visit 3"
+    },
+    {
+      "args": ["bill for Provider6 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider6 visit 0"
+    },
+    {
+      "args": ["bill for Provider3 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider3 visit 2"
+    },
+    {
+      "args": ["m"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "m"
+    },
+    {
+      "args": ["Provider6 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 8"
+    },
+    {
+      "args": ["Provider1 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 6"
+    },
+    {
+      "args": [""],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": ""
+    },
+    {
+      "args": [
+        "the record's own total (per the firm's 3/3/2025 letter) is $7,123.45 (Alpha $1,000.00 + Beta $200.50 + Gamma $300.25 + Delta $1,100.00 + Epsilon $2,222.70 + Zeta $1,300.00 + Eta $1,000.00 = $7,123.45) (NEGOTIATIONS  Settlement Demand Letter, 3/3/2025, DEMAND p.8); no combination of record figures yields $9,876.54"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the record's own total (per the firm's 3/3/2025 letter) is $7,123.45 (Alpha $1,000.00 + Beta $200.50 + Gamma $300.25 + Delta $1,100.00 + Epsilon $2,222.70 + Zeta $1,300.00 + Eta $1,000.00 = $7,123.45) (NEGOTIATIONS  Settlement Demand Letter, 3/3/2025, DEMAND p.8); no combination of record figures yields $9,876.54"
+    },
+    {
+      "args": ["The other driver admitted fault at the scene"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "The other driver admitted fault at the scene"
+    },
+    {
+      "args": ["bill for Provider0 visit 4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider0 visit 4"
+    },
+    {
+      "args": ["bill for Provider1 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider1 visit 1"
+    },
+    {
+      "args": ["bill for Provider2 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider2 visit 5"
+    },
+    {
+      "args": ["none in digest (copy in digest per Billing tab)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "none in the record (copy in the record per Billing tab)"
+    },
+    {
+      "args": ["Provider6 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 0"
+    },
+    {
+      "args": ["bill for Provider5 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 6"
+    },
+    {
+      "args": ["Provider1 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 9"
+    },
+    {
+      "args": ["sum $450"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "sum $450"
+    },
+    {
+      "args": ["bill for Provider0 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider0 visit 7"
+    },
+    {
+      "args": ["the carrier letter names no insured"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the carrier letter names no insured"
+    },
+    {
+      "args": ["bill for Provider5 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 7"
+    },
+    {
+      "args": ["the digest's entry for 7/23"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the record's entry for 7/23"
+    },
+    {
+      "args": ["The record shows no ED bill"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "The record shows no ED bill"
+    },
+    {
+      "args": ["bill for Provider2 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider2 visit 2"
+    },
+    {
+      "args": ["Provider5 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider5 visit 5"
+    },
+    {
+      "args": ["Lakeside Clinic"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Lakeside Clinic"
+    },
+    {
+      "args": ["Provider4 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider4 visit 1"
+    },
+    {
+      "args": ["bill for Provider5 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 2"
+    },
+    {
+      "args": ["Provider6 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider6 visit 3"
+    },
+    {
+      "args": ["bill for Provider6 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider6 visit 7"
+    },
+    {
+      "args": ["Provider0 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider0 visit 1"
+    },
+    {
+      "args": ["Provider5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider5"
+    },
+    {
+      "args": ["the free preflight found it"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the bill reconciliation found it"
+    },
+    {
+      "args": ["bill for Provider5 visit 0"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 0"
+    },
+    {
+      "args": ["lines sum to $450.00"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "lines sum to $450.00"
+    },
+    {
+      "args": ["ED physician bill"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "ED physician bill"
+    },
+    {
+      "args": ["'The defendant admitted fault at the scene'"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "'The defendant admitted fault at the scene'"
+    },
+    {
+      "args": ["Provider1 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 7"
+    },
+    {
+      "args": [
+        "the record's own total is $7,123.45; no combination of record figures yields $9,876.54"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the record's own total is $7,123.45; no combination of record figures yields $9,876.54"
+    },
+    {
+      "args": ["Provider1 visit 4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 4"
+    },
+    {
+      "args": ["Northfield Imaging"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Northfield Imaging"
+    },
+    {
+      "args": ["the record shows no ED bill"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the record shows no ED bill"
+    },
+    {
+      "args": ["preflight (Billing tab vs bills)"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the bill reconciliation (Billing tab vs bills)"
+    },
+    {
+      "args": ["bill for Provider2 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider2 visit 1"
+    },
+    {
+      "args": ["The dispatcher signed the run report at the scene"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "The dispatcher signed the run report at the scene"
+    },
+    {
+      "args": ["the record names one doctor"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "the record names one doctor"
+    },
+    {
+      "args": ["Provider3 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3 visit 8"
+    },
+    {
+      "args": ["A. Referral and order trail"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "A. Referral and order trail"
+    },
+    {
+      "args": ["Provider4"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider4"
+    },
+    {
+      "args": ["Blocks demand"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Blocks demand"
+    },
+    {
+      "args": [
+        "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 4 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 4.\nItems that can follow the demand: 1, 2.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 4 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 4.\nItems that can follow the demand: 1, 2.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+    },
+    {
+      "args": ["bill for Provider5 visit 5"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider5 visit 5"
+    },
+    {
+      "args": ["bill for Provider4 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 6"
+    },
+    {
+      "args": ["bill for Provider3 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider3 visit 8"
+    },
+    {
+      "args": ["Provider2 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider2 visit 2"
+    },
+    {
+      "args": ["bill for Provider4 visit 3"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 3"
+    },
+    {
+      "args": ["Provider3 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3 visit 1"
+    },
+    {
+      "args": ["Digestion was normal on exam."],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Digestion was normal on exam."
+    },
+    {
+      "args": ["Provider0 visit 6"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider0 visit 6"
+    },
+    {
+      "args": ["Provider5 visit 7"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider5 visit 7"
+    },
+    {
+      "args": [
+        "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | not in digest; order in ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | digest shows no ED bill; ER record 1-15-26, p. 1 | Referenced in the digest | billing | Blocks demand |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 4 | Exampletown ER | ED physician bill | none in digest (copy in digest per Billing tab) | preflight (Billing tab vs bills) | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 4.\nItems that can follow the demand: 1, 2.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | not in the record; order in ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | the record shows no ED bill; ER record 1-15-26, p. 1 | Referenced in the record | billing | Blocks demand |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 4 | Exampletown ER | ED physician bill | none in the record (copy in the record per Billing tab) | the bill reconciliation (Billing tab vs bills) | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 4.\nItems that can follow the demand: 1, 2.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: none.\n"
+    },
+    {
+      "args": ["Provider5 visit 8"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider5 visit 8"
+    },
+    {
+      "args": ["bill for Provider1 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider1 visit 9"
+    },
+    {
+      "args": ["not in the record; order at p. 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "not in the record; order at p. 2"
+    },
+    {
+      "args": ["one ER visit at $1,200.00"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "one ER visit at $1,200.00"
+    },
+    {
+      "args": ["Billing mismatch"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Billing mismatch"
+    },
+    {
+      "args": ["Provider3 visit 9"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider3 visit 9"
+    },
+    {
+      "args": [" the report says amber"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": " the report says amber"
+    },
+    {
+      "args": ["Provider1 visit 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Provider1 visit 2"
+    },
+    {
+      "args": ["w"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "w"
+    },
+    {
+      "args": ["bill for Provider4 visit 1"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "bill for Provider4 visit 1"
+    },
+    {
+      "args": ["Strengthens demand"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Strengthens demand"
+    },
+    {
+      "args": ["Exhibit numbers 'Exh. 3,' 'Exh. 4,' 'Exh. 7,' 'Exhs. 4 through 9'"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Exhibit numbers 'Exh. 3,' 'Exh. 4,' 'Exh. 7,' 'Exhs. 4 through 9'"
+    },
+    {
+      "args": ["Preflight checklist signed by the pilot"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "Preflight checklist signed by the pilot"
+    },
+    {
+      "args": ["MRI report"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "MRI report"
+    },
+    {
+      "args": ["no such signature in the record"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "no such signature in the record"
+    },
+    {
+      "args": ["not in digest; order at p. 2"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "not in the record; order at p. 2"
+    },
+    {
+      "args": [
+        "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 4 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 4.\nItems that can follow the demand: 1, 2.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: ER bill 1-15-26.\n"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": "# Records and Billing Gap Audit\n\n## A. Referral and order trail\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 1 | Northfield Imaging | MRI report | ER record 1-15-26, p. 2 | Referenced in record | records | Strengthens demand |\n| 2 | Ridgeview PT | visit notes | ER record 1-15-26, p. 2 | Referenced in record | records | Housekeeping |\n\n## B. Provider-by-provider completeness\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 3 | Exampletown ER | radiology bill | ER record 1-15-26, p. 1 | Referenced in record | billing | Blocks demand |\n\n## C. Billing-to-record reconciliation\n\n| Item | Provider | What's missing | Where the file points to it | Basis | Suggested request type | Priority |\n|---|---|---|---|---|---|---|\n| 4 | Exampletown ER | ED physician bill | ER bill 1-15-26, p. 1 | Billing mismatch | billing | Blocks demand |\n\n## Possible, needs paralegal check\n\nNone.\n\n## Demand Readiness\n\nItems that block sending the demand: 3, 4.\nItems that can follow the demand: 1, 2.\n\nDocuments that could not be read: none.\nDocuments read by machine transcription, not by a person: ER bill 1-15-26.\n"
+    }
+  ]
+}

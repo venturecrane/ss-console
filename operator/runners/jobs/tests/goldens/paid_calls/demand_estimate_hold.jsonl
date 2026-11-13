@@ -1,0 +1,2 @@
+{"args": {"projected_usd": 4.0, "spent_usd": 0.0, "stage": "the first paid stage", "state": {"cap_usd": 1.0, "month_cents_used": 0, "monthly_budget_usd": 200.0}}, "check": "Limits.check_before_paid", "event": "limit", "outcome": "hold", "setting": "per_job_cap_usd", "text": "per_job_cap_usd: this run's projected cost would exceed the job's cost cap before the first paid stage; the package was not started"}
+{"event": "final", "money": [[["dollars", 0.0]]], "runs": 1}

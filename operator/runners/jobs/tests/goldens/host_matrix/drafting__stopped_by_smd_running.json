@@ -1,0 +1,425 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/drafting-queue/<ULID1>.json",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "DRAFTING_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+        "metadata": {
+          "cents": 0,
+          "document_class": "mediation_brief",
+          "folder_id": null,
+          "job_id": "<ULID1>",
+          "reason": null,
+          "state": "running"
+        },
+        "skill": "document-drafter"
+      },
+      {
+        "action_type": "DRAFTING_JOB_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": "0f0f0f0f-0000-4000-8000-000000000001",
+        "metadata": {
+          "cents": 0,
+          "document_class": "mediation_brief",
+          "folder_id": null,
+          "job_id": "<ULID1>",
+          "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+          "state": "failed"
+        },
+        "skill": "document-drafter"
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "demand/cgroup.procs": "<PID>",
+      "demand/memory.max": "1073741824"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "draft",
+          "<TMP>/seat/run/drafting-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/drafting-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "value-of-ANTHROPIC_API_KEY",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/drafting-jobs/<ULID1>",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_DRAFTING_INPUTS": "<TMP>/seat/inputs/drafting",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "value-of-SMOKEBALL_ACCOUNT_ID",
+          "SMOKEBALL_API_KEY": "value-of-SMOKEBALL_API_KEY",
+          "SMOKEBALL_AUTH_MODE": "value-of-SMOKEBALL_AUTH_MODE",
+          "SMOKEBALL_CLIENT_ID": "value-of-SMOKEBALL_CLIENT_ID",
+          "SMOKEBALL_CLIENT_SECRET": "value-of-SMOKEBALL_CLIENT_SECRET",
+          "SMOKEBALL_ENVIRONMENT": "value-of-SMOKEBALL_ENVIRONMENT",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "value-of-SMOKEBALL_REGION"
+        },
+        "job_id": "<ULID1>",
+        "lane": "drafting",
+        "pidfile": "<TMP>/seat/run/drafting-child.pid"
+      }
+    ],
+    "daemon": {
+      "drafting-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "stopped_by_smd",
+        "stopped_by": "smd@example.test",
+        "stopped_cents": 0,
+        "stopped_exit": -15,
+        "stopped_recorded": true,
+        "stopped_why": "host matrix stop",
+        "wake": null
+      }
+    },
+    "job_files": {
+      "drafting-jobs/<ULID1>/job.json": "{\n \"document_class\": \"mediation_brief\",\n \"file_to_matter_id\": null,\n \"file_to_matter_number\": null,\n \"job_id\": \"<ULID1>\",\n \"kind\": \"drafting\",\n \"matter_id\": \"0f0f0f0f-0000-4000-8000-000000000001\",\n \"matter_number\": \"100001\",\n \"message_ref\": \"<req-1@firm.example>\",\n \"request_text\": \"Please draft the mediation brief.\",\n \"requester\": \"admin@firm.example\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"allowance_remaining\": 0,\n \"ledger_releases\": 0\n}"
+    },
+    "log": [
+      "WARNING jobs.daemon drafting job <ULID1>: stopped by SMD; the child stops at its next model call",
+      "ERROR jobs.daemon drafting job <ULID1> still running <N>s after SMD's stop; terminating it",
+      "WARNING jobs.daemon drafting job <ULID1> stopped by SMD (exit -15); final, never resumed"
+    ],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "drafting-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["drafting-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "interrupted",
+    "step": "run",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-heartbeat.json",
+      "run/drafting-jobs/",
+      "run/drafting-jobs/<ULID1>/",
+      "run/drafting-jobs/<ULID1>/.smd-stop.json",
+      "run/drafting-jobs/<ULID1>/daemon.json",
+      "run/drafting-jobs/<ULID1>/daemon.log",
+      "run/drafting-jobs/<ULID1>/data/",
+      "run/drafting-jobs/<ULID1>/envelope.json",
+      "run/drafting-jobs/<ULID1>/job.json",
+      "run/drafting-queue/",
+      "run/drafting-tick",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "attempt": 1,
+            "cents": 0,
+            "created_at": "<TS>",
+            "delivery_json": null,
+            "document_class": "mediation_brief",
+            "envelope_digest": "5800f4b227607f7d4b1b7b82e284ee170df1ac414e8ee877a6b5604638002d26",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "request_ref": "<req-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "state": "submitted",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "drafting_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "allowance": null,
+          "authored": false,
+          "cents_month": "2023-11",
+          "cents_used": 0,
+          "cycle": "2023-11",
+          "cycle_start": "<TS>",
+          "enabled_classes": [],
+          "ok": true,
+          "remaining": 0,
+          "unit": "drafts",
+          "used": 0
+        },
+        "request": {
+          "action": "drafting_allowance",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "running",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "drafting_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "document_class": "mediation_brief",
+            "file_to_matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "files": null,
+            "folder_id": null,
+            "id": "<ULID1>",
+            "matter_id": "0f0f0f0f-0000-4000-8000-000000000001",
+            "matter_number": "100001",
+            "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "state": "failed",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "drafting_job_record",
+          "fields": {
+            "cents": 0,
+            "reason": "stopped_by_smd: by smd@example.test: host matrix stop"
+          },
+          "job_id": "<ULID1>",
+          "state": "failed"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "drafting-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "stopped_by_smd",
+        "stopped_by": "smd@example.test",
+        "stopped_cents": 0,
+        "stopped_exit": -15,
+        "stopped_recorded": true,
+        "stopped_why": "host matrix stop",
+        "wake": null
+      }
+    },
+    "job_files": {
+      "drafting-jobs/<ULID1>/job.json": "{\n \"document_class\": \"mediation_brief\",\n \"file_to_matter_id\": null,\n \"file_to_matter_number\": null,\n \"job_id\": \"<ULID1>\",\n \"kind\": \"drafting\",\n \"matter_id\": \"0f0f0f0f-0000-4000-8000-000000000001\",\n \"matter_number\": \"100001\",\n \"message_ref\": \"<req-1@firm.example>\",\n \"request_text\": \"Please draft the mediation brief.\",\n \"requester\": \"admin@firm.example\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"allowance_remaining\": 0,\n \"ledger_releases\": 0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "drafting-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "wake",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-heartbeat.json",
+      "run/drafting-jobs/",
+      "run/drafting-jobs/<ULID1>/",
+      "run/drafting-jobs/<ULID1>/.smd-stop.json",
+      "run/drafting-jobs/<ULID1>/daemon.json",
+      "run/drafting-jobs/<ULID1>/daemon.log",
+      "run/drafting-jobs/<ULID1>/data/",
+      "run/drafting-jobs/<ULID1>/envelope.json",
+      "run/drafting-jobs/<ULID1>/job.json",
+      "run/drafting-queue/",
+      "run/drafting-tick",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  }
+]

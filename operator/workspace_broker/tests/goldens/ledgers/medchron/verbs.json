@@ -1,0 +1,354 @@
+{
+  "medchron_allowance | gateway | empty": {
+    "allowance": null,
+    "authored": false,
+    "cents_used": 0,
+    "cycle_anchored": false,
+    "cycle_end": "2026-12-01T00:00:00.000Z",
+    "cycle_start": "2026-11-01T00:00:00.000Z",
+    "documents_used": 0,
+    "job_pages_credited": 0,
+    "month": "2026-11",
+    "ok": true,
+    "pages_credited": 0,
+    "pages_debited": 0,
+    "pages_remaining": 0,
+    "pages_used": 0,
+    "remaining": 0,
+    "unit": "pages",
+    "used": 0
+  },
+  "medchron_allowance | gateway | known job": {
+    "allowance": null,
+    "authored": false,
+    "cents_used": 0,
+    "cycle_anchored": false,
+    "cycle_end": "2026-12-01T00:00:00.000Z",
+    "cycle_start": "2026-11-01T00:00:00.000Z",
+    "documents_used": 0,
+    "job_pages_credited": 0,
+    "month": "2026-11",
+    "ok": true,
+    "pages_credited": 0,
+    "pages_debited": 0,
+    "pages_remaining": 0,
+    "pages_used": 0,
+    "remaining": 0,
+    "unit": "pages",
+    "used": 0
+  },
+  "medchron_allowance | root | empty": {
+    "allowance": null,
+    "authored": false,
+    "cents_used": 0,
+    "cycle_anchored": false,
+    "cycle_end": "2026-12-01T00:00:00.000Z",
+    "cycle_start": "2026-11-01T00:00:00.000Z",
+    "documents_used": 0,
+    "job_pages_credited": 0,
+    "month": "2026-11",
+    "ok": true,
+    "pages_credited": 0,
+    "pages_debited": 0,
+    "pages_remaining": 0,
+    "pages_used": 0,
+    "remaining": 0,
+    "unit": "pages",
+    "used": 0
+  },
+  "medchron_allowance | root | known job": {
+    "allowance": null,
+    "authored": false,
+    "cents_used": 0,
+    "cycle_anchored": false,
+    "cycle_end": "2026-12-01T00:00:00.000Z",
+    "cycle_start": "2026-11-01T00:00:00.000Z",
+    "documents_used": 0,
+    "job_pages_credited": 0,
+    "month": "2026-11",
+    "ok": true,
+    "pages_credited": 0,
+    "pages_debited": 0,
+    "pages_remaining": 0,
+    "pages_used": 0,
+    "remaining": 0,
+    "unit": "pages",
+    "used": 0
+  },
+  "medchron_allowance_credit | gateway | empty": {
+    "error": "PermissionError",
+    "message": "medchron_allowance_credit is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_allowance_credit | gateway | known job": {
+    "error": "PermissionError",
+    "message": "medchron_allowance_credit is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_allowance_credit | root | empty": {
+    "error": "ValueError",
+    "message": "medchron_allowance_credit requires pages: a whole number greater than 0",
+    "ok": false
+  },
+  "medchron_allowance_credit | root | known job": {
+    "error": "ValueError",
+    "message": "medchron_allowance_credit requires pages: a whole number greater than 0",
+    "ok": false
+  },
+  "medchron_backfill_covered | gateway | empty": {
+    "error": "PermissionError",
+    "message": "medchron_backfill_covered is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_backfill_covered | gateway | known job": {
+    "error": "PermissionError",
+    "message": "medchron_backfill_covered is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_backfill_covered | root | empty": {
+    "error": "ValueError",
+    "message": "medchron_backfill_covered requires matter_id, matter_number, delivered_at and source",
+    "ok": false
+  },
+  "medchron_backfill_covered | root | known job": {
+    "error": "ValueError",
+    "message": "medchron_backfill_covered requires matter_id, matter_number, delivered_at and source",
+    "ok": false
+  },
+  "medchron_covered_recompute | gateway | empty": {
+    "error": "PermissionError",
+    "message": "medchron_covered_recompute is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_covered_recompute | gateway | known job": {
+    "error": "PermissionError",
+    "message": "medchron_covered_recompute is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_covered_recompute | root | empty": {
+    "error": "ValueError",
+    "message": "medchron_covered_recompute requires job_id",
+    "ok": false
+  },
+  "medchron_covered_recompute | root | known job": {
+    "dry_run": false,
+    "job_id": "01KTJ0BX000000000000000001",
+    "ok": true,
+    "outcome": "not_delivered"
+  },
+  "medchron_job_list | gateway | empty": {
+    "error": "PermissionError",
+    "message": "medchron_job_list is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_job_list | gateway | known job": {
+    "error": "PermissionError",
+    "message": "medchron_job_list is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_job_list | root | empty": {
+    "credits": [],
+    "jobs": [
+      {
+        "cents": 0,
+        "covered_count": null,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "documents": 0,
+        "folder_id": null,
+        "id": "01KTJ0BX000000000000000001",
+        "matter_number": "2026-PI-101",
+        "pages": 0,
+        "reason": null,
+        "state": "submitted",
+        "uncovered_count": null,
+        "updated_at": "2026-10-20T17:00:00.000Z",
+        "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+      }
+    ],
+    "ok": true
+  },
+  "medchron_job_list | root | known job": {
+    "credits": [],
+    "jobs": [
+      {
+        "cents": 0,
+        "covered_count": null,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "documents": 0,
+        "folder_id": null,
+        "id": "01KTJ0BX000000000000000001",
+        "matter_number": "2026-PI-101",
+        "pages": 0,
+        "reason": null,
+        "state": "submitted",
+        "uncovered_count": null,
+        "updated_at": "2026-10-20T17:00:00.000Z",
+        "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+      }
+    ],
+    "ok": true
+  },
+  "medchron_job_record | gateway | empty": {
+    "error": "PermissionError",
+    "message": "medchron_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_job_record | gateway | known job": {
+    "error": "PermissionError",
+    "message": "medchron_job_record is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_job_record | root | empty": {
+    "error": "ValueError",
+    "message": "medchron_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "medchron_job_record | root | known job": {
+    "error": "ValueError",
+    "message": "medchron_job_record requires job_id, a known state, and a fields object",
+    "ok": false
+  },
+  "medchron_job_resume | gateway | empty": {
+    "error": "PermissionError",
+    "message": "medchron_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_job_resume | gateway | known job": {
+    "error": "PermissionError",
+    "message": "medchron_job_resume is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_job_resume | root | empty": {
+    "error": "ValueError",
+    "message": "medchron_job_resume requires job_id",
+    "ok": false
+  },
+  "medchron_job_resume | root | known job": {
+    "error": "ValueError",
+    "message": "medchron_job_resume requires a reason: what was fixed, and why the done stages still hold",
+    "ok": false
+  },
+  "medchron_job_status | gateway | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "covered_count": null,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "documents": 0,
+        "folder_id": null,
+        "id": "01KTJ0BX000000000000000001",
+        "matter_number": "2026-PI-101",
+        "pages": 0,
+        "reason": null,
+        "state": "submitted",
+        "uncovered_count": null,
+        "updated_at": "2026-10-20T17:00:00.000Z",
+        "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+      }
+    ],
+    "ok": true
+  },
+  "medchron_job_status | gateway | known job": {
+    "job": {
+      "cents": 0,
+      "covered_document_ids": null,
+      "covered_json": null,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "documents": 0,
+      "folder_id": null,
+      "id": "01KTJ0BX000000000000000001",
+      "matter_number": "2026-PI-101",
+      "pages": 0,
+      "reason": null,
+      "smd_page_credit_pages": 0,
+      "state": "submitted",
+      "uncovered_document_ids": null,
+      "uncovered_reasons": null,
+      "updated_at": "2026-10-20T17:00:00.000Z",
+      "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+    },
+    "ok": true
+  },
+  "medchron_job_status | root | empty": {
+    "jobs": [
+      {
+        "cents": 0,
+        "covered_count": null,
+        "created_at": "2026-10-20T17:00:00.000Z",
+        "documents": 0,
+        "folder_id": null,
+        "id": "01KTJ0BX000000000000000001",
+        "matter_number": "2026-PI-101",
+        "pages": 0,
+        "reason": null,
+        "state": "submitted",
+        "uncovered_count": null,
+        "updated_at": "2026-10-20T17:00:00.000Z",
+        "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+      }
+    ],
+    "ok": true
+  },
+  "medchron_job_status | root | known job": {
+    "job": {
+      "cents": 0,
+      "covered_document_ids": null,
+      "covered_json": null,
+      "created_at": "2026-10-20T17:00:00.000Z",
+      "documents": 0,
+      "folder_id": null,
+      "id": "01KTJ0BX000000000000000001",
+      "matter_number": "2026-PI-101",
+      "pages": 0,
+      "reason": null,
+      "smd_page_credit_pages": 0,
+      "state": "submitted",
+      "uncovered_document_ids": null,
+      "uncovered_reasons": null,
+      "updated_at": "2026-10-20T17:00:00.000Z",
+      "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"
+    },
+    "ok": true
+  },
+  "medchron_job_submit | gateway | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "matter.id and matter.number are required"
+  },
+  "medchron_job_submit | gateway | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "matter.id and matter.number are required"
+  },
+  "medchron_job_submit | root | empty": {
+    "accepted": false,
+    "ok": true,
+    "reason": "matter.id and matter.number are required"
+  },
+  "medchron_job_submit | root | known job": {
+    "accepted": false,
+    "ok": true,
+    "reason": "matter.id and matter.number are required"
+  },
+  "medchron_units_backfill | gateway | empty": {
+    "error": "PermissionError",
+    "message": "medchron_units_backfill is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_units_backfill | gateway | known job": {
+    "error": "PermissionError",
+    "message": "medchron_units_backfill is not permitted for this caller",
+    "ok": false
+  },
+  "medchron_units_backfill | root | empty": {
+    "error": "ValueError",
+    "message": "medchron_units_backfill requires job_id",
+    "ok": false
+  },
+  "medchron_units_backfill | root | known job": {
+    "dry_run": false,
+    "job_id": "01KTJ0BX000000000000000001",
+    "ok": true,
+    "outcome": "no_dob"
+  }
+}

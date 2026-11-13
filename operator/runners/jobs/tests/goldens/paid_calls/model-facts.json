@@ -1,0 +1,647 @@
+{
+  "facts": {
+    "claude-fable-5": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [
+          "models.audit: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-fable-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": null,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": null,
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": null,
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": null
+      }
+    },
+    "claude-fable-5-1": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [],
+        "drafting:models.compose": [],
+        "drafting:models.digest": [],
+        "drafting:models.repair": [],
+        "drafting:models.transcription": [],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-fable-5-1 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": 128000,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": null,
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": null,
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": null
+      }
+    },
+    "claude-fable-5-2": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [],
+        "drafting:models.compose": [],
+        "drafting:models.digest": [],
+        "drafting:models.repair": [],
+        "drafting:models.transcription": [],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-fable-5-2 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": 128000,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": null,
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": null,
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": null
+      }
+    },
+    "claude-haiku-4-5-20251001": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [
+          "models.audit: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-haiku-4-5-20251001' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": null,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [80, 400, null],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": [80, 400, null],
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          80,
+          400,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+          80,
+          400,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": [80, 400, null]
+      }
+    },
+    "claude-haiku-5-5": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [
+          "models.audit: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-haiku-5-5' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": null,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [10, 50, null],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": null,
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          10,
+          50,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+          10,
+          50,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": null
+      }
+    },
+    "claude-mythos-5-1": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [
+          "models.audit: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-mythos-5-1' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-mythos-5-1 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": null,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": null,
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": null,
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": null
+      }
+    },
+    "claude-opus-4-7": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [
+          "models.audit: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-opus-4-7' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": null,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [1500, 7500, null],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": null,
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          1500,
+          7500,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+          1500,
+          7500,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": null
+      }
+    },
+    "claude-opus-4-8": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [
+          "models.audit: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-opus-4-8' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": null,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [500, 2500, null],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": null,
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          500,
+          2500,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+          500,
+          2500,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": null
+      }
+    },
+    "claude-opus-5": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [],
+        "drafting:models.compose": [],
+        "drafting:models.digest": [],
+        "drafting:models.repair": [],
+        "drafting:models.transcription": [],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": 128000,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [500, 2500, null],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": [500, 2500, null],
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          500,
+          2500,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": [500, 2500, null]
+      }
+    },
+    "claude-opus-5-5": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [],
+        "drafting:models.compose": [],
+        "drafting:models.digest": [],
+        "drafting:models.repair": [],
+        "drafting:models.transcription": [],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-opus-5-5 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": 128000,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [400, 2000, 0.05],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": [500, 2500, null],
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          400, 2000, 0.05
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+          400,
+          2000,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": [500, 2500, null]
+      }
+    },
+    "claude-sonnet-4-6": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [
+          "models.audit: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.compose": [
+          "models.compose: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.digest": [
+          "models.digest: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.repair": [
+          "models.repair: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "drafting:models.transcription": [
+          "models.transcription: 'claude-sonnet-4-6' has no known output maximum (jobs.demand.gapaudit.OUTPUT_MAX)"
+        ],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": null,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [300, 1500, null],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": null,
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          300,
+          1500,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+          300,
+          1500,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": null
+      }
+    },
+    "claude-sonnet-5": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [],
+        "drafting:models.compose": [],
+        "drafting:models.digest": [],
+        "drafting:models.repair": [],
+        "drafting:models.transcription": [],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": 128000,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [200, 1000, null],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": [200, 1000, null],
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          200,
+          1000,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": null,
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": [200, 1000, null]
+      }
+    },
+    "claude-sonnet-5-5": {
+      "firm validators (every problem, when this id is set at the key of a clean fixture)": {
+        "casefile:models.audit": [],
+        "casefile:models.read": [],
+        "demand:models.audit": [],
+        "demand:models.compose": [],
+        "demand:models.digest": [],
+        "demand:models.gap_audit": [],
+        "demand:models.repair": [],
+        "demand:models.transcription": [],
+        "drafting:models.audit": [],
+        "drafting:models.compose": [],
+        "drafting:models.digest": [],
+        "drafting:models.repair": [],
+        "drafting:models.transcription": [],
+        "litigation:models.audit": [],
+        "litigation:models.read": [],
+        "litigation:models.verify": [],
+        "medchron:models.tiers.audit": [
+          "models.tiers.audit: claude-sonnet-5-5 rejects a forced tool_choice, which the audit's verdict call requires; keep the audit tier on a model that accepts it"
+        ],
+        "medchron:models.tiers.composition": [],
+        "medchron:models.tiers.judgment": [],
+        "medchron:models.tiers.mechanical": [],
+        "medchron:models.tiers.transcription": []
+      },
+      "output_max (demand.gapaudit.output_max, fallback None)": 128000,
+      "rate (input cents/M, output cents/M, own cache-read multiplier)": {
+        "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": [200, 1000, 0.05],
+        "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+        "budget.Pricing.load x tests/jobs_testkit.PRICING": [200, 1000, null],
+        "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": [
+          200, 1000, 0.05
+        ],
+        "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": [
+          200,
+          1000,
+          null
+        ],
+        "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": [200, 1000, null]
+      }
+    }
+  },
+  "hard_coded": {
+    "litigation.discovery12.run.REFUSAL_RETRY_MODEL": "claude-opus-5-5",
+    "negotiation.extract.MODEL": "claude-opus-5-5",
+    "negotiation.offer_check.REVIEW_MODEL": "claude-opus-5-5",
+    "negotiation.run.OCR_MODEL": "claude-sonnet-5"
+  },
+  "ids": [
+    "claude-fable-5",
+    "claude-fable-5-1",
+    "claude-fable-5-2",
+    "claude-haiku-4-5-20251001",
+    "claude-haiku-5-5",
+    "claude-mythos-5-1",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-opus-5",
+    "claude-opus-5-5",
+    "claude-sonnet-4-6",
+    "claude-sonnet-5",
+    "claude-sonnet-5-5"
+  ],
+  "loaders": {
+    "budget.Pricing.load x adapter/cost_telemetry/anthropic_pricing.json": "loaded",
+    "budget.Pricing.load x hermes-smd-overlay/shared/anthropic_pricing.json": "refused: BudgetError: <CARD>: _meta.multipliers is missing ['batch', 'cache_write_5m', 'cache_read']; the cap cannot price batch or cache rows without them (ss#2613)",
+    "budget.Pricing.load x tests/jobs_testkit.PRICING": "loaded",
+    "drafting.evidence_cost.load_pricing x adapter/cost_telemetry/anthropic_pricing.json": "loaded",
+    "drafting.evidence_cost.load_pricing x hermes-smd-overlay/shared/anthropic_pricing.json": "loaded",
+    "drafting.evidence_cost.load_pricing x tests/jobs_testkit.PRICING": "loaded"
+  },
+  "sent_in_paid_call_goldens": {
+    "claude-opus-5": {
+      "batch": false,
+      "cases": {
+        "__set": ["records", "records_cap"]
+      },
+      "max_tokens_max": 8000,
+      "tool_choice_types": {
+        "__set": [null]
+      }
+    },
+    "claude-opus-5-5": {
+      "batch": false,
+      "cases": {
+        "__set": ["medchron", "medchron_update", "negotiation"]
+      },
+      "max_tokens_max": 128000,
+      "tool_choice_types": {
+        "__set": [null]
+      }
+    },
+    "claude-sonnet-5": {
+      "batch": false,
+      "cases": {
+        "__set": ["casefile", "demand", "drafting", "litigation", "medchron", "medchron_update"]
+      },
+      "max_tokens_max": 128000,
+      "tool_choice_types": {
+        "__set": ["tool", null]
+      }
+    }
+  }
+}

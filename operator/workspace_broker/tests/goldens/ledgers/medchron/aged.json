@@ -1,0 +1,59 @@
+{
+  "_why": "Each schema an empty file got from one historical version of this lane's ledger (bin/goldens/ledger-aged-schemas.py, from git history). test_ledger_goldens.py opens each with today's ledger class and compares the migrated schema with its golden.",
+  "steps": [
+    {
+      "commit": "dee2e9292e36",
+      "method": "import",
+      "schema": [
+        "index idx_medchron_jobs_created: CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)",
+        "table medchron_jobs: CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT)"
+      ]
+    },
+    {
+      "commit": "297e36cc506b",
+      "method": "import",
+      "schema": [
+        "index idx_medchron_jobs_created: CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)",
+        "table medchron_jobs: CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT)"
+      ]
+    },
+    {
+      "commit": "67bc52b0ab24",
+      "method": "import",
+      "schema": [
+        "index idx_medchron_jobs_created: CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)",
+        "index idx_medchron_jobs_work: CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)",
+        "table medchron_jobs: CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT)"
+      ]
+    },
+    {
+      "commit": "ad5e2369c42f",
+      "method": "import",
+      "schema": [
+        "index idx_medchron_jobs_created: CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)",
+        "index idx_medchron_jobs_work: CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)",
+        "table medchron_jobs: CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, work_digest TEXT)"
+      ]
+    },
+    {
+      "commit": "8095cde7d042",
+      "method": "import",
+      "schema": [
+        "index idx_medchron_jobs_created: CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)",
+        "index idx_medchron_jobs_work: CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)",
+        "table medchron_jobs: CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT)"
+      ]
+    },
+    {
+      "commit": "ed31819b2586",
+      "method": "import",
+      "schema": [
+        "index idx_medchron_jobs_created: CREATE INDEX idx_medchron_jobs_created ON medchron_jobs(created_at)",
+        "index idx_medchron_jobs_work: CREATE INDEX idx_medchron_jobs_work ON medchron_jobs(work_digest)",
+        "index idx_medchron_page_credits_applies: CREATE INDEX idx_medchron_page_credits_applies ON medchron_page_credits(applies_at)",
+        "table medchron_jobs: CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT)",
+        "table medchron_page_credits: CREATE TABLE medchron_page_credits (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, applies_at TEXT NOT NULL, pages INTEGER NOT NULL CHECK (pages > 0), by_name TEXT NOT NULL, why TEXT NOT NULL, job_id TEXT)"
+      ]
+    }
+  ]
+}

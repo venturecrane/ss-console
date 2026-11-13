@@ -1,0 +1,350 @@
+{
+  "jobs.demand.gapaudit.firm_words(garbled)": {
+    "out": "/12 /34 /56 /78 /90 qxzv bcdfg hjklm npqrst 0O/lI/2O24"
+  },
+  "jobs.demand.gapaudit.firm_words(letter)": {
+    "out": "# Demand for Settlement\n\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\n\nDear Example Adjuster,\n\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\n\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\n\nThe record shows a gap in treatment; the bill reconciliation found no missing bill. In this chunk the provider not identified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\n\nSincerely,\nExample Counsel\n"
+  },
+  "jobs.demand.review.docx_text(docx)": {
+    "out": "# Demand for Settlement\n\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\n\nDear Example Adjuster,\n\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\n\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\n\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not identified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\n\nSincerely,\nExample Counsel\n| 03/14/2024 Example Clinic | Emergency visit after the collision. Neck pain 6 of 10. (Exhibit 1 - p. 2) |\n| 04/02/2024 (as written) Example Imaging | MRI of the cervical spine; a 3 mm protrusion. (Exhibit 2 - p. 1) |"
+  },
+  "jobs.demand.review.firm_banned(garbled)": {
+    "out": []
+  },
+  "jobs.demand.review.firm_banned(letter)": {
+    "out": ["The digest", "the preflight"]
+  },
+  "jobs.demand.review.malformed_markers(garbled)": {
+    "out": []
+  },
+  "jobs.demand.review.malformed_markers(letter)": {
+    "out": ["[TO BE SUPPLIED"]
+  },
+  "jobs.demand.review.wording(letter)": {
+    "out": [
+      {
+        "__type": "Finding",
+        "by": "code",
+        "check": "5 system vocabulary",
+        "cite": "Demand.docx",
+        "finding": "the Demand.docx says \"in this chunk\"",
+        "grade": "MUST-FIX"
+      },
+      {
+        "__type": "Finding",
+        "by": "code",
+        "check": "5 system vocabulary",
+        "cite": "Demand.docx",
+        "finding": "the Demand.docx says \"The digest\"",
+        "grade": "MUST-FIX"
+      },
+      {
+        "__type": "Finding",
+        "by": "code",
+        "check": "5 system vocabulary",
+        "cite": "Demand.docx",
+        "finding": "the Demand.docx says \"the preflight\"",
+        "grade": "MUST-FIX"
+      },
+      {
+        "__type": "Finding",
+        "by": "code",
+        "check": "5 system vocabulary",
+        "cite": "Demand.docx",
+        "finding": "the Demand.docx carries \"=== NEEDS THE ATTORNEY ===\"",
+        "grade": "MUST-FIX"
+      }
+    ]
+  },
+  "jobs.drafting.citations.apply(letter)": {
+    "out": [
+      "# Demand for Settlement\n\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\n\nDear Example Adjuster,\n\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red.\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\n\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\n\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not identified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\n\nSincerely,\nExample Counsel\n",
+      [
+        "citation policy: 1 cite(s) to deposition (unquoted) removed (the firm's standing instruction); the sentences stay"
+      ]
+    ]
+  },
+  "jobs.drafting.citations.check(letter)": {
+    "out": [
+      "citations: a cite the firm's policy forbids (deposition (unquoted)): (Example Witness Dep. 12:4)"
+    ]
+  },
+  "jobs.drafting.citations.kind_of": {
+    "out": ["medical", "police-report", "deposition", "deposition"]
+  },
+  "jobs.litigation.extract.docx_text(docx)": {
+    "out": "# Demand for Settlement\n\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\n\nDear Example Adjuster,\n\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\n\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\n\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not identified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\n\nSincerely,\nExample Counsel\n03/14/2024\nExample Clinic | Emergency visit after the collision. Neck pain 6 of 10. (Exhibit 1 - p. 2)\n04/02/2024 (as written)\nExample Imaging | MRI of the cervical spine; a 3 mm protrusion. (Exhibit 2 - p. 1)"
+  },
+  "jobs.litigation.extract.garbled(garbled)": {
+    "out": false
+  },
+  "jobs.litigation.extract.garbled(letter)": {
+    "out": false
+  },
+  "jobs.litigation.extract.html_text": {
+    "out": "Example Clinic\nVisit on\n03/14/2024\n.\nTotal $1,200.00"
+  },
+  "jobs.litigation.extract.ocr_pages": {
+    "out": [1]
+  },
+  "jobs.litigation.extract.pdf_text(pdf)": {
+    "raises": "ExtractFailure: scan_without_vision: a page has no text layer and no vision reader was given"
+  },
+  "jobs.litigation.extract.pdf_text(text-layer pdf)": {
+    "out": [
+      "===== page 1 =====\n# Demand for Settlement\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\nDear Example Adjuster,\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on \nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic reco\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,5\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not ide\n===== page 2 =====\n/12 /34 /56 /78 /90 qxzv bcdfg hjklm npqrst 0O/lI/2O24\n===== page 3 =====\nntified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\nSincerely,\nExample Counsel",
+      0
+    ]
+  },
+  "jobs.litigation.extract.rtf_text": {
+    "out": "Example Clinic visit on 03/14/2024.\nTotal $1,200.00.\n"
+  },
+  "jobs.litigation.extract.strip_rtf": {
+    "out": "Example Clinic visit on 03/14/2024.\nTotal $1,200.00.\n"
+  },
+  "jobs.negotiation.text.docx_text(docx)": {
+    "out": "# Demand for Settlement\n\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\n\nDear Example Adjuster,\n\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\n\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\n\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not identified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\n\nSincerely,\nExample Counsel\n03/14/2024\nExample Clinic | Emergency visit after the collision. Neck pain 6 of 10. (Exhibit 1 - p. 2)\n04/02/2024 (as written)\nExample Imaging | MRI of the cervical spine; a 3 mm protrusion. (Exhibit 2 - p. 1)"
+  },
+  "jobs.negotiation.text.html_text": {
+    "out": "Example Clinic\nVisit on\n03/14/2024\n.\nTotal $1,200.00"
+  },
+  "jobs.negotiation.text.ocr_pages": {
+    "out": [1]
+  },
+  "jobs.negotiation.text.pdf_text(pdf)": {
+    "raises": "ExtractFailure: scan_without_vision: a page has no text layer and no vision reader was given"
+  },
+  "jobs.negotiation.text.pdf_text(text-layer pdf)": {
+    "out": [
+      "===== page 1 =====\n# Demand for Settlement\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\nDear Example Adjuster,\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on \nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic reco\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,5\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not ide\n===== page 2 =====\n/12 /34 /56 /78 /90 qxzv bcdfg hjklm npqrst 0O/lI/2O24\n===== page 3 =====\nntified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\nSincerely,\nExample Counsel",
+      0
+    ]
+  },
+  "jobs.proof.checks.dates(garbled)": {
+    "out": []
+  },
+  "jobs.proof.checks.dates(letter)": {
+    "out": [
+      {
+        "__date": "2024-04-02"
+      },
+      {
+        "__date": "2024-03-14"
+      },
+      {
+        "__date": "2024-03-15"
+      },
+      {
+        "__date": "2099-12-31"
+      },
+      {
+        "__date": "2024-03-14"
+      },
+      {
+        "__date": "2024-04-09"
+      }
+    ]
+  },
+  "jobs.proof.checks.dates_not_in(letter, sources)": {
+    "out": [
+      {
+        "__date": "2024-03-15"
+      },
+      {
+        "__date": "2099-12-31"
+      },
+      {
+        "__date": "2024-04-09"
+      }
+    ]
+  },
+  "jobs.proof.checks.extraction_vocabulary(garbled)": {
+    "out": []
+  },
+  "jobs.proof.checks.extraction_vocabulary(letter)": {
+    "out": []
+  },
+  "jobs.proof.checks.fmt_cents": {
+    "out": ["$0.00", "$0.05", "$1.00", "$1,234,567.89", "$-3.50"]
+  },
+  "jobs.proof.checks.future(dates(letter))": {
+    "out": [
+      {
+        "__date": "2099-12-31"
+      }
+    ]
+  },
+  "jobs.proof.checks.money(garbled)": {
+    "out": []
+  },
+  "jobs.proof.checks.money(letter)": {
+    "out": [1234567, 120000, 25000000]
+  },
+  "jobs.proof.checks.money_in_sources(garbled)": {
+    "out": {
+      "__set": []
+    }
+  },
+  "jobs.proof.checks.money_in_sources(letter)": {
+    "out": {
+      "__set": [100, 120000, 1234567, 202400, 209900, 25000000, 850000]
+    }
+  },
+  "jobs.proof.checks.money_not_in(letter, sources)": {
+    "out": [25000000]
+  },
+  "jobs.proof.checks.sentinels(garbled)": {
+    "out": []
+  },
+  "jobs.proof.checks.sentinels(letter)": {
+    "out": ["=== NEEDS THE ATTORNEY ==="]
+  },
+  "jobs.proof.checks.system_vocabulary(garbled)": {
+    "out": []
+  },
+  "jobs.proof.checks.system_vocabulary(letter)": {
+    "out": ["in this chunk"]
+  },
+  "jobs.proof.review.complete(garbled)": {
+    "out": false
+  },
+  "jobs.proof.review.complete(letter)": {
+    "out": false
+  },
+  "jobs.proof.review.parse(review)": {
+    "out": [
+      {
+        "__type": "Finding",
+        "by": "model",
+        "check": "2",
+        "cite": "entry 03/14/2024",
+        "finding": "a date the record does not print",
+        "grade": "MUST-FIX"
+      }
+    ]
+  },
+  "jobs.stages.extract._ocr_tells(garbled)": {
+    "out": false
+  },
+  "jobs.stages.extract._ocr_tells(letter)": {
+    "out": true
+  },
+  "jobs.stages.extract.docx_text(docx)": {
+    "out": "# Demand for Settlement\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\nDear Example Adjuster,\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not identified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\nSincerely,\nExample Counsel\n03/14/2024\nExample Clinic | Emergency visit after the collision. Neck pain 6 of 10. (Exhibit 1 - p. 2)\n04/02/2024 (as written)\nExample Imaging | MRI of the cervical spine; a 3 mm protrusion. (Exhibit 2 - p. 1)"
+  },
+  "jobs.stages.extract.garbled(garbled)": {
+    "out": true
+  },
+  "jobs.stages.extract.garbled(letter)": {
+    "out": true
+  },
+  "jobs.stages.extract.glyph_junk(garbled)": {
+    "out": true
+  },
+  "jobs.stages.extract.glyph_junk(letter)": {
+    "out": false
+  },
+  "jobs.stages.extract.not_english(garbled)": {
+    "out": false
+  },
+  "jobs.stages.extract.not_english(letter)": {
+    "out": false
+  },
+  "jobs.stages.extract.pdf_text(pdf)": {
+    "out": [
+      [
+        1,
+        "# Demand for Settlement\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\nDear Example Adjuster,\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not ide"
+      ],
+      [2, ""],
+      [3, "/12 /34 /56 /78 /90 qxzv bcdfg hjklm npqrst 0O/lI/2O24"],
+      [
+        4,
+        "ntified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\nSincerely,\nExample Counsel"
+      ]
+    ]
+  },
+  "jobs.stages.extract.thin(garbled)": {
+    "out": true
+  },
+  "jobs.stages.extract.thin(letter)": {
+    "out": false
+  },
+  "jobs.stages.review._as_date": {
+    "out": [
+      {
+        "__date": "2024-03-14"
+      },
+      null,
+      null,
+      null
+    ]
+  },
+  "jobs.stages.review._date_forms": {
+    "out": "(?<!\\d)03\\s*[/.-]\\s*04\\s*[/.-]\\s*2024(?!\\d)|(?<!\\d)03\\s*[/.-]\\s*04\\s*[/.-]\\s*24(?!\\d)|(?<!\\d)03\\s*[/.-]\\s*4\\s*[/.-]\\s*2024(?!\\d)|(?<!\\d)03\\s*[/.-]\\s*4\\s*[/.-]\\s*24(?!\\d)|(?<!\\d)3\\s*[/.-]\\s*04\\s*[/.-]\\s*2024(?!\\d)|(?<!\\d)3\\s*[/.-]\\s*04\\s*[/.-]\\s*24(?!\\d)|(?<!\\d)3\\s*[/.-]\\s*4\\s*[/.-]\\s*2024(?!\\d)|(?<!\\d)3\\s*[/.-]\\s*4\\s*[/.-]\\s*24(?!\\d)"
+  },
+  "jobs.stages.review._system_findings(letter)": {
+    "out": [
+      {
+        "__type": "Finding",
+        "by": "code",
+        "check": "3 system language",
+        "cite": "letter",
+        "finding": "\"In this chunk\" is the system's wording, not the record's",
+        "grade": "MUST-FIX"
+      },
+      {
+        "__type": "Finding",
+        "by": "code",
+        "check": "3 system language",
+        "cite": "letter",
+        "finding": "\"provider not identified\" is the system's wording, not the record's",
+        "grade": "MUST-FIX"
+      },
+      {
+        "__type": "Finding",
+        "by": "code",
+        "check": "3 system language",
+        "cite": "letter",
+        "finding": "a system marker \"=== NEEDS THE ATTORNEY ===\" is in the text",
+        "grade": "MUST-FIX"
+      }
+    ]
+  },
+  "jobs.stages.review.docx_text(docx)": {
+    "out": "# Demand for Settlement\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\nDear Example Adjuster,\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not identified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\nSincerely,\nExample Counsel\n03/14/2024\nExample Clinic\nEmergency visit after the collision. Neck pain 6 of 10. (Exhibit 1 - p. 2)\n04/02/2024 (as written)\nExample Imaging\nMRI of the cervical spine; a 3 mm protrusion. (Exhibit 2 - p. 1)"
+  },
+  "jobs.stages.review.entries(docx)": {
+    "out": [
+      ["03/14/2024", "Example Clinic"],
+      ["04/02/2024 (as written)", "Example Imaging"]
+    ]
+  },
+  "jobs.stages.review.entry_bodies(docx)": {
+    "out": {
+      "03/14/2024 Example Clinic": "\nEmergency visit after the collision. Neck pain 6 of 10. (Exhibit 1 - p. 2)",
+      "04/02/2024 (as written) Example Imaging": "\nMRI of the cervical spine; a 3 mm protrusion. (Exhibit 2 - p. 1)"
+    }
+  },
+  "jobs.stages.review.heading_findings(entries)": {
+    "out": []
+  },
+  "jobs.wording.fill(garbled)": {
+    "out": "/12 /34 /56 /78 /90 qxzv bcdfg hjklm npqrst 0O/lI/2O24"
+  },
+  "jobs.wording.fill(letter)": {
+    "out": "# Demand for Settlement\n\nRe: Example Claimant v. Example Insured\nClaim No.: EX-0001\nDate of Loss: March 14, 2024\n\nDear Example Adjuster,\n\nOn 03/14/2024 our client was struck at an intersection in Exampletown. She was seen at Example Clinic on 3/15/24\nand again on 2024-04-02, and imaging on April 9, 2024 showed a disc protrusion (FILE: Example Clinic records.pdf, p. 2).\nThe deposition of Example Witness confirms the light was red (Example Witness Dep. 12:4).\n\"The light was red when the truck entered the intersection\" (FILE: Police Report.pdf, p. 1).\n\nMedical specials total $12,345.67, of which $1,200.00 is the emergency visit. The future care estimate is 8,500.\nWe demand $250,000 to settle. [ATTORNEY: confirm the policy limit] [TO BE SUPPLIED\n{{FILL: date of service | at service}}\n\nThe digest shows a gap in treatment; the preflight found no missing bill. In this chunk the provider not identified.\n=== NEEDS THE ATTORNEY ===\nThe next visit is scheduled for 12/31/2099.\n\nSincerely,\nExample Counsel\n"
+  },
+  "jobs.wording.names_records_differ(garbled)": {
+    "out": false
+  },
+  "jobs.wording.names_records_differ(letter)": {
+    "out": false
+  },
+  "jobs.wording.subjects(garbled)": {
+    "out": []
+  },
+  "jobs.wording.subjects(letter)": {
+    "out": []
+  }
+}

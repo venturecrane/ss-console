@@ -1,0 +1,519 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/drafting-queue/<ULID1>.json",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "library-setup",
+          "<TMP>/seat/run/drafting-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": false,
+        "cwd": "<TMP>/seat/run/drafting-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "value-of-ANTHROPIC_API_KEY",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/drafting-jobs/<ULID1>",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_DRAFTING_INPUTS": "<TMP>/seat/inputs/drafting",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "value-of-SMOKEBALL_ACCOUNT_ID",
+          "SMOKEBALL_API_KEY": "value-of-SMOKEBALL_API_KEY",
+          "SMOKEBALL_AUTH_MODE": "value-of-SMOKEBALL_AUTH_MODE",
+          "SMOKEBALL_CLIENT_ID": "value-of-SMOKEBALL_CLIENT_ID",
+          "SMOKEBALL_CLIENT_SECRET": "value-of-SMOKEBALL_CLIENT_SECRET",
+          "SMOKEBALL_ENVIRONMENT": "value-of-SMOKEBALL_ENVIRONMENT",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "value-of-SMOKEBALL_REGION"
+        },
+        "job_id": "<ULID1>",
+        "lane": "drafting",
+        "pidfile": "<TMP>/seat/run/drafting-child.pid"
+      }
+    ],
+    "daemon": {
+      "drafting-jobs/<ULID1>": {
+        "attempts": 0,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "reason": null,
+        "retry_after": null,
+        "state": "delivered",
+        "wake": {
+          "attempts": 0,
+          "pending": true,
+          "task": "Run the document-drafter skill's DELIVER mode for drafting job <ULID1>.\nLoad it first: your first call is read_file on document-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: drafting.\nDocument class: memo.\nOutcome: delivered.\nSpend cents: 0.\nMatter number: OPS-LIBRARY.\nFolder id: none.\nFiles: none.\nRequested by: admin@firm.example.\nCaption discrepancies: 0.\nCaption corrections: 0.\nMode: library setup (nothing was filed; the reply is the job record's own words)."
+        }
+      }
+    },
+    "job_files": {
+      "drafting-jobs/<ULID1>/job.json": "{\n \"attorney_named\": null,\n \"document_class\": \"memo\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"library_setup\",\n \"library_matter_number\": \"OPS-LIBRARY\",\n \"live\": true,\n \"message_ref\": \"<setup-1@firm.example>\",\n \"requester\": \"admin@firm.example\",\n \"setup_kind\": \"memo\",\n \"slug\": \"example\"\n}"
+    },
+    "log": [
+      "ERROR jobs.drafting could not record delivered for library setup <ULID1>: broker socket: [Errno 2] No such file or directory"
+    ],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "drafting-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["drafting-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "delivered",
+    "step": "run, broker gone mid-run",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-heartbeat.json",
+      "run/drafting-jobs/",
+      "run/drafting-jobs/<ULID1>/",
+      "run/drafting-jobs/<ULID1>/daemon.json",
+      "run/drafting-jobs/<ULID1>/daemon.log",
+      "run/drafting-jobs/<ULID1>/envelope.json",
+      "run/drafting-jobs/<ULID1>/job.json",
+      "run/drafting-jobs/<ULID1>/verdict.json",
+      "run/drafting-queue/",
+      "run/drafting-tick",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "attempt": 1,
+            "attorney_key": null,
+            "attorney_name": null,
+            "attorney_named": null,
+            "cents": 0,
+            "choice_json": null,
+            "created_at": "<TS>",
+            "delivery_json": null,
+            "document_class": "memo",
+            "envelope_digest": "deb9b48e1fab9a114fbdbbc73e196f718b7e004cf3d385c5f70cadb82b03fac4",
+            "file_to_matter_id": "",
+            "folder_id": null,
+            "id": "<ULID1>",
+            "job_kind": "library_setup",
+            "live": 1,
+            "matter_id": "",
+            "matter_number": "OPS-LIBRARY",
+            "mode": "list",
+            "parent_id": null,
+            "pointed": null,
+            "reason": null,
+            "reply_key": null,
+            "reply_sent_at": null,
+            "report_json": null,
+            "request_ref": "<setup-1@firm.example>",
+            "requester": "admin@firm.example",
+            "revise_of": null,
+            "run_id": null,
+            "state": "submitted",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "drafting_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "attorney_named": null,
+            "cents": 0,
+            "created_at": "<TS>",
+            "document_class": "memo",
+            "id": "<ULID1>",
+            "job_kind": "library_setup",
+            "live": true,
+            "matter_number": "OPS-LIBRARY",
+            "mode": "list",
+            "parent_id": null,
+            "pointed": null,
+            "reason": null,
+            "reply_sent_at": null,
+            "report": null,
+            "requester": "admin@firm.example",
+            "run_id": null,
+            "state": "running",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "drafting_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "drafting-jobs/<ULID1>": {
+        "attempts": 0,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "reason": null,
+        "reply_watch": {
+          "attempt": 1,
+          "due": "<CLOCK+1200.0>",
+          "kind": "drafting_job",
+          "state": "delivered"
+        },
+        "retry_after": null,
+        "state": "delivered",
+        "wake": {
+          "attempts": 0,
+          "outcome": "delivered",
+          "pending": false,
+          "sent_at": "<CLOCK+0.0>",
+          "seq": 1,
+          "task": "Run the document-drafter skill's DELIVER mode for drafting job <ULID1>.\nLoad it first: your first call is read_file on document-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: drafting.\nDocument class: memo.\nOutcome: delivered.\nSpend cents: 0.\nMatter number: OPS-LIBRARY.\nFolder id: none.\nFiles: none.\nRequested by: admin@firm.example.\nCaption discrepancies: 0.\nCaption corrections: 0.\nMode: library setup (nothing was filed; the reply is the job record's own words)."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "drafting-jobs/<ULID1>/job.json": "{\n \"attorney_named\": null,\n \"document_class\": \"memo\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"library_setup\",\n \"library_matter_number\": \"OPS-LIBRARY\",\n \"live\": true,\n \"message_ref\": \"<setup-1@firm.example>\",\n \"requester\": \"admin@firm.example\",\n \"setup_kind\": \"memo\",\n \"slug\": \"example\"\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "drafting-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": [
+            {
+              "file": "drafting-jobs/<ULID1>",
+              "reply_open": true,
+              "sent_ago_s": 0.0
+            }
+          ]
+        },
+        "reasons": ["drafting-jobs/<ULID1>: DELIVER turn started 0s ago, its reply not yet seen"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "broker back",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-heartbeat.json",
+      "run/drafting-jobs/",
+      "run/drafting-jobs/<ULID1>/",
+      "run/drafting-jobs/<ULID1>/daemon.json",
+      "run/drafting-jobs/<ULID1>/daemon.log",
+      "run/drafting-jobs/<ULID1>/envelope.json",
+      "run/drafting-jobs/<ULID1>/job.json",
+      "run/drafting-jobs/<ULID1>/verdict.json",
+      "run/drafting-queue/",
+      "run/drafting-tick",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [
+      {
+        "auth": true,
+        "body": {
+          "handoff_id": "drafting-<ULID1>",
+          "task": "Run the document-drafter skill's DELIVER mode for drafting job <ULID1>.\nLoad it first: your first call is read_file on document-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: drafting.\nDocument class: memo.\nOutcome: delivered.\nSpend cents: 0.\nMatter number: OPS-LIBRARY.\nFolder id: none.\nFiles: none.\nRequested by: admin@firm.example.\nCaption discrepancies: 0.\nCaption corrections: 0.\nMode: library setup (nothing was filed; the reply is the job record's own words)."
+        },
+        "path": "/webhooks/handoff"
+      }
+    ],
+    "wire": [
+      {
+        "reply": {
+          "channel": "agentmail",
+          "expected_key": "",
+          "holds": 0,
+          "ok": true,
+          "replies": [],
+          "sends_to_requester": 0
+        },
+        "request": {
+          "action": "delivery_reply_status",
+          "job_id": "<ULID1>",
+          "kind": "drafting_job",
+          "thread": true
+        }
+      },
+      {
+        "reply": {
+          "channel": "agentmail",
+          "expected_key": "",
+          "holds": 0,
+          "ok": true,
+          "replies": [],
+          "sends_to_requester": 0
+        },
+        "request": {
+          "action": "delivery_reply_status",
+          "job_id": "<ULID1>",
+          "kind": "drafting_job",
+          "requester": "admin@firm.example",
+          "since": "<TS>"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "drafting-jobs/<ULID1>": {
+        "attempts": 0,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "reason": null,
+        "reply_watch": {
+          "attempt": 1,
+          "due": "<CLOCK+1200.0>",
+          "kind": "drafting_job",
+          "state": "delivered"
+        },
+        "retry_after": null,
+        "state": "delivered",
+        "wake": {
+          "attempts": 0,
+          "outcome": "delivered",
+          "pending": false,
+          "sent_at": "<CLOCK+0.0>",
+          "seq": 1,
+          "task": "Run the document-drafter skill's DELIVER mode for drafting job <ULID1>.\nLoad it first: your first call is read_file on document-drafter/SKILL.md in the skills directory the handoff instructions above name. Then follow that file exactly; if it cannot be read, say so and do nothing else.\nKind: drafting.\nDocument class: memo.\nOutcome: delivered.\nSpend cents: 0.\nMatter number: OPS-LIBRARY.\nFolder id: none.\nFiles: none.\nRequested by: admin@firm.example.\nCaption discrepancies: 0.\nCaption corrections: 0.\nMode: library setup (nothing was filed; the reply is the job record's own words)."
+        },
+        "wake_seq": 1
+      }
+    },
+    "job_files": {
+      "drafting-jobs/<ULID1>/job.json": "{\n \"attorney_named\": null,\n \"document_class\": \"memo\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"library_setup\",\n \"library_matter_number\": \"OPS-LIBRARY\",\n \"live\": true,\n \"message_ref\": \"<setup-1@firm.example>\",\n \"requester\": \"admin@firm.example\",\n \"setup_kind\": \"memo\",\n \"slug\": \"example\"\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "drafting-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": [
+            {
+              "file": "drafting-jobs/<ULID1>",
+              "reply_open": true,
+              "sent_ago_s": 0.0
+            }
+          ]
+        },
+        "reasons": ["drafting-jobs/<ULID1>: DELIVER turn started 0s ago, its reply not yet seen"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "wake",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/demand-queue/",
+      "run/drafting-heartbeat.json",
+      "run/drafting-jobs/",
+      "run/drafting-jobs/<ULID1>/",
+      "run/drafting-jobs/<ULID1>/daemon.json",
+      "run/drafting-jobs/<ULID1>/daemon.log",
+      "run/drafting-jobs/<ULID1>/envelope.json",
+      "run/drafting-jobs/<ULID1>/job.json",
+      "run/drafting-jobs/<ULID1>/verdict.json",
+      "run/drafting-queue/",
+      "run/drafting-tick",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "channel": "agentmail",
+          "expected_key": "",
+          "holds": 0,
+          "ok": true,
+          "replies": [],
+          "sends_to_requester": 0
+        },
+        "request": {
+          "action": "delivery_reply_status",
+          "job_id": "<ULID1>",
+          "kind": "drafting_job",
+          "requester": "admin@firm.example",
+          "since": "<TS>"
+        }
+      }
+    ]
+  }
+]

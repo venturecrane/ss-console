@@ -1,0 +1,1063 @@
+{
+  "complete": [
+    {
+      "args": ["| NOTE | 6 tone | half a row"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 statements | The declaration swears the set exceeds 35; it has 35 and no prior set was served. | Document 1, para 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 3 system language | \"The image carries no transcribed text.\" describes the text extraction | entry 01/20/2026 Example Clinic |\n| MUST-FIX | 2 entries contradict | \"Pain was rated 7 of 10 at triage\" and \"Pain was rated 4 of 10 at discharge\" give two pain scores | entry 01/20/2026 Example Clinic |\nVERDICT: 2 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n| MUST-FIX | 1 | the firm wrote this letter to a lienholder | row 1: 'Dear Lien Department' |\n\nVERDICT: 1 MUST-FIX"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 another person's records | the summary may carry another person's visits | Medical Summary |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": ["VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 statements | The declaration swears the set exceeds 35; it has 35. | Document 3, para 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": ["I cannot help with that."],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["| NOTE | x | y | z |"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 defined terms | \"premises\" is used in lower case. | Document 1, item 2 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 summary with no entry | the reference \"Exhibit 1 - p. 2\" has no support | Treatment Timeline |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 6 the attorney notes | A basis row misdescribes its file. | notes; FILE: Complaint 2-1-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 wording | planted | p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n| MUST-FIX | 4 | this is a CCP 998 offer, not a demand | row 1: 'pursuant to CCP 998' |\n\nVERDICT: 1 MUST-FIX"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 wrong party | The Liability section names Gamma Driver as the insured; the carrier's letter names Beta Driver. | Carrier letter of acknowledgment, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n| MUST-FIX | 4 | that figure was a 998 offer | row 1: 'CCP 998' |\n\nVERDICT: 1 MUST-FIX"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n| MUST-FIX | 2 | the amount looks low |  |\n\nVERDICT: 1 MUST-FIX"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 2 entries contradict | the plan on 03/30/2026 contradicts the 01/20/2026 entry | entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 2 entries contradict | the 01/20/2026 entry gives two pain scores and \"The records differ on this point.\" | entry 01/20/2026 Example Clinic |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": ["| GRADE | check | finding | cite |\n|---|---|---|---|\n\nVERDICT: 0 MUST-FIX"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 contradicts the record | The ER paragraph says strain where the record says sprain | DEMAND letter, Exampletown ER; ER record 1-15-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 summary with no entry | the highlight \"Sprain of ligaments of cervical spine\" has no entry behind it | Diagnostic Highlights |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": ["| NOTE | 5 x | y | z |"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": ["| MUST-FIX | 1 | cut off"],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": false
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff's | entry 03/30/2026 Example Clinic |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 3 system language | \"referral pipeline\" reads as the system | entry 03/30/2026 Example Clinic |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 2 the request not carried out | The letter contains unresolved internal placeholders (\"[TO BE SUPPLIED...]\", \"[CONFIRM...]\", \"[ATTORNEY:...]\") so no complete, sendable letter was produced. | DEMAND, Sections III and V |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 6 tone | The opening runs long. | Demand, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 premise not established | G4 rests on a conditional, future statement (once you accept), not a settlement of this claim | Carrier status notice, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 5 embarrassing | a duplicated sentence in the 01/20/2026 entry | entry 01/20/2026 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff's | entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff Beta Roe's | entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| SHOULD-FIX | 6 Attorney notes | The quote is real but does not support RFA 1. | Attorney notes, RFA basis table No. 1; FILE: ER record 1-15-26 |\nVERDICT: 0 MUST-FIX, 1 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 3 system language | \"(provider not stated in the record)\" is a placeholder | entry 03/30/2026 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 summary with no entry | the timeline row \"Other Ortho\" has no entry behind it | Treatment Timeline |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": true
+    }
+  ],
+  "parse": [
+    {
+      "args": [
+        "| MUST-FIX | 2 entries contradict | the 01/20/2026 entry gives two pain scores and \"The records differ on this point.\" | entry 01/20/2026 Example Clinic |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "2 entries contradict",
+          "cite": "entry 01/20/2026 Example Clinic",
+          "finding": "the 01/20/2026 entry gives two pain scores and \"The records differ on this point.\"",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 wording | planted | p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4, 5]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 wording",
+          "cite": "p. 1",
+          "finding": "planted",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 defined terms | \"premises\" is used in lower case. | Document 1, item 2 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "4 defined terms",
+          "cite": "Document 1, item 2",
+          "finding": "\"premises\" is used in lower case.",
+          "grade": "SHOULD-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 another person's records | the summary may carry another person's visits | Medical Summary |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 another person's records",
+          "cite": "Medical Summary",
+          "finding": "the summary may carry another person's visits",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 summary with no entry | the timeline row \"Other Ortho\" has no entry behind it | Treatment Timeline |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "4 summary with no entry",
+          "cite": "Treatment Timeline",
+          "finding": "the timeline row \"Other Ortho\" has no entry behind it",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 statements | The declaration swears the set exceeds 35; it has 35. | Document 3, para 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 statements",
+          "cite": "Document 3, para 3",
+          "finding": "The declaration swears the set exceeds 35; it has 35.",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n| MUST-FIX | 4 | this is a CCP 998 offer, not a demand | row 1: 'pursuant to CCP 998' |\n\nVERDICT: 1 MUST-FIX",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "4",
+          "cite": "row 1: 'pursuant to CCP 998'",
+          "finding": "this is a CCP 998 offer, not a demand",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 2 the request not carried out | The letter contains unresolved internal placeholders (\"[TO BE SUPPLIED...]\", \"[CONFIRM...]\", \"[ATTORNEY:...]\") so no complete, sendable letter was produced. | DEMAND, Sections III and V |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4, 5]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "2 the request not carried out",
+          "cite": "DEMAND, Sections III and V",
+          "finding": "The letter contains unresolved internal placeholders (\"[TO BE SUPPLIED...]\", \"[CONFIRM...]\", \"[ATTORNEY:...]\") so no complete, sendable letter was produced.",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 wrong party | The Liability section names Gamma Driver as the insured; the carrier's letter names Beta Driver. | Carrier letter of acknowledgment, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4, 5]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "4 wrong party",
+          "cite": "Carrier letter of acknowledgment, p. 1",
+          "finding": "The Liability section names Gamma Driver as the insured; the carrier's letter names Beta Driver.",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 statements | The declaration swears the set exceeds 35; it has 35 and no prior set was served. | Document 1, para 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 statements",
+          "cite": "Document 1, para 3",
+          "finding": "The declaration swears the set exceeds 35; it has 35 and no prior set was served.",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 contradicts the record | The ER paragraph says strain where the record says sprain | DEMAND letter, Exampletown ER; ER record 1-15-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4, 5]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 contradicts the record",
+          "cite": "DEMAND letter, Exampletown ER; ER record 1-15-26, p. 1",
+          "finding": "The ER paragraph says strain where the record says sprain",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "| MUST-FIX | 3 system language | \"(provider not stated in the record)\" is a placeholder | entry 03/30/2026 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "3 system language",
+          "cite": "entry 03/30/2026",
+          "finding": "\"(provider not stated in the record)\" is a placeholder",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 summary with no entry | the highlight \"Sprain of ligaments of cervical spine\" has no entry behind it | Diagnostic Highlights |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "4 summary with no entry",
+          "cite": "Diagnostic Highlights",
+          "finding": "the highlight \"Sprain of ligaments of cervical spine\" has no entry behind it",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 premise not established | G4 rests on a conditional, future statement (once you accept), not a settlement of this claim | Carrier status notice, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 premise not established",
+          "cite": "Carrier status notice, p. 1",
+          "finding": "G4 rests on a conditional, future statement (once you accept), not a settlement of this claim",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 2 request | Something seems off. |  |\nVERDICT: 0 MUST-FIX",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "2 request",
+          "cite": "",
+          "finding": "Something seems off.",
+          "grade": "SHOULD-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 2 entries contradict | the plan on 03/30/2026 contradicts the 01/20/2026 entry | entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "2 entries contradict",
+          "cite": "entry 03/30/2026 Example Clinic, Exhibit 1 p. 3",
+          "finding": "the plan on 03/30/2026 contradicts the 01/20/2026 entry",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n\nVERDICT: 0 MUST-FIX",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "| MUST-FIX | 6 the attorney notes | A basis row misdescribes its file. | notes; FILE: Complaint 2-1-26, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "6 the attorney notes",
+          "cite": "notes; FILE: Complaint 2-1-26, p. 1",
+          "finding": "A basis row misdescribes its file.",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff's | entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 another person's records",
+          "cite": "entry 03/30/2026 Example Clinic, Exhibit 1 p. 3",
+          "finding": "the 03/30/2026 visit is the co-plaintiff's",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff's | entry 03/30/2026 Example Clinic |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 another person's records",
+          "cite": "entry 03/30/2026 Example Clinic",
+          "finding": "the 03/30/2026 visit is the co-plaintiff's",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 4 summary with no entry | the reference \"Exhibit 1 - p. 2\" has no support | Treatment Timeline |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "4 summary with no entry",
+          "cite": "Treatment Timeline",
+          "finding": "the reference \"Exhibit 1 - p. 2\" has no support",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 5 embarrassing | a duplicated sentence in the 01/20/2026 entry | entry 01/20/2026 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "5 embarrassing",
+          "cite": "entry 01/20/2026",
+          "finding": "a duplicated sentence in the 01/20/2026 entry",
+          "grade": "SHOULD-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 statements | A false count. | Doc 1 |\nVERDICT: 1 MUST-FIX",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 statements",
+          "cite": "Doc 1",
+          "finding": "A false count.",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n| MUST-FIX | 2 | the amount looks low |  |\n\nVERDICT: 1 MUST-FIX",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "2",
+          "cite": "",
+          "finding": "the amount looks low",
+          "grade": "SHOULD-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 3 system language | \"referral pipeline\" reads as the system | entry 03/30/2026 Example Clinic |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "3 system language",
+          "cite": "entry 03/30/2026 Example Clinic",
+          "finding": "\"referral pipeline\" reads as the system",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 3 system language | \"The image carries no transcribed text.\" describes the text extraction | entry 01/20/2026 Example Clinic |\n| MUST-FIX | 2 entries contradict | \"Pain was rated 7 of 10 at triage\" and \"Pain was rated 4 of 10 at discharge\" give two pain scores | entry 01/20/2026 Example Clinic |\nVERDICT: 2 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "3 system language",
+          "cite": "entry 01/20/2026 Example Clinic",
+          "finding": "\"The image carries no transcribed text.\" describes the text extraction",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "2 entries contradict",
+          "cite": "entry 01/20/2026 Example Clinic",
+          "finding": "\"Pain was rated 7 of 10 at triage\" and \"Pain was rated 4 of 10 at discharge\" give two pain scores",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 2 the request not carried out | The letter contains unresolved internal placeholders (\"[TO BE SUPPLIED...]\", \"[CONFIRM...]\", \"[ATTORNEY:...]\") so no complete, sendable letter was produced. | DEMAND, Sections III and V |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE\n| MUST-FIX | 2 the request not carried out | No gap audit was delivered | the request |\n| MUST-FIX | 1 contradicts the record | The [TO BE SUPPLIED] marker asks for a bill the record has | FILE: bill |",
+        {
+          "__tuple": [1, 2, 3, 4, 5]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "2 the request not carried out",
+          "cite": "DEMAND, Sections III and V",
+          "finding": "The letter contains unresolved internal placeholders (\"[TO BE SUPPLIED...]\", \"[CONFIRM...]\", \"[ATTORNEY:...]\") so no complete, sendable letter was produced.",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "2 the request not carried out",
+          "cite": "the request",
+          "finding": "No gap audit was delivered",
+          "grade": "MUST-FIX"
+        },
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 contradicts the record",
+          "cite": "FILE: bill",
+          "finding": "The [TO BE SUPPLIED] marker asks for a bill the record has",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| SHOULD-FIX | 6 Attorney notes | The quote is real but does not support RFA 1. | Attorney notes, RFA basis table No. 1; FILE: ER record 1-15-26 |\nVERDICT: 0 MUST-FIX, 1 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "6 Attorney notes",
+          "cite": "Attorney notes, RFA basis table No. 1; FILE: ER record 1-15-26",
+          "finding": "The quote is real but does not support RFA 1.",
+          "grade": "SHOULD-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| MUST-FIX | 1 another person's records | the 03/30/2026 visit is the co-plaintiff Beta Roe's | entry 03/30/2026 Example Clinic, Exhibit 1 p. 3 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1 another person's records",
+          "cite": "entry 03/30/2026 Example Clinic, Exhibit 1 p. 3",
+          "finding": "the 03/30/2026 visit is the co-plaintiff Beta Roe's",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4, 5]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "| MUST-FIX | 10 anything | A wrong date. | Doc 1 |\nVERDICT: 1 MUST-FIX",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "10 anything",
+          "cite": "Doc 1",
+          "finding": "A wrong date.",
+          "grade": "SHOULD-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 5, 6, 7, 8, 9]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    },
+    {
+      "args": [
+        "| MUST-FIX | 6 tone | The opening runs long. | Demand, p. 1 |\nVERDICT: 1 MUST-FIX, 0 SHOULD-FIX, 0 NOTE",
+        {
+          "__tuple": [1, 2, 3, 4, 5]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "6 tone",
+          "cite": "Demand, p. 1",
+          "finding": "The opening runs long.",
+          "grade": "SHOULD-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n| MUST-FIX | 4 | that figure was a 998 offer | row 1: 'CCP 998' |\n\nVERDICT: 1 MUST-FIX",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "4",
+          "cite": "row 1: 'CCP 998'",
+          "finding": "that figure was a 998 offer",
+          "grade": "MUST-FIX"
+        }
+      ]
+    },
+    {
+      "args": [
+        "| GRADE | check | finding | cite |\n|---|---|---|---|\n| MUST-FIX | 1 | the firm wrote this letter to a lienholder | row 1: 'Dear Lien Department' |\n\nVERDICT: 1 MUST-FIX",
+        {
+          "__tuple": [1, 2, 3, 4]
+        }
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [
+        {
+          "__type": "Finding",
+          "by": "model",
+          "check": "1",
+          "cite": "row 1: 'Dear Lien Department'",
+          "finding": "the firm wrote this letter to a lienholder",
+          "grade": "MUST-FIX"
+        }
+      ]
+    }
+  ]
+}

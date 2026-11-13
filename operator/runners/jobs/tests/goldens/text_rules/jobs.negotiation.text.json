@@ -1,0 +1,24 @@
+{
+  "html_text": [],
+  "ocr_pages": [
+    {
+      "args": [[""]],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": [0]
+    },
+    {
+      "args": [
+        [
+          "Example Mutual offers $15,000 to settle all claims.\n",
+          "Signed by the adjuster for Example Mutual.\n"
+        ]
+      ],
+      "kwargs": {
+        "__dict": {}
+      },
+      "out": []
+    }
+  ]
+}

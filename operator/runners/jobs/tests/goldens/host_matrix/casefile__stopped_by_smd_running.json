@@ -1,0 +1,500 @@
+[
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {},
+    "job_files": {},
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": "queued",
+    "step": "submit",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-queue/",
+      "run/casefile-queue/<ULID1>.json",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/"
+    ],
+    "wake_posts": [],
+    "wire": []
+  },
+  {
+    "audit": [
+      {
+        "action_type": "CASEFILE_JOB_RUNNING",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 0,
+          "job_id": "<ULID1>",
+          "lines_proposed": null,
+          "matters_current": null,
+          "matters_held": null,
+          "matters_read": null,
+          "matters_total": null,
+          "mode": "full",
+          "reason": null,
+          "stage": null,
+          "state": "running"
+        },
+        "skill": "case-file-manager"
+      },
+      {
+        "action_type": "CASEFILE_JOB_FAILED",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "cents": 0,
+          "job_id": "<ULID1>",
+          "lines_proposed": null,
+          "matters_current": null,
+          "matters_held": null,
+          "matters_read": null,
+          "matters_total": null,
+          "mode": "full",
+          "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+          "stage": null,
+          "state": "failed"
+        },
+        "skill": "case-file-manager"
+      }
+    ],
+    "cgroup": {
+      "cgroup.controllers": "cpu memory pids",
+      "demand/cgroup.procs": "<PID>",
+      "demand/memory.max": "1073741824"
+    },
+    "children": [
+      {
+        "argv": [
+          "setpriv",
+          "--reuid=jobs",
+          "--regid=jobs",
+          "--init-groups",
+          "--no-new-privs",
+          "nice",
+          "-n",
+          "10",
+          "/opt/jobs/.venv/bin/jobs",
+          "casefile",
+          "<TMP>/seat/run/casefile-jobs/<ULID1>"
+        ],
+        "cgroup_preexec": true,
+        "cwd": "<TMP>/seat/run/casefile-jobs/<ULID1>",
+        "env": {
+          "ANTHROPIC_API_KEY": "value-of-ANTHROPIC_API_KEY",
+          "CUSTOMER_SLUG": "example",
+          "HOME": "<TMP>/seat/run/casefile-jobs/<ULID1>",
+          "JOBS_CASEFILE_INPUTS_DIR": "<TMP>/seat/inputs/casefile",
+          "JOBS_CASEFILE_STATE_DIR": "<TMP>/seat/state/casefile",
+          "JOBS_CASEFILE_YIELD_PIDS": "<TMP>/seat/run/demand-child.pid,<TMP>/seat/run/drafting-child.pid,<TMP>/seat/run/child.pid",
+          "JOBS_DAEMON_JOB_ID": "<ULID1>",
+          "JOBS_DATA_DIR": "value-of-JOBS_DATA_DIR",
+          "JOBS_LITIGATION_TEXTCACHE_DIR": "<TMP>/litigation-textcache",
+          "JOBS_PRICING_JSON": "<TMP>/seat/pricing.json",
+          "JOBS_SEAT": "client",
+          "MEDCHRON_FIRM_CONFIG": "value-of-MEDCHRON_FIRM_CONFIG",
+          "PATH": "/usr/bin:/bin",
+          "SMOKEBALL_ACCOUNT_ID": "value-of-SMOKEBALL_ACCOUNT_ID",
+          "SMOKEBALL_API_KEY": "value-of-SMOKEBALL_API_KEY",
+          "SMOKEBALL_AUTH_MODE": "value-of-SMOKEBALL_AUTH_MODE",
+          "SMOKEBALL_CLIENT_ID": "value-of-SMOKEBALL_CLIENT_ID",
+          "SMOKEBALL_CLIENT_SECRET": "value-of-SMOKEBALL_CLIENT_SECRET",
+          "SMOKEBALL_ENVIRONMENT": "value-of-SMOKEBALL_ENVIRONMENT",
+          "SMOKEBALL_REFRESH_TOKEN_FILE": "value-of-SMOKEBALL_REFRESH_TOKEN_FILE",
+          "SMOKEBALL_REGION": "value-of-SMOKEBALL_REGION"
+        },
+        "job_id": "<ULID1>",
+        "lane": "casefile",
+        "pidfile": "<TMP>/seat/run/casefile-child.pid"
+      }
+    ],
+    "daemon": {
+      "casefile-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "stopped_by_smd",
+        "stopped_by": "smd@example.test",
+        "stopped_cents": 0,
+        "stopped_exit": -15,
+        "stopped_recorded": true,
+        "stopped_why": "host matrix stop",
+        "wake": null
+      }
+    },
+    "job_files": {
+      "casefile-jobs/<ULID1>/job.json": "{\n \"file_to_matter_id\": \"99999999-9999-4999-8999-999999999999\",\n \"file_to_matter_number\": \"OPS-LIBRARY\",\n \"folder_name\": \"Case File Manager\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"casefile\",\n \"message_ref\": \"<req-1@firm.example>\",\n \"mode\": \"full\",\n \"request_text\": \"Please review Pat Example's files.\",\n \"requester\": \"admin@firm.example\",\n \"scope\": {\n  \"assisting\": {\n   \"names\": [\n    \"Pat Example\"\n   ]\n  }\n },\n \"trigger\": \"request\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"per_job_cap_usd\": 20.0,\n \"monthly_budget_usd\": 100.0\n}"
+    },
+    "log": [
+      "WARNING jobs.daemon casefile job <ULID1>: stopped by SMD; the child stops at its next model call",
+      "ERROR jobs.daemon casefile job <ULID1> still running <N>s after SMD's stop; terminating it",
+      "WARNING jobs.daemon casefile job <ULID1> stopped by SMD (exit -15); final, never resumed"
+    ],
+    "readers": {
+      "busy_probe": {
+        "busy": true,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "casefile-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": "<ULID1>",
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": ["casefile-heartbeat.json: running job <ULID1>"]
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 1,
+        "wakes_pending": 0
+      }
+    },
+    "result": "interrupted",
+    "step": "run",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-heartbeat.json",
+      "run/casefile-jobs/",
+      "run/casefile-jobs/<ULID1>/",
+      "run/casefile-jobs/<ULID1>/.smd-stop.json",
+      "run/casefile-jobs/<ULID1>/daemon.json",
+      "run/casefile-jobs/<ULID1>/daemon.log",
+      "run/casefile-jobs/<ULID1>/data/",
+      "run/casefile-jobs/<ULID1>/envelope.json",
+      "run/casefile-jobs/<ULID1>/job.json",
+      "run/casefile-queue/",
+      "run/casefile-tick",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": [
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [],
+            "folder_id": null,
+            "job_id": "<ULID1>",
+            "lines_proposed": null,
+            "matters_current": null,
+            "matters_held": null,
+            "matters_read": null,
+            "matters_total": null,
+            "mode": "full",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "row": {
+              "attempt": 1,
+              "cents": 0,
+              "close_reason": null,
+              "close_ref": null,
+              "created_at": "<TS>",
+              "delivery_json": null,
+              "envelope_digest": "af429cba2d427d12e9f9f80dccb301e4172b5b2df30c787d2481324598bbccc9",
+              "file_to_matter_id": "99999999-9999-4999-8999-999999999999",
+              "folder_id": null,
+              "id": "<ULID1>",
+              "lines_proposed": null,
+              "matters_current": null,
+              "matters_held": null,
+              "matters_read": null,
+              "matters_total": null,
+              "metrics_json": null,
+              "mode": "full",
+              "outcomes_json": null,
+              "reason": null,
+              "reply_key": null,
+              "reply_sent_at": null,
+              "request_ref": "<req-1@firm.example>",
+              "requester": "admin@firm.example",
+              "scope_json": "{\"assisting\": {\"names\": [\"Pat Example\"]}}",
+              "scope_key": "casefile:cbe7ede045e0fae693b55e1813839ba3",
+              "source_job_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "<TS>"
+            },
+            "source_job_id": null,
+            "stage": null,
+            "state": "queued",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_status",
+          "job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "jobs": [
+            {
+              "cents": 0,
+              "created_at": "<TS>",
+              "file": null,
+              "files": [],
+              "folder_id": null,
+              "job_id": "<ULID1>",
+              "lines_proposed": null,
+              "matters_current": null,
+              "matters_held": null,
+              "matters_read": null,
+              "matters_total": null,
+              "mode": "full",
+              "reason": null,
+              "reply_sent_at": null,
+              "requester": "admin@firm.example",
+              "source_job_id": null,
+              "stage": null,
+              "state": "queued",
+              "trigger": "request",
+              "updated_at": "<TS>"
+            }
+          ],
+          "month": "2023-11",
+          "month_cents": 0,
+          "monthly_budget_cents": null,
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_status",
+          "exclude_job_id": "<ULID1>"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [],
+            "folder_id": null,
+            "job_id": "<ULID1>",
+            "lines_proposed": null,
+            "matters_current": null,
+            "matters_held": null,
+            "matters_read": null,
+            "matters_total": null,
+            "mode": "full",
+            "reason": null,
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "source_job_id": null,
+            "stage": null,
+            "state": "running",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_record",
+          "fields": {},
+          "job_id": "<ULID1>",
+          "state": "running"
+        }
+      },
+      {
+        "reply": {
+          "job": {
+            "cents": 0,
+            "created_at": "<TS>",
+            "file": null,
+            "files": [],
+            "folder_id": null,
+            "job_id": "<ULID1>",
+            "lines_proposed": null,
+            "matters_current": null,
+            "matters_held": null,
+            "matters_read": null,
+            "matters_total": null,
+            "mode": "full",
+            "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+            "reply_sent_at": null,
+            "requester": "admin@firm.example",
+            "source_job_id": null,
+            "stage": null,
+            "state": "failed",
+            "trigger": "request",
+            "updated_at": "<TS>"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "casefile_job_record",
+          "fields": {
+            "cents": 0,
+            "reason": "stopped_by_smd: by smd@example.test: host matrix stop"
+          },
+          "job_id": "<ULID1>",
+          "state": "failed"
+        }
+      }
+    ]
+  },
+  {
+    "audit": [],
+    "cgroup": {},
+    "children": [],
+    "daemon": {
+      "casefile-jobs/<ULID1>": {
+        "attempts": 1,
+        "claimed": true,
+        "claimed_at": "<CLOCK+0.0>",
+        "deferrals": 0,
+        "finished_at": "<CLOCK+0.0>",
+        "held_paused": false,
+        "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+        "resume_redo": [],
+        "resume_release": false,
+        "resume_release_held": false,
+        "retry_after": null,
+        "state": "stopped_by_smd",
+        "stopped_by": "smd@example.test",
+        "stopped_cents": 0,
+        "stopped_exit": -15,
+        "stopped_recorded": true,
+        "stopped_why": "host matrix stop",
+        "wake": null
+      }
+    },
+    "job_files": {
+      "casefile-jobs/<ULID1>/job.json": "{\n \"file_to_matter_id\": \"99999999-9999-4999-8999-999999999999\",\n \"file_to_matter_number\": \"OPS-LIBRARY\",\n \"folder_name\": \"Case File Manager\",\n \"job_id\": \"<ULID1>\",\n \"kind\": \"casefile\",\n \"message_ref\": \"<req-1@firm.example>\",\n \"mode\": \"full\",\n \"request_text\": \"Please review Pat Example's files.\",\n \"requester\": \"admin@firm.example\",\n \"scope\": {\n  \"assisting\": {\n   \"names\": [\n    \"Pat Example\"\n   ]\n  }\n },\n \"trigger\": \"request\",\n \"slug\": \"example\",\n \"month_cents_used\": 0,\n \"per_job_cap_usd\": 20.0,\n \"monthly_budget_usd\": 100.0\n}"
+    },
+    "log": [],
+    "readers": {
+      "busy_probe": {
+        "busy": false,
+        "facts": {
+          "children": [],
+          "errors": [],
+          "lanes": [
+            {
+              "age_s": 0.0,
+              "daemon_alive": true,
+              "file": "casefile-heartbeat.json",
+              "queued": 0,
+              "quiesced": false,
+              "running": null,
+              "wakes_pending": 0,
+              "written_before_daemon": null
+            }
+          ],
+          "turns": []
+        },
+        "reasons": []
+      },
+      "fleet_facts_lane_counts": {
+        "queued": 0,
+        "running": 0,
+        "wakes_pending": 0
+      }
+    },
+    "result": null,
+    "step": "wake",
+    "tree": [
+      "audit/",
+      "audit/audit.db",
+      "cgroup/",
+      "cgroup/cgroup.controllers",
+      "cgroup/demand/",
+      "cgroup/demand/cgroup.procs",
+      "cgroup/demand/memory.max",
+      "customer.yaml",
+      "inputs/",
+      "pricing.json",
+      "run/",
+      "run/casefile-heartbeat.json",
+      "run/casefile-jobs/",
+      "run/casefile-jobs/<ULID1>/",
+      "run/casefile-jobs/<ULID1>/.smd-stop.json",
+      "run/casefile-jobs/<ULID1>/daemon.json",
+      "run/casefile-jobs/<ULID1>/daemon.log",
+      "run/casefile-jobs/<ULID1>/data/",
+      "run/casefile-jobs/<ULID1>/envelope.json",
+      "run/casefile-jobs/<ULID1>/job.json",
+      "run/casefile-queue/",
+      "run/casefile-tick",
+      "run/demand-queue/",
+      "run/drafting-queue/",
+      "run/lane-proofs.yaml",
+      "run/litigation-queue/",
+      "run/negotiation-queue/",
+      "run/queue/",
+      "run/records-queue/",
+      "run/spend-watch.json"
+    ],
+    "wake_posts": [],
+    "wire": []
+  }
+]

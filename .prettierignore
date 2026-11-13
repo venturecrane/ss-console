@@ -90,3 +90,6 @@ scripts/sprawl/text-pin-baseline.json
 # Written by operator/bin/gen-seat-layout.py; operator/bin/tests/test_seat_layout_generation.py
 # requires it byte-equal to the generator's output.
 operator/templates/seat-layout.generated.json
+# Written by operator/bin/capture-seat-config-callers.py; its golden test
+# (operator/bin/tests/test_seat_config_callers.py) regenerates it from the sites.
+operator/contracts/seat-config-callers.json

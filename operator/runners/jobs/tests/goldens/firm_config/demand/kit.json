@@ -1,0 +1,1288 @@
+{
+  "cli": {
+    "fixture": {
+      "exit": 0,
+      "stderr": "",
+      "stdout": "<TMP>/inputs/demand-firm.yaml: OK (example, 12 inputs pinned, 1 variant(s), 0 attorney format(s), 1 attorney(s) mapped)\n"
+    },
+    "no_argument": {
+      "exit": 2,
+      "stderr": "usage: python -m jobs.demand.firm <demand inputs dir>\n",
+      "stdout": ""
+    },
+    "without_firm": {
+      "exit": 1,
+      "stderr": "<TMP>/inputs/demand-firm.yaml: firm: required section missing or not a map\n",
+      "stdout": ""
+    }
+  },
+  "load": {
+    "__type": "DemandFirm",
+    "attorney": {},
+    "consumer_domains": ["mail.example"],
+    "data": {
+      "attorneys": {
+        "Example Lawyer": {
+          "initials": "EAL/dm",
+          "signer": "Example A. Lawyer",
+          "title": "Attorney at Law"
+        }
+      },
+      "budget": {
+        "monthly_budget_usd": 200.0,
+        "per_job_cap_usd": 20.0,
+        "usd_drafting_fixed": 4.0,
+        "usd_per_million_chars": 6.0,
+        "usd_per_million_condense_chars": 3.3,
+        "usd_per_scanned_page": 0.01
+      },
+      "delivery": {
+        "coverage_report_name_template": "Coverage Posture Report - {matter_number} - {date}.docx",
+        "folder_template": "Demand Prep {date} (Operator {job})",
+        "gap_audit_name_template": "Gap Audit - {matter_number} - {date}.docx",
+        "rehearsal_matters": ["OPS-LIBRARY"]
+      },
+      "firm": {
+        "display_name": "Example & Example, LLP",
+        "slug": "example"
+      },
+      "format": {
+        "firm_signature": "EXAMPLE & EXAMPLE, LLP",
+        "footer_markers": ["Settlement Communication", "1119, 1152"]
+      },
+      "inputs": {
+        "drafting_discipline": {
+          "path": "drafting_discipline.md",
+          "sha256": "d34808299383c46b7ea79d695825f81a6963729b59d900af94f13b6693cc879d"
+        },
+        "house_reference_house": {
+          "path": "house-reference.docx",
+          "sha256": "<sha256 of house-reference.docx>"
+        },
+        "prompt_audit": {
+          "path": "prompt_audit.md",
+          "sha256": "24eb4881784eea920aac0279ddfe21002054c4df54dea27d118d5d1a0402e0e9"
+        },
+        "prompt_compose": {
+          "path": "prompt_compose.md",
+          "sha256": "37fe14325882015a66afbc7f8ca6de7f738d7359010d21e5abf72c56dbfeb160"
+        },
+        "prompt_condense": {
+          "path": "prompt_condense.md",
+          "sha256": "13db9c93601c66949e7c423c00697b8a0b6dd4e3368fdbc7e538848449949e45"
+        },
+        "prompt_digest": {
+          "path": "prompt_digest.md",
+          "sha256": "1301f99d37b09ab54a25850555451130c93b43b6c90b2ca7ebd300be71e5613d"
+        },
+        "prompt_gap_audit": {
+          "path": "prompt_gap_audit.md",
+          "sha256": "495b110cbf268396b429dc25d2658351cf9044af23b42a636514a872488c018b"
+        },
+        "prompt_repair": {
+          "path": "prompt_repair.md",
+          "sha256": "fdebe35af74237484eee4fe1a9674d582822524e9c055b9167b1d99ff5a921ac"
+        },
+        "skeleton_house": {
+          "path": "skeleton_house.md",
+          "sha256": "c96cdd78874d74303fe6226d913b6987ea66667305ef23d8fe537a44e5560e10"
+        },
+        "voice_adjustments": {
+          "path": "voice_adjustments.md",
+          "sha256": "929fd371b2d925d37c04262c9bd154f1493e0bebb779350ed265ddddc6aa9b35"
+        },
+        "voice_fixed_strings": {
+          "path": "voice_fixed_strings.md",
+          "sha256": "4ae8a527d27f23bf9222c11bbd5269740d1d0cc2c951d607d336deae84c3a77b"
+        },
+        "voice_profile": {
+          "path": "voice_profile.md",
+          "sha256": "4c31730f4a070ab0119b3c4e247d7a939bf451a1ceb7736541eb36421a447cea"
+        }
+      },
+      "levers": {
+        "chunk_chars": 120000,
+        "compose_max_tokens": 64000,
+        "concurrency": 2,
+        "digest_budget_chars": 2000000,
+        "digest_max_tokens": 64000,
+        "vendor_lookup_cap": 3
+      },
+      "models": {
+        "audit": "claude-sonnet-5",
+        "compose": "claude-sonnet-5",
+        "digest": "claude-sonnet-5",
+        "gap_audit": "claude-sonnet-5",
+        "repair": "claude-sonnet-5",
+        "transcription": "claude-sonnet-5"
+      },
+      "premise": {
+        "carrier_phrases": ["claim number", "policy number"],
+        "denial_phrases": ["coverage is denied", "deny coverage"],
+        "fail_on": ["acceptance", "release"],
+        "litigation_phrases": ["complaint for damages", "superior court of california"],
+        "scan": {
+          "acceptance": ["(?i)accept"],
+          "funding": ["(?i)funding"],
+          "lawsuit": ["(?i)complaint for damages|lawsuit"],
+          "prior_demand": ["(?i)demand"],
+          "release": ["(?i)release"]
+        },
+        "settled_phrases": ["accept the policy limits", "timely acceptance"]
+      },
+      "privilege": {
+        "consumer_domains": ["mail.example"],
+        "firm_domains": ["firm.example"]
+      },
+      "selection": {
+        "doc_extensions": [".pdf", ".docx", ".msg", ".jpg", ".png"],
+        "exclude_folder_patterns": ["(?i)chronology", "(?i)\\(operator\\)"],
+        "exclude_name_patterns": [
+          "(?i)^chronology",
+          "(?i)\\bmemo\\b",
+          "(?i)\\bintake\\b",
+          "(?i)\\bnotes?\\b"
+        ]
+      },
+      "variants": {
+        "pre_suit": {
+          "banner": true,
+          "forbidden": [],
+          "headings": ["Summary of Injuries", "Liability", "Damages", "Demand"],
+          "house_reference": "house_reference_house",
+          "mail_line": "CERTIFIED MAIL",
+          "re_one_of": ["Your Insured:", "Our Client:"],
+          "re_required": ["Claim Number:", "Date of Loss:"],
+          "re_vs": false,
+          "skeleton": "skeleton_house"
+        }
+      }
+    },
+    "figure": null,
+    "firm_domains": ["firm.example"],
+    "root": {
+      "__path": "<TMP>/inputs"
+    },
+    "variant": {
+      "raises": "DemandConfigError: no demand variant selected for this job"
+    },
+    "variant_name": {
+      "raises": "DemandConfigError: no demand variant selected for this job"
+    }
+  },
+  "mutations": {
+    "<root> :: unknown_sibling": {
+      "problems": ["zz_unknown_key: unknown section (closed key set)"]
+    },
+    "attorneys :: blank": {
+      "problems": []
+    },
+    "attorneys :: missing": {
+      "problems": ["attorneys: required section missing or not a map"]
+    },
+    "attorneys :: unknown_sibling": {
+      "problems": [
+        "attorneys.zz_unknown_key: expected {signer, title, initials} and optionally format, bar_number, each a string"
+      ]
+    },
+    "attorneys :: wrong_type": {
+      "problems": ["attorneys: required section missing or not a map"]
+    },
+    "attorneys.Example Lawyer :: blank": {
+      "problems": [
+        "attorneys.Example Lawyer: expected {signer, title, initials} and optionally format, bar_number, each a string"
+      ]
+    },
+    "attorneys.Example Lawyer :: missing": {
+      "problems": []
+    },
+    "attorneys.Example Lawyer :: unknown_sibling": {
+      "problems": [
+        "attorneys.Example Lawyer: expected {signer, title, initials} and optionally format, bar_number, each a string"
+      ]
+    },
+    "attorneys.Example Lawyer :: wrong_type": {
+      "problems": [
+        "attorneys.Example Lawyer: expected {signer, title, initials} and optionally format, bar_number, each a string"
+      ]
+    },
+    "attorneys.Example Lawyer.initials :: blank": {
+      "problems": []
+    },
+    "attorneys.Example Lawyer.initials :: missing": {
+      "problems": [
+        "attorneys.Example Lawyer: expected {signer, title, initials} and optionally format, bar_number, each a string"
+      ]
+    },
+    "attorneys.Example Lawyer.initials :: wrong_type": {
+      "problems": [
+        "attorneys.Example Lawyer.initials: expected a string (empty for no initials line)"
+      ]
+    },
+    "attorneys.Example Lawyer.signer :: blank": {
+      "problems": ["attorneys.Example Lawyer.signer: expected a non-empty string"]
+    },
+    "attorneys.Example Lawyer.signer :: missing": {
+      "problems": [
+        "attorneys.Example Lawyer: expected {signer, title, initials} and optionally format, bar_number, each a string"
+      ]
+    },
+    "attorneys.Example Lawyer.signer :: wrong_type": {
+      "problems": ["attorneys.Example Lawyer.signer: expected a non-empty string"]
+    },
+    "attorneys.Example Lawyer.title :: blank": {
+      "problems": ["attorneys.Example Lawyer.title: expected a non-empty string"]
+    },
+    "attorneys.Example Lawyer.title :: missing": {
+      "problems": [
+        "attorneys.Example Lawyer: expected {signer, title, initials} and optionally format, bar_number, each a string"
+      ]
+    },
+    "attorneys.Example Lawyer.title :: wrong_type": {
+      "problems": ["attorneys.Example Lawyer.title: expected a non-empty string"]
+    },
+    "budget :: blank": {
+      "problems": [
+        "budget.per_job_cap_usd: required",
+        "budget.monthly_budget_usd: required",
+        "budget.usd_per_million_chars: required",
+        "budget.usd_per_scanned_page: required",
+        "budget.usd_drafting_fixed: required",
+        "budget.usd_per_million_condense_chars: required"
+      ]
+    },
+    "budget :: missing": {
+      "problems": ["budget: required section missing or not a map"]
+    },
+    "budget :: unknown_sibling": {
+      "problems": ["budget.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "budget :: wrong_type": {
+      "problems": ["budget: required section missing or not a map"]
+    },
+    "budget.monthly_budget_usd :: blank": {
+      "problems": ["budget.monthly_budget_usd: expected float"]
+    },
+    "budget.monthly_budget_usd :: missing": {
+      "problems": ["budget.monthly_budget_usd: required"]
+    },
+    "budget.monthly_budget_usd :: wrong_type": {
+      "problems": ["budget.monthly_budget_usd: expected float"]
+    },
+    "budget.per_job_cap_usd :: blank": {
+      "problems": ["budget.per_job_cap_usd: expected float"]
+    },
+    "budget.per_job_cap_usd :: missing": {
+      "problems": ["budget.per_job_cap_usd: required"]
+    },
+    "budget.per_job_cap_usd :: wrong_type": {
+      "problems": ["budget.per_job_cap_usd: expected float"]
+    },
+    "budget.usd_drafting_fixed :: blank": {
+      "problems": ["budget.usd_drafting_fixed: expected float"]
+    },
+    "budget.usd_drafting_fixed :: missing": {
+      "problems": ["budget.usd_drafting_fixed: required"]
+    },
+    "budget.usd_drafting_fixed :: wrong_type": {
+      "problems": ["budget.usd_drafting_fixed: expected float"]
+    },
+    "budget.usd_per_million_chars :: blank": {
+      "problems": ["budget.usd_per_million_chars: expected float"]
+    },
+    "budget.usd_per_million_chars :: missing": {
+      "problems": ["budget.usd_per_million_chars: required"]
+    },
+    "budget.usd_per_million_chars :: wrong_type": {
+      "problems": ["budget.usd_per_million_chars: expected float"]
+    },
+    "budget.usd_per_million_condense_chars :: blank": {
+      "problems": ["budget.usd_per_million_condense_chars: expected float"]
+    },
+    "budget.usd_per_million_condense_chars :: missing": {
+      "problems": ["budget.usd_per_million_condense_chars: required"]
+    },
+    "budget.usd_per_million_condense_chars :: wrong_type": {
+      "problems": ["budget.usd_per_million_condense_chars: expected float"]
+    },
+    "budget.usd_per_scanned_page :: blank": {
+      "problems": ["budget.usd_per_scanned_page: expected float"]
+    },
+    "budget.usd_per_scanned_page :: missing": {
+      "problems": ["budget.usd_per_scanned_page: required"]
+    },
+    "budget.usd_per_scanned_page :: wrong_type": {
+      "problems": ["budget.usd_per_scanned_page: expected float"]
+    },
+    "delivery :: blank": {
+      "problems": [
+        "delivery.folder_template: required",
+        "delivery.gap_audit_name_template: required",
+        "delivery.coverage_report_name_template: required",
+        "delivery.rehearsal_matters: required"
+      ]
+    },
+    "delivery :: missing": {
+      "problems": ["delivery: required section missing or not a map"]
+    },
+    "delivery :: unknown_sibling": {
+      "problems": ["delivery.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "delivery :: wrong_type": {
+      "problems": ["delivery: required section missing or not a map"]
+    },
+    "delivery.coverage_report_name_template :: blank": {
+      "problems": ["delivery.coverage_report_name_template: expected str"]
+    },
+    "delivery.coverage_report_name_template :: missing": {
+      "problems": ["delivery.coverage_report_name_template: required"]
+    },
+    "delivery.coverage_report_name_template :: wrong_type": {
+      "problems": ["delivery.coverage_report_name_template: expected str"]
+    },
+    "delivery.folder_template :: blank": {
+      "problems": ["delivery.folder_template: expected str"]
+    },
+    "delivery.folder_template :: missing": {
+      "problems": ["delivery.folder_template: required"]
+    },
+    "delivery.folder_template :: wrong_type": {
+      "problems": ["delivery.folder_template: expected str"]
+    },
+    "delivery.gap_audit_name_template :: blank": {
+      "problems": ["delivery.gap_audit_name_template: expected str"]
+    },
+    "delivery.gap_audit_name_template :: missing": {
+      "problems": ["delivery.gap_audit_name_template: required"]
+    },
+    "delivery.gap_audit_name_template :: wrong_type": {
+      "problems": ["delivery.gap_audit_name_template: expected str"]
+    },
+    "delivery.rehearsal_matters :: blank": {
+      "problems": []
+    },
+    "delivery.rehearsal_matters :: missing": {
+      "problems": ["delivery.rehearsal_matters: required"]
+    },
+    "delivery.rehearsal_matters :: wrong_type": {
+      "problems": ["delivery.rehearsal_matters: expected list[str]"]
+    },
+    "firm :: blank": {
+      "problems": ["firm.slug: required", "firm.display_name: required"]
+    },
+    "firm :: missing": {
+      "problems": ["firm: required section missing or not a map"]
+    },
+    "firm :: unknown_sibling": {
+      "problems": ["firm.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "firm :: wrong_type": {
+      "problems": ["firm: required section missing or not a map"]
+    },
+    "firm.display_name :: blank": {
+      "problems": ["firm.display_name: expected str"]
+    },
+    "firm.display_name :: missing": {
+      "problems": ["firm.display_name: required"]
+    },
+    "firm.display_name :: wrong_type": {
+      "problems": ["firm.display_name: expected str"]
+    },
+    "firm.slug :: blank": {
+      "problems": ["firm.slug: expected str"]
+    },
+    "firm.slug :: missing": {
+      "problems": ["firm.slug: required"]
+    },
+    "firm.slug :: wrong_type": {
+      "problems": ["firm.slug: expected str"]
+    },
+    "format :: blank": {
+      "problems": ["format.firm_signature: required", "format.footer_markers: required"]
+    },
+    "format :: missing": {
+      "problems": ["format: required section missing or not a map"]
+    },
+    "format :: unknown_sibling": {
+      "problems": ["format.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "format :: wrong_type": {
+      "problems": ["format: required section missing or not a map"]
+    },
+    "format.firm_signature :: blank": {
+      "problems": ["format.firm_signature: expected str"]
+    },
+    "format.firm_signature :: missing": {
+      "problems": ["format.firm_signature: required"]
+    },
+    "format.firm_signature :: wrong_type": {
+      "problems": ["format.firm_signature: expected str"]
+    },
+    "format.footer_markers :: blank": {
+      "problems": []
+    },
+    "format.footer_markers :: missing": {
+      "problems": ["format.footer_markers: required"]
+    },
+    "format.footer_markers :: wrong_type": {
+      "problems": ["format.footer_markers: expected list[str]"]
+    },
+    "inputs :: blank": {
+      "problems": [
+        "variants.pre_suit.skeleton: names no entry in inputs",
+        "variants.pre_suit.house_reference: names no entry in inputs",
+        "inputs.voice_profile: required",
+        "inputs.voice_fixed_strings: required",
+        "inputs.voice_adjustments: required",
+        "inputs.drafting_discipline: required",
+        "inputs.prompt_digest: required",
+        "inputs.prompt_condense: required",
+        "inputs.prompt_gap_audit: required",
+        "inputs.prompt_compose: required",
+        "inputs.prompt_audit: required",
+        "inputs.prompt_repair: required"
+      ]
+    },
+    "inputs :: missing": {
+      "problems": ["inputs: required section missing or not a map"]
+    },
+    "inputs :: unknown_sibling": {
+      "problems": ["inputs.zz_unknown_key: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs :: wrong_type": {
+      "problems": ["inputs: required section missing or not a map"]
+    },
+    "inputs.drafting_discipline :: blank": {
+      "problems": ["inputs.drafting_discipline: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.drafting_discipline :: missing": {
+      "problems": ["inputs.drafting_discipline: required"]
+    },
+    "inputs.drafting_discipline :: unknown_sibling": {
+      "problems": ["inputs.drafting_discipline: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.drafting_discipline :: wrong_type": {
+      "problems": ["inputs.drafting_discipline: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.drafting_discipline.path :: blank": {
+      "problems": []
+    },
+    "inputs.drafting_discipline.path :: missing": {
+      "problems": ["inputs.drafting_discipline: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.drafting_discipline.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.drafting_discipline.sha256 :: blank": {
+      "problems": ["inputs.drafting_discipline: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.drafting_discipline.sha256 :: missing": {
+      "problems": ["inputs.drafting_discipline: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.drafting_discipline.sha256 :: wrong_type": {
+      "problems": ["inputs.drafting_discipline: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.house_reference_house :: blank": {
+      "problems": ["inputs.house_reference_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.house_reference_house :: missing": {
+      "problems": ["variants.pre_suit.house_reference: names no entry in inputs"]
+    },
+    "inputs.house_reference_house :: unknown_sibling": {
+      "problems": ["inputs.house_reference_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.house_reference_house :: wrong_type": {
+      "problems": ["inputs.house_reference_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.house_reference_house.path :: blank": {
+      "problems": []
+    },
+    "inputs.house_reference_house.path :: missing": {
+      "problems": ["inputs.house_reference_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.house_reference_house.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.house_reference_house.sha256 :: blank": {
+      "problems": ["inputs.house_reference_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.house_reference_house.sha256 :: missing": {
+      "problems": ["inputs.house_reference_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.house_reference_house.sha256 :: wrong_type": {
+      "problems": ["inputs.house_reference_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_audit :: blank": {
+      "problems": ["inputs.prompt_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_audit :: missing": {
+      "problems": ["inputs.prompt_audit: required"]
+    },
+    "inputs.prompt_audit :: unknown_sibling": {
+      "problems": ["inputs.prompt_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_audit :: wrong_type": {
+      "problems": ["inputs.prompt_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_audit.path :: blank": {
+      "problems": []
+    },
+    "inputs.prompt_audit.path :: missing": {
+      "problems": ["inputs.prompt_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_audit.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.prompt_audit.sha256 :: blank": {
+      "problems": ["inputs.prompt_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_audit.sha256 :: missing": {
+      "problems": ["inputs.prompt_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_audit.sha256 :: wrong_type": {
+      "problems": ["inputs.prompt_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_compose :: blank": {
+      "problems": ["inputs.prompt_compose: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_compose :: missing": {
+      "problems": ["inputs.prompt_compose: required"]
+    },
+    "inputs.prompt_compose :: unknown_sibling": {
+      "problems": ["inputs.prompt_compose: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_compose :: wrong_type": {
+      "problems": ["inputs.prompt_compose: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_compose.path :: blank": {
+      "problems": []
+    },
+    "inputs.prompt_compose.path :: missing": {
+      "problems": ["inputs.prompt_compose: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_compose.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.prompt_compose.sha256 :: blank": {
+      "problems": ["inputs.prompt_compose: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_compose.sha256 :: missing": {
+      "problems": ["inputs.prompt_compose: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_compose.sha256 :: wrong_type": {
+      "problems": ["inputs.prompt_compose: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_condense :: blank": {
+      "problems": ["inputs.prompt_condense: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_condense :: missing": {
+      "problems": ["inputs.prompt_condense: required"]
+    },
+    "inputs.prompt_condense :: unknown_sibling": {
+      "problems": ["inputs.prompt_condense: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_condense :: wrong_type": {
+      "problems": ["inputs.prompt_condense: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_condense.path :: blank": {
+      "problems": []
+    },
+    "inputs.prompt_condense.path :: missing": {
+      "problems": ["inputs.prompt_condense: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_condense.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.prompt_condense.sha256 :: blank": {
+      "problems": ["inputs.prompt_condense: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_condense.sha256 :: missing": {
+      "problems": ["inputs.prompt_condense: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_condense.sha256 :: wrong_type": {
+      "problems": ["inputs.prompt_condense: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_digest :: blank": {
+      "problems": ["inputs.prompt_digest: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_digest :: missing": {
+      "problems": ["inputs.prompt_digest: required"]
+    },
+    "inputs.prompt_digest :: unknown_sibling": {
+      "problems": ["inputs.prompt_digest: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_digest :: wrong_type": {
+      "problems": ["inputs.prompt_digest: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_digest.path :: blank": {
+      "problems": []
+    },
+    "inputs.prompt_digest.path :: missing": {
+      "problems": ["inputs.prompt_digest: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_digest.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.prompt_digest.sha256 :: blank": {
+      "problems": ["inputs.prompt_digest: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_digest.sha256 :: missing": {
+      "problems": ["inputs.prompt_digest: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_digest.sha256 :: wrong_type": {
+      "problems": ["inputs.prompt_digest: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_gap_audit :: blank": {
+      "problems": ["inputs.prompt_gap_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_gap_audit :: missing": {
+      "problems": ["inputs.prompt_gap_audit: required"]
+    },
+    "inputs.prompt_gap_audit :: unknown_sibling": {
+      "problems": ["inputs.prompt_gap_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_gap_audit :: wrong_type": {
+      "problems": ["inputs.prompt_gap_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_gap_audit.path :: blank": {
+      "problems": []
+    },
+    "inputs.prompt_gap_audit.path :: missing": {
+      "problems": ["inputs.prompt_gap_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_gap_audit.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.prompt_gap_audit.sha256 :: blank": {
+      "problems": ["inputs.prompt_gap_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_gap_audit.sha256 :: missing": {
+      "problems": ["inputs.prompt_gap_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_gap_audit.sha256 :: wrong_type": {
+      "problems": ["inputs.prompt_gap_audit: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_repair :: blank": {
+      "problems": ["inputs.prompt_repair: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_repair :: missing": {
+      "problems": ["inputs.prompt_repair: required"]
+    },
+    "inputs.prompt_repair :: unknown_sibling": {
+      "problems": ["inputs.prompt_repair: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_repair :: wrong_type": {
+      "problems": ["inputs.prompt_repair: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_repair.path :: blank": {
+      "problems": []
+    },
+    "inputs.prompt_repair.path :: missing": {
+      "problems": ["inputs.prompt_repair: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_repair.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.prompt_repair.sha256 :: blank": {
+      "problems": ["inputs.prompt_repair: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_repair.sha256 :: missing": {
+      "problems": ["inputs.prompt_repair: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.prompt_repair.sha256 :: wrong_type": {
+      "problems": ["inputs.prompt_repair: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.skeleton_house :: blank": {
+      "problems": ["inputs.skeleton_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.skeleton_house :: missing": {
+      "problems": ["variants.pre_suit.skeleton: names no entry in inputs"]
+    },
+    "inputs.skeleton_house :: unknown_sibling": {
+      "problems": ["inputs.skeleton_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.skeleton_house :: wrong_type": {
+      "problems": ["inputs.skeleton_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.skeleton_house.path :: blank": {
+      "problems": []
+    },
+    "inputs.skeleton_house.path :: missing": {
+      "problems": ["inputs.skeleton_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.skeleton_house.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.skeleton_house.sha256 :: blank": {
+      "problems": ["inputs.skeleton_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.skeleton_house.sha256 :: missing": {
+      "problems": ["inputs.skeleton_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.skeleton_house.sha256 :: wrong_type": {
+      "problems": ["inputs.skeleton_house: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_adjustments :: blank": {
+      "problems": ["inputs.voice_adjustments: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_adjustments :: missing": {
+      "problems": ["inputs.voice_adjustments: required"]
+    },
+    "inputs.voice_adjustments :: unknown_sibling": {
+      "problems": ["inputs.voice_adjustments: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_adjustments :: wrong_type": {
+      "problems": ["inputs.voice_adjustments: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_adjustments.path :: blank": {
+      "problems": []
+    },
+    "inputs.voice_adjustments.path :: missing": {
+      "problems": ["inputs.voice_adjustments: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_adjustments.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.voice_adjustments.sha256 :: blank": {
+      "problems": ["inputs.voice_adjustments: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_adjustments.sha256 :: missing": {
+      "problems": ["inputs.voice_adjustments: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_adjustments.sha256 :: wrong_type": {
+      "problems": ["inputs.voice_adjustments: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_fixed_strings :: blank": {
+      "problems": ["inputs.voice_fixed_strings: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_fixed_strings :: missing": {
+      "problems": ["inputs.voice_fixed_strings: required"]
+    },
+    "inputs.voice_fixed_strings :: unknown_sibling": {
+      "problems": ["inputs.voice_fixed_strings: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_fixed_strings :: wrong_type": {
+      "problems": ["inputs.voice_fixed_strings: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_fixed_strings.path :: blank": {
+      "problems": []
+    },
+    "inputs.voice_fixed_strings.path :: missing": {
+      "problems": ["inputs.voice_fixed_strings: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_fixed_strings.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.voice_fixed_strings.sha256 :: blank": {
+      "problems": ["inputs.voice_fixed_strings: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_fixed_strings.sha256 :: missing": {
+      "problems": ["inputs.voice_fixed_strings: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_fixed_strings.sha256 :: wrong_type": {
+      "problems": ["inputs.voice_fixed_strings: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_profile :: blank": {
+      "problems": ["inputs.voice_profile: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_profile :: missing": {
+      "problems": ["inputs.voice_profile: required"]
+    },
+    "inputs.voice_profile :: unknown_sibling": {
+      "problems": ["inputs.voice_profile: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_profile :: wrong_type": {
+      "problems": ["inputs.voice_profile: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_profile.path :: blank": {
+      "problems": []
+    },
+    "inputs.voice_profile.path :: missing": {
+      "problems": ["inputs.voice_profile: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_profile.path :: wrong_type": {
+      "problems": []
+    },
+    "inputs.voice_profile.sha256 :: blank": {
+      "problems": ["inputs.voice_profile: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_profile.sha256 :: missing": {
+      "problems": ["inputs.voice_profile: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "inputs.voice_profile.sha256 :: wrong_type": {
+      "problems": ["inputs.voice_profile: expected {path, sha256} with a 64-hex sha256"]
+    },
+    "levers :: blank": {
+      "problems": [
+        "levers.chunk_chars: required",
+        "levers.concurrency: required",
+        "levers.digest_max_tokens: required",
+        "levers.compose_max_tokens: required",
+        "levers.digest_budget_chars: required",
+        "levers.vendor_lookup_cap: required"
+      ]
+    },
+    "levers :: missing": {
+      "problems": ["levers: required section missing or not a map"]
+    },
+    "levers :: unknown_sibling": {
+      "problems": ["levers.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "levers :: wrong_type": {
+      "problems": ["levers: required section missing or not a map"]
+    },
+    "levers.chunk_chars :: blank": {
+      "problems": ["levers.chunk_chars: expected int"]
+    },
+    "levers.chunk_chars :: missing": {
+      "problems": ["levers.chunk_chars: required"]
+    },
+    "levers.chunk_chars :: wrong_type": {
+      "problems": ["levers.chunk_chars: expected int"]
+    },
+    "levers.compose_max_tokens :: blank": {
+      "problems": ["levers.compose_max_tokens: expected int"]
+    },
+    "levers.compose_max_tokens :: missing": {
+      "problems": ["levers.compose_max_tokens: required"]
+    },
+    "levers.compose_max_tokens :: wrong_type": {
+      "problems": ["levers.compose_max_tokens: expected int"]
+    },
+    "levers.concurrency :: blank": {
+      "problems": ["levers.concurrency: expected int"]
+    },
+    "levers.concurrency :: missing": {
+      "problems": ["levers.concurrency: required"]
+    },
+    "levers.concurrency :: wrong_type": {
+      "problems": ["levers.concurrency: expected int"]
+    },
+    "levers.digest_budget_chars :: blank": {
+      "problems": ["levers.digest_budget_chars: expected int"]
+    },
+    "levers.digest_budget_chars :: missing": {
+      "problems": ["levers.digest_budget_chars: required"]
+    },
+    "levers.digest_budget_chars :: wrong_type": {
+      "problems": ["levers.digest_budget_chars: expected int"]
+    },
+    "levers.digest_max_tokens :: blank": {
+      "problems": ["levers.digest_max_tokens: expected int"]
+    },
+    "levers.digest_max_tokens :: missing": {
+      "problems": ["levers.digest_max_tokens: required"]
+    },
+    "levers.digest_max_tokens :: wrong_type": {
+      "problems": ["levers.digest_max_tokens: expected int"]
+    },
+    "levers.vendor_lookup_cap :: blank": {
+      "problems": ["levers.vendor_lookup_cap: expected int"]
+    },
+    "levers.vendor_lookup_cap :: missing": {
+      "problems": ["levers.vendor_lookup_cap: required"]
+    },
+    "levers.vendor_lookup_cap :: wrong_type": {
+      "problems": ["levers.vendor_lookup_cap: expected int"]
+    },
+    "models :: blank": {
+      "problems": [
+        "models.transcription: required",
+        "models.digest: required",
+        "models.gap_audit: required",
+        "models.compose: required",
+        "models.audit: required",
+        "models.repair: required"
+      ]
+    },
+    "models :: missing": {
+      "problems": ["models: required section missing or not a map"]
+    },
+    "models :: unknown_sibling": {
+      "problems": ["models.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "models :: wrong_type": {
+      "problems": ["models: required section missing or not a map"]
+    },
+    "models.audit :: blank": {
+      "problems": ["models.audit: expected str"]
+    },
+    "models.audit :: missing": {
+      "problems": ["models.audit: required"]
+    },
+    "models.audit :: wrong_type": {
+      "problems": ["models.audit: expected str"]
+    },
+    "models.compose :: blank": {
+      "problems": ["models.compose: expected str"]
+    },
+    "models.compose :: missing": {
+      "problems": ["models.compose: required"]
+    },
+    "models.compose :: wrong_type": {
+      "problems": ["models.compose: expected str"]
+    },
+    "models.digest :: blank": {
+      "problems": ["models.digest: expected str"]
+    },
+    "models.digest :: missing": {
+      "problems": ["models.digest: required"]
+    },
+    "models.digest :: wrong_type": {
+      "problems": ["models.digest: expected str"]
+    },
+    "models.gap_audit :: blank": {
+      "problems": ["models.gap_audit: expected str"]
+    },
+    "models.gap_audit :: missing": {
+      "problems": ["models.gap_audit: required"]
+    },
+    "models.gap_audit :: wrong_type": {
+      "problems": ["models.gap_audit: expected str"]
+    },
+    "models.repair :: blank": {
+      "problems": ["models.repair: expected str"]
+    },
+    "models.repair :: missing": {
+      "problems": ["models.repair: required"]
+    },
+    "models.repair :: wrong_type": {
+      "problems": ["models.repair: expected str"]
+    },
+    "models.transcription :: blank": {
+      "problems": ["models.transcription: expected str"]
+    },
+    "models.transcription :: missing": {
+      "problems": ["models.transcription: required"]
+    },
+    "models.transcription :: wrong_type": {
+      "problems": ["models.transcription: expected str"]
+    },
+    "premise :: blank": {
+      "problems": [
+        "premise.scan: required",
+        "premise.fail_on: required",
+        "premise.denial_phrases: required",
+        "premise.settled_phrases: required",
+        "premise.litigation_phrases: required",
+        "premise.carrier_phrases: required"
+      ]
+    },
+    "premise :: missing": {
+      "problems": ["premise: required section missing or not a map"]
+    },
+    "premise :: unknown_sibling": {
+      "problems": ["premise.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "premise :: wrong_type": {
+      "problems": ["premise: required section missing or not a map"]
+    },
+    "premise.carrier_phrases :: blank": {
+      "problems": []
+    },
+    "premise.carrier_phrases :: missing": {
+      "problems": ["premise.carrier_phrases: required"]
+    },
+    "premise.carrier_phrases :: wrong_type": {
+      "problems": ["premise.carrier_phrases: expected list[str]"]
+    },
+    "premise.denial_phrases :: blank": {
+      "problems": []
+    },
+    "premise.denial_phrases :: missing": {
+      "problems": ["premise.denial_phrases: required"]
+    },
+    "premise.denial_phrases :: wrong_type": {
+      "problems": ["premise.denial_phrases: expected list[str]"]
+    },
+    "premise.fail_on :: blank": {
+      "problems": []
+    },
+    "premise.fail_on :: missing": {
+      "problems": ["premise.fail_on: required"]
+    },
+    "premise.fail_on :: wrong_type": {
+      "problems": ["premise.fail_on: expected list[str]"]
+    },
+    "premise.litigation_phrases :: blank": {
+      "problems": []
+    },
+    "premise.litigation_phrases :: missing": {
+      "problems": ["premise.litigation_phrases: required"]
+    },
+    "premise.litigation_phrases :: wrong_type": {
+      "problems": ["premise.litigation_phrases: expected list[str]"]
+    },
+    "premise.scan :: blank": {
+      "problems": [
+        "premise.fail_on: 'acceptance' is not a premise.scan class",
+        "premise.fail_on: 'release' is not a premise.scan class"
+      ]
+    },
+    "premise.scan :: missing": {
+      "problems": ["premise.scan: required"]
+    },
+    "premise.scan :: unknown_sibling": {
+      "problems": ["premise.scan.zz_unknown_key: expected a non-empty list of regex"]
+    },
+    "premise.scan :: wrong_type": {
+      "problems": ["premise.scan: expected map"]
+    },
+    "premise.scan.acceptance :: blank": {
+      "problems": ["premise.scan.acceptance: expected a non-empty list of regex"]
+    },
+    "premise.scan.acceptance :: missing": {
+      "problems": ["premise.fail_on: 'acceptance' is not a premise.scan class"]
+    },
+    "premise.scan.acceptance :: wrong_type": {
+      "problems": ["premise.scan.acceptance: expected a non-empty list of regex"]
+    },
+    "premise.scan.funding :: blank": {
+      "problems": ["premise.scan.funding: expected a non-empty list of regex"]
+    },
+    "premise.scan.funding :: missing": {
+      "problems": []
+    },
+    "premise.scan.funding :: wrong_type": {
+      "problems": ["premise.scan.funding: expected a non-empty list of regex"]
+    },
+    "premise.scan.lawsuit :: blank": {
+      "problems": ["premise.scan.lawsuit: expected a non-empty list of regex"]
+    },
+    "premise.scan.lawsuit :: missing": {
+      "problems": []
+    },
+    "premise.scan.lawsuit :: wrong_type": {
+      "problems": ["premise.scan.lawsuit: expected a non-empty list of regex"]
+    },
+    "premise.scan.prior_demand :: blank": {
+      "problems": ["premise.scan.prior_demand: expected a non-empty list of regex"]
+    },
+    "premise.scan.prior_demand :: missing": {
+      "problems": []
+    },
+    "premise.scan.prior_demand :: wrong_type": {
+      "problems": ["premise.scan.prior_demand: expected a non-empty list of regex"]
+    },
+    "premise.scan.release :: blank": {
+      "problems": ["premise.scan.release: expected a non-empty list of regex"]
+    },
+    "premise.scan.release :: missing": {
+      "problems": ["premise.fail_on: 'release' is not a premise.scan class"]
+    },
+    "premise.scan.release :: wrong_type": {
+      "problems": ["premise.scan.release: expected a non-empty list of regex"]
+    },
+    "premise.settled_phrases :: blank": {
+      "problems": []
+    },
+    "premise.settled_phrases :: missing": {
+      "problems": ["premise.settled_phrases: required"]
+    },
+    "premise.settled_phrases :: wrong_type": {
+      "problems": ["premise.settled_phrases: expected list[str]"]
+    },
+    "privilege :: blank": {
+      "problems": ["privilege.firm_domains: required", "privilege.consumer_domains: required"]
+    },
+    "privilege :: missing": {
+      "problems": ["privilege: required section missing or not a map"]
+    },
+    "privilege :: unknown_sibling": {
+      "problems": ["privilege.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "privilege :: wrong_type": {
+      "problems": ["privilege: required section missing or not a map"]
+    },
+    "privilege.consumer_domains :: blank": {
+      "problems": []
+    },
+    "privilege.consumer_domains :: missing": {
+      "problems": ["privilege.consumer_domains: required"]
+    },
+    "privilege.consumer_domains :: wrong_type": {
+      "problems": ["privilege.consumer_domains: expected list[str]"]
+    },
+    "privilege.firm_domains :: blank": {
+      "problems": []
+    },
+    "privilege.firm_domains :: missing": {
+      "problems": ["privilege.firm_domains: required"]
+    },
+    "privilege.firm_domains :: wrong_type": {
+      "problems": ["privilege.firm_domains: expected list[str]"]
+    },
+    "selection :: blank": {
+      "problems": [
+        "selection.doc_extensions: required",
+        "selection.exclude_folder_patterns: required"
+      ]
+    },
+    "selection :: missing": {
+      "problems": ["selection: required section missing or not a map"]
+    },
+    "selection :: unknown_sibling": {
+      "problems": ["selection.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "selection :: wrong_type": {
+      "problems": ["selection: required section missing or not a map"]
+    },
+    "selection.doc_extensions :: blank": {
+      "problems": []
+    },
+    "selection.doc_extensions :: missing": {
+      "problems": ["selection.doc_extensions: required"]
+    },
+    "selection.doc_extensions :: wrong_type": {
+      "problems": ["selection.doc_extensions: expected list[str]"]
+    },
+    "selection.exclude_folder_patterns :: blank": {
+      "problems": []
+    },
+    "selection.exclude_folder_patterns :: missing": {
+      "problems": ["selection.exclude_folder_patterns: required"]
+    },
+    "selection.exclude_folder_patterns :: wrong_type": {
+      "problems": ["selection.exclude_folder_patterns: expected list[str]"]
+    },
+    "selection.exclude_name_patterns :: blank": {
+      "problems": []
+    },
+    "selection.exclude_name_patterns :: missing": {
+      "problems": []
+    },
+    "selection.exclude_name_patterns :: wrong_type": {
+      "problems": ["selection.exclude_name_patterns: expected list[str]"]
+    },
+    "variants :: blank": {
+      "problems": ["variants.pre_suit: required"]
+    },
+    "variants :: missing": {
+      "problems": ["variants: required section missing or not a map"]
+    },
+    "variants :: unknown_sibling": {
+      "problems": ["variants.zz_unknown_key: unknown variant (expected ['pre_suit', 'litigation'])"]
+    },
+    "variants :: wrong_type": {
+      "problems": ["variants: required section missing or not a map"]
+    },
+    "variants.pre_suit :: blank": {
+      "problems": [
+        "variants.pre_suit.skeleton: required",
+        "variants.pre_suit.house_reference: required",
+        "variants.pre_suit.headings: required",
+        "variants.pre_suit.re_required: required",
+        "variants.pre_suit.re_one_of: required",
+        "variants.pre_suit.mail_line: required",
+        "variants.pre_suit.banner: required",
+        "variants.pre_suit.forbidden: required",
+        "variants.pre_suit.re_vs: required"
+      ]
+    },
+    "variants.pre_suit :: missing": {
+      "problems": ["variants.pre_suit: required"]
+    },
+    "variants.pre_suit :: unknown_sibling": {
+      "problems": ["variants.pre_suit.zz_unknown_key: unknown key (closed key set)"]
+    },
+    "variants.pre_suit :: wrong_type": {
+      "problems": ["variants.pre_suit: expected a map"]
+    },
+    "variants.pre_suit.banner :: blank": {
+      "problems": ["variants.pre_suit.banner: expected bool"]
+    },
+    "variants.pre_suit.banner :: missing": {
+      "problems": ["variants.pre_suit.banner: required"]
+    },
+    "variants.pre_suit.banner :: wrong_type": {
+      "problems": ["variants.pre_suit.banner: expected bool"]
+    },
+    "variants.pre_suit.forbidden :: blank": {
+      "problems": []
+    },
+    "variants.pre_suit.forbidden :: missing": {
+      "problems": ["variants.pre_suit.forbidden: required"]
+    },
+    "variants.pre_suit.forbidden :: wrong_type": {
+      "problems": ["variants.pre_suit.forbidden: expected list[str]"]
+    },
+    "variants.pre_suit.headings :: blank": {
+      "problems": []
+    },
+    "variants.pre_suit.headings :: missing": {
+      "problems": ["variants.pre_suit.headings: required"]
+    },
+    "variants.pre_suit.headings :: wrong_type": {
+      "problems": ["variants.pre_suit.headings: expected list[str]"]
+    },
+    "variants.pre_suit.house_reference :: blank": {
+      "problems": [
+        "variants.pre_suit.house_reference: expected str",
+        "variants.pre_suit.house_reference: names no entry in inputs"
+      ]
+    },
+    "variants.pre_suit.house_reference :: missing": {
+      "problems": ["variants.pre_suit.house_reference: required"]
+    },
+    "variants.pre_suit.house_reference :: wrong_type": {
+      "problems": [
+        "variants.pre_suit.house_reference: expected str",
+        "variants.pre_suit.house_reference: names no entry in inputs"
+      ]
+    },
+    "variants.pre_suit.mail_line :: blank": {
+      "problems": []
+    },
+    "variants.pre_suit.mail_line :: missing": {
+      "problems": ["variants.pre_suit.mail_line: required"]
+    },
+    "variants.pre_suit.mail_line :: wrong_type": {
+      "problems": ["variants.pre_suit.mail_line: expected str?"]
+    },
+    "variants.pre_suit.re_one_of :: blank": {
+      "problems": []
+    },
+    "variants.pre_suit.re_one_of :: missing": {
+      "problems": ["variants.pre_suit.re_one_of: required"]
+    },
+    "variants.pre_suit.re_one_of :: wrong_type": {
+      "problems": ["variants.pre_suit.re_one_of: expected list[str]"]
+    },
+    "variants.pre_suit.re_required :: blank": {
+      "problems": []
+    },
+    "variants.pre_suit.re_required :: missing": {
+      "problems": ["variants.pre_suit.re_required: required"]
+    },
+    "variants.pre_suit.re_required :: wrong_type": {
+      "problems": ["variants.pre_suit.re_required: expected list[str]"]
+    },
+    "variants.pre_suit.re_vs :: blank": {
+      "problems": ["variants.pre_suit.re_vs: expected bool"]
+    },
+    "variants.pre_suit.re_vs :: missing": {
+      "problems": ["variants.pre_suit.re_vs: required"]
+    },
+    "variants.pre_suit.re_vs :: wrong_type": {
+      "problems": ["variants.pre_suit.re_vs: expected bool"]
+    },
+    "variants.pre_suit.skeleton :: blank": {
+      "problems": [
+        "variants.pre_suit.skeleton: expected str",
+        "variants.pre_suit.skeleton: names no entry in inputs"
+      ]
+    },
+    "variants.pre_suit.skeleton :: missing": {
+      "problems": ["variants.pre_suit.skeleton: required"]
+    },
+    "variants.pre_suit.skeleton :: wrong_type": {
+      "problems": [
+        "variants.pre_suit.skeleton: expected str",
+        "variants.pre_suit.skeleton: names no entry in inputs"
+      ]
+    }
+  },
+  "validate": {
+    "problems": []
+  }
+}

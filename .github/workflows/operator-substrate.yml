@@ -168,6 +168,23 @@ jobs:
           pyright --outputjson > /tmp/pyright.json || true
           python3 bin/pyright-ratchet.py /tmp/pyright.json
 
+      # httpx, lxml, pydantic and mcp, pinned to the seat's versions in
+      # requirements/jobs.txt and requirements/connector-smokeball.txt: the
+      # seat-config caller capture (bin/tests/test_seat_config_callers.py)
+      # imports every customer.yaml reader to run it, and seven of them (the
+      # Smokeball connector's records/vendor-invoice/resolution-mode readers,
+      # the jobs runner's records lane, and templates/lane-memory-caps-probe.py
+      # by a function-level import) need these. Without them six were recorded
+      # "not-executable" and the seventh raised ModuleNotFoundError instead of
+      # running; the pin keeps their recorded behaviour from moving with a
+      # library release. Installed AFTER the pyright step: the pyright baseline
+      # was taken without them, and an installed lxml turns 14 unresolved
+      # imports into "etree is unknown import symbol" errors, a change in the
+      # environment, not in the code.
+      - name: Install the caller capture's packages
+        if: steps.changes.outputs.relevant == 'true'
+        run: python3 -m pip install --quiet httpx==0.28.1 lxml==6.1.3 pydantic==2.13.5 mcp==2.2.0
+
       # shellcheck never ran anywhere before 2026-09-10; five `shellcheck
       # disable` directives sat in workflow run: blocks, which no linter reads.
       # The generated env-array file is excluded (no shebang by design).
@@ -346,12 +363,78 @@ jobs:
           # and a four-worker probe passed 3544/3544, the serial count, in 356 s vs 735 s.
           /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml runners/jobs/tests -q -rs --numprocesses=4 --dist=loadfile
 
+      # Every broker verb the runner's source names is frozen in the wire
+      # snapshot (runners/jobs/tests/goldens/wire.json, test_wire_snapshot.py).
+      - name: Runner-to-broker wire census
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        run: |
+          set -euo pipefail
+          /tmp/jobsv/bin/python bin/goldens/wire-census.py
+
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'
         run: >-
           echo "No file under .github/operator-substrate-paths.txt changed;
           the jobs runner suite did not need to run. This job still reports so
           the required check is satisfied."
+
+  # The goldens hold the OLD code's behaviour (wave 2, Phase A). EVERY golden
+  # set (the host matrix, the wire, the ledgers, the lane endings, the paid
+  # calls, the firm loaders, the text rules, the seat-config caller table) is
+  # regenerated from the merge-base tree, with THIS PR's harness laid over it,
+  # and compared with the goldens the PR commits; the PR's goldens and harness
+  # declarations are also held to the base's committed copies, so nothing
+  # pinned is dropped unseen. Any difference outside each set's allowed list
+  # fails, as does a stale, inherited or wildcard entry, so a PR cannot change
+  # the code and rewrite its golden to match.
+  # operator/bin/goldens/golden-integrity.py says how. Same gating shape as
+  # `runner`.
+  goldens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect substrate-relevant changes
+        id: changes
+        run: >-
+          python3 operator/bin/substrate-paths-changed.py
+          --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
+          --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
+
+      - name: Set up uv
+        if: steps.changes.outputs.relevant == 'true'
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
+      - name: Regenerate the goldens from the merge-base tree and compare
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.event.merge_group.base_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        # Every golden set (bin/goldens/integrity_families.py), the caller
+        # capture included: the script builds the base runner's venv (3.13)
+        # and the capture's (3.14, the substrate job's packages). On the push
+        # to main, --require-empty fails while any allowed list still names a
+        # path, so a merged change's entries are cleared in a follow-up.
+        run: |
+          set -euo pipefail
+          base="$(git merge-base "${BASE_SHA:-HEAD~1}" HEAD)"
+          echo "merge base: $base"
+          extra=()
+          if [ "$EVENT_NAME" = "push" ]; then extra=(--require-empty); fi
+          python3 bin/goldens/golden-integrity.py --base "$base" ${extra[@]+"${extra[@]}"}
+
+      - name: No substrate paths changed
+        if: steps.changes.outputs.relevant != 'true'
+        run: >-
+          echo "No file under .github/operator-substrate-paths.txt changed;
+          the goldens did not need regenerating. This job still reports so
+          the check is satisfied."
 
   # The seat runtime's own suite (operator/hermes-smd-overlay, ADR 0095). Until
   # 2026-10-22 this ran as the standalone overlay repo's CI (Python 3.11, Hermes
