@@ -50,7 +50,7 @@ rings:
     bake_minutes: 0
     max_parallel: 20
   - ring: 2
-    seats: [pilot-smokeball, scott, brokery, captain-mark, smd-guide]
+    seats: [pilot-smokeball, brokery, captain-mark, smd-guide, smd-office]
     max_parallel: 1
 twins:
   ashton-price: ap-staging

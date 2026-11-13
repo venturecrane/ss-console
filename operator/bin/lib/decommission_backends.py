@@ -340,7 +340,36 @@ class AgentMailInboxDeprovisioner:
         return {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
 
     def _address(self, customer_slug: str) -> str:
-        return seat_inbox_address(self.customers_root / customer_slug / "customer.yaml", customer_slug)
+        """The authored inbox, read from the live seat directory or, once step
+        08 has renamed it, from the newest tombstone of that slug. Without the
+        tombstone fallback the post-run read-back fell to the slug convention
+        and checked an inbox the seat never had (scott, 2026-11-13: it read
+        ``scott@agentmail.to`` absent while the authored inbox was
+        ``agentcrane@agentmail.to``), a check that could not fail."""
+        live = self.customers_root / customer_slug / "customer.yaml"
+        if not live.exists():
+            tombs = sorted(self.customers_root.glob(f"{customer_slug}.decommissioned.*/customer.yaml"))
+            if tombs:
+                live = tombs[-1]
+        return seat_inbox_address(live, customer_slug)
+
+    def _inbox_keys(self, address: str) -> list[str]:
+        """Ids of the API keys scoped to this inbox. AgentMail refuses to delete
+        an inbox while any exist (HTTP 409 ``cannot_delete``, scott 2026-11-13),
+        and a retired seat's keys must not outlive it anyway."""
+        listing = self.http("GET", f"{AGENTMAIL_API}/api-keys", self._headers(), None)
+        if listing.status != 200 or not isinstance(listing.body, dict):
+            raise RuntimeError(f"agentmail list api-keys failed: HTTP {listing.status}")
+        out = []
+        for k in listing.body.get("api_keys") or []:
+            if not isinstance(k, dict):
+                continue
+            scoped = k.get("inbox_id") or k.get("inbox_ids") or []
+            scoped = [scoped] if isinstance(scoped, str) else scoped
+            kid = k.get("api_key_id") or k.get("id")
+            if kid and any(isinstance(s, str) and s.lower() == address for s in scoped):
+                out.append(str(kid))
+        return out
 
     def _find_inbox(self, address: str) -> Optional[str]:
         listing = self.http("GET", f"{AGENTMAIL_API}/inboxes", self._headers(), None)
@@ -385,6 +414,9 @@ class AgentMailInboxDeprovisioner:
     async def deprovision(self, customer_slug: str) -> dict:
         address = self._address(customer_slug)
         inbox_id = self._find_inbox(address)
+        keys_revoked = [k for k in self._inbox_keys(address) if self._delete("api-keys", k)]
+        if left_keys := self._inbox_keys(address):
+            raise RuntimeError(f"agentmail api key(s) for {address} still listed after revoke: {left_keys}")
         removed = bool(inbox_id) and self._delete("inboxes", inbox_id)
         hooks = [h for h in self._seat_webhooks(customer_slug) if self._delete("webhooks", h)]
         # Read back both: a vendor that answered 2xx and kept the object is a
@@ -394,9 +426,10 @@ class AgentMailInboxDeprovisioner:
         if left := self._seat_webhooks(customer_slug):
             raise RuntimeError(f"agentmail webhook(s) for {seat_webhook_host(customer_slug)} still listed: {left}")
         manifest: dict = {
-            "skipped": not removed and not hooks,
+            "skipped": not removed and not hooks and not keys_revoked,
             "identities_removed": int(removed),
             "webhooks_removed": hooks,
+            "api_keys_revoked": len(keys_revoked),
         }
         if removed:
             manifest["inbox_id"] = inbox_id

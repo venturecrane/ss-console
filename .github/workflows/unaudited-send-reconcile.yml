@@ -228,7 +228,6 @@ jobs:
           # 2026-10-14..16 with HTTP 403 on its own inbox lists.
           AGENTMAIL_API_KEY__PILOT_SMOKEBALL: ${{ secrets.AGENTMAIL_API_KEY__PILOT_SMOKEBALL }}
           AGENTMAIL_API_KEY__BROKERY: ${{ secrets.AGENTMAIL_API_KEY__BROKERY }}
-          AGENTMAIL_API_KEY__SCOTT: ${{ secrets.AGENTMAIL_API_KEY__SCOTT }}
         run: |
           set -eu
           # Same `|| STATUS=$?` discipline as the reconcile step (ss#2309):

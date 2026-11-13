@@ -131,6 +131,6 @@ def test_the_real_seats_author_what_their_configs_say() -> None:
     # runs, and the Smokeball connector, bound to SMD's staging tenant.
     assert cap.authored_lanes(seat("ap-staging")) == every_lane
     assert cap.authors_connector(seat("ap-staging"), "smokeball")
-    for slug in ("captain-mark", "scott", "brokery", "ashton-price-marketing"):
+    for slug in ("captain-mark", "smd-office", "brokery", "ashton-price-marketing"):
         assert cap.authored_lanes(seat(slug)) == [], slug
         assert not cap.authors_connector(seat(slug), "smokeball"), slug

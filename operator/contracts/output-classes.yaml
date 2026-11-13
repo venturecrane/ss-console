@@ -604,7 +604,7 @@ skill_bindings:
       - { artifact: routing_decision, seam: session_output, class: record }
     outbound: derived # replies in the sender's thread; a send-as call only proposes
 
-  # ---- real estate: open-house POC (scott seat) ----
+  # ---- real estate: open-house add-on (brokery seat) ----
   open-house-visitor-capture:
     internal:
       - { artifact: visitor_record, seam: local_file, class: record }

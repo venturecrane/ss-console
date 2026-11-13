@@ -2351,372 +2351,6 @@
    }
   }
  },
- "scott": {
-  "hooks": [
-   [
-    "on_session_end",
-    "hermes-smd-hook-probe"
-   ],
-   [
-    "on_session_end",
-    "hermes-smd-peer-memory"
-   ],
-   [
-    "on_session_end",
-    "hermes-smd-reply"
-   ],
-   [
-    "on_session_end",
-    "hermes-smd-space-delivery"
-   ],
-   [
-    "post_api_request",
-    "hermes-smd-usage"
-   ],
-   [
-    "post_llm_call",
-    "hermes-smd-audit"
-   ],
-   [
-    "post_llm_call",
-    "hermes-smd-hook-probe"
-   ],
-   [
-    "post_llm_call",
-    "hermes-smd-mcp-result-sink"
-   ],
-   [
-    "post_llm_call",
-    "hermes-smd-reply"
-   ],
-   [
-    "post_llm_call",
-    "hermes-smd-space-delivery"
-   ],
-   [
-    "post_tool_call",
-    "hermes-smd-audit"
-   ],
-   [
-    "post_tool_call",
-    "hermes-smd-connector-health"
-   ],
-   [
-    "post_tool_call",
-    "hermes-smd-establishment"
-   ],
-   [
-    "post_tool_call",
-    "hermes-smd-hook-probe"
-   ],
-   [
-    "post_tool_call",
-    "hermes-smd-peer-memory"
-   ],
-   [
-    "post_tool_call",
-    "hermes-smd-record-store"
-   ],
-   [
-    "post_tool_call",
-    "hermes-smd-reply"
-   ],
-   [
-    "post_tool_call",
-    "hermes-smd-trust"
-   ],
-   [
-    "pre_gateway_dispatch",
-    "hermes-smd-webhook-router"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-corrections"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-establishment"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-group-audience"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-hook-probe"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-inbound"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-initiation"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-peer-memory"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-reply"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-trust"
-   ],
-   [
-    "pre_llm_call",
-    "hermes-smd-webhook-router"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-corrections"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-establishment"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-hook-probe"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-initiation"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-peer-memory"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-record-store"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-reply"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-space-gate"
-   ],
-   [
-    "pre_tool_call",
-    "hermes-smd-trust"
-   ],
-   [
-    "subagent_stop",
-    "hermes-smd-audit"
-   ],
-   [
-    "transform_tool_result",
-    "hermes-smd-hook-probe"
-   ],
-   [
-    "transform_tool_result",
-    "hermes-smd-inbound"
-   ],
-   [
-    "transform_tool_result",
-    "hermes-smd-reply"
-   ]
-  ],
-  "tools": {
-   "correction_capture": {
-    "plugin": "hermes-smd-corrections",
-    "toolset": "corrections"
-   },
-   "escalation_append": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "escalation_reply_ack": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "escalation_state": {
-    "plugin": "hermes-smd-escalation",
-    "toolset": "escalation"
-   },
-   "establish_pending": {
-    "plugin": "hermes-smd-establishment",
-    "toolset": "establishment"
-   },
-   "establish_propose": {
-    "plugin": "hermes-smd-establishment",
-    "toolset": "establishment"
-   },
-   "establish_stage_document": {
-    "plugin": "hermes-smd-establishment",
-    "toolset": "establishment"
-   },
-   "establish_status": {
-    "plugin": "hermes-smd-establishment",
-    "toolset": "establishment"
-   },
-   "establish_submit": {
-    "plugin": "hermes-smd-establishment",
-    "toolset": "establishment"
-   },
-   "job_cancel": {
-    "plugin": "hermes-smd-jobs",
-    "toolset": "jobs"
-   },
-   "job_record_sideeffect": {
-    "plugin": "hermes-smd-jobs",
-    "toolset": "jobs"
-   },
-   "job_status": {
-    "plugin": "hermes-smd-jobs",
-    "toolset": "jobs"
-   },
-   "mail_list_attachments": {
-    "plugin": "hermes-smd-mail-attachments",
-    "toolset": "mail"
-   },
-   "mail_spool_attachment": {
-    "plugin": "hermes-smd-mail-attachments",
-    "toolset": "mail"
-   },
-   "mail_spool_message": {
-    "plugin": "hermes-smd-mail-attachments",
-    "toolset": "mail"
-   },
-   "operations_request": {
-    "plugin": "hermes-smd-establishment",
-    "toolset": "establishment"
-   },
-   "operator_help_guide_undo": {
-    "plugin": "hermes-smd-initiation",
-    "toolset": "initiation"
-   },
-   "operator_help_guide_update": {
-    "plugin": "hermes-smd-initiation",
-    "toolset": "initiation"
-   },
-   "operator_help_note": {
-    "plugin": "hermes-smd-initiation",
-    "toolset": "initiation"
-   },
-   "operator_help_signals": {
-    "plugin": "hermes-smd-initiation",
-    "toolset": "initiation"
-   },
-   "operator_seat_facts": {
-    "plugin": "hermes-smd-initiation",
-    "toolset": "initiation"
-   },
-   "record_peer_preference": {
-    "plugin": "hermes-smd-peer-memory",
-    "toolset": "relationship"
-   },
-   "record_store_list": {
-    "plugin": "hermes-smd-record-store",
-    "toolset": "record_store"
-   },
-   "record_store_read": {
-    "plugin": "hermes-smd-record-store",
-    "toolset": "record_store"
-   },
-   "record_store_write": {
-    "plugin": "hermes-smd-record-store",
-    "toolset": "record_store"
-   },
-   "reply_bind": {
-    "plugin": "hermes-smd-reply",
-    "toolset": "reply"
-   },
-   "smd_deliver_draft": {
-    "plugin": "hermes-smd-drafting",
-    "toolset": "drafting"
-   },
-   "smd_send_message": {
-    "plugin": "hermes-smd-trust",
-    "toolset": "email"
-   },
-   "start_background_job": {
-    "plugin": "hermes-smd-jobs",
-    "toolset": "jobs"
-   },
-   "voice_note_transcribe": {
-    "plugin": "hermes-smd-voice-notes",
-    "toolset": "voice_notes"
-   },
-   "workspace_calendar_create_draft": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_calendar_get": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_calendar_list": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_calendar_update_draft": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_docs_append": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_docs_create": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_docs_get": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_drive_export": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_drive_get": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_drive_list": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_gmail_archive": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_gmail_create_draft": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_gmail_get": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_gmail_modify": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_gmail_search": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_sheets_create": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_sheets_get_values": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   },
-   "workspace_sheets_update_values": {
-    "plugin": "hermes-smd-workspace",
-    "toolset": "workspace"
-   }
-  }
- },
  "smd-guide": {
   "hooks": [
    [
@@ -3066,6 +2700,356 @@
     "toolset": "workspace"
    },
    "workspace_gmail_search": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_sheets_create": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_sheets_get_values": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_sheets_update_values": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   }
+  }
+ },
+ "smd-office": {
+  "hooks": [
+   [
+    "on_session_end",
+    "hermes-smd-hook-probe"
+   ],
+   [
+    "on_session_end",
+    "hermes-smd-peer-memory"
+   ],
+   [
+    "on_session_end",
+    "hermes-smd-reply"
+   ],
+   [
+    "on_session_end",
+    "hermes-smd-space-delivery"
+   ],
+   [
+    "post_api_request",
+    "hermes-smd-usage"
+   ],
+   [
+    "post_llm_call",
+    "hermes-smd-audit"
+   ],
+   [
+    "post_llm_call",
+    "hermes-smd-hook-probe"
+   ],
+   [
+    "post_llm_call",
+    "hermes-smd-mcp-result-sink"
+   ],
+   [
+    "post_llm_call",
+    "hermes-smd-reply"
+   ],
+   [
+    "post_llm_call",
+    "hermes-smd-space-delivery"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-audit"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-connector-health"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-establishment"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-hook-probe"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-peer-memory"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-reply"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-trust"
+   ],
+   [
+    "pre_gateway_dispatch",
+    "hermes-smd-webhook-router"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-corrections"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-establishment"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-group-audience"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-hook-probe"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-inbound"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-peer-memory"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-reply"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-trust"
+   ],
+   [
+    "pre_llm_call",
+    "hermes-smd-webhook-router"
+   ],
+   [
+    "pre_tool_call",
+    "hermes-smd-corrections"
+   ],
+   [
+    "pre_tool_call",
+    "hermes-smd-establishment"
+   ],
+   [
+    "pre_tool_call",
+    "hermes-smd-hook-probe"
+   ],
+   [
+    "pre_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "pre_tool_call",
+    "hermes-smd-peer-memory"
+   ],
+   [
+    "pre_tool_call",
+    "hermes-smd-reply"
+   ],
+   [
+    "pre_tool_call",
+    "hermes-smd-space-gate"
+   ],
+   [
+    "pre_tool_call",
+    "hermes-smd-trust"
+   ],
+   [
+    "subagent_stop",
+    "hermes-smd-audit"
+   ],
+   [
+    "transform_tool_result",
+    "hermes-smd-hook-probe"
+   ],
+   [
+    "transform_tool_result",
+    "hermes-smd-inbound"
+   ],
+   [
+    "transform_tool_result",
+    "hermes-smd-reply"
+   ]
+  ],
+  "tools": {
+   "correction_capture": {
+    "plugin": "hermes-smd-corrections",
+    "toolset": "corrections"
+   },
+   "escalation_append": {
+    "plugin": "hermes-smd-escalation",
+    "toolset": "escalation"
+   },
+   "escalation_reply_ack": {
+    "plugin": "hermes-smd-escalation",
+    "toolset": "escalation"
+   },
+   "escalation_state": {
+    "plugin": "hermes-smd-escalation",
+    "toolset": "escalation"
+   },
+   "establish_pending": {
+    "plugin": "hermes-smd-establishment",
+    "toolset": "establishment"
+   },
+   "establish_propose": {
+    "plugin": "hermes-smd-establishment",
+    "toolset": "establishment"
+   },
+   "establish_stage_document": {
+    "plugin": "hermes-smd-establishment",
+    "toolset": "establishment"
+   },
+   "establish_status": {
+    "plugin": "hermes-smd-establishment",
+    "toolset": "establishment"
+   },
+   "establish_submit": {
+    "plugin": "hermes-smd-establishment",
+    "toolset": "establishment"
+   },
+   "job_cancel": {
+    "plugin": "hermes-smd-jobs",
+    "toolset": "jobs"
+   },
+   "job_record_sideeffect": {
+    "plugin": "hermes-smd-jobs",
+    "toolset": "jobs"
+   },
+   "job_status": {
+    "plugin": "hermes-smd-jobs",
+    "toolset": "jobs"
+   },
+   "mail_list_attachments": {
+    "plugin": "hermes-smd-mail-attachments",
+    "toolset": "mail"
+   },
+   "mail_spool_attachment": {
+    "plugin": "hermes-smd-mail-attachments",
+    "toolset": "mail"
+   },
+   "mail_spool_message": {
+    "plugin": "hermes-smd-mail-attachments",
+    "toolset": "mail"
+   },
+   "operations_request": {
+    "plugin": "hermes-smd-establishment",
+    "toolset": "establishment"
+   },
+   "operator_help_guide_undo": {
+    "plugin": "hermes-smd-initiation",
+    "toolset": "initiation"
+   },
+   "operator_help_guide_update": {
+    "plugin": "hermes-smd-initiation",
+    "toolset": "initiation"
+   },
+   "operator_help_note": {
+    "plugin": "hermes-smd-initiation",
+    "toolset": "initiation"
+   },
+   "operator_help_signals": {
+    "plugin": "hermes-smd-initiation",
+    "toolset": "initiation"
+   },
+   "operator_seat_facts": {
+    "plugin": "hermes-smd-initiation",
+    "toolset": "initiation"
+   },
+   "record_peer_preference": {
+    "plugin": "hermes-smd-peer-memory",
+    "toolset": "relationship"
+   },
+   "reply_bind": {
+    "plugin": "hermes-smd-reply",
+    "toolset": "reply"
+   },
+   "smd_deliver_draft": {
+    "plugin": "hermes-smd-drafting",
+    "toolset": "drafting"
+   },
+   "smd_send_message": {
+    "plugin": "hermes-smd-trust",
+    "toolset": "email"
+   },
+   "start_background_job": {
+    "plugin": "hermes-smd-jobs",
+    "toolset": "jobs"
+   },
+   "voice_note_transcribe": {
+    "plugin": "hermes-smd-voice-notes",
+    "toolset": "voice_notes"
+   },
+   "workspace_calendar_create_draft": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_calendar_get": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_calendar_list": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_calendar_update_draft": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_docs_append": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_docs_create": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_docs_get": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_drive_export": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_drive_get": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_drive_list": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_gmail_archive": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_gmail_create_draft": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_gmail_get": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_gmail_modify": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_gmail_search": {
+    "plugin": "hermes-smd-workspace",
+    "toolset": "workspace"
+   },
+   "workspace_gmail_trash_thread": {
     "plugin": "hermes-smd-workspace",
     "toolset": "workspace"
    },

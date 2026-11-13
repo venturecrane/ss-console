@@ -137,7 +137,7 @@ Check I also asks the session to move rows a letter **handed to the client** to 
 
 **What the check cannot see.** The detector reads the session's engagement read log, which is written when a file is opened with the Read tool. A letter opened through the shell, reached by a search, or pasted into the prompt leaves no trace. A client it flags is real; a quiet session proves nothing.
 
-**SMD Services is itself a client.** Obligations on our own seats (`ap-staging`, `pilot-smokeball`, `scott`) roll up to `smd-services`. There is no internal-versus-external split in the register: there is a client list, and we are on it. Identity is the default in `scripts/lib/seat-clients.mjs`, so onboarding a client needs no change there. A new seat of our own, or a client's second seat, says where it rolls up with `client:` in its own `operator/customers/<slug>/seat.yaml`, and `npm run gen:seat-registries` carries that into the rollup.
+**SMD Services is itself a client.** Obligations on our own seats (`ap-staging`, `pilot-smokeball`, `smd-guide`, `smd-office`) roll up to `smd-services`. There is no internal-versus-external split in the register: there is a client list, and we are on it. Identity is the default in `scripts/lib/seat-clients.mjs`, so onboarding a client needs no change there. A new seat of our own, or a client's second seat, says where it rolls up with `client:` in its own `operator/customers/<slug>/seat.yaml`, and `npm run gen:seat-registries` carries that into the rollup.
 
 ## How a row closes
 

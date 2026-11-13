@@ -54,8 +54,8 @@ Seats declared in the repository (`operator/customers/`). Whether each one is ru
 
 | Seat | Purpose | Product | Role | Vertical |
 |---|---|---|---|---|
-| `scott` | internal | hosted-agent | none | mixed |
 | `smd-guide` | internal | operator | guide | mixed |
+| `smd-office` | internal | hosted-agent | none | mixed |
 
 <!-- END GENERATED: seat roster -->
 

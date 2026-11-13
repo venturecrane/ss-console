@@ -1,5 +1,5 @@
 /**
- * Open-house visitor capture (real estate POC, scott seat).
+ * Open-house visitor capture (the real estate add-on, brokery seat).
  *
  * Two things the skill's own prose promises that nothing else checks:
  *
@@ -17,7 +17,7 @@
  *      turn, whatever HERMES_HOME either runs under.
  *
  * And the seat binding that makes the act reachable (the /wired chain): the
- * scott seat enables the skill with webhook + scheduled initiation, routes the
+ * brokery seat enables the skill with webhook + scheduled initiation, routes the
  * AgentMail trigger to it, arms it on cron, and authors the internal-send
  * exposure the scheduled email to the agent needs. Parsed, never grepped.
  */
@@ -27,7 +27,9 @@ import { join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 const SKILL = resolve('operator/skills/open-house-visitor-capture/SKILL.md')
-const SEAT = resolve('operator/customers/scott/customer.yaml')
+// The one seat that binds the skill since the scott seat (the POC's first home)
+// was decommissioned 2026-11-13.
+const SEAT = resolve('operator/customers/brokery/customer.yaml')
 const STORE_NAME = 'open-house-visitors'
 const BROKERY_SEAT = resolve('operator/customers/brokery/customer.yaml')
 
@@ -162,7 +164,7 @@ describe('open-house-visitor-capture: the skill contract', () => {
   })
 })
 
-describe('open-house-visitor-capture: the scott seat binds it (the /wired chain)', () => {
+describe('open-house-visitor-capture: the brokery seat binds it (the /wired chain)', () => {
   const seat = parseYaml(readFileSync(SEAT, 'utf8')) as {
     personas: {
       slug: string
@@ -173,19 +175,12 @@ describe('open-house-visitor-capture: the scott seat binds it (the /wired chain)
     webhook_triggers: { source: string; event_type: string; skill: string; persona: string }[]
     send_policy?: { reply?: { internal_exempt?: boolean }; held_release?: { enabled?: boolean } }
   }
-  const persona = seat.personas.find((p) => p.slug === 'agent-crane')!
+  const persona = seat.personas.find((p) => p.slug === 'brokery-agent')!
 
   it('authors the record store the skill names, at one absolute path under the volume', () => {
     const stores = (seat as unknown as { record_stores?: { name: string; path: string }[] })
       .record_stores
     expect(stores?.find((s) => s.name === STORE_NAME)?.path).toBe(STORE_PATH)
-  })
-
-  it('stays private per agent with the index shared; the broker view moved to the brokery seat', () => {
-    const store = storeOf(seat)
-    expect(store?.owner_field).toBe('agent')
-    expect(store?.readers ?? []).toEqual([])
-    expect(store?.index).toEqual(['visitor', 'property', 'visit_date', 'contact'])
   })
 
   it('the brokery seat authors the broker view: private per agent, a broker reads across', () => {
@@ -243,7 +238,7 @@ describe('open-house-visitor-capture: the scott seat binds it (the /wired chain)
       (t) => t.source === 'agentmail' && t.event_type === 'message.received'
     )
     expect(trigger?.skill).toBe('open-house-visitor-capture')
-    expect(trigger?.persona).toBe('agent-crane')
+    expect(trigger?.persona).toBe('brokery-agent')
   })
 
   it('cron arms the follow-up mode with wake_policy always and no pre_run', () => {

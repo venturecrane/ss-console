@@ -239,10 +239,14 @@ def test_slug_for_inbox_prefers_the_authored_address():
 
 
 def test_slug_for_inbox_reads_the_real_seat_configs():
-    """No injection: the shipped scott config owns agentcrane@ (falsifier for
-    the yaml read; it returned None before the authored lookup existed)."""
-    slugs = sorted(d for d in os.listdir(rec._customers_dir()) if not d.startswith(("_", ".")))
-    assert rec.slug_for_inbox("agentcrane@agentmail.to", slugs) == "scott"
+    """No injection: the shipped brokery config owns brokery-agent@, an inbox
+    that is not its slug (falsifier for the yaml read; it returned None before
+    the authored lookup existed). scott, the seat this first pinned
+    (agentcrane@), was decommissioned 2026-11-13."""
+    slugs = sorted(
+        d for d in os.listdir(rec._customers_dir()) if not d.startswith(("_", ".")) and ".decommissioned." not in d
+    )
+    assert rec.slug_for_inbox("brokery-agent@agentmail.to", slugs) == "brokery"
 
 
 def test_no_seat_inbox_is_allowlisted_as_a_non_seat():

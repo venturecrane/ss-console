@@ -14,8 +14,8 @@ export const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze
   brokery: 'hermes-brokery',
   'captain-mark': 'hermes-captain-mark',
   'pilot-smokeball': 'hermes-pilot-smokeball',
-  scott: 'hermes-scott',
   'smd-guide': 'hermes-smd-guide',
+  'smd-office': 'hermes-smd-office',
 })
 
 /** Seats authored with `fly_app: null`, each with its unprovisioned_reason. */

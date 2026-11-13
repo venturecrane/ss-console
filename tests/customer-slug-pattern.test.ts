@@ -103,8 +103,8 @@ const CANDIDATES: readonly string[] = [
   'brokery',
   'captain-mark',
   'pilot-smokeball',
-  'scott',
   'smd-guide',
+  'smd-office',
   // shape edges that MUST be accepted (2..40 chars). 39 and 40 both exceed the
   // provisioner's old 32-char ceiling — the divergence in the other direction.
   'ab',
@@ -145,8 +145,8 @@ const LIVE_SLUGS: readonly string[] = [
   'brokery',
   'captain-mark',
   'pilot-smokeball',
-  'scott',
   'smd-guide',
+  'smd-office',
 ]
 
 /**
@@ -312,6 +312,22 @@ describe('retired seats', () => {
     expect(existsSync(resolve(REPO_ROOT, 'operator/customers/smd-staging'))).toBe(false)
     expect(
       existsSync(resolve(REPO_ROOT, 'operator/customers/smd-staging.decommissioned.2026-11-11'))
+    ).toBe(true)
+  })
+
+  /**
+   * `scott` -- the hosted-agent founding seat (ADR 0067) -- was decommissioned
+   * 2026-11-13 by `operator/bin/decommission-customer.sh --live`: Fly app
+   * hermes-scott destroyed, its AgentMail inbox and webhook removed, R2
+   * emptied, console D1 rows deleted, healthchecks cancelled. `smd-office`
+   * replaces it as SMD's own operations seat. Same reasoning as smd-staging
+   * above: a live directory reappearing would re-arm every publisher and
+   * reconciler against an app that no longer exists.
+   */
+  it('scott has no live seat directory, only its tombstone', () => {
+    expect(existsSync(resolve(REPO_ROOT, 'operator/customers/scott'))).toBe(false)
+    expect(
+      existsSync(resolve(REPO_ROOT, 'operator/customers/scott.decommissioned.2026-11-13'))
     ).toBe(true)
   })
 
