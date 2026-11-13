@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ...filing import full_name
+
 EXHIBIT_FILE = re.compile(r"^Exhibit\s*(\d+)\s*[-\u2013:]\s*.+\.pdf$", re.I)
 
 
@@ -28,10 +30,9 @@ class LocateHold(ValueError):
     """The delivered chronology cannot be placed; the update holds."""
 
 
-def vendor_name(row: dict[str, Any]) -> str:
-    """The full filename: the vendor gives the extension in its own field."""
-    name, ext = str(row.get("name") or ""), str(row.get("ext") or "")
-    return name if not ext or name.lower().endswith(ext.lower()) else name + ext
+#: The full filename: the vendor gives the extension in its own field (the one
+#: rule, ``jobs/filing.full_name``).
+vendor_name = full_name
 
 
 def name_pattern(template: str, client: str) -> re.Pattern[str]:

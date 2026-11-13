@@ -1,5 +1,5 @@
 {
-  "_why": "The filing goldens' matrix (test_filing_goldens.py): every lane that files into a firm's Smokeball by every ending, captured from origin/main c65294ee9 before wave 3 folds the four filing procedures into one module. A cell is recorded in <lane>/<ending>.json or named under not_applicable with its reason; a missing cell fails. frozen names the send records (frozen-<record>.json, recaptured only by JOBS_WRITE_FILING_FROZEN=1, never by the integrity job) that resume/<state>.json loads, each with what the vendor holds: none may send again.",
+  "_why": "The filing goldens' matrix (test_filing_goldens.py): every lane that files into a firm's Smokeball by every ending, captured from origin/main c65294ee9 before wave 3 folds the four filing procedures into one module. A cell is recorded in <lane>/<ending>.json or named under not_applicable with its reason; a missing cell fails. frozen names the send records (frozen-<record>.json, recaptured only by JOBS_WRITE_FILING_FROZEN=1, never by the integrity job) that resume/<state>.json loads, each with what the vendor holds: none may send again. The new-* states (wave 3, PR B) load the records the one filing module writes, each captured from it by JOBS_WRITE_FILING_FROZEN=new: the integrity job runs them on the merge-base's code, so a rollback to it must load what the new code wrote and send nothing again.",
   "lanes": [
     "chronology",
     "update",
@@ -37,30 +37,140 @@
     "library/shape_no_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed"
   },
   "frozen": {
-    "dated-pending-landed": { "lane": "chronology", "record": "dated-pending", "vendor": "landed" },
+    "dated-pending-landed": {
+      "lane": "chronology",
+      "record": "dated-pending",
+      "vendor": "landed"
+    },
     "dated-pending-absent": {
       "lane": "chronology",
       "record": "dated-pending",
       "vendor": "absent-first"
     },
-    "dated-sent": { "lane": "chronology", "record": "dated-sent", "vendor": "landed" },
-    "dated-confirmed": { "lane": "chronology", "record": "dated-confirmed", "vendor": "landed" },
-    "dated-proven": { "lane": "chronology", "record": "dated-proven", "vendor": "landed" },
-    "dated-pre-flag": { "lane": "chronology", "record": "dated-pre-flag", "vendor": "landed" },
-    "standing-pending": { "lane": "litigation", "record": "standing-pending", "vendor": "landed" },
+    "dated-sent": {
+      "lane": "chronology",
+      "record": "dated-sent",
+      "vendor": "landed"
+    },
+    "dated-confirmed": {
+      "lane": "chronology",
+      "record": "dated-confirmed",
+      "vendor": "landed"
+    },
+    "dated-proven": {
+      "lane": "chronology",
+      "record": "dated-proven",
+      "vendor": "landed"
+    },
+    "dated-pre-flag": {
+      "lane": "chronology",
+      "record": "dated-pre-flag",
+      "vendor": "landed"
+    },
+    "standing-pending": {
+      "lane": "litigation",
+      "record": "standing-pending",
+      "vendor": "landed"
+    },
     "standing-pending-absent": {
       "lane": "litigation",
       "record": "standing-pending",
       "vendor": "absent-first"
     },
-    "standing-sent": { "lane": "litigation", "record": "standing-sent", "vendor": "landed" },
+    "standing-sent": {
+      "lane": "litigation",
+      "record": "standing-sent",
+      "vendor": "landed"
+    },
     "standing-confirmed": {
       "lane": "litigation",
       "record": "standing-confirmed",
       "vendor": "landed"
     },
-    "update-proven": { "lane": "update", "record": "update-proven", "vendor": "landed" },
-    "update-retired": { "lane": "update", "record": "update-retired", "vendor": "landed" },
-    "versions-sent": { "lane": "revise", "record": "versions-sent", "vendor": "landed" }
+    "update-proven": {
+      "lane": "update",
+      "record": "update-proven",
+      "vendor": "landed"
+    },
+    "update-retired": {
+      "lane": "update",
+      "record": "update-retired",
+      "vendor": "landed"
+    },
+    "versions-sent": {
+      "lane": "revise",
+      "record": "versions-sent",
+      "vendor": "landed"
+    },
+    "new-dated-pending-landed": {
+      "lane": "chronology",
+      "record": "new-dated-pending",
+      "vendor": "landed"
+    },
+    "new-dated-pending-absent": {
+      "lane": "chronology",
+      "record": "new-dated-pending",
+      "vendor": "absent-first"
+    },
+    "new-dated-sent": {
+      "lane": "chronology",
+      "record": "new-dated-sent",
+      "vendor": "landed"
+    },
+    "new-dated-confirmed": {
+      "lane": "chronology",
+      "record": "new-dated-confirmed",
+      "vendor": "landed"
+    },
+    "new-dated-proven": {
+      "lane": "chronology",
+      "record": "new-dated-proven",
+      "vendor": "landed"
+    },
+    "new-standing-pending": {
+      "lane": "litigation",
+      "record": "new-standing-pending",
+      "vendor": "landed"
+    },
+    "new-standing-pending-absent": {
+      "lane": "litigation",
+      "record": "new-standing-pending",
+      "vendor": "absent-first"
+    },
+    "new-standing-sent": {
+      "lane": "litigation",
+      "record": "new-standing-sent",
+      "vendor": "landed"
+    },
+    "new-standing-confirmed": {
+      "lane": "litigation",
+      "record": "new-standing-confirmed",
+      "vendor": "landed"
+    },
+    "new-update-proven": {
+      "lane": "update",
+      "record": "new-update-proven",
+      "vendor": "landed"
+    },
+    "new-update-retired": {
+      "lane": "update",
+      "record": "new-update-retired",
+      "vendor": "landed"
+    },
+    "new-versions-sent": {
+      "lane": "revise",
+      "record": "new-versions-sent",
+      "vendor": "landed"
+    },
+    "new-dated-raised-sent": {
+      "lane": "chronology",
+      "record": "new-dated-raised-sent",
+      "vendor": "landed"
+    },
+    "new-update-raised-proven": {
+      "lane": "update",
+      "record": "new-update-raised-proven",
+      "vendor": "landed"
+    }
   }
 }

@@ -80,6 +80,49 @@
       "sha256": "9db968ae03743c8ddeff909c34b6f4481f876f2e8a1d0e5339bd913c7cfb6162"
     },
     {
+      "log": "Memo - Example points 11-13-26.docx: the send raised (the response was lost after the POST); reading that one name back by hash"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1"]
+    },
+    {
       "log": "Memo - Example points 11-13-26.docx: the send failed (the response was lost after the POST); the file's record may already exist in folder folder-1, so it is not retried. Holding for a person to read the folder."
     }
   ],
@@ -99,9 +142,7 @@
       "folder_id": "folder-1"
     }
   },
-  "vendor": [
-    "up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1 not indexed yet (no bytes)"
-  ],
+  "vendor": ["up-1 'Memo - Example points 11-13-26' '.docx' 0 in folder-1 v1 (no bytes)"],
   "writes": {
     "add_file": 1,
     "create_folder": 1

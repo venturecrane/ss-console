@@ -36,6 +36,7 @@ from typing import Any
 from . import seedcheck, vocab
 from .firm import LitigationFirm
 from .. import seat_layout
+from ..filing import full_name
 
 STATE_ENV = "JOBS_LITIGATION_STATE_DIR"
 DATA_ENV = "JOBS_DATA_DIR"
@@ -103,11 +104,6 @@ def diff(now: dict[str, str], prior: dict[str, str]) -> dict[str, list[str]]:
 
 def file_date(f: dict[str, Any]) -> str:
     return str(f.get("modified") or f.get("created") or "")[:10]
-
-
-def full_name(f: dict[str, Any]) -> str:
-    name, ext = str(f.get("name") or ""), str(f.get("ext") or "")
-    return name if not ext or name.lower().endswith(ext.lower()) else name + ext
 
 
 def is_email(f: dict[str, Any]) -> bool:

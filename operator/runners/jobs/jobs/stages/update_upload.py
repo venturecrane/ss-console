@@ -14,12 +14,15 @@ chronology at all:
    delivered document's own), is never written over: the new file is
    VERSIONED, "<name> (2)<ext>", and the manifest rewritten before any send so
    a resume keeps that name;
-3. the updated document and the new exhibits go up through the ordinary
-   upload machinery (intent rows written through, never sent twice, the
-   listing read back at size, then every file downloaded by id and hashed);
-4. ONLY when every new file is proven by hash is the delivered chronology
-   document deleted, addressed by its id, never by name; and the folder is
-   read back until that id reads gone.
+3. the updated document and the new exhibits go up through the one filing
+   (``jobs/filing.file_into_folder``: intent rows written through, never sent
+   twice, the listing read back at size, then every file downloaded by id and
+   hashed);
+4. ONLY when every new file is proven by hash, and no send raised in this
+   attempt, is the delivered chronology document deleted, addressed by its id,
+   never by name; and the folder is read back until that id reads gone. A send
+   that raised and was then proven leaves the delivered chronology to the
+   resume (wave 3): a deletion never rides on an attempt that saw an anomaly.
 
 Nothing else is ever deleted: not the delivered exhibits (the updated document
 still cites them), not a worksheet, not a file the firm authored in that
@@ -37,17 +40,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .. import filing
+from ..filing import SendRecord, full_name
+from ..proof.readback import READBACK_PAUSE_SECONDS, READBACK_TRIES
 from .base import StageRun
 from .update_base import plan
-from .upload import (
-    READBACK_PAUSE_SECONDS,
-    READBACK_TRIES,
-    _files_in,
-    _prove,
-    _send_missing,
-    _write_readback,
-    _vendor_name,
-)
 
 #: The stage's exits (dag_update.py reads EXITS), split 2026-10-24 like the
 #: full build's (stages/upload.py). Exit 2 used to cover every hold, under a
@@ -84,7 +81,7 @@ def _folder_rows(seat: Any, matter_id: str, folder_id: str) -> list[dict[str, An
 def _collisions(rows: list[dict[str, Any]], manifest: list[dict[str, Any]], ours: set[str]) -> list[str]:
     """Manifest names already in the folder that this run did not send."""
     want = {m["name"] for m in manifest}
-    return sorted(n for n in (_vendor_name(r) for r in rows) if n in want and n not in ours)
+    return sorted(n for n in (full_name(r) for r in rows) if n in want and n not in ours)
 
 
 def versioned(name: str, taken: set[str]) -> str:
@@ -113,7 +110,7 @@ def _version_clashes(
     clash = set(_collisions(rows, manifest, ours))
     if not clash:
         return manifest
-    taken = {_vendor_name(r) for r in rows} | {m["name"] for m in manifest}
+    taken = {full_name(r) for r in rows} | {m["name"] for m in manifest}
     for m in manifest:
         if m["name"] in clash:
             new = versioned(m["name"], taken)
@@ -127,19 +124,23 @@ def _version_clashes(
     return manifest
 
 
-def _readback(
-    sr: StageRun, seat: Any, matter_id: str, folder_id: str, manifest: list[dict], tries: int, pause: float
-) -> list[str]:
-    expected = {m["name"]: m["bytes"] for m in manifest}
-    short = list(expected)
-    for attempt in range(tries):
-        present = _files_in(seat, matter_id, folder_id)
-        short = [n for n, b in expected.items() if present.get(n) != b]
-        if not short:
-            break
-        if attempt + 1 < tries:
-            time.sleep(pause)
-    return short
+def record_of(sr: StageRun, p: dict[str, Any]) -> SendRecord:
+    """The update's send record, marked an update into the delivered folder."""
+    rec = SendRecord.load(sr.slug_dir / "runs" / sr.unit.unit / "delivery.json")
+    rec.doc.update({"folder": p["folder_name"], "folder_id": str(p["folder_id"]), "update": True})
+    rec.doc.setdefault("files", [])
+    return rec
+
+
+def prepare(
+    sr: StageRun, out: Path, rec: SendRecord, rows: list[dict[str, Any]], manifest: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The manifest with every clash against ``rows`` versioned; the manifest
+    and the record are both written before anything is sent. Shared with
+    ``update_review_file``."""
+    manifest = _version_clashes(sr, out, rows, manifest, rec.ours())
+    rec.save()
+    return manifest
 
 
 def _retire(
@@ -148,34 +149,46 @@ def _retire(
     matter_id: str,
     folder_id: str,
     old: dict[str, Any],
-    delivery: dict,
-    dpath: Path,
+    rec: SendRecord,
     tries: int,
     pause: float,
 ) -> int:
     """Delete the delivered chronology by id, then read the folder until it is gone."""
-    rec = delivery.setdefault("replaced", {"file_id": old["id"], "name": old["name"], "deleted": False})
-    if not rec.get("deleted"):
+    done = rec.replaced(old)
+    if not done.get("deleted"):
         try:
             seat.delete_file(matter_id, old["id"])
         except Exception as exc:  # noqa: BLE001 - a failed delete leaves both documents on the matter; that is the hold
             sr.log(
                 f"update_held: the delivered chronology could not be retired ({str(exc)[:160]}); both are on the matter"
             )
-            dpath.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
+            rec.save()
             return EXIT_HELD
-        rec["deleted"] = True
-        dpath.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
+        done["deleted"] = True
+        rec.save()
     for attempt in range(tries):
         if not any(str(r.get("id")) == old["id"] for r in _folder_rows(seat, matter_id, folder_id)):
-            rec["confirmed_gone"] = True
-            dpath.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
+            done["confirmed_gone"] = True
+            rec.save()
             sr.log(f"retired the delivered chronology {old['name']} (id {old['id']}); read back gone")
             return 0
         if attempt + 1 < tries:
             time.sleep(pause)
     sr.log(f"update_held: the delivered chronology (id {old['id']}) still reads present after its delete")
     return EXIT_HELD
+
+
+def _filed_exit(sr: StageRun, filed: filing.Filed, tries: int) -> int | None:
+    """The stage's exit for a filing that did not end proven, else None."""
+    if filed.status in ("held", "refused"):
+        return EXIT_SEND_UNKNOWN if filed.status == "held" else EXIT_REFUSED
+    if filed.status == "short":
+        sr.log(f"read-back short after {tries} tries: {', '.join(filed.short)}; the delivered chronology is untouched")
+        return EXIT_SHORT
+    if filed.status == "unproven":
+        sr.log("the new files are not proven by hash; the delivered chronology is untouched")
+        return filed.rc
+    return None
 
 
 def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = READBACK_TRIES) -> int:
@@ -186,35 +199,28 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
         sr.log("update upload: no manifest or no update plan")
         return EXIT_REFUSED
     matter_id, folder_id, old = sr.job.matter_id, str(p["folder_id"]), p["chronology"]
-    dpath = sr.slug_dir / "runs" / sr.unit.unit / "delivery.json"
-    delivery: dict[str, Any] = json.loads(dpath.read_text(encoding="utf-8")) if dpath.is_file() else {}
-    delivery.update({"folder": p["folder_name"], "folder_id": folder_id, "update": True})
-    delivery.setdefault("files", [])
     seat = sr.seat
     rows = _folder_rows(seat, matter_id, folder_id)
-    retired = bool((delivery.get("replaced") or {}).get("deleted"))
+    rec = record_of(sr, p)
+    retired = bool((rec.doc.get("replaced") or {}).get("deleted"))
     if not retired and not any(str(r.get("id")) == old["id"] for r in rows):
         sr.log(f"update_held: the delivered chronology (id {old['id']}) is no longer in its folder; nothing was filed")
         return EXIT_HELD
-    ours = {str(f.get("name")) for f in delivery["files"] if f.get("sent") or f.get("pending") or f.get("confirmed")}
-    manifest = _version_clashes(sr, out, rows, manifest, ours)
-    dpath.parent.mkdir(parents=True, exist_ok=True)
-    dpath.write_text(json.dumps(delivery, indent=1), encoding="utf-8")
-    present = _files_in(seat, matter_id, folder_id)
-    counts, why = _send_missing(sr, seat, matter_id, folder_id, manifest, present, delivery, dpath)
-    if counts is None:
-        return EXIT_SEND_UNKNOWN if why == "held" else EXIT_REFUSED
-    short = _readback(sr, seat, matter_id, folder_id, manifest, tries, pause)
-    _write_readback(delivery, manifest, _files_in(seat, matter_id, folder_id), dpath)
-    if short:
-        sr.log(f"read-back short after {tries} tries: {', '.join(short)}; the delivered chronology is untouched")
-        return EXIT_SHORT
-    rc = _prove(sr, seat, matter_id, folder_id, manifest, delivery, dpath, pause=pause, tries=tries)
-    if rc != 0:
-        sr.log("the new files are not proven by hash; the delivered chronology is untouched")
+    manifest = prepare(sr, out, rec, rows, manifest)
+    scratch = sr.slug_dir / "runs" / sr.unit.unit / "readback"
+    filed = filing.file_into_folder(
+        seat, matter_id, folder_id, manifest, rec, sr.log, scratch, tries=tries, pause=pause
+    )
+    rc = _filed_exit(sr, filed, tries)
+    if rc is not None:
         return rc
-    delivery = json.loads(dpath.read_text(encoding="utf-8"))
-    if not all(f.get("proven") for f in delivery.get("files") or []):
+    if not all(f.get("proven") for f in rec.files()):
         sr.log("update_held: not every new file is proven; the delivered chronology is untouched")
         return EXIT_HELD
-    return _retire(sr, seat, matter_id, folder_id, old, delivery, dpath, tries, pause)
+    if filed.raised:
+        sr.log(
+            "update_held: every new file is proven by hash, but a send raised in this attempt; the delivered "
+            "chronology is retired by the resume, never in an attempt that saw a send fail"
+        )
+        return EXIT_HELD
+    return _retire(sr, seat, matter_id, folder_id, old, rec, tries, pause)

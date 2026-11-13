@@ -1,21 +1,64 @@
 {
   "end": {
     "returned": {
+      "proof": {
+        "files": [
+          {
+            "file_id": "up-1",
+            "name": "Demand - Alpha Example 11-13-26.docx",
+            "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0",
+            "size": 19
+          },
+          {
+            "file_id": "up-2",
+            "name": "Gap audit 11-13-26.docx",
+            "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd",
+            "size": 15
+          },
+          {
+            "file_id": "up-3",
+            "name": "Demand - Alpha Example 11-13-26 - attorney notes.docx",
+            "sha256": "58945bbb206f4c3b195c9cd3190280785296a391dbf961ad14d153f869eb2d05",
+            "size": 20
+          }
+        ],
+        "folder_id": "folder-1",
+        "readback": "confirmed"
+      },
       "rec": {
-        "exit": 3,
+        "exit": 0,
         "files": [
           {
             "bytes": 19,
-            "confirmed": false,
+            "confirmed": true,
+            "file_id": "up-1",
             "name": "Demand - Alpha Example 11-13-26.docx",
-            "pending": true,
-            "sent": false,
+            "proven": true,
+            "sent": true,
             "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+          },
+          {
+            "bytes": 15,
+            "confirmed": true,
+            "file_id": "up-2",
+            "name": "Gap audit 11-13-26.docx",
+            "proven": true,
+            "sent": true,
+            "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+          },
+          {
+            "bytes": 20,
+            "confirmed": true,
+            "file_id": "up-3",
+            "name": "Demand - Alpha Example 11-13-26 - attorney notes.docx",
+            "proven": true,
+            "sent": true,
+            "sha256": "58945bbb206f4c3b195c9cd3190280785296a391dbf961ad14d153f869eb2d05"
           }
         ],
         "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
         "folder_id": "folder-1",
-        "said": "Demand - Alpha Example 11-13-26.docx: the send failed (the response was lost after the POST); the file's record may already exist in folder folder-1, so it is not retried. Holding for a person to read the folder."
+        "said": "read-back proven: 3 file(s) by id, size and sha256 in folder folder-1"
       }
     }
   },
@@ -80,7 +123,256 @@
       "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
     },
     {
-      "log": "Demand - Alpha Example 11-13-26.docx: the send failed (the response was lost after the POST); the file's record may already exist in folder folder-1, so it is not retried. Holding for a person to read the folder."
+      "log": "Demand - Alpha Example 11-13-26.docx: the send raised (the response was lost after the POST); reading that one name back by hash"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": ["up-1 'Demand - Alpha Example 11-13-26' '.docx' 19 in folder-1"]
+    },
+    {
+      "call": "mint",
+      "ids": ["up-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "up-1",
+          "size": 19,
+          "url": "https://fake.invalid/up-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 19,
+      "url": "https://fake.invalid/up-1"
+    },
+    {
+      "log": "  sent     Demand - Alpha Example 11-13-26.docx (19 bytes; proven by hash after the send raised)"
+    },
+    {
+      "bytes": 15,
+      "call": "add_file",
+      "folder": "folder-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "Gap audit 11-13-26.docx",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 19,
+              "confirmed": false,
+              "name": "Demand - Alpha Example 11-13-26.docx",
+              "sent": true,
+              "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+            },
+            {
+              "bytes": 15,
+              "confirmed": false,
+              "name": "Gap audit 11-13-26.docx",
+              "pending": true,
+              "sent": false,
+              "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+            }
+          ],
+          "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
+          "folder_id": "folder-1"
+        }
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+    },
+    {
+      "log": "  sent     Gap audit 11-13-26.docx (15 bytes; file id pending)"
+    },
+    {
+      "bytes": 20,
+      "call": "add_file",
+      "folder": "folder-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "Demand - Alpha Example 11-13-26 - attorney notes.docx",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 19,
+              "confirmed": false,
+              "name": "Demand - Alpha Example 11-13-26.docx",
+              "sent": true,
+              "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+            },
+            {
+              "bytes": 15,
+              "confirmed": false,
+              "name": "Gap audit 11-13-26.docx",
+              "sent": true,
+              "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+            },
+            {
+              "bytes": 20,
+              "confirmed": false,
+              "name": "Demand - Alpha Example 11-13-26 - attorney notes.docx",
+              "pending": true,
+              "sent": false,
+              "sha256": "58945bbb206f4c3b195c9cd3190280785296a391dbf961ad14d153f869eb2d05"
+            }
+          ],
+          "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
+          "folder_id": "folder-1"
+        }
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "58945bbb206f4c3b195c9cd3190280785296a391dbf961ad14d153f869eb2d05"
+    },
+    {
+      "log": "  sent     Demand - Alpha Example 11-13-26 - attorney notes.docx (20 bytes; file id pending)"
+    },
+    {
+      "log": "3 file(s) sent, 0 already present, 0 sent by an earlier attempt"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 19,
+              "confirmed": false,
+              "name": "Demand - Alpha Example 11-13-26.docx",
+              "sent": true,
+              "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+            },
+            {
+              "bytes": 15,
+              "confirmed": false,
+              "name": "Gap audit 11-13-26.docx",
+              "sent": true,
+              "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+            },
+            {
+              "bytes": 20,
+              "confirmed": false,
+              "name": "Demand - Alpha Example 11-13-26 - attorney notes.docx",
+              "sent": true,
+              "sha256": "58945bbb206f4c3b195c9cd3190280785296a391dbf961ad14d153f869eb2d05"
+            }
+          ],
+          "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
+          "folder_id": "folder-1"
+        }
+      },
+      "returned": [
+        "up-1 'Demand - Alpha Example 11-13-26' '.docx' 19 in folder-1",
+        "up-2 'Gap audit 11-13-26' '.docx' 15 in folder-1",
+        "up-3 'Demand - Alpha Example 11-13-26 - attorney notes' '.docx' 20 in folder-1"
+      ]
+    },
+    {
+      "log": "read-back complete: 3 file(s) at the expected byte counts in folder folder-1"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 19,
+              "confirmed": true,
+              "name": "Demand - Alpha Example 11-13-26.docx",
+              "sent": true,
+              "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+            },
+            {
+              "bytes": 15,
+              "confirmed": true,
+              "name": "Gap audit 11-13-26.docx",
+              "sent": true,
+              "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+            },
+            {
+              "bytes": 20,
+              "confirmed": true,
+              "name": "Demand - Alpha Example 11-13-26 - attorney notes.docx",
+              "sent": true,
+              "sha256": "58945bbb206f4c3b195c9cd3190280785296a391dbf961ad14d153f869eb2d05"
+            }
+          ],
+          "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
+          "folder_id": "folder-1"
+        }
+      },
+      "returned": [
+        "up-1 'Demand - Alpha Example 11-13-26' '.docx' 19 in folder-1",
+        "up-2 'Gap audit 11-13-26' '.docx' 15 in folder-1",
+        "up-3 'Demand - Alpha Example 11-13-26 - attorney notes' '.docx' 20 in folder-1"
+      ]
+    },
+    {
+      "call": "mint",
+      "ids": ["up-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "up-1",
+          "size": 19,
+          "url": "https://fake.invalid/up-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 19,
+      "url": "https://fake.invalid/up-1"
+    },
+    {
+      "call": "mint",
+      "ids": ["up-2"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "up-2",
+          "size": 15,
+          "url": "https://fake.invalid/up-2"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 15,
+      "url": "https://fake.invalid/up-2"
+    },
+    {
+      "call": "mint",
+      "ids": ["up-3"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "up-3",
+          "size": 20,
+          "url": "https://fake.invalid/up-3"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 20,
+      "url": "https://fake.invalid/up-3"
+    },
+    {
+      "log": "read-back proven: 3 file(s) by id, size and sha256 in folder folder-1"
+    },
+    {
+      "log": "read-back proven by the upload stage: 3 file(s) by id, size and sha256"
     }
   ],
   "records": {
@@ -88,11 +380,30 @@
       "files": [
         {
           "bytes": 19,
-          "confirmed": false,
+          "confirmed": true,
+          "file_id": "up-1",
           "name": "Demand - Alpha Example 11-13-26.docx",
-          "pending": true,
-          "sent": false,
+          "proven": true,
+          "sent": true,
           "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
+        },
+        {
+          "bytes": 15,
+          "confirmed": true,
+          "file_id": "up-2",
+          "name": "Gap audit 11-13-26.docx",
+          "proven": true,
+          "sent": true,
+          "sha256": "0776a93a74ccd552dc141ea7899afa02c18d8eec61fc78039f70caa3c795e5fd"
+        },
+        {
+          "bytes": 20,
+          "confirmed": true,
+          "file_id": "up-3",
+          "name": "Demand - Alpha Example 11-13-26 - attorney notes.docx",
+          "proven": true,
+          "sent": true,
+          "sha256": "58945bbb206f4c3b195c9cd3190280785296a391dbf961ad14d153f869eb2d05"
         }
       ],
       "folder": "Demand 2099-EX-0001 11-13-26 (Operator 0000a1)",
@@ -100,10 +411,12 @@
     }
   },
   "vendor": [
-    "up-1 'Demand - Alpha Example 11-13-26' '.docx' 19 in folder-1 not indexed yet sha c8b3e4c01a4f49b6"
+    "up-1 'Demand - Alpha Example 11-13-26' '.docx' 19 in folder-1 v1 sha c8b3e4c01a4f49b6",
+    "up-2 'Gap audit 11-13-26' '.docx' 15 in folder-1 v1 sha 0776a93a74ccd552",
+    "up-3 'Demand - Alpha Example 11-13-26 - attorney notes' '.docx' 20 in folder-1 v1 sha 58945bbb206f4c3b"
   ],
   "writes": {
-    "add_file": 1,
+    "add_file": 3,
     "create_folder": 1
   }
 }

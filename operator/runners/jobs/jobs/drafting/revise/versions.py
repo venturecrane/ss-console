@@ -25,13 +25,14 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from ...proof.readback import remote_sha
+from ...proof.readback import READBACK_PAUSE_SECONDS, remote_sha
 from ..outcome import DraftingFailed, DraftingHold
 
 ORDER = ("draft", "attorney_notes")
-#: The proven method's read-back: 16 polls, 15 s apart (both landed in one wait).
+#: The proven method's read-back: 16 polls (a stated override of the shared
+#: ``READBACK_TRIES``; both new versions landed in one wait), at the shared pause.
 TRIES = 16
-PAUSE_SECONDS = 15.0
+PAUSE_SECONDS = READBACK_PAUSE_SECONDS
 SHORT = "stage_unfinished: file: a new version did not read back as ours after its retries"
 
 

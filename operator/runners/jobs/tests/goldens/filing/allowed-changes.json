@@ -1,3 +1,63 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the filing goldens, per cell (<lane>/<ending> or resume/<state>). Empty when the goldens were captured (wave 3 PR A, from today's code): a change to how a file is sent, recorded, read back or named names each path it changes here, in the PR that makes it."
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the filing goldens, per cell (<lane>/<ending> or resume/<state>). Wave 3 PR B (jobs/filing.py) makes ONE named change, the rule for a send that raises (decided in the plan): the intent row stays and that one name is read back by hash; any exception in that read-back counts as not proven; proven, the row is marked sent and the next file is sent; not proven, the sending stops and the job holds (exit 3) as before; an update never retires the delivered chronology in an attempt where a send raised (it holds, exit 4 update_held, for the resume). Litigation and casefile already read back after a raised send, so their cells do not move. Only the send-raised cells of the five dated-folder lanes are named here; every other cell is byte-equal. Clear this list once it merges.",
+  "chronology/send_raises_landed": [
+    "end.returned",
+    "events",
+    "records.data/example-matter/runs/alpha/delivery.json.files",
+    "vendor",
+    "writes.add_file"
+  ],
+  "chronology/send_raises_not_landed": ["events"],
+  "chronology/send_raises_placeholder": ["events", "vendor.0"],
+  "chronology/send_raises_then_listing_raises": ["events"],
+  "demand/send_raises_landed": [
+    "end.returned.proof",
+    "end.returned.rec.exit",
+    "end.returned.rec.files",
+    "end.returned.rec.said",
+    "events",
+    "records.job-data/runs/demand/delivery.json.files",
+    "vendor",
+    "writes.add_file"
+  ],
+  "demand/send_raises_not_landed": ["events"],
+  "demand/send_raises_placeholder": ["events", "vendor.0"],
+  "demand/send_raises_then_listing_raises": ["events"],
+  "drafting/send_raises_landed": [
+    "end.returned.proof",
+    "end.returned.rec.exit",
+    "end.returned.rec.files",
+    "end.returned.rec.said",
+    "events",
+    "records.job-data/runs/demand/delivery.json.files",
+    "vendor",
+    "writes.add_file"
+  ],
+  "drafting/send_raises_not_landed": ["events"],
+  "drafting/send_raises_placeholder": ["events", "vendor.0"],
+  "drafting/send_raises_then_listing_raises": ["events"],
+  "update/send_raises_landed": [
+    "end.returned",
+    "events",
+    "records.data/example-matter/runs/alpha/delivery.json.files",
+    "vendor",
+    "writes.add_file"
+  ],
+  "update/send_raises_not_landed": ["events"],
+  "update/send_raises_placeholder": ["events", "vendor.3"],
+  "update/send_raises_then_listing_raises": ["events"],
+  "update_review/send_raises_landed": [
+    "end.returned.0",
+    "end.returned.1",
+    "events",
+    "records.data/example-matter/runs/alpha/delivery.json.files.0.confirmed",
+    "records.data/example-matter/runs/alpha/delivery.json.files.0.file_id",
+    "records.data/example-matter/runs/alpha/delivery.json.files.0.pending",
+    "records.data/example-matter/runs/alpha/delivery.json.files.0.proven",
+    "records.data/example-matter/runs/alpha/delivery.json.files.0.sent",
+    "vendor.3"
+  ],
+  "update_review/send_raises_not_landed": ["events"],
+  "update_review/send_raises_placeholder": ["events", "vendor.3"],
+  "update_review/send_raises_then_listing_raises": ["events"]
 }

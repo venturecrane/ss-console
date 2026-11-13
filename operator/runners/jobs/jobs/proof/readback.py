@@ -53,13 +53,12 @@ class ReadbackMismatch(RuntimeError):
 
 
 def vendor_name(row: dict[str, Any]) -> str:
-    """The full filename (the vendor splits name and extension; see
-    ``stages/upload._vendor_name`` for the measured cases)."""
-    name = str(row.get("name") or "")
-    ext = str(row.get("ext") or "")
-    if not ext or name.lower().endswith(ext.lower()):
-        return name
-    return name + ext
+    """The full filename: the one rule, ``jobs/filing.full_name`` (the vendor
+    splits name and extension; the measured cases are there)."""
+    # Imported here: jobs/filing.py imports this module at its top.
+    from ..filing import full_name
+
+    return full_name(row)
 
 
 def rows_in(seat: Any, matter_id: str, folder_id: str) -> dict[str, dict[str, Any]]:

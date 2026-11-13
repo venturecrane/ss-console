@@ -204,8 +204,9 @@ def test_a_frozen_record_loads_and_sends_nothing_again(tmp_path, monkeypatch, st
 
 
 # ---- recapturing the frozen records (never run by the integrity job) -------------------------
-def _kill_index(lane: str, root: Path, mp: Any, pick: Any) -> int:
-    probe = LANES[lane](root, "clean", mp)
+def _kill_index(lane: str, root: Path, mp: Any, pick: Any, ending: str) -> int:
+    probe = LANES[lane](root, ending, mp)
+    _fault(probe, ending)
     _run(probe)
     calls = _calls(probe.seat.events)
     return 1 + next(i for i, c in enumerate(calls) if pick(calls, i))
@@ -223,17 +224,26 @@ def _first_list_after_last(method: str) -> Any:
     return pick
 
 
-CAPTURE: dict[str, tuple[str, Any]] = {
-    "dated-pending": ("chronology", _after_nth("add_file")),
-    "dated-sent": ("chronology", _first_list_after_last("add_file")),
-    "dated-confirmed": ("chronology", _after_nth("mint")),
-    "dated-proven": ("chronology", None),
-    "standing-pending": ("litigation", _after_nth("add_file")),
-    "standing-sent": ("litigation", lambda calls, i: i > 0 and calls[i - 1]["call"] == "add_file"),
-    "standing-confirmed": ("litigation", None),
-    "update-proven": ("update", "delete_file"),
-    "update-retired": ("update", None),
-    "versions-sent": ("revise", _after_nth("add_file_version")),
+#: record -> (lane, where the run is killed, the ending it runs under).
+CAPTURE: dict[str, tuple[str, Any, str]] = {
+    "dated-pending": ("chronology", _after_nth("add_file"), "clean"),
+    "dated-sent": ("chronology", _first_list_after_last("add_file"), "clean"),
+    "dated-confirmed": ("chronology", _after_nth("mint"), "clean"),
+    "dated-proven": ("chronology", None, "clean"),
+    "standing-pending": ("litigation", _after_nth("add_file"), "clean"),
+    "standing-sent": ("litigation", lambda calls, i: i > 0 and calls[i - 1]["call"] == "add_file", "clean"),
+    "standing-confirmed": ("litigation", None, "clean"),
+    "update-proven": ("update", "delete_file", "clean"),
+    "update-retired": ("update", None, "clean"),
+    "versions-sent": ("revise", _after_nth("add_file_version"), "clean"),
+}
+#: The states only the one rule for a send that raises writes (wave 3): a row
+#: marked sent once its raised send read back by hash, and an update whose
+#: files are proven but left unretired because a send raised. Captured only
+#: under ``JOBS_WRITE_FILING_FROZEN=new``.
+CAPTURE_RAISED: dict[str, tuple[str, Any, str]] = {
+    "dated-raised-sent": ("chronology", _after_nth("add_file", 2), "send_raises_landed"),
+    "update-raised-proven": ("update", None, "send_raises_landed"),
 }
 
 
@@ -241,18 +251,22 @@ CAPTURE: dict[str, tuple[str, Any]] = {
 def test_planted_frozen_records_are_recaptured_from_this_code(tmp_path, monkeypatch):
     """Writes ``frozen-<record>.json``: the record each state's run leaves on
     disk, killed after the picked call, on entry to the named method, or run
-    to the end. ``dated-pre-flag``
-    is ``dated-confirmed`` with its ``sent`` and ``pending`` keys removed: the
-    shape the code wrote before ss#2901 and still reads."""
-    for record, (lane, pick) in CAPTURE.items():
-        sc = LANES[lane](tmp_path / record, "clean", monkeypatch)
+    to the end. ``dated-pre-flag`` is ``dated-confirmed`` with its ``sent`` and
+    ``pending`` keys removed: the shape the code wrote before ss#2901 and still
+    reads. ``JOBS_WRITE_FILING_FROZEN=new`` writes ``frozen-new-<record>.json``
+    instead, and the raised-send states too: the records a change writes, which
+    the integrity job then loads with the merge-base's code (the rollback)."""
+    new = os.environ.get(CAPTURE_ENV) == "new"
+    for record, (lane, pick, ending) in {**CAPTURE, **(CAPTURE_RAISED if new else {})}.items():
+        sc = LANES[lane](tmp_path / record, ending, monkeypatch)
+        _fault(sc, ending)
         if isinstance(pick, str):
             sc.seat.kill_before = pick
         elif pick is not None:
-            sc.seat.kill_after = _kill_index(lane, tmp_path / f"{record}-probe", monkeypatch, pick)
+            sc.seat.kill_after = _kill_index(lane, tmp_path / f"{record}-probe", monkeypatch, pick, ending)
         _run(sc)
         doc = json.loads(sc.seat.watch[0].read_text(encoding="utf-8"))
-        (ROOT / f"frozen-{record}.json").write_text(gk.dump(doc), encoding="utf-8")
-        if record == "dated-confirmed":
+        (ROOT / f"frozen-{'new-' if new else ''}{record}.json").write_text(gk.dump(doc), encoding="utf-8")
+        if record == "dated-confirmed" and not new:
             pre = {**doc, "files": [{k: v for k, v in f.items() if k not in ("sent", "pending")} for f in doc["files"]]}
             (ROOT / "frozen-dated-pre-flag.json").write_text(gk.dump(pre), encoding="utf-8")

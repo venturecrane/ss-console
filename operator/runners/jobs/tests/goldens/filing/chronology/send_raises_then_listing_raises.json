@@ -63,6 +63,20 @@
       "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
     },
     {
+      "log": "Alpha Example - Medical Chronology 08-29-26.docx: the send raised (the response was lost after the POST); reading that one name back by hash"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "raised": {
+        "message": "the listing failed (the seat stopped answering)",
+        "type": "RuntimeError"
+      }
+    },
+    {
+      "log": "Alpha Example - Medical Chronology 08-29-26.docx: the read-back after the raised send failed too (the listing failed (the seat stopped answering))"
+    },
+    {
       "log": "Alpha Example - Medical Chronology 08-29-26.docx: the send failed (the response was lost after the POST); the file's record may already exist in folder folder-1, so it is not retried. Holding for a person to read the folder."
     }
   ],

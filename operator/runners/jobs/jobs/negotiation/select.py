@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .. import filing
+
 #: "counter" only at the start of a word ("Hospital Encounters.pdf" matched it on
 #: the firm's data, 2026-10-10); "998" only as its own number, never inside one.
 NAME = re.compile(
@@ -21,20 +23,13 @@ NAME = re.compile(
 EXTENSIONS = frozenset({".pdf", ".docx", ".doc", ".msg", ".eml"})
 
 
-def extension(f: dict[str, Any]) -> str:
-    ext = str(f.get("ext") or "").strip().lower()
-    if ext and not ext.startswith("."):
-        ext = "." + ext
-    if ext:
-        return ext
-    name = str(f.get("name") or "")
-    return ("." + name.rsplit(".", 1)[1].lower()) if "." in name else ""
+#: The extension lower-cased with its dot (``jobs/filing.folded_ext``).
+extension = filing.folded_ext
 
 
 def full_name(f: dict[str, Any]) -> str:
-    name = str(f.get("name") or "").strip()
-    ext = extension(f)
-    return name if not ext or name.lower().endswith(ext) else name + ext
+    """The full filename, folded: the one rule (``jobs/filing.full_name``)."""
+    return filing.full_name(f, fold=True)
 
 
 def select(f: dict[str, Any]) -> bool:

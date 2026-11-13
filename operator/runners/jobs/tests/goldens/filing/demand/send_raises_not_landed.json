@@ -80,6 +80,49 @@
       "sha256": "c8b3e4c01a4f49b653905acd70e4b8cb278a6ad28b58aece59b20ce6618c09c0"
     },
     {
+      "log": "Demand - Alpha Example 11-13-26.docx: the send raised (connection dropped mid-upload); reading that one name back by hash"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": []
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": []
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": []
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": []
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": []
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": []
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": []
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": []
+    },
+    {
       "log": "Demand - Alpha Example 11-13-26.docx: the send failed (connection dropped mid-upload); the file's record may already exist in folder folder-1, so it is not retried. Holding for a person to read the folder."
     }
   ],
