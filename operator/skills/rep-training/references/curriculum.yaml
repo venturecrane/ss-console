@@ -230,7 +230,7 @@ quiz:
       choices:
         A: SMD never sees any client content
         B: SMD's console never shows business content, client files are handled only by AI agents, and a request notice with the requester's words reaches SMD's operations mailbox
-        C: A person at SMD reads every email the Operator handles
+        C: SMD keeps its own copy of every client file the Operator handles
         D: SMD sees content only when the client sends it records
       answer: B
       source:

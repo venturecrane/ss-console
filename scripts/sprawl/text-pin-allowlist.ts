@@ -39,7 +39,9 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
     'Policy: handbook frontmatter, links, cited files and generated lists agree with the tree.',
   'tests/adr-integrity.test.ts': 'Contract: the ADR index is complete against docs/adr/.',
   'tests/docs-facts.test.ts':
-    'Contract: counts stated in CLAUDE.md agree with the files they count.',
+    'Contract: counts stated in CLAUDE.md, the handbook and the guide product library (kinds of action, connection tools, packs, queued job kinds, seats) agree with the files they count.',
+  'tests/capability-framing.test.ts':
+    'Policy: the site, the guide and the sales docs never disclaim a capability by build state and never say a person at SMD reads client files (Captain ruling 2026-11-13).',
   'tests/landing-page.test.ts':
     'Policy: marketing pages carry no dollar amounts, keep we-voice, no mailto, no overclaim (CLAUDE.md tone standard).',
   'tests/intake-questionnaire.test.ts':
