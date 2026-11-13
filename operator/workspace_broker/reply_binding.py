@@ -120,10 +120,11 @@ KINDS = ("casefile_job", "demand_job", "drafting_job", "litigation_job", "medchr
 JOB_KINDS = frozenset(
     {"casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"}
 )
-#: The kinds whose ledger carries its own reply mark (``mark_replied``). The
-#: medchron ledger predates it; its once-only rests on the bound_replies claim.
+#: The kinds whose ledger carries its own reply mark (``mark_replied``): every
+#: job kind. The medchron ledger joined 2026-11-13: until then its once-only
+#: rested on the bound_replies claim alone, and a reply could go out twice.
 _LEDGER_MARKED_KINDS = frozenset(
-    {"casefile_job", "demand_job", "drafting_job", "litigation_job", "negotiation_job", "note_job"}
+    {"casefile_job", "demand_job", "drafting_job", "litigation_job", "medchron_job", "negotiation_job", "note_job"}
 )
 _NOUN = {
     "casefile_job": "case file",
@@ -262,19 +263,19 @@ def _negotiation_ledger(broker: BrokerContext) -> NegotiationLedger:
 
 
 def _medchron_ledger(broker: BrokerContext) -> MedchronLedger:
-    # Read-only here; the queue dir is never written on this path.
+    # Read, and its reply marked; the queue dir is never written on this path.
     queue = os.environ.get("SMD_MEDCHRON_QUEUE_DIR") or seat_layout.JOBS_QUEUE
     return MedchronLedger(str(broker.audit_db_path), queue)
 
 
 def job_ledger(broker: BrokerContext, kind: str) -> Any:
-    if kind == "medchron_job":
-        return _medchron_ledger(broker)
     return _marking_ledger(broker, kind)
 
 
 def _marking_ledger(broker: BrokerContext, kind: str) -> Any:
     """The ledger of a kind in ``_LEDGER_MARKED_KINDS`` (it carries mark_replied)."""
+    if kind == "medchron_job":
+        return _medchron_ledger(broker)
     if kind == "litigation_job":
         return _litigation_ledger(broker)
     if kind == "negotiation_job":

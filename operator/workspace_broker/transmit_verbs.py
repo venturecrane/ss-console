@@ -469,8 +469,12 @@ def msgraph(broker: BrokerContext, action: str, request: dict[str, Any], _pid: i
         # SMD's review release of a reply that IS a job's reply (2026-11-06):
         # recorded as that job's bound reply, atomically with the send.
         # Imported here: reply_binding imports this module.
-        from . import hand_reply
+        from . import hand_reply, records_reply
 
+        if records_reply.names_records_job(request.get("for_job")):
+            # A records job's review row (2026-11-13): its ledger's reply-once
+            # mark, taken at the release's first POST.
+            return records_reply.records_reply(broker, action, request)
         return hand_reply.hand_reply(broker, action, request)
     ops = broker.msgraph
     db_path = broker.audit_db_path

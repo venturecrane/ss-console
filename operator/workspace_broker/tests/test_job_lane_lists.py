@@ -30,8 +30,10 @@ def test_the_reply_wording_lanes_are_the_lanes_that_wake_a_turn() -> None:
 
 def test_reply_binding_names_every_waking_kind() -> None:
     assert set(reply_binding._NOUN) == set(jl.WAKE_WORD_JOB_KIND.values())
-    # The chronology's ledger carries no reply mark; every other waking kind does.
-    assert reply_binding._LEDGER_MARKED_KINDS == frozenset(jl.WAKE_WORD_JOB_KIND.values()) - {"medchron_job"}
+    # Every waking kind's ledger carries the reply mark (the chronology's since
+    # 2026-11-13: records and medchron had no reply-once mark; a reply could go
+    # out twice).
+    assert reply_binding._LEDGER_MARKED_KINDS == frozenset(jl.WAKE_WORD_JOB_KIND.values())
 
 
 def test_the_help_review_reads_every_queued_lane_and_library_setup() -> None:

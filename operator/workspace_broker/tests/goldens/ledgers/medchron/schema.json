@@ -22,7 +22,7 @@
             [
               "table",
               "medchron_jobs",
-              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT)"
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT, reply_sent_at TEXT, reply_key TEXT)"
             ]
           ],
           "table_info": [
@@ -43,7 +43,9 @@
             [14, "delivery_json", "TEXT", 0, null, 0],
             [15, "work_digest", "TEXT", 0, null, 0],
             [16, "covered_json", "TEXT", 0, null, 0],
-            [17, "client_keys", "TEXT", 0, null, 0]
+            [17, "client_keys", "TEXT", 0, null, 0],
+            [18, "reply_sent_at", "TEXT", 0, null, 0],
+            [19, "reply_key", "TEXT", 0, null, 0]
           ]
         },
         "medchron_page_credits": {
@@ -98,7 +100,7 @@
             [
               "table",
               "medchron_jobs",
-              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT)"
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT, reply_sent_at TEXT, reply_key TEXT)"
             ]
           ],
           "table_info": [
@@ -119,7 +121,9 @@
             [14, "delivery_json", "TEXT", 0, null, 0],
             [15, "work_digest", "TEXT", 0, null, 0],
             [16, "covered_json", "TEXT", 0, null, 0],
-            [17, "client_keys", "TEXT", 0, null, 0]
+            [17, "client_keys", "TEXT", 0, null, 0],
+            [18, "reply_sent_at", "TEXT", 0, null, 0],
+            [19, "reply_key", "TEXT", 0, null, 0]
           ]
         },
         "medchron_page_credits": {
@@ -174,7 +178,7 @@
             [
               "table",
               "medchron_jobs",
-              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT)"
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, work_digest TEXT, covered_json TEXT, client_keys TEXT, reply_sent_at TEXT, reply_key TEXT)"
             ]
           ],
           "table_info": [
@@ -195,7 +199,9 @@
             [14, "delivery_json", "TEXT", 0, null, 0],
             [15, "work_digest", "TEXT", 0, null, 0],
             [16, "covered_json", "TEXT", 0, null, 0],
-            [17, "client_keys", "TEXT", 0, null, 0]
+            [17, "client_keys", "TEXT", 0, null, 0],
+            [18, "reply_sent_at", "TEXT", 0, null, 0],
+            [19, "reply_key", "TEXT", 0, null, 0]
           ]
         },
         "medchron_page_credits": {
@@ -250,7 +256,7 @@
             [
               "table",
               "medchron_jobs",
-              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, work_digest TEXT, client_keys TEXT)"
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, work_digest TEXT, client_keys TEXT, reply_sent_at TEXT, reply_key TEXT)"
             ]
           ],
           "table_info": [
@@ -271,7 +277,9 @@
             [14, "delivery_json", "TEXT", 0, null, 0],
             [15, "covered_json", "TEXT", 0, null, 0],
             [16, "work_digest", "TEXT", 0, null, 0],
-            [17, "client_keys", "TEXT", 0, null, 0]
+            [17, "client_keys", "TEXT", 0, null, 0],
+            [18, "reply_sent_at", "TEXT", 0, null, 0],
+            [19, "reply_key", "TEXT", 0, null, 0]
           ]
         },
         "medchron_page_credits": {
@@ -326,7 +334,7 @@
             [
               "table",
               "medchron_jobs",
-              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT)"
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT, reply_sent_at TEXT, reply_key TEXT)"
             ]
           ],
           "table_info": [
@@ -347,7 +355,9 @@
             [14, "delivery_json", "TEXT", 0, null, 0],
             [15, "covered_json", "TEXT", 0, null, 0],
             [16, "client_keys", "TEXT", 0, null, 0],
-            [17, "work_digest", "TEXT", 0, null, 0]
+            [17, "work_digest", "TEXT", 0, null, 0],
+            [18, "reply_sent_at", "TEXT", 0, null, 0],
+            [19, "reply_key", "TEXT", 0, null, 0]
           ]
         },
         "medchron_page_credits": {
@@ -402,7 +412,7 @@
             [
               "table",
               "medchron_jobs",
-              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT)"
+              "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT, reply_sent_at TEXT, reply_key TEXT)"
             ]
           ],
           "table_info": [
@@ -423,7 +433,9 @@
             [14, "delivery_json", "TEXT", 0, null, 0],
             [15, "covered_json", "TEXT", 0, null, 0],
             [16, "client_keys", "TEXT", 0, null, 0],
-            [17, "work_digest", "TEXT", 0, null, 0]
+            [17, "work_digest", "TEXT", 0, null, 0],
+            [18, "reply_sent_at", "TEXT", 0, null, 0],
+            [19, "reply_key", "TEXT", 0, null, 0]
           ]
         },
         "medchron_page_credits": {
@@ -478,7 +490,7 @@
         [
           "table",
           "medchron_jobs",
-          "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT)"
+          "CREATE TABLE medchron_jobs (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, state TEXT NOT NULL, matter_id TEXT NOT NULL, matter_number TEXT NOT NULL, requester TEXT, request_ref TEXT, envelope_digest TEXT NOT NULL, documents INTEGER NOT NULL DEFAULT 0, pages INTEGER NOT NULL DEFAULT 0, cents INTEGER NOT NULL DEFAULT 0, reason TEXT, folder_id TEXT, delivery_json TEXT, covered_json TEXT, client_keys TEXT, work_digest TEXT, reply_sent_at TEXT, reply_key TEXT)"
         ]
       ],
       "table_info": [
@@ -499,7 +511,9 @@
         [14, "delivery_json", "TEXT", 0, null, 0],
         [15, "covered_json", "TEXT", 0, null, 0],
         [16, "client_keys", "TEXT", 0, null, 0],
-        [17, "work_digest", "TEXT", 0, null, 0]
+        [17, "work_digest", "TEXT", 0, null, 0],
+        [18, "reply_sent_at", "TEXT", 0, null, 0],
+        [19, "reply_key", "TEXT", 0, null, 0]
       ]
     },
     "medchron_page_credits": {

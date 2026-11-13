@@ -41,10 +41,11 @@ AUDIT_DB_ENV = "SMD_AUDIT_DB_PATH"
 # SMD_AUDIT_DB_PATH was refused with "the seat's audit db is not at ...".
 DEFAULT_AUDIT_DB = seat_layout.AUDIT_VOLUME_DB
 #: The ledgers a requested job's reply is marked on (``reply_sent_at`` /
-#: ``reply_key``), by kind. A medchron job carries no mark (its once-only is the
-#: broker's claim alone) and a negotiation or note job has no request thread of
-#: the kind a hand reply answers, so neither is looked for here; ``--job`` still
-#: names them.
+#: ``reply_key``), by kind, whose "ended and owes a reply" is delivered or held.
+#: A medchron job carries the mark too (2026-11-13) but is replied on only when
+#: delivered, never held, so this rule does not fit it; a negotiation or note
+#: job has no request thread of the kind a hand reply answers. None of the three
+#: is looked for here; ``--job`` still names them.
 _TABLES = {
     "casefile_job": "casefile_jobs",
     "demand_job": "demand_jobs",

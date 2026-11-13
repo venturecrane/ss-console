@@ -1,3 +1,50 @@
 {
-  "_why": "Dotted paths (list indexes as numbers) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered); <file> allows the file to appear or go. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared."
+  "_why": "Dotted paths (list indexes as numbers) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered); <file> allows the file to appear or go. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. #4011 (2026-11-13): the records and medchron ledgers gain reply_sent_at and reply_key (the reply-once mark, a defect Phase A pinned), so a records job row the broker returns carries both, null until replied.",
+  "records__broker_down_mid_run": [
+    "1.wire.0.reply.job.row.reply_key",
+    "1.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__broker_unreachable": [
+    "2.wire.0.reply.job.row.reply_key",
+    "2.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__busy": ["1.wire.0.reply.job.row.reply_key", "1.wire.0.reply.job.row.reply_sent_at"],
+  "records__delivered": [
+    "1.wire.0.reply.job.row.reply_key",
+    "1.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__failed": ["1.wire.0.reply.job.row.reply_key", "1.wire.0.reply.job.row.reply_sent_at"],
+  "records__held": ["1.wire.0.reply.job.row.reply_key", "1.wire.0.reply.job.row.reply_sent_at"],
+  "records__lane_unproven": [
+    "1.wire.0.reply.job.row.reply_key",
+    "1.wire.0.reply.job.row.reply_sent_at",
+    "3.wire.0.reply.job.row.reply_key",
+    "3.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__machine_stop": [
+    "1.wire.0.reply.job.row.reply_key",
+    "1.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__no_verdict_usage": [
+    "1.wire.0.reply.job.row.reply_key",
+    "1.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__resume_failed": [
+    "1.wire.0.reply.job.row.reply_key",
+    "1.wire.0.reply.job.row.reply_sent_at",
+    "3.wire.0.reply.job.row.reply_key",
+    "3.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__seat_paused": [
+    "1.wire.0.reply.job.row.reply_key",
+    "1.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__settings_missing": [
+    "2.wire.0.reply.job.row.reply_key",
+    "2.wire.0.reply.job.row.reply_sent_at"
+  ],
+  "records__stopped_by_smd_running": [
+    "1.wire.0.reply.job.row.reply_key",
+    "1.wire.0.reply.job.row.reply_sent_at"
+  ]
 }

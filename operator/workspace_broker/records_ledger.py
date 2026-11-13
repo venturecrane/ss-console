@@ -101,6 +101,19 @@ CREATE_INDEXES = (
     "CREATE TABLE IF NOT EXISTS records_spend (job_id TEXT NOT NULL, at TEXT NOT NULL, cents INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS idx_records_spend_at ON records_spend(at)",
 )
+#: The ``records_jobs`` columns added after the table first shipped, each with
+#: its own literal statement (no SQL is composed), run by
+#: ``RecordsLedger.ensure_schema`` when the column is missing (a seat's file
+#: that predates it keeps its rows; CREATE TABLE IF NOT EXISTS adds nothing to
+#: a table that exists).
+#:
+#: 2026-11-13, the reply-once mark (``lane_ledger.ReplyOnce``): records and
+#: medchron had no reply-once mark, so a reply could go out twice. NULL on an
+#: older row reads "not yet replied".
+ADDED_COLUMNS = (
+    ("reply_sent_at", "ALTER TABLE records_jobs ADD COLUMN reply_sent_at TEXT"),
+    ("reply_key", "ALTER TABLE records_jobs ADD COLUMN reply_key TEXT"),
+)
 PROJECTION = tuple("created_at updated_at state trigger requester matter_id stage cents review_id reason".split())
 
 
@@ -292,6 +305,7 @@ def resolve(report: dict[str, Any], current: str) -> tuple[str, dict[str, Any]]:
 
 __all__ = [
     "ACKS",
+    "ADDED_COLUMNS",
     "ALLOWED_NEXT",
     "CLOSE_REF",
     "CLOSED_REASON",

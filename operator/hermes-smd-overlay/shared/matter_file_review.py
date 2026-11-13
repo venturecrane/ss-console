@@ -61,6 +61,7 @@ from records_contract.review_row import (
     DIGEST_RE,
     HOLD_REASON,
     ID_RE,
+    JOB_ID_RE,
     JOB_NONE,
     REVIEW_DIR_ENV,
     STATUS_EXPIRED,
@@ -92,6 +93,7 @@ __all__ = [
     "DEFAULT_DECISIONS_DIR",
     "DEFAULT_REVIEW_DIR",
     "HOLD_REASON",
+    "JOB_ID_RE",
     "JOB_NONE",
     "REVIEW_DIR_ENV",
     "STATUS_EXPIRED",
@@ -111,11 +113,32 @@ __all__ = [
     "hold",
     "main",
     "mark_smd",
+    "release_job",
     "released_count",
     "review_dir",
     "row_job",
     "rows",
 ]
+
+#: The job kind a records lane row's release is the reply of (the broker's
+#: ``records_reply.KIND``).
+LANE_JOB_KIND = "records_job"
+
+
+def release_job(row: dict[str, Any], lane_session_prefix: str) -> dict[str, str] | None:
+    """The job a release IS the reply of: the row's own ``job`` (SMD's
+    ``approve --job``), else, for a records lane row, the job its
+    ``session_id`` names after ``lane_session_prefix``. The broker takes that
+    job's reply-once mark at the send (2026-11-13: records and medchron had no
+    reply-once mark; a reply could go out twice)."""
+    job = row_job(row)
+    if job is not None:
+        return job
+    session = str(row.get("session_id") or "")
+    if not session.startswith(lane_session_prefix):
+        return None
+    job_id = session[len(lane_session_prefix) :]
+    return {"kind": LANE_JOB_KIND, "job_id": job_id} if JOB_ID_RE.fullmatch(job_id) else None
 
 
 def hold(

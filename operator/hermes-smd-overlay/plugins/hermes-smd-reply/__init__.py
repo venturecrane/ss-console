@@ -1281,11 +1281,12 @@ def _review_one(row: dict[str, Any]) -> None:
             matter_ref=matter_ref,
             to=str(row.get("to") or "") if row.get("redirect") else None,
             attachments=matter_file_reply.Prepared.descriptors(first) if first else None,
-            # The job this release IS the reply of (``approve --job``): the
-            # broker records it as that job's bound reply, atomically with the
-            # send, so a later rewake cannot send a second completion (A&P,
-            # 2026-11-06).
-            for_job=matter_file_review.row_job(row),
+            # The job this release IS the reply of (``approve --job``, or a
+            # records lane row's own job): the broker records it as that job's
+            # reply, atomically with the send, so a later rewake or a second
+            # row cannot send a second completion (A&P, 2026-11-06; records,
+            # 2026-11-13).
+            for_job=matter_file_review.release_job(row, LANE_SESSION_PREFIX),
         )
     except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
         matter_file_review.finish(row, matter_file_review.STATUS_FAILED, note=type(exc).__name__)

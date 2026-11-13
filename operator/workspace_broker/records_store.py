@@ -13,8 +13,9 @@ import sqlite3
 from typing import Any
 
 from .audit_ledger import _iso_utc, _ulid
-from .lane_ledger import RecentJobs, SpendMeter
+from .lane_ledger import RecentJobs, ReplyOnce, SpendMeter
 from .records_ledger import (
+    ADDED_COLUMNS,
     ALLOWED_NEXT,
     CLOSE_REF,
     CLOSED_REASON,
@@ -51,10 +52,12 @@ def queue_dir_from_env() -> str:
     return os.environ.get(QUEUE_DIR_ENV, "").strip() or DEFAULT_QUEUE_DIR
 
 
-class RecordsLedger(RecentJobs, SpendMeter):
+class RecordsLedger(ReplyOnce, RecentJobs, SpendMeter):
     """The records lane on the shared ledger (``lane_ledger``): its tables, its
-    DDL, its report-shaped record, SMD's close and its UPDATE. It carries no
-    reply-once mark (``ReplyOnce``): its reply is bound elsewhere."""
+    DDL, its report-shaped record, SMD's close and its UPDATE. Its reply is the
+    SMD review row the gateway releases; the reply-once mark (``ReplyOnce``,
+    2026-11-13) is taken by the broker at that release's first POST
+    (``records_reply``), once per job (``records_reply.REPLY_KEY``)."""
 
     JOBS = "records_jobs"
     ID = "job_id"
@@ -66,6 +69,10 @@ class RecordsLedger(RecentJobs, SpendMeter):
     def _create(self, conn: sqlite3.Connection) -> None:
         for sql in (CREATE_SQL, CREATE_LINES_SQL, *CREATE_INDEXES):
             conn.execute(sql)
+        have = {r["name"] for r in conn.execute("PRAGMA table_info(records_jobs)")}
+        for column, alter in ADDED_COLUMNS:
+            if column not in have:
+                conn.execute(alter)
 
     # ---- reads ---------------------------------------------------------------------
     def lines(self, job_id: str) -> list[dict[str, Any]]:
