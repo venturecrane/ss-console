@@ -31,7 +31,8 @@ brotlicffi>=1.2.1.0
 # webhook server); no seat runs a Telegram platform. A minor release of a
 # library Hermes never calls directly; python-telegram-bot's requirement is a
 # range, so the override resolves without a Hermes promotion.
-tornado>=6.6
+# tornado 6.6 -> fix: CVE-2026-126347 (fixed in 6.6.1, published 2026-11-13).
+tornado>=6.6.1
 
 # pyasn1 0.6.4 -> fix: CVE-2026-119194, CVE-2026-119195, CVE-2026-119196,
 # CVE-2026-119197 (fixed in 0.6.5). Reachable: google-auth decodes service
