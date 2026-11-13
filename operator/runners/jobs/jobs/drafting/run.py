@@ -48,20 +48,17 @@ Outcomes (the drafting ledger, the same edges as demand's):
 from __future__ import annotations
 
 import json
-import os
 import time
 import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import budget as budget_mod, firm_wording, limits as limits_mod, proof_mode, request_additions, stop_request
+from .. import firm_wording, limits as limits_mod, paid, proof_mode, request_additions, stop_request
 from ..demand import deliver, facts as facts_mod, preflight, pull, summarize, transcribe
 from ..demand.firm import DemandFirm
 from operator_connector_sdk.library import readers
 
 from ..attorneys.seat import roster_for
-from ..ledger import Ledger
-from ..llm import Doorway
 from ..proof import readback as readback_mod, review as proof_review
 from . import (
     caption as caption_mod,
@@ -161,28 +158,26 @@ class DraftingRun(EvidenceLane, Placing):
         self.data = self.job.data
         self.data.mkdir(parents=True, exist_ok=True)
         self.log = log
-        self.pricing = budget_mod.Pricing.load(
-            Path(pricing or os.environ.get(budget_mod.PRICING_ENV) or budget_mod.PRICING_DEFAULT)
-        )
         b = self.firm.data["budget"]
-        self.budget = budget_mod.Budget(
-            self.pricing,
-            float(b["per_job_cap_usd"]),
-            [self.data / "usage-ledger.jsonl"],
-            float(b["usd_per_million_chars"]),
-        )
-        self.limits = limits_mod.Limits(
-            cap_usd=float(b["per_job_cap_usd"]),
-            monthly_budget_usd=float(b["monthly_budget_usd"]),
-            usd_per_scanned_page=float(b["usd_per_scanned_page"]),
-            usd_per_audit_claim=0.0,
-            month_cents_used=self.job.month_cents_used,
-        )
-        self.doorway = Doorway(
-            ledger=Ledger(self.data / "usage-ledger.jsonl"),
+        session = paid.open_session(
+            self.data,
+            paid.Caps(
+                cap_usd=float(b["per_job_cap_usd"]),
+                monthly_budget_usd=float(b["monthly_budget_usd"]),
+                usd_per_scanned_page=float(b["usd_per_scanned_page"]),
+                month_cents_used=self.job.month_cents_used,
+            ),
+            pricing=pricing,
+            usd_per_million_chars=float(b["usd_per_million_chars"]),
             client=client,
             log=log,
             before_request=lambda stage: self.limits.check_each_call(self.budget.refresh(), stage),
+        )
+        self.pricing, self.budget, self.limits, self.doorway = (
+            session.pricing,
+            session.budget,
+            session.limits,
+            session.doorway,
         )
         self._seat_factory, self._seat = seat_factory, None
         self.date_stamp = self._frozen_date(today())

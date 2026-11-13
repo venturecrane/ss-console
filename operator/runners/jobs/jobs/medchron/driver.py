@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .. import __version__, budget as budget_mod, limits as limits_mod, proof_mode, seat as seat_mod, stop_request
+from .. import __version__, budget as budget_mod, limits as limits_mod, paid, proof_mode, seat as seat_mod, stop_request
 from . import (
     allowance as allowance_mod,
     config as config_mod,
@@ -259,8 +259,7 @@ class Driver:
         self._seat = None
         self._client = client
         self.pipeline = None if (dry_run or rehearse) else _pipeline_dir()
-        pricing_path = Path(pricing or os.environ.get(budget_mod.PRICING_ENV) or budget_mod.PRICING_DEFAULT)
-        self.pricing = budget_mod.Pricing.load(pricing_path)
+        self.pricing = paid.load_pricing(pricing)
         # The envelope can only LOWER the firm's cap. It used to win outright,
         # which made the cap advisory: anything that could author an envelope
         # could author its way past the firm's posture.
@@ -269,7 +268,7 @@ class Driver:
         if self.job.cap_usd is not None and self.job.cap_usd > firm_cap:
             self.log("[cap] the envelope asked for a higher cap than the firm's; the firm's cap stands")
         self.slug_dir = self.job.data_root / self.job.slug
-        self.budget = budget_mod.Budget(
+        self.budget = paid.budget(
             self.pricing,
             cap,
             job_mod.usage_ledgers(self.job),
@@ -305,7 +304,7 @@ class Driver:
                 "seat mode: the job envelope carries no month state "
                 "(allowance_remaining_pages, month_cents_used); refusing to run unmetered"
             )
-        return limits_mod.Limits(
+        return paid.Caps(
             cap_usd=cap,
             monthly_budget_usd=self.cfg.monthly_budget_usd,
             usd_per_scanned_page=self.cfg.usd_per_scanned_page,
@@ -314,7 +313,7 @@ class Driver:
             allowance_remaining_pages=job.allowance_remaining_pages,
             allowance_month=job.allowance_month,
             allowance_cycle_label=job.allowance_cycle_label,
-        )
+        ).limits()
 
     def _projection(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> float | None:
         """What this paid stage is projected to add, in dollars, from THIS

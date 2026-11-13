@@ -12,6 +12,8 @@ from __future__ import annotations
 import difflib
 import re
 
+from ...text_rules import DATE_HEAD as DATE, EXHIBIT_CITE as CITE
+
 SECTIONS = (
     "## Treatment Timeline",
     "## Diagnostic Highlights",
@@ -27,8 +29,6 @@ SECTIONS = (
 HEAD = re.compile(r"\d{2}/\d{2}/\d{4}\s*(?:\(|$)|\d{1,2}/\d{1,2}(?![/\d])\s*(?:\(|$)", re.M)
 ENTRY = re.compile(r"(?m)^(?=" + HEAD.pattern + ")")
 DATED = re.compile(r"\d{2}/\d{2}/\d{4}")
-DATE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
-CITE = re.compile(r"\(Exhibit (\d+)(?: - p\. ([0-9,\s\-]+))?\)")
 #: The delivered summarize-only note ("[NTD: N additional pre-incident
 #: encounters ... not itemized ...]"); an update that itemizes removes it.
 PRE_NOTE = re.compile(r"\[NTD: \d+ additional pre-incident encounters?[^\]]*not itemized[^\]]*\]\s*")

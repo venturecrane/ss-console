@@ -97,11 +97,10 @@ from .. import wording
 from ..medchron.audit import claims as CL
 from ..proof import checks, review
 from .base import StageRun
+from ..text_rules import EXHIBIT_PAGE_MENTION as _EXHIBIT_PAGE, US_DATE as _DATE
 
 #: A double-quoted span a reviewer quotes (straight or curly quotes).
 _QUOTED = re.compile(r"\"([^\"]{8,})\"|“([^”]{8,})”")
-_DATE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
-_EXHIBIT_PAGE = re.compile(r"(?i)\bExhibit\s+(\d+)(?:\s*[,-]?\s*p(?:age|p)?\.?\s*(\d+))?")
 _DATED = re.compile(r"^\d{2}/\d{2}/\d{4}")
 _CHECK = re.compile(r"^\s*(\d{1,2})\b")
 #: Any double-quoted span (check 3 quotes short words: "the auditor").

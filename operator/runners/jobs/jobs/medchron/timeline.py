@@ -11,17 +11,16 @@ firm's `chronology.treatment_gap_days`.
 
 from __future__ import annotations
 
-import re
 from calendar import Calendar, month_name
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
+from ..text_rules import DATE_HEAD, ENTRY_START as ENTRY_SPLIT
+
 PALETTE = ["#e8447f", "#f5a623", "#7ac943", "#9b59d0", "#2ecc9b", "#2d9cdb", "#f2c94c", "#eb5757", "#56ccf2", "#27ae60"]
 FONT = "DejaVu Sans"
-ENTRY_SPLIT = re.compile(r"(?m)^(?=\d{2}/\d{2}/\d{4}\s*(?:\(|$))")
-DATE_HEAD = re.compile(r"^(\d{2})/(\d{2})/(\d{4})")
 
 
 def _provider_of(lines: list[str], headings: set[str]) -> str:
