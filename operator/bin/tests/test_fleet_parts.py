@@ -719,8 +719,8 @@ def test_cli_only_runs_beside_a_full_rollout_and_never_takes_the_fleet_lease() -
         seats.append(seat)
         return _done(seat, ring)
 
-    assert cli._run_waves(_ctx(store), _waves_args("scott"), rel, do_seat, "fixer") == 0  # type: ignore[arg-type]
-    assert seats == ["scott"] and store.lease_row["holder"] == "full"
+    assert cli._run_waves(_ctx(store), _waves_args("smd-guide"), rel, do_seat, "fixer") == 0  # type: ignore[arg-type]
+    assert seats == ["smd-guide"] and store.lease_row["holder"] == "full"
 
 
 def test_cli_completion_is_stamped_once_from_the_records() -> None:
@@ -755,7 +755,7 @@ def test_cli_dry_run_summary_claims_nothing_about_the_release() -> None:
     store.insert_release(rel)
     logs: list[str] = []
     ctx = cli.Ctx(REPO, ScriptRunner(), store, FakeR2(), FakeFly(), log=logs.append)  # type: ignore[arg-type]
-    args = argparse.Namespace(only="scott", dry_run=True, parallel=1)
+    args = argparse.Namespace(only="smd-guide", dry_run=True, parallel=1)
     assert cli._run_waves(ctx, args, rel, _done, "h") == 0  # type: ignore[arg-type]
     assert logs[-1] == "dry run: nothing deployed, nothing recorded"
     assert not any("not yet done" in line for line in logs)

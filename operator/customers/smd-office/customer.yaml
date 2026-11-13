@@ -1,0 +1,167 @@
+schema_version: 1
+
+# OPERATIONS seat: SMD Services' own back office. It keeps SMD's mailbox
+# (sorting and drafting in the Captain's Gmail, smdurgan@smdurgan.com, which
+# also sends as scott@smd.services) and later takes on SMD's finances. It
+# replaces the scott seat (the hosted-agent founding seat, ADR 0067),
+# decommissioned 2026-11-13; that seat's record is
+# operator/customers/scott.decommissioned.2026-11-13/.
+#
+# NOT YET PROVISIONED (seat.yaml fly_app: null). A merge of this file writes
+# nothing to R2 (ci-publish-customer-configs.sh never creates a seat's object)
+# and no D1 row (ci-sync-customer-configs.sh skips a slug with no
+# customer_configs row), so nothing runs until the Captain provisions it.
+#
+# What is deliberately absent here, each added by its own reviewed PR:
+# - the mailbox-keeper skill and the webhook trigger that wakes it on inbound
+#   mail (until then the seat acts only when the Captain asks, in workspace);
+# - any send FROM the Captain's mailbox. google_auth below lets the broker
+#   read, label and draft there; sending as smdurgan@smdurgan.com or
+#   scott@smd.services is a staff send-as and arrives only through an ADR 0089
+#   approval in a later PR. The persona's external_send stays confirm.
+
+# ---- IDENTITY ----
+customer_id: 'smd-office'
+customer_name: 'SMD Services'
+
+# ---- SEAT DESCRIPTOR ----
+# SMD's own seat, on SMD's key.
+seat:
+  kind: internal
+  product: hosted-agent
+
+vertical: mixed
+addons: []
+practice_areas:
+  - general
+fly_region: lax # Phoenix-adjacent; Fly has no phx region
+
+# ---- RUNTIME ----
+# The main model SMD's current seats run (smd-guide).
+model: claude-sonnet-5-5
+
+# One gateway, no lanes: the fleet floor (#3917), as scott ran.
+machine:
+  size: shared-cpu-2x
+  memory_mb: 2048
+
+# ---- GOOGLE WORKSPACE (domain-wide delegation) ----
+# The broker alone holds the service-account credential and impersonates only
+# the subjects authored here (operator/workspace_broker/google_auth.py
+# authored_identities). One mailbox, the Captain's; its "Send mail as" list is
+# the two identities that mailbox carries. Listing them here does not authorize
+# a send (see the header).
+google_auth:
+  mode: dwd
+  subject: smdurgan@smdurgan.com
+  scopes:
+    - https://www.googleapis.com/auth/gmail.modify
+  managed_mailboxes:
+    - address: smdurgan@smdurgan.com
+      send_as:
+        - smdurgan@smdurgan.com
+        - scott@smd.services
+
+# ---- HUMANS WITH PORTAL ACCESS ----
+users:
+  - email: scott@smd.services
+    role: principal
+    full_name: Scott Durgan
+
+# ---- PERSONA ----
+personas:
+  - slug: smd-operations
+    status: active
+    name: SMD Operations
+    title: Operations
+    tone:
+      - plainspoken
+      - concise
+    entitlements:
+      exposure:
+        internal_write: autonomous
+        # A send to anyone off the roster waits for the Captain's yes.
+        external_send: confirm
+        # Sends to a ROSTERED address (scope.inbound_allow_from) are their own
+        # class: the Captain's own addresses, so no approval round trip.
+        external_send_internal: autonomous
+    skills:
+      - name: workspace
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: false
+        enabled: true
+
+# ---- CONNECTORS ----
+connectors:
+  Email:
+    adapter: agentmail
+    backend: 'mcp:agentmail'
+    enabled: true
+    webhook_url: 'https://hermes-smd-office.fly.dev/webhooks/agentmail'
+    # The seat's OWN inbox, created at provisioning. Authored rather than
+    # derived (the scott seat's inbox was agentcrane@, not its slug, and the
+    # broker refused every send until this line was written down).
+    inbox_address: smd-office@agentmail.to
+  # ADR 0070/0099: SMD-keyed search.
+  WebSearch:
+    adapter: brave
+    backend: 'native:brave-free'
+    enabled: true
+
+# ---- SEND POLICY ----
+# Same authored values as scott and brokery: rostered senders exempt from the
+# reply throttle, held replies auto-release, non-roster bounds unchanged.
+send_policy:
+  reply:
+    internal_exempt: true
+    per_sender_max: 3
+    per_sender_window_seconds: 600
+    global_max: 20
+    global_window_seconds: 3600
+    backstop_max: 60
+    backstop_window_seconds: 3600
+  held_release:
+    enabled: true
+    ttl_seconds: 86400
+
+# ---- SCOPE ----
+scope:
+  email_folders_visible:
+    - Inbox
+    - Sent
+  email_folders_blind: []
+  email_keyword_blocks: []
+  domain_blocks: []
+  # Exact addresses only: the Captain's two.
+  inbound_allow_from:
+    - scott@smd.services
+    - smdurgan@smdurgan.com
+
+# ---- ESCALATION ----
+escalation:
+  red_flag_recipients:
+    - scott@smd.services
+  failure_recipients:
+    - team@smd.services
+
+# ---- SAFETY ----
+# On SMD's key: the runaway guard.
+safety:
+  sticky_stop:
+    cost_cap_daily_cents: 300
+    inbound_daily_cap: 100
+
+# ---- TELEGRAM ----
+# Off: no bot exists for this seat. A seat with chat enabled and no bot token
+# does not boot. Turned on by a reviewed PR once a bot is created and vaulted.
+telegram:
+  enabled: false
+
+# ---- MEMORY (isolation invariants; must match customer_id) ----
+memory:
+  d1_namespace: smd-office
+  r2_vault_path: 'vaults/smd-office/'
+  vectorize_index: 'hermes-smd-office-vault'

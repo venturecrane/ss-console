@@ -24,6 +24,6 @@ export const SEAT_PURPOSES: Readonly<Record<string, SeatPurposeEntry>> = Object.
   brokery: { purpose: 'client', twinOf: null, provisioned: true },
   'captain-mark': { purpose: 'client', twinOf: null, provisioned: true },
   'pilot-smokeball': { purpose: 'demo', twinOf: null, provisioned: true },
-  scott: { purpose: 'internal', twinOf: null, provisioned: true },
   'smd-guide': { purpose: 'internal', twinOf: null, provisioned: true },
+  'smd-office': { purpose: 'internal', twinOf: null, provisioned: false },
 })

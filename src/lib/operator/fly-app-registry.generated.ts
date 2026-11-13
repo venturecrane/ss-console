@@ -14,7 +14,6 @@ export const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze
   brokery: 'hermes-brokery',
   'captain-mark': 'hermes-captain-mark',
   'pilot-smokeball': 'hermes-pilot-smokeball',
-  scott: 'hermes-scott',
   'smd-guide': 'hermes-smd-guide',
 })
 
@@ -22,4 +21,5 @@ export const CUSTOMER_FLY_APPS: Readonly<Record<string, string>> = Object.freeze
 export const UNPROVISIONED_CUSTOMERS: Readonly<Record<string, string>> = Object.freeze({
   'ashton-price-marketing':
     "The firm has not yet created the seat's mailbox, its two Microsoft Graph app registrations or the WordPress Contributor user; the seat is provisioned the week the firm engages (scope letter 385, 2026-10-15).",
+  'smd-office': 'Fly app not created yet',
 })

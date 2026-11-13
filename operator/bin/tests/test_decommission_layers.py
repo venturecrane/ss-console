@@ -216,7 +216,8 @@ def test_r2_list_error_surfaces():
 
 
 class FakeAgentMail:
-    def __init__(self, inboxes, webhooks, *, sticky=(), list_status=200):
+    def __init__(self, inboxes, webhooks, *, sticky=(), list_status=200, keys=None):
+        self.keys = dict(keys or {})  # key id -> inbox id
         self.inboxes = list(inboxes)
         self.webhooks = dict(webhooks)  # id -> url
         self.sticky = set(sticky)
@@ -230,10 +231,21 @@ class FakeAgentMail:
             return HttpResponse(200, {"inboxes": [{"inbox_id": i} for i in self.inboxes]})
         if method == "GET" and path == "/webhooks":
             return HttpResponse(200, {"webhooks": [{"webhook_id": k, "url": v} for k, v in self.webhooks.items()]})
+        if method == "GET" and path == "/api-keys":
+            return HttpResponse(200, {"api_keys": [{"api_key_id": k, "inbox_id": v} for k, v in self.keys.items()]})
+        if method == "DELETE" and path.startswith("/api-keys/"):
+            ident = urllib.parse.unquote(path[len("/api-keys/") :])
+            if ident not in self.keys:
+                return HttpResponse(404, None)
+            if ident not in self.sticky:
+                del self.keys[ident]
+            return HttpResponse(204, None)
         if method == "DELETE" and path.startswith("/inboxes/"):
             ident = urllib.parse.unquote(path[len("/inboxes/") :])
             if ident not in self.inboxes:
                 return HttpResponse(404, None)
+            if any(v == ident for v in self.keys.values()):
+                return HttpResponse(409, {"name": "CannotDeleteError"})
             if ident not in self.sticky:
                 self.inboxes.remove(ident)
             return HttpResponse(204, None)
@@ -284,6 +296,37 @@ def test_agentmail_removes_the_inbox_and_the_seats_webhook_only(tmp_path):
     }
     assert mail.inboxes == ["other@agentmail.to"]
     assert set(mail.webhooks) == {"wh-other", "wh-acme-two", "wh-evil"}
+
+
+def test_agentmail_revokes_the_inboxs_own_keys_before_the_delete(tmp_path):
+    # The vendor refuses an inbox delete while inbox-scoped keys exist (409).
+    mail = _mail_world(keys={"k-acme-send": "Acme@agentmail.to", "k-other": "other@agentmail.to"})
+    manifest = _run(AgentMailInboxDeprovisioner("key", tmp_path, http=mail).deprovision("acme"))
+    assert manifest["api_keys_revoked"] == 1 and manifest["identities_removed"] == 1
+    assert mail.keys == {"k-other": "other@agentmail.to"}
+    assert mail.inboxes == ["other@agentmail.to"]
+
+
+def test_agentmail_key_the_vendor_keeps_raises(tmp_path):
+    mail = _mail_world(keys={"k-acme": "Acme@agentmail.to"}, sticky={"k-acme"})
+    with pytest.raises(RuntimeError, match="api key"):
+        _run(AgentMailInboxDeprovisioner("key", tmp_path, http=mail).deprovision("acme"))
+
+
+def test_agentmail_reads_the_authored_inbox_from_the_tombstone(tmp_path):
+    # After step 08 renames the seat directory, the read-back must still check
+    # the authored inbox, not the slug convention.
+    tomb = tmp_path / "acme.decommissioned.2026-11-13"
+    tomb.mkdir()
+    (tomb / "customer.yaml").write_text("connectors:\n  Email:\n    inbox_address: crane@agentmail.to\n")
+    mail = FakeAgentMail(["crane@agentmail.to"], {})
+    deprov = AgentMailInboxDeprovisioner("key", tmp_path, http=mail)
+    assert deprov.survey("acme") == {
+        "present": True,
+        "inbox": "crane@agentmail.to",
+        "inbox_present": True,
+        "webhooks": [],
+    }
 
 
 def test_agentmail_inbox_the_vendor_keeps_raises(tmp_path):

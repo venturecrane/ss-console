@@ -13,6 +13,6 @@ export const INVENTORY_SEAT_PURPOSES = Object.freeze([
   ['brokery', 'client', null],
   ['captain-mark', 'client', null],
   ['pilot-smokeball', 'demo', null],
-  ['scott', 'internal', null],
   ['smd-guide', 'internal', null],
+  ['smd-office', 'internal', null],
 ])

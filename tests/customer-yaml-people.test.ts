@@ -453,7 +453,7 @@ describe('existing seats are unchanged', () => {
   const seats = seatSlugs(CUSTOMERS)
 
   it('covers the five live seats', () => {
-    for (const s of ['scott', 'brokery', 'ashton-price', 'pilot-smokeball', 'ap-staging']) {
+    for (const s of ['smd-office', 'brokery', 'ashton-price', 'pilot-smokeball', 'ap-staging']) {
       expect(seats).toContain(s)
     }
   })

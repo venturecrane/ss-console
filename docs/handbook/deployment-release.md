@@ -319,7 +319,7 @@ reachable: `infisical run --env=prod --path=/ss --silent -- operator/bin/fleet <
    (`pilot-smokeball`, `purpose: demo`, [The Demo Seat](/admin/playbook/demo-seat))
    gates nothing and is not a step before the client. Rings live in `operator/fleet/rings.yaml`: 0
    `ap-staging` (the twin of `ashton-price`), 1 `ashton-price`, 2
-   `pilot-smokeball` `scott` `brokery` `captain-mark` `smd-guide` (the last ring
+   `pilot-smokeball` `brokery` `captain-mark` `smd-guide` (the last ring
    always one at a time), with a `twins:` block naming each client's twin. The
    client seat has been ring 1 since 2026-10-30; the reason is under "The
    release controller" below. That file is generated from each seat's

@@ -844,19 +844,20 @@ def test_a_mailbox_sign_in_failure_pages():
 
 
 def test_a_self_serve_seat_gets_the_same_checks_as_any_seat():
-    """ADR 0100 W6: one product. scott (seat.product hosted-agent, the
-    self-serve preset) is checked like every seat: the rows that are findings
-    on an Operator seat are findings there too. FALSIFIER: restore the
-    product branch and scott's items come back empty."""
+    """ADR 0100 W6: one product. smd-office (seat.product hosted-agent, as
+    scott was until its 2026-11-13 decommission) is checked like every seat:
+    the rows that are findings on an Operator seat are findings there too.
+    FALSIFIER: restore the product branch and its items come back empty."""
     import yaml
 
     customers = Path(__file__).resolve().parents[2] / "customers"
     hosted = [
         p.parent.name
         for p in customers.glob("[!_]*/customer.yaml")
-        if cli.seat_product(yaml.safe_load(p.read_text())) == "hosted-agent"
+        if ".decommissioned." not in p.parent.name
+        and cli.seat_product(yaml.safe_load(p.read_text())) == "hosted-agent"
     ]
-    assert "scott" in hosted
+    assert "smd-office" in hosted
     rows = [_inbound(NOW - timedelta(hours=1)), _job("DRAFTING", "SUBMITTED", NOW - timedelta(hours=5))]
     for seat in hosted:
         console = _console()

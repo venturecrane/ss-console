@@ -28,7 +28,7 @@ SEATS = sorted(
     if not p.parent.name.startswith("_") and ".decommissioned." not in p.parent.name
 )
 CASEWORK = {"reply_verdicts"}
-NO_LANE_SEATS = {"captain-mark", "scott", "brokery", "ashton-price-marketing"}
+NO_LANE_SEATS = {"captain-mark", "smd-office", "brokery", "ashton-price-marketing"}
 
 
 def _medchron_today() -> set[str]:

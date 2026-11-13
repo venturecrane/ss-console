@@ -95,8 +95,8 @@ describe('generated registries are current (drift)', () => {
       brokery: ['client', null, 2],
       'captain-mark': ['client', null, 2],
       'pilot-smokeball': ['demo', null, 2],
-      scott: ['internal', null, 2],
       'smd-guide': ['internal', null, 2],
+      'smd-office': ['internal', null, 2],
     })
   })
 
@@ -113,9 +113,9 @@ describe('generated registries are current (drift)', () => {
         brokery: 'hermes-brokery',
         'captain-mark': 'hermes-captain-mark',
         'pilot-smokeball': 'hermes-pilot-smokeball',
-        scott: 'hermes-scott',
-        // Authored, not yet provisioned (provisioning is the Captain's act).
         'smd-guide': 'hermes-smd-guide',
+        // Authored, not yet provisioned (provisioning is the Captain's act).
+        'smd-office': null,
       }
     )
   })

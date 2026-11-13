@@ -13,7 +13,7 @@
       "floors": "block"
     },
     "pilot-smokeball": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" },
-    "scott": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" },
-    "smd-guide": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" }
+    "smd-guide": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" },
+    "smd-office": { "identifier_dates": "block", "own_sources": [], "checklist": "paralegal", "floors": "block" }
   }
 }

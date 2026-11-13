@@ -26,9 +26,9 @@ seats:
   pilot-smokeball:
     purpose: demo
     provisioned: true
-  scott:
-    purpose: internal
-    provisioned: true
   smd-guide:
     purpose: internal
     provisioned: true
+  smd-office:
+    purpose: internal
+    provisioned: false

@@ -35,11 +35,13 @@ SLUG = "boot-harness"
 # release-twin. A twin's slug is distinctive (it is never a word), so it is the
 # one source replaced textually.
 SOURCE_SLUG = seat_purpose.release_twins()[0]
-# The smallest seat's shape (ring 2: scott, brokery, captain-mark run
+# The smallest seat's shape (ring 2: brokery, captain-mark, smd-office run
 # shared-cpu-2x / 2048 MB, the floor after the 2026-09-01 and 2026-11-09
-# startup-watchdog crash loops). scott carries no medchron or litigation lane,
-# so no lane-memory check applies.
-SOURCE_SMALL = "scott"
+# startup-watchdog crash loops). brokery carries no medchron or litigation
+# lane, so no lane-memory check applies, and it authors a cron routine, which
+# the keep_routines run needs (smd-office authors none). It took the role from
+# scott, decommissioned 2026-11-13; it was scott's open-house twin.
+SOURCE_SMALL = "brokery"
 NOBODY = "nobody@boot-harness.invalid"
 _DROPPED_KEYS = ("connectors", "webhook_triggers", "mcp_connector", "telegram", "record_stores")
 
@@ -47,7 +49,7 @@ _DROPPED_KEYS = ("connectors", "webhook_triggers", "mcp_connector", "telegram", 
 def _deslug(text: str, source: str) -> str:
     # Only a release twin's slug is distinctive enough to replace textually (it
     # is replaced with its own slug); any other source is re-homed structurally
-    # (_rehome), so a short slug like "scott" never rewrites an unrelated word.
+    # (_rehome), so a short slug like "brokery" never rewrites an unrelated word.
     return text.replace(source, SLUG) if source in seat_purpose.release_twins() else text
 
 

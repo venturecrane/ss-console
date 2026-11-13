@@ -69,9 +69,9 @@ describe('telegram block', () => {
     expect(telegramDeprecationNotes({})).toEqual([])
   })
 
-  it('the shipped scott seat telegram block validates', () => {
+  it('the shipped captain-mark seat telegram block validates', () => {
     const root = parseYaml(
-      readFileSync(resolve('operator/customers/scott/customer.yaml'), 'utf8')
+      readFileSync(resolve('operator/customers/captain-mark/customer.yaml'), 'utf8')
     ) as Record<string, unknown>
     expect(run(root['telegram'])).toEqual([])
   })

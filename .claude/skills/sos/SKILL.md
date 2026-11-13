@@ -100,7 +100,7 @@ Examples:
 - `[owed] nothing ours. 4 waiting on the client or a vendor.`
 - `[owed] register unreachable — wrangler: command not found`
 
-Note SMD Services is itself a client here: obligations on our own seats (`pilot-smokeball`, `ap-staging`, `scott`) roll up to `smd-services` via `scripts/lib/seat-clients.mjs`. There is no internal-versus-external split anywhere in the register.
+Note SMD Services is itself a client here: obligations on our own seats (`pilot-smokeball`, `ap-staging`, `smd-guide`, `smd-office`) roll up to `smd-services` via `scripts/lib/seat-clients.mjs`. There is no internal-versus-external split anywhere in the register.
 
 ## Rules
 

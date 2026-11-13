@@ -323,7 +323,7 @@ skills:
       as the only body the woken turn may send. Stamps: body_sha256 entries on
       EMITTED_WAKE (full and skeleton).
 
-  # ---- scott seat cron rows ----
+  # ---- open-house and status-report cron rows ----
   status-report-assembler:
     render: compositional
     note: Per-client report drafts on the SMD-internal seat; wave-1 authored state.
