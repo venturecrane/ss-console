@@ -112,6 +112,30 @@ def test_update_task_without_staff_id_refuses_before_the_wire(rec: _Recorder) ->
     assert [c for c in rec.calls if c["method"] == "PUT"] == []
 
 
+def test_full_replace_body_keeps_categories_and_names_the_completer() -> None:
+    """The job lanes' task PUT body: the merged fields, the task's categories
+    re-sent (the full replace clears what it omits), the text unstamped, and
+    ``completed_by`` only on a body that completes the task."""
+    from smokeball_connector.task_update import full_replace_body
+
+    cur = {"subject": "Draft responses", "matter": {"id": "m-9"}, "assignees": [{"id": "s-2"}], "categories": ["D"]}
+    body = full_replace_body(cur, note="done", is_completed=True, staff_id="s-2", completed_by="s-3")
+    assert body == {
+        "staffId": "s-2",
+        "subject": "Draft responses",
+        "note": "done",
+        "matterId": "m-9",
+        "isCompleted": True,
+        "completedByStaffId": "s-3",
+        "assigneeIds": ["s-2"],
+        "categories": ["D"],
+    }
+    moved = full_replace_body({**cur, "categories": []}, assignee_ids=["s-4"], staff_id="s-1", completed_by="s-3")
+    assert moved == {"staffId": "s-1", "subject": "Draft responses", "matterId": "m-9", "assigneeIds": ["s-4"]}
+    with pytest.raises(ValueError, match="staff_id"):
+        full_replace_body(cur, staff_id=None)
+
+
 # ---- events ---------------------------------------------------------------
 def test_create_event_forces_normal_type(rec: _Recorder) -> None:
     # attendees + time_zone became required with the live-API contract fix

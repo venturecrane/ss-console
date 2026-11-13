@@ -7,7 +7,9 @@ omitted field is CLEARED on the tenant (a bare completion PUT nulled the
 subject, due date, and matter link). The task read never echoes ``staffId``,
 so the caller must supply the owner. This module builds the merged body from
 the task's current state plus the requested changes; ``server.update_task``
-owns the wire calls and the matter-reference guard.
+owns the wire calls and the matter-reference guard. ``full_replace_body`` is
+the form the job lanes send: the merged body with the task's ``categories``
+kept.
 """
 
 from __future__ import annotations
@@ -139,3 +141,44 @@ def merge_task_update(
         "assigneeIds": assignee_ids if assignee_ids is not None else (cur_assignees or None),
     }
     return {k: v for k, v in fields.items() if v is not None}, matter_id
+
+
+def _unstamped(subject: str | None) -> str | None:
+    return subject
+
+
+def full_replace_body(
+    current: Any,
+    *,
+    staff_id: str | None,
+    subject: str | None = None,
+    note: str | None = None,
+    due_date: str | None = None,
+    is_completed: bool | None = None,
+    assignee_ids: list[str] | None = None,
+    completed_by: str | None = None,
+) -> dict[str, Any]:
+    """The whole body for a job's ``PUT /tasks/{id}``: ``merge_task_update``'s
+    merged fields plus the task's ``categories``, re-sent when it has any,
+    because the full replace clears what it omits. The one home of that rule.
+
+    A job writes the text it composed as given (no provenance stamp; the job
+    marks its own notes). ``completed_by`` names who completed the task when
+    that is not its owner (the case file apply completes as the approver); it
+    applies only to a body that completes the task."""
+    body, _ = merge_task_update(
+        current,
+        subject=subject,
+        note=note,
+        due_date=due_date,
+        is_completed=is_completed,
+        assignee_ids=assignee_ids,
+        staff_id=staff_id,
+        stamp=_unstamped,
+    )
+    if completed_by and body.get("isCompleted"):
+        body["completedByStaffId"] = completed_by
+    categories = current.get("categories") if isinstance(current, dict) else None
+    if categories:
+        body["categories"] = categories
+    return body

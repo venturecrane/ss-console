@@ -21,7 +21,7 @@ vfy_01M50H3Z461FTKV2RSV7HKS5HN):
   both;
 * when it changes, Smokeball moves that person's open tasks on the matter
   itself, within about a minute; the rest need ``PUT /tasks/{id}``, which is a
-  FULL REPLACE built from a fresh read (``merge_task_update``), carrying
+  FULL REPLACE built from a fresh read (``full_replace_body``), carrying
   ``categories`` when the task has any; subtasks survive it;
 * a task PUT can take more than one read to show: every write is read back,
   re-sent on a mismatch in a bounded loop, and one that never converges is
