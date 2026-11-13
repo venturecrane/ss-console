@@ -32,6 +32,7 @@ from .establishment_validation import (
     readback_for,
     require_address,
 )
+from . import seat_config
 
 
 class ActProposals(ProposalLifecycle):
@@ -51,9 +52,7 @@ class ActProposals(ProposalLifecycle):
         if self._store.customer_path is None:
             raise EstablishmentValidationError("this broker has no customer.yaml handle; no act can be proposed")
         try:
-            import yaml
-
-            data = yaml.safe_load(self._store.customer_path.read_text(encoding="utf-8")) or {}
+            data = seat_config.load(self._store.customer_path, encoding="utf-8", on_missing="raise") or {}
         except OSError as exc:
             raise EstablishmentValidationError(
                 f"the seat config is not readable ({exc.__class__.__name__}); no act can be proposed"

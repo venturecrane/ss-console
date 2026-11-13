@@ -54,7 +54,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 from . import (
     casefile_casework as casework,
@@ -82,6 +81,7 @@ from .casework_verbs import casework_ledger_path
 from .litigation_intake import initiation_allows
 from .litigation_verbs import month_window
 from .medchron_ledger import admins_from_customer_yaml
+from . import seat_config
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ _REQUEST_KEYS = {"trigger", "requester", "message_ref", "request_text", "scope"}
 
 
 def _load(path: str | Path) -> dict[str, Any]:
-    doc = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    doc = seat_config.load(Path(path), encoding="utf-8", on_missing="raise")
     return doc if isinstance(doc, dict) else {}
 
 

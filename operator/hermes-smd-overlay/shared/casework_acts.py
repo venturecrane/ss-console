@@ -40,7 +40,6 @@ import copy
 import json
 import logging
 import os
-import socket
 import threading
 import time
 from collections import OrderedDict
@@ -48,7 +47,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from shared import casework_ledger
+from shared import broker_socket, casework_ledger
 from shared.pending_acts import tool_call_failed
 
 logger = logging.getLogger(__name__)
@@ -154,17 +153,8 @@ def broker_append(event: dict[str, Any]) -> dict[str, Any]:
     socket_path = os.environ.get(_SOCKET_ENV, "")
     if not socket_path:
         raise RuntimeError(f"{_SOCKET_ENV} is unset; cannot reach the broker")
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.settimeout(_TIMEOUT_SECONDS)
-        sock.connect(socket_path)
-        payload = {"action": "casework_event_append", "event": event}
-        sock.sendall(json.dumps(payload).encode("utf-8") + b"\n")
-        raw = b""
-        while not raw.endswith(b"\n"):
-            chunk = sock.recv(65_536)
-            if not chunk:
-                break
-            raw += chunk
+    payload = {"action": "casework_event_append", "event": event}
+    raw = broker_socket.request(socket_path, payload, timeout=_TIMEOUT_SECONDS)
     return json.loads(raw.decode("utf-8"))
 
 

@@ -1025,7 +1025,9 @@ def test_request_is_serialized_without_ascii_escaping(monkeypatch):
             return next(self._replies, b"")
 
     monkeypatch.setenv("SMD_WORKSPACE_BROKER_SOCKET", "/tmp/fake.sock")
-    monkeypatch.setattr(plugin.socket, "socket", _FakeSocket)
+    from shared import broker_socket
+
+    monkeypatch.setattr(broker_socket.socket, "socket", _FakeSocket)
     payload = {"action": "establish_stage_document", "text": "Dear Ms. Reyes — “hello”"}
     plugin._broker_request(payload)
     escaped = json.dumps(payload, ensure_ascii=True).encode("utf-8") + b"\n"

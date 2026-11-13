@@ -71,6 +71,7 @@ from typing import Any, Callable
 from . import note_lane, seat_layout
 from .broker_client import BrokerClient, BrokerError
 from .daemon import CHILD_ENV_PASS, DEFAULT_RUN_DIR, RUN_DIR_ENV, SOCKET_ENV
+from . import seat_config
 
 REQUEST_INDEX_ENV = "SMD_REQUEST_INDEX_DB_PATH"
 DEFAULT_REQUEST_INDEX = "/opt/data/requests.db"
@@ -326,7 +327,7 @@ def _lane(client: BrokerClient) -> note_lane.NoteLane:
         run_dir=Path(os.environ.get(RUN_DIR_ENV) or DEFAULT_RUN_DIR),
         broker=note_lane.NoteBroker(client),
         runner_cmd=[],
-        customer_slug=os.environ.get("CUSTOMER_SLUG", ""),
+        customer_slug=seat_config.slug(on_missing="empty"),
         wake_secret="",
     )
 

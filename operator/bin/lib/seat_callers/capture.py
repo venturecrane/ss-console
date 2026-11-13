@@ -72,6 +72,15 @@ def run_site(spec: SiteSpec, repo: Path, python: str) -> dict[str, Any]:
         shutil.rmtree(sockdir, ignore_errors=True)
 
 
+def _connects(count: int) -> str:
+    """One connect, or ``retried``. A site that retries a refused connect until a
+    wall-clock deadline (the job ledger client: every 0.5 s for 10 s) connects as
+    many times as the clock allows, so the count was the machine's load, not the
+    site's behaviour: 21 on an idle laptop, 20 under a loaded test run. That it
+    retried is the behaviour; how often is not recorded."""
+    return str(count) if count <= 1 else "retried"
+
+
 def _brief(run: dict[str, Any], keep_digest: bool) -> str:
     o = run.get("outcome")
     if o == "return":
@@ -90,7 +99,7 @@ def _brief(run: dict[str, Any], keep_digest: bool) -> str:
     if run.get("reads"):
         extras.append(f"reads={run['reads']}")
     if run.get("unix_connects"):
-        extras.append(f"connects={run['unix_connects']}")
+        extras.append(f"connects={_connects(run['unix_connects'])}")
     if run.get("blocked_attempts"):
         extras.append(f"attempted={','.join(run['blocked_attempts'])}")
     if run.get("stdout") and keep_digest:

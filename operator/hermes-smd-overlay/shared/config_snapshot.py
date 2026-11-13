@@ -41,7 +41,7 @@ from typing import Any
 
 import yaml
 
-from shared import audit_status
+from shared import audit_status, seat_config
 from shared.consumes_conformance import declared_vars
 
 SCHEMA = "operator.runtime.config/v1"
@@ -379,7 +379,7 @@ def snapshot(*, own_slug: str | None = None, hermes_home: str | None = None) -> 
     Never raises for an introspection failure — every failure becomes a
     ``degraded[]`` entry."""
     home = hermes_home or os.environ.get("HERMES_HOME") or _DEFAULT_HERMES_HOME
-    slug = own_slug or os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG")
+    slug = own_slug or seat_config.slug(on_missing="none", alternate="first")
 
     try:
         allowlist: list[str] | None = sorted(declared_vars().keys())

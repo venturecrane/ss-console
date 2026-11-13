@@ -48,6 +48,7 @@ from .drafting_intake import operator_library_number
 from .library_setup_ledger import STATES, EnvelopeError, SetupLedger, Underway, of_drafting
 from .logic_in_code import LIBRARY_SETUP, load_switch
 from .medchron_ledger import admins_from_customer_yaml
+from . import seat_config
 
 
 def _obj(value: Any) -> dict[str, Any]:
@@ -62,10 +63,8 @@ SKILL_NAME = "document-library-establishment"
 def skill_enabled(path: str) -> bool:
     """The establishment skill is listed on a persona and not disabled."""
     try:
-        import yaml
-
         with open(path, encoding="utf-8") as fh:
-            doc = yaml.safe_load(fh) or {}
+            doc = seat_config.parse(fh) or {}
     except Exception:  # noqa: BLE001 - an unreadable seat config enables nothing
         return False
     for persona in doc.get("personas") or []:

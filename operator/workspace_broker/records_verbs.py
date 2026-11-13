@@ -37,7 +37,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 from . import hold_class, seat_layout
 from .broker_context import BrokerContext
@@ -54,6 +53,7 @@ from .records_ledger import (
     validate_envelope,
 )
 from .records_store import RecordsLedger
+from . import seat_config
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class Refused(ValueError):
 
 
 def _load(path: str | Path) -> dict[str, Any]:
-    doc = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    doc = seat_config.load(Path(path), encoding="utf-8", on_missing="raise")
     return doc if isinstance(doc, dict) else {}
 
 

@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 from typing import Any
+
+from shared import broker_socket
 
 SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
 _DEFAULT_TIMEOUT_SECONDS = 5.0
@@ -183,18 +184,9 @@ class JobsBrokerClient:
         return self._request({"action": "help_job_signals", "days": days})
 
     def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+        encoded = broker_socket.encode(payload, sort_keys=True, separators=(",", ":"))
         try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-                client.settimeout(self._timeout)
-                client.connect(self._socket_path)
-                client.sendall(encoded)
-                buf = bytearray()
-                while not buf.endswith(b"\n"):
-                    chunk = client.recv(65_536)
-                    if not chunk:
-                        break
-                    buf.extend(chunk)
+            buf = broker_socket.send_frame(self._socket_path, encoded, timeout=self._timeout)
         except OSError as exc:
             raise JobsBrokerError(f"broker socket error: {exc}") from exc
         try:

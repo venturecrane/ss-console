@@ -29,6 +29,7 @@ from typing import Any
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
 from .layout_shape import _items, layout_values
+from . import seat_config
 
 CONFIG_BLOCK = "form_letters"
 ACCIDENT_DATE_KEY = "Matter/CaseDetails/AccidentDetails/AccidentDate"
@@ -52,9 +53,7 @@ def _load_yaml(path: str | None) -> dict[str, Any]:
     path = path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML
     try:
         with open(path, encoding="utf-8") as fh:
-            import yaml
-
-            data = yaml.safe_load(fh) or {}
+            data = seat_config.parse(fh) or {}
     except Exception:  # noqa: BLE001 - unreadable or unparseable config means nothing authored; every signer field then prints its marker
         return {}
     return data if isinstance(data, dict) else {}

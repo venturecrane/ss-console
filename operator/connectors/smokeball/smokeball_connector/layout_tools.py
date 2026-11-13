@@ -53,6 +53,7 @@ from .layout_sections import (
     section_of,
 )
 from .layout_shape import layout_values
+from . import seat_config
 
 #: Read-back waits after the PATCH, in seconds; module-level so tests shorten them.
 VALUE_WAITS: tuple[float, ...] = (2, 3, 5, 8, 12)
@@ -73,10 +74,8 @@ def _seat_today() -> date:
     zone = os.environ.get("HERMES_TIMEZONE", "").strip()
     if not zone:
         try:
-            import yaml
-
             with open(os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML, encoding="utf-8") as fh:
-                doc = yaml.safe_load(fh) or {}
+                doc = seat_config.parse(fh) or {}
             hours = doc.get("business_hours") if isinstance(doc, dict) else None
             zone = str((hours or {}).get("timezone") or "").strip() if isinstance(hours, dict) else ""
         except Exception:  # noqa: BLE001 - an unreadable config dates the summary in UTC

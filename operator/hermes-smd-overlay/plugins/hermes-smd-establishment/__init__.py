@@ -262,7 +262,6 @@ import json
 import logging
 import os
 import re
-import socket
 import sys
 import threading
 import time
@@ -272,6 +271,7 @@ from typing import Any
 from shared import (
     act_broker,
     admin_possession,
+    broker_socket,
     layout_rules,
     matter_gate,
     msgraph_broker,
@@ -1905,25 +1905,14 @@ def _broker_request(payload: dict[str, Any]) -> dict[str, Any]:
     socket_path = os.environ.get(_SOCKET_ENV, "")
     if not socket_path:
         raise RuntimeError(f"{_SOCKET_ENV} is unset; cannot reach the broker")
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.settimeout(_TIMEOUT_SECONDS)
-        sock.connect(socket_path)
-        # ensure_ascii=False deliberately (ss#2247). With the default True every
-        # curly quote, en dash, or accented character costs SIX frame bytes
-        # instead of the two or three it occupies in utf-8, and the frame
-        # ceiling is the real per-document limit. On a typographically normal
-        # legal letter that is roughly 2x the effective headroom. Safe: the
-        # broker reads with readline() then json.loads(), which decodes utf-8,
-        # and no utf-8 continuation byte is 0x0A, so newline framing is
-        # unaffected. Restoring the default would silently halve the document
-        # ceiling — test_request_is_serialized_without_ascii_escaping pins it.
-        sock.sendall(json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n")
-        raw = b""
-        while not raw.endswith(b"\n"):
-            chunk = sock.recv(65_536)
-            if not chunk:
-                break
-            raw += chunk
+    # UTF-8 on the wire deliberately (ss#2247): broker_socket.encode sends an
+    # accented letter or curly quote as its two or three UTF-8 bytes, not a
+    # six-byte escape, and the frame ceiling is the real per-document limit.
+    # test_request_is_serialized_without_ascii_escaping pins it. This client has
+    # always raised on a string with no UTF-8 form, and still does.
+    raw = broker_socket.request(
+        socket_path, payload, timeout=_TIMEOUT_SECONDS, lone_surrogates="raise"
+    )
     return json.loads(raw.decode("utf-8"))
 
 

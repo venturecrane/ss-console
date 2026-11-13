@@ -58,6 +58,7 @@ from .demand_ledger import (
     validate_envelope,
 )
 from .medchron_ledger import admins_from_customer_yaml, cycle_from_customer_yaml
+from . import seat_config
 
 #: The audit types, spelled as literals here so a reader (and the producer
 #: manifest's token check) finds them in this file; pinned to the ledger's.
@@ -95,9 +96,7 @@ def demand_skill_settings(path: str | Path) -> dict[str, Any] | None:
     """The demand skill's authored settings, or None unless the seat LISTS the
     skill and does not disable it. Omission is refusal (ADR 0035)."""
     try:
-        import yaml
-
-        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        doc = seat_config.load(Path(path), encoding="utf-8", on_missing="raise") or {}
     except Exception:  # noqa: BLE001 - an unreadable seat config enables nothing
         return None
     for persona in doc.get("personas") or []:
@@ -116,9 +115,7 @@ def operator_library_number(path: str | Path) -> str | None:
     document_library.operator_matter.number``), the one matter a rehearsal may
     file on instead of the matter it reads. None when unauthored."""
     try:
-        import yaml
-
-        doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        doc = seat_config.load(Path(path), encoding="utf-8", on_missing="raise") or {}
         number = doc["self_initiation"]["document_library"]["operator_matter"]["number"]
     except Exception:  # noqa: BLE001 - unauthored or unreadable authorizes nothing
         return None

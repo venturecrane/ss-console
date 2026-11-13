@@ -15,15 +15,15 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from . import seat_config
 
 SKILL_NAME = "negotiation-watch"
 RECIPIENTS_KEY = "scheduled_recipients"
 
 
 def _load(path: str | Path) -> dict[str, Any]:
-    import yaml
 
-    doc = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    doc = seat_config.load(Path(path), encoding="utf-8", on_missing="raise") or {}
     return doc if isinstance(doc, dict) else {}
 
 

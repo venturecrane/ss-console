@@ -52,7 +52,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 from .space_people import LANE_SPACE, people_emails
 from .recipient_policy import (
@@ -63,6 +62,7 @@ from .recipient_policy import (
     split_authored,
     split_device_replies,
 )
+from . import seat_config
 
 #: SMD's own domains. Mirrors the overlay's ``customer_config.OPS_REPLY_DOMAINS``.
 SMD_DOMAINS = frozenset({"smd.services", "smdurgan.com"})
@@ -250,7 +250,7 @@ def _escalation_lane(escalation: Any) -> frozenset[str]:
 
 def seat_facts(customer_path: Path) -> SeatFacts:
     """Read the seat's own config. Unreadable raises (the caller refuses)."""
-    loaded = yaml.safe_load(customer_path.read_text(encoding="utf-8"))
+    loaded = seat_config.load(customer_path, encoding="utf-8", on_missing="raise")
     data: dict[str, Any] = loaded if isinstance(loaded, dict) else {}
     raw_scope = data.get("scope")
     scope: dict[str, Any] = raw_scope if isinstance(raw_scope, dict) else {}

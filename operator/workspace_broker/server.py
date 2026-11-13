@@ -48,6 +48,7 @@ from .msgraph_ops import MsGraphOps
 from .operations import WorkspaceOperations
 from .request_errors import error_response_for
 from .verbs import dispatch
+from . import seat_config
 
 #: One request frame. 6 MiB since AgentMail sends carry files
 #: (``agentmail_attachments``): up to 3 MiB decoded is 4 MiB of base64 on the
@@ -161,7 +162,7 @@ class Broker:
         self.socket_path = Path(os.environ["SMD_WORKSPACE_BROKER_SOCKET"])
         self.customer_path = Path(os.environ["SMD_CUSTOMER_YAML"])
         self.credential_path = Path(os.environ["SMD_WORKSPACE_CREDENTIAL_PATH"])
-        self.customer_slug = os.environ["CUSTOMER_SLUG"]
+        self.customer_slug = seat_config.slug(on_missing="raise")
         self.gateway_pid = int(os.environ["SMD_GATEWAY_PID"])
         materialize_credential(self.credential_path)
         self.operations = WorkspaceOperations(self.credential_path, self.customer_path)

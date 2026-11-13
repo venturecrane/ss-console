@@ -28,6 +28,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from shared import seat_config
 from shared.audit_client import (
     SOCKET_ENV,
     BrokerAuditClient,
@@ -390,9 +391,7 @@ def _cost_breaker() -> Any:
         from shared.cost_breaker import build_breaker
         from shared.customer_config import CustomerConfig
 
-        slug = (
-            _CUSTOMER_SLUG or os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG")
-        )
+        slug = _CUSTOMER_SLUG or seat_config.slug(on_missing="none", alternate="first")
         if not slug:
             logger.error("interactive cost meter: no customer slug; breaker NOT armed")
             return None

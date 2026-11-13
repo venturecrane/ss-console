@@ -86,9 +86,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import socket
 from typing import Any
 
+from shared import broker_socket
 from shared.audit_contract import INSERT_SQL as _INSERT_SQL
 from shared.audit_contract import agent_event_params
 from shared.inbound import SESSION_INBOUND_ORIGIN, SESSION_TAINT, TRUST_CLASS_INTERNAL
@@ -166,16 +166,7 @@ def _broker_request(payload: dict[str, Any]) -> dict[str, Any]:
     socket_path = os.environ.get(_SOCKET_ENV, "")
     if not socket_path:
         raise RuntimeError(f"{_SOCKET_ENV} is unset; cannot reach the broker")
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.settimeout(_TIMEOUT_SECONDS)
-        sock.connect(socket_path)
-        sock.sendall(json.dumps(payload).encode("utf-8") + b"\n")
-        raw = b""
-        while not raw.endswith(b"\n"):
-            chunk = sock.recv(65_536)
-            if not chunk:
-                break
-            raw += chunk
+    raw = broker_socket.request(socket_path, payload, timeout=_TIMEOUT_SECONDS)
     return json.loads(raw.decode("utf-8"))
 
 

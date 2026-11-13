@@ -38,11 +38,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import threading
 import time
 from collections import OrderedDict
 from typing import Any
+
+from shared import seat_config
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ def page(channel: str) -> None:
             scope.set_tag("channel", channel)
             scope.set_tag(
                 "customer",
-                os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "",
+                seat_config.slug(on_missing="none", alternate="first") or "",
             )
             sentry_sdk.capture_message("send_outcome_unknown", level="error")
     except Exception as exc:  # noqa: BLE001 - monitoring must never break a send path

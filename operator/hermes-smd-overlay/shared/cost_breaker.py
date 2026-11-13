@@ -39,6 +39,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from shared import seat_config
 from shared.audit_contract import INSERT_SQL, build_audit_params
 from shared.ids import iso_utc, ulid
 from shared.sticky_stop import (
@@ -356,7 +357,7 @@ def pin_hard_stops(
     conn.execute("PRAGMA busy_timeout = 5000")
     try:
         conn.execute(_CREATE_TABLE_SQL)
-        slug = os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "_machine"
+        slug = seat_config.slug(on_missing="none", alternate="first") or "_machine"
         now = iso_utc()
         stamped_reason = f"operator_pause by {actor_id}: {reason}"
         rows = conn.execute("SELECT customer, persona, level FROM sticky_stop_state").fetchall()

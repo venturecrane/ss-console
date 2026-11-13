@@ -41,6 +41,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from shared import seat_config
 from shared.action_classes import ActionClass
 from shared.ids import iso_utc
 
@@ -87,7 +88,7 @@ def db_path() -> str:
 
 
 def _customer_slug() -> str:
-    return os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "_machine"
+    return seat_config.slug(on_missing="none", alternate="first") or "_machine"
 
 
 def _connect(path: str | None) -> sqlite3.Connection:

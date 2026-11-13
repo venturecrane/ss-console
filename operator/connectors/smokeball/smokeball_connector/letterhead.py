@@ -54,6 +54,7 @@ from typing import Any
 
 from .docx_format_types import NAMED_STYLES, STARTER_COMMENT_PREFIX, STARTER_MARKER
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
+from . import seat_config
 
 #: The classes whose starter carries the authored letterhead. See the module
 #: docstring for why the pleadings and the memo are not here.
@@ -115,9 +116,7 @@ def load_firm_identity(path: str | None = None) -> FirmIdentity:
     except OSError as exc:
         return FirmIdentity(authored=False, source=f"customer.yaml not readable at {path}: {exc.__class__.__name__}")
     try:
-        import yaml
-
-        data = yaml.safe_load(raw) or {}
+        data = seat_config.parse(raw) or {}
     except Exception as exc:  # noqa: BLE001 - an unparseable config is "not authored", reported
         return FirmIdentity(authored=False, source=f"customer.yaml not parseable: {exc.__class__.__name__}")
     block = data.get("firm_identity") if isinstance(data, dict) else None

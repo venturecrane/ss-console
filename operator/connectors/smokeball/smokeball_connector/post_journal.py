@@ -78,6 +78,7 @@ from typing import Any, Callable
 from . import logic_in_code, outcome_ledger, post_outcomes
 from .letter_pages import FILED_PAGES
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
+from . import seat_config
 
 JOURNAL_DIR_ENV = "SMD_POST_JOURNAL_DIR"
 DEFAULT_JOURNAL_DIR = "/opt/data/post-intake-journal"
@@ -127,10 +128,8 @@ def daily_list_authored(path: str | None = None) -> bool:
     else (absent, unreadable) is False, and the intake replies per bundle as
     it always did (ADR 0037: unauthored is fail-closed, never a default)."""
     try:
-        import yaml
-
         with open(path or os.environ.get(CUSTOMER_YAML_ENV) or DEFAULT_CUSTOMER_YAML, encoding="utf-8") as fh:
-            doc = yaml.safe_load(fh) or {}
+            doc = seat_config.parse(fh) or {}
     except Exception:  # noqa: BLE001 - an unreadable config authors nothing
         return False
     for persona in doc.get("personas") or [] if isinstance(doc, dict) else []:

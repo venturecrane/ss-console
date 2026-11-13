@@ -28,6 +28,7 @@ from typing import Any
 import yaml
 
 from bin.lib import seat_purpose
+from bin.lib import seat_config
 
 SLUG = "boot-harness"
 # The release twin (ADR 0107): the first seat whose seat.yaml says purpose:
@@ -96,7 +97,7 @@ def _scrub_personas(personas: list[dict[str, Any]], keep_routines: bool = False)
 
 def derive(source_text: str, source: str = SOURCE_SLUG, keep_routines: bool = False) -> dict[str, Any]:
     """The harness document from a source seat's customer.yaml text."""
-    doc = yaml.safe_load(_deslug(source_text, source)) or {}
+    doc = seat_config.parse(_deslug(source_text, source)) or {}
     if doc.get("customer_id") not in (SLUG, source):
         raise ValueError(f"source is not {source}'s customer.yaml (customer_id={doc.get('customer_id')!r})")
     _rehome(doc)

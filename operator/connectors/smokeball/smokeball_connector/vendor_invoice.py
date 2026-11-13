@@ -69,6 +69,7 @@ from .resolution_token import consume as consume_resolution
 from .resolution_token import verify as verify_resolution
 from .task_update import MatterReferenceMismatch
 from .xlsx_io import is_xlsx
+from . import seat_config
 
 # ---- Reading the attachment -----------------------------------------------
 
@@ -233,9 +234,7 @@ def load_expense_config(path: str | None = None) -> ExpenseConfig:
     except OSError:
         return ExpenseConfig()
     try:
-        import yaml
-
-        data = yaml.safe_load(raw) or {}
+        data = seat_config.parse(raw) or {}
     except Exception as exc:  # noqa: BLE001 - an unparseable config refuses the write, reported
         return ExpenseConfig(error=f"customer.yaml not parseable: {exc.__class__.__name__}")
     return parse_expense_config(data.get(CONFIG_BLOCK) if isinstance(data, dict) else None)
