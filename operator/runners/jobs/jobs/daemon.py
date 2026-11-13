@@ -50,6 +50,7 @@ from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, job_lanes, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
 from . import resume as resume_mod, retention, spend, verdict as verdict_mod
+from .back_off import BackOff
 from .proof import watch as proof_watch
 from . import seat_layout
 
@@ -100,7 +101,7 @@ TERMINAL = frozenset({"delivered", "failed", "stopped_by_smd", "observed"})
 
 
 @dataclass
-class Daemon:
+class Daemon(BackOff):
     run_dir: Path
     broker: Any
     runner_cmd: list[str]
@@ -614,45 +615,6 @@ class Daemon:
         if self._daemon_state(job_id).get("held_paused"):
             self._write_state(job_id, held_paused=False)
         return self.run_job(job_id)
-
-    # -- a backing-off lane: no head-of-line starvation, and held is final -----------
-    def _refuse_held_resumes(self) -> None:
-        """A held job is FINAL. Its ledger has no held -> running edge, and a
-        hold means a person must read the reason (a refused letter, a wrong
-        destination); resuming it would replay the same refusal or, worse,
-        file what was refused. A marker for one is removed, loudly."""
-        if not self.queue.is_dir():
-            return
-        for marker in self.queue.glob(f"{resume_mod.MARKER_PREFIX}*.json"):
-            job_id = marker.name[len(resume_mod.MARKER_PREFIX) : -len(".json")]
-            if self._daemon_state(job_id).get("state") == "held":
-                self._loop_log.error(self.HELD_RESUME_REFUSED, job_id)
-                marker.unlink(missing_ok=True)
-
-    def _ready(self) -> list[str]:
-        now = self.clock()
-        return [j for j in self._in_progress() if float(self._daemon_state(j).get("retry_after") or 0) <= now]
-
-    def _defer(self, job_id: str) -> None:
-        """Back the job off (1, 2, 4 ... 60 minutes) so a job that keeps
-        deferring cannot hold the head of the queue: the next tick claims the
-        job behind it (review of #3074)."""
-        n = int(self._daemon_state(job_id).get("deferrals") or 0) + 1
-        self._write_state(job_id, deferrals=n, retry_after=self.clock() + min(60.0 * 2 ** (n - 1), 3600.0))
-
-    def _run_backing_off(self, job_id: str) -> str:
-        try:
-            result = self.run_job(job_id)
-        except Exception:  # noqa: BLE001 - one job's crash backs that job off (logged with its trace); it must not wedge the lane's head
-            self._loop_log.exception("%s job %s could not be started; backing it off", self.JOB_WORD, job_id)
-            result = "deferred"
-        if result == "deferred":
-            self._defer(job_id)
-        elif result == "waiting":
-            pass  # another lane's child is running; the lane set retry_after itself
-        else:
-            self._write_state(job_id, deferrals=0, retry_after=None)
-        return result
 
     def run_forever(self, stop: Callable[[], bool], poll_seconds: float) -> None:
         self.stopping = stop
