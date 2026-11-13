@@ -268,10 +268,11 @@ ssh_check() { # <step> <command as reported> <command as run on the Machine>
   vendor_inconclusive "${step}" "${out}" && return
   if [[ "${out}" == *"${CHECK_FAILED_MARK}"* ]]; then
     # The check ran and said no. Retry only if the Machine was cycling under it.
-    if retry_if_machine_cycling && out="$(ssh_run "${remote}")"; then
+    # A retry may only turn a non-answer into an answer, never a "no" into a
+    # warning: if the retry's vendor did not answer, the first attempt's "no"
+    # (for a vendor probe, a confirmed breach) stands.
+    if retry_if_machine_cycling && ssh_run "${remote}" >/dev/null; then
       pass "${step} (passed on retry; the Machine was cycling on the first attempt)"
-    elif vendor_inconclusive "${step}" "${out}"; then
-      return
     else
       check_fail "${step} — command failed: ${cmd}"
     fi
@@ -408,6 +409,7 @@ check_script() { ssh_exec_script "$@"; }
 # smoke runs at provision and release, which are boot runs.
 check_idle() { ssh_exec "$@"; }
 check_vendor() { ssh_exec_vendor "$@"; }
+check_vendor_strict() { ssh_exec_vendor "$@"; }
 check_note() { pass "$1 ($2)"; }
 check_broken() { check_fail "$1 — $2"; }
 

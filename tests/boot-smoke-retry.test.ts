@@ -390,6 +390,41 @@ describe('boot smoke: a vendor that did not answer (2026-11-12)', () => {
     expect(out).toContain('command failed')
   })
 
+  it('never lets a retry that got no answer override a confirmed breach', () => {
+    // Review finding: attempt 1 says "can read" (exit 1) while the Machine is
+    // cycling; the retry's vendor does not answer (exit 3). The breach stands.
+    writeFileSync(join(dir, 'ssh-attempts'), '')
+    writeFileSync(
+      join(dir, 'fly'),
+      `#!/bin/bash
+if [ "$1" = "status" ]; then
+  if [ -f "${dir}/settled3" ]; then echo '{"Machines":[{"state":"started"}]}'
+  else touch "${dir}/settled3"; echo '{"Machines":[{"state":"replacing"}]}'; fi
+  exit 0
+fi
+if [ "$1" = "ssh" ]; then
+  echo x >> "${dir}/ssh-attempts"
+  while [ "$#" -gt 0 ] && [ "$1" != "--command" ]; do shift; done
+  eval "$2"
+  exit $?
+fi
+exit 0
+`,
+      { mode: 0o755 }
+    )
+    chmodSync(join(dir, 'fly'), 0o755)
+    rmSync(join(dir, 'settled3'), { force: true })
+    const out = runWithHelpers(`
+ssh_exec_vendor "a-vendor-probe" "if [ \\$(wc -l < ${dir}/ssh-attempts) -ge 2 ]; then echo INCONCLUSIVE: HTTP 503; exit 3; fi; echo FAIL: can read; exit 1"
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+echo "WARNED_COUNT=\${#WARNED_CHECKS[@]}"
+echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+`)
+    expect(out).toMatch(/ATTEMPTS=2/)
+    expect(out).toContain('FAILED_COUNT=1')
+    expect(out).toContain('WARNED_COUNT=0')
+  })
+
   it('passes a probe that exits 0', () => {
     const out = vendorCheck('echo pass; exit 0')
     expect(out).toContain('PASS_COUNT=1')

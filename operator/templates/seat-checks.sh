@@ -22,6 +22,10 @@
 #                                 Exit 3 means the vendor did not answer: a
 #                                 WARNING at boot and hourly, never a pass, and
 #                                 a failure once it persists (selftest.sh)
+#   check_vendor_strict <id> <cmd>  asks a vendor through a probe that keeps
+#                                 its weather on exit 3, so any other failure
+#                                 is the vendor's own answer: FAILS at boot
+#                                 AND hourly; exit 3 as check_vendor
 #   check_file <id> <interp> <f>  run probe operator/templates/<f> (= /app/<f>)
 #   check_report <id> <program>   as check_script, and its stdout is the detail
 #   check_lever <probe>           the identifier-gate lever verdict (warn-only)
@@ -577,7 +581,13 @@ check_vendor "msgraph-read-app-cannot-send-on-send-as-seat" \
 # tenant scopes it with an ApplicationAccessPolicy. Ask Microsoft, about EVERY
 # approver: the scope group may hold staff mailboxes the firm authored for
 # reading, so one approver being out of it says nothing about the next.
-check_vendor "msgraph-read-app-cannot-read-staff-mailbox" \
+#
+# STRICT HOURLY (2026-11-12). The probe keeps Microsoft's weather (5xx, 429,
+# timeouts) on exit 3, so its exit 1 is Microsoft's own answer that the read
+# app is NOT refused (or a credential that cannot ask at all). That is a
+# breach found between releases, so it fails the hourly run too and pages
+# through selftest_failing; before this it was a vendor warning nobody read.
+check_vendor_strict "msgraph-read-app-cannot-read-staff-mailbox" \
   "${SEAT_ROOT}${SMD_LAYOUT_HERMES_PYTHON3} ${SEAT_ROOT}/app/msgraph-read-app-cannot-read-staff-probe.py ${SEAT_ROOT}${SMD_LAYOUT_CUSTOMER_YAML} hermes"
 
 # ---------- Step 13b: the identifier-gate rollback lever is not set (ADR 0093) ----------

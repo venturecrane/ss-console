@@ -14,7 +14,9 @@ WHAT THIS DRIVES, all real code, nothing read as source text:
                      server playing Microsoft (only the token mint and the
                      backoff sleep are replaced)
   the self-test      operator/templates/selftest.sh --once, with a one-check
-                     list that calls check_vendor on that probe
+                     list that calls check_vendor_strict on that probe, the verb
+                     the real list uses for it (pinned by the seat-checks golden
+                     fixture)
   the heartbeat      shared.selftest_check.summarize on the results.json written
   the release        ImageRollout with --verify selftest reading that heartbeat
 
@@ -22,12 +24,16 @@ THE OUTCOMES THIS PINS:
 
   UNKNOWN at boot    a WARNING naming the HTTP status; the release is NOT rolled
                      back, and the rollout's detail line names the check.
-  UNKNOWN that stays the hourly run that makes it INCONCLUSIVE_FAIL_AFTER in a
-                     row records the check FAILED, and the next hourly run gives
+  UNKNOWN that stays the first hourly run at INCONCLUSIVE_FAIL_AFTER in a row,
+                     or four hours after the first, counted across restarts
+                     (the streak lives on the volume), records the check
+                     FAILED, and the next hourly run gives
                      failed_streak 2: the shape fleet-alerts pages as
                      selftest_failing (workers/fleet-alerts/src/selftest.test.ts
                      pins the paging half on this exact shape).
   ALLOWED (planted)  a FAILED check at boot, and the release IS rolled back.
+  ALLOWED hourly     a FAILED check on the first hourly run (strict), and the
+                     next hourly run gives failed_streak 2, which pages.
 """
 
 from __future__ import annotations
@@ -122,7 +128,7 @@ def seat(tmp_path: Path, graph: http.server.ThreadingHTTPServer) -> dict:
     base = f"http://127.0.0.1:{graph.server_address[1]}"
     user = pwd.getpwuid(os.getuid()).pw_name
     command = f"{sys.executable} {driver} {PROBE} {base} {yaml_path} {tmp_path / 'proc'} {user}"
-    (checks / "seat-checks.sh").write_text(f'seat_checks() {{\ncheck_vendor "{CHECK_ID}" "{command}"\n}}\n')
+    (checks / "seat-checks.sh").write_text(f'seat_checks() {{\ncheck_vendor_strict "{CHECK_ID}" "{command}"\n}}\n')
     return {"root": root, "checks": checks, "graph": graph}
 
 
@@ -137,6 +143,8 @@ def _selftest(seat: dict, kind: str) -> dict:
         "SMD_HERMES_UPSTREAM_SHA": HERMES,
         "SMD_OVERLAY_REF": OVERLAY,
         "FLY_IMAGE_REF": TARGET_REF + "@" + DIGEST,
+        # The state directory must be owned by "root"; here that is this user.
+        "SMD_SELFTEST_ROOT_UID": str(os.getuid()),
     }
     done = subprocess.run(  # noqa: S603 - the repo's own self-test, against a tmp tree
         ["bash", str(SELFTEST), "--once", kind], env=env, capture_output=True, text=True, timeout=120
@@ -233,8 +241,8 @@ def test_a_boot_run_never_escalates_and_an_answer_clears_the_streak(seat: dict) 
     seat["graph"].script = [503]
     for _ in range(4):
         _selftest(seat, "hourly")
-    # A boot run (a loop restart that kept /run) with streak 5 still only warns:
-    # a release's verdict is never a failure for Microsoft's weather.
+    # A boot run with streak 5 still only warns: a release's verdict is never a
+    # failure for Microsoft's weather.
     boot = _check(_selftest(seat, "boot"))
     assert (boot["warn"], boot["inconclusive_streak"]) == (True, 5)
     seat["graph"].script = [403]
@@ -244,10 +252,85 @@ def test_a_boot_run_never_escalates_and_an_answer_clears_the_streak(seat: dict) 
     assert _check(_selftest(seat, "hourly"))["inconclusive_streak"] == 1
 
 
-def test_a_breach_hourly_is_judged_as_before(seat: dict) -> None:
-    # Unchanged: a vendor check's definitive failure on an hourly run is a
-    # warning (vendor checks are soft hourly). It carries no inconclusive streak.
-    seat["graph"].script = [200]
-    check = _check(_selftest(seat, "hourly"))
+STATE = "opt/data/selftest-state/inconclusive.json"
+
+
+def _restart(seat: dict) -> None:
+    """A Machine restart: /run is a tmpfs and comes back empty; the volume stays."""
+    run = seat["root"] / "run"
+    for path in sorted(run.rglob("*"), reverse=True):
+        path.rmdir() if path.is_dir() else path.unlink()
+
+
+def test_the_streak_survives_restarts_and_escalates_on_the_first_hourly_run_after(seat: dict) -> None:
+    # Review finding: on tmpfs a seat restarted more often than every ~3 h never
+    # escalated. Boot runs count toward the streak; only an hourly run escalates.
+    seat["graph"].script = [503]
+    boots = []
+    for _ in range(3):
+        boots.append(_check(_selftest(seat, "boot")))
+        _restart(seat)
+    assert [(b["warn"], b["inconclusive_streak"]) for b in boots] == [(True, 1), (True, 2), (True, 3)]
+    assert not (seat["root"] / "run/smd-selftest/results.json").exists()
+    hourly = _check(_selftest(seat, "hourly"))
+    assert (hourly["ok"], hourly["warn"], hourly["inconclusive_streak"]) == (False, False, 4)
+    state = seat["root"] / STATE
+    assert oct(state.parent.stat().st_mode & 0o777) == "0o700" and oct(state.stat().st_mode & 0o777) == "0o600"
+
+
+def test_four_hours_since_the_first_inconclusive_escalates_before_four_runs(seat: dict) -> None:
+    seat["graph"].script = [503]
+    assert _check(_selftest(seat, "boot"))["inconclusive_streak"] == 1
+    state = seat["root"] / STATE
+    doc = json.loads(state.read_text())
+    doc[CHECK_ID]["first_seen"] -= 4 * 3600 + 60  # first seen just over four hours ago
+    state.write_text(json.dumps(doc))
+    hourly = _check(_selftest(seat, "hourly"))
+    assert (hourly["ok"], hourly["warn"], hourly["inconclusive_streak"]) == (False, False, 2)
+    assert "over 241 min" in hourly["detail"]
+    # The same age on a boot run is still only a warning.
+    doc = json.loads(state.read_text())
+    doc[CHECK_ID]["first_seen"] -= 3600
+    state.write_text(json.dumps(doc))
+    assert _check(_selftest(seat, "boot"))["warn"] is True
+
+
+def test_a_state_root_did_not_write_is_discarded_never_read(seat: dict) -> None:
+    # A planted streak cannot forge anything: a directory with a loose mode is
+    # removed and the streak starts over.
+    seat["graph"].script = [503]
+    state = seat["root"] / STATE
+    state.parent.mkdir(parents=True)
+    state.parent.chmod(0o755)
+    state.write_text(json.dumps({CHECK_ID: {"streak": 99, "first_seen": 0}}))
+    assert _check(_selftest(seat, "hourly"))["inconclusive_streak"] == 1
+    assert oct(state.parent.stat().st_mode & 0o777) == "0o700"
+
+
+def test_an_address_graph_does_not_know_warns_at_boot_and_does_not_roll_back(seat: dict, tmp_path: Path) -> None:
+    seat["graph"].script = [404]
+    doc = _selftest(seat, "boot")
+    check = _check(doc)
     assert (check["ok"], check["warn"]) == (False, True)
+    assert f"cannot prove the policy refuses {STAFF}" in check["detail"]
+    assert _release(tmp_path, _heartbeat(doc))[0] == "done"
+
+
+def test_a_breach_found_hourly_fails_at_once_and_pages_on_the_existing_streak(seat: dict) -> None:
+    # Strict hourly: Microsoft's YES between releases is a breach, not weather.
+    # FALSIFIER: bind the check soft (check_vendor) and run 1 is a warning,
+    # failed_streak stays 0 and nothing ever pages.
+    seat["graph"].script = [403]
+    assert _check(_selftest(seat, "boot"))["ok"] is True
+    seat["graph"].script = [200]
+    first = _selftest(seat, "hourly")
+    check = _check(first)
+    assert (check["ok"], check["warn"]) == (False, False)
     assert "can read" in check["detail"] and "inconclusive_streak" not in check
+    assert first["failed_streak"] == 1
+    beat = _heartbeat(first)
+    assert (beat["run_kind"], beat["failed"], beat["failed_streak"]) == ("hourly", [CHECK_ID], 1)
+    # The next hourly run: failed_streak 2, which fleet-alerts pages as
+    # selftest_failing (SELFTEST_HOURLY_STREAK; selftest.test.ts pins that half).
+    second = _heartbeat(_selftest(seat, "hourly"))
+    assert (second["run_kind"], second["failed"], second["failed_streak"]) == ("hourly", [CHECK_ID], 2)

@@ -54,6 +54,7 @@ export const SEAT_LAYOUT = {
   records_state: '/opt/data/jobs/records-state',
   requests_db: '/opt/data/requests.db',
   selftest_results: '/run/smd-selftest/results.json',
+  selftest_state: '/opt/data/selftest-state',
   skills: '/opt/data/skills',
   smd_config: '/var/lib/smd-config',
   smokeball_bundle: '/opt/connectors/smokeball',

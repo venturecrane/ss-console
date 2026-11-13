@@ -37,6 +37,7 @@ check() { _p check "$@"; }
 check_script() { _p check_script "$@"; }
 check_idle() { _p check_idle "$@"; }
 check_vendor() { _p check_vendor "$@"; }
+check_vendor_strict() { _p check_vendor_strict "$@"; }
 check_note() { _p check_note "$@"; }
 check_broken() { _p check_broken "$@"; }
 check_file() { _p check_file "$@"; }

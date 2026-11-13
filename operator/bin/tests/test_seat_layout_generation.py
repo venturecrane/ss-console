@@ -50,6 +50,7 @@ PINNED = {
             "records_queue_volume": "/opt/data/jobs/records-queue",
             "records_state": "/opt/data/jobs/records-state",
             "requests_db": "/opt/data/requests.db",
+            "selftest_state": "/opt/data/selftest-state",
             "skills": "/opt/data/skills",
             "smokeball_extract_cache": "/opt/data/smokeball-extract-cache",
             "smokeball_refresh_token": "/opt/data/.smokeball-mcp/refresh_token",

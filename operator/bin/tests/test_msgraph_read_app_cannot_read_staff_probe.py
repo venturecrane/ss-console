@@ -81,10 +81,17 @@ def test_a_scoped_read_app_passes(tmp_path: Path, capsys) -> None:
     assert "refused" in out and "403" in out
 
 
-def test_a_missing_mailbox_also_passes(tmp_path: Path, capsys) -> None:
-    # 404 is what Graph answers for a mailbox the policy hides. Same verdict.
+def test_an_address_graph_does_not_know_is_unproven_not_a_pass(tmp_path: Path, capsys) -> None:
+    # CHANGED 2026-11-12 (was test_a_missing_mailbox_also_passes). Graph answers
+    # 404 for an alias, a typo, an unlicensed or mailbox-less user, even where
+    # the app could read the real mailbox, so a 404 proves nothing about the
+    # policy. It is inconclusive (exit 3, a warning), never a pass and never a
+    # breach, and the line names the address.
     rc, _asked = _run(tmp_path, WITH_STAFF, 404)
-    assert rc == 0 and "refused" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert rc == probe.INCONCLUSIVE_RC
+    assert f"cannot prove the policy refuses {STAFF}: Graph does not know this address (HTTP 404)" in out
+    assert "pass:" not in out and "can read" not in out
 
 
 def test_an_unscoped_read_app_fails_and_names_the_fix(tmp_path: Path, capsys) -> None:
@@ -111,10 +118,24 @@ def _run_per_mailbox(tmp_path: Path, yaml_text: str, statuses: dict[str, int]):
 
 
 def test_every_approver_is_asked_and_all_refused_passes(tmp_path: Path, capsys) -> None:
-    rc, asked = _run_per_mailbox(tmp_path, TWO_APPROVERS, {STAFF: 403, SECOND: 404})
+    # CHANGED 2026-11-12: SECOND answered 404 here, which passed; only 403 is a
+    # refusal now (see test_an_address_graph_does_not_know_is_unproven_not_a_pass).
+    rc, asked = _run_per_mailbox(tmp_path, TWO_APPROVERS, {STAFF: 403, SECOND: 403})
     out = capsys.readouterr().out
     assert (rc, asked) == (0, [STAFF, SECOND])
     assert "every approver" in out and STAFF in out and SECOND in out
+
+
+def test_one_refused_and_one_unknown_address_is_inconclusive(tmp_path: Path, capsys) -> None:
+    rc, asked = _run_per_mailbox(tmp_path, TWO_APPROVERS, {STAFF: 403, SECOND: 404})
+    out = capsys.readouterr().out
+    assert (rc, asked) == (probe.INCONCLUSIVE_RC, [STAFF, SECOND])
+    assert f"cannot prove the policy refuses {SECOND}" in out and f"refused: {STAFF} HTTP 403" in out
+
+
+def test_a_breach_beside_an_unknown_address_still_fails(tmp_path: Path, capsys) -> None:
+    rc, _asked = _run_per_mailbox(tmp_path, TWO_APPROVERS, {STAFF: 404, SECOND: 200})
+    assert rc == 1 and f"can read {SECOND}'s mailbox" in capsys.readouterr().out
 
 
 def test_a_readable_second_approver_fails_though_the_first_is_refused(tmp_path: Path, capsys) -> None:
@@ -182,7 +203,8 @@ Reply = probe.Reply
     ("status", "verdict"),
     [
         (403, probe.DENIED),
-        (404, probe.DENIED),
+        # Graph does not know the address as asked: proves nothing.
+        (404, probe.NOT_FOUND),
         (200, probe.ALLOWED),
         (204, probe.ALLOWED),
         # Neither a refusal nor weather: failed before 2026-11-12, still does.
@@ -197,7 +219,7 @@ Reply = probe.Reply
         (None, probe.UNKNOWN),
     ],
 )
-def test_every_answer_is_exactly_one_of_three(status: int | None, verdict: str) -> None:
+def test_every_answer_is_exactly_one_of_four(status: int | None, verdict: str) -> None:
     assert probe.classify(Reply(status)) == verdict
 
 
@@ -279,8 +301,76 @@ def test_planted_defect_allowed_after_an_outage_still_fails(tmp_path: Path, caps
     rc, asked, _clock = _run_script(tmp_path, TWO_APPROVERS, {STAFF: [Reply(503)], SECOND: [Reply(200)]})
     out = capsys.readouterr().out
     assert rc == 1
-    assert asked == [STAFF] * probe.MAX_ATTEMPTS + [SECOND]
+    # Every approver is asked once before any retry, so the breach is found
+    # in the first round and the outage spends none of its budget.
+    assert asked == [STAFF, SECOND]
     assert f"can read {SECOND}'s mailbox (HTTP 200)" in out
+
+
+def test_three_approvers_all_timing_out_finish_inside_the_budget(tmp_path: Path, capsys) -> None:
+    # Review finding (2026-11-12): checking only the next WAIT against the
+    # deadline let a timeout-style outage with 2+ approvers run 81-96 s, past
+    # the laptop smoke's 90 s ssh limit, which records a failure and rolls the
+    # release back. Each request now must fit, wall clock included.
+    third = "clerk@firm.example"
+    three = TWO_APPROVERS + f"    - address: {third}\n      name: Lee\n"
+    yaml_path, proc = _seat(tmp_path, three)
+    clock = _Clock()
+    start = clock()
+    asked: list[str] = []
+
+    def hang(_token: str, mailbox: str):
+        asked.append(mailbox)
+        clock.now += probe.REQUEST_TIMEOUT_S + probe.WALL_SLACK_S  # the worst a request can take
+        return Reply(None, None, "WallClockTimeout")
+
+    rc = probe.run(yaml_path, _user(), proc, mint=lambda *_: "token", ask=hang, sleep=clock.sleep, clock=clock)
+    out = capsys.readouterr().out
+    assert rc == probe.INCONCLUSIVE_RC
+    assert clock() - start <= probe.BUDGET_S
+    assert asked[:3] == [STAFF, SECOND, third]  # every approver asked once first
+    for mailbox in (STAFF, SECOND, third):
+        assert f"Microsoft did not answer for {mailbox}" in out
+
+
+def test_an_approver_the_budget_never_reached_is_unknown_never_a_pass(tmp_path: Path, capsys) -> None:
+    yaml_path, proc = _seat(tmp_path, TWO_APPROVERS)
+    clock = _Clock()
+
+    def slow_first(_token: str, mailbox: str):
+        clock.now += probe.BUDGET_S  # the first answer arrives with the budget spent
+        return Reply(403)
+
+    rc = probe.run(yaml_path, _user(), proc, mint=lambda *_: "token", ask=slow_first, sleep=clock.sleep, clock=clock)
+    out = capsys.readouterr().out
+    assert rc == probe.INCONCLUSIVE_RC
+    assert f"Microsoft did not answer for {SECOND}: no answer ({probe.NOT_ASKED})" in out
+
+
+def test_a_hung_dns_lookup_is_bounded(monkeypatch) -> None:
+    # urllib's timeout does not cover getaddrinfo; the wall clock does.
+    import socket
+
+    def stuck(*_args, **_kwargs):
+        time.sleep(3)
+        raise OSError("never")
+
+    monkeypatch.setattr(socket, "getaddrinfo", stuck)
+    began = time.monotonic()
+    reply = probe._urllib_ask("token", STAFF, base="http://graph.invalid", timeout=0.2)
+    assert time.monotonic() - began < 2.5
+    assert (reply.status, reply.error) == (None, "WallClockTimeout")
+    assert probe.classify(reply) == probe.UNKNOWN
+    with pytest.raises(probe.Unanswered):
+        probe._urllib_mint("tid", "cid", SECRET, base="http://login.invalid", timeout=0.2)
+
+
+def test_bounded_returns_the_value_and_reraises_the_error() -> None:
+    assert probe.bounded(lambda: 7, 1.0) == 7
+    with pytest.raises(KeyError):
+        probe.bounded(lambda: {}["x"], 1.0)
+    with pytest.raises(probe.WallClockTimeout):
+        probe.bounded(lambda: time.sleep(2), 0.1)
 
 
 def test_an_answer_that_turns_from_weather_to_yes_fails(tmp_path: Path, capsys) -> None:
@@ -402,7 +492,7 @@ DENIED_BODY = b'{"error":{"code":"ErrorAccessDenied","message":"Access to OData 
         ((502, {"Content-Type": "application/json"}, b'{"error": {"code": "Bad'), 502, probe.UNKNOWN),
         ((429, {"Retry-After": "3"}, b'{"error":{"code":"TooManyRequests"}}'), 429, probe.UNKNOWN),
         ((403, {}, DENIED_BODY), 403, probe.DENIED),
-        ((404, {}, b'{"error":{"code":"ErrorInvalidUser"}}'), 404, probe.DENIED),
+        ((404, {}, b'{"error":{"code":"ErrorInvalidUser"}}'), 404, probe.NOT_FOUND),
         # Microsoft said YES. A body that does not parse does not take that back.
         ((200, {"Content-Type": "application/json"}, b'{"id": "AAMk'), 200, probe.ALLOWED),
         ("hang", None, probe.UNKNOWN),
