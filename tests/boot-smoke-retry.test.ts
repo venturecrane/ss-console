@@ -330,3 +330,105 @@ echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
     }
   )
 })
+
+/**
+ * A `fly` stub that RUNS the check on this host: `ssh console -a <app>
+ * --command <cmd>` evaluates <cmd> (the same `sh -c '...'` string ssh_run builds
+ * for the Machine), so the remote wrapper's exit handling is the real one.
+ */
+function writeExecutingFlyStub(): void {
+  writeFileSync(
+    join(dir, 'fly'),
+    `#!/bin/bash
+if [ "$1" = "status" ]; then
+  echo '{"Machines":[{"state":"started"}]}'
+  exit 0
+fi
+if [ "$1" = "ssh" ]; then
+  echo x >> "${dir}/ssh-attempts"
+  while [ "$#" -gt 0 ] && [ "$1" != "--command" ]; do shift; done
+  eval "$2"
+  exit $?
+fi
+exit 0
+`,
+    { mode: 0o755 }
+  )
+  chmodSync(join(dir, 'fly'), 0o755)
+}
+
+function vendorCheck(command: string): string {
+  writeExecutingFlyStub()
+  writeFileSync(join(dir, 'ssh-attempts'), '')
+  return runWithHelpers(`
+ssh_exec_vendor "a-vendor-probe" "${command}"
+echo "PASS_COUNT=\${PASS_COUNT}"
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+echo "WARNED_COUNT=\${#WARNED_CHECKS[@]}"
+echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+`)
+}
+
+describe('boot smoke: a vendor that did not answer (2026-11-12)', () => {
+  // Microsoft answered 503 for hours; the probe read it as a breach and the
+  // twin's releases rolled back. A probe now exits 3 for "the vendor did not
+  // answer", and the laptop smoke records that as a WARNING: never a pass,
+  // never a failure, and never a second vendor call.
+  it('records exit 3 as a warning carrying the probe line, on one attempt', () => {
+    const out = vendorCheck('echo INCONCLUSIVE: Microsoft did not answer, HTTP 503; exit 3')
+    expect(out).toContain('PASS_COUNT=0')
+    expect(out).toContain('FAILED_COUNT=0')
+    expect(out).toContain('WARNED_COUNT=1')
+    expect(out).toMatch(/WARN: a-vendor-probe: the vendor did not answer.*HTTP 503/)
+    expect(out).toMatch(/ATTEMPTS=1/)
+  })
+
+  it('STILL FAILS a probe that exits 1 (a confirmed breach), exactly as ssh_exec does', () => {
+    const out = vendorCheck('echo FAIL: the read app can read the inbox; exit 1')
+    expect(out).toContain('FAILED_COUNT=1')
+    expect(out).toContain('WARNED_COUNT=0')
+    expect(out).toContain('command failed')
+  })
+
+  it('never lets a retry that got no answer override a confirmed breach', () => {
+    // Review finding: attempt 1 says "can read" (exit 1) while the Machine is
+    // cycling; the retry's vendor does not answer (exit 3). The breach stands.
+    writeFileSync(join(dir, 'ssh-attempts'), '')
+    writeFileSync(
+      join(dir, 'fly'),
+      `#!/bin/bash
+if [ "$1" = "status" ]; then
+  if [ -f "${dir}/settled3" ]; then echo '{"Machines":[{"state":"started"}]}'
+  else touch "${dir}/settled3"; echo '{"Machines":[{"state":"replacing"}]}'; fi
+  exit 0
+fi
+if [ "$1" = "ssh" ]; then
+  echo x >> "${dir}/ssh-attempts"
+  while [ "$#" -gt 0 ] && [ "$1" != "--command" ]; do shift; done
+  eval "$2"
+  exit $?
+fi
+exit 0
+`,
+      { mode: 0o755 }
+    )
+    chmodSync(join(dir, 'fly'), 0o755)
+    rmSync(join(dir, 'settled3'), { force: true })
+    const out = runWithHelpers(`
+ssh_exec_vendor "a-vendor-probe" "if [ \\$(wc -l < ${dir}/ssh-attempts) -ge 2 ]; then echo INCONCLUSIVE: HTTP 503; exit 3; fi; echo FAIL: can read; exit 1"
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+echo "WARNED_COUNT=\${#WARNED_CHECKS[@]}"
+echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+`)
+    expect(out).toMatch(/ATTEMPTS=2/)
+    expect(out).toContain('FAILED_COUNT=1')
+    expect(out).toContain('WARNED_COUNT=0')
+  })
+
+  it('passes a probe that exits 0', () => {
+    const out = vendorCheck('echo pass; exit 0')
+    expect(out).toContain('PASS_COUNT=1')
+    expect(out).toContain('FAILED_COUNT=0')
+    expect(out).toContain('WARNED_COUNT=0')
+  })
+})

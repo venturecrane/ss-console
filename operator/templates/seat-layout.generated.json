@@ -239,6 +239,12 @@
       "kind": "file",
       "when": "always"
     },
+    "selftest_state": {
+      "path": "/opt/data/selftest-state",
+      "expect": "lazy",
+      "kind": "dir",
+      "when": "always"
+    },
     "skills": {
       "path": "/opt/data/skills",
       "when": "always"

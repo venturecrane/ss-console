@@ -200,6 +200,14 @@ paths:
     path: /run/smd-selftest/results.json
     expect: lazy
     kind: file
+  # The self-test's per-check inconclusive streaks (check ids, counts and
+  # epoch seconds; no client data), kept across restarts (selftest.sh
+  # judge_inconclusive). Root-owned 0700; created on the first inconclusive run.
+  selftest_state:
+    path: '{data}/selftest-state'
+    expect: lazy
+    kind: dir
+    volume: true
 
   # ---- connectors ----
   connectors_root:
