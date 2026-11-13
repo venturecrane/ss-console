@@ -504,6 +504,9 @@
       },
       "events": [
         {
+          "log": "filing the records review this job already sent (Alpha Example - Records Review 10-13-26.docx); it is never rebuilt or renamed"
+        },
+        {
           "call": "list_files",
           "matter": "00000000-0000-4000-8000-000000000001",
           "records": {
@@ -689,6 +692,9 @@
       },
       "events": [
         {
+          "log": "filing the records review this job already sent (Alpha Example - Records Review 10-13-26.docx); it is never rebuilt or renamed"
+        },
+        {
           "call": "list_files",
           "matter": "00000000-0000-4000-8000-000000000001",
           "records": {
@@ -872,6 +878,9 @@
         ]
       },
       "events": [
+        {
+          "log": "filing the records review this job already sent (Alpha Example - Records Review 10-13-26.docx); it is never rebuilt or renamed"
+        },
         {
           "call": "list_files",
           "matter": "00000000-0000-4000-8000-000000000001",
@@ -1057,6 +1066,9 @@
       },
       "events": [
         {
+          "log": "filing the records review this job already sent (Alpha Example - Records Review 10-13-26.docx); it is never rebuilt or renamed"
+        },
+        {
           "call": "list_files",
           "matter": "00000000-0000-4000-8000-000000000001",
           "records": {
@@ -1216,6 +1228,9 @@
       },
       "events": [
         {
+          "log": "filing the records review this job already sent (Alpha Example - Records Review 10-13-26.docx); it is never rebuilt or renamed"
+        },
+        {
           "call": "list_files",
           "matter": "00000000-0000-4000-8000-000000000001",
           "records": {
@@ -1374,6 +1389,9 @@
         ]
       },
       "events": [
+        {
+          "log": "filing the records review this job already sent (Alpha Example - Records Review 10-13-26.docx); it is never rebuilt or renamed"
+        },
         {
           "call": "list_files",
           "matter": "00000000-0000-4000-8000-000000000001",

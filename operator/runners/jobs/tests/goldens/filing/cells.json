@@ -27,7 +27,9 @@
     "shape_no_ext",
     "rebuilt_after_send",
     "resume_name_taken_after_placeholder",
-    "resume_name_taken_after_short"
+    "resume_name_taken_after_short",
+    "review_retry_after_short",
+    "review_retry_later_day"
   ],
   "not_applicable": {
     "update/folder_taken": "the update files into the delivered chronology's own folder, by its id; no folder is chosen or created by name",
@@ -53,7 +55,23 @@
     "revise/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
     "revise/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
     "library/resume_name_taken_after_placeholder": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
-    "library/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one"
+    "library/resume_name_taken_after_short": "only a filing into a folder this run did not create numbers a taken name, so only the update and its review resume one",
+    "chronology/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "chronology/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "update/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "update/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "demand/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "demand/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "drafting/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "drafting/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "litigation/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "litigation/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "casefile/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "casefile/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "revise/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "revise/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts",
+    "library/review_retry_after_short": "only the update's records review is rendered again by the driver between attempts",
+    "library/review_retry_later_day": "only the update's records review is rendered again by the driver between attempts"
   },
   "frozen": {
     "dated-pending-landed": {

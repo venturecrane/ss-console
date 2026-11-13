@@ -17,43 +17,7 @@
   },
   "events": [
     {
-      "call": "list_files",
-      "matter": "00000000-0000-4000-8000-000000000001",
-      "records": {
-        "data/example-matter/out/alpha/upload_manifest.json": [
-          {
-            "bytes": 20,
-            "folder": "CHRON",
-            "local_path": "<TMP>/data/example-matter/out/alpha/Alpha Example - Records Review 10-13-26.docx",
-            "name": "Alpha Example - Records Review 10-13-26.docx",
-            "sha256": "95e6e8e3eac32af8f74e566ee29a0aa0796001075a63ebc27bf609bd9fce02b0"
-          }
-        ],
-        "data/example-matter/runs/alpha/delivery.json": {
-          "files": [
-            {
-              "bytes": 20,
-              "confirmed": false,
-              "name": "Alpha Example - Records Review 10-13-26 (2).docx",
-              "sent": true,
-              "sha256": "95e6e8e3eac32af8f74e566ee29a0aa0796001075a63ebc27bf609bd9fce02b0"
-            }
-          ],
-          "folder": "CHRON",
-          "folder_id": "fold-chron",
-          "update": true
-        }
-      },
-      "returned": [
-        "c1 'Alpha Example - Medical Chronology 09-01-26' '.docx' 15 in fold-chron",
-        "e1 'Exhibit 1 - x' '.pdf' 14 in fold-chron",
-        "a1 'Attorney notes' '.docx' 20 in fold-chron",
-        "firm-2 'Alpha Example - Records Review 10-13-26' '.docx' 24 in fold-chron",
-        "up-1 'Alpha Example - Records Review 10-13-26 (2)' '.docx' 20 in fold-chron"
-      ]
-    },
-    {
-      "log": "keeping the name Alpha Example - Records Review 10-13-26 (2).docx an earlier attempt of this update chose for Alpha Example - Records Review 10-13-26.docx"
+      "log": "filing the records review this job already sent (Alpha Example - Records Review 10-13-26 (2).docx); it is never rebuilt or renamed"
     },
     {
       "call": "list_files",
@@ -84,6 +48,17 @@
           "update": true
         }
       },
+      "returned": [
+        "c1 'Alpha Example - Medical Chronology 09-01-26' '.docx' 15 in fold-chron",
+        "e1 'Exhibit 1 - x' '.pdf' 14 in fold-chron",
+        "a1 'Attorney notes' '.docx' 20 in fold-chron",
+        "firm-2 'Alpha Example - Records Review 10-13-26' '.docx' 24 in fold-chron",
+        "up-1 'Alpha Example - Records Review 10-13-26 (2)' '.docx' 20 in fold-chron"
+      ]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
       "returned": [
         "c1 'Alpha Example - Medical Chronology 09-01-26' '.docx' 15 in fold-chron",
         "e1 'Exhibit 1 - x' '.pdf' 14 in fold-chron",

@@ -15,15 +15,18 @@ unless all three hold, the first two before it builds a client:
   ``staging`` environment (``SmokeballClient.environment``, which selects the
   host every write goes to).
 
-Then, every file stamped ``[SMD-PROBE <ts>]``:
+Then, every file stamped ``[SMD-PROBE <ts> <random>]`` (unique to this run):
 
 1. the dated-folder path (``file_into_new_folder``): two files into a new
    folder, proven by hash; then run again, which must send NOTHING;
 2. the standing-folder path (``file_into_standing_folder``): one file into a
    new standing folder, proven; then run again, which must send nothing;
-3. teardown: every stamped file deleted by id and the listing polled until each
-   reads gone. The folders cannot be deleted through the seat; they are named in
-   the output for a person to remove.
+3. teardown: the files whose ids this run's own send records hold are deleted
+   by id (one the listing shows only later, too; a failed delete is tried
+   again), and the listing is polled until nothing with this run's stamp reads
+   present. A stamped file this run never recorded is reported, not deleted.
+   The folders cannot be deleted through the seat; they are named in the
+   output for a person to remove.
 
 Exit 0 only when every step held; 1 when any did not, or while any stamped file
 still reads present (the output names each). Nothing here touches any matter
@@ -34,6 +37,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 import sys
 import tempfile
 import time
@@ -82,7 +86,9 @@ class CountingSeat:
 
 
 def _stamp() -> str:
-    return f"[SMD-PROBE {time.strftime('%Y%m%dT%H%M%S', time.gmtime())}]"
+    """Unique per run: the time and a random suffix, so two runs in the same
+    second never read or delete each other's files."""
+    return f"[SMD-PROBE {time.strftime('%Y%m%dT%H%M%S', time.gmtime())} {secrets.token_hex(3)}]"
 
 
 def _dated(seat: CountingSeat, work: Path, stamp: str, say: Any) -> tuple[bool, str]:
@@ -134,36 +140,57 @@ def _stamped(seat: Any, stamp: str) -> list[dict[str, Any]]:
     return [f for f in seat.list_files(PROBE_MATTER_ID) if not f.get("deleted") and stamp in filing.full_name(f)]
 
 
-def _delete_new(seat: Any, stamp: str, asked: set[str], say: Any) -> list[str]:
-    """Delete every stamped file not asked for yet (a file the vendor's index
-    shows only now is deleted too); returns the full names still listed."""
+def recorded_ids(work: Path) -> set[str]:
+    """The file ids this run's own send records hold (the dated folder's rows
+    and the standing folder's record): the only files the teardown deletes."""
+    ids: set[str] = set()
+    for rec in (work / "dated" / "runs" / "probe" / "delivery.json", work / "standing" / "delivery.json"):
+        try:
+            doc = json.loads(rec.read_text(encoding="utf-8")) if rec.is_file() else {}
+        except ValueError:
+            continue
+        rows = doc.get("files") if isinstance(doc.get("files"), list) else [doc]
+        ids |= {str(r["file_id"]) for r in rows if isinstance(r, dict) and r.get("file_id")}
+    return ids
+
+
+def _delete_ours(seat: Any, stamp: str, ids: set[str], asked: set[str], say: Any) -> list[str]:
+    """Delete every listed file of this run's own ids not deleted yet (one the
+    vendor's index shows only now included; a delete that fails is tried again
+    on the next poll); returns the full names of the stamped files still listed."""
     left = []
     for f in _stamped(seat, stamp):
         left.append(filing.full_name(f))
         fid = str(f["id"])
-        if fid in asked:
+        if fid not in ids or fid in asked:
             continue
         say(f"deleting {filing.full_name(f)} (id {fid})")
+        try:
+            seat.delete_file(PROBE_MATTER_ID, fid)
+        except Exception as exc:  # noqa: BLE001 - a failed delete is tried again on the next poll; a file left fails the probe
+            say(f"teardown: the delete of {fid} failed ({type(exc).__name__}: {str(exc)[:120]}); trying again")
+            continue
         asked.add(fid)
-        seat.delete_file(PROBE_MATTER_ID, fid)
     return left
 
 
 def teardown(
-    seat: Any, stamp: str, say: Any, *, tries: int = GONE_TRIES, pause: float = GONE_PAUSE_SECONDS
+    seat: Any, stamp: str, ids: set[str], say: Any, *, tries: int = GONE_TRIES, pause: float = GONE_PAUSE_SECONDS
 ) -> list[str]:
-    """Delete every stamped file by id and poll until each reads gone,
-    deleting any stamped file that appears while it polls (the listing lags an
-    upload by minutes); returns the full names still present after the last
-    poll (empty is a clean teardown). A listing or a delete that fails proves
-    nothing gone, so it is reported as left."""
+    """Delete this run's own files (``ids``, from its send records) and poll
+    until every file stamped with this run's ``stamp`` reads gone, deleting any
+    of its own that the listing shows only while it polls; returns the full
+    names still present after the last poll (empty is a clean teardown). A file
+    carrying the stamp that this run never recorded is not deleted: it is
+    reported, and it fails the probe. A listing that fails proves nothing gone,
+    so it is reported as left."""
     asked: set[str] = set()
     left: list[str] = []
     for attempt in range(tries):
         try:
-            left = _delete_new(seat, stamp, asked, say)
-        except Exception as exc:  # noqa: BLE001 - a teardown that cannot read or delete has not proven anything gone
-            say(f"teardown: the deletes stopped ({type(exc).__name__}: {str(exc)[:120]})")
+            left = _delete_ours(seat, stamp, ids, asked, say)
+        except Exception as exc:  # noqa: BLE001 - a teardown that cannot read the matter has not proven anything gone
+            say(f"teardown: the matter could not be read ({type(exc).__name__}: {str(exc)[:120]})")
             left = [f"(the matter could not be read: {type(exc).__name__}: {str(exc)[:120]})"]
         if not left:
             say("teardown: every stamped file reads deleted")
@@ -175,20 +202,23 @@ def teardown(
 
 def run(seat: Any, say: Any = print, *, gone_tries: int = GONE_TRIES, gone_pause: float = GONE_PAUSE_SECONDS) -> int:
     """The probe over ``seat`` (the caller has checked ``refusal``)."""
-    stamp, counted, failed = _stamp(), CountingSeat(seat), []
+    stamp, counted, failed, ids = _stamp(), CountingSeat(seat), [], set()
     say(f"filing probe {stamp} on matter {PROBE_MATTER_ID}")
     try:
         with tempfile.TemporaryDirectory(prefix="filing-probe-") as tmp:
-            for name, step in (("dated folder", _dated), ("standing folder", _standing)):
-                try:
-                    ok, detail = step(counted, Path(tmp), stamp, say)
-                except Exception as exc:  # noqa: BLE001 - a step that raises fails the probe and still reaches the teardown
-                    ok, detail = False, f"{type(exc).__name__}: {str(exc)[:200]}"
-                say(f"{name}: {'PROVEN, second run sent nothing' if ok else 'FAILED'} ({detail})")
-                if not ok:
-                    failed.append(name)
+            try:
+                for name, step in (("dated folder", _dated), ("standing folder", _standing)):
+                    try:
+                        ok, detail = step(counted, Path(tmp), stamp, say)
+                    except Exception as exc:  # noqa: BLE001 - a step that raises fails the probe and still reaches the teardown
+                        ok, detail = False, f"{type(exc).__name__}: {str(exc)[:200]}"
+                    say(f"{name}: {'PROVEN, second run sent nothing' if ok else 'FAILED'} ({detail})")
+                    if not ok:
+                        failed.append(name)
+            finally:
+                ids = recorded_ids(Path(tmp))
     finally:
-        left = teardown(seat, stamp, say, tries=gone_tries, pause=gone_pause)
+        left = teardown(seat, stamp, ids, say, tries=gone_tries, pause=gone_pause)
     say(f"folders left for a person to remove: '{stamp} dated', '{stamp} standing'")
     if left:
         say(f"FAILED: {len(left)} stamped file(s) still read present: {', '.join(left)}")

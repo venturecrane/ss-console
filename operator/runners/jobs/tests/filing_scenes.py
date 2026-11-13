@@ -51,6 +51,9 @@ class Scene:
     #: Rebuilds the first file with other bytes (and its manifest row), as a
     #: lane re-run between two attempts would; None where nothing is rebuilt.
     rebuild: Callable[[], None] | None = None
+    #: Renders the first file again on a later day (another dated name, other
+    #: bytes) and files that instead; None where no lane does.
+    later: Callable[[], None] | None = None
 
 
 REBUILT = b" (rebuilt)"
@@ -277,8 +280,16 @@ def update_review(root: Path, ending: str, _mp: Any) -> Scene:
     seat, sr, out = _update_scene(root, ending, first)
     doc = out / first
     doc.write_bytes(b"records review bytes")
-    run = lambda: update_review_file.file(sr, doc, pause=0, tries=3)  # noqa: E731 - one call, named for the scene
-    return Scene(seat, run, first, root, rebuild_file(doc))
+    # The driver renders the review again on every ending (outcome.end); the
+    # scene files whatever document it rendered last.
+    held = {"doc": doc}
+
+    def later() -> None:
+        held["doc"] = out / UP_REVIEW.replace("10-13-26", "10-14-26")
+        held["doc"].write_bytes(b"records review bytes, rendered a day later")
+
+    run = lambda: update_review_file.file(sr, held["doc"], pause=0, tries=3)  # noqa: E731 - one call, named for the scene
+    return Scene(seat, run, first, root, rebuild_file(doc), later)
 
 
 # ---- a standing folder ------------------------------------------------------------------

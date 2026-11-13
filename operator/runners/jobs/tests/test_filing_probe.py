@@ -102,18 +102,70 @@ def test_a_path_that_raises_fails_the_probe_and_still_tears_down(matter):
     said: list[str] = []
     assert probe.run(seat, said.append, gone_tries=2, gone_pause=0) == 1
     assert any(line.startswith("dated folder: FAILED") for line in said)
-    assert any(line.startswith("teardown: the deletes stopped") for line in said)
+    assert any(line.startswith("teardown: the matter could not be read") for line in said)
     assert any("still read present: (the matter could not be read" in line for line in said), said
 
 
-def test_a_stamped_file_the_listing_shows_only_late_is_deleted_too():
+STAMP = "[SMD-PROBE 20261113T000000 a1b2c3]"
+
+
+def _row(fid: str, what: str, stamp: str = STAMP) -> dict:
+    return {"id": fid, "name": f"{stamp} {what}", "ext": ".txt", "size": 1, "folderId": "f"}
+
+
+def test_a_file_of_its_own_the_listing_shows_only_late_is_deleted_too():
     """MUTATION: delete only what the first pass listed and a file the vendor
     indexed a minute later stays on the staging matter while the probe passes."""
     seat = RecordingSeat()
-    stamp = "[SMD-PROBE 20261113T000000]"
-    seat.docs.append({"id": "early", "name": f"{stamp} early", "ext": ".txt", "size": 1, "folderId": "f"})
-    late = {"id": "late", "name": f"{stamp} late", "ext": ".txt", "size": 1, "folderId": "f"}
-    seat._pending.append((seat._lists + 2, late))  # the vendor indexes it only on the second listing
+    seat.docs.append(_row("early", "early"))
+    seat._pending.append((seat._lists + 2, _row("late", "late")))  # the vendor indexes it only on the second listing
     said: list[str] = []
-    assert probe.teardown(seat, stamp, said.append, tries=4, pause=0) == []
+    assert probe.teardown(seat, STAMP, {"early", "late"}, said.append, tries=4, pause=0) == []
     assert seat.deleted == ["early", "late"]
+
+
+def test_a_delete_that_fails_is_tried_again_on_the_next_poll():
+    """MUTATION: mark an id asked before its delete returns and a failed delete
+    is never retried."""
+    seat = RecordingSeat()
+    seat.docs.append(_row("mine", "dated 1"))
+    real, fails = seat.delete_file, [RuntimeError("503 from the vendor")]
+
+    def flaky(matter_id: str, file_id: str) -> dict:
+        if fails:
+            raise fails.pop()
+        return real(matter_id, file_id)
+
+    seat.delete_file = flaky
+    said: list[str] = []
+    assert probe.teardown(seat, STAMP, {"mine"}, said.append, tries=3, pause=0) == []
+    assert seat.deleted == ["mine"] and any("failed" in line and "trying again" in line for line in said)
+
+
+def test_only_its_own_files_are_deleted_and_a_stranger_with_its_stamp_fails_it():
+    """MUTATION: delete by stamp and a file this run never sent (another run's,
+    a person's) is deleted off the matter."""
+    seat = RecordingSeat()
+    seat.docs += [
+        _row("mine", "dated 1"),
+        _row("theirs", "copied by hand"),
+        _row("other", "x", "[SMD-PROBE other run]"),
+    ]
+    said: list[str] = []
+    left = probe.teardown(seat, STAMP, {"mine"}, said.append, tries=2, pause=0)
+    assert seat.deleted == ["mine"]
+    assert left == [f"{STAMP} copied by hand.txt"]
+
+
+def test_every_run_has_its_own_stamp():
+    assert len({probe._stamp() for _ in range(50)}) == 50
+
+
+def test_the_ids_come_from_its_own_send_records(tmp_path):
+    (tmp_path / "dated" / "runs" / "probe").mkdir(parents=True)
+    (tmp_path / "standing").mkdir()
+    (tmp_path / "dated" / "runs" / "probe" / "delivery.json").write_text(
+        '{"files": [{"name": "a", "file_id": "d1"}, {"name": "b", "pending": true}]}'
+    )
+    (tmp_path / "standing" / "delivery.json").write_text('{"name": "c", "file_id": "s1"}')
+    assert probe.recorded_ids(tmp_path) == {"d1", "s1"}

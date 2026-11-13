@@ -148,6 +148,29 @@ def resume_cell(lane: str, ending: str, root: Path, mp: Any) -> dict[str, Any]:
     }
 
 
+def review_retry_cell(lane: str, ending: str, root: Path, mp: Any) -> dict[str, Any]:
+    """The records review's first attempt reads back short; the driver renders
+    it again (the same name with other bytes, or on a later day another name)
+    and the retry runs once the vendor has caught up. Both runs recorded."""
+    sc = LANES[lane](root, "clean", mp)
+    seat = sc.seat
+    seat.lag = 10**6
+    first = _run(sc)
+    split = len(seat.events)
+    seat.lag = 0
+    seat._pending = [(0, row) for _due, row in seat._pending]  # the vendor's index catches up
+    render = sc.later if ending.endswith("later_day") else sc.rebuild
+    assert render is not None
+    render()
+    seat._last = None
+    end = _run(sc)
+    return {
+        "first_file": sc.first,
+        "first": {"end": first, "events": seat.events[:split]},
+        **_doc(sc, end, seat.events[split:]),
+    }
+
+
 def _copies(doc: dict[str, Any]) -> list[str]:
     """Every name sent, in both runs, that is the first file or a numbered form of it."""
     stem, dot, ext = str(doc["first_file"]).rpartition(".")
@@ -164,6 +187,8 @@ def cell(lane: str, ending: str, root: Path, mp: Any) -> dict[str, Any]:
         return rebuilt_cell(lane, root, mp)
     if ending.startswith("resume_name_taken_after_"):
         return resume_cell(lane, ending, root, mp)
+    if ending.startswith("review_retry_"):
+        return review_retry_cell(lane, ending, root, mp)
     sc = LANES[lane](root, ending, mp)
     _fault(sc, ending)
     end = _run(sc)
@@ -252,6 +277,9 @@ def test_a_filing_cell_records_what_its_golden_holds(tmp_path, monkeypatch, lane
         assert again == [], "a file rebuilt after it was sent must never be sent again"
     if ending.startswith("resume_name_taken_after_"):
         assert len(_copies(doc)) <= 1, f"one copy only, not {_copies(doc)}"
+    if ending.startswith("review_retry_"):
+        sent = [e for e in [*doc["first"]["events"], *doc["events"]] if e.get("call") == "add_file"]
+        assert len(sent) == 1, f"the review is filed once, not {[e.get('name') for e in sent]}"
 
 
 @pytest.mark.parametrize("state", sorted(FROZEN))
