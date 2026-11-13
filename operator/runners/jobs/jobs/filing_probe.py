@@ -149,7 +149,8 @@ def recorded_ids(work: Path) -> set[str]:
             doc = json.loads(rec.read_text(encoding="utf-8")) if rec.is_file() else {}
         except ValueError:
             continue
-        rows = doc.get("files") if isinstance(doc.get("files"), list) else [doc]
+        files = doc.get("files")
+        rows: list[Any] = files if isinstance(files, list) else [doc]
         ids |= {str(r["file_id"]) for r in rows if isinstance(r, dict) and r.get("file_id")}
     return ids
 
