@@ -1227,31 +1227,6 @@ def _row_matter_ref(row: dict[str, Any]) -> str | None:
     return str(row.get("matter_id") or "") or None
 
 
-#: The job kind a records lane row's release is the reply of (the broker's
-#: ``records_reply.KIND``).
-_LANE_JOB_KIND = "records_job"
-
-
-def _row_for_job(row: dict[str, Any]) -> dict[str, str] | None:
-    """The job a release IS the reply of: the row's own ``job`` (SMD's
-    ``approve --job``), else, for a records lane row, the job its
-    ``session_id`` names. The broker takes that job's reply-once mark at the
-    send (2026-11-13: records and medchron had no reply-once mark; a reply
-    could go out twice)."""
-    job = matter_file_review.row_job(row)
-    if job is not None:
-        return job
-    session = str(row.get("session_id") or "")
-    if not session.startswith(LANE_SESSION_PREFIX):
-        return None
-    job_id = session[len(LANE_SESSION_PREFIX) :]
-    return (
-        {"kind": _LANE_JOB_KIND, "job_id": job_id}
-        if matter_file_review.JOB_ID_RE.fullmatch(job_id)
-        else None
-    )
-
-
 def _review_one(row: dict[str, Any]) -> None:
     if row.get("status") != matter_file_review.STATUS_REVIEW:
         return
@@ -1311,7 +1286,7 @@ def _review_one(row: dict[str, Any]) -> None:
             # reply, atomically with the send, so a later rewake or a second
             # row cannot send a second completion (A&P, 2026-11-06; records,
             # 2026-11-13).
-            for_job=_row_for_job(row),
+            for_job=matter_file_review.release_job(row, LANE_SESSION_PREFIX),
         )
     except Exception as exc:  # noqa: BLE001 - recorded on the row and paged, never resent
         matter_file_review.finish(row, matter_file_review.STATUS_FAILED, note=type(exc).__name__)

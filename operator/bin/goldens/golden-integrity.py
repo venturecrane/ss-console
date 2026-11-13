@@ -30,7 +30,10 @@ Four checks, each a failure on its own:
    must be named in ``allowed-instrument-changes.json``.
 3. **Allowed lists stay honest (H3).** An entry that explains no difference is
    stale; an entry the base already carried is inherited (it was reviewed for
-   the change that merged it) and must be cleared; a wildcard is refused.
+   the change that merged it). An inherited entry that still explains a
+   difference fails (it would excuse a new change unreviewed); one that
+   explains nothing is a merged change's leftover and blocks no PR, so a peer
+   is never held by another change's uncleared list. A wildcard is refused.
 4. **Cleared once merged.** ``--require-empty`` (the push to main) fails while
    any allowed list still names a path, so a merged change's entries are
    cleared in a follow-up rather than left to excuse a later one.
@@ -218,10 +221,21 @@ def judge(label: str, allowed: dict[str, list[str]], base_allowed: dict[str, lis
     for kind, f in zip(("behaviour", "lost"), found):
         for name, paths in gd.unallowed(f, allowed).items():
             problems.append(f"{label}/{name}: {kind}: {', '.join(paths[:20])}{' ...' if len(paths) > 20 else ''}")
-    for name, paths in gd.stale(allowed, *found).items():
-        problems.append(f"{label}/{name}: stale allowed entries (they explain no difference; remove them): {paths}")
-    for name, paths in gd.inherited(allowed, base_allowed).items():
-        problems.append(f"{label}/{name}: inherited allowed entries (the merge-base already carried them; clear them): {paths}")  # fmt: skip
+    # An entry the merge-base already carried that explains nothing here is a
+    # leftover of a change already merged: it blocks no PR (it would block every
+    # peer's PR until someone cleared it); the push to main's --require-empty run
+    # is what asks for it to be cleared. An inherited entry that DOES explain a
+    # difference here is being reused to excuse a new change, and still fails.
+    inherited = gd.inherited(allowed, base_allowed)
+    stale = gd.stale(allowed, *found)
+    for name, paths in stale.items():
+        own = [p for p in paths if p not in set(inherited.get(name, []))]
+        if own:
+            problems.append(f"{label}/{name}: stale allowed entries (they explain no difference; remove them): {own}")
+    for name, paths in inherited.items():
+        reused = [p for p in paths if p not in set(stale.get(name, []))]
+        if reused:
+            problems.append(f"{label}/{name}: inherited allowed entries excuse a difference here (the merge-base already carried them; a new change needs its own entry): {reused}")  # fmt: skip
     return problems
 
 
