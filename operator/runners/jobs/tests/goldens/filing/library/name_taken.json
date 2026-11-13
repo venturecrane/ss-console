@@ -1,0 +1,115 @@
+{
+  "end": {
+    "returned": {
+      "__type": "Filed",
+      "file_id": "lib-7",
+      "name": "Template - Memo.docx",
+      "new_file": false,
+      "sha256": "9bd04f8a4f6e6c3c775794f1b781f8486c45cae35f5ecf4de79e94f611967c27",
+      "version": "lib-7-v2"
+    }
+  },
+  "events": [
+    {
+      "Limit": "50",
+      "Offset": "0",
+      "Search": "LIB-EXAMPLE",
+      "call": "client.get",
+      "path": "/matters",
+      "records": {},
+      "returned": {
+        "value": [
+          {
+            "id": "00000000-0000-0000-0000-00000000a11b",
+            "number": "LIB-EXAMPLE"
+          }
+        ]
+      }
+    },
+    {
+      "Limit": "500",
+      "Offset": "0",
+      "call": "client.get",
+      "path": "/matters/00000000-0000-0000-0000-00000000a11b/documents/files",
+      "returned": {
+        "value": [
+          {
+            "fileExtension": ".docx",
+            "folder": {
+              "id": "00000000-0000-0000-0000-0000000f01de"
+            },
+            "id": "lib-7",
+            "isDeleted": false,
+            "name": "Template - Memo",
+            "sizeBytes": 12,
+            "versionId": "lib-7-v1"
+          }
+        ]
+      }
+    },
+    {
+      "Limit": "500",
+      "Offset": "0",
+      "call": "client.get",
+      "path": "/matters/00000000-0000-0000-0000-00000000a11b/documents/folders",
+      "returned": {
+        "value": [
+          {
+            "folders": [
+              {
+                "id": "00000000-0000-0000-0000-0000000f01de",
+                "name": "Document Library"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "bytes": 22,
+      "call": "add_file_version",
+      "expected_folder": null,
+      "expected_name": null,
+      "expected_version": "lib-7-v1",
+      "id": "lib-7",
+      "matter": "00000000-0000-0000-0000-00000000a11b",
+      "returned": {
+        "fileId": "lib-7",
+        "uploaded": true,
+        "versionBefore": "lib-7-v1"
+      },
+      "sha256": "9bd04f8a4f6e6c3c775794f1b781f8486c45cae35f5ecf4de79e94f611967c27"
+    },
+    {
+      "call": "client.get",
+      "path": "/matters/00000000-0000-0000-0000-00000000a11b/documents/files/lib-7",
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "00000000-0000-0000-0000-0000000f01de"
+        },
+        "id": "lib-7",
+        "isDeleted": false,
+        "name": "Template - Memo",
+        "sizeBytes": 22,
+        "versionId": "lib-7-v2"
+      }
+    },
+    {
+      "call": "client.download_file",
+      "id": "lib-7",
+      "matter": "00000000-0000-0000-0000-00000000a11b",
+      "returned": {
+        "bytes": 22,
+        "sha256": "9bd04f8a4f6e6c3c775794f1b781f8486c45cae35f5ecf4de79e94f611967c27"
+      }
+    }
+  ],
+  "records": {},
+  "vendor": [
+    "lib-7 'Template - Memo' '.docx' 22 in 00000000-0000-0000-0000-0000000f01de v2 sha 9bd04f8a4f6e6c3c"
+  ],
+  "writes": {
+    "add_file_version": 1
+  }
+}

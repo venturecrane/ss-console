@@ -1,0 +1,258 @@
+{
+  "end": {
+    "returned": [
+      {
+        "file_id": "up-1",
+        "folder_id": "folder-1",
+        "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+        "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef",
+        "size": 7
+      },
+      {
+        "file_id": "up-2",
+        "folder_id": "folder-1",
+        "name": "Litigation Status 2026-11-13 by case.xlsx",
+        "sha256": "cca9873bb90b778af769db6fdff6fc5d5dda3cd2c14f8c2e1826c8c70d705bdc",
+        "size": 11
+      }
+    ]
+  },
+  "events": [
+    {
+      "call": "folder_tree",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": null
+      },
+      "returned": []
+    },
+    {
+      "call": "create_folder",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "name": "Litigation Status",
+      "returned": {
+        "id": "folder-1"
+      }
+    },
+    {
+      "log": "created folder 'Litigation Status'"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": []
+    },
+    {
+      "bytes": 7,
+      "call": "add_file",
+      "folder": "folder-1",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+          "pending": true,
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+          "pending": false,
+          "sent": true,
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.XLSX' 7 in folder-1"]
+    },
+    {
+      "call": "mint",
+      "ids": ["up-1"],
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": [
+        {
+          "id": "up-1",
+          "size": 7,
+          "url": "https://fake.invalid/up-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 7,
+      "url": "https://fake.invalid/up-1"
+    },
+    {
+      "call": "folder_tree",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "confirmed": true,
+          "file_id": "up-1",
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+          "pending": false,
+          "sent": true,
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": ["folder-1 'Litigation Status' under None"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": {
+          "bytes": 11,
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 by case.xlsx",
+          "sha256": "cca9873bb90b778af769db6fdff6fc5d5dda3cd2c14f8c2e1826c8c70d705bdc"
+        },
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "confirmed": true,
+          "file_id": "up-1",
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+          "pending": false,
+          "sent": true,
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": ["up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.XLSX' 7 in folder-1"]
+    },
+    {
+      "bytes": 11,
+      "call": "add_file",
+      "folder": "folder-1",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "name": "Litigation Status 2026-11-13 by case.xlsx",
+      "records": {
+        "job-data/delivery-percase.json": {
+          "bytes": 11,
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 by case.xlsx",
+          "pending": true,
+          "sha256": "cca9873bb90b778af769db6fdff6fc5d5dda3cd2c14f8c2e1826c8c70d705bdc"
+        },
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "confirmed": true,
+          "file_id": "up-1",
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+          "pending": false,
+          "sent": true,
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "cca9873bb90b778af769db6fdff6fc5d5dda3cd2c14f8c2e1826c8c70d705bdc"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": {
+          "bytes": 11,
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 by case.xlsx",
+          "pending": false,
+          "sent": true,
+          "sha256": "cca9873bb90b778af769db6fdff6fc5d5dda3cd2c14f8c2e1826c8c70d705bdc"
+        },
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "confirmed": true,
+          "file_id": "up-1",
+          "folder_id": "folder-1",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+          "pending": false,
+          "sent": true,
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": [
+        "up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.XLSX' 7 in folder-1",
+        "up-2 'Litigation Status 2026-11-13 by case' '.xlsx' 11 in folder-1"
+      ]
+    },
+    {
+      "call": "mint",
+      "ids": ["up-2"],
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": [
+        {
+          "id": "up-2",
+          "size": 11,
+          "url": "https://fake.invalid/up-2"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 11,
+      "url": "https://fake.invalid/up-2"
+    }
+  ],
+  "records": {
+    "job-data/delivery-percase.json": {
+      "bytes": 11,
+      "confirmed": true,
+      "file_id": "up-2",
+      "folder_id": "folder-1",
+      "name": "Litigation Status 2026-11-13 by case.xlsx",
+      "pending": false,
+      "sent": true,
+      "sha256": "cca9873bb90b778af769db6fdff6fc5d5dda3cd2c14f8c2e1826c8c70d705bdc"
+    },
+    "job-data/delivery.json": {
+      "bytes": 7,
+      "confirmed": true,
+      "file_id": "up-1",
+      "folder_id": "folder-1",
+      "name": "Litigation Status 2026-11-13 (Operator 0000c3).XLSX",
+      "pending": false,
+      "sent": true,
+      "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+    }
+  },
+  "vendor": [
+    "up-1 'Litigation Status 2026-11-13 (Operator 0000c3)' '.XLSX' 7 in folder-1 v1 sha 7961ce24b7773ef4",
+    "up-2 'Litigation Status 2026-11-13 by case' '.xlsx' 11 in folder-1 v1 sha cca9873bb90b778a"
+  ],
+  "writes": {
+    "add_file": 2,
+    "create_folder": 1
+  }
+}

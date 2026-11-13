@@ -1,0 +1,55 @@
+{
+  "end": {
+    "raised": {
+      "message": "filing_refused: the filed draft was moved, renamed or deleted; nothing was written",
+      "type": "DraftingHold"
+    }
+  },
+  "events": [
+    {
+      "call": "file_meta",
+      "id": "draft-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/versions.json": null
+      },
+      "returned": {
+        "fileExtension": ".docx",
+        "folder": {
+          "id": "fold-r"
+        },
+        "id": "draft-1",
+        "isDeleted": false,
+        "name": "Brief.docx",
+        "sizeBytes": 11,
+        "versionId": "draft-1-v1"
+      }
+    },
+    {
+      "call": "mint",
+      "ids": ["draft-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "draft-1",
+          "size": 11,
+          "url": "https://fake.invalid/draft-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 11,
+      "url": "https://fake.invalid/draft-1"
+    }
+  ],
+  "records": {
+    "job-data/versions.json": null
+  },
+  "vendor": [
+    "draft-1 'Brief.docx' '.docx' 11 in fold-r v1 sha da137d32ac281b17",
+    "notes-1 'Brief - attorney notes.docx' '.docx' 20 in fold-r v1 sha 3612e7620e727ee0"
+  ],
+  "writes": {}
+}

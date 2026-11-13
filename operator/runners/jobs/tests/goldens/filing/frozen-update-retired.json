@@ -1,0 +1,31 @@
+{
+  "files": [
+    {
+      "bytes": 20,
+      "confirmed": true,
+      "file_id": "up-1",
+      "name": "Alpha Example - Medical Chronology 10-13-26.docx",
+      "proven": true,
+      "sent": true,
+      "sha256": "c203b9aa4cf1fd09baf1af038894e4724a2891d42671678a66ade5175fd58aee"
+    },
+    {
+      "bytes": 16,
+      "confirmed": true,
+      "file_id": "up-2",
+      "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+      "proven": true,
+      "sent": true,
+      "sha256": "71f35d4ed9b811d9e750171f4d5c41d4fb2318fc95f3c7a5f5fbdb036101c437"
+    }
+  ],
+  "folder": "CHRON",
+  "folder_id": "fold-chron",
+  "replaced": {
+    "confirmed_gone": true,
+    "deleted": true,
+    "file_id": "c1",
+    "name": "Alpha Example - Medical Chronology 09-01-26.docx"
+  },
+  "update": true
+}

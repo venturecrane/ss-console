@@ -1,0 +1,46 @@
+{
+  "end": {
+    "raised": {
+      "message": "filing_refused: a file named 'File Status 2099-EX-0001 2026-11-13.pdf' is already in the folder and this run did not send it",
+      "type": "LitigationHold"
+    }
+  },
+  "events": [
+    {
+      "call": "folder_tree",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/delivery.json": null,
+        "job-data/wb.json": null
+      },
+      "returned": ["fold-standing 'File Status' under None"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/delivery.json": {
+          "bytes": 16,
+          "folder_id": "fold-standing",
+          "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+          "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+        },
+        "job-data/wb.json": null
+      },
+      "returned": ["firm-3 'File Status 2099-EX-0001 2026-11-13' '.pdf' 16 in fold-standing"]
+    }
+  ],
+  "records": {
+    "job-data/delivery.json": {
+      "bytes": 16,
+      "folder_id": "fold-standing",
+      "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+      "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+    },
+    "job-data/wb.json": null
+  },
+  "vendor": [
+    "firm-3 'File Status 2099-EX-0001 2026-11-13' '.pdf' 16 in fold-standing v1 sha d0719e3fc8aa48c4"
+  ],
+  "writes": {}
+}

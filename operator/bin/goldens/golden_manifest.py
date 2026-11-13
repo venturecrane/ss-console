@@ -35,6 +35,7 @@ NORMALISERS: dict[str, tuple[str, ...]] = {
     "wire_kit": ("shape", "traffic"),
     "test_wire_snapshot": ("direct",),
     "ledger_golden_kit": ("normal", "fix_clock", "Clock"),
+    "filing_kit": ("normal", "_row"),
 }
 
 
@@ -98,6 +99,14 @@ def _load() -> dict[str, Any]:
         import ledger_golden_kit
 
         out["ledger_golden_kit"] = ledger_golden_kit
+    with contextlib.suppress(ImportError):
+        import filing_kit
+
+        out["filing_kit"] = filing_kit
+    with contextlib.suppress(ImportError):
+        import test_filing_goldens
+
+        out["test_filing_goldens"] = test_filing_goldens
     return out
 
 
@@ -120,6 +129,9 @@ def cases() -> dict[str, list[str]]:
         ("firm_config.cases", "test_firm_config_goldens", "CASES"),
         ("text_rules.targets", "text_rule_kit", "TARGETS"),
         ("wire.direct", "test_wire_snapshot", "DIRECT"),
+        ("filing.cells", "test_filing_goldens", "CELLS"),
+        ("filing.frozen", "test_filing_goldens", "FROZEN"),
+        ("filing.not_applicable", "test_filing_goldens", "NOT_APPLICABLE"),
     ):
         m = _module(mod)
         if m is not None and hasattr(m, attr):

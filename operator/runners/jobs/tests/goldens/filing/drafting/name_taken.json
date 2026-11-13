@@ -1,0 +1,187 @@
+{
+  "end": {
+    "returned": {
+      "rec": {
+        "exit": 1,
+        "files": [
+          {
+            "bytes": 18,
+            "confirmed": true,
+            "name": "Memo - Example points 11-13-26.docx",
+            "sent": false,
+            "sha256": "9db968ae03743c8ddeff909c34b6f4481f876f2e8a1d0e5339bd913c7cfb6162"
+          },
+          {
+            "bytes": 16,
+            "confirmed": true,
+            "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+            "sent": true,
+            "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+          }
+        ],
+        "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+        "folder_id": "fold-ours",
+        "said": "readback_mismatch: Memo - Example points 11-13-26.docx: the downloaded bytes differ from the bytes built (folder fold-ours); nothing further is sent"
+      }
+    }
+  },
+  "events": [
+    {
+      "log": "resuming into folder fold-ours ('Draft 2099-EX-0001 11-13-26 (Operator 0000b2)') created by this run"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [],
+          "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": ["firm-1 'Memo - Example points 11-13-26' '.docx' 18 in fold-ours"]
+    },
+    {
+      "log": "  present  Memo - Example points 11-13-26.docx"
+    },
+    {
+      "bytes": 16,
+      "call": "add_file",
+      "folder": "fold-ours",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 16,
+              "confirmed": false,
+              "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+              "pending": true,
+              "sent": false,
+              "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+            }
+          ],
+          "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+    },
+    {
+      "log": "  sent     Memo - Example points 11-13-26 - attorney notes.docx (16 bytes; file id pending)"
+    },
+    {
+      "log": "1 file(s) sent, 1 already present, 0 sent by an earlier attempt"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 16,
+              "confirmed": false,
+              "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+              "sent": true,
+              "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+            }
+          ],
+          "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": [
+        "firm-1 'Memo - Example points 11-13-26' '.docx' 18 in fold-ours",
+        "up-1 'Memo - Example points 11-13-26 - attorney notes' '.docx' 16 in fold-ours"
+      ]
+    },
+    {
+      "log": "read-back complete: 2 file(s) at the expected byte counts in folder fold-ours"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/runs/demand/delivery.json": {
+          "files": [
+            {
+              "bytes": 18,
+              "confirmed": true,
+              "name": "Memo - Example points 11-13-26.docx",
+              "sent": false,
+              "sha256": "9db968ae03743c8ddeff909c34b6f4481f876f2e8a1d0e5339bd913c7cfb6162"
+            },
+            {
+              "bytes": 16,
+              "confirmed": true,
+              "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+              "sent": true,
+              "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+            }
+          ],
+          "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": [
+        "firm-1 'Memo - Example points 11-13-26' '.docx' 18 in fold-ours",
+        "up-1 'Memo - Example points 11-13-26 - attorney notes' '.docx' 16 in fold-ours"
+      ]
+    },
+    {
+      "call": "mint",
+      "ids": ["firm-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "firm-1",
+          "size": 18,
+          "url": "https://fake.invalid/firm-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 18,
+      "url": "https://fake.invalid/firm-1"
+    },
+    {
+      "log": "readback_mismatch: Memo - Example points 11-13-26.docx: the downloaded bytes differ from the bytes built (folder fold-ours); nothing further is sent"
+    }
+  ],
+  "records": {
+    "job-data/runs/demand/delivery.json": {
+      "files": [
+        {
+          "bytes": 18,
+          "confirmed": true,
+          "name": "Memo - Example points 11-13-26.docx",
+          "sent": false,
+          "sha256": "9db968ae03743c8ddeff909c34b6f4481f876f2e8a1d0e5339bd913c7cfb6162"
+        },
+        {
+          "bytes": 16,
+          "confirmed": true,
+          "name": "Memo - Example points 11-13-26 - attorney notes.docx",
+          "sent": true,
+          "sha256": "0e01cd3cd9ffb986ae9bdfb2912aa547ad9ee51adef4b1ec362b25458d66a705"
+        }
+      ],
+      "folder": "Draft 2099-EX-0001 11-13-26 (Operator 0000b2)",
+      "folder_id": "fold-ours"
+    }
+  },
+  "vendor": [
+    "firm-1 'Memo - Example points 11-13-26' '.docx' 18 in fold-ours v1 sha 5eb366f8b329ca80",
+    "up-1 'Memo - Example points 11-13-26 - attorney notes' '.docx' 16 in fold-ours v1 sha 0e01cd3cd9ffb986"
+  ],
+  "writes": {
+    "add_file": 1
+  }
+}

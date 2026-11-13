@@ -1,0 +1,66 @@
+{
+  "_why": "The filing goldens' matrix (test_filing_goldens.py): every lane that files into a firm's Smokeball by every ending, captured from origin/main c65294ee9 before wave 3 folds the four filing procedures into one module. A cell is recorded in <lane>/<ending>.json or named under not_applicable with its reason; a missing cell fails. frozen names the send records (frozen-<record>.json, recaptured only by JOBS_WRITE_FILING_FROZEN=1, never by the integrity job) that resume/<state>.json loads, each with what the vendor holds: none may send again.",
+  "lanes": [
+    "chronology",
+    "update",
+    "update_review",
+    "demand",
+    "drafting",
+    "litigation",
+    "casefile",
+    "revise",
+    "library"
+  ],
+  "endings": [
+    "clean",
+    "crash",
+    "send_raises_landed",
+    "send_raises_placeholder",
+    "send_raises_not_landed",
+    "send_raises_then_listing_raises",
+    "short_readback",
+    "bytes_mismatch",
+    "name_taken",
+    "folder_taken",
+    "shape_ext_on_name",
+    "shape_upper_ext",
+    "shape_no_ext"
+  ],
+  "not_applicable": {
+    "update/folder_taken": "the update files into the delivered chronology's own folder, by its id; no folder is chosen or created by name",
+    "update_review/folder_taken": "the review files into the delivered chronology's own folder, by its id; no folder is chosen or created by name",
+    "revise/folder_taken": "revise writes new versions of files already filed, by id; it creates no folder",
+    "revise/name_taken": "revise writes new versions of files already filed, by id; it never names a new file",
+    "revise/send_raises_placeholder": "a new version lands whole on its one PUT or not at all; there is no POST to leave a placeholder row",
+    "library/folder_taken": "the library folder is the firm's standing Document Library, found by name and never created",
+    "library/shape_upper_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed",
+    "library/shape_no_ext": "the library names its file from the firm's config ('Template - <Kind>.docx'); no other name shape is ever filed"
+  },
+  "frozen": {
+    "dated-pending-landed": { "lane": "chronology", "record": "dated-pending", "vendor": "landed" },
+    "dated-pending-absent": {
+      "lane": "chronology",
+      "record": "dated-pending",
+      "vendor": "absent-first"
+    },
+    "dated-sent": { "lane": "chronology", "record": "dated-sent", "vendor": "landed" },
+    "dated-confirmed": { "lane": "chronology", "record": "dated-confirmed", "vendor": "landed" },
+    "dated-proven": { "lane": "chronology", "record": "dated-proven", "vendor": "landed" },
+    "dated-pre-flag": { "lane": "chronology", "record": "dated-pre-flag", "vendor": "landed" },
+    "standing-pending": { "lane": "litigation", "record": "standing-pending", "vendor": "landed" },
+    "standing-pending-absent": {
+      "lane": "litigation",
+      "record": "standing-pending",
+      "vendor": "absent-first"
+    },
+    "standing-sent": { "lane": "litigation", "record": "standing-sent", "vendor": "landed" },
+    "standing-confirmed": {
+      "lane": "litigation",
+      "record": "standing-confirmed",
+      "vendor": "landed"
+    },
+    "update-proven": { "lane": "update", "record": "update-proven", "vendor": "landed" },
+    "update-retired": { "lane": "update", "record": "update-retired", "vendor": "landed" },
+    "versions-sent": { "lane": "revise", "record": "versions-sent", "vendor": "landed" }
+  }
+}

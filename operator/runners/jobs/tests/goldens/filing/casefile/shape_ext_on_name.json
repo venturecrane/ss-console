@@ -1,0 +1,269 @@
+{
+  "end": {
+    "returned": [
+      {
+        "file_id": "up-1",
+        "folder_id": "folder-1",
+        "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+        "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375",
+        "size": 16
+      },
+      {
+        "file_id": "up-2",
+        "folder_id": "folder-2",
+        "name": "Case File Manager 2026-11-13 (Operator 0000d4).xlsx",
+        "sha256": "f705886023042018063188ccaa0ad01dc7ea0debe9b4b4553bd8ad29ed99e08c",
+        "size": 11
+      }
+    ]
+  },
+  "events": [
+    {
+      "call": "folder_tree",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/delivery.json": null,
+        "job-data/wb.json": null
+      },
+      "returned": []
+    },
+    {
+      "call": "create_folder",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "File Status",
+      "returned": {
+        "id": "folder-1"
+      }
+    },
+    {
+      "log": "created folder 'File Status'"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/delivery.json": {
+          "bytes": 16,
+          "folder_id": "folder-1",
+          "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+          "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+        },
+        "job-data/wb.json": null
+      },
+      "returned": []
+    },
+    {
+      "bytes": 16,
+      "call": "add_file",
+      "folder": "folder-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+      "records": {
+        "job-data/delivery.json": {
+          "bytes": 16,
+          "folder_id": "folder-1",
+          "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+          "pending": true,
+          "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+        },
+        "job-data/wb.json": null
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "job-data/delivery.json": {
+          "bytes": 16,
+          "folder_id": "folder-1",
+          "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+          "pending": false,
+          "sent": true,
+          "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+        },
+        "job-data/wb.json": null
+      },
+      "returned": ["up-1 'File Status 2099-EX-0001 2026-11-13.pdf' '.pdf' 16 in folder-1"]
+    },
+    {
+      "call": "mint",
+      "ids": ["up-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "up-1",
+          "size": 16,
+          "url": "https://fake.invalid/up-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 16,
+      "url": "https://fake.invalid/up-1"
+    },
+    {
+      "call": "folder_tree",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery.json": {
+          "bytes": 16,
+          "confirmed": true,
+          "file_id": "up-1",
+          "folder_id": "folder-1",
+          "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+          "pending": false,
+          "sent": true,
+          "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+        },
+        "job-data/wb.json": null
+      },
+      "returned": ["folder-1 'File Status' under None"]
+    },
+    {
+      "call": "create_folder",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "name": "Case File Manager",
+      "returned": {
+        "id": "folder-2"
+      }
+    },
+    {
+      "log": "created folder 'Case File Manager'"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery.json": {
+          "bytes": 16,
+          "confirmed": true,
+          "file_id": "up-1",
+          "folder_id": "folder-1",
+          "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+          "pending": false,
+          "sent": true,
+          "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+        },
+        "job-data/wb.json": {
+          "bytes": 11,
+          "folder_id": "folder-2",
+          "name": "Case File Manager 2026-11-13 (Operator 0000d4).xlsx",
+          "sha256": "f705886023042018063188ccaa0ad01dc7ea0debe9b4b4553bd8ad29ed99e08c"
+        }
+      },
+      "returned": ["up-1 'File Status 2099-EX-0001 2026-11-13.pdf' '.pdf' 16 in folder-1"]
+    },
+    {
+      "bytes": 11,
+      "call": "add_file",
+      "folder": "folder-2",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "name": "Case File Manager 2026-11-13 (Operator 0000d4).xlsx",
+      "records": {
+        "job-data/delivery.json": {
+          "bytes": 16,
+          "confirmed": true,
+          "file_id": "up-1",
+          "folder_id": "folder-1",
+          "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+          "pending": false,
+          "sent": true,
+          "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+        },
+        "job-data/wb.json": {
+          "bytes": 11,
+          "folder_id": "folder-2",
+          "name": "Case File Manager 2026-11-13 (Operator 0000d4).xlsx",
+          "pending": true,
+          "sha256": "f705886023042018063188ccaa0ad01dc7ea0debe9b4b4553bd8ad29ed99e08c"
+        }
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "f705886023042018063188ccaa0ad01dc7ea0debe9b4b4553bd8ad29ed99e08c"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery.json": {
+          "bytes": 16,
+          "confirmed": true,
+          "file_id": "up-1",
+          "folder_id": "folder-1",
+          "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+          "pending": false,
+          "sent": true,
+          "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+        },
+        "job-data/wb.json": {
+          "bytes": 11,
+          "folder_id": "folder-2",
+          "name": "Case File Manager 2026-11-13 (Operator 0000d4).xlsx",
+          "pending": false,
+          "sent": true,
+          "sha256": "f705886023042018063188ccaa0ad01dc7ea0debe9b4b4553bd8ad29ed99e08c"
+        }
+      },
+      "returned": [
+        "up-1 'File Status 2099-EX-0001 2026-11-13.pdf' '.pdf' 16 in folder-1",
+        "up-2 'Case File Manager 2026-11-13 (Operator 0000d4).xlsx' '.xlsx' 11 in folder-2"
+      ]
+    },
+    {
+      "call": "mint",
+      "ids": ["up-2"],
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "returned": [
+        {
+          "id": "up-2",
+          "size": 11,
+          "url": "https://fake.invalid/up-2"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 11,
+      "url": "https://fake.invalid/up-2"
+    }
+  ],
+  "records": {
+    "job-data/delivery.json": {
+      "bytes": 16,
+      "confirmed": true,
+      "file_id": "up-1",
+      "folder_id": "folder-1",
+      "name": "File Status 2099-EX-0001 2026-11-13.pdf",
+      "pending": false,
+      "sent": true,
+      "sha256": "755425c61a7cd316a5c40fbd8d6f7d0b2c983f350e42b93c226343c889f35375"
+    },
+    "job-data/wb.json": {
+      "bytes": 11,
+      "confirmed": true,
+      "file_id": "up-2",
+      "folder_id": "folder-2",
+      "name": "Case File Manager 2026-11-13 (Operator 0000d4).xlsx",
+      "pending": false,
+      "sent": true,
+      "sha256": "f705886023042018063188ccaa0ad01dc7ea0debe9b4b4553bd8ad29ed99e08c"
+    }
+  },
+  "vendor": [
+    "up-1 'File Status 2099-EX-0001 2026-11-13.pdf' '.pdf' 16 in folder-1 v1 sha 755425c61a7cd316",
+    "up-2 'Case File Manager 2026-11-13 (Operator 0000d4).xlsx' '.xlsx' 11 in folder-2 v1 sha f705886023042018"
+  ],
+  "writes": {
+    "add_file": 2,
+    "create_folder": 2
+  }
+}

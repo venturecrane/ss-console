@@ -1,0 +1,48 @@
+{
+  "end": {
+    "raised": {
+      "message": "filing_refused: a file named 'Litigation Status 2026-11-13 (Operator 0000c3).xlsx' is already in the folder and this run did not send it",
+      "type": "LitigationHold"
+    }
+  },
+  "events": [
+    {
+      "call": "folder_tree",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": null
+      },
+      "returned": ["fold-standing 'Litigation Status' under None"]
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-00000000a11b",
+      "records": {
+        "job-data/delivery-percase.json": null,
+        "job-data/delivery.json": {
+          "bytes": 7,
+          "folder_id": "fold-standing",
+          "name": "Litigation Status 2026-11-13 (Operator 0000c3).xlsx",
+          "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+        }
+      },
+      "returned": [
+        "firm-3 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 7 in fold-standing"
+      ]
+    }
+  ],
+  "records": {
+    "job-data/delivery-percase.json": null,
+    "job-data/delivery.json": {
+      "bytes": 7,
+      "folder_id": "fold-standing",
+      "name": "Litigation Status 2026-11-13 (Operator 0000c3).xlsx",
+      "sha256": "7961ce24b7773ef40fa408bc5a5d6fa144fd2c7d5a8e43114700b42ade4fabef"
+    }
+  },
+  "vendor": [
+    "firm-3 'Litigation Status 2026-11-13 (Operator 0000c3)' '.xlsx' 7 in fold-standing v1 sha 5814700228c15167"
+  ],
+  "writes": {}
+}

@@ -1,0 +1,92 @@
+{
+  "end": {
+    "returned": 3
+  },
+  "events": [
+    {
+      "call": "folder_tree",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": null
+      },
+      "returned": []
+    },
+    {
+      "call": "create_folder",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+      "returned": {
+        "id": "folder-1"
+      }
+    },
+    {
+      "log": "created folder 'MEDICAL CHRONOLOGY - Alpha Example 08-29-26' (id folder-1)"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [],
+          "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+          "folder_id": "folder-1"
+        }
+      },
+      "returned": []
+    },
+    {
+      "bytes": 25,
+      "call": "add_file",
+      "folder": "folder-1",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+      "raised": {
+        "message": "the response was lost after the POST",
+        "type": "RuntimeError"
+      },
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [
+            {
+              "bytes": 25,
+              "confirmed": false,
+              "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+              "pending": true,
+              "sent": false,
+              "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+            }
+          ],
+          "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+          "folder_id": "folder-1"
+        }
+      },
+      "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+    },
+    {
+      "log": "Alpha Example - Medical Chronology 08-29-26.docx: the send failed (the response was lost after the POST); the file's record may already exist in folder folder-1, so it is not retried. Holding for a person to read the folder."
+    }
+  ],
+  "records": {
+    "data/example-matter/runs/alpha/delivery.json": {
+      "files": [
+        {
+          "bytes": 25,
+          "confirmed": false,
+          "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+          "pending": true,
+          "sent": false,
+          "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+        }
+      ],
+      "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+      "folder_id": "folder-1"
+    }
+  },
+  "vendor": [
+    "up-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 0 in folder-1 not indexed yet (no bytes)"
+  ],
+  "writes": {
+    "add_file": 1,
+    "create_folder": 1
+  }
+}

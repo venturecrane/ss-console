@@ -1,0 +1,225 @@
+{
+  "end": {
+    "returned": 1
+  },
+  "events": [
+    {
+      "log": "resuming into folder fold-ours ('MEDICAL CHRONOLOGY - Alpha Example 08-29-26') created by this run"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [],
+          "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": ["firm-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 25 in fold-ours"]
+    },
+    {
+      "log": "  present  Alpha Example - Medical Chronology 08-29-26.docx"
+    },
+    {
+      "bytes": 20,
+      "call": "add_file",
+      "folder": "fold-ours",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [
+            {
+              "bytes": 20,
+              "confirmed": false,
+              "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+              "pending": true,
+              "sent": false,
+              "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+            }
+          ],
+          "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+    },
+    {
+      "log": "  sent     Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf (20 bytes; file id pending)"
+    },
+    {
+      "bytes": 21,
+      "call": "add_file",
+      "folder": "fold-ours",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [
+            {
+              "bytes": 20,
+              "confirmed": false,
+              "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+              "sent": true,
+              "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+            },
+            {
+              "bytes": 21,
+              "confirmed": false,
+              "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+              "pending": true,
+              "sent": false,
+              "sha256": "6e44a5ab275806624dffd2f67b7c86752e7fce8520d75c4f458ec3473c329720"
+            }
+          ],
+          "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": {
+        "fileId": null
+      },
+      "sha256": "6e44a5ab275806624dffd2f67b7c86752e7fce8520d75c4f458ec3473c329720"
+    },
+    {
+      "log": "  sent     Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf (21 bytes; file id pending)"
+    },
+    {
+      "log": "2 file(s) sent, 1 already present, 0 sent by an earlier attempt"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [
+            {
+              "bytes": 20,
+              "confirmed": false,
+              "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+              "sent": true,
+              "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+            },
+            {
+              "bytes": 21,
+              "confirmed": false,
+              "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+              "sent": true,
+              "sha256": "6e44a5ab275806624dffd2f67b7c86752e7fce8520d75c4f458ec3473c329720"
+            }
+          ],
+          "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": [
+        "firm-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 25 in fold-ours",
+        "up-1 'Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records)' '.pdf' 20 in fold-ours",
+        "up-2 'Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records)' '.pdf' 21 in fold-ours"
+      ]
+    },
+    {
+      "log": "read-back complete: 3 file(s) at the expected byte counts in folder fold-ours"
+    },
+    {
+      "call": "list_files",
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "records": {
+        "data/example-matter/runs/alpha/delivery.json": {
+          "files": [
+            {
+              "bytes": 25,
+              "confirmed": true,
+              "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+              "sent": false,
+              "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+            },
+            {
+              "bytes": 20,
+              "confirmed": true,
+              "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+              "sent": true,
+              "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+            },
+            {
+              "bytes": 21,
+              "confirmed": true,
+              "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+              "sent": true,
+              "sha256": "6e44a5ab275806624dffd2f67b7c86752e7fce8520d75c4f458ec3473c329720"
+            }
+          ],
+          "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+          "folder_id": "fold-ours"
+        }
+      },
+      "returned": [
+        "firm-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 25 in fold-ours",
+        "up-1 'Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records)' '.pdf' 20 in fold-ours",
+        "up-2 'Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records)' '.pdf' 21 in fold-ours"
+      ]
+    },
+    {
+      "call": "mint",
+      "ids": ["firm-1"],
+      "matter": "00000000-0000-4000-8000-000000000001",
+      "returned": [
+        {
+          "id": "firm-1",
+          "size": 25,
+          "url": "https://fake.invalid/firm-1"
+        }
+      ]
+    },
+    {
+      "call": "fetch",
+      "expected_size": null,
+      "returned": 25,
+      "url": "https://fake.invalid/firm-1"
+    },
+    {
+      "log": "readback_mismatch: Alpha Example - Medical Chronology 08-29-26.docx: the downloaded bytes differ from the bytes built (folder fold-ours); nothing further is sent"
+    }
+  ],
+  "records": {
+    "data/example-matter/runs/alpha/delivery.json": {
+      "files": [
+        {
+          "bytes": 25,
+          "confirmed": true,
+          "name": "Alpha Example - Medical Chronology 08-29-26.docx",
+          "sent": false,
+          "sha256": "b98ea9ea60112eca47a6468b0bcff7a828b4d173de9e96a9157650ed4582d878"
+        },
+        {
+          "bytes": 20,
+          "confirmed": true,
+          "name": "Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records).pdf",
+          "sent": true,
+          "sha256": "4017e5c7c14659efc9ff80c322e9e51c54e48006599772149d9bc5e1e80369f1"
+        },
+        {
+          "bytes": 21,
+          "confirmed": true,
+          "name": "Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records).pdf",
+          "sent": true,
+          "sha256": "6e44a5ab275806624dffd2f67b7c86752e7fce8520d75c4f458ec3473c329720"
+        }
+      ],
+      "folder": "MEDICAL CHRONOLOGY - Alpha Example 08-29-26",
+      "folder_id": "fold-ours"
+    }
+  },
+  "vendor": [
+    "firm-1 'Alpha Example - Medical Chronology 08-29-26' '.docx' 25 in fold-ours v1 sha 82d00bbfc14eca1c",
+    "up-1 'Exhibit 1 - Example Clinic - 01-20-2026 (Medical Records)' '.pdf' 20 in fold-ours v1 sha 4017e5c7c14659ef",
+    "up-2 'Exhibit 2 - Example Imaging - 02-10-2026 (Medical Records)' '.pdf' 21 in fold-ours v1 sha 6e44a5ab27580662"
+  ],
+  "writes": {
+    "add_file": 2
+  }
+}
