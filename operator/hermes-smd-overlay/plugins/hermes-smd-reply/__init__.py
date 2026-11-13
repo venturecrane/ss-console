@@ -103,6 +103,7 @@ from shared import (
     reply_could_not,
     report_render,
     request_index,
+    seat_config,
     seat_layout,
     send_policy,
     silence,
@@ -972,9 +973,7 @@ def _file_facts(session_id: str, origin: inbound.InboundOrigin) -> matter_file_f
 def _seat_doc() -> dict[str, Any]:
     """The seat's customer.yaml as a mapping, read live; empty when unreadable."""
     try:
-        import yaml
-
-        doc = yaml.safe_load(_YAML_PATH.read_text(encoding="utf-8"))
+        doc = seat_config.load(_YAML_PATH, encoding="utf-8", on_missing="raise")
     except Exception:  # noqa: BLE001 - unreadable authors nothing
         return {}
     return doc if isinstance(doc, dict) else {}

@@ -127,6 +127,7 @@ from bin.lib.decommission_inventory import (
     seat_fly_apps,
     seat_webhook_host,
 )
+from bin.lib import seat_config
 
 log = logging.getLogger("aie.bin.decommission")
 
@@ -523,9 +524,7 @@ def _load_customer_yaml(customers_root: Path, slug: str) -> Optional[dict]:
     if not yaml_path.is_file():
         return None
     try:
-        import yaml as _yaml  # type: ignore[import-untyped]
-
-        parsed = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        parsed = seat_config.load(yaml_path, encoding="utf-8", on_missing="raise")
         return parsed if isinstance(parsed, dict) else None
     except Exception:  # noqa: BLE001 - an unparseable customer.yaml is logged and read as absent; the pipeline's preflight decides what that means
         log.warning("decommission: customer.yaml parse failed at %s", yaml_path)

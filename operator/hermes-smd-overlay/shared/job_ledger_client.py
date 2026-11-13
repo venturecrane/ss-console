@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 import time
 from collections.abc import Callable
 from typing import Any
 
+from shared import broker_socket
 from shared.audit_client import _UNREACHABLE_AT_CONNECT
 
 SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
@@ -138,7 +138,7 @@ class BrokerJobClient:
         respawn gap after a paid segment raised, and that segment's spend and
         rotated session tip never reached the ledger.
         """
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+        encoded = broker_socket.encode(payload, sort_keys=True, separators=(",", ":"))
         deadline = self._clock() + self._connect_retry_seconds
         while True:
             try:
@@ -165,17 +165,10 @@ class BrokerJobClient:
         it; any OSError after connect becomes :class:`JobLedgerError` at once
         and is NOT retried, because by then the broker may already have applied
         the request."""
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.settimeout(self._timeout)
-            client.connect(self._socket_path)
+        with broker_socket.connect(self._socket_path, timeout=self._timeout) as client:
             try:
                 client.sendall(encoded)
-                buf = bytearray()
-                while not buf.endswith(b"\n"):
-                    chunk = client.recv(65_536)
-                    if not chunk:
-                        break
-                    buf.extend(chunk)
+                buf = broker_socket.read_reply(client)
             except OSError as exc:
                 # Past connect(), even a reset is not retry-safe: raise now.
                 raise JobLedgerError(f"job broker socket error: {exc}") from exc

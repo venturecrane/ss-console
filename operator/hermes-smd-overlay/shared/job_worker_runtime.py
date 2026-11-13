@@ -25,6 +25,7 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
+from shared import seat_config
 from shared.gateway_identity import GATEWAY_PID_ENV, _env_says_gateway
 
 logger = logging.getLogger(__name__)
@@ -50,22 +51,14 @@ def readiness_ok(checks: list[Callable[[], bool]]) -> bool:
 def _broker_healthy() -> bool:
     """The broker socket answers a health ping AND reports the job ledger ready."""
     import json
-    import socket
+
+    from shared import broker_socket
 
     sock_path = os.environ.get("SMD_WORKSPACE_BROKER_SOCKET", "")
     if not sock_path:
         return False
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as c:
-            c.settimeout(3.0)
-            c.connect(sock_path)
-            c.sendall(json.dumps({"action": "health"}).encode() + b"\n")
-            buf = bytearray()
-            while not buf.endswith(b"\n"):
-                chunk = c.recv(65_536)
-                if not chunk:
-                    break
-                buf.extend(chunk)
+        buf = broker_socket.request(sock_path, {"action": "health"}, timeout=3.0)
         data = json.loads(buf)
         return bool(data.get("ok")) and bool(data.get("jobs_ready"))
     except OSError:
@@ -373,7 +366,7 @@ def _r2_results_config_from_env() -> tuple[str, str, str, str, str] | None:
     access_key = os.environ.get("R2_ACCESS_KEY_ID")
     secret_key = os.environ.get("R2_SECRET_ACCESS_KEY")
     bucket = os.environ.get("R2_BUCKET_CONFIG")
-    slug = os.environ.get("CUSTOMER_SLUG") or os.environ.get("SMD_CUSTOMER_SLUG")
+    slug = seat_config.slug(on_missing="none", alternate="after")
     if not (endpoint and access_key and secret_key and bucket and slug):
         return None
     return endpoint, access_key, secret_key, bucket, slug
@@ -514,7 +507,7 @@ def _build_cost_breaker():
         from shared.cost_breaker import build_breaker
         from shared.customer_config import CustomerConfig
 
-        slug = os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG")
+        slug = seat_config.slug(on_missing="none", alternate="first")
         if not slug:
             logger.error("smd-job-worker: no customer slug; cost breaker NOT armed")
             return None

@@ -20,6 +20,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -28,9 +29,10 @@ OPERATOR = Path(__file__).resolve().parents[2]
 REPO = OPERATOR.parent
 sys.path.insert(0, str(OPERATOR))
 
-from bin.lib.seat_callers.capture import _row, run_site  # noqa: E402 - imported only once sys.path holds the operator tree
+from bin.lib.seat_callers.canon import Normaliser, digest  # noqa: E402 - imported only once sys.path holds the operator tree
+from bin.lib.seat_callers.capture import _brief, _connects, _row, run_site  # noqa: E402 - imported only once sys.path holds the operator tree
 from bin.lib.seat_callers.diff import differences  # noqa: E402 - imported only once sys.path holds the operator tree
-from bin.lib.seat_callers.discover import SiteSpec, sites_in  # noqa: E402 - imported only once sys.path holds the operator tree
+from bin.lib.seat_callers.discover import CONCEPTS, SiteSpec, file_matches, sites_in  # noqa: E402 - imported only once sys.path holds the operator tree
 from bin.lib.seat_callers.modes import modes  # noqa: E402 - imported only once sys.path holds the operator tree
 
 SCRIPT = OPERATOR / "bin" / "capture-seat-config-callers.py"
@@ -324,3 +326,83 @@ def test_a_missing_module_is_recorded_in_the_words_that_test_reads(tmp_path: Pat
     result = run_site(spec, repo, sys.executable)
     row = _row(spec, result, real_digests=False)
     assert _missing_module(row), row
+
+
+# ------------------------------------------------------------ sites moved onto the shared readers
+
+
+READER_SITES = """
+import seat_config, broker_socket
+
+
+def parses():
+    return seat_config.load("/opt/data/customer.yaml", encoding="utf-8", on_missing="raise")
+
+
+def parses_text(text):
+    return seat_config.parse(text)
+
+
+def asks_the_broker(payload):
+    return broker_socket.request("/run/b.sock", payload, timeout=1.0)
+
+
+def only_encodes(payload):
+    return broker_socket.encode(payload)
+
+
+def reads_the_slug():
+    return seat_config.slug(on_missing="none")
+"""
+
+
+def test_a_site_that_calls_the_shared_reader_is_still_a_site() -> None:
+    """Wave 2, B1: a migrated site keeps its row; only its call text changes."""
+    found = {c: {s.qualname for s in sites_in(c, "operator/x/y.py", READER_SITES)} for c in CONCEPTS}
+    assert found["customer-yaml"] == {"parses", "parses_text"}
+    # the frame encoder alone opens no socket: a site that only encodes is not a client
+    assert found["broker-socket"] == {"asks_the_broker"}
+    assert found["slug"] == {"reads_the_slug"}
+    assert all(file_matches(c, READER_SITES) for c in CONCEPTS)
+    assert not file_matches("broker-socket", "import broker_socket\nbroker_socket.encode({})\n")
+
+
+# ------------------------------------------------------------ what is recorded does not depend on the machine
+
+
+class _Emitter:
+    """A site's own object holding the interpreter's: a threading.Event, as the
+    heartbeat emitter does."""
+
+    def __init__(self, slug: str) -> None:
+        self.slug = slug
+        self.stop = threading.Event()
+
+
+def test_a_standard_library_object_is_recorded_by_type_not_by_its_internals(monkeypatch) -> None:
+    """The heartbeat emitter digested differently on two machines: threading.Condition
+    gained a ``locked`` attribute in Python 3.14, and canon walked into it."""
+    norm = Normaliser([])
+    before = digest(_Emitter("seat-one"), norm)
+    # The interpreter's internals change under the object (another Python release) ...
+    original = threading.Condition.__init__
+
+    def without_locked(self, lock=None):
+        original(self, lock)
+        self.__dict__.pop("locked", None)
+        self.__dict__["_another_release_s_field"] = 1
+
+    monkeypatch.setattr(threading.Condition, "__init__", without_locked)
+    assert digest(_Emitter("seat-one"), norm) == before
+    # ... while what the SITE put in its object still decides the digest (falsifier).
+    assert digest(_Emitter("seat-two"), norm) != before
+
+
+def test_a_retry_loop_s_wall_clock_count_is_recorded_as_retried() -> None:
+    """The job ledger client retries a refused connect every 0.5 s for 10 s: 21
+    connects idle, 20 under load. The table records that it retried, not how often."""
+    assert _connects(1) == "1"
+    assert _connects(20) == _connects(21) == "retried"
+    run = {"outcome": "raise", "type": "JobLedgerError", "unix_connects": 20}
+    assert _brief(run, False) == _brief({**run, "unix_connects": 21}, False) == "raise JobLedgerError connects=retried"
+    assert _brief({**run, "unix_connects": 1}, False) == "raise JobLedgerError connects=1"

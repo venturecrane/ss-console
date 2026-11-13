@@ -29,6 +29,7 @@ import logging
 import os
 from typing import Any
 
+from shared import seat_config
 from shared.job_ledger_client import BrokerJobClient
 from shared.tool_registration import register_wrapped_tool
 
@@ -67,7 +68,7 @@ def _start_background_job(args: dict[str, Any], **_: Any) -> str:
         raise ValueError("start_background_job requires a non-empty 'brief'")
     deliver_to = str(args.get("deliver_to") or "").strip()
     row = {
-        "customer_slug": os.environ["CUSTOMER_SLUG"],
+        "customer_slug": seat_config.slug(on_missing="raise"),
         # Worker resolves/validates the authoritative persona at claim time.
         "persona_id": os.environ.get("HERMES_PERSONA_SLUG", "") or "default",
         "model": os.environ.get("HERMES_MODEL", ""),

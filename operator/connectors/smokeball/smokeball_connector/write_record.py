@@ -44,10 +44,10 @@ import hashlib
 import json
 import os
 import pwd
-import socket
 import sys
 import uuid
 from typing import Any
+from . import broker_socket
 
 SOCKET_ENV = "SMD_AUDIT_BROKER_SOCKET"
 #: operator/templates/fly.toml.template: the one broker socket on every seat.
@@ -143,17 +143,8 @@ def resolve_actor() -> str | None:
 
 
 def _send(socket_path: str, row: dict[str, Any]) -> None:
-    payload = json.dumps({"action": VERB, "row": row}, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-        client.settimeout(_TIMEOUT_SECONDS)
-        client.connect(socket_path)
-        client.sendall(payload)
-        buf = bytearray()
-        while not buf.endswith(b"\n"):
-            chunk = client.recv(65_536)
-            if not chunk:
-                break
-            buf.extend(chunk)
+    payload = broker_socket.encode({"action": VERB, "row": row}, sort_keys=True, separators=(",", ":"))
+    buf = broker_socket.send_frame(socket_path, payload, timeout=_TIMEOUT_SECONDS)
     reply = json.loads(buf)
     if not isinstance(reply, dict) or reply.get("ok") is not True:
         message = reply.get("message") or reply.get("error") if isinstance(reply, dict) else None

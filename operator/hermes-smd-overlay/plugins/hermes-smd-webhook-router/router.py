@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from shared import seat_config
+
 try:
     import yaml
 except ImportError as exc:  # pragma: no cover - import-time guard
@@ -94,7 +96,7 @@ def build_routing_table(customer_yaml_path: Path) -> RoutingTable:
 
     try:
         with customer_yaml_path.open() as handle:
-            cfg = yaml.safe_load(handle) or {}
+            cfg = seat_config.parse(handle) or {}
     except yaml.YAMLError as exc:
         logger.warning(
             "hermes-smd-webhook-router: customer.yaml parse failed (%s); router will no-op",

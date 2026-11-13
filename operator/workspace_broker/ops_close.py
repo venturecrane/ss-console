@@ -33,11 +33,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import socket
 import sys
 from typing import Any
 
 from . import seat_layout
+from . import broker_socket
 
 # The entrypoint's BROKER_SOCKET.
 DEFAULT_SOCKET = seat_layout.BROKER_SOCKET
@@ -58,16 +58,7 @@ def build_request(proposal_id: str, *, closed_by: str, source_ref: str, reason: 
 
 def call_broker(request: dict[str, Any], socket_path: str, timeout: float = 30.0) -> dict[str, Any]:
     """One request, one newline-terminated JSON reply."""
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
-        conn.settimeout(timeout)
-        conn.connect(socket_path)
-        conn.sendall(json.dumps(request, separators=(",", ":")).encode("utf-8") + b"\n")
-        buf = b""
-        while not buf.endswith(b"\n"):
-            chunk = conn.recv(65536)
-            if not chunk:
-                break
-            buf += chunk
+    buf = broker_socket.request(socket_path, request, timeout=timeout, separators=(",", ":"))
     reply = json.loads(buf.decode("utf-8"))
     if not isinstance(reply, dict):
         raise ValueError("broker reply was not a JSON object")

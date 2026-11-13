@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
+from . import seat_config
 
 CONFIG_BLOCK = "combined_post_intake"
 #: The kinds of letter a filing can name, and the config key holding its folder.
@@ -55,9 +56,7 @@ def load_post_intake_config(path: str | None = None) -> PostIntakeConfig:
     except OSError:
         return PostIntakeConfig(folders={})
     try:
-        import yaml
-
-        data = yaml.safe_load(raw) or {}
+        data = seat_config.parse(raw) or {}
     except Exception as exc:  # noqa: BLE001 - an unparseable config is reported on the filing, never raised
         return PostIntakeConfig(folders={}, error=f"customer.yaml not parseable: {exc.__class__.__name__}")
     return parse_post_intake_config(data.get(CONFIG_BLOCK) if isinstance(data, dict) else None)

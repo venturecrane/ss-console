@@ -48,7 +48,15 @@ import threading
 from collections import OrderedDict
 from typing import Any
 
-from shared import cron_space, hook_worker, report_render, send_anchor, send_dispatch, silence
+from shared import (
+    cron_space,
+    hook_worker,
+    report_render,
+    seat_config,
+    send_anchor,
+    send_dispatch,
+    silence,
+)
 from shared import space as _space
 
 logger = logging.getLogger(__name__)
@@ -126,8 +134,6 @@ def _page(reason: str, space_key: str) -> None:
     """A person was owed a routine's email and got none: page. Reason code and
     space key only (never the text, never an address). Never raises."""
     try:
-        import os
-
         import sentry_sdk
 
         with sentry_sdk.new_scope() as scope:
@@ -135,7 +141,7 @@ def _page(reason: str, space_key: str) -> None:
             scope.set_tag("space", space_key)
             scope.set_tag(
                 "customer",
-                os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "",
+                seat_config.slug(on_missing="none", alternate="first") or "",
             )
             sentry_sdk.capture_message(PAGE_MESSAGE, level="error")
     except Exception as exc:  # noqa: BLE001 - monitoring must never break delivery

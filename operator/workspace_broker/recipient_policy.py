@@ -43,7 +43,7 @@ from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
 
-import yaml
+from . import seat_config
 
 
 def canonicalize(text: str) -> str:
@@ -317,7 +317,7 @@ def split_device_replies(entries: Any) -> tuple[tuple[str, str], ...]:
 
 
 def _load(customer_path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    loaded = yaml.safe_load(customer_path.read_text(encoding="utf-8")) or {}
+    loaded = seat_config.load(customer_path, encoding="utf-8", on_missing="raise") or {}
     data: dict[str, Any] = loaded if isinstance(loaded, dict) else {}
     scope = data.get("scope") or {}
     if not isinstance(scope, dict):

@@ -87,7 +87,7 @@ from bootstrap.cron_materialize import (
 from bootstrap.mcp_registry import MCP_CONNECTOR_REGISTRY
 from bootstrap.role_persona import RolePersonaError, load_role_persona
 from bootstrap.validate import validate_customer_yaml
-from shared import capabilities
+from shared import capabilities, seat_config
 from shared.cron_containment import containment_active, containment_reason, sentinel_path
 from shared.routine_change_spool import append_routine_change
 from shared.secrets import get_secret
@@ -2581,7 +2581,7 @@ def translate_customer_yaml(
         )
 
     with yaml_path.open() as handle:
-        customer = yaml.safe_load(handle) or {}
+        customer = seat_config.parse(handle) or {}
     personas = customer.get("personas") or []
     if not personas:
         raise TranslateError("customer.yaml has no personas to translate")

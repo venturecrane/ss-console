@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-import yaml
+from . import seat_config
 
 
 def materialize_credential(credential_path: Path) -> None:
@@ -25,7 +25,7 @@ def materialize_credential(credential_path: Path) -> None:
 
 
 def _customer_google_auth(customer_path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(customer_path.read_text(encoding="utf-8")) or {}
+    data = seat_config.load(customer_path, encoding="utf-8", on_missing="raise") or {}
     config = data.get("google_auth") or {}
     if not isinstance(config, dict):
         raise RuntimeError("customer.yaml google_auth must be an object")

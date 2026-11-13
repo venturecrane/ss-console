@@ -232,7 +232,7 @@ def test_a_failure_after_connect_is_never_retried(monkeypatch):
         def sendall(self, _b: bytes) -> None:
             raise ConnectionResetError(54, "Connection reset by peer")
 
-    monkeypatch.setattr(mod.socket, "socket", _ResetAfterConnect)
+    monkeypatch.setattr(mod.broker_socket.socket, "socket", _ResetAfterConnect)
     client = BrokerJobClient(
         socket_path="/tmp/x.sock",
         sleep=lambda _s: pytest.fail("a post-connect failure must not back off"),

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 from typing import Any
+
+from shared import broker_socket
 
 SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
 GRANT_ARG = "_smd_workspace_grant"
@@ -92,9 +93,8 @@ def request(payload: dict[str, Any], *, timeout: float = DEFAULT_TIMEOUT_SECONDS
     socket_path = os.environ.get(SOCKET_ENV, "")
     if not socket_path:
         raise BrokerError(f"{SOCKET_ENV} is unset", code=NOT_CONFIGURED)
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-        client.settimeout(timeout)
+    encoded = broker_socket.encode(payload, sort_keys=True, separators=(",", ":"))
+    with broker_socket.unix_stream(timeout=timeout) as client:
         try:
             client.connect(socket_path)
         except OSError as exc:
@@ -105,12 +105,7 @@ def request(payload: dict[str, Any], *, timeout: float = DEFAULT_TIMEOUT_SECONDS
             # does not time out halfway through a delivery either.
             raise BrokerNotReached(exc.errno, f"broker not reached: {exc.strerror or exc}") from exc
         client.sendall(encoded)
-        response = bytearray()
-        while not response.endswith(b"\n"):
-            chunk = client.recv(65_536)
-            if not chunk:
-                break
-            response.extend(chunk)
+        response = broker_socket.read_reply(client)
     try:
         data = json.loads(response)
     except ValueError as exc:

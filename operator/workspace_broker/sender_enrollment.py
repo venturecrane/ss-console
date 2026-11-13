@@ -52,9 +52,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 from .recipient_policy import normalize_address, sender_key
+from . import seat_config
 
 DIR_ENV = "SMD_SENDER_ENROLLMENT_DIR"
 DEFAULT_DIR = "/run/smd-sender-enrollment"
@@ -231,7 +231,7 @@ def enabled_for(customer_path: Path) -> bool:
     Fail closed: an unreadable config, another role, or anything but
     ``enabled: true`` is off."""
     try:
-        data = yaml.safe_load(Path(customer_path).read_text(encoding="utf-8")) or {}
+        data = seat_config.load(Path(customer_path), encoding="utf-8", on_missing="raise") or {}
     except Exception:  # noqa: BLE001 - unreadable config is "off", never "on"
         return False
     return enabled_in(data)

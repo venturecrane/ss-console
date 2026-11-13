@@ -18,9 +18,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 from .recipient_policy import normalize_address
+from . import seat_config
 
 #: The space lane's name, as the overlay names it (``shared.send_anchor``).
 LANE_SPACE = "space"
@@ -46,5 +46,5 @@ def people_emails(data: dict[str, Any]) -> tuple[str, ...]:
 def seat_people_emails(customer_path: Path) -> tuple[str, ...]:
     """:func:`people_emails` read from the seat's ``customer.yaml``. Raises when
     the file cannot be read (the caller refuses)."""
-    loaded = yaml.safe_load(customer_path.read_text(encoding="utf-8"))
+    loaded = seat_config.load(customer_path, encoding="utf-8", on_missing="raise")
     return people_emails(loaded if isinstance(loaded, dict) else {})

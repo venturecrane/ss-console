@@ -50,6 +50,7 @@ from bin.lib import work_health_auth as auth
 from bin.lib import work_health_casefile as casefile_wh
 from bin.lib import work_health_mail as mail
 from bin.lib import work_health_sources as src
+from bin.lib import seat_config
 
 EXIT_OK = 0
 EXIT_SEND_FAILED = 2
@@ -90,7 +91,7 @@ def read_ledger(client, since: datetime) -> list[dict]:
 
 def customer_yaml(slug: str) -> dict:
     try:
-        data = yaml.safe_load((CUSTOMERS / slug / "customer.yaml").read_text(encoding="utf-8"))
+        data = seat_config.load(CUSTOMERS / slug / "customer.yaml", encoding="utf-8", on_missing="raise")
     except (OSError, yaml.YAMLError):
         return {}
     return data if isinstance(data, dict) else {}

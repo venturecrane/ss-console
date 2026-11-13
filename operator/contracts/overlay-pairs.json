@@ -17,9 +17,9 @@
     {
       "adapterPath": "operator/adapter/d1_env.py",
       "overlayPath": "shared/d1_env.py",
-      "syncNote": "2026-06-12 baseline; overlaySha256 added 2026-06-16 (SEC-32). Different return contracts by design (NamespacedD1Executor vs D1Client) — control-plane HTTP API vs Machine-local sqlite; see #1355.",
-      "sha256": "a961b362e43a7d6d74945213b471344afad711ff01f7fe39f808df09ba29478e",
-      "overlaySha256": "abfb684baabc9a416add0ad8ae4024494b1c22965d8d6c0813b23addd14902b8"
+      "syncNote": "Different return contracts by design (NamespacedD1Executor vs D1Client): control-plane HTTP API vs Machine-local sqlite (#1355). Both read the slug through their tree's seat_config copy.",
+      "sha256": "0c1d9d9a0ba0630b02be094b6108d0e4700728ae8e3af5ec1ca4a5a659d19cb1",
+      "overlaySha256": "cee770e64db10038be9e946c675044b909e30393d43e23cd40ebd8d8c9af46da"
     },
     {
       "adapterPath": "operator/roles/couples/persona.md",

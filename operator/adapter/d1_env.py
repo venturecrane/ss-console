@@ -28,6 +28,7 @@ from typing import Optional
 
 from .audit_log import AuditLogWriter, HttpD1Executor, writer_from_env
 from .namespace_assertion import NamespacedD1Executor
+from . import seat_config
 
 
 def namespaced_executor_from_env(
@@ -52,9 +53,7 @@ def namespaced_executor_from_env(
     slug is missing — that is a bootstrap-time invariant failure and
     should abort container start.
     """
-    slug = customer_slug if customer_slug is not None else os.environ.get(
-        "CUSTOMER_SLUG", ""
-    )
+    slug = customer_slug if customer_slug is not None else seat_config.slug(on_missing="empty")
     if not slug:
         raise RuntimeError(
             "d1_env.namespaced_executor_from_env: CUSTOMER_SLUG env var unset "

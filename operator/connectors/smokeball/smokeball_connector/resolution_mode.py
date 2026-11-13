@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from operator_connector_sdk.resolution import MODE_ENFORCE, MODE_OBSERVE, MODES
 
 from .library import CUSTOMER_YAML_ENV, DEFAULT_CUSTOMER_YAML
+from . import seat_config
 
 MODE_KEY = "matter_resolution_mode"
 BACKEND = "mcp:smokeball"
@@ -75,9 +76,7 @@ def load_resolution_mode(path: str | None = None) -> ResolutionMode:
     except OSError:
         return ResolutionMode(DEFAULT_MODE)
     try:
-        import yaml
-
-        data = yaml.safe_load(raw) or {}
+        data = seat_config.parse(raw) or {}
     except Exception as exc:  # noqa: BLE001 - an unparseable config enforces, never raises into a write
         return ResolutionMode(MODE_ENFORCE, error=f"customer.yaml not parseable: {exc.__class__.__name__}")
     return parse_resolution_mode(data)

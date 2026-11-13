@@ -25,6 +25,7 @@ import time
 from typing import Any
 
 from .broker_context import BrokerContext
+from . import seat_config
 
 _log = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def approve_base_url() -> str:
     authored = (os.environ.get("SMD_APPROVE_BASE_URL") or "").strip().rstrip("/")
     if authored:
         return authored
-    slug = (os.environ.get("SMD_CUSTOMER_SLUG") or os.environ.get("CUSTOMER_SLUG") or "").strip()
+    slug = (seat_config.slug(on_missing="none", alternate="first") or "").strip()
     return f"https://hermes-{slug}.fly.dev" if slug else ""
 
 

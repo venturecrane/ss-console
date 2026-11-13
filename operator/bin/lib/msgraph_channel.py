@@ -25,6 +25,7 @@ from typing import Optional
 from . import transient_http
 from .html_channel import HtmlBody
 from .seat_dirs import seat_slugs, unprovisioned_slugs
+from . import seat_config
 
 GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_TOKEN_HOST = "https://login.microsoftonline.com"
@@ -122,7 +123,7 @@ def msgraph_seats(customers_dir: str | None = None) -> list[MsGraphSeat]:
         path = os.path.join(root, slug, "customer.yaml")
         try:
             with open(path, encoding="utf-8") as handle:
-                data = yaml.safe_load(handle) or {}
+                data = seat_config.parse(handle) or {}
         except (OSError, ValueError, yaml.YAMLError):
             continue
         email = ((data.get("connectors") or {}).get("Email")) or {}

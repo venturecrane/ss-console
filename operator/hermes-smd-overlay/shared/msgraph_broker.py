@@ -28,9 +28,9 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 from typing import Any
 
+from shared import broker_socket
 from shared.send_anchor import envelope_fields
 from shared.workspace_broker import BrokerError, BrokerNotReached, BrokerReplyUnreadable, request
 
@@ -375,16 +375,7 @@ def _verdict(payload: dict[str, Any], *, timeout: float = SEND_TIMEOUT_SECONDS) 
             f"{SOCKET_ENV} is unset; this seat has no broker transmit path"
         )
     try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(timeout)
-            sock.connect(socket_path)
-            sock.sendall(json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n")
-            raw = b""
-            while not raw.endswith(b"\n"):
-                chunk = sock.recv(65_536)
-                if not chunk:
-                    break
-                raw += chunk
+        raw = broker_socket.request(socket_path, payload, timeout=timeout, lone_surrogates="raise")
         decoded = json.loads(raw.decode("utf-8"))
     except (OSError, ValueError) as exc:
         raise MsGraphBrokerUnavailable(f"broker unreachable: {exc}") from exc

@@ -32,8 +32,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import socket
 from typing import Any
+
+from shared import broker_socket
 
 logger = logging.getLogger(__name__)
 
@@ -157,16 +158,9 @@ def verdict(payload: dict[str, Any]) -> dict[str, Any]:
     socket_path = os.environ.get(SOCKET_ENV, "")
     if not socket_path:
         raise RuntimeError(f"{SOCKET_ENV} is unset; cannot reach the broker")
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.settimeout(TIMEOUT_SECONDS)
-        sock.connect(socket_path)
-        sock.sendall(json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n")
-        raw = b""
-        while not raw.endswith(b"\n"):
-            chunk = sock.recv(65_536)
-            if not chunk:
-                break
-            raw += chunk
+    raw = broker_socket.request(
+        socket_path, payload, timeout=TIMEOUT_SECONDS, lone_surrogates="raise"
+    )
     decoded = json.loads(raw.decode("utf-8"))
     return decoded if isinstance(decoded, dict) else {"ok": False, "refused": "malformed verdict"}
 

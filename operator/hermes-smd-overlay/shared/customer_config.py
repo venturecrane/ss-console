@@ -41,7 +41,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
-from shared import seat_layout
+from shared import seat_config, seat_layout
 
 try:
     import yaml
@@ -174,7 +174,7 @@ class CustomerConfig:
             raise CustomerConfigMissingError(f"customer.yaml not found at {path}")
         try:
             with file_path.open() as handle:
-                data = yaml.safe_load(handle)
+                data = seat_config.parse(handle)
         except yaml.YAMLError as exc:
             raise CustomerConfigError(f"customer.yaml at {path} is not valid YAML: {exc}") from exc
         if data is None:

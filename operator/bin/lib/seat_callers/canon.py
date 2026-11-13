@@ -14,6 +14,7 @@ import datetime as _dt
 import enum
 import hashlib
 import json
+import sys
 import types
 from pathlib import PurePath
 from typing import Any
@@ -42,8 +43,18 @@ def _canon_mapping(value: dict, norm: Normaliser, depth: int, seen: set[int]) ->
     return {"map": sorted(items, key=lambda kv: kv[0])}
 
 
+def _from_the_runtime(value: Any) -> bool:
+    """An object of a standard-library class (a threading.Event, a Condition, a
+    logger, a queue): its attributes are the interpreter's, not the site's, and
+    differ between Python releases (Condition gained ``locked`` in 3.14), so the
+    same site digested differently on two machines. It is recorded by type alone."""
+    return (type(value).__module__ or "").split(".")[0] in sys.stdlib_module_names
+
+
 def _canon_object(value: Any, norm: Normaliser, depth: int, seen: set[int]) -> Any:
     name = type(value).__name__
+    if _from_the_runtime(value):
+        return {"object": name}
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         fields = {f.name: getattr(value, f.name, None) for f in dataclasses.fields(value)}
         return {"dataclass": name, "fields": canon(fields, norm, depth + 1, seen)}

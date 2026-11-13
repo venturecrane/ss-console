@@ -13,8 +13,8 @@ helper is just an env-binding factory.
 """
 
 import logging
-import os
 
+from shared import seat_config
 from shared.d1_client import D1Client
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def d1_client_from_env(
         ValueError: If the resolved slug does not match the slug
             regex.
     """
-    slug = customer_slug if customer_slug is not None else os.environ.get("CUSTOMER_SLUG", "")
+    slug = customer_slug if customer_slug is not None else seat_config.slug(on_missing="empty")
     if not slug:
         raise RuntimeError(
             "d1_client_from_env: CUSTOMER_SLUG env var unset (and no explicit "

@@ -70,9 +70,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 from .recipient_policy import normalize_address
+from . import seat_config
 
 #: The send-capable Graph app credential, named apart from the gateway's
 #: ``MSGRAPH_*`` on purpose. Sharing the names would make the split invisible in
@@ -175,7 +175,7 @@ def load_credential(credential_path: Path) -> dict[str, str]:
 
 
 def _email_connector(customer_path: Path) -> dict[str, Any]:
-    data = yaml.safe_load(customer_path.read_text(encoding="utf-8")) or {}
+    data = seat_config.load(customer_path, encoding="utf-8", on_missing="raise") or {}
     connectors = data.get("connectors") or {}
     email = connectors.get("Email") if isinstance(connectors, dict) else None
     return email if isinstance(email, dict) else {}
