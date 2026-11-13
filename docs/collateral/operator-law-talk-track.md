@@ -66,7 +66,7 @@ The spine claim (gets better at your firm every week) is the one a skeptic disco
 - **A preference given once, then holding.** The rep gives it a preference by email ("lead with open items when you answer me"), then asks again and the answer follows it. That is the receipt for the compounding.
 - **The deliverable.** A sample medical chronology made from the matter's records, in the exact format a client receives, every entry cited to its page. Present it as a sample from these records. A full chronology runs for hours, so it is not produced live in a short meeting.
 
-Show only what is in production (`operator/skills/product-guide/references/built-versus-planned.md`). If a prospect asks about anything listed there as built but not in client use, or specified, say so in those words.
+Describe anything the Operator can be set up to do, the way the site and the product guide describe it. Demonstrate live only what the demo seat is set up to do. If a prospect asks what a client has running today, use the guide's labels (`operator/skills/product-guide/references/built-versus-planned.md`): running for a client today, built and set up per client, or configured per engagement.
 
 ## The room-opener (intermediary motion)
 

@@ -15,7 +15,7 @@ sources:
     href: tests/demo-seat.test.ts
   - label: The talk track's demo moments
     href: docs/collateral/operator-law-talk-track.md
-  - label: What is in production and what is not
+  - label: What is running for a client today and what is set up per client
     href: operator/skills/product-guide/references/built-versus-planned.md
   - label: Invite-code enrollment (ADR 0106, amended for demo seats)
     href: docs/adr/0106-invite-code-enrollment-for-guide-seats.md
@@ -115,21 +115,23 @@ Notes for each act:
 
 ## What not to show
 
-Show only what is in production, as listed in the product guide's "Built Versus Planned"
-(`operator/skills/product-guide/references/built-versus-planned.md`). In particular:
+Describe anything the Operator can be set up to do, the way the site and the product guide
+describe it. Demonstrate live only what this seat is set up to do, so the demo never stalls.
+The guide's "running for a client today" labels
+(`operator/skills/product-guide/references/built-versus-planned.md`) say what a client has now
+if a prospect asks. In particular:
 
-- **Never send to an outside party live, and never imply it can.** "Acts on its own for sends
-  to outside parties" is built but written on no seat. On this seat every outside send is a
-  draft.
+- **Never send to an outside party live from this seat.** On this seat every outside send is
+  a draft; acting on its own for outside sends is something SMD sets up per client.
 - **Do not ask it to build a chronology, draft a demand or run any job.** Those are queued
   jobs that run for a long time and cost money; none is set up on this seat, and the
   request would wait unanswered while SMD is paged.
 - **Do not demonstrate chat, voice notes, the AI assistant connector, the client level dial,
-  Google Workspace, code execution or anything listed as built but not in client use, or as
-  specified.** If a prospect asks, use the guide's words: built but not yet in client use, or
-  specified and not built.
-- **Never say the Operator learns a firm's voice from its emails.** That approach was removed.
-  Voice is a written specification the firm approves.
+  Google Workspace or code execution on this seat.** None is set up here. If a prospect asks,
+  describe it as something SMD sets up for the client.
+- **Voice:** the Operator drafts in the firm's voice, written per kind of document from the
+  firm's own examples, and sharpens as the firm corrects drafts. This seat has no firm voice
+  set up, so describe it rather than demonstrate it.
 - **Never quote a time.** No turnaround, no response time, no implementation length.
 - **Never use a real client's name, matter or result.** The seat holds none, and the demo
   never refers to one.
