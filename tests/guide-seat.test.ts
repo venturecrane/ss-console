@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { validate } from '../src/lib/operator/customer-yaml'
@@ -57,6 +57,26 @@ describe('smd-guide seat config (ADR 0105)', () => {
     ])
     const router = readFileSync(resolve('operator/skills/product-guide/SKILL.md'), 'utf8')
     expect(router).toContain('/app/skills/pitch-practice/SKILL.md')
+  })
+
+  it('schedules the library-change email once a day, decided by its pre_run', () => {
+    // The pre_run renders each person's email by code from
+    // product-guide/changes.yaml (shared/library_notice.py); a day with
+    // nothing new wakes no model and sends nothing.
+    const guide = seat.personas.find((p: Doc) => p.slug === 'guide')
+    const skill = guide.skills.find((s: Doc) => s.name === 'product-guide')
+    expect(skill.initiation).toEqual({ manual: true, scheduled: true, webhook: true })
+    expect(skill.settings).toEqual({ recipients: 'roster' })
+    expect(guide.cron.filter((c: Doc) => c.skill === 'product-guide')).toEqual([
+      {
+        skill: 'product-guide',
+        schedule: '23 16 * * *',
+        pre_run: 'pre_run.py',
+        wake_policy: 'pre_run_decides',
+      },
+    ])
+    // The script the row names ships in the skill (the overlay suite runs it).
+    expect(existsSync(resolve('operator/skills/product-guide/pre_run.py'))).toBe(true)
   })
 
   it('authors one send class only: the reply to a rostered sender', () => {
