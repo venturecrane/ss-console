@@ -754,9 +754,13 @@ skill_bindings:
     outbound: derived # reactive how-to reply to the requester, no one else
   # The guide role (ADR 0105): both write nothing on the seat; their only output
   # is the reply in the asker's own thread or chat.
+  # product-guide also runs a daily scheduled job: the library-change email,
+  # rendered by code from changes.yaml, one to each listed person alone. Its
+  # per-person mark is a code-written file in the walled progress store, not
+  # an artifact the model composes, so it is no output class.
   product-guide:
     internal: []
-    outbound: derived # reactive library answer to the requester, no one else
+    outbound: derived # library answers and the per-person library-change email, each to that person only
   pitch-practice:
     internal: []
     outbound: derived # practice turns and feedback to the requester, no one else

@@ -31,7 +31,8 @@ person's address:
   each representative it names there): those entries are removed, exact
   digest match only, and a file left with none is deleted;
 * their progress record in the training progress store (``rep-progress``),
-  which is a store walled per person and so is covered by the first item;
+  and their library-change mark beside it (``library-seen.json``), which is a
+  store walled per person and so is covered by the first item;
 * their rows in the per-sender daily count ``smd/sender_daily.db`` on the
   volume (``sender_enrollment.daily_limit``), keyed by the sha256 of their
   address (:func:`sender_hash`).

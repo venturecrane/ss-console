@@ -1,0 +1,27 @@
+# What changed in the product library, in the words each listed person is sent.
+#
+# Read by code only (operator/hermes-smd-overlay/shared/library_notice.py): the
+# product-guide skill's daily pre_run sends each person on the guide seat one
+# email with the lines of every entry newer than the one they were last sent
+# (the newest only, for a person never sent one). The model composes nothing.
+#
+# RULES (pinned by operator/hermes-smd-overlay/tests/test_library_notice.py):
+# - Append only. Never edit or remove a sent entry; say a correction in a new one.
+# - `id` is an integer, strictly greater than the entry above it.
+# - `lines` are rep-facing: what we now say, plain sentences. No dates, clock
+#   times, amounts, exclamation marks or em dashes (every rendered entry is run
+#   through the seat's reply checks).
+# - `library_sha256` is a hash over every file in references/. The newest entry
+#   must match the library as committed. After changing references/, add an
+#   entry and regenerate its hash:
+#       cd operator/hermes-smd-overlay && uv run python -m shared.library_notice rehash
+entries:
+  - id: 1
+    lines:
+      - You can send the guide a post, deck text, a one-pager or a proposal draft, pasted or forwarded, and it checks the wording against the house rules and the library, then returns a revised draft. Paste the text of a deck; attached files are not read.
+      - Ask the guide to prep you for a meeting with a kind of business. It brings the matching industry pack, the objections that buyer raises with answers, discovery questions to ask, and the demo acts to show.
+      - Ask for a proposal sketch for a lead on your desk. The guide lists the jobs from the library that fit, each with where it comes from, for SMD to scope. SMD sets scope, price and timing.
+      - A new lesson, the demo meeting, walks through the acts to show a prospect and how to describe everything else as what SMD configures. The quiz has new questions on it.
+      - The guide describes the Operator by what SMD sets up for a client, and labels each job as running for a client today; built, set up per client; or configured per engagement.
+      - When the product library changes, the guide emails you a short note like this one saying what we now say.
+    library_sha256: 7657c6ff4fb420f40a29c848d37d7beb2eeff20a02a4854fdd1b337008d29534
