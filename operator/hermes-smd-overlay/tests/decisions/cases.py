@@ -163,6 +163,8 @@ RELAY: tuple[Case, ...] = (
         "guard",
         relay__gate_body=new("relay.GateResult", False, "fabrication", ("tier2",)),
     ),
+    case("champion_wall", "guard", knobs={"champion": True}, champion__reply_wall="rep_marker"),
+    case("champion_answered", "guard", exits=False, knobs={"champion": True}),
     case("checklist_hold", "guard", _checklist_violations=("staff_ids", "name the matter")),
     case("advertising_hold", "guard", _advertising_violations=("rule_7_1", "remove the guarantee")),
     case("empty_body", "guard", relay__draft_body=("Re: x\n", "", "")),

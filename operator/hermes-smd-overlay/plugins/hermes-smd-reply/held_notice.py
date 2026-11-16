@@ -122,6 +122,23 @@ class Once:
             return True
 
 
+def sends_line(raw_config: Any, message_id: str, sender: str) -> bool:
+    """Whether a held reply to this email ends in a fixed line at all: the seat
+    authors the line, or the reply was to a client champion (``shared.champion``),
+    who is always told, in that module's fixed sentence."""
+    from shared import champion
+
+    return policy(raw_config).enabled or champion.owes_sentence(message_id, sender)
+
+
+def line_for(message_id: str, sender: str) -> str:
+    """The fixed line this email's sender receives: :data:`FIXED_LINE`, or the
+    champion sentence when the wall held it or the sender is a champion."""
+    from shared import champion
+
+    return champion.held_line(message_id, sender, FIXED_LINE)
+
+
 def over_cap(pol: Policy, holds: int) -> bool:
     """Whether a new draft for an email whose reply was held ``holds`` times
     is past the cap: the first draft plus ``max_redrafts`` redrafts relay."""
@@ -135,8 +152,10 @@ __all__ = [
     "OFF",
     "Once",
     "Policy",
+    "line_for",
     "REDRAFT_LIMIT_DETAIL",
     "REDRAFT_LIMIT_REASON",
     "over_cap",
     "policy",
+    "sends_line",
 ]

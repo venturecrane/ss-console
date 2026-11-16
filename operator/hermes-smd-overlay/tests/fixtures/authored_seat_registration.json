@@ -2383,6 +2383,10 @@
    ],
    [
     "post_llm_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_llm_call",
     "hermes-smd-mcp-result-sink"
    ],
    [

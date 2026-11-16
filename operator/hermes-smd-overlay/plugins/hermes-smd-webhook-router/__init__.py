@@ -58,14 +58,15 @@ from shared import (
 from shared.audit_client import audit_client_from_env
 from shared.audit_contract import INSERT_SQL as _INSERT_SQL
 from shared.audit_contract import agent_event_params, sender_key
-from shared.customer_config import OPS_REPLY_DOMAINS, CustomerConfig
+from shared.customer_config import CustomerConfig
 from shared.secrets import get_secret, require
 from shared.webhook_read_surface import (
     WEBHOOK_READ_TOOLSET,
     register_webhook_read_toolset,
 )
 
-from . import daily_limit, router, verify  # noqa: F401 - surface for tests
+from . import daily_limit, enrollment_redeem, router, verify  # noqa: F401 - surface for tests
+from .enrollment_redeem import start_training as _start_training
 
 logger = logging.getLogger(__name__)
 
@@ -694,84 +695,10 @@ def _enrollment_attempt(source: str, payload: Any) -> dict | None:
     return {"action": "skip"}
 
 
-def _start_training(cfg: Any, address: str) -> bool:
-    """On a seat that authors representative training (ss-console #3946),
-    create the person's progress record and library-change mark by code at
-    enrollment, and say so, so the welcome points them at the learning path.
-    Every other seat: False, nothing written, the welcome unchanged. Never raises."""
-    try:
-        from shared import library_notice, training
-
-        if not training.authored(cfg):
-            return False
-        if not training.start_progress(address, config=cfg):
-            logger.warning("hermes-smd-webhook-router: progress record not created at enrollment")
-        # The newest entry, so no change made before they joined is emailed to them.
-        return library_notice.mark_newest(cfg, address) or True
-    except Exception as exc:  # noqa: BLE001 - the enrollment stands; the first lesson creates it
-        logger.warning("hermes-smd-webhook-router: training start failed (%s)", type(exc).__name__)
-        return False
-
-
 def _redeem_enrollment(cfg: Any, dto: Any, code: str) -> None:
-    """Ask the broker to redeem; on an enrollment send the fixed welcome and
-    tell SMD. Logs name the outcome only, never the code. Never raises."""
-    try:
-        authenticated, reason = sender_auth.sender_authenticated(dto)
-    except Exception:  # noqa: BLE001 - could not tell is not authenticated
-        authenticated, reason = False, sender_auth.READ_FAILED
-    try:
-        result = sender_enrollment.redeem(
-            message_id=dto.message_id,
-            sender=dto.from_addr,
-            code=code,
-            authenticated=authenticated,
-            auth_reason=reason,
-        )
-    except Exception as exc:  # noqa: BLE001 - nothing enrolled; the message is dropped
-        logger.warning(
-            "hermes-smd-webhook-router: invite-code redeem failed (%s); nothing enrolled",
-            type(exc).__name__,
-        )
-        return
-    outcome = result.get("outcome") if isinstance(result, dict) else None
-    logger.info(
-        "hermes-smd-webhook-router: invite-code attempt from %s: %s", dto.from_addr, outcome
-    )
-    if not (isinstance(result, dict) and result.get("enrolled") is True):
-        return
-    name = result.get("name") if isinstance(result.get("name"), str) else None
-    demo = sender_enrollment.is_demo(cfg.raw)
-    trains = False if demo else _start_training(cfg, dto.from_addr)
-    try:
-        agentmail_broker.send_reply(
-            dto.message_id,
-            text=sender_enrollment.welcome_text(name, demo=demo, training=trains),
-            anchor=send_anchor.message_anchor(dto.message_id, "agentmail"),
-        )
-    except Exception as exc:  # noqa: BLE001 - the enrollment stands; SMD is told below
-        logger.warning("hermes-smd-webhook-router: welcome not sent (%s)", type(exc).__name__)
-    smd = [a for a in cfg.admins if a.rsplit("@", 1)[-1] in OPS_REPLY_DOMAINS]
-    if not smd:
-        return
-    try:
-        agentmail_broker.send_message(
-            {
-                "to": smd,
-                "subject": sender_enrollment.notice_subject(demo=demo),
-                "text": sender_enrollment.notice_text(
-                    address=dto.from_addr,
-                    slug=cfg.slug,
-                    code_id=str(result.get("code_id") or ""),
-                    name=name,
-                    demo=demo,
-                ),
-            }
-        )
-    except Exception as exc:  # noqa: BLE001 - the audit row and heartbeat still say it
-        logger.warning(
-            "hermes-smd-webhook-router: enrollment notice to SMD not sent (%s)", type(exc).__name__
-        )
+    """The redeem and its welcome (``enrollment_redeem``), with this module's
+    ``_start_training`` so a test that replaces it here is honoured."""
+    enrollment_redeem.redeem_enrollment(cfg, dto, code, start=_start_training)
 
 
 def _daily_limit_attempt(source: str, payload: Any) -> dict | None:
@@ -784,11 +711,11 @@ def _daily_limit_attempt(source: str, payload: Any) -> dict | None:
         return None
     try:
         cfg = CustomerConfig.from_volume(str(_YAML_PATH))
-        limit = daily_limit.authored_limit(cfg.raw)
-        if limit is None:
-            return None
         dto = inbound_message.normalize_inbound(source, payload)
         if dto is None or not dto.from_addr or not dto.message_id:
+            return None
+        limit = daily_limit.limit_for(cfg.raw, dto.from_addr)
+        if limit is None:
             return None
         if not cfg.sender_on_roster(dto.from_addr) or cfg.sender_is_admin(dto.from_addr):
             return None

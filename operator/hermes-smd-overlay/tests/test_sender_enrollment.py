@@ -339,9 +339,16 @@ def test_an_administrator_gets_an_id_and_never_the_code(tool) -> None:
     mod, issued, _ = tool
     _origin("s-admin", ADMIN)
     out = mod.issue_handler({"name": "Jane O'Neil", "days": 7}, session_id="s-admin")
-    assert out.startswith("DONE: invite code c_9 for Jane O'Neil")
+    assert out.startswith("DONE: representative code c_9 for Jane O'Neil")
     assert issued == [
-        {"message_id": "admin-msg", "admin": ADMIN, "name": "Jane O'Neil", "days": 7, "max_uses": 1}
+        {
+            "message_id": "admin-msg",
+            "admin": ADMIN,
+            "name": "Jane O'Neil",
+            "days": 7,
+            "max_uses": 1,
+            "kind": se.KIND_REPRESENTATIVE,
+        }
     ]
     assert se.find_code(out) is None
 
@@ -500,7 +507,7 @@ def test_an_administrator_of_the_demo_seat_gets_a_code(tool, fake_ctx) -> None:
     assert set(fake_ctx.tools) == {"invite_code_issue"}
     _origin("s-admin-demo", ADMIN)
     out = mod.issue_handler({"name": "Jane Smith"}, session_id="s-admin-demo")
-    assert out.startswith("DONE: invite code c_9 for Jane Smith")
+    assert out.startswith("DONE: representative code c_9 for Jane Smith")
     assert issued and issued[0]["admin"] == ADMIN
 
 

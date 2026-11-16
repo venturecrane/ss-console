@@ -32,6 +32,7 @@ from typing import Any
 
 from shared import (
     advertising_gate,
+    champion,
     inbound,
     matter_file_facts,
     matter_file_reply,
@@ -358,9 +359,27 @@ def body_and_facts(
     floor = _content_floor(cfg, vertical, session_id, origin, bound, reply_to, scan_text)
     if floor is None:
         return None
+    if _champion_walled(origin, reply_to, scan_text):
+        return None
     recipient_class, internal = floor
     text = (scan_text, send_text, send_html)
     return facts, facts_hold, model_words, text, recipient_class, internal
+
+
+def _champion_walled(origin: Any, reply_to: Any, scan_text: str) -> bool:
+    """(c0) The champion wall (``shared.champion``), keyed on who RECEIVES the
+    reply: to a client champion, a reply that carries a rep marker or cites a
+    document or heading outside the champion allowlist is held, and the held-
+    notice path sends them the fixed sentence instead. Anyone else's reply is
+    untouched: the wall answers ``""`` for a recipient who is not a champion."""
+    # ``reply_to`` is who receives it: the sender, or a device's authored person.
+    if not champion.is_champion(reply_to):
+        return False
+    why = champion.reply_wall(reply_to, scan_text, origin.message_id)
+    if not why:
+        return False
+    _plugin._held(champion.HOLD_REASON, origin, rule=why, _detail=champion.MODEL_DETAIL)
+    return True
 
 
 def _facts(session_id: str, origin: Any, args: dict[str, Any]) -> tuple[Any, str, Any, Any]:

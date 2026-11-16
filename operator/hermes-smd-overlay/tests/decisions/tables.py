@@ -142,6 +142,7 @@ RELAY = Decision(
         "_shared_reply_people",
         "_transmitted_body",
         "binding.SESSION_BINDINGS.get",
+        "champion.reply_wall",
         "classify_recipients_typed",
         "held_notice.over_cap",
         "held_notice.policy",
@@ -193,6 +194,11 @@ RELAY = Decision(
         ("<call>.get", "a dict read on a recorded result (bound.as_request())"),
         ("<call>.lower", "a str method on a recorded value"),
         ("relay.RateDecision", "builds a value; what it decides reaches the recorded calls"),
+        (
+            "champion.is_champion",
+            "reads the enrolled list; true only for a client champion recipient (the "
+            "champion knob), whose wall is the recorded champion.reply_wall",
+        ),
     ),
     edges=(
         "_emit_reply_event",
@@ -327,6 +333,7 @@ SELECTION: tuple[str, ...] = (
     "tests/test_blocked_after_allow_row.py",
     "tests/test_brief_taint_exemption.py",
     "tests/test_calendar_tools.py",
+    "tests/test_champion_wall.py",
     "tests/test_commitment_acts.py",
     "tests/test_confirm_approval.py",
     "tests/test_confirm_dispatch.py",

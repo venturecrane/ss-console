@@ -86,7 +86,7 @@ import json
 import logging
 from typing import Any
 
-from shared import record_store, space_taint
+from shared import champion, record_store, space_taint
 from shared import space as space_mod
 from shared.customer_config import CustomerConfigError
 from shared.inbound import SESSION_INBOUND_ORIGIN, SESSION_TAINT
@@ -395,10 +395,11 @@ def _write_handler(args: dict[str, Any], **kwargs: Any) -> str:
     return json.dumps(receipt, ensure_ascii=False)
 
 
+#: A client champion (``shared.champion``) is refused by every one of them.
 _HANDLERS = {
-    TOOL_LIST: _list_handler,
-    TOOL_READ: _read_handler,
-    TOOL_WRITE: _write_handler,
+    TOOL_LIST: champion.refuse_champion(_list_handler),
+    TOOL_READ: champion.refuse_champion(_read_handler),
+    TOOL_WRITE: champion.refuse_champion(_write_handler),
 }
 
 _TAINTED_MESSAGE = (

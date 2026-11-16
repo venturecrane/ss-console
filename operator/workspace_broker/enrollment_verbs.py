@@ -25,6 +25,7 @@ and label. Never the code, never a digest of it.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from .broker_context import BrokerContext
@@ -38,12 +39,20 @@ ISSUED_TYPE = "SENDER_ENROLLMENT_CODE_ISSUED"
 DEFAULT_DAYS = 14
 DEFAULT_MAX_USES = 1
 ISSUED_LABEL = "admin-issued"
+#: A client champion's code (the overlay's ``shared.sender_enrollment.CHAMPION_LABEL``):
+#: the label the gateway walls on. Issued only on a guide seat, only when the
+#: administrator's own email says "champion" (re-read here from the mailbox).
+CHAMPION_LABEL = "champion"
+KIND_CHAMPION = "champion"
+#: The fixed words for each kind of code, in the code email and the result.
+KIND_WORDS = {KIND_CHAMPION: "champion code", "representative": "representative code"}
+_CHAMPION_WORD = re.compile(r"\bchampions?\b", re.IGNORECASE)
 
 #: The one message that carries an administrator's code, composed here and
 #: nowhere else. The code is in the administrator's own mailbox, which is the
 #: point; it is in no row, log or tool result.
 _ISSUED_TEXT = (
-    "Here is the invite code for {name}:\n\n"
+    "Here is the {kind_words} for {name}:\n\n"
     "{code}\n\n"
     "It works until {expires} UTC for {uses}. {name} connects by emailing {inbox} "
     "from their own address with the code anywhere in that first message. The seat "
@@ -184,12 +193,16 @@ def issue_verb(
         raise ValueError("issuing a code needs the AgentMail channel and the audit ledger")
     if admin not in _admins(broker.customer_path):
         raise PermissionError("only an administrator of this seat may ask for an invite code")
-    if str(broker.agentmail.enrollment_source(message_id)["sender"]) != admin:
+    source = broker.agentmail.enrollment_source(message_id)
+    if str(source["sender"]) != admin:
         raise PermissionError("that message was not sent by the administrator named")
+    kind = _kind(broker, payload.get("kind"), source)
+    label = CHAMPION_LABEL if kind == KIND_CHAMPION else ISSUED_LABEL
     store = se.EnrollmentStore()
-    code, code_id = store.issue(label=ISSUED_LABEL, days=days, max_uses=uses, name=str(name))
+    code, code_id = store.issue(label=label, days=days, max_uses=uses, name=str(name))
     expires = next(r.expires_at for r in store.codes() if r.code_id == code_id)
     text = _ISSUED_TEXT.format(
+        kind_words=KIND_WORDS[kind],
         name=name,
         code=code,
         expires=expires.replace("T", " ").replace("Z", ""),
@@ -216,18 +229,46 @@ def issue_verb(
         )
     except Exception:
         store.revoke(code_id)
-        _audit_issued(broker, admin, code_id, days, uses, sent=False)
+        _audit_issued(broker, admin, code_id, days, uses, label, sent=False)
         raise
-    _audit_issued(broker, admin, code_id, days, uses, sent=True)
-    return {"ok": True, "code_id": code_id, "sent": True, "expires_at": expires}
+    _audit_issued(broker, admin, code_id, days, uses, label, sent=True)
+    return {"ok": True, "code_id": code_id, "sent": True, "expires_at": expires, "kind": KIND_WORDS[kind]}
 
 
-def _audit_issued(broker: BrokerContext, admin: str, code_id: str, days: int, uses: int, *, sent: bool) -> None:
+def _kind(broker: BrokerContext, claimed: Any, source: dict[str, Any]) -> str:
+    """``champion`` only when the gateway asked for one, the seat is a guide
+    seat (never the demo seat), and the administrator's own email, re-read from
+    the mailbox, says "champion"; a champion claim the email does not bear out
+    is refused. Everything else is a representative code."""
+    if claimed != KIND_CHAMPION:
+        return "representative"
+    if _role(broker.customer_path) != se.ROLE:
+        raise PermissionError("a champion code is issued only on a guide seat")
+    if not any(isinstance(t, str) and _CHAMPION_WORD.search(t) for t in source.get("texts") or []):
+        raise PermissionError("the administrator's email does not ask for a champion code")
+    return KIND_CHAMPION
+
+
+def _role(customer_path: Any) -> str:
+    try:
+        import yaml
+
+        data = yaml.safe_load(customer_path.read_text(encoding="utf-8")) or {}
+        seat = data.get("seat") or {}
+        return str(seat.get("role") or "")
+    except Exception:  # noqa: BLE001 - an unreadable config is no guide seat
+        return ""
+
+
+def _audit_issued(
+    broker: BrokerContext, admin: str, code_id: str, days: int, uses: int, label: str, *, sent: bool
+) -> None:
     if broker.ledger is None:
         return
     meta = {
         "admin_key": sender_key(admin) or "",
         "code_id": code_id,
+        "label": label,
         "days": days,
         "max_uses": uses,
         "sent": sent,

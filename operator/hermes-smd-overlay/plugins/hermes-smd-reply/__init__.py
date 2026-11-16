@@ -91,6 +91,7 @@ from typing import Any
 from shared import (
     advertising_gate,
     answered_messages,
+    champion,  # noqa: F401 - the decision corpus resolves champion.reply_wall through here
     hook_worker,
     inbound,
     matter_binding,
@@ -2274,7 +2275,7 @@ def _send_held_line(session_id: str, origin: Any) -> str:
             cfg = CustomerConfig.from_volume(str(_YAML_PATH))
         except (CustomerConfigError, OSError):
             return "none"
-        if not held_notice.policy(cfg.raw).enabled:
+        if not held_notice.sends_line(cfg.raw, message_id, sender):
             return "off"
         if _REPLIED.committed(message_id) or answered_messages.answered(message_id):
             return "answered"
@@ -2288,9 +2289,8 @@ def _send_held_line(session_id: str, origin: Any) -> str:
             return "not_rostered"
         if not _HELD_LINES.claim(message_id):
             return "sent_before"
-        relay.send_reply(
-            message_id=message_id, text=held_notice.FIXED_LINE, html="", session_id=session_id
-        )
+        line = held_notice.line_for(message_id, sender)
+        relay.send_reply(message_id=message_id, text=line, html="", session_id=session_id)
         logger.info(
             "hermes-smd-reply: told the sender of %s, in the fixed line, that it could not "
             "be answered",

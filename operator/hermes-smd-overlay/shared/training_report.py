@@ -131,12 +131,14 @@ def gather(
     cur: training.Curriculum, *, config: Any = None
 ) -> list[tuple[str, dict[str, Any] | None]]:
     """Every enrolled person, with their progress read from the progress store
-    only. Sorted by address so the report is stable week to week."""
+    only. Sorted by address so the report is stable week to week. A client
+    champion is not a representative in training and is never listed."""
     from shared import sender_enrollment
 
     return [
         (_label(address), training.read_progress(address, cur, config=config))
         for address in sender_enrollment.enrolled_addresses()
+        if not sender_enrollment.is_champion(address)
     ]
 
 

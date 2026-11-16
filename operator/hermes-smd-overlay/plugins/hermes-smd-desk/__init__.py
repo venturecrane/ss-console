@@ -31,7 +31,7 @@ import json
 import logging
 from typing import Any
 
-from shared import gap_report, reminders
+from shared import champion, gap_report, reminders
 from shared.tool_registration import register_wrapped_tool
 
 logger = logging.getLogger(__name__)
@@ -161,7 +161,8 @@ def on_post_llm_call(**kwargs: Any) -> None:
         logger.warning("hermes-smd-desk: post_llm_call failed", exc_info=True)
 
 
-_HANDLERS = {TOOL_SET: _set_handler}
+#: A client champion (``shared.champion``) is refused.
+_HANDLERS = {TOOL_SET: champion.refuse_champion(_set_handler)}
 
 
 def register(ctx: Any) -> None:
