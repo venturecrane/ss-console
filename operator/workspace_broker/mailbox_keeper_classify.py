@@ -62,7 +62,8 @@ SYSTEM_PROMPT = (
     '"decision": something he must decide, answer or act on (a person asking him something, a tax or '
     "government notice, an upcoming charge or renewal, a failed payment, an expiring card or sign-in, a "
     'contract, a deadline). "receipt": a record of money already paid, with the amount stated (an invoice '
-    'marked paid, a payment receipt). "notice": nothing for him to do (a product announcement, a newsletter, '
+    "marked paid, a payment receipt) for something HE bought; money paid TO him or his firm (a client's "
+    'payment, a payout) is never a receipt but a notice. "notice": nothing for him to do (a product announcement, a newsletter, '
     "a shipping update, a security notice about something he did himself). When unsure, it is a decision. "
     'Return ONLY a JSON object with these keys: "kind"; "what", at most 160 characters, what the email is, '
     'plainly; for a decision, "recommend", at most 160 characters, the one thing you recommend he do, and '

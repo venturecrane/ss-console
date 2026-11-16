@@ -685,3 +685,37 @@ def test_a_dry_run_can_list_what_a_reading_would_be_shown_for_free(tmp_path, mon
     subjects = {c["subject"] for c in out["candidates"]}
     assert "Kickoff date" in subjects and not any(s.startswith("[SMD Ops]") for s in subjects)
     assert model.requests == [] and http.sends == [] and gmail.modified == []
+
+
+def test_repeated_ops_lines_collapse_and_only_the_newest_triage_is_kept() -> None:
+    from workspace_broker import mailbox_keeper_digest as mkd
+
+    day = 1_794_800_000_000
+    pending = [
+        {"kind": "never_clears", "line": "seat-a: a scheduled message did not go out", "ms": day + i} for i in range(12)
+    ]
+    pending += [{"kind": "triage", "line": f"Triage says {n} need you", "ms": day + 100 + n} for n in (1, 2, 3)]
+    pending.append({"kind": "sign_in_dead", "line": "seat-a: the Clio sign-in is dead", "ms": day + 50})
+    lines = mkd.ops_lines(pending, "America/Phoenix")
+    assert len(lines) == 3
+    assert lines[0] == "Triage says 3 need you"
+    assert lines[1] == "seat-a: the Clio sign-in is dead"
+    assert lines[2].startswith("seat-a: a scheduled message did not go out (12 times, latest ")
+
+
+def test_mail_an_smd_operator_sent_is_not_from_a_person() -> None:
+    raw = {
+        "id": "m1",
+        "threadId": "t1",
+        "labelIds": ["INBOX"],
+        "payload": {
+            "headers": [
+                {"name": "From", "value": "Operator <operator@firm.example>"},
+                {"name": "Subject", "value": "Operator help: this week's note"},
+                {"name": "X-SMD-Audit-Row", "value": "row-1"},
+            ]
+        },
+    }
+    m = mk.parse_message(raw)
+    settings = mk.Settings(mailbox="owner@firm.example", owners=frozenset({"owner@firm.example"}))
+    assert m.from_operator and not mk.is_person(m, settings)

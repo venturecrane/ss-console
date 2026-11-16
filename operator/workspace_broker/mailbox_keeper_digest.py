@@ -58,6 +58,28 @@ def local_time(ms: int, zone: str) -> str:
     return datetime.fromtimestamp(ms / 1000, tz=ZoneInfo(zone)).strftime("%b %d, %I:%M %p").replace(" 0", " ")
 
 
+def ops_lines(pending: list[dict], zone: str) -> list[str]:
+    """The SMD Ops needs-you lines as the list shows them: the same line said
+    several times is one line with its count and latest time, and only the
+    newest triage report is kept, because each one supersedes the last (the
+    first labelled list on smd-office would otherwise have carried 32 lines,
+    12 of them one sentence; 2026-11-16 dry run)."""
+    triage = [p for p in pending if str(p.get("kind", "")).startswith("triage")]
+    newest = max(triage, key=lambda p: int(p.get("ms") or 0)) if triage else None
+    groups: dict[str, list[int]] = {}
+    for p in pending:
+        if p in triage and p is not newest:
+            continue
+        groups.setdefault(str(p.get("line") or ""), []).append(int(p.get("ms") or 0))
+    out = []
+    for line, stamps in sorted(groups.items(), key=lambda kv: -max(kv[1])):
+        if len(stamps) > 1:
+            out.append(f"{line} ({len(stamps)} times, latest {local_time(max(stamps), zone)})")
+        else:
+            out.append(line)
+    return out
+
+
 def who(name: str, address: str) -> str:
     """'Name (domain)' when the header names someone, else the address."""
     if name:
