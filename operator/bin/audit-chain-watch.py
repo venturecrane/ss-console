@@ -106,6 +106,7 @@ from bin.lib.console_d1 import (
     utc_date,  # noqa: F401 — re-export: tests and callers read it from this module
     utc_now,
 )
+from bin.lib.r2_env import aws_env
 from bin.lib.seam_pull import seam_client_from_env
 from workspace_broker.chain import verify_chain
 
@@ -349,7 +350,7 @@ def _aws_upload(local: Path, destination: str) -> None:
         capture_output=True,
         text=True,
         check=False,
-        env=dict(os.environ, AWS_ACCESS_KEY_ID=key_id, AWS_SECRET_ACCESS_KEY=secret),
+        env=aws_env(key_id, secret, os.environ),
     )
     if proc.returncode != 0:
         raise RuntimeError(f"R2 upload failed for {destination}: {proc.stderr.strip()}")
