@@ -96,6 +96,21 @@ personas:
         # cron turn answers no email, so without it every agent is refused.
         settings:
           recipients: roster
+      # The product library, for the broker and his agents to explore what an
+      # Operator could take on for a brokerage and to make the case inside it.
+      # Reached from open-house-visitor-capture's routing; never woken on its
+      # own. `audience: champion` keeps it to the documents the library opens
+      # to people inside a client business, and the seat holds any library
+      # answer that cites anything else (shared/champion_audience.py).
+      - name: product-guide
+        version: pending
+        initiation:
+          manual: true
+          scheduled: false
+          webhook: true
+        enabled: true
+        settings:
+          audience: champion
     cron:
       # Follow-up drafts at 8:00 MST (15:00 UTC). `always`: the skill reads a
       # small records directory and exits silently when nothing is due.

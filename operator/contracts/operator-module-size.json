@@ -9,7 +9,7 @@
     "operator/customers/pilot-smokeball/seed/seed_data.py": 590,
     "operator/customers/pilot-smokeball/seed/seed_voice_letters.py": 628,
     "operator/hermes-smd-overlay/bootstrap/translate.py": 1466,
-    "operator/hermes-smd-overlay/bootstrap/validate.py": 1261,
+    "operator/hermes-smd-overlay/bootstrap/validate.py": 1256,
     "operator/hermes-smd-overlay/establish_intake/intake.py": 1054,
     "operator/hermes-smd-overlay/firm_inputs_applier/applier.py": 528,
     "operator/hermes-smd-overlay/plugins/hermes-smd-audit/emit.py": 664,

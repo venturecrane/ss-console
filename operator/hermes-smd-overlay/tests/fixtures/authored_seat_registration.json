@@ -1229,6 +1229,10 @@
    ],
    [
     "on_session_end",
+    "hermes-smd-initiation"
+   ],
+   [
+    "on_session_end",
     "hermes-smd-peer-memory"
    ],
    [
@@ -1250,6 +1254,10 @@
    [
     "post_llm_call",
     "hermes-smd-hook-probe"
+   ],
+   [
+    "post_llm_call",
+    "hermes-smd-initiation"
    ],
    [
     "post_llm_call",
@@ -1278,6 +1286,10 @@
    [
     "post_tool_call",
     "hermes-smd-hook-probe"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-initiation"
    ],
    [
     "post_tool_call",

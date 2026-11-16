@@ -195,9 +195,10 @@ RELAY = Decision(
         ("<call>.lower", "a str method on a recorded value"),
         ("relay.RateDecision", "builds a value; what it decides reaches the recorded calls"),
         (
-            "champion.is_champion",
-            "reads the enrolled list; true only for a client champion recipient (the "
-            "champion knob), whose wall is the recorded champion.reply_wall",
+            "champion.walls",
+            "reads the enrolled list and the seat's product-guide audience setting; "
+            "non-empty only for a client champion recipient (the champion knob) or an "
+            "audience seat, whose wall is the recorded champion.reply_wall",
         ),
     ),
     edges=(
@@ -333,6 +334,7 @@ SELECTION: tuple[str, ...] = (
     "tests/test_blocked_after_allow_row.py",
     "tests/test_brief_taint_exemption.py",
     "tests/test_calendar_tools.py",
+    "tests/test_champion_audience.py",
     "tests/test_champion_wall.py",
     "tests/test_commitment_acts.py",
     "tests/test_confirm_approval.py",

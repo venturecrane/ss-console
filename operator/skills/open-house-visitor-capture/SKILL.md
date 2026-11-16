@@ -95,6 +95,14 @@ body and the transcript together and classify by shape:
 - **A request to change who can use the assistant.** "Add these agents, here
   are their emails", "remove Jane", "Bob has a new address". Run **Access
   request** below.
+- **A question about what an Operator could take on for a brokerage, its agents
+  or their clients, or how to make the case for one inside the brokerage.** Only
+  on a seat that enables the product-guide skill. Read
+  `/app/skills/product-guide/SKILL.md` with `read_file` and answer under it, in
+  its Champion mode, with its `Source:` lines; the seat holds any such reply
+  that cites no open library document. One difference on this seat: a question
+  about this brokerage's own pilot, program or visitor records is answered here,
+  from **Help** or **Recall**, not with Champion mode's own-business sentence.
 - **Anything else.** Answer it the way you would any message from your principal,
   briefly, in the same reply. If it is plainly not about open houses, say so in one
   line and help with what was asked. Do not force it into Capture.

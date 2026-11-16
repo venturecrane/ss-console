@@ -59,6 +59,7 @@ function checkOneSkill(raw: unknown, path: string, errors: ValidationError[]): P
   const cost = checkCostEstimate(raw['cost_estimate'], `${path}.cost_estimate`, errors)
   const scope = optionalStringList(raw, 'scope', `${path}.scope`, errors)
   const settings = checkSkillSettings(raw['settings'], `${path}.settings`, errors)
+  checkAudience(raw['name'], settings, `${path}.settings`, errors)
   return assembleSkill(raw, initiation, cost, scope, settings)
 }
 
@@ -112,6 +113,27 @@ function checkRosterRecipients(
     code: 'InvalidSkillSetting',
     path: `${path}.recipients`,
     message: `${path}.recipients must be 'roster' when present`,
+  })
+}
+
+/**
+ * `settings.audience: champion` on the product-guide entry limits that skill to
+ * the documents the library opens to people inside a client business, for
+ * everyone on the seat (`shared/champion_audience.py` on the overlay). One
+ * value, one skill. Mirrors the overlay's `_validate_skill`.
+ */
+function checkAudience(
+  name: unknown,
+  settings: Record<string, string | number | boolean> | undefined,
+  path: string,
+  errors: ValidationError[]
+): void {
+  if (settings === undefined || settings['audience'] === undefined) return
+  if (name === 'product-guide' && settings['audience'] === 'champion') return
+  errors.push({
+    code: 'InvalidSkillSetting',
+    path: `${path}.audience`,
+    message: `${path}.audience must be 'champion', and only on the product-guide skill`,
   })
 }
 

@@ -336,10 +336,47 @@ class Walled:
 WALLED = Walled()
 
 
-def reply_wall(recipient: Any, scan_text: str, message_id: Any) -> str:
-    """The relay's one call: why this reply may not reach its recipient, or
-    ``""`` (always, for anyone who is not a champion). A walled email is marked
-    so the held-notice path sends the champion :data:`SENTENCE`. Never raises."""
+#: The two kinds of wall: a reply to an enrolled champion, or any reply on a
+#: seat whose product-guide entry authors ``audience: champion``.
+MODE_CHAMPION = "champion"
+MODE_AUDIENCE = "audience"
+
+
+def walls(recipient: Any, raw: Any) -> str:
+    """Which wall this reply passes: :data:`MODE_CHAMPION` for an enrolled
+    champion, :data:`MODE_AUDIENCE` on an audience seat (``shared.champion_audience``),
+    ``""`` for everything else. ``raw`` is the seat's live config. Never raises."""
+    if is_champion(recipient):
+        return MODE_CHAMPION
+    try:
+        from shared import champion_audience
+
+        return MODE_AUDIENCE if champion_audience.seat_has_audience(raw) else ""
+    except Exception:  # noqa: BLE001 - an undecidable seat setting walls nothing more
+        return ""
+
+
+def reply_wall(
+    recipient: Any,
+    scan_text: str,
+    message_id: Any,
+    *,
+    mode: str = MODE_CHAMPION,
+    session_id: str = "",
+) -> str:
+    """The relay's one call: why this reply may not go, or ``""``.
+
+    For a champion, the whole wall; a walled email is marked so the held-notice
+    path sends the champion :data:`SENTENCE`. On an audience seat, only the
+    library ``Source:`` lines and, once the turn read product-guide's
+    procedure, that one is there; the seat's own held line is unchanged.
+    Never raises."""
+    if mode == MODE_AUDIENCE:
+        from shared import champion_audience
+
+        return champion_audience.source_reason(
+            scan_text, guide_read=champion_audience.GUIDE_READ.has(session_id)
+        )
     if not is_champion(recipient):
         return ""
     why = wall_reason(scan_text)
@@ -411,5 +448,6 @@ __all__ = [
     "parse_allowlist",
     "refuse_champion",
     "reply_wall",
+    "walls",
     "wall_reason",
 ]

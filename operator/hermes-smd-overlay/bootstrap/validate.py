@@ -36,6 +36,7 @@ except ImportError as exc:  # pragma: no cover - import-time guard
         "PyYAML is required by bootstrap.validate; install with `pip install pyyaml`"
     ) from exc
 
+from bootstrap import skill_settings_rules
 from bootstrap.secret_scan import finding_to_error, scan_parsed_value, scan_raw_yaml
 
 logger = logging.getLogger(__name__)
@@ -561,15 +562,8 @@ def _validate_skill(skill: Any, sk_prefix: str, errors: list[str]) -> None:
         _err(f"{sk_prefix}: version must be a string when present", errors)
     if "enabled" in skill and not isinstance(skill["enabled"], bool):
         _err(f"{sk_prefix}: enabled must be a boolean when present", errors)
-    settings = skill.get("settings")
-    if (
-        isinstance(settings, dict)
-        and "recipients" in settings
-        and settings["recipients"] != "roster"
-    ):
-        # The scheduled-turn roster lane (shared.send_anchor.routine_turn_lane):
-        # one value is meaningful, and any other would author a lane nobody gets.
-        _err(f"{sk_prefix}.settings.recipients: must be 'roster' when present", errors)
+    # The settings' value rules (recipients, audience): bootstrap/skill_settings_rules.py.
+    errors.extend(skill_settings_rules.errors_for(skill, sk_prefix))
 
 
 def _validate_initiation(raw: Any, path: str, errors: list[str]) -> None:
