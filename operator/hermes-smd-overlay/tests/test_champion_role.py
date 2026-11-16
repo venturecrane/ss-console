@@ -194,6 +194,8 @@ def test_with_no_champion_in_flight_nothing_changes(library) -> None:
     [
         ("read_file", {"path": GUIDE_SKILL}, True),
         ("read_file", {"path": JOBS}, True),
+        ("read_file", {"path": "/app/skills/product-guide/references/INDEX.md"}, True),
+        ("skill_view", {"name": "product-guide", "file_path": "references/INDEX.md"}, True),
         ("read_file", {"path": "/opt/data/skills/product-guide/references/jobs.md"}, True),
         ("read_file", {"path": DEMO}, False),
         ("read_file", {"path": PITCH}, False),

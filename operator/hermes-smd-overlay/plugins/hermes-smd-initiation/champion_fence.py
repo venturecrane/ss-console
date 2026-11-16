@@ -15,7 +15,8 @@ with the real session id) and on the session this thread is working under:
   its own id): nothing changes, so a representative's turn running beside a
   champion's still reads pitch-practice;
 * otherwise (this thread is the champion's, or cannot say whose it is):
-  ``read_file`` under a skills root may reach only ``product-guide/SKILL.md``
+  ``read_file`` under a skills root may reach only ``product-guide/SKILL.md``, the
+  library index (``references/INDEX.md``)
   and the allowlisted ``references/`` documents; ``skill_view`` may name only
   product-guide, with no file or one of those files; ``search_files`` under a
   skills root, and ``terminal`` / ``execute_code`` that mention one, are
@@ -102,16 +103,22 @@ def _read_allowed(args: dict[str, Any], allowed: frozenset[str]) -> bool:
     return True
 
 
+def _readable() -> frozenset[str]:
+    """The documents under references/ a champion's turn may read: the
+    allowlist, and the index itself, which the skill reads to find them."""
+    return champion.allowlist() | {champion.INDEX_FILE}
+
+
 def check(tool_name: str, args: Any) -> str | None:
     """The refusal, or None when this call may proceed on a champion's turn."""
     if tool_name not in skill_fence.FENCED_TOOLS or not isinstance(args, dict):
         return None
     if tool_name == "skill_view":
-        return None if _skill_view_allowed(args, champion.allowlist()) else REFUSAL
+        return None if _skill_view_allowed(args, _readable()) else REFUSAL
     if not skill_fence.touched_skills(tool_name, args):
         return None
     if tool_name == "read_file":
-        return None if _read_allowed(args, champion.allowlist()) else REFUSAL
+        return None if _read_allowed(args, _readable()) else REFUSAL
     return REFUSAL
 
 
