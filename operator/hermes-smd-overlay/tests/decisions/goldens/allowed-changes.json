@@ -347,5 +347,8 @@
   ],
   "existing/test_blocked_after_allow_row": [
     "<file>"
+  ],
+  "existing/test_pre_hook_blocks_recorded": [
+    "<file>"
   ]
 }
