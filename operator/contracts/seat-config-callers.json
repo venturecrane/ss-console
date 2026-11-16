@@ -2584,18 +2584,6 @@
      "symbol": "skill_enabled"
     },
     {
-     "file": "operator/workspace_broker/mailbox_keeper_verbs.py",
-     "labels": [
-      "fails-open-on-block-malformed",
-      "fails-open-on-block-malformed-deep",
-      "fails-open-on-empty",
-      "fails-open-on-not-mapping",
-      "fails-open-on-unreadable",
-      "fails-open-on-yaml-syntax-error"
-     ],
-     "symbol": "skill_entry"
-    },
-    {
      "file": "operator/workspace_broker/medchron_ledger.py",
      "labels": [
       "fails-open-on-block-malformed-deep",
@@ -3398,7 +3386,7 @@
       "yaml-syntax-error": "not-applicable: the site takes cfg (this input does not parse)"
      },
      "calls": [
-      "operator/bin/seat-readiness.py:384 yaml.safe_load(path.read_text())"
+      "operator/bin/seat-readiness.py:395 yaml.safe_load(path.read_text())"
      ],
      "file": "operator/bin/seat-readiness.py",
      "kind": "function",
@@ -3434,7 +3422,7 @@
       "yaml-syntax-error": "not-applicable: the site takes cfg (this input does not parse)"
      },
      "calls": [
-      "operator/bin/seat-readiness.py:454 yaml.safe_load(grid_path.read_text())"
+      "operator/bin/seat-readiness.py:465 yaml.safe_load(grid_path.read_text())"
      ],
      "file": "operator/bin/seat-readiness.py",
      "kind": "function",
@@ -3610,7 +3598,7 @@
       "yaml-syntax-error": "return empty:dict fd0eecc3dff2f4d8 reads=1"
      },
      "calls": [
-      "operator/bin/work-health.py:94 seat_config.load(CUSTOMERS / slug / \"customer.yaml\", encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/bin/work-health.py:95 seat_config.load(CUSTOMERS / slug / \"customer.yaml\", encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/bin/work-health.py",
      "kind": "function",
@@ -5127,7 +5115,7 @@
       "yaml-syntax-error": "return empty:dict fd0eecc3dff2f4d8 reads=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py:976 seat_config.load(_YAML_PATH, encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py:991 seat_config.load(_YAML_PATH, encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py",
      "kind": "function",
@@ -7013,57 +7001,41 @@
     },
     {
      "behaviour": {
-      "block-malformed": "return none 74234e98afe7498f reads=1",
-      "block-malformed-deep": "return none 74234e98afe7498f reads=1",
-      "block-missing": "return none 74234e98afe7498f reads=1",
-      "empty": "return none 74234e98afe7498f reads=1",
-      "good": "return none 74234e98afe7498f reads=1",
+      "block-malformed": "not-applicable: no customer.yaml key observed read",
+      "block-malformed-deep": "not-applicable: no customer.yaml key observed read",
+      "block-missing": "not-applicable: no customer.yaml key observed read",
+      "empty": "return empty:dict fd0eecc3dff2f4d8 reads=1",
+      "good": "return value:dict c99814124bbe7c62 reads=1",
       "missing": "return none 74234e98afe7498f reads=1",
       "not-mapping": "return none 74234e98afe7498f reads=1",
-      "real-0e29268fcb": "return none reads=1",
-      "real-5c81ccbc83": "return none reads=1",
-      "real-7380b64d88": "return none reads=1",
-      "real-87c9d88a05": "return none reads=1",
-      "real-9302036937": "return none reads=1",
-      "real-931453a391": "return none reads=1",
-      "real-b02aa60269": "return none reads=1",
-      "real-c388304bc1": "return none reads=1",
-      "real-c3de4c838e": "return none reads=1",
+      "real-0e29268fcb": "return value:dict reads=1",
+      "real-5c81ccbc83": "return value:dict reads=1",
+      "real-7380b64d88": "return value:dict reads=1",
+      "real-87c9d88a05": "return value:dict reads=1",
+      "real-9302036937": "return value:dict reads=1",
+      "real-931453a391": "return value:dict reads=1",
+      "real-b02aa60269": "return value:dict reads=1",
+      "real-c388304bc1": "return value:dict reads=1",
+      "real-c3de4c838e": "return value:dict reads=1",
       "real-d91ae216e0": "return value:dict reads=1",
       "unreadable": "return none 74234e98afe7498f reads=1",
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/mailbox_keeper_verbs.py:80 seat_config.load(customer_path, encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/mailbox_keeper_verbs.py:69 seat_config.load(customer_path, encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/mailbox_keeper_verbs.py",
      "kind": "function",
      "modes": [
-      "fails-open-on-block-malformed",
-      "fails-open-on-block-malformed-deep",
-      "fails-open-on-empty",
-      "fails-open-on-not-mapping",
-      "fails-open-on-unreadable",
-      "fails-open-on-yaml-syntax-error",
-      "returns-as-good-on-block-malformed",
-      "returns-as-good-on-block-malformed-deep",
-      "returns-as-good-on-block-missing",
-      "returns-as-good-on-empty",
-      "returns-as-good-on-missing",
-      "returns-as-good-on-not-mapping",
-      "returns-as-good-on-unreadable",
-      "returns-as-good-on-yaml-syntax-error",
-      "treats-malformed-as-absent"
+      "returns-empty-on-empty",
+      "returns-none-on-missing",
+      "returns-none-on-not-mapping",
+      "returns-none-on-unreadable",
+      "returns-none-on-yaml-syntax-error"
      ],
-     "observed_keys": [
-      "personas",
-      "personas.[]",
-      "personas.[].skills",
-      "personas.[].skills.[]",
-      "personas.[].skills.[].name"
-     ],
+     "observed_keys": [],
      "status": "executable",
-     "symbol": "skill_entry",
+     "symbol": "_seat_doc",
      "tree": "broker"
     },
     {
@@ -7725,6 +7697,15 @@
      "symbol": "writer_factory"
     },
     {
+     "file": "operator/skills/mailbox-keeper/pre_run.py",
+     "labels": [
+      "fails-open-on-empty",
+      "fails-open-on-unset",
+      "fails-open-on-whitespace"
+     ],
+     "symbol": "_meter"
+    },
+    {
      "file": "operator/templates/skill_helpers.py",
      "labels": [
       "fails-open-on-empty",
@@ -7767,6 +7748,7 @@
     "operator/skills/deadline-miss-escalator/pre_run.py",
     "operator/skills/lien-ledger-tracker/pre_run.py",
     "operator/skills/litigation-status/pre_run.py",
+    "operator/skills/mailbox-keeper/pre_run.py",
     "operator/skills/medical-records-chaser/pre_run.py",
     "operator/skills/negotiation-watch/pre_run.py",
     "operator/skills/operator-help/pre_run.py",
@@ -8249,7 +8231,7 @@
       "whitespace": "return value:HeartbeatEmitter 0737ea95319900a2"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/heartbeat.py:2713 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
+      "operator/hermes-smd-overlay/shared/heartbeat.py:2729 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
      ],
      "file": "operator/hermes-smd-overlay/shared/heartbeat.py",
      "kind": "function",
@@ -8868,6 +8850,42 @@
      "tree": "skill"
     },
     {
+     "behaviour": {
+      "both": "return value:tuple 44d69e8bd9924db8",
+      "empty": "return value:tuple 851dd06b78746d1e",
+      "padded": "return value:tuple 4f873bfbce947a65",
+      "unset": "return value:tuple 851dd06b78746d1e",
+      "valid": "return value:tuple 4805a5cb7f694674",
+      "whitespace": "return value:tuple af15c750090871a1"
+     },
+     "calls": [
+      "operator/skills/mailbox-keeper/pre_run.py:126 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
+     ],
+     "file": "operator/skills/mailbox-keeper/pre_run.py",
+     "kind": "function",
+     "modes": [
+      "fails-open-on-empty",
+      "fails-open-on-unset",
+      "fails-open-on-whitespace",
+      "keeps-padding",
+      "prefers-alternate",
+      "returns-value-on-both",
+      "returns-value-on-empty",
+      "returns-value-on-padded",
+      "returns-value-on-unset",
+      "returns-value-on-valid",
+      "returns-value-on-whitespace"
+     ],
+     "slug_names_read": [
+      "CUSTOMER_SLUG",
+      "SMD_CUSTOMER_SLUG"
+     ],
+     "slug_values": {},
+     "status": "executable",
+     "symbol": "_meter",
+     "tree": "skill"
+    },
+    {
      "calls": [
       "operator/skills/medical-records-chaser/pre_run.py:884 os.environ.get(\"CUSTOMER_SLUG\")"
      ],
@@ -9253,13 +9271,13 @@
     "skill": 5,
     "templates": 10
    },
-   "fail_open": 56,
+   "fail_open": 55,
    "files": 82,
    "sites": 93
   },
   "slug": {
    "by_status": {
-    "executable": 39,
+    "executable": 40,
     "not-executable": 5
    },
    "by_tree": {
@@ -9267,12 +9285,12 @@
     "broker": 2,
     "overlay": 23,
     "runner": 3,
-    "skill": 13,
+    "skill": 14,
     "templates": 2
    },
-   "fail_open": 14,
-   "files": 42,
-   "sites": 44
+   "fail_open": 15,
+   "files": 43,
+   "sites": 45
   }
  }
 }

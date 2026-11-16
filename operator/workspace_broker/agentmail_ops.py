@@ -30,6 +30,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -304,6 +305,36 @@ class AgentMailOps:
             "own": own if isinstance(own, str) else "",
         }
 
+    def sent_to_since(self, recipient: str, subject_prefix: str, after_iso: str) -> list[dict[str, str]]:
+        """This inbox's SENT messages to ``recipient`` whose subject starts with
+        ``subject_prefix``, timestamped at or after ``after_iso``.
+
+        The mailbox keeper's send-once check across machines (2026-11-16: a
+        second machine back from a host failure sent the morning list again,
+        because "already sent today" was only on the first machine's volume).
+        AgentMail filters by label, time, recipient and subject; the filter is
+        applied again here, so a vendor that ignored a parameter cannot make a
+        received message read as a sent one. RAISES on any failure to look:
+        "could not look" must never read as "nothing sent"."""
+        wanted = normalize_address(recipient)
+        query = urllib.parse.urlencode(
+            [("labels", "sent"), ("after", after_iso), ("to", wanted), ("subject", subject_prefix), ("limit", "100")]
+        )
+        found = self._request(self._path("messages") + "?" + query, "GET", None)
+        messages = found.get("messages")
+        if not isinstance(messages, list):
+            raise AgentMailTransportError("agentmail returned no message list")
+        out: list[dict[str, str]] = []
+        for entry in messages:
+            if not isinstance(entry, dict):
+                raise AgentMailTransportError("agentmail returned a message of the wrong shape")
+            subject = str(entry.get("subject") or "")
+            if _before(entry.get("timestamp"), after_iso):
+                continue
+            if wanted in _as_addresses(entry.get("to")) and subject.startswith(subject_prefix):
+                out.append({"message_id": _message_id(entry), "timestamp": str(entry.get("timestamp") or "")})
+        return out
+
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Fence every recipient, then transmit from this seat's pinned inbox."""
         files = _files(payload)
@@ -425,3 +456,14 @@ class AgentMailOps:
             # so the join exists and the address does not.
             "sender_key": sender_key(sender),
         }
+
+
+def _before(timestamp: Any, after_iso: str) -> bool:
+    """True only when ``timestamp`` is readable and earlier than ``after_iso``.
+    An unreadable stamp is kept: counting a send that happened is the safe error."""
+    try:
+        stamp = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        floor = datetime.fromisoformat(after_iso.replace("Z", "+00:00"))
+        return stamp < floor
+    except (TypeError, ValueError):
+        return False

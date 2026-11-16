@@ -30,7 +30,7 @@ ping_hc "/start"
 
 git -C "$REPO" fetch -q origin && git -C "$REPO" checkout -q --detach origin/main
 since=$(cat "$STATE/triage-since" 2>/dev/null || true)
-args=(--dry-run --print-body --state-out "$STATE/triage-state.next.json")
+args=(--dry-run --print-body --machines --state-out "$STATE/triage-state.next.json")
 [ -f "$STATE/triage-state.json" ] && args+=(--state-in "$STATE/triage-state.json")
 [ -n "$since" ] && args+=(--since "$since")
 start=$(date -u +%Y-%m-%dT%H:%M:%SZ)

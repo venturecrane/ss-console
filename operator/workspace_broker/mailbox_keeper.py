@@ -1,9 +1,12 @@
 """The mailbox keeper's decisions, all in code (doctrine Law 18, Class N).
 
 The SMD operations seat keeps one Google Workspace mailbox: it trashes settled
-"[SMD Ops]" alert threads and lists, once a day, the people waiting on a reply.
-No model reads a message and no model decides anything; this module is the
-whole of the judgement, and it is pure (no I/O), so every rule is a test.
+"[SMD Ops]" alert threads, files the rest of SMD's own mail under a label, and
+lists, once a day, what needs the owner. This module is the code half of the
+judgement and it is pure (no I/O), so every rule is a test. When the seat
+authors ``classify: true``, a model READS the remaining threads and returns a
+value per thread (``mailbox_keeper_classify.py``); code still decides what may
+be filed, archived or drafted, from the floors written there.
 ``mailbox_keeper_verbs.py`` reads the mailbox, hands the threads here, and acts
 on what comes back.
 
@@ -32,11 +35,13 @@ WHY THE THREAD AND NOT THE ROOT MESSAGE-ID. The alert's own Message-ID
 (measured 2026-11-13, vfy_01M7ATXM50M0T1Q50YT67RW45A). The reply's own
 ``In-Reply-To`` still names it, and Gmail's threadId is what groups the pair.
 
-RULE 1B, AN SMD OPS THREAD THAT IS NOT SETTLED IS LISTED, never trashed: an
-open alert, a reminder, one he replied to, one that failed authentication.
-The two kinds that never recover (``send-refused.ts``: "a scheduled message did
-not go out"; ``shortfalls.ts``: "a reply did not go out", "a limit stopped the
-work") are listed in their own section and are never trashed.
+RULE 1B, AN SMD OPS THREAD THAT IS NOT SETTLED IS FILED, never trashed: when
+the seat authors ``alert_label``, every verified SMD Ops thread the owner did
+not write in gets that label and leaves the inbox (``ops_needs_you.py`` lists
+the kinds that need him, by subject). One that failed authentication, or one he
+wrote in, stays in the inbox. The two kinds that never recover
+(``send-refused.ts``: "a scheduled message did not go out"; ``shortfalls.ts``:
+"a reply did not go out", "a limit stopped the work") are never trashed.
 
 RULE 2, A PERSON WAITING ON HIM IS LISTED. In the inbox, the newest message
 from a person (not a list: no ``List-Unsubscribe``, no bulk ``Precedence``, not
@@ -98,6 +103,12 @@ class Message:
     bulk: bool
     alert_state: str
     first_paragraph: str
+    message_id_header: str = ""
+    reply_to: str = ""
+    #: Every To and Cc address, lowercased (the alias a message was received at).
+    recipients: tuple[str, ...] = ()
+    #: The message as plain text (the text part, else the HTML part's text).
+    text: str = ""
 
 
 @dataclass(frozen=True)
@@ -117,6 +128,17 @@ class Settings:
     seat_inbox: str = ""
     timezone: str = "America/Phoenix"
     max_pages: int = 20
+    #: The Gmail label SMD Ops mail is filed under; unauthored, it stays in the inbox.
+    alert_label: str = ""
+    #: A model reads the remaining threads (mailbox_keeper_classify.py).
+    classify: bool = False
+    classify_model: str = ""
+    receipts_label: str = ""
+    cost_fence_cents: float = 0.0
+    #: Appended by code to every reply draft; unauthored, none.
+    draft_signoff: str = ""
+    #: The first scheduled run at or after this seat-local hour sends the list.
+    send_after_hour: int = 6
 
 
 @dataclass(frozen=True)
@@ -186,6 +208,20 @@ def _part(payload: dict[str, Any], mime: str) -> str:
     return ""
 
 
+_DROP_BLOCKS = re.compile(r"<(script|style|head)\b.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+_BREAKS = re.compile(r"<(?:br|/p|/div|/tr|/li|/h[1-6])\b[^>]*>", re.IGNORECASE)
+
+
+def body_text(payload: dict[str, Any]) -> str:
+    """The message as plain text: its text part, else its HTML part's text."""
+    plain = _part(payload, "text/plain")
+    if plain.strip():
+        return plain.replace("\r\n", "\n")
+    markup = _DROP_BLOCKS.sub(" ", _part(payload, "text/html"))
+    text = html.unescape(_TAG.sub("", _BREAKS.sub("\n", markup)))
+    return "\n".join(line.strip() for line in text.splitlines())
+
+
 def first_paragraph(payload: dict[str, Any]) -> str:
     """The message's first paragraph as text, whitespace collapsed. The HTML
     part's first ``<p>`` when there is one (the alert worker sends HTML), else
@@ -235,7 +271,18 @@ def parse_message(raw: dict[str, Any]) -> Message:
         bulk=precedence in ("bulk", "list", "junk") or (auto not in ("", "no")),
         alert_state=one(ALERT_STATE_HEADER),
         first_paragraph=first_paragraph(payload),
+        message_id_header=one("message-id").strip(),
+        reply_to=_norm(one("reply-to")),
+        recipients=tuple(
+            a.lower() for _, a in getaddresses([*(headers.get("to") or []), *(headers.get("cc") or [])]) if "@" in a
+        ),
+        text=body_text(payload),
     )
+
+
+def has_draft(thread: dict[str, Any]) -> bool:
+    """Any message in the thread carries Gmail's DRAFT label (his or ours)."""
+    return any("DRAFT" in (m.get("labelIds") or []) for m in thread.get("messages") or [] if isinstance(m, dict))
 
 
 def thread_messages(thread: dict[str, Any]) -> list[Message]:
@@ -270,19 +317,19 @@ def never_clears(subject: str) -> bool:
     return any(phrase in lowered for phrase in NEVER_CLEARS)
 
 
-def _is_ops(m: Message, settings: Settings) -> bool:
+def is_ops(m: Message, settings: Settings) -> bool:
     return m.sender == settings.alert_sender and SMD_OPS_SUBJECT_RE.match(m.subject) is not None
 
 
-def _verified(m: Message, settings: Settings) -> bool:
-    return _is_ops(m, settings) and dkim_pass(m.auth_results, settings.alert_domain)
+def verified(m: Message, settings: Settings) -> bool:
+    return is_ops(m, settings) and dkim_pass(m.auth_results, settings.alert_domain)
 
 
 def settled(messages: list[Message], settings: Settings) -> bool:
     """Rule 1. True only when every condition in the module docstring holds."""
     if not messages:
         return False
-    if any(not _verified(m, settings) or never_clears(m.subject) for m in messages):
+    if any(not verified(m, settings) or never_clears(m.subject) for m in messages):
         return False
     if any(m.sender in settings.owners for m in messages):
         return False
@@ -297,7 +344,7 @@ def settled(messages: list[Message], settings: Settings) -> bool:
     return open_incidents == 0
 
 
-def _is_person(m: Message, settings: Settings) -> bool:
+def is_person(m: Message, settings: Settings) -> bool:
     sender = m.sender
     if "@" not in sender or "SENT" in m.labels:
         return False
@@ -316,7 +363,7 @@ def _is_person(m: Message, settings: Settings) -> bool:
 def waiting_on_owner(messages: list[Message], settings: Settings, now_ms: int) -> Message | None:
     """Rule 2: the newest message from a person, when nothing from his own
     addresses follows it and it is older than ``needs_you_after_hours``."""
-    people = [i for i, m in enumerate(messages) if _is_person(m, settings)]
+    people = [i for i, m in enumerate(messages) if is_person(m, settings)]
     if not people:
         return None
     newest = people[-1]
@@ -339,15 +386,15 @@ def plan(threads: list[dict[str, Any]], settings: Settings, now_ms: int) -> Plan
         if not messages:
             continue
         thread_id = str(thread.get("id") or messages[0].thread_id)
-        if any(_is_ops(m, settings) for m in messages):
+        if any(is_ops(m, settings) for m in messages):
             subject = _clean(messages[0].subject)
-            verified = all(_verified(m, settings) or m.sender in settings.owners for m in messages)
+            verified_all = all(verified(m, settings) or m.sender in settings.owners for m in messages)
             if any(never_clears(m.subject) for m in messages):
-                out.never_clears.append(OpsThread(thread_id, subject, verified))
+                out.never_clears.append(OpsThread(thread_id, subject, verified_all))
             elif settled(messages, settings):
                 out.settled.append(thread_id)
             else:
-                out.open_alerts.append(OpsThread(thread_id, subject, verified))
+                out.open_alerts.append(OpsThread(thread_id, subject, verified_all))
             continue
         person = waiting_on_owner(messages, settings, now_ms)
         if person is not None:
@@ -406,6 +453,16 @@ def _flag(raw: Any, name: str) -> bool:
     raise SettingsError(f"{name} must be true or false")
 
 
+def _text(raw: Any, name: str, limit: int = 200) -> str:
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        raise SettingsError(f"{name} must be text")
+    if len(raw) > limit:
+        raise SettingsError(f"{name} must be at most {limit} characters")
+    return raw.replace("\r\n", "\n").strip()
+
+
 def settings_from(raw: dict[str, Any], *, seat_inbox: str = "") -> Settings:
     """The authored skill settings (scalars, ADR 0075), checked. A missing
     mailbox refuses; everything else has the default named in SKILL.md."""
@@ -433,6 +490,13 @@ def settings_from(raw: dict[str, Any], *, seat_inbox: str = "") -> Settings:
         seat_inbox=_norm(str(raw.get("seat_inbox") or "")) or _norm(seat_inbox),
         timezone=timezone,
         max_pages=int(_number(raw.get("max_pages"), 20, 1, 200, "max_pages")),
+        alert_label=_text(raw.get("alert_label"), "alert_label", 80),
+        classify=_flag(raw.get("classify"), "classify"),
+        classify_model=_text(raw.get("classify_model"), "classify_model", 80),
+        receipts_label=_text(raw.get("receipts_label"), "receipts_label", 80),
+        cost_fence_cents=_number(raw.get("cost_fence_cents"), 0.0, 0, 1000, "cost_fence_cents"),
+        draft_signoff=_text(raw.get("draft_signoff"), "draft_signoff", 200),
+        send_after_hour=int(_number(raw.get("send_after_hour"), 6, 0, 23, "send_after_hour")),
     )
 
 
@@ -446,13 +510,18 @@ __all__ = [
     "Settings",
     "SettingsError",
     "Waiting",
+    "body_text",
     "dkim_pass",
     "first_paragraph",
+    "has_draft",
+    "is_ops",
+    "is_person",
     "never_clears",
     "parse_message",
     "plan",
     "settings_from",
     "settled",
     "thread_messages",
+    "verified",
     "waiting_on_owner",
 ]

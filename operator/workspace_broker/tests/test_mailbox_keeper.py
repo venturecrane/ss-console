@@ -1,10 +1,11 @@
 """The mailbox keeper (mailbox_keeper.py, mailbox_keeper_verbs.py), end to end.
 
 Every test drives the REAL verb through the real verb table on a real
-``Broker`` (built as test_agentmail_send.py builds it): the real
-``WorkspaceOperations`` over a fake Gmail service, and the real ``AgentMailOps``
-over a fake HTTP opener, so the digest goes through the same fenced, audited
-transmit the seat uses. Only the vendors are fake.
+``Broker``: the real ``WorkspaceOperations`` over a fake Gmail service, and the
+real ``AgentMailOps`` over a fake HTTP opener, so the digest goes through the
+same fenced, audited transmit the seat uses. Only the vendors are fake
+(``mailbox_keeper_fakes.py``). The model-reading half is
+``test_mailbox_keeper_classify.py``.
 
 The fixtures are the shapes the plan names, each built the way the real sender
 builds it: the alert and recovery HTML exactly as
@@ -19,130 +20,40 @@ sends nothing.
 
 from __future__ import annotations
 
-import base64
 import json
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import workspace_broker.operations as ops_mod
+import mailbox_keeper_fakes as fk
+from mailbox_keeper_fakes import (
+    ALERT_FROM,
+    GOOD_AUTH,
+    MAILBOX,
+    NO_DKIM,
+    NOW_MS,
+    OWNERS,
+    RECIPIENT,
+    SEAT_INBOX,
+    UUID1,
+    FakeAgentMail,
+    FakeGmail,
+    msg,
+)
 from workspace_broker import mailbox_keeper as mk
-from workspace_broker import mailbox_keeper_verbs as mkv
-from workspace_broker.agentmail_ops import AgentMailOps
-from workspace_broker.operations import WorkspaceOperations
+from workspace_broker import mailbox_keeper_mail as mail
 from workspace_broker.server import Broker
 
-GATEWAY_PID = 42
-AGENT_UID = 1000
-SEAT = "smd-office"
-SEAT_INBOX = "smd-office@agentmail.to"
-MAILBOX = "smdurgan@smdurgan.com"
-OWNERS = "smdurgan@smdurgan.com,scott@smd.services"
-RECIPIENT = "scott@smd.services"
-ALERT_FROM = "SMD Services Ops <team@smd.services>"
-GOOD_AUTH = "mx.google.com; dkim=pass header.i=@smd.services header.s=resend header.b=AbC; spf=pass"
-NO_DKIM = "mx.google.com; dkim=none; spf=softfail smtp.mailfrom=evil.example"
-UUID1 = "11111111-2222-4333-8444-555555555555"
-UUID2 = "66666666-7777-4888-9999-aaaaaaaaaaaa"
-NOW_MS = int(time.time() * 1000)
-HOUR = 3_600_000
-
-SEAT_YAML = f"""
-schema_version: 1
-connectors:
-  Email:
-    adapter: agentmail
-    enabled: true
-    inbox_address: {SEAT_INBOX}
-google_auth:
-  mode: dwd
-  subject: {MAILBOX}
-  scopes: [https://www.googleapis.com/auth/gmail.modify]
-  managed_mailboxes:
-    - address: {MAILBOX}
-      send_as: [scott@smd.services, smdurgan@smdurgan.com]
-scope:
-  inbound_allow_from: [scott@smd.services, smdurgan@smdurgan.com]
-  admins: [scott@smd.services]
-personas:
-  - name: smd-operations
-    skills:
-      - name: mailbox-keeper
-        version: pending
-        initiation: {{manual: false, scheduled: true, webhook: false}}
-        enabled: true
-        settings:
-          mailbox: {MAILBOX}
-          owner_addresses: '{OWNERS}'
-          digest_recipient: {RECIPIENT}
-          needs_you_after_hours: 24
-          window_days: 14
-    cron:
-      - skill: mailbox-keeper
-        schedule: '47 6,12 * * *'
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
-"""
-
-
-# ------------------------------------------------------------------ fixtures
-
-
-def _b64(text: str) -> str:
-    return base64.urlsafe_b64encode(text.encode()).decode().rstrip("=")
-
-
-def _alert_html(happened: str, todo: str, detail: str) -> str:
-    # alertHtml in workers/fleet-alerts/src/alert-words.ts, byte for byte in shape.
-    return (
-        f"<p><strong>WHAT HAPPENED:</strong> {happened}</p>"
-        f"<p><strong>WHAT YOU NEED TO DO:</strong> {todo}</p>"
-        "<hr><p><strong>DETAILS, for the agent who picks this up</strong><br>"
-        f"Seat: ashton-price<br>Condition: heartbeat red<br>Detail: {detail}</p>"
-    )
-
-
-def msg(
-    mid: str,
-    thread: str,
-    age_hours: float,
-    sender: str,
-    subject: str,
-    *,
-    html: str | None = None,
-    text: str | None = None,
-    labels: tuple[str, ...] = ("INBOX",),
-    in_reply_to: str = "",
-    auth: str = GOOD_AUTH,
-    headers: tuple[tuple[str, str], ...] = (),
-) -> dict[str, Any]:
-    hdrs = [
-        {"name": "From", "value": sender},
-        {"name": "Subject", "value": subject},
-        # SES rewrites the alert's own Message-ID on delivery: never keyed on.
-        {"name": "Message-ID", "value": f"<0100{mid}@email.amazonses.com>"},
-        {"name": "Authentication-Results", "value": auth},
-    ]
-    if in_reply_to:
-        hdrs += [{"name": "In-Reply-To", "value": in_reply_to}, {"name": "References", "value": in_reply_to}]
-    hdrs += [{"name": k, "value": v} for k, v in headers]
-    parts = []
-    if text is not None:
-        parts.append({"mimeType": "text/plain", "body": {"data": _b64(text)}})
-    if html is not None:
-        parts.append({"mimeType": "text/html", "body": {"data": _b64(html)}})
-    return {
-        "id": mid,
-        "threadId": thread,
-        "labelIds": list(labels),
-        "internalDate": str(NOW_MS - int(age_hours * HOUR)),
-        "payload": {"mimeType": "multipart/alternative", "headers": hdrs, "parts": parts},
-    }
+GATEWAY_PID = fk.GATEWAY_PID
+SEAT_YAML = fk.seat_yaml(schedule="47 * * * *")
+LABELLED_YAML = fk.seat_yaml("          alert_label: 'SMD Ops'")
+_alert_html = fk.alert_html
+_b64 = fk.b64
 
 
 ALERT_SUBJECT = "[SMD Ops] ashton-price: the Operator may be down"
@@ -204,7 +115,7 @@ def owner_replied_alert() -> dict[str, Any]:
         "o3",
         "t-owner",
         28,
-        "Scott Durgan <scott@smd.services>",
+        f"Scott <{RECIPIENT}>",
         f"Re: {ALERT_SUBJECT}",
         text="On it.",
         labels=("SENT",),
@@ -241,7 +152,7 @@ def replied_thread() -> dict[str, Any]:
         "id": "t-replied",
         "messages": [
             msg("p1", "t-replied", 50, "Pat Client <pat@client.example>", "Question", text="Can you call?"),
-            msg("p2", "t-replied", 49, "Scott <smdurgan@smdurgan.com>", "Re: Question", text="Yes.", labels=("SENT",)),
+            msg("p2", "t-replied", 49, f"Scott <{MAILBOX}>", "Re: Question", text="Yes.", labels=("SENT",)),
         ],
     }
 
@@ -304,126 +215,18 @@ ALL_FIXTURES = [
 OPEN_ALERT_THREADS = {"t-reminder", "t-spoof", "t-lookalike", "t-owner", "t-open", "t-refused", "t-reopen"}
 
 
-# ------------------------------------------------------------------ fakes
+# ------------------------------------------------------------------ the broker
 
 
-class _Call:
-    def __init__(self, fn):
-        self._fn = fn
-
-    def execute(self):
-        return self._fn()
+FakeHTTP = FakeAgentMail
 
 
-class FakeGmail:
-    """The slice of the Gmail v1 client the broker calls, over fixed threads."""
-
-    def __init__(self, threads: list[dict[str, Any]], *, page_size: int = 2, fail_on: str = "") -> None:
-        self.by_id = {t["id"]: t for t in threads}
-        self.page_size = page_size
-        self.fail_on = fail_on
-        self.trashed: list[str] = []
-        self.list_calls: list[dict[str, Any]] = []
-
-    def users(self):
-        return self
-
-    def messages(self):
-        return _Messages(self)
-
-    def threads(self):
-        return _Threads(self)
+def _broker(tmp_path: Path, monkeypatch, gmail: FakeGmail, http: FakeAgentMail, yaml_text: str = SEAT_YAML) -> Broker:
+    return fk.build_broker(tmp_path, monkeypatch, gmail, http, yaml_text)
 
 
-class _Messages:
-    def __init__(self, g: FakeGmail) -> None:
-        self.g = g
-
-    def list(self, **kw):
-        self.g.list_calls.append(kw)
-        if self.g.fail_on == "list":
-            raise OSError("gmail down")
-        ids = [{"id": m["id"], "threadId": t["id"]} for t in self.g.by_id.values() for m in t["messages"]]
-        start = int(kw.get("pageToken") or 0)
-        page = ids[start : start + self.g.page_size]
-        nxt = start + self.g.page_size
-        body: dict[str, Any] = {"messages": page}
-        if nxt < len(ids):
-            body["nextPageToken"] = str(nxt)
-        return _Call(lambda: body)
-
-
-class _Threads:
-    def __init__(self, g: FakeGmail) -> None:
-        self.g = g
-
-    def get(self, *, userId, id, format):
-        if self.g.fail_on == "get":
-            raise OSError("thread read failed")
-        return _Call(lambda: json.loads(json.dumps(self.g.by_id[id])))
-
-    def trash(self, *, userId, id):
-        self.g.trashed.append(id)
-        return _Call(lambda: {"id": id, "messages": self.g.by_id[id]["messages"]})
-
-
-class FakeHTTP:
-    def __init__(self) -> None:
-        self.sends: list[dict[str, Any]] = []
-
-    def __call__(self, request, timeout=None):
-        body = json.loads(request.data.decode()) if request.data else None
-        if "/messages/send" in request.full_url:
-            self.sends.append(body)
-            payload: dict[str, Any] = {"message_id": f"msg_{len(self.sends)}", "thread_id": "th_1"}
-        else:
-            payload = {"inboxes": [{"inbox_id": SEAT_INBOX}]}
-        return _Response(json.dumps(payload))
-
-
-class _Response:
-    def __init__(self, text: str) -> None:
-        self._text = text
-
-    def read(self) -> bytes:
-        return self._text.encode()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_exc) -> bool:
-        return False
-
-
-class RecordingLedger:
-    def __init__(self) -> None:
-        self.rows: list[dict[str, Any]] = []
-
-    def append(self, row: dict[str, Any]) -> str:
-        self.rows.append(row)
-        return f"row-{len(self.rows)}"
-
-
-def _broker(tmp_path: Path, monkeypatch, gmail: FakeGmail, http: FakeHTTP, yaml_text: str = SEAT_YAML) -> Broker:
-    customer = tmp_path / "customer.yaml"
-    customer.write_text(yaml_text)
-    credential = tmp_path / "agentmail.json"
-    credential.write_text("am_test_key")
-    monkeypatch.setattr(ops_mod, "service", lambda *a, **k: gmail)
-    monkeypatch.setenv(mkv.STATE_DIR_ENV, str(tmp_path / "keeper"))
-    broker = Broker.__new__(Broker)
-    broker.customer_slug = SEAT
-    broker.gateway_pid = GATEWAY_PID
-    broker.agent_uid = AGENT_UID
-    broker.ledger = RecordingLedger()
-    broker.customer_path = customer
-    broker.operations = WorkspaceOperations(tmp_path / "google.json", customer)
-    broker.agentmail = AgentMailOps(credential, customer, SEAT, opener=http)
-    return broker
-
-
-def _run(broker: Broker, mode: str = "scheduled", uid: int = AGENT_UID) -> dict[str, Any]:
-    return broker.handle({"action": "mailbox_keeper_run", "mode": mode}, peer_pid=GATEWAY_PID + 7, peer_uid=uid)
+def _run(broker: Broker, mode: str = "scheduled", uid: int = fk.AGENT_UID) -> dict[str, Any]:
+    return fk.run(broker, mode, uid)
 
 
 def _all() -> list[dict[str, Any]]:
@@ -547,7 +350,7 @@ def test_a_failed_read_trashes_and_sends_nothing(tmp_path: Path, monkeypatch) ->
 
 def test_a_full_page_without_a_token_fails_closed(tmp_path: Path, monkeypatch) -> None:
     gmail = FakeGmail(_all(), page_size=10_000)
-    monkeypatch.setattr(mkv, "PAGE_SIZE", 3)  # the fake returns everything with no token
+    monkeypatch.setattr(mail, "PAGE_SIZE", 3)  # the fake returns everything with no token
     http = FakeHTTP()
     out = _run(_broker(tmp_path, monkeypatch, gmail, http), mode="daily")
     assert (out["status"], out["reason"]) == ("read_failed", "full_page_without_token")
@@ -574,25 +377,20 @@ def test_the_daily_list_goes_once_to_the_authored_recipient_only(tmp_path: Path,
     gmail = FakeGmail(_all())
     http = FakeHTTP()
     broker = _broker(tmp_path, monkeypatch, gmail, http)
-    out = _run(broker)  # scheduled: the day's first run sends
-    assert (out["status"], out["mode"]) == ("done", "daily")
+    out = _run(broker)  # scheduled: the day's first run at or after send_after_hour sends
+    assert (out["status"], out["mode"], out["classify"]) == ("done", "daily", "off")
     assert len(http.sends) == 1
     sent = http.sends[0]
     assert sent["to"] == [RECIPIENT]
+    # The person waiting, and the never-clears alert (no recovery email comes for it).
+    assert sent["subject"] == "Mailbox: 2 need you"
     body = sent["text"]
-    # Fixed section order.
-    order = [
-        body.index(h)
-        for h in (
-            "Waiting on a reply from you (1):",
-            "SMD Ops mail left in the inbox: 6 without a recovery, 1 of the kind that never clears.",
-            "Trashed 1 settled alerts.",
-        )
-    ]
+    # Fixed section order: what needs him, then what happened to SMD Ops mail.
+    order = [body.index(h) for h in ("Needs you (2):", "SMD Ops: 1 settled alerts trashed, 4 left in the inbox")]
     assert order == sorted(order)
     assert "dana@prospect.example" in body and "pat@client.example" not in body
     assert "news@vendor.example" not in body and SEAT_INBOX not in body
-    # Counted, never listed: no SMD Ops subject reaches the list.
+    # No alert_label authored: SMD Ops mail stays in the inbox and is not listed.
     assert "[SMD Ops]" not in body
     # The send is the audited transmit: intent + dispatched rows, on the skill lane.
     types = [r["action_type"] for r in broker.ledger.rows]
@@ -600,9 +398,9 @@ def test_the_daily_list_goes_once_to_the_authored_recipient_only(tmp_path: Path,
     dispatched = next(r for r in broker.ledger.rows if r["action_type"] == "CONFIRM_SEND_DISPATCHED")
     assert dispatched["skill_name"] == "mailbox-keeper"
     assert json.loads(dispatched["metadata"])["lane"] == "skill:mailbox-keeper"
-    # A second scheduled run the same day only trashes.
+    # A second scheduled run the same day is the hourly pass only.
     again = _run(broker)
-    assert (again["status"], again["mode"]) == ("done", "midday")
+    assert (again["status"], again["mode"]) == ("done", "hourly")
     assert len(http.sends) == 1
     # Listed once: a forced daily the same day is refused as already sent.
     assert _run(broker, mode="daily")["status"] == "already_sent_today"
@@ -616,19 +414,33 @@ def test_already_listed_items_are_not_listed_again(tmp_path: Path, monkeypatch) 
     state = json.loads((tmp_path / "keeper" / "listed.json").read_text())
     state["digest_sent_on"] = "2000-01-01"  # a new day
     (tmp_path / "keeper" / "listed.json").write_text(json.dumps(state))
+    http.sends.clear()  # the AgentMail listing holds today's first list; a new day would not
     assert _run(broker)["status"] == "done"
-    assert http.sends[1]["text"] == "Nothing waiting on you. Trashed 0 settled alerts."
-    assert http.sends[1]["subject"] == "Mailbox: nothing waiting on you"
+    assert http.sends[0]["subject"] == "Mailbox: nothing needs you"
+    assert http.sends[0]["text"].startswith("Nothing needs you.\n\nStill open from earlier: 1.\n")
 
 
-def test_midday_trashes_only(tmp_path: Path, monkeypatch) -> None:
+def test_hourly_trashes_and_labels_only(tmp_path: Path, monkeypatch) -> None:
     gmail = FakeGmail(_all())
     http = FakeHTTP()
-    out = _run(_broker(tmp_path, monkeypatch, gmail, http), mode="midday")
+    out = _run(_broker(tmp_path, monkeypatch, gmail, http, LABELLED_YAML), mode="hourly")
     assert out["status"] == "done" and out["counts"]["trashed"] == 1
     assert gmail.trashed == ["t-settled"] and http.sends == []
     log = (tmp_path / "keeper" / "trashed.jsonl").read_text().splitlines()
     assert [json.loads(line)["thread_id"] for line in log] == ["t-settled"]
+    # Verified alerts leave the inbox under the label; the spoofed, the
+    # lookalike and the one he replied in stay.
+    assert {
+        t for t in gmail.by_id if t not in gmail.trashed and not gmail.inbox(t) and "SMD Ops" in gmail.label_names(t)
+    } == {
+        "t-reminder",
+        "t-open",
+        "t-refused",
+        "t-reopen",
+    }
+    assert all(gmail.inbox(t) for t in ("t-spoof", "t-lookalike", "t-owner", "t-wait", "t-news"))
+    # The hourly read asks only for SMD Ops mail.
+    assert all("from:team@smd.services" in c["q"] for c in gmail.list_calls)
 
 
 def test_an_unlisted_skill_does_nothing(tmp_path: Path, monkeypatch) -> None:
@@ -656,7 +468,9 @@ def test_a_recipient_off_the_seat_surface_is_refused_by_the_transmit(tmp_path: P
     out = _run(broker, mode="daily")
     assert out["status"] == "digest_failed"
     assert http.sends == []
-    assert not (tmp_path / "keeper" / "listed.json").exists()
+    # The SMD Ops record is written before anything leaves the inbox; the day's
+    # list is not marked sent.
+    assert json.loads((tmp_path / "keeper" / "listed.json").read_text())["digest_sent_on"] == ""
 
 
 def test_the_gateway_pid_alone_is_not_enough(tmp_path: Path, monkeypatch) -> None:
@@ -704,9 +518,9 @@ def test_no_reply_anywhere_in_the_local_part_is_automated_and_watch_senders_over
     # 2026-11-15 smd-office dry run: anchored matching listed these as people.
     s = mk.settings_from({"mailbox": "me@example.com", "watch_senders": "@taxoffice.example"})
     for addr in ("microsoft-noreply@microsoft.com", "donotreplytpt9@other.gov", "billing-no-reply@x.example"):
-        assert not mk._is_person(_person_msg(addr), s), addr
-    assert mk._is_person(_person_msg("donotreplytpt1@taxoffice.example"), s)
-    assert mk._is_person(_person_msg("dana@prospect.example"), s)
+        assert not mk.is_person(_person_msg(addr), s), addr
+    assert mk.is_person(_person_msg("donotreplytpt1@taxoffice.example"), s)
+    assert mk.is_person(_person_msg("dana@prospect.example"), s)
 
 
 def _person_msg(addr: str) -> mk.Message:

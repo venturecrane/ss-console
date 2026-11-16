@@ -305,14 +305,16 @@ skills:
   mailbox-keeper:
     render: compositional
     note: >-
-      The once-a-day list to the authored digest_recipient. No model composes
-      it: the broker renders it in code (mailbox_keeper_verbs.py
-      render_digest) and sends it through the audited transmit with
-      skill_name mailbox-keeper. Declared compositional because there is no
+      The once-a-day list to the authored digest_recipient. The broker renders
+      it in code (mailbox_keeper_digest.py render) and sends it through the
+      audited transmit with skill_name mailbox-keeper. With classify set, a
+      model reads each remaining thread broker-side (mailbox_keeper_model.py,
+      no tools) and the list carries that model's validated, figure-checked
+      "what" and "recommend" lines per decision; the sections, their order and
+      every other line are code. Declared compositional because there is no
       turn and no pre_run dispatch, so no EMITTED_WAKE body stamp exists for a
-      hash to be checked against; a templated declaration would grade every
-      list as "templated send with no wake hash". The cross-run invariants
-      (one recipient) apply.
+      hash to be checked against, and because part of the body is a model's
+      words. The cross-run invariants (one recipient) apply.
 
   # ---- smd-guide cron rows ----
   rep-desk:

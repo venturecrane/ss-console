@@ -163,10 +163,12 @@ const EXPECTED_VERBS = [
   'litigation_job_resume',
   'litigation_job_status',
   'litigation_job_submit',
-  // The mailbox keeper (mailbox_keeper_verbs.py, 2026-11-13): trashes settled
-  // SMD Ops alert threads and sends the one daily list to the authored
-  // digest_recipient, all decided in code. Agent uid (the cron pre_run) or root
-  // (the $0 dry-run rehearsal); the caller names only the mode.
+  // The mailbox keeper (mailbox_keeper_verbs.py, 2026-11-13; decisions
+  // 2026-11-16): files SMD Ops mail, has a no-tools model read the rest when the
+  // seat authors classify, and sends the one daily list to the authored
+  // digest_recipient. Agent uid (the cron pre_run, or the dry-run rehearsal
+  // through seat-probe) or root; the caller names the mode and nothing else
+  // but whether the cost breaker allows model spend.
   'mailbox_keeper_run',
   // ss#2614 routine 11: the chronology-package job seam. Bodies live in
   // operator/workspace_broker/medchron_verbs.py; the table declares the

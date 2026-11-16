@@ -56,7 +56,7 @@ from urllib.parse import quote
 # parsing, the body is capped at 2 MB, and expat resolves no external entities.
 from xml.etree import ElementTree  # nosemgrep: python.lang.security.use-defused-xml.use-defused-xml
 
-from shared import safe_fetch
+from shared import model_call, safe_fetch
 from shared.reader_items import (
     MAX_DATE_CHARS,
     MAX_ITEMS,
@@ -80,14 +80,12 @@ logger = logging.getLogger(__name__)
 TOOL_NAME = "web_research"
 
 MODEL = "claude-haiku-5-5"
-ANTHROPIC_HOST = "api.anthropic.com"
-ANTHROPIC_PATH = "/v1/messages"
-ANTHROPIC_VERSION = "2023-06-01"
+ANTHROPIC_HOST = model_call.API_HOST
 BRAVE_HOST = "api.search.brave.com"
 BRAVE_PATH = "/res/v1/web/search"
 YOUTUBE_FEED_HOST = "www.youtube.com"
 BRAVE_KEY_ENV = "BRAVE_SEARCH_API_KEY"
-ANTHROPIC_KEY_ENV = "ANTHROPIC_API_KEY"
+ANTHROPIC_KEY_ENV = model_call.KEY_ENV
 
 MODE_WEB = "web"
 MODE_YOUTUBE = "youtube_channel"
@@ -269,47 +267,33 @@ def call_model(request: dict[str, Any], deadline: float) -> dict[str, Any]:
     key = (os.environ.get(ANTHROPIC_KEY_ENV) or "").strip()
     if not key:
         raise ReaderError("web research is not configured on this seat (no model key)")
-    return safe_fetch._json_request(
-        ANTHROPIC_HOST,
-        "POST",
-        ANTHROPIC_PATH,
-        {
-            "content-type": "application/json",
-            "anthropic-version": ANTHROPIC_VERSION,
-            "x-api-key": key,
-        },
-        json.dumps(request).encode("utf-8"),
-        deadline,
-    )
+    # The one no-tools client (shared/model_call.py), over safe_fetch's own
+    # transport, looked up per call so its address checks and deadline stand.
+    return model_call.call(request, key=key, deadline=deadline, post=_post)
+
+
+def _post(host: str, method: str, path: str, headers: dict, body: bytes, deadline: float) -> Any:
+    return safe_fetch._json_request(host, method, path, headers, body, deadline)
 
 
 def _pricing() -> dict[str, Any]:
-    path = Path(__file__).with_name("anthropic_pricing.json")
-    return json.loads(path.read_text()).get("models", {})
+    return model_call.pricing_table()
 
 
 def cost_cents(response: dict[str, Any]) -> int:
     """Cents for one response, from the overlay's pricing table (rounded up)."""
     usage = (response or {}).get("usage") or {}
-    in_tok = int(usage.get("input_tokens") or 0)
-    out_tok = int(usage.get("output_tokens") or 0)
+    if not (usage.get("input_tokens") or usage.get("output_tokens")):
+        return 0
     rates = _pricing().get(MODEL) or {
         "input_per_million_cents": 1500,
         "output_per_million_cents": 7500,
     }
-    cents = (
-        in_tok * float(rates["input_per_million_cents"])
-        + out_tok * float(rates["output_per_million_cents"])
-    ) / 1_000_000
-    return max(1, math.ceil(cents)) if (in_tok or out_tok) else 0
+    return max(1, math.ceil(model_call.usage_cents(response, rates)))
 
 
 def _response_text(response: dict[str, Any]) -> str:
-    parts = []
-    for block in (response or {}).get("content") or []:
-        if isinstance(block, dict) and block.get("type") == "text":
-            parts.append(str(block.get("text") or ""))
-    return "".join(parts)
+    return model_call.response_text(response)
 
 
 def _parse_items(text: str) -> list[Any]:

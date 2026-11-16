@@ -89,7 +89,7 @@ export const SKILL_SUMMARIES: Record<string, string> = {
   'litigation-status':
     'Builds a status list of your open litigation cases when an administrator asks: filing, service, answers, court dates and discovery, each date citing its document. Filed in your firm library.',
   'mailbox-keeper':
-    'Keeps one mailbox on a schedule: moves settled SMD Ops alert threads to Trash and emails one daily list of the people waiting on a reply. Never reads a message in a turn, replies or drafts.',
+    'Keeps one mailbox on a schedule: files alert mail out of the inbox and emails one daily list of what needs you, each with a recommendation and, when needed, a draft reply. Never sends a reply.',
   'memory-journal':
     'Keeps a dated journal of moments you want to remember, in your words. Photos stay in your chat.',
   'matter-document-review':

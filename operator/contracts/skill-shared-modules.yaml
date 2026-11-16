@@ -180,3 +180,11 @@ modules:
       - operator/workspace_broker/broker_socket.py
       - operator/runners/jobs/jobs/broker_socket.py
       - operator/connectors/smokeball/smokeball_connector/broker_socket.py
+
+  # The one no-tools Anthropic Messages client (2026-11-16): the sealed web
+  # reader in the gateway and the mailbox keeper's classifier in the broker
+  # make the same call with a key passed in.
+  model_call:
+    source: operator/hermes-smd-overlay/shared/model_call.py
+    copies:
+      - operator/workspace_broker/model_call.py

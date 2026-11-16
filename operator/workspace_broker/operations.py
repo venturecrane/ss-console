@@ -47,6 +47,15 @@ class WorkspaceOperations:
         if from_addr not in send_as.get(effective, set()):
             raise RuntimeError(f"from {from_addr!r} is not an authored send-as for {effective!r}")
 
+    def is_send_as(self, mailbox: str, address: str) -> bool:
+        """``address`` is an authored send-as for ``mailbox`` (the check
+        ``_validate_from`` enforces), as a yes or no."""
+        try:
+            self._validate_from(mailbox, address)
+        except Exception:  # noqa: BLE001 - an unreadable or unauthored identity is a no
+            return False
+        return bool(address)
+
     def _handlers(self) -> dict[str, Operation]:
         return {
             "workspace_gmail_search": self.gmail_search,
@@ -133,6 +142,44 @@ class WorkspaceOperations:
         messages = result.get("messages") if isinstance(result, dict) else None
         return {"thread_id": thread_id, "trashed": True, "messages": len(messages or [])}
 
+    def gmail_label_ensure(self, payload: dict[str, Any]) -> str:
+        """The id of the user label ``name``, created when absent (labels.list,
+        then labels.create). Not in ``_handlers``: the mailbox keeper files
+        threads broker-side. Raises on any failure, so no caller files a thread
+        under a label that could not be found or made."""
+        name = str(payload.get("name") or "").strip()
+        if not name:
+            raise ValueError("gmail_label_ensure requires a name")
+        labels = self._service("gmail", "v1", str(payload.get("mailbox") or "")).users().labels()
+        listed = labels.list(userId="me").execute()
+        for label in (listed or {}).get("labels") or []:
+            if isinstance(label, dict) and str(label.get("name") or "").lower() == name.lower() and label.get("id"):
+                return str(label["id"])
+        body = {"name": name, "labelListVisibility": "labelShow", "messageListVisibility": "show"}
+        created = labels.create(userId="me", body=body).execute()
+        found = (created or {}).get("id")
+        if not found:
+            raise RuntimeError("gmail_label_ensure: Gmail returned no label id")
+        return str(found)
+
+    def gmail_modify_thread(self, payload: dict[str, Any]) -> Any:
+        """Add and remove labels on a whole thread (``threads.modify``). Not in
+        ``_handlers``: the mailbox keeper files threads broker-side."""
+        thread_id = str(payload.get("thread_id") or "").strip()
+        if not thread_id:
+            raise ValueError("gmail_modify_thread requires a thread_id")
+        body = {
+            "addLabelIds": [str(x) for x in payload.get("add_label_ids") or []],
+            "removeLabelIds": [str(x) for x in payload.get("remove_label_ids") or []],
+        }
+        return (
+            self._service("gmail", "v1", str(payload.get("mailbox") or ""))
+            .users()
+            .threads()
+            .modify(userId="me", id=thread_id, body=body)
+            .execute()
+        )
+
     def gmail_get(self, payload: dict[str, Any]) -> Any:
         return (
             self._service("gmail", "v1", str(payload.get("mailbox") or ""))
@@ -151,6 +198,12 @@ class WorkspaceOperations:
         if from_addr:
             message["From"] = from_addr
         message["Subject"] = str(payload["subject"])
+        # Threading headers (2026-11-16, the mailbox keeper's reply drafts): a
+        # draft that names the message it answers lands in that conversation in
+        # the recipient's client too, not only in this mailbox's thread.
+        for header, key in (("In-Reply-To", "in_reply_to"), ("References", "references")):
+            if payload.get(key):
+                message[header] = str(payload[key])
         message.set_content(str(payload["body"]))
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
         body: dict[str, Any] = {"message": {"raw": raw}}

@@ -277,6 +277,17 @@ def check_machine(rep: Report, app: str, no_seat: bool) -> None:
         "a machine reporting started when it is not (or vice versa)",
         blocker=False,
     )
+    # One machine per seat (2026-11-16: a second machine back from a host failure
+    # sent the office seat's morning list twice). A deploy replacing the machine
+    # runs two for a moment, so read this after a release has settled.
+    count = states.count("started")
+    rep.add(
+        "machine",
+        "one machine started",
+        PASS if count <= 1 else FAIL,
+        f"{count} started",
+        "two started machines, each running every schedule",
+    )
 
 
 # ------------------------------------------------------------------- routines

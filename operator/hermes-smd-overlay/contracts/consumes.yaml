@@ -123,9 +123,14 @@ vars:
     discovery: indirect
     stage: agent
     requirement: optional
-    consumed_by: [mcp_registry]
+    consumed_by: [mcp_registry, model_call-materializer]
     note: >-
-      ss-console#2464. NEW EGRESS, optional: with a key staged, the smokeball
+      2026-11-16: also read, once at boot and as root, by
+      shared/model_call.py materialize_credential (KEY_ENV), which writes it
+      with the pricing table to the workspace broker's 0600 model.json for the
+      mailbox keeper's classify step on a seat that authors it
+      (operator/templates/entrypoint-mailbox-keeper.sh). No agent-uid process
+      reads that file. ss-console#2464. NEW EGRESS, optional: with a key staged, the smokeball
       connector subprocess makes outbound HTTPS calls to the Anthropic Messages
       API to transcribe scanned documents that carry no text layer. The call is
       READ-classified — it sends document bytes already fetched from Smokeball
@@ -207,7 +212,7 @@ vars:
     discovery: static
     stage: agent
     requirement: optional
-    consumed_by: [job-worker, webhook-gate]
+    consumed_by: [job-worker, webhook-gate, mailbox-keeper-pre-run]
     note: "test/dev override for the Machine-local sticky_stop state file; defaults to /opt/data/smd/sticky_stop.db (shared/cost_breaker.py). The job worker writes it (record_cost_cents ladder, agent uid); the gate and heartbeat read it read-only (HARD_STOP park + sticky_stop_level field)."
   # ---- ss-console #2003 Q7: the entitlement dial (runtime exposure overrides) ----
   SMD_EXPOSURE_OVERRIDE_DB_PATH:
