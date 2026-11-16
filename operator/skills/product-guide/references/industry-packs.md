@@ -13,6 +13,7 @@ This document says, for each industry SMD has mapped, what the Operator takes on
 
 ## Law firm
 
+- In depth: [law-firms-and-personal-injury.md](law-firms-and-personal-injury.md).
 - What it takes on: for a personal injury practice, it carries a case from records to settlement. It reads medical records into cited chronologies, builds the billing picture, writes first drafts for the attorneys, and tracks settled cases to payout.
 - The line: the lawyer's work stays the lawyer's. The judgment stays with the attorneys: what a case is worth, the strategy, the call on a matter, and what gets signed. The firm sets the lines it works within, such as anything bound for opposing counsel or the court. Trust balances are read, never moved.
 
@@ -74,5 +75,5 @@ This document says, for each industry SMD has mapped, what the Operator takes on
 
 ## Real estate
 
-- What it takes on: a starting preset for open-house visitor capture, run on a seat SMD pays for. A real estate seat is shaped with the client the same way as every other pack.
+- What it takes on: a starting preset for open-house visitor capture. A real estate seat is shaped with the client the same way as every other pack. [real-estate-brokerages.md](real-estate-brokerages.md) covers brokerages in depth.
 - The line: the same rule as every industry, above.

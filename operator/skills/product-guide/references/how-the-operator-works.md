@@ -131,7 +131,7 @@ View 5, queued jobs. Big jobs run as queued work, with proof at both ends. Work 
 
 A queued job is in one of five main states: queued, running, delivered, held (stopped at a failed stage, before anything is filed) or failed (ended without a proven delivery). Two other final states exist: stopped by SMD, and observed.
 
-- **Proof before first use.** A kind of job never run for this client does not run on a real request. It waits while SMD runs it on that client's own data, stopped before anything is written, and a person at SMD accepts the result.
+- **Proof before first use.** A kind of job never run for this client does not run on a real request. It waits while SMD runs it on that client's own data, stopped before anything is written, and it is accepted for that client only when that run passes its checks and review.
 - **Cost has a limit.** A per-job cost limit and a monthly cost limit are checked before every paid step. Over the limit, the job holds and SMD is paged.
 - **Delivery is proven, not assumed.** A queued job counts as delivered only when the delivered file has been fetched from the client's system of record and matches what was built.
 - **If the reply does not go out,** SMD is paged after 20 minutes.
@@ -232,7 +232,7 @@ Pricing is set per engagement and is not covered here.
 
 Explainer view: #edges
 
-A technical buyer will test these. Describe each as a capability of the Operator. When the buyer asks what is live today, say which of these a client is running.
+Each of these is a capability of the Operator. They are grouped by where each stands for clients today.
 
 ### Running for a client today
 

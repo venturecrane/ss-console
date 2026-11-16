@@ -25,3 +25,9 @@ entries:
       - The guide describes the Operator by what SMD sets up for a client, and labels each job as running for a client today; built, set up per client; or configured per engagement.
       - When the product library changes, the guide emails you a short note like this one saying what we now say.
     library_sha256: 0862188fd28e807906da4914e10edc5346241d97ece6bfe14586db669b3755d9
+  - id: 2
+    lines:
+      - The library now covers real estate brokerages in depth, with how a brokerage works, where its coordinators' time goes, what the Operator takes on for the brokerage, its agents and their clients, the line it holds on MLS data and fair housing, and questions to explore.
+      - The library now covers law firms and personal injury practices in depth, from records and the chronology through deadlines, drafts and settled cases, with the line that keeps the lawyer's work the lawyer's.
+      - A new document, making the case, answers the questions an owner asks before saying yes, covering risk, control, what the people affected see, how a pilot is shaped and how it is stopped, each with where the library says it.
+    library_sha256: 58c55f6eaf1465130f885aa1e9893692fa24df41119c900e0a950c6dbb376376

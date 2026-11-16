@@ -12,7 +12,7 @@ Where a document says how a capability stands for clients today, it uses one of 
 - **Built, set up per client**: built, and switched on for a client when the engagement calls for it.
 - **Configured per engagement**: SMD sets it up, and builds what it needs, when a client's engagement calls for it.
 
-Use a label when a person asks what is live, what a client has today, or what SMD would set up, or when it changes what to promise about timing. A label never means the Operator cannot do it.
+A label answers what is live, what a client has today, or what SMD would set up. A label never means the Operator cannot do it.
 
 ## Definition
 
@@ -36,7 +36,7 @@ Work that has many steps or costs real effort runs as a queued job, not as a cha
 
 SMD provisions the seat, releases updates to it, monitors it, and changes it as a managed service. The client directs the work. Where the agreement allows, the client can also move how much the Operator does on its own and can pause it. The client does this from the Client portal, which never shows the client's business data.
 
-Commercially, the Operator is positioned as an alternative to the next hire. The client's existing systems are things it connects to, not things it replaces.
+The Operator is an alternative to the next hire. The client's existing systems are things it connects to, not things it replaces.
 
 ## A guide, not a vendor
 
@@ -60,7 +60,7 @@ SMD also offers a self-serve Operator for one person: an always-on personal agen
 
 ## Industry packs
 
-An industry pack is a starting point for a client in a particular industry. It is used for onboarding and for selling. It is not a separate product, and nothing in the running seat behaves differently because of the pack's label. Every seat is still authored for its own client.
+An industry pack is a starting point for a client in a particular industry. It is used as a head start for onboarding. It is not a separate product, and nothing in the running seat behaves differently because of the pack's label. Every seat is still authored for its own client.
 
 ### What a pack holds
 
@@ -93,7 +93,7 @@ There are 13 industry packs: accounting, dental, home services, insurance, law f
 | Pack             | Where it stands for clients today                                                                                                                |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Law firm         | Running for a client today                                                                                                                       |
-| Real estate      | Built, set up per client: a starting preset, run on a seat SMD pays for                                                                          |
+| Real estate      | Built, set up per client: a starting preset                                                                                                      |
 | The other eleven | Configured per engagement. Each pack lists its skills and shares the general ones; SMD builds its industry-specific skills with the first client |
 
 ## A seat at work: one example

@@ -29,7 +29,7 @@ SMD's console reads each seat through one narrow, read-only channel. Its rules:
 
 ## What SMD can see beyond the console
 
-Stated plainly, so representatives do not overclaim:
+Stated plainly:
 
 - **Request notices.** When someone asks the Operator for something, SMD's operations mailbox receives a request notice that carries the requester's words and the Operator's reply. This is how SMD watches that every request is answered.
 - **Per-client ops workspace.** When a client's documents need work beyond the seat, SMD's agents do it in that client's ops workspace, which is sealed to that client's seat. Work there is kept for up to 30 days before it is deleted. No person at SMD reads client files, and SMD does not warehouse copies of them.
@@ -75,4 +75,4 @@ The record is cryptographically chained and verified every day, and the agent ca
 - Provisioning prefers a separate provider credential per seat.
 - Some seats also use a speech-to-text processor and a web-search processor.
 - SMD holds no SOC 2 or ISO 27001 certification of its own.
-- No provider retention period, zero-retention arrangement or processing region is documented. Representatives should not claim one.
+- No provider retention period, zero-retention arrangement or processing region is documented, so none is claimed.

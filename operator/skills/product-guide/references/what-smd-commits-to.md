@@ -7,7 +7,7 @@ This document summarises, in plain words, the standard commitments SMD Services 
 - These are the standard terms. Each client's signed agreement governs, and an engagement can differ from the standard where both sides agree in writing.
 - Where a notice period or a window is given, it is what the standard agreement states. It is not a promise about how fast any piece of work will be delivered.
 - Pricing is set per engagement and is not covered here. Fees, payment terms, liability cap amounts and insurance limits are set in each signed agreement and are not part of this library.
-- This is a summary, not legal advice. A prospect's own counsel should read the agreement itself.
+- This is a summary, not legal advice. A client's own counsel should read the agreement itself.
 
 ## What the service is
 

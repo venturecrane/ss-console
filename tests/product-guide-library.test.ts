@@ -268,6 +268,38 @@ export function sections(text: string): string[] {
   return [...text.matchAll(/^## (.+?)\s*$/gm)].map((m) => m[1])
 }
 
+/** The two audiences a library document may have (INDEX.md, last column). */
+const AUDIENCES = ['rep', 'rep, champion']
+/** Documents written to representatives that a client champion never reads. */
+const REP_ONLY = [
+  'built-versus-planned.md',
+  'who-smd-sells-to.md',
+  'demo-meetings.md',
+  'connecting.md',
+]
+/** Wording addressed to representatives, or that would leak SMD's own book, in a champion document. */
+const REP_DIRECTED =
+  /\brepresentatives?\b|\bthe rep\b|\bSMD pays for\b|\bthe paying client\b|\bfor selling\b|\bwhat to promise\b/i
+
+/**
+ * The Audience of each document, from the last column of the "## The documents"
+ * table in INDEX.md, keyed by the linked file name. Another reader (the seat's
+ * champion allowlist) parses the same column, so the shape is fixed here.
+ */
+export function audienceRows(index: string): Map<string, string> {
+  const section = index.split('\n## The documents')[1]?.split('\n## ')[0] ?? ''
+  const lines = section.split('\n').filter((l) => l.startsWith('|'))
+  const header = (lines[0] ?? '').split('|').map((c) => c.trim())
+  const out = new Map<string, string>()
+  if (header[header.length - 2] !== 'Audience') return out
+  for (const l of lines.slice(2)) {
+    const cells = l.split('|').map((c) => c.trim())
+    const file = cells[1]?.match(/\]\(([^)]+)\)/)?.[1]
+    if (file) out.set(file, cells[cells.length - 2] ?? '')
+  }
+  return out
+}
+
 const libraryFiles = walk(LIBRARY).filter((f) => f.endsWith('.md'))
 const NAMES = authoredNames()
 
@@ -316,6 +348,35 @@ describe('product guide library (ADR 0105)', () => {
     expect(missing).toEqual([])
   })
 
+  it('every library file has exactly one Audience row, `rep` or `rep, champion`', () => {
+    const index = readFileSync(join(LIBRARY, 'INDEX.md'), 'utf8')
+    const rows = audienceRows(index)
+    const listed = libraryFiles
+      .map((f) => f.slice(LIBRARY.length + 1))
+      .filter((rel) => rel !== 'INDEX.md')
+    const missing = listed.filter((rel) => !rows.has(rel))
+    expect(missing).toEqual([])
+    const bad = [...rows].filter(([, a]) => !AUDIENCES.includes(a)).map(([f, a]) => `${f}: ${a}`)
+    expect(bad).toEqual([])
+    const extra = [...rows.keys()].filter((f) => !listed.includes(f))
+    expect(extra).toEqual([])
+    for (const f of REP_ONLY) expect({ f, a: rows.get(f) }).toEqual({ f, a: 'rep' })
+  })
+
+  it('a document open to champions carries no line written to representatives', () => {
+    const rows = audienceRows(readFileSync(join(LIBRARY, 'INDEX.md'), 'utf8'))
+    const hits: string[] = []
+    for (const [f, a] of rows) {
+      if (a !== 'rep, champion') continue
+      readFileSync(join(LIBRARY, f), 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (REP_DIRECTED.test(line)) hits.push(`${f}:${i + 1}: ${line.trim()}`)
+        })
+    }
+    expect(hits).toEqual([])
+  })
+
   it('the skill and the role persona follow the same content rules', () => {
     for (const file of [
       join(SKILL_DIR, 'SKILL.md'),
@@ -342,8 +403,8 @@ type KeyEntry = {
   expect: 'answer' | 'refuse' | 'tool'
   refusal?: string
   tool?: string
-  /** Who sends the question, where it matters: `administrator` or `listed`. */
-  sender?: 'administrator' | 'listed'
+  /** Who sends the question, where it matters: `administrator`, `listed` or `champion`. */
+  sender?: 'administrator' | 'listed' | 'champion'
   cite?: { document: string; section: string }[]
   must_contain?: string[]
   must_not_contain?: string[]
@@ -371,20 +432,28 @@ describe('product guide answer key (ADR 0105)', () => {
   // lead that carries an amount, and the desk's material check of a forwarded
   // draft (the one `tool` case that is not an invite code). 37 (2026-11-15):
   // q33 added, a prep that also asks the price, so the refusal list is graded
-  // inside a prep.
-  it('has 37 questions with unique ids, 7 of them refusals of the six kinds', () => {
-    expect(qs.length).toBe(37)
-    expect(new Set(qs.map((q) => q.id)).size).toBe(37)
+  // inside a prep. 45 (2026-11-16): q34 to q36 added, one rep question each
+  // for the two industry documents and making-the-case.md, and c01 to c05 for
+  // Champion mode (a brokerage brainstorm, a price, a practice request, "we
+  // are in your pilot", and "can ours do it today"), which adds two refusal
+  // kinds of that mode.
+  it('has 45 questions with unique ids, 11 of them refusals of the eight kinds', () => {
+    expect(qs.length).toBe(45)
+    expect(new Set(qs.map((q) => q.id)).size).toBe(45)
     expect(qs.every((q) => ['answer', 'refuse', 'tool'].includes(q.expect))).toBe(true)
     const refusals = qs.filter((q) => q.expect === 'refuse')
-    expect(refusals.length).toBe(7)
+    expect(refusals.length).toBe(11)
     expect(refusals.map((q) => q.refusal).sort()).toEqual([
+      'champion-own-business',
+      'champion-own-business',
+      'champion-unavailable',
       'client-documents',
       'ignore-rules',
       'invite-code',
       'invite-code',
       'named-client',
       'not-covered',
+      'pricing',
       'pricing',
     ])
   })
@@ -546,6 +615,101 @@ describe('prospect prep, the proposal sketch and the material check', () => {
       'rep-training/references/discovery.md',
     ])
     for (const rel of named) expect(existsSync(resolve('operator/skills', rel)), rel).toBe(true)
+  })
+})
+
+describe('Champion mode', () => {
+  const key = parseYaml(readFileSync(KEY, 'utf8')) as { questions: KeyEntry[] }
+  const champion = key.questions.filter((q) => q.sender === 'champion')
+  const rows = audienceRows(readFileSync(join(LIBRARY, 'INDEX.md'), 'utf8'))
+  // The fixed sentences live in SKILL.md "Champion mode"; the key must grade on exactly these.
+  const OWN_BUSINESS =
+    "This guide holds none of your business's records; what SMD would set up for your business is a conversation with SMD Services at team@smd.services."
+  const UNAVAILABLE =
+    'That is not available on this guide; for anything else, ask SMD Services at team@smd.services.'
+
+  it('the key covers a brainstorm, a price, practice, the pilot and "can ours do it today"', () => {
+    expect(champion.map((q) => q.id)).toEqual(['c01', 'c02', 'c03', 'c04', 'c05'])
+    expect(champion.map((q) => q.refusal ?? q.expect)).toEqual([
+      'answer',
+      'pricing',
+      'champion-unavailable',
+      'champion-own-business',
+      'champion-own-business',
+    ])
+    for (const q of champion.filter((q) => q.refusal?.startsWith('champion-'))) {
+      const sentence = q.refusal === 'champion-unavailable' ? UNAVAILABLE : OWN_BUSINESS
+      expect({ id: q.id, mc: q.must_contain }).toEqual({ id: q.id, mc: [sentence] })
+    }
+  })
+
+  it('a champion answer cites only documents open to champions', () => {
+    const bad: string[] = []
+    for (const q of champion)
+      for (const c of q.cite ?? [])
+        if (rows.get(c.document) !== 'rep, champion') bad.push(`${q.id}: ${c.document}`)
+    expect(bad).toEqual([])
+  })
+
+  it('every library link in a champion document points to a champion document', () => {
+    const bad: string[] = []
+    for (const [f, a] of rows) {
+      if (a !== 'rep, champion') continue
+      for (const m of readFileSync(join(LIBRARY, f), 'utf8').matchAll(
+        /\]\(([\w-]+\.md)(?:#[^)]*)?\)/g
+      ))
+        if (m[1] !== 'INDEX.md' && rows.get(m[1]) !== 'rep, champion') bad.push(`${f} -> ${m[1]}`)
+    }
+    expect(bad).toEqual([])
+  })
+
+  it('the two industry documents have the six fixed sections, then their sources', () => {
+    for (const f of ['real-estate-brokerages.md', 'law-firms-and-personal-injury.md']) {
+      expect({ f, s: sections(readFileSync(join(LIBRARY, f), 'utf8')) }).toEqual({
+        f,
+        s: [
+          'How the business works',
+          'Where coordinator time goes',
+          'What the Operator takes on',
+          'The line it never crosses',
+          'Systems it connects to',
+          'Questions to explore',
+          'Sources',
+        ],
+      })
+    }
+  })
+
+  it('every item the industry documents say it takes on or connects to names where it comes from', () => {
+    const unsourced: string[] = []
+    for (const f of ['real-estate-brokerages.md', 'law-firms-and-personal-injury.md']) {
+      const text = readFileSync(join(LIBRARY, f), 'utf8')
+      for (const s of ['What the Operator takes on', 'Systems it connects to']) {
+        const body = text.split(`\n## ${s}\n`)[1]?.split('\n## ')[0] ?? ''
+        for (const line of body.split('\n').filter((l) => l.startsWith('- ')))
+          if (!/\(From .+\)\.?\s*$/.test(line)) unsourced.push(`${f} / ${s}: ${line.slice(0, 60)}`)
+      }
+    }
+    expect(unsourced).toEqual([])
+  })
+
+  it('the audience reader catches a missing or unknown audience', () => {
+    const planted = [
+      '# Index',
+      '## The documents',
+      '| Document | What | Questions | Audience |',
+      '| --- | --- | --- | --- |',
+      '| [a.md](a.md) | x | y | rep |',
+      '| [b.md](b.md) | x | y | everyone |',
+      '',
+      '## Next',
+    ].join('\n')
+    const r = audienceRows(planted)
+    expect(r.get('a.md')).toBe('rep')
+    expect(AUDIENCES.includes(r.get('b.md') ?? '')).toBe(false)
+    expect(r.has('c.md')).toBe(false)
+    expect(audienceRows(planted.replace('| Audience |', '|'))).toEqual(new Map())
+    expect(REP_DIRECTED.test('Representatives should not claim one.')).toBe(true)
   })
 })
 
