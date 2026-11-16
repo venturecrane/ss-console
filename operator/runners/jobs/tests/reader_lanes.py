@@ -9,7 +9,7 @@ size, the request's shape) and the store the run left behind. Litigation and
 casefile run a SECOND job over the same files and store: what it downloads and
 pays for again is the store's reuse.
 
-The entry points are the contract a refactor keeps (``RULES`` in
+The entry points are the contract a refactor keeps (the docstring of
 ``test_reader_goldens.py``): ``LitigationRun`` + ``_fetch`` / ``_extract``,
 ``CasefileRun`` + ``casefile.matter._extract``, ``NegotiationRun._text``, the
 medchron ``StageRun`` stages ``extract.run`` / ``vision.run``, and the demand
@@ -131,8 +131,9 @@ def _cf_job(tmp: Path, name: str, keys: list[str], store: Path, mp: Any) -> dict
     from jobs.casefile.run import CasefileRun
     from jobs.litigation import fetch as fetch_mod
 
-    for k, v in ct.environ(tmp).items():
-        mp.setenv(k, v)
+    # The fake browser the lane prints with; JOBS_DATA_DIR is the test's own
+    # (``test_reader_goldens.STORE_ENV``).
+    mp.setenv("SMD_CHROME", ct.environ(tmp)["SMD_CHROME"])
     docs, blobs = rk.listing(keys)
     seat, model = rk.Seat(docs, blobs), rk.Model()
     inputs = ct.make_inputs(tmp / "cf-inputs")
@@ -260,18 +261,20 @@ def demand(tmp: Path, mp: Any) -> dict[str, Any]:
 
     rk.Sleeps(mp)
     data = tmp / "demand"
-    (data / "text").mkdir(parents=True)
-    raw = data / "raw"
-    raw.mkdir()
+    (data / "raw").mkdir(parents=True)
+    (data / "text").mkdir()
+    # Paths relative to the job's dir: a reader's error message carries the
+    # path, cut at a fixed length, so an absolute temp path would move it.
+    mp.chdir(data)
     rows = []
     for k in NO_MSG:
         f = FIXTURES[k]
-        p = raw / f"{f.id}{f.ext}"
+        p = Path("raw") / f"{f.id}{f.ext}"
         p.write_bytes(f.data)
         rows.append(
             {"id": f.id, "name": f.full, "folder": "/MEDICAL", "kind": "document", "ext": f.ext, "path": str(p)}
         )
-    extracted = [preflight.extract_one(r, data / "text") for r in rows]
+    extracted = [preflight.extract_one(r, Path("text")) for r in rows]
     preflight.write_extracted(data, extracted)
     model = rk.Model()
     doorway = Doorway(ledger=Ledger(data / "usage-ledger.jsonl"), client=model, log=lambda _m: None)

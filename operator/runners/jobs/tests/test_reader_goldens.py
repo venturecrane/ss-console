@@ -21,6 +21,18 @@ and needs no instrument entry. The cells:
 * ``names/<site>``: every display or key join of a file's name and extension,
   the string it produced for each fixture row (``reader_names``).
 
+What a refactor keeps, or names. The instrument files are pinned by sha256
+(``golden_manifest.READER_FROZEN``); a change to one is a ``<normaliser>`` entry
+in ``bin/goldens/allowed-instrument-changes.json``. So the names the cells call
+stay importable with the call shapes they use: each module's docstring lists
+its own (``reader_lanes``, ``reader_pulls``, ``reader_names``,
+``reader_connector``). What is recorded at the edges: every
+``messages.create`` request (model, max tokens, a sha256 of its system prompt
+and of its text blocks, its keys, its block types, and each page's identity and
+render size); every seat call in order with its arguments and answer; every
+``time.sleep`` (looked up on the ``time`` module at call time); the return or
+the exception; and every file under each store root and each site's own dir.
+
 ``goldens/reader/<cell>.json`` holds each one. A difference fails, except the
 dotted paths ``allowed-changes.json`` names for that cell (``golden-integrity.py``
 regenerates every cell from the merge-base tree). ``JOBS_WRITE_KIT_GOLDENS=1``

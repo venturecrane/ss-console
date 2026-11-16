@@ -74,7 +74,10 @@ class VisionHttp:
 def _env(tmp: Path, mp: Any) -> None:
     from smokeball_connector import extract_cache
 
-    mp.setenv(extract_cache.CACHE_DIR_ENV, str(tmp / "vision-cache"))
+    import os
+
+    # The cache dir is the test's own, set by ``test_reader_goldens._stores``.
+    assert os.environ[extract_cache.CACHE_DIR_ENV].startswith(str(tmp)), "the connector cache must be the test's"
     mp.setenv("ANTHROPIC_API_KEY", "sk-test-not-a-real-key")
     mp.setenv("SMOKEBALL_VISION_WORKERS", "1")
     for k in KNOBS:
@@ -109,7 +112,7 @@ def _mode(name: str) -> Any:
             http.calls.clear()
         doc["files"] = _read_all(name != "mechanical")
         doc["sent"] = http.record()
-        doc["cache"] = rk.tree(tmp / "vision-cache", tmp)
+        doc["cache"] = rk.tree(tmp / "connector-cache", tmp)
         return rk.scrub(doc, tmp)
 
     return run

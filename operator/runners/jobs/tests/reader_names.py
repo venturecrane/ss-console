@@ -11,7 +11,8 @@ extension, and a ``.msg`` container) and records the strings it produced.
 Each site is driven through the function that holds the join. Where that is a
 whole stage, the stage runs over the smallest artifacts it reads, and the join's
 string is captured at the call it is handed to (``Captured``): the stage's own
-collaborator, named in ``test_reader_goldens.RULES``.
+collaborator (``assemble.Resolver``, ``group.index_rows``, ``exhibits.index_rows``,
+``units.billing_stem``), which must keep its name and receive the joined names.
 """
 
 from __future__ import annotations

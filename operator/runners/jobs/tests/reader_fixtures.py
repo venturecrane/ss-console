@@ -13,9 +13,14 @@ reading, in what order, at what size, without recording a pixel. A blank page
 (no image and no text) has no colour and is recorded as unknown.
 
 ``FIXTURES`` is the one table: id, listing name and extension kept apart (the
-way the seat lists a file), and the bytes. ``collision`` is the pair of files
-whose joined names meet: ``x.pdf`` as an email attachment is pulled with its
-extension in its name AND in ``ext``; ``x`` + ``.pdf`` is the same name filed.
+way the seat lists a file), and the bytes. ``x_emailed`` and ``x_filed`` are the
+pair whose joined names meet: ``x.pdf`` as an email attachment is pulled with
+its extension in its name AND in ``ext``; ``x`` + ``.pdf`` is the same name filed.
+
+The boundary pairs sit on each lane's own threshold: ``edge14``/``edge15`` the
+connector's 15 characters a page (averaged), ``edge24``/``edge25`` the 25 a page
+of litigation, negotiation and demand, ``thin199``/``thin200`` the chronology's
+thin page, ``absent399``/``absent400`` its absent text layer (400 over 200 pages).
 """
 
 from __future__ import annotations
@@ -189,7 +194,9 @@ MSG = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1 fixture outlook container (opened by re
 GLYPH = " ".join(f"/{i % 10}" for i in range(400))
 CIPHER = "".join(chr(ord(c) + 3) if c.isalpha() else c for c in PROSE + " " + PROSE)
 CONTROL = "Statement of charges " + "\x01\x02\x03\x04\x05" * 8 + " total due on receipt"
-PLEADING = "\n".join(f"{n}   {line}" for n, line in enumerate(wrap(" ".join([PROSE] * 4), 80)[:28], 1))
+#: Pleading paper: 28 lines, each opening with its margin line number (the run
+#: ``pleading_margin`` removes; it needs 26 or more in order).
+PLEADING = "\n".join(f"{n}   {line}" for n, line in enumerate(wrap(" ".join([PROSE] * 6), 80)[:28], 1))
 
 
 @dataclass(frozen=True)
@@ -217,6 +224,8 @@ def _pdfs() -> list[tuple[str, list[Page]]]:
         ("scan8", [("scan",)] * 8),
         ("cover_scans", [("text", "COVER SHEET\n" + para), *[("scan",)] * 5]),
         ("typed60", typed60),
+        ("edge14", [("text+scan", chars(14))]),
+        ("edge15", [("text+scan", chars(15))]),
         ("edge24", [("text+scan", chars(24))]),
         ("edge25", [("text+scan", chars(25))]),
         ("thin199", [("text", para), ("text+scan", "\n".join(wrap(nonspace(199))))]),

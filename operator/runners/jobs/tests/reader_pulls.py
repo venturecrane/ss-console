@@ -7,6 +7,12 @@ fetch with the size it was told to expect and what it served or answered),
 every sleep, what the site returned, and every file it left in its download
 directory (its manifest rows parsed, the downloaded bytes as their length).
 
+The sites, each called as its lane calls it: ``stages.download.run(sr)``,
+``stages.msg.pull_containers``, ``stages.update_base._pull``,
+``demand.pull.fetch_all``, ``litigation.fetch.fetch_matter``,
+``NegotiationRun._fetch``, ``ReviseRun._download`` and
+``proof.readback.confirm_files``.
+
 Three files ride every scenario: ``a`` (a typed PDF), ``b`` (a scan), ``c`` (a
 text note). The scenarios act on ``a`` or ``b`` as their names say.
 """
