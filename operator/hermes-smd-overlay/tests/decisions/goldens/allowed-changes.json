@@ -1,23 +1,3 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges.",
-  "synthetic/wall.guard": [
-    "volume_report.0.events.19.args",
-    "volume_report.0.events.23.$ref",
-    "volume_report.0.events.27.$ref",
-    "volume_report.0.registers.@shared.trust_decision.TRUST_DECISIONS._local.last.new",
-    "volume_report.0.registers.@shared.trust_decision.TRUST_DECISIONS._reports",
-    "volume_report.0.values",
-    "volume_report.0.values.5",
-    "volume_report.0.values.6.reason",
-    "volume_report.0.values.7"
-  ],
-  "existing/test_read_volume_gate_placement": [
-    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.events.17.args",
-    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.registers.@shared.trust_decision.TRUST_DECISIONS._by_call.\"tc-rv\".new.1.$ref",
-    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.registers.@shared.trust_decision.TRUST_DECISIONS._local.last.new",
-    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.registers.@shared.trust_decision.TRUST_DECISIONS._reports",
-    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.values",
-    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.values.1",
-    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.values.2"
-  ]
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges."
 }
