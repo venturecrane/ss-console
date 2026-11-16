@@ -168,6 +168,19 @@ FAMILIES: tuple[Family, ...] = (
         checks=(f"{_RT}/test_filing_goldens.py",),
     ),
     Family(
+        "reader",
+        f"{_RG}/reader",
+        "**/*",
+        f"{_RG}/reader/allowed-changes.json",
+        "inplace",
+        # How every lane reads a firm's file (each lane's reader over the
+        # fixtures, with the pages sent to paid reading and the store left),
+        # each download site through each scenario, the connector's reader, and
+        # every join of a file's name and extension (wave 5).
+        tests=("test_reader_goldens.py",),
+        checks=(f"{_RT}/test_reader_goldens.py", f"{_RT}/test_reader_census.py"),
+    ),
+    Family(
         "task_puts",
         f"{_RG}/task_puts",
         "*",

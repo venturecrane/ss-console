@@ -1,0 +1,29 @@
+{
+ "cell": {
+  "attempts": [
+   {
+    "message": "read-back short: 2 file(s) not at their size: Scan2.pdf, Phone Note.txt",
+    "raised": "ReadbackShort"
+   }
+  ],
+  "files": {},
+  "seat": [
+   {
+    "call": "list_files"
+   },
+   {
+    "call": "list_files"
+   }
+  ],
+  "sleeps": [
+   7.0
+  ]
+ },
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

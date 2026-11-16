@@ -1,0 +1,135 @@
+{
+ "cell": {
+  "attempts": [
+   {
+    "message": "read-back short: 1 file(s) not at their size: Phone Note.txt",
+    "raised": "ReadbackShort"
+   },
+   {
+    "returned": {
+     "files": [
+      {
+       "file_id": "r-digital",
+       "name": "Digital.pdf",
+       "sha256": "<sha:digital>",
+       "size": 3264
+      },
+      {
+       "file_id": "r-scan2",
+       "name": "Scan2.pdf",
+       "sha256": "<sha:scan2>",
+       "size": 4416
+      },
+      {
+       "file_id": "r-note-txt",
+       "name": "Phone Note.txt",
+       "sha256": "<sha:note_txt>",
+       "size": 71
+      }
+     ],
+     "folder_id": "fold-med",
+     "readback": "confirmed"
+    }
+   }
+  ],
+  "files": {},
+  "seat": [
+   {
+    "call": "list_files"
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-digital"
+    ]
+   },
+   {
+    "call": "fetch",
+    "expected": null,
+    "id": "r-digital",
+    "served": 3264
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-scan2"
+    ]
+   },
+   {
+    "call": "fetch",
+    "expected": null,
+    "id": "r-scan2",
+    "served": 4416
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-note-txt"
+    ]
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-note-txt"
+    ]
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-note-txt"
+    ]
+   },
+   {
+    "call": "list_files"
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-digital"
+    ]
+   },
+   {
+    "call": "fetch",
+    "expected": null,
+    "id": "r-digital",
+    "served": 3264
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-scan2"
+    ]
+   },
+   {
+    "call": "fetch",
+    "expected": null,
+    "id": "r-scan2",
+    "served": 4416
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-note-txt"
+    ]
+   },
+   {
+    "call": "fetch",
+    "expected": null,
+    "id": "r-note-txt",
+    "served": 71
+   }
+  ],
+  "sleeps": [
+   7.0,
+   7.0,
+   7.0
+  ]
+ },
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

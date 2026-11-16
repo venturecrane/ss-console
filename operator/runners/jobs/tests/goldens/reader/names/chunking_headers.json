@@ -1,0 +1,17 @@
+{
+ "cell": [
+  "=== FILE: x.pdf.pdf (fileId n-emailed) ===",
+  "=== FILE: x.pdf.pdf (fileId n-emailed) ===\n[p.1]\nthe text of n-emailed\n\n",
+  "=== FILE: x.pdf (fileId n-filed) ===\n[p.1]\nthe text of n-filed\n\n",
+  "=== FILE: Clinic Note 01-20-26.docx (fileId n-plain) ===\n[p.1]\nthe text of n-plain\n\n",
+  "=== FILE: README (fileId n-bare) ===\n[p.1]\nthe text of n-bare\n\n",
+  "=== FILE: Scan.PDF.PDF (fileId n-upper) ===\n[p.1]\nthe text of n-upper\n\n"
+ ],
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

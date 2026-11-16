@@ -1,0 +1,112 @@
+{
+ "cell": {
+  "attempts": [
+   {
+    "returned": [
+     {
+      "ext": ".pdf",
+      "folder": "/MEDICAL",
+      "id": "r-digital",
+      "name": "Digital",
+      "ok": true,
+      "path": "<TMP>/mc/data/example-matter/msg_raw/r-digital.msg",
+      "size_expected": 3264,
+      "size_got": 3264
+     },
+     {
+      "error": "Client error '404 Not Found' for url 'https://fake.invalid/r-scan2'",
+      "ext": ".pdf",
+      "folder": "/MEDICAL",
+      "id": "r-scan2",
+      "name": "Scan2",
+      "ok": false,
+      "size_expected": 4416
+     },
+     {
+      "ext": ".txt",
+      "folder": "/MEDICAL",
+      "id": "r-note-txt",
+      "name": "Phone Note",
+      "ok": true,
+      "path": "<TMP>/mc/data/example-matter/msg_raw/r-note-txt.msg",
+      "size_expected": 71,
+      "size_got": 71
+     }
+    ]
+   }
+  ],
+  "files": {
+   "msg_manifest.jsonl": [
+    {
+     "ext": ".pdf",
+     "folder": "/MEDICAL",
+     "id": "r-digital",
+     "name": "Digital",
+     "ok": true,
+     "path": "<TMP>/mc/data/example-matter/msg_raw/r-digital.msg",
+     "size_expected": 3264,
+     "size_got": 3264
+    },
+    {
+     "error": "Client error '404 Not Found' for url 'https://fake.invalid/r-scan2'",
+     "ext": ".pdf",
+     "folder": "/MEDICAL",
+     "id": "r-scan2",
+     "name": "Scan2",
+     "ok": false,
+     "size_expected": 4416
+    },
+    {
+     "ext": ".txt",
+     "folder": "/MEDICAL",
+     "id": "r-note-txt",
+     "name": "Phone Note",
+     "ok": true,
+     "path": "<TMP>/mc/data/example-matter/msg_raw/r-note-txt.msg",
+     "size_expected": 71,
+     "size_got": 71
+    }
+   ],
+   "msg_raw/r-digital.msg": {
+    "bytes": 3264
+   },
+   "msg_raw/r-note-txt.msg": "Phone note: the adjuster called on 04/12/2026 and asked for the bills.\n"
+  },
+  "seat": [
+   {
+    "call": "mint",
+    "ids": [
+     "r-digital",
+     "r-scan2",
+     "r-note-txt"
+    ]
+   },
+   {
+    "call": "fetch",
+    "expected": 3264,
+    "id": "r-digital",
+    "served": 3264
+   },
+   {
+    "answer": 404,
+    "call": "fetch",
+    "expected": 4416,
+    "id": "r-scan2"
+   },
+   {
+    "call": "fetch",
+    "expected": 71,
+    "id": "r-note-txt",
+    "served": 71
+   }
+  ],
+  "sleeps": []
+ },
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

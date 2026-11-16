@@ -1,0 +1,42 @@
+{
+ "cell": {
+  "attempts": [
+   {
+    "returned": [
+     "Digital.pdf (mint failed twice: mint: the vendor answered 503)",
+     "Scan2.pdf (mint failed twice: mint: the vendor answered 503)",
+     "Phone Note.txt (mint failed twice: mint: the vendor answered 503)"
+    ]
+   }
+  ],
+  "files": {},
+  "seat": [
+   {
+    "call": "mint",
+    "ids": [
+     "r-digital",
+     "r-scan2",
+     "r-note-txt"
+    ]
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-digital",
+     "r-scan2",
+     "r-note-txt"
+    ]
+   }
+  ],
+  "sleeps": [
+   5.0
+  ]
+ },
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

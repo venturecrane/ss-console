@@ -1,0 +1,49 @@
+{
+ "cell": {
+  "attempts": [
+   {
+    "message": "Client error '429 Too Many Requests' for url 'https://fake.invalid/r-scan2'",
+    "raised": "HTTPStatusError"
+   }
+  ],
+  "files": {
+   "base/draft.docx": {
+    "bytes": 3264
+   }
+  },
+  "seat": [
+   {
+    "call": "mint",
+    "ids": [
+     "r-digital"
+    ]
+   },
+   {
+    "call": "fetch",
+    "expected": null,
+    "id": "r-digital",
+    "served": 3264
+   },
+   {
+    "call": "mint",
+    "ids": [
+     "r-scan2"
+    ]
+   },
+   {
+    "answer": 429,
+    "call": "fetch",
+    "expected": null,
+    "id": "r-scan2"
+   }
+  ],
+  "sleeps": []
+ },
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

@@ -1,0 +1,31 @@
+{
+ "cell": [
+  [
+   "README",
+   "left out at the firm's direction"
+  ],
+  [
+   "x.pdf.pdf",
+   "left out at the firm's direction"
+  ],
+  [
+   "x.pdf",
+   "left out at the firm's direction"
+  ],
+  [
+   "Clinic Note 01-20-26.docx",
+   "left out at the firm's direction"
+  ],
+  [
+   "Scan.PDF.PDF",
+   "left out at the firm's direction"
+  ]
+ ],
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

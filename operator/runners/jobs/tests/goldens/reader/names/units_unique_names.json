@@ -1,0 +1,61 @@
+{
+ "cell": {
+  "renamed": [
+   [
+    "x.pdf",
+    "x (2).pdf"
+   ]
+  ],
+  "rows": [
+   {
+    "ext": ".pdf",
+    "folder": "/MEDICAL",
+    "folderId": "fold-med",
+    "id": "n-emailed",
+    "name": "x.pdf"
+   },
+   {
+    "ext": ".pdf",
+    "folder": "/MEDICAL",
+    "folderId": "fold-med",
+    "id": "n-filed",
+    "name": "x"
+   },
+   {
+    "ext": ".docx",
+    "folder": "/MEDICAL",
+    "folderId": "fold-med",
+    "id": "n-plain",
+    "name": "Clinic Note 01-20-26"
+   },
+   {
+    "ext": "",
+    "folder": "/MEDICAL",
+    "folderId": "fold-med",
+    "id": "n-bare",
+    "name": "README"
+   },
+   {
+    "ext": ".PDF",
+    "folder": "/MEDICAL",
+    "folderId": "fold-med",
+    "id": "n-upper",
+    "name": "Scan.PDF"
+   },
+   {
+    "ext": ".pdf",
+    "folder": "/MEDICAL",
+    "folderId": "fold-med",
+    "id": "n-filed-2",
+    "name": "x (2)"
+   }
+  ]
+ },
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

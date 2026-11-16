@@ -1,0 +1,32 @@
+{
+ "cell": {
+  "msgatt-n-bare": [
+   "mail-n-bare"
+  ],
+  "msgatt-n-bare-joined": [
+   "mail-n-bare"
+  ],
+  "msgatt-n-emailed": [
+   "mail-n-filed"
+  ],
+  "msgatt-n-emailed-joined": [
+   "mail-n-emailed"
+  ],
+  "msgatt-n-filed-joined": [
+   "mail-n-filed"
+  ],
+  "msgatt-n-plain-joined": [
+   "mail-n-plain"
+  ],
+  "msgatt-n-upper-joined": [
+   "mail-n-upper"
+  ]
+ },
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}

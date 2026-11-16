@@ -1,0 +1,39 @@
+{
+ "cell": {
+  "holds": [],
+  "payload": {
+   "_decided": {
+    "by": "jobs.medchron.decisions.orphans"
+   },
+   "orphans": [
+    {
+     "name": "x.pdf.pdf",
+     "reason": "a .pdf file, a type this review does not read"
+    },
+    {
+     "name": "x.pdf",
+     "reason": "a .pdf file, a type this review does not read"
+    },
+    {
+     "name": "Clinic Note 01-20-26.docx",
+     "reason": "a .docx file, a type this review does not read"
+    },
+    {
+     "name": "README",
+     "reason": "a file file, a type this review does not read"
+    },
+    {
+     "name": "Scan.PDF.PDF",
+     "reason": "a .PDF file, a type this review does not read"
+    }
+   ]
+  }
+ },
+ "env_stores": {
+  "JOBS_DATA_DIR": {},
+  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+  "JOBS_TEXTCACHE_DIR": {},
+  "SMD_POST_JOURNAL_DIR": {},
+  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+ }
+}
