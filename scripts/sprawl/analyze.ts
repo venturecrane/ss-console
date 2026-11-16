@@ -404,6 +404,17 @@ export function changeCoupling(
   return rows.sort((x, y) => y.shared - x.shared || y.degree - x.degree)
 }
 
+/**
+ * A page under docs/ and the program it describes. The repo requires these to
+ * change in one PR (the handbook, spec and ADR maintenance contracts), so the
+ * pair is the contract being kept, not a hidden dependency. Reported apart
+ * from the headline, which would otherwise rise each time a doc is kept true.
+ * Two docs, or two programs, are never this.
+ */
+export function isDocumentationPair(r: CouplingRow): boolean {
+  return r.a.startsWith('docs/') !== r.b.startsWith('docs/')
+}
+
 /** The headline numbers of a snapshot, the only part two runs are compared on. */
 export type Headline = {
   copiedLines: number
