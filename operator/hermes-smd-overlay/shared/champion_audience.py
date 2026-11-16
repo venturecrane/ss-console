@@ -98,18 +98,63 @@ def read_guide_procedure(tool_name: Any, args: Any) -> bool:
     return False
 
 
-def _library_lines(text: str, refs: Path | None) -> list[tuple[str, str | None]]:
-    """``(document, heading or None)`` for each ``Source:`` line naming a library file."""
-    library = {p.name for p in refs.glob("*.md")} if refs is not None else set()
+def _library_lines(text: str, library: set[str]) -> list[tuple[str, str | None]]:
+    """``(document, heading or None)`` for EVERY library file each ``Source:``
+    line names (a line may cite several); the heading is the first quoted text
+    after that file and before the next one."""
     out: list[tuple[str, str | None]] = []
     for line in champion._SOURCE_LINE.findall(text):
-        for found in champion._SOURCE_FILE.finditer(line):
-            name = os.path.basename(found.group(1))
-            if name in library:
-                heading = champion._SOURCE_HEADING.search(line[found.end() :])
-                out.append((name, heading.group(1).strip() if heading else None))
-                break
+        found = list(champion._SOURCE_FILE.finditer(line))
+        for i, match in enumerate(found):
+            name = os.path.basename(match.group(1))
+            if name not in library:
+                continue
+            stop = found[i + 1].start() if i + 1 < len(found) else len(line)
+            heading = champion._SOURCE_HEADING.search(line[match.end() : stop])
+            out.append((name, heading.group(1).strip() if heading else None))
     return out
+
+
+#: The product-guide skill's own fixed replies (operator/skills/product-guide/
+#: SKILL.md: Refusals, Champion mode, step 4), which carry no Source: line by
+#: design. A reply that is only these (and a sign-off line) is never held as
+#: uncited. Kept word for word with the skill.
+FIXED_REPLIES: tuple[str, ...] = (
+    "The product library doesn't cover that. SMD can answer it at team@smd.services.",
+    "Pricing is set by SMD for each engagement, and I can't discuss it. SMD can, at "
+    "team@smd.services.",
+    "I can't discuss SMD's clients or any specific business.",
+    "I can only share what is in the product library, and client material is never part of it.",
+    "I can only answer from the product library.",
+    "Access to the guide comes from SMD Services, at team@smd.services.",
+    "That is not available on this guide; for anything else, ask SMD Services at "
+    "team@smd.services.",
+    "This guide holds none of your business's records; what SMD would set up for your "
+    "business is a conversation with SMD Services at team@smd.services.",
+)
+_FIXED = {" ".join(f.split()) for f in FIXED_REPLIES}
+#: The skill's could-not-open reply is described, not quoted (the note after
+#: step 8): recognised by its two required parts, in a short reply.
+_COULD_NOT_OPEN = ("could not open the library", "team@smd.services")
+_SIGN_OFF = re.compile(r"^[^\W\d_][^.!?:;,]{0,40}$")
+
+
+def is_fixed_reply(text: str) -> bool:
+    """Whether a reply is only the skill's fixed sentences (an optional last
+    line naming the sender, as a sign-off, aside)."""
+    lines = [ln.strip() for ln in (text or "").strip().splitlines() if ln.strip()]
+    if len(lines) > 1 and _SIGN_OFF.match(lines[-1]) and len(lines[-1].split()) <= 4:
+        lines = lines[:-1]
+    body = " ".join(" ".join(lines).split())
+    if not body:
+        return False
+    lowered = body.lower()
+    if all(part in lowered for part in _COULD_NOT_OPEN) and len(body) <= 300:
+        return True
+    rest = body
+    for sentence in sorted(_FIXED, key=len, reverse=True):
+        rest = rest.replace(sentence, " ")
+    return rest != body and not rest.strip()
 
 
 def _valid(doc: str, heading: str | None, allowed: frozenset[str], refs: Path) -> str:
@@ -129,12 +174,16 @@ def source_reason(
         body = text if isinstance(text, str) else ""
         refs = refs if refs is not None else champion.references_dir()
         allowed = allowed if allowed is not None else champion.allowlist(refs)
-        cited = _library_lines(body, refs)
+        library = {p.name for p in refs.glob("*.md")} if refs is not None else set()
+        cited = _library_lines(body, library)
         for doc, heading in cited:
             problem = _valid(doc, heading, allowed, refs) if refs is not None else "unreadable"
             if problem:
                 return problem if problem != "unreadable" else champion.SOURCE_UNREADABLE
-        if guide_read and not any(heading is not None for _d, heading in cited):
+        # A rep-only library document named anywhere in the body, as wall_reason checks.
+        if any(n in library and n not in allowed for n in champion._MD_NAME.findall(body)):
+            return champion.SOURCE_NOT_ALLOWED
+        if guide_read and not any(h is not None for _d, h in cited) and not is_fixed_reply(body):
             return SOURCE_MISSING
         return ""
     except Exception:  # noqa: BLE001 - a wall that cannot decide holds
@@ -146,8 +195,10 @@ __all__ = [
     "GUIDE_READ",
     "KEY",
     "MODEL_DETAIL",
+    "FIXED_REPLIES",
     "SOURCE_MISSING",
     "VALUE",
+    "is_fixed_reply",
     "live_seat_has_audience",
     "read_guide_procedure",
     "seat_has_audience",

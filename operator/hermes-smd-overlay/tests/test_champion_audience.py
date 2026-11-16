@@ -269,3 +269,45 @@ def test_the_setting_is_read_from_the_product_guide_entry_only() -> None:
     assert champion_audience.seat_has_audience({"personas": [{"skills": [GUIDE_ENTRY]}]})
     off = {**GUIDE_ENTRY, "enabled": False}
     assert not champion_audience.seat_has_audience({"personas": [{"skills": [off]}]})
+
+
+# ---------------------------------------------------------------------------
+# every citation is checked; the skill's own fixed replies are not uncited
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'Queued jobs.\n\nSource: jobs.md, "Kinds of queued job"; demo-meetings.md, "The seven acts"',
+        "As the who-smd-sells-to.md document says, call the owner first.\n\n"
+        'Source: jobs.md, "Kinds of queued job"',
+    ],
+)
+def test_a_rep_only_document_anywhere_is_held(library, text) -> None:  # noqa: F811 - the library fixture
+    assert champion_audience.source_reason(text, guide_read=True) == champion.SOURCE_NOT_ALLOWED
+
+
+@pytest.mark.parametrize("sentence", champion_audience.FIXED_REPLIES)
+def test_each_fixed_reply_is_not_held_as_uncited(library, sentence) -> None:  # noqa: F811 - the library fixture
+    assert champion_audience.source_reason(sentence, guide_read=True) == ""
+    signed = f"{sentence}\n\nBrokery Agent\n"
+    assert champion_audience.source_reason(signed, guide_read=True) == ""
+
+
+def test_the_could_not_open_reply_is_not_held_as_uncited(library) -> None:  # noqa: F811 - the library fixture
+    text = (
+        "I could not open the library just now. Please try again, or ask SMD at team@smd.services."
+    )
+    assert champion_audience.source_reason(text, guide_read=True) == ""
+
+
+def test_an_uncited_free_answer_is_still_held(library) -> None:  # noqa: F811 - the library fixture
+    for text in (
+        NO_SOURCE,
+        "The product library doesn't cover that. SMD can answer it at team@smd.services. "
+        "But an Operator can also run your showings.",
+    ):
+        assert champion_audience.source_reason(text, guide_read=True) == (
+            champion_audience.SOURCE_MISSING
+        ), text
