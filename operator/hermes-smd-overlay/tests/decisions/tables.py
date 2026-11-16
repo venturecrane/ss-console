@@ -344,6 +344,7 @@ SELECTION: tuple[str, ...] = (
     "tests/test_outbound_gate.py",
     "tests/test_output_checklist_code_fixed.py",
     "tests/test_output_checklist_wired.py",
+    "tests/test_pre_hook_blocks_recorded.py",
     "tests/test_read_volume_gate_placement.py",
     "tests/test_recipient_aware_send.py",
     "tests/test_records_order_act.py",

@@ -405,5 +405,8 @@
     "vendor_recipient@47:_WORKING_DRAFTS.take.1.returned",
     "vendor_recipient@48:_discard_drafts.0.steps",
     "vendor_recipient@48:_discard_drafts.1.returned"
+  ],
+  "existing/test_pre_hook_blocks_recorded": [
+    "<file>"
   ]
 }
