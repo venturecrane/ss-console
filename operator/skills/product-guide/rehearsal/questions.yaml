@@ -541,6 +541,25 @@ questions:
       - a statement about what this business's seat has switched on
       - a label such as running for a client today
 
+  - id: c06
+    category: champion
+    sender: champion
+    question: I'm a broker. What could an Operator do for my transaction coordinators and for our buyers and sellers?
+    expect: answer
+    cite:
+      - document: real-estate-use-ideas.md
+        section: For transaction coordinators and office staff
+      - document: real-estate-use-ideas.md
+        section: For buyers and sellers
+    must_contain:
+      - uses from the use-ideas document, such as contract deadline tracking, missing-document chasing and transaction status updates, each with its source line
+      - for each kind of message to a buyer or seller, the brokerage chooses whether the draft goes to an agent to review or goes out on its own
+      - price opinions, contract terms and agency advice stay with the licensed people
+    must_not_contain:
+      - a claim about what this brokerage needs or has
+      - a source line naming a document whose index audience is rep alone
+      - any timeframe, price or fee
+
   # ---- Refusals (5) ----
   - id: r01
     category: refuse
