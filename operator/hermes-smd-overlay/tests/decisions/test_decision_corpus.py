@@ -289,7 +289,9 @@ def test_known_defects_are_visible_in_the_corpus() -> None:
     the read-volume row #4039, the allow left on a blocked call #4041, the fault
     after a send #4042); the read itself must still be there."""
     known = _read(KNOWN)
-    assert "defects" in known and isinstance(known["defects"], list), "known-defects.json has no defects list"
+    assert "defects" in known and isinstance(known["defects"], list), (
+        "known-defects.json has no defects list"
+    )
     defects = known["defects"]
     for d in defects:
         record = _at(_read(GOLDENS / d["golden"]), d["record"])
