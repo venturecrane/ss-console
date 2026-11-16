@@ -677,3 +677,11 @@ def test_a_sent_list_from_before_the_window_is_not_counted() -> None:
     assert _before("2026-11-15T13:48:31Z", "2026-11-16T07:00:00+00:00")
     assert not _before("2026-11-16T13:48:31Z", "2026-11-16T07:00:00+00:00")
     assert not _before("garbled", "2026-11-16T07:00:00+00:00")  # unreadable: counted as sent
+
+
+def test_a_dry_run_can_list_what_a_reading_would_be_shown_for_free(tmp_path, monkeypatch) -> None:
+    broker, gmail, http, model = _broker(tmp_path, monkeypatch, _all_threads())
+    out = fk.run(broker, mode="dry_run", candidates=True)
+    subjects = {c["subject"] for c in out["candidates"]}
+    assert "Kickoff date" in subjects and not any(s.startswith("[SMD Ops]") for s in subjects)
+    assert model.requests == [] and http.sends == [] and gmail.modified == []

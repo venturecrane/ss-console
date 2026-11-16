@@ -508,6 +508,17 @@ def _dry_run(broker, settings: mk.Settings, state, directory: Path, request, tod
         "decisions": _decisions(plan, state),
     }
     out["ops"] = {"trash": sweep.trash, "label": sweep.label, "needs_you": [p["line"] for p in sweep.needs_you]}
+    if request.get("candidates") is True:  # $0: what a reading would be shown, for writing an answer key first
+        out["candidates"] = [
+            {
+                "thread_id": c.thread_id,
+                "from": mkd.who(c.sender_name, c.sender),
+                "subject": c.subject,
+                "facts": {"person": c.is_person, "waiting": c.waiting_on_owner, "watched": c.watched},
+                "text": c.text[-1200:],
+            }
+            for c in _candidates(threads, settings)
+        ]
     if request.get("classify") is not True:
         return out
     if _classify_unauthored(settings):
