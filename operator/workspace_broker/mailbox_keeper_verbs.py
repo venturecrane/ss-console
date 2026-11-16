@@ -213,15 +213,14 @@ def render_digest(
             who = f"{w.sender_name} <{w.sender}>" if w.sender_name else w.sender
             lines.append(f"- {who}: {w.subject or '(no subject)'} (since {_local(w.since_ms, zone)})")
         lines.append("")
-    if alerts:
-        lines.append(f"SMD Ops alerts not cleared ({len(alerts)}):")
-        for a in alerts:
-            lines.append(f"- {a.subject or '(no subject)'}" + ("" if a.verified else " (sender not verified)"))
-        lines.append("")
-    if never:
-        lines.append(f"SMD Ops notices that do not clear on their own ({len(never)}):")
-        for a in never:
-            lines.append(f"- {a.subject or '(no subject)'}" + ("" if a.verified else " (sender not verified)"))
+    # SMD Ops mail is counted, never listed (2026-11-15 dry run: 78 of the 83
+    # threads were request cards and triage reports with no recovery mail, so a
+    # row per thread buried the people). The hourly triage owns the alerts.
+    if alerts or never:
+        lines.append(
+            f"SMD Ops mail left in the inbox: {len(alerts)} without a recovery, "
+            f"{len(never)} of the kind that never clears. The hourly triage tracks them."
+        )
         lines.append("")
     lines.append(tail)
     subject = f"Mailbox: {len(waiting)} waiting on you" if waiting else "Mailbox: SMD Ops alerts to look at"

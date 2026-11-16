@@ -115,6 +115,11 @@ personas:
           digest_recipient: scott@smd.services
           needs_you_after_hours: 24
           window_days: 14
+          # From the 2026-11-15 dry run against the real mailbox: receipt and
+          # notice senders that were listed as people, and the Operator seats'
+          # own mailboxes. watch_senders are automated but need him (taxes).
+          system_senders: '@mail.anthropic.com,@stripe.com,@updates.napkin.ai,@npmjs.com,operator@ashtonandprice.com'
+          watch_senders: '@azdor.gov'
     cron:
       # 06:47 and 12:47 seat-local, America/Phoenix (business_hours.timezone
       # below, exported as HERMES_TIMEZONE by bootstrap.sh). The 06:47 run is
