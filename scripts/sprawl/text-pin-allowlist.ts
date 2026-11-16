@@ -201,7 +201,7 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
   'tests/connector-observability.test.ts':
     'Contract: token-expiry alerting uses the deployed token lifetime.',
   'tests/demo-seat.test.ts':
-    'Policy: the demo runbook names every act skill; no placeholder or client names in the demo seat.',
+    'Policy: the demo runbook names every act skill; no placeholder or client names in the demo seat; the guide library demo page keeps the runbook acts and its example emails clear the reply checks.',
   'workers/fleet-alerts/src/shortfalls.test.ts':
     'Contract: the digest cron in code matches the wrangler.toml schedule.',
   'operator/bin/tests/test_deploy_ordering.py':
@@ -373,7 +373,7 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
   'tests/guide-seat.test.ts':
     'Model-read rule: guide seat answers listed senders only, one send class (ADR 0105).',
   'tests/product-guide-library.test.ts':
-    'Model-read rule: the guide library carries no dollar amounts, names, em dashes or runtime vocabulary.',
+    'Model-read rule: the guide library carries no dollar amounts, names, em dashes or runtime vocabulary; the desk proposal sketch keeps its fixed first and last lines.',
   'tests/guide-code-capability-not-disclosed.test.ts':
     'Model-read rule: the guide never tells a non-administrator who issues invite codes (ADR 0106).',
   'tests/role-persona-delivery.test.ts':

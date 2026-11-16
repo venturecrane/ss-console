@@ -2575,6 +2575,10 @@
     "plugin": "hermes-smd-mail-attachments",
     "toolset": "mail"
    },
+   "material_check": {
+    "plugin": "hermes-smd-training",
+    "toolset": "training"
+   },
    "operations_request": {
     "plugin": "hermes-smd-establishment",
     "toolset": "establishment"

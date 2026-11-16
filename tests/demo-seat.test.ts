@@ -19,7 +19,11 @@
  *     exists where the runbook says to install it from;
  *  6. nothing from a client: no placeholder awaiting a client's answer, no
  *     client name, and none of the client-mirror artifacts the seat used to
- *     carry.
+ *     carry;
+ *  7. the guide's library playbook (product-guide/references/demo-meetings.md)
+ *     names the same seven acts as the runbook, in the same order, and every
+ *     example email in it clears the seat's reply checks (the fabrication
+ *     markers and the plain-text rules), so the guide can quote it.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -37,6 +41,8 @@ const VOICE_SPEC = resolve(
   'operator/customers/pilot-smokeball/seed/voice/spec/work_product.voice.md'
 )
 const RUNBOOK = resolve('docs/handbook/demo-seat.md')
+const PLAYBOOK = resolve('operator/skills/product-guide/references/demo-meetings.md')
+const MARKERS_JSON = resolve('operator/hermes-smd-overlay/shared/fabrication_markers.json')
 
 /** The skills each demo act in the runbook depends on. */
 const DEMO_ACT_SKILLS = [
@@ -177,5 +183,82 @@ describe('nothing from a client', () => {
       expect(text).not.toMatch(word)
     for (const file of ['commitments.json', 'routine-grid.yaml', 'initiation-card.yaml'])
       expect(existsSync(join(DEMO_DIR, file)), file).toBe(false)
+  })
+})
+
+/** The act titles of the runbook's table ("| 1. Meet it |"), in order. */
+function runbookActs(): string[] {
+  const text = readFileSync(RUNBOOK, 'utf8')
+  return [...text.matchAll(/^\| (\d)\. ([^|]+?) \|/gm)].map((m) => `${m[1]}. ${m[2]}`)
+}
+
+/** The act lines of the library playbook's "The seven acts" section. */
+function playbookActLines(): string[] {
+  const text = readFileSync(PLAYBOOK, 'utf8')
+  const section = text.split('## The seven acts')[1]?.split('\n## ')[0] ?? ''
+  return section.split('\n').filter((l) => /^\d\. /.test(l))
+}
+
+/** The fabrication gate's registry, matched as the overlay compiles it. */
+function markerTests(): { id: string; test: (t: string) => boolean }[] {
+  const doc = JSON.parse(readFileSync(MARKERS_JSON, 'utf8')) as {
+    markers: { id: string; kind?: string; value?: string; pattern?: string }[]
+  }
+  return doc.markers.map((m) => {
+    const text = m.value ?? m.pattern ?? ''
+    const kind = (m.kind ?? 'literal_ci').toLowerCase()
+    if (kind === 'regex') {
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp - the pattern is the overlay's own checked-in marker registry, never user input
+      const re = new RegExp(text, 'i')
+      return { id: m.id, test: (t: string) => re.test(t) }
+    }
+    if (kind === 'literal') return { id: m.id, test: (t: string) => t.includes(text) }
+    return { id: m.id, test: (t: string) => t.toLowerCase().includes(text.toLowerCase()) }
+  })
+}
+
+/** What the seat's reply checks refuse in plain text, beyond the markers. */
+function plainTextMisses(text: string): string[] {
+  const misses: string[] = []
+  if (text.includes('!')) misses.push('exclamation mark')
+  if (text.includes('—')) misses.push('em dash')
+  if (/\b[A-Z]{2,}(?:\s+[A-Z]{2,})+\b/.test(text)) misses.push('words in capitals')
+  if (/\$\s?\d/.test(text)) misses.push('dollar amount')
+  return misses
+}
+
+describe("the guide's demo playbook keeps step with the runbook", () => {
+  const acts = runbookActs()
+  const lines = playbookActLines()
+
+  it('the playbook names the seven runbook acts, in order (an empty parse cannot pass)', () => {
+    const titles = lines.map((l) => l.split('.').slice(0, 2).join('.'))
+    expect({ count: acts.length, titles }).toEqual({ count: 7, titles: acts })
+  })
+
+  it('names no skill, seat slug or matter number', () => {
+    const text = readFileSync(PLAYBOOK, 'utf8')
+    const found = [...DEMO_ACT_SKILLS, 'pilot-smokeball'].filter((n) => text.includes(n))
+    found.push(...(text.match(/\b\d{4}-PI-\d+\b/g) ?? []))
+    expect(found).toEqual([])
+  })
+
+  it('every example email clears the reply checks', () => {
+    const markers = markerTests()
+    const emails = lines.flatMap((l) => [...l.matchAll(/"([^"]+)"/g)].map((m) => m[1]))
+    const misses = emails.flatMap((e) => [
+      ...markers.filter((m) => m.test(e)).map((m) => `${e}: ${m.id}`),
+      ...plainTextMisses(e).map((p) => `${e}: ${p}`),
+    ])
+    expect({ enough: emails.length >= 6, misses }).toEqual({ enough: true, misses: [] })
+  })
+
+  it('the reply checks can fail: a planted email is caught', () => {
+    const markers = markerTests()
+    const planted = 'We guarantee it by end of month, for $500!'
+    expect(markers.filter((m) => m.test(planted)).map((m) => m.id)).toEqual(
+      expect.arrayContaining(['guarantee', 'by-end-of', 'specific-dollar-amount'])
+    )
+    expect(plainTextMisses(planted)).toEqual(['exclamation mark', 'dollar amount'])
   })
 })

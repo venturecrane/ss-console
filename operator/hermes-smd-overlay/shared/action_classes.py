@@ -409,6 +409,9 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     # Nothing is sent and no recipient is named.
     "training_record": ActionClass.INTERNAL_WRITE,
     "tone_check": ActionClass.INTERNAL_WRITE,
+    # The material check (hermes-smd-training): the same tone rules over a
+    # pasted or forwarded draft. READ: it writes nothing and sends nothing.
+    "material_check": ActionClass.READ,
     # A dated reminder in the asking person's own walled store (plugins/
     # hermes-smd-desk, ss-console #3946). INTERNAL_WRITE: one record in that
     # person's partition of a managed store, the date resolved and checked in

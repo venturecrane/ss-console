@@ -267,7 +267,17 @@ class Rehearsal:
 
     # -- one turn -----------------------------------------------------------
 
-    def _payload(self, sender: str, mid: str, body: str) -> dict[str, Any]:
+    def _payload(
+        self,
+        sender: str,
+        mid: str,
+        body: str,
+        *,
+        subject: str = "notes",
+        own: str | None = None,
+    ) -> dict[str, Any]:
+        """``own`` is the provider's quoted-history-free text when the body
+        carries a forwarded or quoted part; the whole body otherwise."""
         domain = sender.rsplit("@", 1)[-1]
         return {
             "source": "agentmail",
@@ -278,9 +288,9 @@ class Rehearsal:
                 "thread_id": f"thr-{mid.strip('<>')}",
                 "from": f"Rep Example <{sender}>",
                 "to": [INBOX],
-                "subject": "notes",
+                "subject": subject,
                 "text": body,
-                "extracted_text": body,
+                "extracted_text": body if own is None else own,
                 "authentication_results": {
                     "spf": "pass",
                     "dkim": "pass",
@@ -308,6 +318,8 @@ class Rehearsal:
         sender: str | None,
         body: str = "",
         final_text: str = "",
+        subject: str = "notes",
+        own: str | None = None,
     ) -> dict[str, Any]:
         from tests_e2e._drive import fresh_ladder, fresh_session
         from tests_e2e._model_stub import ScriptedTurn
@@ -326,7 +338,7 @@ class Rehearsal:
         verdict: Any = None
         if sender is not None:
             mid = f"<{uuid.uuid4().hex}@mail.example.test>"
-            payload = self._payload(sender, mid, f"{body} {marker}")
+            payload = self._payload(sender, mid, f"{body} {marker}", subject=subject, own=own)
             verdict = self._deliver(payload, event_id=mid)
             from bootstrap.translate import _INBOUND_EMAIL_PROMPT
 

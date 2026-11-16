@@ -1,6 +1,6 @@
-"""hermes-smd-training: a representative's lessons, quiz, mock pitch and tone check (ss-console #3946).
+"""hermes-smd-training: a representative's lessons, quiz, mock pitch, tone check and material check (ss-console #3946).
 
-Two tools, registered only on a guide seat that authors representative
+Three tools, registered only on a guide seat that authors representative
 training (:func:`shared.training.authored`: the ``rep-training`` skill enabled
 and the ``rep-progress`` store walled per person and written only by code):
 
@@ -14,6 +14,14 @@ and the ``rep-progress`` store walled per person and written only by code):
 ``tone_check``  Checks the representative's own words in the email that opened
     this turn against the tone rules the skill authors as data, records how
     many misses there were, and returns each miss with how to fix it.
+
+``material_check``  Checks a draft the representative wants looked at (a post,
+    deck text, a one-pager, a proposal draft, an email), pasted into their email
+    or forwarded, against the same tone rules. Code decides what is read
+    (:mod:`shared.material_check`: their own words, plus the forwarded
+    part when the email is a forward), and the result says how many characters
+    were checked and whether forwarded text was included. It records NOTHING:
+    checking a rough draft, or a competitor's post, never moves readiness.
 
 The model supplies values (a lesson id, a scenario id, an objection number) and
 never a person, a grade, a count or any text to store. Everything is decided in
@@ -31,13 +39,14 @@ import json
 import logging
 from typing import Any
 
-from shared import training
+from shared import material_check, training
 from shared.tool_registration import register_wrapped_tool
 
 logger = logging.getLogger(__name__)
 
 TOOL_RECORD = "training_record"
 TOOL_TONE = "tone_check"
+TOOL_MATERIAL = "material_check"
 
 ACTIONS = ("status", "complete_lesson", "quiz", "grade_quiz", "objection_answered")
 
@@ -67,6 +76,16 @@ TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
         "Checks the representative's own words in the email you are answering against the "
         "seat's tone rules, records how many misses there were, and returns each miss with "
         "how to fix it. Takes no arguments: it reads that email itself.",
+        {"type": "object", "properties": {}, "additionalProperties": False},
+    ),
+    TOOL_MATERIAL: (
+        "Checks material the representative wants looked at (a post, deck text, a one-pager, "
+        "a proposal draft or an email), pasted into the email you are answering or forwarded "
+        "in it, against the seat's tone rules. Records nothing and changes no training "
+        "progress. Returns each miss with how to fix it, how many characters were checked, "
+        "whether forwarded text was included, and a sentence saying what was checked, to put "
+        "in your reply. Takes no arguments: it reads that email itself. Attached files are "
+        "not read.",
         {"type": "object", "properties": {}, "additionalProperties": False},
     ),
 }
@@ -231,11 +250,25 @@ def tone_handler(args: dict[str, Any], **kwargs: Any) -> str:
     )
 
 
-_HANDLERS = {TOOL_RECORD: record_handler, TOOL_TONE: tone_handler}
+def material_handler(args: dict[str, Any], **kwargs: Any) -> str:
+    """The material check (:mod:`shared.material_check`): tone rules over what
+    code decides is the material, and nothing written anywhere."""
+    try:
+        return _say(material_check.check(kwargs.get("session_id")))
+    except training.TrainingError as exc:
+        logger.warning("hermes-smd-training: tone rules unreadable (%s)", exc)
+        return _refused("The tone rules could not be opened just now; nothing was checked.")
+
+
+_HANDLERS = {
+    TOOL_RECORD: record_handler,
+    TOOL_TONE: tone_handler,
+    TOOL_MATERIAL: material_handler,
+}
 
 
 def register(ctx: Any) -> None:
-    """Register both tools on a seat that authors representative training; nothing elsewhere."""
+    """Register the three tools on a seat that authors representative training; nothing elsewhere."""
     if not training.authored():
         logger.info("hermes-smd-training: representative training not authored; no tools")
         return
@@ -255,8 +288,10 @@ def register(ctx: Any) -> None:
 __all__ = [
     "ACTIONS",
     "TOOLS",
+    "TOOL_MATERIAL",
     "TOOL_RECORD",
     "TOOL_TONE",
+    "material_handler",
     "record_handler",
     "register",
     "tone_handler",

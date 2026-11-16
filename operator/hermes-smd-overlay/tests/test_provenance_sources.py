@@ -341,6 +341,10 @@ _EXPECTED_NON_SEEDING: frozenset[str] = frozenset(
         # the Operator's own record of a list it sent. A reply to it re-resolves
         # on the number the sender gave, so its matter numbers certify nothing.
         "mcp_smokeball_get_post_list",
+        # The guide seat's material check (hermes-smd-training): tone-rule
+        # misses counted over a draft the sender pasted or forwarded. Their own
+        # email, never the firm's records.
+        "material_check",
         # Hermes-core filesystem / workspace / self-inspection.
         "read_file",
         "search_files",

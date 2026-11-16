@@ -365,10 +365,14 @@ describe('product guide answer key (ADR 0105)', () => {
   // reveal the capability is graded on the question path too, not only on
   // the tool path (r06). 31 (2026-11-10, ss-console #3946): q26 and q27 added
   // for the new prospect-fit page (who-smd-sells-to.md), which the training
-  // curriculum's fit lesson reads.
-  it('has 31 questions with unique ids, 7 of them refusals of the six kinds', () => {
-    expect(qs.length).toBe(31)
-    expect(new Set(qs.map((q) => q.id)).size).toBe(31)
+  // curriculum's fit lesson reads. 36 (2026-11-15): q28 to q32 added for the
+  // guide's prospect prep (an industry with a pack, one without, and a named
+  // company that is not on the asker's desk), the desk's proposal sketch on a
+  // lead that carries an amount, and the desk's material check of a forwarded
+  // draft (the one `tool` case that is not an invite code).
+  it('has 36 questions with unique ids, 7 of them refusals of the six kinds', () => {
+    expect(qs.length).toBe(36)
+    expect(new Set(qs.map((q) => q.id)).size).toBe(36)
     expect(qs.every((q) => ['answer', 'refuse', 'tool'].includes(q.expect))).toBe(true)
     const refusals = qs.filter((q) => q.expect === 'refuse')
     expect(refusals.length).toBe(7)
@@ -396,7 +400,7 @@ describe('product guide answer key (ADR 0105)', () => {
       expect(mnc.some((m) => /role/.test(m))).toBe(true)
     }
 
-    const tools = qs.filter((q) => q.expect === 'tool')
+    const tools = qs.filter((q) => q.expect === 'tool' && q.tool === 'invite_code_issue')
     expect(tools.length).toBe(2)
     for (const q of tools) {
       expect({ id: q.id, tool: q.tool, sender: q.sender, cites: q.cite }).toEqual({
@@ -473,6 +477,73 @@ describe('product guide answer key (ADR 0105)', () => {
     // A pricing question may say "price"; it may not carry an amount.
     expect(existsSync(KEY)).toBe(true)
     expect(hygieneErrors(readFileSync(KEY, 'utf8'), NAMES, { runtime: false })).toEqual([])
+  })
+})
+
+describe('prospect prep, the proposal sketch and the material check', () => {
+  const key = parseYaml(readFileSync(KEY, 'utf8')) as { questions: KeyEntry[] }
+  const qs = key.questions
+  const desk = readFileSync(resolve('operator/skills/rep-desk/SKILL.md'), 'utf8')
+  const guide = readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8')
+  /** The fixed first and last lines of a proposal sketch, as the desk skill writes them. */
+  const SKETCH_FIRST =
+    'Seat sketch for SMD to scope. Not a proposal: SMD sets scope, price and timing.'
+  const SKETCH_LAST =
+    'For SMD to scope with the business: send it to team@smd.services, not to the prospect.'
+
+  it('every tool case names a tool, and the only other tool is the material check', () => {
+    const tools = qs.filter((q) => q.expect === 'tool')
+    expect(tools.map((q) => q.tool).sort()).toEqual([
+      'invite_code_issue',
+      'invite_code_issue',
+      'material_check',
+    ])
+    const material = tools.find((q) => q.tool === 'material_check')!
+    expect(material.sender).toBe('listed')
+    expect(material.question).toMatch(/Forwarded message/)
+    expect((material.must_not_contain ?? []).join(' ')).toMatch(/approved/)
+  })
+
+  it('the prep cases: one industry with a pack, one without, one named company off the desk', () => {
+    const prep = qs.filter((q) => q.category === 'prospect-prep')
+    expect(prep.map((q) => q.id)).toEqual(['q28', 'q29', 'q30'])
+    expect(prep[1].must_contain?.join(' ')).toMatch(/no industry pack/)
+    expect(prep[2].must_contain?.join(' ')).toMatch(/cannot discuss SMD's clients/)
+  })
+
+  it('the sketch case puts an amount on the lead and forbids it in the reply', () => {
+    const [sketch] = qs.filter((q) => q.category === 'proposal-sketch')
+    const records = (sketch as KeyEntry & { desk_records?: string[] }).desk_records ?? []
+    expect(records.some((r) => /Amount:/.test(r))).toBe(true)
+    expect((sketch.must_not_contain ?? []).join(' ')).toMatch(/amount/)
+  })
+
+  it("the sketch's fixed first and last lines are the desk skill's, word for word", () => {
+    const section = desk.split('## A proposal sketch')[1]?.split('\n## ')[0] ?? ''
+    const fixed = section
+      .split('\n')
+      .filter((l) => l.startsWith('    '))
+      .map((l) => l.trim())
+    expect(fixed).toEqual([SKETCH_FIRST, SKETCH_LAST])
+    for (const line of fixed) {
+      expect(hygieneErrors(line, NAMES, { runtime: false })).toEqual([])
+      expect(markerHits(line)).toEqual([])
+    }
+  })
+
+  it('the prep reads only the files it names, and each exists', () => {
+    const section = guide.split('## Prospect prep')[1]?.split('\n## ')[0] ?? ''
+    const named = [...section.matchAll(/`\/app\/skills\/([\w/.-]+)`/g)].map((m) => m[1]).sort()
+    expect(named).toEqual([
+      'pitch-practice/references/buyer-types.md',
+      'pitch-practice/references/drills.yaml',
+      'pitch-practice/references/scenarios.yaml',
+      'product-guide/references/demo-meetings.md',
+      'product-guide/references/industry-packs.md',
+      'rep-desk/SKILL.md',
+      'rep-training/references/discovery.md',
+    ])
+    for (const rel of named) expect(existsSync(resolve('operator/skills', rel)), rel).toBe(true)
   })
 })
 

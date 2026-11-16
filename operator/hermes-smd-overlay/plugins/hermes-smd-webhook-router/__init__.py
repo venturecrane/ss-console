@@ -275,8 +275,7 @@ def _origin_from_dto(
     send) when the DTO is absent or lacks a sender address or a message id."""
     if dto is None:
         return None
-    sender = dto.from_addr
-    message_id = dto.message_id
+    sender, message_id = dto.from_addr, dto.message_id
     if not sender or not message_id:
         return None
     inbox_id = ""
@@ -318,6 +317,9 @@ def _origin_from_dto(
             )
         ),
         subject=dto.subject if isinstance(dto.subject, str) else "",
+        # The whole body, for the material check's deterministic read of a
+        # forwarded draft (shared.training.material_text). Never logged.
+        body_text=dto.body_text if isinstance(dto.body_text, str) else "",
     )
 
 

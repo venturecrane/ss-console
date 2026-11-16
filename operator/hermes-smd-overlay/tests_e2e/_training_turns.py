@@ -11,6 +11,8 @@ What runs, each through the seat's own code path:
   refused), a draft with tone misses then a clean one, a whole mock pitch
   answered objection by objection (one out of order refused), the quiz sent and
   graded from her own numbered answers, and readiness;
+* rep A forwards a post to be checked: the material check reads her note and
+  the forwarded part, returns the misses, and records nothing;
 * rep B starts, completes one lesson, and fails the quiz in the letters-only
   form; B's status shows B's progress and nothing of A's;
 * a scheduled turn calls the training tool and is refused (no person);
@@ -41,11 +43,17 @@ C_MARK = "CANARY-C-m3t6x1"
 REPORT_SCHEDULE = "0 15 * * 1"
 
 #: Every quiz answer correct except question 9 (the key's answer is D).
-A_QUIZ = "1 B\n2. C\nQ3: A\n4) D\n5 A\n6 C\n7 B\n8 C\n9 B\n10 A"
+A_QUIZ = "1 B\n2. C\nQ3: A\n4) D\n5 A\n6 C\n7 B\n8 C\n9 B\n10 A\n11 B\n12 D"
 #: Three right (questions 3, 5 and 10), the rest wrong. The letters-only form is
 #: covered by the unit tests: here every email body ends with the harness's
 #: turn marker, which is not a letter.
-B_QUIZ = "\n".join(f"{n} A" for n in range(1, 11))
+B_QUIZ = "\n".join(f"{n} A" for n in range(1, 13))
+
+#: A post rep A forwards for a material check, with misses of several rules.
+FORWARDED_POST = (
+    "---------- Forwarded message ---------\n"
+    "Meet your new AI employee, guaranteed to replace your staff in two weeks."
+)
 
 #: Rep A's answers to the owner scenario's six objections, one per email.
 A_ANSWERS = (
@@ -224,6 +232,21 @@ def run_training(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, 
         sender=a,
         body=f"That was the whole pitch. {a_mark}",
     )
+    turn(
+        "t-a-lesson-11",
+        [(rec, {"action": "complete_lesson", "lesson_id": "l11"})],
+        sender=a,
+        body=f"I would run the seven acts in order, starting with meet it. {a_mark}",
+    )
+    own = f"Can you check this post before I share it? {a_mark}"
+    turn(
+        "t-a-material-check",
+        [("material_check", {})],
+        sender=a,
+        subject="Fwd: our launch",
+        own=own,
+        body=f"{own}\n\n{FORWARDED_POST}",
+    )
     turn("t-a-asks-quiz", [(rec, {"action": "quiz"})], sender=a, body=f"quiz please {a_mark}")
     turn(
         "t-a-quiz-answers",
@@ -272,4 +295,12 @@ def run_training(r: Any, a: str, b: str, a_mark: str, b_mark: str) -> dict[str, 
     return out
 
 
-__all__ = ["A_QUIZ", "B_QUIZ", "C", "C_MARK", "author_training", "run_training"]
+__all__ = [
+    "A_QUIZ",
+    "B_QUIZ",
+    "C",
+    "C_MARK",
+    "FORWARDED_POST",
+    "author_training",
+    "run_training",
+]
