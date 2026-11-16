@@ -42,7 +42,11 @@ import {
   suffixOf,
 } from './lib/engagement-paths.mjs'
 
-const LOG_TTL_MS = 7 * 24 * 60 * 60 * 1000 // prune logs older than 7 days
+// Kept 45 days, longer than the obligation-capture-at-close review interval:
+// that review joins these logs against ~/.claude/ss-obligation-journal, and a
+// 7-day prune deleted the evidence before the review could read it (scored
+// 2026-11-16). The log is keyed by session id, so age changes nothing else.
+const LOG_TTL_MS = 45 * 24 * 60 * 60 * 1000 // prune logs older than 45 days
 
 try {
   const payload = JSON.parse(fs.readFileSync(0, 'utf8'))
@@ -61,7 +65,8 @@ try {
   const logDir = readLogDir()
   fs.mkdirSync(logDir, { recursive: true })
 
-  // Opportunistic prune: read logs are session-scoped scratch, not a record.
+  // Opportunistic prune: read logs are session-scoped, kept long enough to be
+  // the evidence for the obligation-capture review, then dropped.
   const now = Date.now()
   for (const f of fs.readdirSync(logDir)) {
     try {
