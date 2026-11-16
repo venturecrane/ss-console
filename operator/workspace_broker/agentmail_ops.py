@@ -298,6 +298,34 @@ class AgentMailOps:
         texts = [found.get(k) for k in ("subject", "text", "extracted_text", "preview", "html")]
         return {"sender": sender, "texts": [t for t in texts if isinstance(t, str) and t]}
 
+    def sent_to_since(self, recipient: str, subject_prefix: str, after_iso: str) -> list[dict[str, str]]:
+        """This inbox's SENT messages to ``recipient`` whose subject starts with
+        ``subject_prefix``, timestamped at or after ``after_iso``.
+
+        The mailbox keeper's send-once check across machines (2026-11-16: a
+        second machine back from a host failure sent the morning list again,
+        because "already sent today" was only on the first machine's volume).
+        AgentMail filters by label, time, recipient and subject; the filter is
+        applied again here, so a vendor that ignored a parameter cannot make a
+        received message read as a sent one. RAISES on any failure to look:
+        "could not look" must never read as "nothing sent"."""
+        wanted = normalize_address(recipient)
+        query = urllib.parse.urlencode(
+            [("labels", "sent"), ("after", after_iso), ("to", wanted), ("subject", subject_prefix), ("limit", "100")]
+        )
+        found = self._request(self._path("messages") + "?" + query, "GET", None)
+        messages = found.get("messages")
+        if not isinstance(messages, list):
+            raise AgentMailTransportError("agentmail returned no message list")
+        out: list[dict[str, str]] = []
+        for entry in messages:
+            if not isinstance(entry, dict):
+                raise AgentMailTransportError("agentmail returned a message of the wrong shape")
+            subject = str(entry.get("subject") or "")
+            if wanted in _as_addresses(entry.get("to")) and subject.startswith(subject_prefix):
+                out.append({"message_id": _message_id(entry), "timestamp": str(entry.get("timestamp") or "")})
+        return out
+
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Fence every recipient, then transmit from this seat's pinned inbox."""
         files = _files(payload)

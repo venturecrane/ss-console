@@ -82,7 +82,8 @@ def test_a_run_names_only_the_mode_and_wakes_nothing(monkeypatch, capsys) -> Non
     counts = {"pages": 2, "threads": 9, "settled": 3, "trashed": 3, "trash_failed": 0, "waiting": 1}
     broker = FakeBroker({"ok": True, "status": "done", "mode": "daily", "counts": counts})
     out, lines = _run(monkeypatch, capsys, broker)
-    assert broker.requests[0] == {"action": "mailbox_keeper_run", "mode": "scheduled"}
+    # No seat slug, so no cost breaker: the broker is told the model is refused.
+    assert broker.requests[0] == {"action": "mailbox_keeper_run", "mode": "scheduled", "model": "refused"}
     assert out == {"wakeAgent": False, "status": "done", "mode": "daily", **counts}
     assert len(lines) == 1
     meta = _row_meta(broker)
@@ -156,3 +157,45 @@ def test_a_missing_client_still_prints_a_verdict(monkeypatch, capsys) -> None:
     assert _load().main() == 0
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert out == {"wakeAgent": False, "status": "client_unavailable", "error": "ModuleNotFoundError"}
+
+
+def _metered(monkeypatch, tmp_path, broker: FakeBroker) -> Path:
+    db = tmp_path / "sticky_stop.db"
+    monkeypatch.setenv("CUSTOMER_SLUG", "example-seat")
+    monkeypatch.setenv("SMD_STICKY_STOP_DB_PATH", str(db))
+    monkeypatch.setenv("SMD_AUDIT_BROKER_SOCKET", broker.path)
+    return db
+
+
+def test_the_cost_breaker_is_asked_before_and_charged_after(monkeypatch, capsys, tmp_path) -> None:
+    import sqlite3
+
+    broker = FakeBroker({"ok": True, "status": "done", "mode": "daily", "classify": "ok", "counts": {"cost_cents": 5}})
+    db = _metered(monkeypatch, tmp_path, broker)
+    out, _ = _run(monkeypatch, capsys, broker)
+    assert broker.requests[0]["model"] == "allowed"
+    assert out["classify"] == "ok" and out["cost_cents"] == 5
+    (cents,) = sqlite3.connect(db).execute("SELECT cost_cents_today FROM sticky_stop_state").fetchone()
+    assert cents == 5
+
+
+def test_a_stopped_breaker_refuses_the_model(monkeypatch, capsys, tmp_path) -> None:
+    import sqlite3
+
+    broker = FakeBroker({"ok": True, "status": "done", "mode": "daily", "counts": {}})
+    db = _metered(monkeypatch, tmp_path, broker)
+    first = FakeBroker({"ok": True, "status": "done", "counts": {}})
+    monkeypatch.setenv("SMD_AUDIT_BROKER_SOCKET", first.path)
+    _run(monkeypatch, capsys, first)  # creates the table
+    assert first.requests[0]["model"] == "allowed"  # the control: the same seat, not stopped
+    conn = sqlite3.connect(db)
+    conn.execute("UPDATE sticky_stop_state SET level = 'HARD_STOP'")
+    if conn.total_changes == 0:
+        conn.execute(
+            "INSERT INTO sticky_stop_state (customer, persona, level, updated_at) VALUES "
+            "('example-seat', '_machine', 'HARD_STOP', '2026-11-16T00:00:00Z')"
+        )
+    conn.commit()
+    monkeypatch.setenv("SMD_AUDIT_BROKER_SOCKET", broker.path)
+    _run(monkeypatch, capsys, broker)
+    assert broker.requests[0]["model"] == "refused"

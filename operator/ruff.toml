@@ -132,6 +132,9 @@ exclude = [
     # The staff-mailbox read rule twin (overlay shared/staff_mailbox_rule.py,
     # tests/test_staff_mailbox_rule_parity.py on both sides): one set of bytes at 100.
     "connectors/msgraph-mail/msgraph_mail_connector/staff_mailbox_rule.py",
+    # The no-tools model client twin (overlay shared/model_call.py, stamped by
+    # bin/gen-skill-shared.py): one set of bytes at the overlay's 100.
+    "workspace_broker/model_call.py",
 ]
 quote-style = "double"
 indent-style = "space"

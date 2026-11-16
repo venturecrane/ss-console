@@ -48,6 +48,7 @@ from bin.lib import console_d1, msgraph_channel, seam_pull
 from bin.lib import work_health as wh
 from bin.lib import work_health_auth as auth
 from bin.lib import work_health_casefile as casefile_wh
+from bin.lib import work_health_keeper as keeper_wh
 from bin.lib import work_health_mail as mail
 from bin.lib import work_health_sources as src
 from bin.lib import seat_config
@@ -276,6 +277,7 @@ def _operator_items(
     items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
     items += src.delivery_proof_items(slug, rows, cfg, now)
     items += casefile_wh.casefile_schedule_items(slug, rows, now)
+    items += keeper_wh.keeper_items(slug, rows, now, config)
     if has_smokeball:
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)
@@ -427,10 +429,24 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--pages-only", action="store_true", help="send the urgent pages but not the digest (deliberate proofs)"
     )
+    ap.add_argument(
+        "--machines", action="store_true", help="also count each seat's started Fly machines (needs a Fly credential)"
+    )
     return ap
 
 
-def _evaluate_all(cfg: wh.Config, console: Console, seats: list[str], offline: dict[str, str], now: datetime):
+def _machine_check(slug: str, now: datetime, items: list[wh.Item], gaps: dict[str, list[str]]) -> None:
+    """One machine per seat (bin/lib/work_health_keeper.py); unreadable is a gap."""
+    machines, why = keeper_wh.read_machines(slug, CUSTOMERS.parents[1])
+    if machines is None:
+        gaps.setdefault(slug, []).append(f"machine count not checked: {why}.")
+        return
+    items += keeper_wh.machine_items(slug, machines, now)
+
+
+def _evaluate_all(
+    cfg: wh.Config, console: Console, seats: list[str], offline: dict[str, str], now: datetime, machines: bool = False
+):
     """(items, gaps, resolved) over every seat."""
     items: list[wh.Item] = []
     gaps: dict[str, list[str]] = {}
@@ -443,6 +459,8 @@ def _evaluate_all(cfg: wh.Config, console: Console, seats: list[str], offline: d
             resolved[slug] = seat_resolved
         if seat_gaps:
             gaps[slug] = seat_gaps
+        if machines:
+            _machine_check(slug, now, items, gaps)
     return items, gaps, resolved
 
 
@@ -464,7 +482,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     cfg = wh.load_config()
     console = Console(console_d1.ConsoleD1()) if not offline else Console(_NoD1())
     seats = live_seats(console, args.slug or list(offline))
-    items, gaps, resolved = _evaluate_all(cfg, console, seats, offline, now)
+    items, gaps, resolved = _evaluate_all(cfg, console, seats, offline, now, args.machines)
     items += wh.missed_run_items(since, cfg, now)
     plan = mail.decide(
         items=items,

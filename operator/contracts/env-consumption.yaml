@@ -68,9 +68,15 @@ vars:
     custody: customer
     note: >-
       the gateway's model credential (per-seat Anthropic workspace key or BYO
-      key). TWO CONSUMERS, one value (ss#2464): the long-running gateway, and —
-      on a Smokeball seat — the smokeball MCP subprocess, which needs a model
-      credential to transcribe scanned documents. The overlay registry delivers
+      key). THREE CONSUMERS, one value (ss#2464; 2026-11-16): the long-running
+      gateway; on a Smokeball seat the smokeball MCP subprocess, which needs a
+      model credential to transcribe scanned documents; and on a seat whose
+      mailbox-keeper skill authors `classify`, the workspace broker, which
+      reads it from the 0600 broker-owned model.json the entrypoint writes at
+      boot (entrypoint-mailbox-keeper.sh, SMD_MODEL_CREDENTIAL_PATH in the
+      broker's env -i launch) for the keeper's one-call, no-tools reading of
+      the owner's mail. A cron pre_run never holds it (Hermes scrubs provider
+      keys from a script's environment). The overlay registry delivers
       it under the same name (a remap-from-same-name optional row), so no second
       credential exists. Deliberate: ADR 0062 §2 already makes this a per-seat
       Anthropic WORKSPACE key, so spend limits, revocation, and cost attribution
