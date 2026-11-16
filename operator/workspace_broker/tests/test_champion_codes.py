@@ -22,7 +22,7 @@ from workspace_broker import enrollment_verbs as ev
 from workspace_broker import person_purge
 from workspace_broker import sender_enrollment as se
 from workspace_broker.sender_enrollment_cli import main as cli_main
-from workspace_broker.tests.test_sender_enrollment import (  # noqa: F401 - fixture reuse
+from workspace_broker.tests.test_sender_enrollment import (  # noqa: F401 - store_dir is a pytest fixture used by name
     DEMO_YAML,
     GUIDE_YAML,
     SMD,
@@ -108,3 +108,33 @@ def test_a_removed_champion_is_proven_gone_by_the_probe(tmp_path: Path) -> None:
     assert CHAMPION not in store.enrolled_addresses()
     assert person_purge.probe(CHAMPION, targets) == []
     assert cli_main(probe, store=store) == 0
+
+
+@pytest.mark.parametrize(
+    ("own", "subject"),
+    [
+        ("I need a code for Jane Smith.", "Re: Champion code for Dana"),
+        ("Please send a champion code for Dana Reyes and a code for Jane Smith.", "codes"),
+        ("I need a code for Jane Smith. Jane is a rep, not a champion.", "codes"),
+    ],
+)
+def test_a_champion_claim_for_the_wrong_person_is_refused(
+    tmp_path: Path,
+    store_dir: Path,
+    own: str,
+    subject: str,
+) -> None:
+    """Whatever the gateway claims, the broker reads only the administrator's
+    own words, never the subject or quoted history, for this person's name."""
+    mail = FakeMail(SMD, [subject, own, "> On Monday: a champion code for Jane Smith"], own=own)
+    with pytest.raises(PermissionError):
+        _issue_verb(_broker(tmp_path, GUIDE_YAML, mail), name="Jane Smith", kind="champion")
+    assert mail.replies == [] and se.EnrollmentStore(store_dir).codes() == []
+
+
+def test_the_subject_alone_never_makes_a_champion_code(tmp_path: Path, store_dir: Path) -> None:
+    mail = FakeMail(
+        SMD, ["Champion code for Dana Reyes", "I need a code for Dana Reyes"], own="I need a code for Dana Reyes"
+    )
+    with pytest.raises(PermissionError):
+        _issue_verb(_broker(tmp_path, GUIDE_YAML, mail), name="Dana Reyes", kind="champion")

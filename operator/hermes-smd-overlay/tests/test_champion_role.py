@@ -353,12 +353,26 @@ def test_a_champion_is_held_to_twenty_a_day(guide, tmp_path, authored, cap) -> N
     assert mod.daily_limit.limit_for(raw, CHAMPION) is None
 
 
-def test_the_kind_of_code_comes_from_words() -> None:
-    assert se.kind_from_words("I need a Champion code for Dana Reyes") == se.KIND_CHAMPION
-    assert se.kind_from_words("champions: Dana Reyes") == se.KIND_CHAMPION
-    assert se.kind_from_words("I need a code for Dana Reyes", "") == se.KIND_REPRESENTATIVE
-    assert se.kind_from_words("the championship is over") == se.KIND_REPRESENTATIVE
-    assert se.kind_from_words(None) == se.KIND_REPRESENTATIVE
+#: The security review's three cases: each must give Jane a representative code.
+MISISSUE = [
+    ("I need a code for Jane Smith.", "Re: Champion code for Dana"),
+    ("Please send a champion code for Dana Reyes and a code for Jane Smith.", "codes"),
+    ("I need a code for Jane Smith. Jane is a rep, not a champion.", "codes"),
+]
+
+
+def test_the_kind_of_code_is_decided_per_person_from_the_phrase() -> None:
+    assert se.kind_for("I need a champion code for Dana Reyes", "Dana Reyes") == se.KIND_CHAMPION
+    assert se.kind_for("A CHAMPION CODE FOR  dana   reyes, please", "Dana Reyes") == (
+        se.KIND_CHAMPION
+    )
+    for words, _subject in MISISSUE:
+        assert se.kind_for(words, "Jane Smith") == se.KIND_REPRESENTATIVE, words
+    assert se.kind_for("a champion code for Dana Reyes-Smith", "Dana Reyes") == (
+        se.KIND_REPRESENTATIVE
+    )
+    assert se.kind_for("champions: Dana Reyes", "Dana Reyes") == se.KIND_REPRESENTATIVE
+    assert se.kind_for(None, "Dana Reyes") == se.KIND_REPRESENTATIVE
 
 
 def test_the_seat_session_register_is_the_real_one() -> None:
@@ -417,13 +431,15 @@ def test_the_demo_seat_issues_representative_codes_only(tool) -> None:  # noqa: 
 def test_a_champion_redeem_sends_the_champion_welcome_and_starts_no_training(
     router,  # noqa: F811 - fixture reuse
     monkeypatch,
+    enrolled_file,  # noqa: F811 - fixture reuse
 ) -> None:
     mod, _fake, broker, _tmp = router
     started: list[str] = []
     monkeypatch.setattr(mod, "_start_training", lambda _cfg, addr: started.append(addr) or True)
     real = broker.redeem
 
-    def redeem(**kw):
+    def redeem(**kw):  # the broker writes the enrolled entry before it answers
+        _enroll(enrolled_file, (CHAMPION, se.CHAMPION_LABEL))
         out = real(**kw)
         out["label"] = se.CHAMPION_LABEL
         return out
@@ -447,3 +463,70 @@ def test_a_representative_redeem_still_starts_training(router, monkeypatch) -> N
     te._dispatch(mod, te._mail(te.REP, f"my code {te.CODE}"))
     assert started == [te.REP]
     assert "The code's label is x." in broker.sends[0]["text"]
+
+
+def test_an_already_enrolled_representative_keeps_the_label_on_file(
+    router,  # noqa: F811 - fixture reuse
+    monkeypatch,
+    enrolled_file,  # noqa: F811 - fixture reuse
+) -> None:
+    """A representative who redeems a champion code is still a representative:
+    the broker keeps the first label, and the welcome, the training start and
+    SMD's notice follow the label on file, as the wall does."""
+    mod, _fake, broker, tmp = router
+    _enroll(enrolled_file, (te.REP, "admin-issued"))
+    started: list[str] = []
+    monkeypatch.setattr(mod, "_start_training", lambda _cfg, addr: started.append(addr) or False)
+    real = broker.redeem
+
+    def redeem(**kw):
+        out = real(**kw)
+        out["label"] = se.CHAMPION_LABEL  # the new code's label, not the one on file
+        return out
+
+    monkeypatch.setattr(se, "redeem", redeem)
+    # The router answers a listed sender as listed, so this is reached only when
+    # the gateway's roster read raced the broker's write: drive the redeem itself.
+    from shared import inbound_message
+
+    dto = inbound_message.normalize_inbound("agentmail", te._mail(te.REP, f"my code {te.CODE}"))
+    mod._redeem_enrollment(CustomerConfig.from_volume(str(tmp / "customer.yaml")), dto, te.CODE)
+    [(_mid, text, _anchor)] = broker.replies
+    assert text == se.welcome_text(None)
+    assert started == [te.REP]
+    [notice] = broker.sends
+    assert "The code's label is admin-issued." in notice["text"]
+    assert "client champion" not in notice["text"]
+    assert not se.is_champion(te.REP)
+
+
+def test_an_interrupted_turn_clears_the_mark(guide) -> None:
+    """An interrupted turn fires on_session_end (interrupted=True) and no
+    post_llm_call: the hook registered there clears the mark."""
+    mod = load_plugin("hermes-smd-initiation")
+
+    class Ctx:
+        def __init__(self) -> None:
+            self.hooks: dict[str, list] = {}
+
+        def register_hook(self, name, fn) -> None:
+            self.hooks.setdefault(name, []).append(fn)
+
+        def register_tool(self, **_kw) -> None:
+            pass
+
+    ctx = Ctx()
+    mod.register(ctx)
+    champion.IN_FLIGHT.mark("s-interrupted")
+    for fn in ctx.hooks["on_session_end"]:
+        fn(session_id="s-interrupted", interrupted=True, completed=False)
+    assert not champion.IN_FLIGHT.has("s-interrupted")
+
+
+@pytest.mark.parametrize(("words", "subject"), MISISSUE)
+def test_a_representative_is_never_misissued_a_champion_code(tool, words, subject) -> None:  # noqa: F811 - fixture reuse
+    mod, issued, _ = tool
+    _admin_origin("s-misissue", words, subject=subject)
+    out = mod.issue_handler({"name": "Jane Smith"}, session_id="s-misissue")
+    assert out.startswith("DONE: representative code c_9 for Jane Smith"), out
+    assert issued[-1]["kind"] == se.KIND_REPRESENTATIVE

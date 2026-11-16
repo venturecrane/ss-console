@@ -2359,6 +2359,10 @@
    ],
    [
     "on_session_end",
+    "hermes-smd-initiation"
+   ],
+   [
+    "on_session_end",
     "hermes-smd-reply"
    ],
    [

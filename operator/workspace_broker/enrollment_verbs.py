@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from typing import Any
 
 from .broker_context import BrokerContext
@@ -46,7 +47,6 @@ CHAMPION_LABEL = "champion"
 KIND_CHAMPION = "champion"
 #: The fixed words for each kind of code, in the code email and the result.
 KIND_WORDS = {KIND_CHAMPION: "champion code", "representative": "representative code"}
-_CHAMPION_WORD = re.compile(r"\bchampions?\b", re.IGNORECASE)
 
 #: The one message that carries an administrator's code, composed here and
 #: nowhere else. The code is in the administrator's own mailbox, which is the
@@ -196,7 +196,7 @@ def issue_verb(
     source = broker.agentmail.enrollment_source(message_id)
     if str(source["sender"]) != admin:
         raise PermissionError("that message was not sent by the administrator named")
-    kind = _kind(broker, payload.get("kind"), source)
+    kind = _kind(broker, payload.get("kind"), source, str(name))
     label = CHAMPION_LABEL if kind == KIND_CHAMPION else ISSUED_LABEL
     store = se.EnrollmentStore()
     code, code_id = store.issue(label=label, days=days, max_uses=uses, name=str(name))
@@ -235,17 +235,32 @@ def issue_verb(
     return {"ok": True, "code_id": code_id, "sent": True, "expires_at": expires, "kind": KIND_WORDS[kind]}
 
 
-def _kind(broker: BrokerContext, claimed: Any, source: dict[str, Any]) -> str:
+def _fold(value: Any) -> str:
+    return " ".join(unicodedata.normalize("NFC", value).casefold().split()) if isinstance(value, str) else ""
+
+
+def _asks_champion(own_words: Any, name: str) -> bool:
+    """ "champion code for <name>" in the administrator's own words, naming this
+    person. Mirrors the overlay's ``shared.sender_enrollment.kind_for``."""
+    words, wanted = _fold(own_words), _fold(name)
+    if not words or not wanted:
+        return False
+    return re.search(r"(?<![\w])champion code for " + re.escape(wanted) + r"(?![\w'-])", words) is not None
+
+
+def _kind(broker: BrokerContext, claimed: Any, source: dict[str, Any], name: str) -> str:
     """``champion`` only when the gateway asked for one, the seat is a guide
-    seat (never the demo seat), and the administrator's own email, re-read from
-    the mailbox, says "champion"; a champion claim the email does not bear out
-    is refused. Everything else is a representative code."""
+    seat (never the demo seat), and the administrator's OWN words in that email
+    (``own``: the provider's quoted-history-free text, re-read from the
+    mailbox; never the subject or quoted history) say "champion code for" this
+    person's name. A champion claim those words do not bear out is refused.
+    Everything else is a representative code."""
     if claimed != KIND_CHAMPION:
         return "representative"
     if _role(broker.customer_path) != se.ROLE:
         raise PermissionError("a champion code is issued only on a guide seat")
-    if not any(isinstance(t, str) and _CHAMPION_WORD.search(t) for t in source.get("texts") or []):
-        raise PermissionError("the administrator's email does not ask for a champion code")
+    if not _asks_champion(source.get("own"), name):
+        raise PermissionError("the administrator's email does not ask for a champion code for this person")
     return KIND_CHAMPION
 
 

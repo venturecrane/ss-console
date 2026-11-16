@@ -296,7 +296,13 @@ class AgentMailOps:
         if sender == normalize_address(self.inbox_id()):
             raise AgentMailRefused("that message was sent by this inbox itself, not to it")
         texts = [found.get(k) for k in ("subject", "text", "extracted_text", "preview", "html")]
-        return {"sender": sender, "texts": [t for t in texts if isinstance(t, str) and t]}
+        own = found.get("extracted_text")
+        return {
+            "sender": sender,
+            "texts": [t for t in texts if isinstance(t, str) and t],
+            # The sender's own words, quoted history removed by the provider.
+            "own": own if isinstance(own, str) else "",
+        }
 
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Fence every recipient, then transmit from this seat's pinned inbox."""

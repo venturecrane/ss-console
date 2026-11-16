@@ -46,15 +46,17 @@ scope:
 
 
 class FakeMail:
-    def __init__(self, sender: str, texts: list[str], *, fail_send: bool = False) -> None:
+    def __init__(self, sender: str, texts: list[str], *, fail_send: bool = False, own: str | None = None) -> None:
         self.sender = sender
         self.texts = texts
+        #: The provider's quoted-history-free text; the first text unless given.
+        self.own = own if own is not None else (texts[0] if texts else "")
         self.fail_send = fail_send
         self.replies: list[dict] = []
 
     def enrollment_source(self, message_id: str) -> dict:
         assert message_id
-        return {"sender": self.sender, "texts": list(self.texts)}
+        return {"sender": self.sender, "texts": list(self.texts), "own": self.own}
 
     def inbox_id(self) -> str:
         return "smd-guide@agentmail.to"

@@ -189,6 +189,9 @@ def register(ctx: Any) -> None:
     ctx.register_hook("pre_llm_call", on_turn_start)
     ctx.register_hook("pre_tool_call", on_pre_tool_call)
     ctx.register_hook("post_llm_call", on_turn_end)
+    # An interrupted turn fires on_session_end (interrupted=True) and no
+    # post_llm_call; without this its mark would outlive the turn.
+    ctx.register_hook("on_session_end", on_turn_end)
 
 
 __all__ = ["REFUSAL", "check", "on_pre_tool_call", "on_turn_end", "on_turn_start", "register"]

@@ -332,17 +332,27 @@ def redeem(
 #: The two kinds of code an administrator can ask for.
 KIND_CHAMPION = "champion"
 KIND_REPRESENTATIVE = "representative"
-_CHAMPION_WORD = re.compile(r"\bchampions?\b", re.IGNORECASE)
 
 
-def kind_from_words(*texts: Any) -> str:
-    """The kind of code an administrator's own words ask for: a champion code
-    when they say "champion", a representative code otherwise. Decided here,
-    in code, from the email; never from a model's argument."""
-    for text in texts:
-        if isinstance(text, str) and _CHAMPION_WORD.search(text):
-            return KIND_CHAMPION
-    return KIND_REPRESENTATIVE
+def _fold(value: Any) -> str:
+    """Case-folded, NFC, whitespace collapsed to single spaces."""
+    if not isinstance(value, str):
+        return ""
+    return " ".join(unicodedata.normalize("NFC", value).casefold().split())
+
+
+def kind_for(own_words: Any, name: Any) -> str:
+    """The kind of code an administrator's own words ask for, for this one
+    person. A champion code only when the phrase "champion code for <name>"
+    appears, ``<name>`` being the person the code is issued for; anything else
+    (the word alone, a subject line, quoted history, another person's name) is
+    a representative code. Decided here, in code; never from a model's
+    argument. Mirrored by ss-console ``workspace_broker/enrollment_verbs.py``."""
+    words, wanted = _fold(own_words), _fold(name)
+    if not words or not wanted:
+        return KIND_REPRESENTATIVE
+    phrase = re.compile(r"(?<![\w])champion code for " + re.escape(wanted) + r"(?![\w'-])")
+    return KIND_CHAMPION if phrase.search(words) else KIND_REPRESENTATIVE
 
 
 def issue(
@@ -391,7 +401,7 @@ __all__ = [
     "find_code",
     "is_champion",
     "issue",
-    "kind_from_words",
+    "kind_for",
     "notice_text",
     "redeem",
     "valid_name",

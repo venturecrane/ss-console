@@ -22,7 +22,8 @@ WHO MAY ASK, decided here in code and again by the broker:
 
 WHICH KIND OF CODE, decided here in code and never by the model: a CHAMPION
 code (a client champion, ``shared.champion``) when the administrator's own
-words in the email that opened the turn say "champion", on a guide seat; a
+words in the email that opened the turn say "champion code for" this
+person's name, on a guide seat; a
 REPRESENTATIVE code otherwise. The tool has no argument for it; an argument
 the model invents is ignored. The broker re-reads the email and checks the
 word again before it labels the code.
@@ -111,15 +112,15 @@ _DONE = (
 )
 
 
-def _kind(cfg: Any, origin: Any) -> str:
+def _kind(cfg: Any, origin: Any, name: str) -> str:
     """The kind of code, decided here from the administrator's OWN words in the
     email that opened this turn (``reply_text``, the provider's quoted-history-free
-    text, and the subject): the word "champion" asks for a champion code, and
-    only on a guide seat. The model passes no kind, and any argument naming one
-    is ignored."""
+    text; never the subject): "champion code for <name>", naming this person,
+    asks for a champion code, and only on a guide seat. The model passes no
+    kind, and any argument naming one is ignored."""
     if se.is_demo(cfg.raw):
         return se.KIND_REPRESENTATIVE
-    return se.kind_from_words(getattr(origin, "reply_text", ""), getattr(origin, "subject", ""))
+    return se.kind_for(getattr(origin, "reply_text", ""), name)
 
 
 def _tainted(session_id: str) -> bool:
@@ -183,7 +184,7 @@ def issue_handler(args: dict[str, Any], **kwargs: Any) -> str:
         return _REFUSED.format(
             tool=TOOL_ISSUE, why="days runs from 1 to 90 and max uses from 1 to 100."
         )
-    kind = _kind(cfg, origin)
+    kind = _kind(cfg, origin, str(name))
     try:
         result = se.issue(
             message_id=origin.message_id,

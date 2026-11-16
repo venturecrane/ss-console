@@ -102,9 +102,13 @@ def redeem_enrollment(
     if result is None:
         return
     name = result.get("name") if isinstance(result.get("name"), str) else None
-    label = result.get("label") if isinstance(result.get("label"), str) else None
+    # The label ON FILE, not the code just redeemed: an address already
+    # enrolled keeps its first label, and that is what the wall reads.
+    on_file = sender_enrollment.enrolled_label(dto.from_addr)
+    label = on_file if on_file is not None else result.get("label")
+    label = label if isinstance(label, str) else None
     demo = sender_enrollment.is_demo(cfg.raw)
-    champion = not demo and label == sender_enrollment.CHAMPION_LABEL
+    champion = not demo and sender_enrollment.is_champion(dto.from_addr)
     trains = False if demo or champion else start(cfg, dto.from_addr)
     try:
         agentmail_broker.send_reply(
