@@ -20,7 +20,10 @@ emitter builds it:
   ``still open:`` (``workers/fleet-alerts/src/alert-words.ts``,
   ``transition-email.ts``);
 * ``[SMD Ops] <N> cost anomaly|anomalies on <date>``
-  (``workers/cost-anomaly/src/notify.ts``).
+  (``workers/cost-anomaly/src/notify.ts``);
+* the never-clears alerts (``mailbox_keeper.NEVER_CLEARS``: a scheduled message
+  or a reply did not go out, a limit stopped the work), which have no recovery
+  email (``send-refused.ts``, ``shortfalls.ts``).
 
 A recovery (the first paragraph is ``mailbox_keeper.RECOVERY_PARAGRAPH``) never
 needs him. No model reads SMD Ops mail. Pure.
@@ -30,7 +33,7 @@ from __future__ import annotations
 
 import re
 
-from .mailbox_keeper import RECOVERY_PARAGRAPH, _clean
+from .mailbox_keeper import RECOVERY_PARAGRAPH, _clean, never_clears
 
 _REPLY_PREFIX = re.compile(r"^(?:re:\s*)+", re.IGNORECASE)
 _OPS = "[SMD Ops] "
@@ -58,6 +61,8 @@ def needs_you(subject: str, first_paragraph: str) -> tuple[str, str] | None:
         return ("triage", f"Triage says {count} need you") if count > 0 else None
     if TRIAGE_UNREADABLE.match(text):
         return "triage_unreadable", "Triage sent a report it could not summarize; open it"
+    if never_clears(text):
+        return "never_clears", text[len(_OPS) :] if text.startswith(_OPS) else text
     for kind, pattern in KINDS:
         if pattern.match(text):
             return kind, text[len(_OPS) :]

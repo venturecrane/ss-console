@@ -382,10 +382,11 @@ def test_the_daily_list_goes_once_to_the_authored_recipient_only(tmp_path: Path,
     assert len(http.sends) == 1
     sent = http.sends[0]
     assert sent["to"] == [RECIPIENT]
-    assert sent["subject"] == "Mailbox: 1 needs you"
+    # The person waiting, and the never-clears alert (no recovery email comes for it).
+    assert sent["subject"] == "Mailbox: 2 need you"
     body = sent["text"]
     # Fixed section order: what needs him, then what happened to SMD Ops mail.
-    order = [body.index(h) for h in ("Needs you (1):", "SMD Ops: 1 settled alerts trashed, 4 left in the inbox")]
+    order = [body.index(h) for h in ("Needs you (2):", "SMD Ops: 1 settled alerts trashed, 4 left in the inbox")]
     assert order == sorted(order)
     assert "dana@prospect.example" in body and "pat@client.example" not in body
     assert "news@vendor.example" not in body and SEAT_INBOX not in body

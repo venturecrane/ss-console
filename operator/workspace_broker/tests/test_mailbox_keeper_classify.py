@@ -509,6 +509,10 @@ def test_the_needs_you_table_reads_each_emitters_subject() -> None:
         # workers/cost-anomaly/src/notify.ts
         "[SMD Ops] 1 cost anomaly on 2026-11-16": "cost_anomaly",
         "[SMD Ops] 3 cost anomalies on 2026-11-16": "cost_anomaly",
+        # mailbox_keeper.NEVER_CLEARS (send-refused.ts, shortfalls.ts): no recovery email
+        "[SMD Ops] example-seat: a reply did not go out": "never_clears",
+        "[SMD Ops] example-seat: a scheduled message did not go out": "never_clears",
+        "[SMD Ops] example-seat: a limit stopped the work": "never_clears",
     }
     for subject, kind in yes.items():
         found = mko.needs_you(subject, "WHAT HAPPENED: something.")
@@ -517,7 +521,6 @@ def test_the_needs_you_table_reads_each_emitters_subject() -> None:
         "[SMD Ops] Triage: 5 handled, 0 need you",
         "[SMD Ops] example-seat: answered in 4m: Chris Doe: Question",
         "[SMD Ops] example-seat: the Operator may be down",
-        "[SMD Ops] example-seat: a reply did not go out",
         "[SMD Ops] Weekly: what a check stopped the Operator from doing (3)",
         "[SMD Ops] example-seat: cleared: the Clio sign-in is about to expire",
     ]
@@ -531,6 +534,27 @@ def test_the_needs_you_table_reads_each_emitters_subject() -> None:
 
 
 # ------------------------------------------------------------------ still open, off, dry run
+
+
+def test_a_receipt_that_could_not_be_labelled_stays_and_is_read_again(tmp_path, monkeypatch) -> None:
+    broker, gmail, http, model = _broker(tmp_path, monkeypatch, [receipt()])
+    gmail.fail_on = "label_create"
+    out = fk.run(broker)
+    assert out["status"] == "done"
+    assert gmail.inbox("t-receipt")  # not filed
+    classified_path = tmp_path / "keeper" / "classified.json"
+    classified = json.loads(classified_path.read_text()) if classified_path.exists() else {}
+    assert "t-receipt" not in classified  # so the next run reads it again
+    gmail.fail_on = ""
+    state_path = tmp_path / "keeper" / "listed.json"
+    state = json.loads(state_path.read_text())
+    state["digest_sent_on"] = "2000-01-01"
+    state_path.write_text(json.dumps(state))
+    http.sends.clear()
+    calls = len(model.requests)
+    assert fk.run(broker)["status"] == "done"
+    assert len(model.requests) == calls + 1
+    assert not gmail.inbox("t-receipt") and "Receipts" in gmail.label_names("t-receipt")
 
 
 def test_still_open_counts_decisions_listed_before(tmp_path, monkeypatch) -> None:
@@ -631,3 +655,25 @@ def test_the_draft_carries_the_rfc_threading_headers_through_the_real_operation(
     )
     h = gmail.made_drafts[0]["headers"]
     assert h["In-Reply-To"] == "<1@x.example>" and email.utils.parseaddr(h["To"])[1] == "a@b.example"
+
+
+def test_every_model_call_failing_on_a_small_inbox_is_a_failed_classify(tmp_path, monkeypatch) -> None:
+    answers = {**ANSWERS, "Enabling 2FA": "!error", "Your receipt": "!error"}
+    broker, gmail, http, _ = _broker(tmp_path, monkeypatch, [notice(), receipt()], answers=answers)
+    out = fk.run(broker)
+    assert out["classify"] == "failed"  # the hourly triage reads this word
+    assert gmail.inbox("t-notice") and gmail.inbox("t-receipt")
+
+
+def test_a_run_without_the_breakers_answer_reads_nothing(tmp_path, monkeypatch) -> None:
+    broker, gmail, http, model = _broker(tmp_path, monkeypatch, [person(), notice()])
+    out = fk.run(broker, model="")
+    assert out["classify"] == "refused_by_meter" and model.requests == []
+
+
+def test_a_sent_list_from_before_the_window_is_not_counted() -> None:
+    from workspace_broker.agentmail_ops import _before
+
+    assert _before("2026-11-15T13:48:31Z", "2026-11-16T07:00:00+00:00")
+    assert not _before("2026-11-16T13:48:31Z", "2026-11-16T07:00:00+00:00")
+    assert not _before("garbled", "2026-11-16T07:00:00+00:00")  # unreadable: counted as sent

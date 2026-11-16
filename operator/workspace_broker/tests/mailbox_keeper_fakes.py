@@ -280,6 +280,8 @@ class _Labels:
         return _Call(lambda: {"labels": [{"id": v, "name": k} for k, v in self.g.label_ids.items()]})
 
     def create(self, *, userId, body):
+        if self.g.fail_on == "label_create":
+            raise OSError("label create failed")
         label_id = f"Label_{len(self.g.label_ids)}"
         self.g.label_ids[body["name"]] = label_id
         return _Call(lambda: {"id": label_id, "name": body["name"]})
@@ -446,6 +448,8 @@ def _no_model(*_a, **_k):
 
 
 def run(broker: Broker, mode: str = "scheduled", uid: int = AGENT_UID, **extra: Any) -> dict[str, Any]:
+    if mode != "dry_run":
+        extra.setdefault("model", "allowed")  # what the pre_run sends when the seat's cost breaker allows it
     return broker.handle(
         {"action": "mailbox_keeper_run", "mode": mode, **extra}, peer_pid=GATEWAY_PID + 7, peer_uid=uid
     )

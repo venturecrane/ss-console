@@ -126,6 +126,8 @@ def read_all(
         out.cents += cents
         largest = max(largest, cents)
         out.outcomes.append(result)
+    if not out.stopped and errors and (errors >= MAX_ERRORS_IN_A_ROW or out.calls == 0):
+        out.stopped = "model_errors"  # every call failed, or the run ended on a run of failures
     return out
 
 

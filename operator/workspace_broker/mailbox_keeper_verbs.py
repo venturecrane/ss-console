@@ -194,7 +194,8 @@ def _still_open(
             still += 1
             listed_on = str(prior.get("listed_on") or "")
             since = min(since, listed_on) if since and listed_on else (since or listed_on)
-        # a receipt or notice read before and still in the inbox failed to file: read again tomorrow
+        else:
+            fresh.append(c)  # a receipt or notice read before and still in the inbox failed to file: read it again
     return fresh, still, since
 
 
@@ -202,7 +203,7 @@ def _classify(broker, settings, request, directory, today, fresh) -> tuple[model
     """(the reading, the classify word for the heartbeat row)."""
     if not settings.classify:
         return model.Reading(), "off"
-    if request.get("model") == "refused":
+    if request.get("model") != "allowed":  # only the pre_run asks the seat's cost breaker; no answer is a refusal
         return model.Reading(), "refused_by_meter"
     if _classify_unauthored(settings):
         return model.Reading(), "unauthored"
@@ -214,7 +215,9 @@ def _classify(broker, settings, request, directory, today, fresh) -> tuple[model
         pass  # the breaker is still charged by the pre_run with the cents this run reports
     if reading.stopped in ("no_credential", "model_unpriced", "model_errors"):
         return reading, "failed"
-    return reading, "fence" if reading.stopped == "fence" else "ok"
+    if reading.stopped in ("fence", "deadline"):
+        return reading, "fence"  # threads were left unread: the triage flags it
+    return reading, "ok"
 
 
 # ---------------------------------------------------------------- the list
@@ -291,6 +294,10 @@ def _act(
                 {"name": settings.receipts_label, "mailbox": settings.mailbox}
             )
         except Exception:  # noqa: BLE001 - no Receipts label: no receipt leaves the inbox
+            for o in to_file:
+                if o.kind == "receipt":
+                    skipped.add(o.thread_id)  # not recorded, so it is read again on the next run
+                    counts["file_failed"] += 1
             to_file = [o for o in to_file if o.kind == "notice"]
     for o in to_file:
         result = mail.file_thread(broker.operations, settings, o, label_id)

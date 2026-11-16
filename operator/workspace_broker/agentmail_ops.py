@@ -30,6 +30,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -322,6 +323,8 @@ class AgentMailOps:
             if not isinstance(entry, dict):
                 raise AgentMailTransportError("agentmail returned a message of the wrong shape")
             subject = str(entry.get("subject") or "")
+            if _before(entry.get("timestamp"), after_iso):
+                continue
             if wanted in _as_addresses(entry.get("to")) and subject.startswith(subject_prefix):
                 out.append({"message_id": _message_id(entry), "timestamp": str(entry.get("timestamp") or "")})
         return out
@@ -447,3 +450,14 @@ class AgentMailOps:
             # so the join exists and the address does not.
             "sender_key": sender_key(sender),
         }
+
+
+def _before(timestamp: Any, after_iso: str) -> bool:
+    """True only when ``timestamp`` is readable and earlier than ``after_iso``.
+    An unreadable stamp is kept: counting a send that happened is the safe error."""
+    try:
+        stamp = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        floor = datetime.fromisoformat(after_iso.replace("Z", "+00:00"))
+        return stamp < floor
+    except (TypeError, ValueError):
+        return False
