@@ -6,7 +6,7 @@ This is the index of the Operator product library. Every answer the guide gives 
 
 The reviewed explainer page shows the Operator in seven views, each with its own figure, followed by the service around it, what runs today and what SMD sets up, and one industry example. The page is at:
 
-Explainer page: https://claude.ai/artifact/RPLJDHJduemvFrAvv9QQ1i
+Explainer page: https://claude.ai/artifact/D15dwEZdgrdLsg1icwCCPy
 
 Each view, and each of the three closing sections, has its own anchor. A link to one view is the page address followed by the anchor, for example the page address followed by `#context` for the system context view. The anchors, and the section of [how-the-operator-works.md](how-the-operator-works.md) that carries each view's text:
 
