@@ -19,6 +19,15 @@ from typing import Any
 
 import pytest
 
+# The decision corpus's reach check (tests/decisions/reach.py): a test file that
+# reaches _relay_draft or _evaluate_tool_call must be in the corpus selection,
+# or a full run of this suite fails naming it.
+from tests.decisions.reach import (  # noqa: F401 - pytest hooks, collected by name
+    pytest_configure,
+    pytest_runtest_protocol,
+    pytest_sessionfinish,
+)
+
 
 class FakePluginContext:
     """Minimal stand-in for Hermes' ``PluginContext``.

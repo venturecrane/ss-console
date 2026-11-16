@@ -7,8 +7,8 @@ WHY. A golden test compares the code with the golden file next to it. A PR
 that changes the code AND rewrites the golden passes it, and then the golden
 proves nothing about the change. This job closes that, for EVERY golden set
 (``FAMILIES``): the job host matrix, the runner-to-broker wire, the broker
-ledgers, the lane endings, the paid calls, the firm loaders, the text rules, the filing paths
-and the seat-config caller table.
+ledgers, the lane endings, the paid calls, the firm loaders, the text rules, the filing paths,
+the reply relay's and trust wall's decisions and the seat-config caller table.
 
 Four checks, each a failure on its own:
 
@@ -55,6 +55,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +72,10 @@ from bin.goldens.integrity_families import (  # noqa: E402 - imported only once 
 from bin.lib import golden_diff as gd  # noqa: E402 - imported only once sys.path holds the operator tree
 
 RUNNER_TESTS = "runners/jobs/tests"
+OVERLAY_DIR = "hermes-smd-overlay"
+#: What the ``overlay`` CI job adds to the overlay's own dependencies: the
+#: pinned Hermes source's imports (operator-substrate.yml, "Install the overlay").
+OVERLAY_EXTRAS = ("ruamel.yaml==0.18.16", "psutil==7.2.2")
 
 
 def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None, *, check: bool = True) -> int:
@@ -144,6 +149,32 @@ def capture_venv(work: Path, at: Path) -> Path:
     ])  # fmt: skip
 
 
+def overlay_venv(tree: Path, at: Path) -> Path:
+    """Python 3.14 with the overlay's dependencies and dev extras, read from
+    ``tree``'s pyproject. The overlay itself is NOT installed: a run imports it
+    from the tree it runs in (``overlay_env``), so a base run never reaches the
+    PR's code through an installed copy."""
+    project = tomllib.loads((tree / OVERLAY_DIR / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    deps = [*project["dependencies"], *project["optional-dependencies"]["dev"], *OVERLAY_EXTRAS]
+    return venv(tree, at, "3.14", [deps])
+
+
+def overlay_env(tree: Path, **extra: str) -> dict[str, str]:
+    """The tree's overlay and records contract ahead of anything installed."""
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    roots = [tree / OVERLAY_DIR, tree / "connectors/_contract"]
+    return {**env, "PYTHONPATH": os.pathsep.join(str(r) for r in roots), **extra}
+
+
+def regenerate_overlay(work: Path, ov: Path | None, names: set[str]) -> None:
+    """The overlay-written sets (the decision corpus), from the base tree."""
+    for f in FAMILIES:
+        if f.name not in names or f.writes_with != "overlay" or ov is None:
+            continue
+        cmd = [str(ov), "-m", "pytest", "-q", "-p", "no:cacheprovider", *f.tests, "-k", "corpus_writes"]
+        run(cmd, work / OVERLAY_DIR, overlay_env(work, SMD_DECISIONS_WRITE="1"), check=False)
+
+
 def code_path(work: Path) -> dict[str, str]:
     """The base tree's own packages ahead of any installed copy."""
     roots = [
@@ -168,7 +199,8 @@ def regenerate(work: Path, py: Path, cap: Path | None, out: Path, names: set[str
         run([str(py), "-m", "pytest", "-p", "no:cacheprovider", "workspace_broker/tests/test_ledger_goldens.py", "-q",
              "-n", "4", "-k", "not every"], work, env, check=False)  # fmt: skip
     kit_env = {**code_path(work), "JOBS_WRITE_KIT_GOLDENS": "1", "JOBS_WRITE_LANE_GOLDENS": "1"}
-    for test in (f"{RUNNER_TESTS}/{t}" for f in FAMILIES if f.name in names for t in f.tests):
+    runner_tests = (t for f in FAMILIES if f.name in names and f.writes_with == "runner" for t in f.tests)
+    for test in (f"{RUNNER_TESTS}/{t}" for t in runner_tests):
         # One file at a time, in the family's order: the model facts read the
         # paid-call goldens, which must be written first. Only the writers run:
         # a set's completeness test (``every_golden_has_a_case``) reads the dir
@@ -276,6 +308,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--base", required=True, help="the merge-base commit")
     ap.add_argument("--python", help="a venv python with the runner's dependencies (default: build one with uv)")
     ap.add_argument("--capture-python", help="a python for the seat-config caller capture (default: build one)")
+    ap.add_argument("--overlay-python", help="a 3.14 python with the overlay's dependencies (default: build one)")
     ap.add_argument("--only", nargs="*", default=None, help="only these families (default: all)")
     ap.add_argument("--require-empty", action="store_true", help="fail while any allowed list names a path")
     return ap.parse_args(argv)
@@ -287,8 +320,16 @@ def introduced(f: Family, base: Path) -> bool:
     return not gd.goldens(base / f.root, f.pattern)
 
 
-def own_tests(f: Family, py: Path, cap: Path | None) -> list[str]:
+def own_tests(f: Family, py: Path, cap: Path | None, ov: Path | None = None) -> list[str]:
     """An introduced set's own tests, on the PR's tree: they must pass."""
+    if f.check_with == "overlay":
+        if ov is None:
+            return [f"{f.name}: introduced, but no overlay interpreter to run its tests with"]
+        checks = [c.removeprefix(f"{OVERLAY_DIR}/") for c in f.checks]
+        cmd = [str(ov), "-m", "pytest", "-q", "-p", "no:cacheprovider", *checks]
+        if run(cmd, OPERATOR / OVERLAY_DIR, overlay_env(OPERATOR), check=False) != 0:
+            return [f"{f.name}: introduced by this PR, and its own tests fail on the PR's tree ({', '.join(f.checks)})"]
+        return []
     if f.check_with == "capture":
         if cap is None:
             return [f"{f.name}: introduced, but no capture interpreter to run its tests with"]
@@ -315,12 +356,16 @@ def check(a: argparse.Namespace, tmp: Path) -> tuple[list[str], list[str]]:
     cap = None
     if "seat_callers" in {f.name for f in families}:
         cap = Path(a.capture_python) if a.capture_python else capture_venv(work, tmp / "capv")
+    ov = None
+    if any("overlay" in (f.writes_with, f.check_with) for f in families):
+        ov = Path(a.overlay_python) if a.overlay_python else overlay_venv(OPERATOR, tmp / "ovv")
     out = tmp / "out"
     regenerate(work, py, cap, out, {f.name for f in present})
+    regenerate_overlay(work, ov, {f.name for f in present})
     problems = [p for f in present for p in check_family(f, base, work, out)]
     notices = []
     for f in new:
-        problems += own_tests(f, py, cap) + judge(f.name, allowed_of(OPERATOR, f.allowed), {}, {}, {})
+        problems += own_tests(f, py, cap, ov) + judge(f.name, allowed_of(OPERATOR, f.allowed), {}, {}, {})
         notices.append(f"{f.name}: introduced by this PR (the merge-base has none); its own tests ran on the PR's tree")
     found = manifest_losses(manifest(base, py), manifest(OPERATOR, py))
     problems += judge("instrument", allowed_of(OPERATOR, INSTRUMENT_ALLOWED), allowed_of(base, INSTRUMENT_ALLOWED), {}, found)  # fmt: skip

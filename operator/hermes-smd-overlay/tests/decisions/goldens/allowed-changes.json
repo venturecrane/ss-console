@@ -1,0 +1,3 @@
+{
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges."
+}

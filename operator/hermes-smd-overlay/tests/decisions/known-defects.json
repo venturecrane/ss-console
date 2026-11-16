@@ -1,0 +1,45 @@
+{
+  "_why": "What the decision corpus records today that is wrong, read from the corpus (wave 4, PR A). The split PRs B and C reproduce each of these exactly; a PR that fixes one changes its golden (each path named in goldens/allowed-changes.json) and removes or rewrites its entry here, which test_known_defects_are_visible_in_the_corpus checks against the corpus on every run. Lines are as of the commit that recorded the corpus.",
+  "defects": [
+    {
+      "id": "read-volume-report-overwritten",
+      "summary": "A read that crosses the authored read-volume threshold in report mode records its READ_VOLUME_GATE report decision, then the same call records its ordinary allow decision under the same tool_call_id. The register replaces by tool_call_id, so the report never reaches the audit row: the one artifact report mode exists to leave is overwritten in the same call. Plan: PR C fixes it, as its one named allowed change.",
+      "where": [
+        "plugins/hermes-smd-trust/enforce.py:1615-1626 (the report record)",
+        "plugins/hermes-smd-trust/enforce.py:1821 (the final record, same tool_call_id)",
+        "shared/trust_decision.py:184-201 (record replaces by tool_call_id)"
+      ],
+      "golden": "synthetic/wall.guard.json",
+      "record": ["volume_report", 0],
+      "call": "_record_decision",
+      "count": 2,
+      "reasons_start": ["READ_VOLUME_GATE: crossed 300 pages", "external_send permitted"],
+      "register_keeps": ["@shared.trust_decision.TRUST_DECISIONS", "external_send permitted"]
+    },
+    {
+      "id": "blocked-after-allow-decision",
+      "summary": "When the matter gate, the multi-matter fence, the structure floor, the content floor, the voice gate or the spec gate blocks a call the ceiling allowed, the wall returns a block after recording allowed=true for that tool_call_id and does not record again, so the decision register holds an allow for a call that was refused. A refused call never reaches post_tool_call, so no audit row is written from it today; the register's per-thread last slot still holds the allow. Recorded for the split to keep exactly; not yet shown to reach a row.",
+      "where": [
+        "plugins/hermes-smd-trust/enforce.py:1816-1834 (the allow record)",
+        "plugins/hermes-smd-trust/enforce.py:1910 and :1940 (the matter blocks, returned without a record)"
+      ],
+      "golden": "synthetic/wall.guard.json",
+      "record": ["matter_mismatch", 0],
+      "call": "_record_decision",
+      "count": 1,
+      "reasons_start": ["external_send permitted"],
+      "returned_action": "block"
+    },
+    {
+      "id": "fault-after-transmit-leaves-no-trace",
+      "summary": "A fault after the reply's bytes reached the transport and before _commit_reply completes is swallowed by the relay's catch-all with no REPLY_SENT row, no REPLY_FAILED row, no notice and no page (the catch-all skips a transmitted reply), and the email's id is left uncommitted in _REPLIED, so a second draft in the same turn would be relayed again. Seen by injecting a raise at each call after the send.",
+      "where": [
+        "plugins/hermes-smd-reply/__init__.py:2014-2024 (transmitted, then commit)",
+        "plugins/hermes-smd-reply/__init__.py:2085-2097 (the catch-all skips a transmitted reply)"
+      ],
+      "golden": "synthetic/relay.raise.json",
+      "record": ["baseline@38:_commit_reply", 0],
+      "steps": ["_commit_reply!"]
+    }
+  ]
+}

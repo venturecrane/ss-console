@@ -20,6 +20,9 @@ OVERLAY = (
     "bin/lib/golden_broker.py",
     "bin/lib/seat_callers",
     "bin/capture-seat-config-callers.py",
+    # The decision corpus's recorder, census, cases and replay (wave 4): the
+    # measure is this PR's, the decisions measured are the base's.
+    "hermes-smd-overlay/tests/decisions",
 )
 #: Where a dropped case, a newly not-applicable cell or a changed normaliser
 #: (``golden_manifest.py``) is named, as ``<cases>`` / ``<normaliser>`` entries.
@@ -53,9 +56,16 @@ class Family:
     #: these must pass on the PR's tree instead.
     checks: tuple[str, ...] = ()
     #: Which interpreter runs ``checks``: ``runner`` (the jobs venv, the runner's
-    #: pytest config), ``broker`` (the jobs venv, the operator's config) or
-    #: ``capture`` (the caller capture's venv).
+    #: pytest config), ``broker`` (the jobs venv, the operator's config),
+    #: ``capture`` (the caller capture's venv) or ``overlay`` (the seat runtime's
+    #: own venv, run from ``hermes-smd-overlay/``).
     check_with: str = "runner"
+    #: Which interpreter writes an in-place set: ``runner`` (the jobs venv, the
+    #: runner's pytest config) or ``overlay`` (Python 3.14 with the overlay's
+    #: dependencies and dev extras, as the ``overlay`` CI job installs them;
+    #: ``tests`` are then under ``hermes-smd-overlay/`` and run from there with
+    #: ``SMD_DECISIONS_WRITE=1`` and ``-k corpus_writes``).
+    writes_with: str = "runner"
 
 
 _RT = "runners/jobs/tests"
@@ -165,6 +175,21 @@ FAMILIES: tuple[Family, ...] = (
         "inplace",
         tests=("test_casefile_apply.py", "test_litigation_reassign.py"),
         checks=(f"{_RT}/test_casefile_apply.py", f"{_RT}/test_litigation_reassign.py"),
+    ),
+    Family(
+        "decisions",
+        "hermes-smd-overlay/tests/decisions/goldens",
+        "**/*",
+        "hermes-smd-overlay/tests/decisions/goldens/allowed-changes.json",
+        "inplace",
+        # What the reply relay (_relay_draft) and the trust wall
+        # (_evaluate_tool_call) decide, call by call: the synthetic guard,
+        # condition, pair and raise cases, and every existing overlay test that
+        # reaches either function, replayed under the recorder.
+        tests=("tests/decisions/test_decision_corpus.py",),
+        checks=("hermes-smd-overlay/tests/decisions/test_decision_corpus.py",),
+        check_with="overlay",
+        writes_with="overlay",
     ),
     Family(
         "seat_callers",
