@@ -1,6 +1,36 @@
 {
   "cell": {
     "cache": {
+      "<sha:cover_scans>.p2.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 2,
+        "text": "TRANSCRIPT OF cover_scans PAGE 2"
+      },
+      "<sha:cover_scans>.p3.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 3,
+        "text": "TRANSCRIPT OF cover_scans PAGE 3"
+      },
+      "<sha:cover_scans>.p4.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 4,
+        "text": "TRANSCRIPT OF cover_scans PAGE 4"
+      },
+      "<sha:cover_scans>.p5.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 5,
+        "text": "TRANSCRIPT OF cover_scans PAGE 5"
+      },
+      "<sha:cover_scans>.p6.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 6,
+        "text": "TRANSCRIPT OF cover_scans PAGE 6"
+      },
       "<sha:edge14>.json": {
         "created_at": "<AT>",
         "method": "vision",
@@ -65,11 +95,16 @@
         "refused": "PDF could not be parsed: startxref not found"
       },
       "cover_scans": {
-        "method": "mixed",
+        "method": "vision",
         "pages": 6,
         "reason": null,
         "text": [
-          "[p.1]\nCOVER SHEET\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n[p.2: scanned page, not read]\n\n[p.3: scanned page, not read]\n\n[p.4: scanned page, not read]\n\n[p.5: scanned page, not read]\n\n[p.6: scanned page, not read]"
+          "[p.1]\nCOVER SHEET\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.2] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 2\n\n",
+          "[p.3] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 3\n\n",
+          "[p.4] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 4\n\n",
+          "[p.5] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 5\n\n",
+          "[p.6] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 6"
         ]
       },
       "digital": {
@@ -470,6 +505,76 @@
               "media": "application/pdf",
               "pages": 1,
               "shows": {
+                "fixture": "cover_scans",
+                "page": 2
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 3
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 4
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 5
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 6
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
                 "fixture": "edge14",
                 "page": 1
               },
@@ -522,6 +627,36 @@
     "JOBS_TEXTCACHE_DIR": {},
     "SMD_POST_JOURNAL_DIR": {},
     "SMOKEBALL_EXTRACT_CACHE_DIR": {
+      "<sha:cover_scans>.p2.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 2,
+        "text": "TRANSCRIPT OF cover_scans PAGE 2"
+      },
+      "<sha:cover_scans>.p3.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 3,
+        "text": "TRANSCRIPT OF cover_scans PAGE 3"
+      },
+      "<sha:cover_scans>.p4.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 4,
+        "text": "TRANSCRIPT OF cover_scans PAGE 4"
+      },
+      "<sha:cover_scans>.p5.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 5,
+        "text": "TRANSCRIPT OF cover_scans PAGE 5"
+      },
+      "<sha:cover_scans>.p6.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 6,
+        "text": "TRANSCRIPT OF cover_scans PAGE 6"
+      },
       "<sha:edge14>.json": {
         "created_at": "<AT>",
         "method": "vision",

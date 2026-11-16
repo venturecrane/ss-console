@@ -1139,10 +1139,14 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
     ``api_error``, ``truncated``, ``incomplete_transcription``, ``disabled``,
     ``busy`` — another scan was being read; ask again in a few minutes)
     and ``needsHumanRead`` is true. That is never an empty document — say so
-    rather than treating silence as content. ``mixed`` is a PDF read from its text
-    layer that also holds scans: a ``[p.N: scanned page, not read]`` marker means
-    that page exists and was not transcribed (``unreadPages`` lists them and
-    ``needsHumanRead`` is true), so never read it as an empty page."""
+    rather than treating silence as content. In a PDF read from its text layer,
+    a scanned page read on its own is ``[p.N] (machine transcription)``
+    (``transcribedPages``), to be cited as a transcription like ``vision``; with
+    any scan left, ``extraction`` is ``mixed``, and a
+    ``[p.N: scanned page, not read]`` marker means that page exists and was not
+    transcribed (``unreadPages`` and ``unreadCount`` say which and how many,
+    ``extractionReason`` why, and ``needsHumanRead`` is true), so never read it as
+    an empty page."""
     from .extract import UnsupportedDocumentError, extract_text_ex
 
     client = _get_client()
@@ -1180,8 +1184,8 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
         "text": window,
         # The road, the page count, why there is no text, and whether a person
         # must read it: a scan we could not read is NOT an empty document
-        # (ss#2464), and a ``mixed`` file names the scanned pages it did not
-        # read, none of them paid for (wave 5, K1). See ExtractResult.report.
+        # (ss#2464), and a ``mixed`` file names the scanned pages it left unread
+        # and why (wave 5, K1). See ExtractResult.report.
         **result.report(),
     }
     _attach_matter_ref(client, read)
@@ -1603,9 +1607,12 @@ def _collect_matter_sources(
         if result.method == METHOD_XLSX_OPERATOR:
             continue  # the Operator's own workbook is not the firm's record
         if result.method == METHOD_MIXED:
-            # Typed pages read, scanned pages not: the record is partial in
-            # exactly the way an uncached scan's is, so it is reported the same
-            # way, with the pages named, and the draft refuses.
+            # Typed pages read, scanned pages not (none stored, and this path
+            # never transcribes): the record is partial in exactly the way an
+            # uncached scan's is, so it is reported the same way, with the pages
+            # named, and the draft refuses. Once ``read_document`` has read
+            # those pages they are stored, and the file comes back
+            # ``vision_cached``, a transcription source like any other.
             unextractable.append(f"{name} ({result.unread_note()})")
         elif result.method == METHOD_VISION_CACHED:
             vision_sources.append((name, result.text))

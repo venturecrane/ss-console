@@ -83,8 +83,55 @@ def cache_get(blob: bytes) -> str | None:
     unreadable entry is a miss — never an error, and never partial text."""
     root = cache_root()
     path = entry_path(root, cache_key(blob))
+    return None if path is None else _read_text(path)
+
+
+def cache_put(blob: bytes, text: str, *, pages: int | None = None) -> None:
+    """Store a SUCCESSFUL transcription. Silently does nothing on any I/O fault
+    or for empty text."""
+    if not text or not text.strip():
+        return
+    root = cache_root()
+    path = entry_path(root, cache_key(blob))
     if path is None:
-        return None
+        return
+    _write(root, path, {"method": "vision", "text": text, "pages": pages, "created_at": time.time()})
+
+
+# ---- One page of a file (wave 5, K1) ------------------------------------------
+#
+# A mixed PDF (typed pages plus scans) has only its scanned pages read, so what
+# is stored is a PAGE, under its own name: ``<file sha>.p<N>.<method version>``.
+# The whole-file entry ``<sha>.json`` and its key are untouched, so every entry
+# written before this keeps serving exactly as it did. The method version names
+# the model, the prompt and the render the page was read with: a change to any
+# of them is a new name, never a stale reading served as current.
+
+
+def page_key(sha: str, page: int, version: str) -> str:
+    return f"{sha}.p{int(page)}.{version}"
+
+
+def page_get(sha: str, page: int, version: str) -> str | None:
+    """The stored reading of one page, or None (the same miss rules as
+    :func:`cache_get`)."""
+    root = cache_root()
+    path = entry_path(root, page_key(sha, page, version))
+    return None if path is None else _read_text(path)
+
+
+def page_put(sha: str, page: int, version: str, text: str) -> None:
+    """Store one page's reading. Never raises; empty text is not stored."""
+    if not text or not text.strip():
+        return
+    root = cache_root()
+    path = entry_path(root, page_key(sha, page, version))
+    if path is None:
+        return
+    _write(root, path, {"method": "vision_page", "text": text, "page": int(page), "created_at": time.time()})
+
+
+def _read_text(path: Path) -> str | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -104,28 +151,12 @@ def cache_get(blob: bytes) -> str | None:
     return text
 
 
-def cache_put(blob: bytes, text: str, *, pages: int | None = None) -> None:
-    """Store a SUCCESSFUL transcription. Silently does nothing on any I/O fault
-    or for empty text."""
-    if not text or not text.strip():
-        return
-    root = cache_root()
-    path = entry_path(root, cache_key(blob))
-    if path is None:
-        return
-    payload = json.dumps(
-        {
-            "method": "vision",
-            "text": text,
-            "pages": pages,
-            "created_at": time.time(),
-        }
-    )
+def _write(root: Path, path: Path, payload: dict) -> None:
     try:
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         tmp = path.with_suffix(".json.tmp")
         with open(tmp, "w", encoding="utf-8", opener=_private_opener) as fh:
-            fh.write(payload)
+            fh.write(json.dumps(payload))
         os.replace(tmp, path)
     except OSError:
         return
