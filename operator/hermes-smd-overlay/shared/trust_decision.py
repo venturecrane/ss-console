@@ -100,7 +100,7 @@ from __future__ import annotations
 
 import threading
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 #: How a row's decision was joined to its tool call. Stamped into every per-tool
 #: audit row so an auditor never has to guess which of the three it was.
@@ -113,6 +113,13 @@ MATCH_NONE = "none"
 #: resolved, and the existing trust-decision log line already says
 #: ``action_class=banned`` for it.
 ACTION_CLASS_BANNED = "banned"
+
+#: The verdict a gate records to leave an artifact on a call it does not decide
+#: (the read-volume gate's report mode). The call's own decision is recorded
+#: after it under the same ``tool_call_id``, so the register carries the
+#: report's reason onto every later record for that call instead of letting the
+#: replacement drop it: the report is the one artifact report mode exists for.
+AUDIT_REPORT = "report"
 
 
 @dataclass(frozen=True)
@@ -176,6 +183,9 @@ class TrustDecisionRegister:
     _lock: threading.Lock = field(default_factory=threading.Lock)
     #: Thread-local holder for ``last``: (tool_call_id, tool_name, decision).
     _local: threading.local = field(default_factory=threading.local)
+    #: tool_call_id -> the reason of an ``AUDIT_REPORT`` recorded for that call,
+    #: carried onto its later records. Bounded with ``_by_call``; lock-guarded.
+    _reports: dict[str, str] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     # Producer — the trust plugin's pre_tool_call
@@ -194,11 +204,24 @@ class TrustDecisionRegister:
         key = tool_call_id or ""
         if key:
             with self._lock:
+                decision = self._carry_report(key, decision)
                 self._by_call[key] = (tool_name, decision)
                 self._by_call.move_to_end(key)
                 while len(self._by_call) > self.max_calls:
-                    self._by_call.popitem(last=False)
+                    gone, _entry = self._by_call.popitem(last=False)
+                    self._reports.pop(gone, None)
         self._local.last = (key, tool_name, decision)
+
+    def _carry_report(self, key: str, decision: TrustDecision) -> TrustDecision:
+        """Remember a report for ``key``, or append a remembered one to the
+        reason of the decision that supersedes it. Caller holds the lock."""
+        if decision.audit_action == AUDIT_REPORT:
+            self._reports[key] = decision.reason
+            return decision
+        report = self._reports.get(key)
+        if report is None or report in decision.reason:
+            return decision
+        return replace(decision, reason=f"{decision.reason} | {report}")
 
     # ------------------------------------------------------------------
     # Consumer — the audit plugin's post_tool_call
@@ -220,6 +243,7 @@ class TrustDecisionRegister:
         if tool_call_id:
             with self._lock:
                 entry = self._by_call.pop(tool_call_id, None)
+                self._reports.pop(tool_call_id, None)
             if entry is not None and entry[0] == tool_name:
                 last = getattr(self._local, "last", None)
                 if last is not None and last[0] == tool_call_id:
@@ -231,6 +255,7 @@ class TrustDecisionRegister:
             if last[0]:
                 with self._lock:
                     self._by_call.pop(last[0], None)
+                    self._reports.pop(last[0], None)
             return last[2], MATCH_SEQUENTIAL
         return None, MATCH_NONE
 
@@ -248,6 +273,7 @@ class TrustDecisionRegister:
         """
         with self._lock:
             self._by_call.clear()
+            self._reports.clear()
         self._local.last = None
 
     def _reset_for_tests(self) -> None:
@@ -260,6 +286,7 @@ TRUST_DECISIONS = TrustDecisionRegister()
 
 __all__ = [
     "ACTION_CLASS_BANNED",
+    "AUDIT_REPORT",
     "MATCH_KEYED",
     "MATCH_NONE",
     "MATCH_SEQUENTIAL",
