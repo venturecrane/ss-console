@@ -49,6 +49,23 @@ def test_a_page_put_once_is_served_again_and_a_hit_adds_its_matter(store_dir: Pa
     assert oct((store_dir / "pages" / SHA / _mv() / "1.json").stat().st_mode & 0o777) == "0o600"
 
 
+def test_a_store_this_process_cannot_read_is_a_miss_not_a_crash(store_dir: Path) -> None:
+    """Live-caught on the twin, 2026-11-16: a store reached through a path the
+    process may not traverse raised PermissionError out of ``get``, so the job
+    would have stopped instead of paying on as it does with no store."""
+    s = store_mod.from_env("litigation", log=lambda m: None)
+    s.put(SHA, 1, _mv(), "PAGE ONE", M1, stop_reason=END)
+    locked_dir = store_dir / "pages" / SHA
+    locked_dir.chmod(0o000)
+    try:
+        if os.access(locked_dir / _mv(), os.F_OK):
+            pytest.skip("running as root: permissions do not bind")
+        assert s.get(SHA, 1, _mv(), M1) is None  # FALSIFIER: before the fix this raised
+        assert s.summary()["misses"] == 1
+    finally:
+        locked_dir.chmod(0o700)
+
+
 def test_another_file_page_or_method_is_a_miss(store_dir: Path) -> None:
     s = store_mod.from_env("litigation", log=lambda m: None)
     s.put(SHA, 1, _mv(), "PAGE ONE", M1, stop_reason=END)
