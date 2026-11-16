@@ -369,10 +369,12 @@ describe('product guide answer key (ADR 0105)', () => {
   // guide's prospect prep (an industry with a pack, one without, and a named
   // company that is not on the asker's desk), the desk's proposal sketch on a
   // lead that carries an amount, and the desk's material check of a forwarded
-  // draft (the one `tool` case that is not an invite code).
-  it('has 36 questions with unique ids, 7 of them refusals of the six kinds', () => {
-    expect(qs.length).toBe(36)
-    expect(new Set(qs.map((q) => q.id)).size).toBe(36)
+  // draft (the one `tool` case that is not an invite code). 37 (2026-11-15):
+  // q33 added, a prep that also asks the price, so the refusal list is graded
+  // inside a prep.
+  it('has 37 questions with unique ids, 7 of them refusals of the six kinds', () => {
+    expect(qs.length).toBe(37)
+    expect(new Set(qs.map((q) => q.id)).size).toBe(37)
     expect(qs.every((q) => ['answer', 'refuse', 'tool'].includes(q.expect))).toBe(true)
     const refusals = qs.filter((q) => q.expect === 'refuse')
     expect(refusals.length).toBe(7)
@@ -506,7 +508,7 @@ describe('prospect prep, the proposal sketch and the material check', () => {
 
   it('the prep cases: one industry with a pack, one without, one named company off the desk', () => {
     const prep = qs.filter((q) => q.category === 'prospect-prep')
-    expect(prep.map((q) => q.id)).toEqual(['q28', 'q29', 'q30'])
+    expect(prep.map((q) => q.id)).toEqual(['q28', 'q29', 'q30', 'q33'])
     expect(prep[1].must_contain?.join(' ')).toMatch(/no industry pack/)
     expect(prep[2].must_contain?.join(' ')).toMatch(/cannot discuss SMD's clients/)
   })

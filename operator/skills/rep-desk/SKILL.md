@@ -62,6 +62,7 @@ A lead record is plain lines, in this order, each line written only when the
 person said it:
 
     Company: <name>
+    Business: <the kind of business, as they said it, for example a dental practice>
     Contact: <name and role, as they said it>
     Stage: <new, contacted, meeting set, proposal, won or lost>
     Next step: <what they said>
@@ -201,7 +202,10 @@ order. Its first line is exactly:
 
     Seat sketch for SMD to scope. Not a proposal: SMD sets scope, price and timing.
 
-1. Who: the company and the kind of business, as their records say.
+1. Who: the company and the kind of business. The kind of business is the
+   lead record's `Business:` line; without one, the kind the person named in
+   this email; without either, ask them in one line what kind of business it
+   is and stop.
 2. Pack: the one `##` heading of `industry-packs.md` that names that kind of
    business, other than "The rule in every industry", with its source line.
    When none does, write "No industry pack in the library matches." and name

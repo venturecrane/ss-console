@@ -758,7 +758,7 @@ class InboundOrigin:
     subject: str = field(default="", repr=False)
     #: The whole plain-text body from the verified payload, quoted and
     #: forwarded parts included. Read only by deterministic code that checks a
-    #: forwarded draft's wording (``shared.training.material_text``); never
+    #: forwarded draft's wording (``shared.material_check.material_text``); never
     #: injected into a prompt (the model already reads the body in the turn's
     #: own message) and never logged (``repr=False``). Empty when not supplied.
     body_text: str = field(default="", repr=False)

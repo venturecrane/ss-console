@@ -49,7 +49,7 @@ Each act is one email you send to the demo seat while the prospect watches. Ever
 ## Cautions
 
 - Show these seven acts. Describe every other capability, such as texting, team chat, voice notes, the client level dial or other industries, as something SMD configures for a client. If the prospect asks what a client has today, use the library's three labels: running for a client today; built, set up per client; configured per engagement.
-- Never ask the demo seat to send to an outside party live. Sending to outside parties on its own is a capability SMD sets up per client; describe it.
+- The demo seat keeps every letter to an outside party as a draft for a person. Act 5 asks it to send so the prospect watches it keep the draft; never expect it to send, and never try to make it. Sending to outside parties on its own is a capability SMD sets up per client; describe it.
 - Do not ask it to build a chronology, draft a demand or run any long job in a meeting. Those run as queued work for a long time. Show the sample package instead.
 - Describe voice the way the library does: it is written per kind of document from the firm's own examples, it sharpens as the firm's people correct drafts, and the firm's administrators confirm which corrections become standing rules.
 - Never quote a time: no turnaround, no response time, no setup length.

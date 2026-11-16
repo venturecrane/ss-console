@@ -287,10 +287,10 @@ quiz:
         section: The buyer
 
     - id: q11
-      ask: In a demo meeting, a prospect asks to see the Operator send a letter to an outside party on its own. What do you do?
+      ask: In a demo meeting, a prospect asks you to make the demo seat actually send a letter to an outside party. What do you do?
       choices:
-        A: Ask it to send the letter live
-        B: Show the draft it keeps for a person, and describe sending on its own as something SMD sets up per client
+        A: Look for a way to make the demo seat send it for real
+        B: Show that it keeps every outside letter as a draft for a person, and describe sending on its own as something SMD sets up per client
         C: Tell them it cannot send letters
         D: Forward the draft to the prospect yourself
       answer: B

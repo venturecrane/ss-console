@@ -318,7 +318,7 @@ def _origin_from_dto(
         ),
         subject=dto.subject if isinstance(dto.subject, str) else "",
         # The whole body, for the material check's deterministic read of a
-        # forwarded draft (shared.training.material_text). Never logged.
+        # forwarded draft (shared.material_check.material_text). Never logged.
         body_text=dto.body_text if isinstance(dto.body_text, str) else "",
     )
 

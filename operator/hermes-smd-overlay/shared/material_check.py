@@ -13,7 +13,8 @@ WHAT IS READ. The representative's own words in the verified email that opened
 the turn (``InboundOrigin.reply_text``, the provider's quoted-history-free
 text), always; the rest of the body (``InboundOrigin.body_text``) only when the
 email is a forward, by its subject ("Fwd:", "Fw:") or by a mail client's
-forwarded-message line in the body. The quoted history of an ordinary reply is
+forwarded-message line in the body above any quoted reply history ("On ... wrote:"
+or a line starting with ">"). The quoted history of an ordinary reply is
 earlier conversation, not material, so it is never read. An attachment is never
 read: the result says so, and says to paste the text. Nothing the model passes
 is read; the tool takes no arguments.
@@ -37,12 +38,28 @@ from shared import training
 
 #: A subject that says the email is a forward ("Fwd:", "Fw:", "FW:").
 _FORWARD_SUBJECT = re.compile(r"^\s*(?:fwd?|fw)\s*:", re.IGNORECASE)
-#: The lines mail clients write at the top of a forwarded message.
+#: The lines mail clients write at the top of a forwarded message (Gmail's
+#: dashed line, Apple Mail's "Begin forwarded message:"). Outlook's
+#: "-----Original Message-----" is NOT one: it heads the quoted history of an
+#: ordinary reply.
 _FORWARD_MARKER = re.compile(
-    r"^\s*(?:-{2,}\s*forwarded message\s*-{2,}|begin forwarded message:"
-    r"|-{2,}\s*original message\s*-{2,})\s*$",
+    r"^\s*(?:-{2,}\s*forwarded message\s*-{2,}|begin forwarded message:)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
+#: Where a reply's quoted history begins: "On <date>, <person> wrote:" or the
+#: first line quoted with ">". A forward marker below it belongs to an older
+#: message in the thread, not to this email.
+_REPLY_QUOTE = re.compile(r"^\s*(?:on .+ wrote:\s*|>.*)$", re.IGNORECASE | re.MULTILINE)
+
+
+def _forwarded_by_body(body: str) -> bool:
+    """A forward marker that sits above any reply-quote boundary."""
+    marker = _FORWARD_MARKER.search(body)
+    if marker is None:
+        return False
+    quote = _REPLY_QUOTE.search(body)
+    return quote is None or marker.start() < quote.start()
+
 
 _ATTACHMENTS = (
     "Attached files are not read; paste a deck or document's text into the email to have "
@@ -80,7 +97,7 @@ def material_text(reply_text: str, body_text: str, subject: str) -> Material:
     own = (reply_text or "").strip()
     body = (body_text or "").strip()
     forwarded = ""
-    is_forward = bool(_FORWARD_SUBJECT.match(subject or "")) or bool(_FORWARD_MARKER.search(body))
+    is_forward = bool(_FORWARD_SUBJECT.match(subject or "")) or _forwarded_by_body(body)
     if is_forward and body:
         # The own words are part of the body; drop them once so nothing is
         # counted twice.

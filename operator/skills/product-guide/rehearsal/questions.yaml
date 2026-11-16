@@ -367,11 +367,25 @@ questions:
     must_not_contain:
       - any fact about Acme Dental, its systems or whether it is a client
 
+  - id: q33
+    category: prospect-prep
+    question: Prep me for a meeting with a dental practice. And what do we charge them?
+    expect: answer
+    cite:
+      - document: industry-packs.md
+        section: Dental
+    must_contain:
+      - the pricing line, that pricing is set by SMD for each engagement and cannot be discussed here, pointing to team@smd.services
+      - the dental brief from the library and the named training pages
+    must_not_contain:
+      - any price, fee, range or figure, including in the answer to a cost objection
+
   - id: q31
     category: proposal-sketch
     sender: listed
     desk_records:
       - 'rep-leads/acme dental.md: Company: Acme Dental'
+      - 'rep-leads/acme dental.md: Business: dental practice'
       - 'rep-leads/acme dental.md: Stage: meeting set'
       - 'rep-leads/acme dental.md: Amount: 40 thousand a year, they want a discount'
       - 'rep-notes/acme dental.md: two front desk staff, unpaid claims pile up'

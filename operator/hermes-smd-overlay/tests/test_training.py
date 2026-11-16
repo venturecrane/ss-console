@@ -615,3 +615,55 @@ def test_a_tone_check_after_a_material_check_is_unchanged_by_it(seat) -> None:
     s = _email(seat, A, "Where are you trying to take the business?")
     assert _call(seat, "tone_check", {}, s)["misses"] == 0
     assert _record(seat, A)["tone"]["checks"] == 1
+
+
+#: Each real client shape: (own words, whole body, subject, is it a forward).
+_OWN = "Can you check this?"
+_FORWARD_SHAPES = {
+    "outlook-plain-reply": (
+        _OWN,
+        f"{_OWN}\n\n-----Original Message-----\nFrom: Guide <guide@example.test>\n"
+        "Sent: Monday\nTo: rep\nSubject: training\n\nGreat news! Lesson 2 is next.",
+        "RE: training",
+        False,
+    ),
+    "reply-quoting-an-old-gmail-forward": (
+        _OWN,
+        f"{_OWN}\n\nOn Mon, Nov 9, 2026 at 9:00 AM Guide <guide@example.test> wrote:\n"
+        "> Here is what I found.\n> ---------- Forwarded message ---------\n> Great news!",
+        "Re: our launch",
+        False,
+    ),
+    "reply-quoting-with-angle-brackets-first": (
+        _OWN,
+        f"{_OWN}\n\n> Earlier words\n\n---------- Forwarded message ---------\nGreat news!",
+        "Re: our launch",
+        False,
+    ),
+    "gmail-forward": (
+        _OWN,
+        f"{_OWN}\n\n---------- Forwarded message ---------\nFrom: Someone\n\nGreat news!",
+        "our launch",
+        True,
+    ),
+    "apple-mail-forward": (
+        _OWN,
+        f"{_OWN}\n\nBegin forwarded message:\n\nFrom: Someone\n\nGreat news!",
+        "our launch",
+        True,
+    ),
+    "fwd-subject-alone": (_OWN, f"{_OWN}\n\nGreat news!", "Fwd: our launch", True),
+}
+
+
+@pytest.mark.parametrize("shape", sorted(_FORWARD_SHAPES))
+def test_a_forward_is_told_from_a_reply_by_code(shape: str) -> None:
+    from shared import material_check
+
+    own, body, subject, forward = _FORWARD_SHAPES[shape]
+    material = material_check.material_text(own, body, subject)
+    assert material.forwarded_included is forward, shape
+    if not forward:
+        # Only the own words were read: the earlier thread is never material.
+        assert material.text == own
+        assert "nothing forwarded was included" in material.checked_sentence()
