@@ -40,6 +40,7 @@ import {
   type Headline,
   type SourceFile,
   changeCoupling,
+  isDocumentationPair,
   regressions,
   literalBaselineOf,
   literalCensus,
@@ -233,6 +234,7 @@ function measure(since: string) {
     .split('\n')
     .filter((line) => !generated.has(line.split(':', 1)[0]))
     .join('\n')
+  const coupled = changeCoupling(commits)
   return {
     measuredAt: new Date().toISOString(),
     commit: run('git', ['rev-parse', 'HEAD']).trim(),
@@ -242,7 +244,8 @@ function measure(since: string) {
       ...summarizeClones(clones.filter(handWritten), factsFor(sources)),
     },
     literals: literalCensus(sources),
-    coupling: changeCoupling(commits),
+    coupling: coupled.filter((r) => !isDocumentationPair(r)),
+    documented: coupled.filter(isDocumentationPair),
     dead: summarizeVulture(vulture),
   }
 }
@@ -291,6 +294,10 @@ function print(s: Snapshot, prev?: Snapshot): void {
   )
   for (const r of s.coupling.slice(0, 12))
     console.log(`  ${r.shared} shared, ${r.degree}%  ${r.a}  <->  ${r.b}`)
+  // A snapshot written before this split counted these pairs in `coupling`.
+  console.log(
+    `  A docs/ page changing with the program it describes (kept by contract, not compared): ${s.documented.length} pairs`
+  )
   console.log(
     `Dead-code candidates (vulture 60%+, Python): ${s.dead.candidates}${delta(s.dead.candidates, prev?.dead.candidates)} ${JSON.stringify(s.dead.byKind)}`
   )

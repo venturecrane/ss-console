@@ -12,6 +12,7 @@ import {
   type FileFacts,
   areaOf,
   changeCoupling,
+  isDocumentationPair,
   envNames,
   isGenerated,
   isTestPath,
@@ -158,6 +159,16 @@ describe('changeCoupling', () => {
       ...Array.from({ length: 20 }, () => [pair[0]]),
     ]
     expect(changeCoupling(weak)).toEqual([])
+  })
+
+  it('tells a docs page kept with its program from two programs or two docs', () => {
+    const row = (a: string, b: string) => ({ a, b, shared: 6, degree: 100 })
+    expect(isDocumentationPair(row('docs/specs/x.md', 'operator/bin/x.sh'))).toBe(true)
+    expect(isDocumentationPair(row('.claude/hooks/p.sh', 'docs/doctrine/d.md'))).toBe(true)
+    expect(isDocumentationPair(row(pair[0], pair[1]))).toBe(false)
+    expect(isDocumentationPair(row('docs/adr/1.md', 'docs/handbook/2.md'))).toBe(false)
+    // A skill's SKILL.md is read by a model as rules: a program, not a docs page.
+    expect(isDocumentationPair(row('operator/skills/a/SKILL.md', 'operator/x.py'))).toBe(false)
   })
 })
 
