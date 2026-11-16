@@ -73,7 +73,9 @@ NEVER_CLEARS: tuple[str, ...] = (
     "a reply did not go out",
     "a limit stopped the work",
 )
-_NO_REPLY_LOCAL = re.compile(r"^(?:no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster)(?:[+._-].*)?$")
+# Anywhere in the local part (2026-11-15 dry run on smd-office: microsoft-noreply@
+# and donotreplytpt1@ slipped past an anchored match and were listed as people).
+_NO_REPLY_LOCAL = re.compile(r"no-?reply|do-?not-?reply|mailer-daemon|postmaster")
 _SKIP_LABELS = frozenset({"TRASH", "SPAM", "DRAFT"})
 _WS = re.compile(r"\s+")
 _FIRST_P = re.compile(r"<p\b[^>]*>(.*?)</p>", re.IGNORECASE | re.DOTALL)
@@ -109,6 +111,9 @@ class Settings:
     alert_sender: str = "team@smd.services"
     alert_domain: str = "smd.services"
     system_senders: frozenset[str] = frozenset()
+    #: Automated senders that still need him (a state tax office): listed even
+    #: when the no-reply or bulk rules would drop them. Addresses or ``@domain``.
+    watch_senders: frozenset[str] = frozenset()
     seat_inbox: str = ""
     timezone: str = "America/Phoenix"
     max_pages: int = 20
@@ -294,14 +299,18 @@ def settled(messages: list[Message], settings: Settings) -> bool:
 
 def _is_person(m: Message, settings: Settings) -> bool:
     sender = m.sender
-    if "@" not in sender or m.list_unsubscribe or m.bulk or "SENT" in m.labels:
+    if "@" not in sender or "SENT" in m.labels:
         return False
     local, _, domain = sender.partition("@")
     if sender in settings.owners or sender in (settings.seat_inbox, settings.alert_sender):
         return False
+    if sender in settings.watch_senders or f"@{domain}" in settings.watch_senders:
+        return True
+    if m.list_unsubscribe or m.bulk:
+        return False
     if sender in settings.system_senders or f"@{domain}" in settings.system_senders:
         return False
-    return _NO_REPLY_LOCAL.match(local) is None
+    return _NO_REPLY_LOCAL.search(local) is None
 
 
 def waiting_on_owner(messages: list[Message], settings: Settings, now_ms: int) -> Message | None:
@@ -420,6 +429,7 @@ def settings_from(raw: dict[str, Any], *, seat_inbox: str = "") -> Settings:
         window_days=int(_number(raw.get("window_days"), 14, 1, 60, "window_days")),
         require_alert_state_header=_flag(raw.get("require_alert_state_header"), "require_alert_state_header"),
         system_senders=_addresses(raw.get("system_senders")),
+        watch_senders=_addresses(raw.get("watch_senders")),
         seat_inbox=_norm(str(raw.get("seat_inbox") or "")) or _norm(seat_inbox),
         timezone=timezone,
         max_pages=int(_number(raw.get("max_pages"), 20, 1, 200, "max_pages")),

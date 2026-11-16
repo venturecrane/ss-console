@@ -585,15 +585,15 @@ def test_the_daily_list_goes_once_to_the_authored_recipient_only(tmp_path: Path,
         body.index(h)
         for h in (
             "Waiting on a reply from you (1):",
-            "SMD Ops alerts not cleared (6):",
-            "do not clear on their own (1):",
+            "SMD Ops mail left in the inbox: 6 without a recovery, 1 of the kind that never clears.",
             "Trashed 1 settled alerts.",
         )
     ]
     assert order == sorted(order)
     assert "dana@prospect.example" in body and "pat@client.example" not in body
     assert "news@vendor.example" not in body and SEAT_INBOX not in body
-    assert "(sender not verified)" in body
+    # Counted, never listed: no SMD Ops subject reaches the list.
+    assert "[SMD Ops]" not in body
     # The send is the audited transmit: intent + dispatched rows, on the skill lane.
     types = [r["action_type"] for r in broker.ledger.rows]
     assert "CONFIRM_SEND_INTENT" in types and "CONFIRM_SEND_DISPATCHED" in types
@@ -698,3 +698,31 @@ def test_dkim_pass_reads_only_the_mailbox_verdict() -> None:
     assert not mk.dkim_pass("evil.example; dkim=pass header.i=@smd.services", "smd.services")
     assert not mk.dkim_pass("mx.google.com; dkim=pass header.i=@smd.services.evil.example", "smd.services")
     assert not mk.dkim_pass("mx.google.com; dkim=fail header.i=@smd.services", "smd.services")
+
+
+def test_no_reply_anywhere_in_the_local_part_is_automated_and_watch_senders_override() -> None:
+    # 2026-11-15 smd-office dry run: anchored matching listed these as people.
+    s = mk.settings_from({"mailbox": "me@example.com", "watch_senders": "@taxoffice.example"})
+    for addr in ("microsoft-noreply@microsoft.com", "donotreplytpt9@other.gov", "billing-no-reply@x.example"):
+        assert not mk._is_person(_person_msg(addr), s), addr
+    assert mk._is_person(_person_msg("donotreplytpt1@taxoffice.example"), s)
+    assert mk._is_person(_person_msg("dana@prospect.example"), s)
+
+
+def _person_msg(addr: str) -> mk.Message:
+    return mk.Message(
+        id="m1",
+        thread_id="t1",
+        internal_ms=0,
+        labels=frozenset({"INBOX"}),
+        sender=addr,
+        sender_name="",
+        subject="s",
+        in_reply_to="",
+        references="",
+        auth_results="",
+        list_unsubscribe=False,
+        bulk=False,
+        alert_state="",
+        first_paragraph="",
+    )
