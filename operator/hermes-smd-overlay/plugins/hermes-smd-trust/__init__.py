@@ -50,7 +50,7 @@ from shared.spec_status import SPEC_STATUS
 from shared.tool_registration import register_wrapped_tool
 from shared.workspace_broker import GRANT_ARG, authorize
 
-from . import approval, enforce, outbound, outbound_send, spec_read
+from . import approval, enforce, held_record, outbound, outbound_send, spec_read
 
 logger = logging.getLogger(__name__)
 
@@ -424,7 +424,7 @@ def on_pre_tool_call(**kwargs: Any) -> dict | None:
             tool_call_id=kwargs.get("tool_call_id") or "",
         )
         if outbound_block is not None:
-            return outbound_block
+            return held_record.refused_after_wall(kwargs, outbound_block)
 
         # EFF-01 (ADR 0028): an autonomous EXTERNAL_SEND delivers content with no
         # human review — scan its body for fabrication too (the draft gate above
@@ -436,7 +436,7 @@ def on_pre_tool_call(**kwargs: Any) -> dict | None:
             tool_call_id=kwargs.get("tool_call_id") or "",
         )
         if send_block is not None:
-            return send_block
+            return held_record.refused_after_wall(kwargs, send_block)
 
         # WS-RENDER: the in-turn rendered-body check, POST-ceiling. A cron
         # session whose consumed dispatch envelope declared enforced in-turn
@@ -451,7 +451,7 @@ def on_pre_tool_call(**kwargs: Any) -> dict | None:
                 prerendered_dispatch.in_turn_templates(session_id),
             )
             if body_block is not None:
-                return body_block
+                return held_record.refused_after_wall(kwargs, body_block)
 
         if tool_name.startswith("workspace_"):
             broker_payload = {key: value for key, value in args.items() if key != GRANT_ARG}
@@ -481,37 +481,9 @@ def on_pre_tool_call(**kwargs: Any) -> dict | None:
             "the tool call (safety: an indeterminate trust decision must not "
             "allow a sensitive action; issue #12)"
         )
-        # NAME THE ACTUAL FAULT. This is the catch-all around the WHOLE hook —
-        # roughly a hundred lines spanning session resolution, the ceiling
-        # resolver, the content floor, the outbound scans, the workspace broker
-        # and the audit transport. It said "trust-ceiling evaluation failed" for
-        # every one of them, and the real exception went only to the log above.
-        #
-        # That wording has a measured cost, not a theoretical one. On
-        # 2026-07-31 it sent an agent to a production-severity bug report
-        # against a WORKING security control: the broker had correctly refused a
-        # caller that was not the gateway process, and the message named a
-        # subsystem that was never involved. Diagnosis, a wrong report relayed
-        # to the Captain, and a rebuild cycle, all spent on a message that
-        # described the wrong thing (ss#2103, vfy_01KYX1SHS2ZDCNNB6KR3PNSYQY).
-        #
-        # The exception TYPE and its origin are safe to surface: they name
-        # machinery, not payload. The message body is deliberately excluded —
-        # it can carry recipient or content fragments from whatever raised.
-        origin = "unknown"
-        tb = exc.__traceback__
-        while tb is not None:  # innermost frame — where it actually raised
-            origin = f"{Path(tb.tb_frame.f_code.co_filename).name}:{tb.tb_lineno}"
-            tb = tb.tb_next
-        return {
-            "action": "block",
-            "message": (
-                "Refused: the trust hook raised and failed closed — "
-                f"{type(exc).__name__} at {origin}. This is an indeterminate "
-                "decision blocked for safety, NOT necessarily a ceiling or "
-                "entitlement problem; see the seat log for the traceback."
-            ),
-        }
+        # The block names the actual fault, and is recorded as the call's
+        # refusal: held_record.catch_all_block says why both matter.
+        return held_record.catch_all_block(kwargs, exc)
 
 
 def _act_reference(result: Any) -> str:
