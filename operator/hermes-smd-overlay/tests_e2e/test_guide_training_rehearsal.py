@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 
 from shared import sender_enrollment, training, training_report
-from tests_e2e._training_turns import C_MARK, C
+from tests_e2e._training_turns import C_MARK, FORWARDED_POST, C
 from tests_e2e.test_guide_rehearsal import _person_purge, guide_rehearsal
 from tests_e2e.test_guide_rehearsal_run import A_MARK, ADMIN, B_MARK, A, B
 
@@ -74,11 +74,13 @@ def test_a_works_the_whole_path_and_code_decides_each_step(rehearsal) -> None:
     assert out_of_order["ok"] is False and one["ok"] is True
     for n in range(2, 7):
         assert _results(rehearsal, f"t-a-objection-{n}")[0]["ok"]
+    [eleven] = _results(rehearsal, "t-a-lesson-11")
+    assert eleven["ok"] is True and eleven["lessons_complete"] == 11
     [quiz] = _results(rehearsal, "t-a-asks-quiz")
-    assert len(quiz["questions"]) == 10
+    assert len(quiz["questions"]) == 12
     assert all(set(q) == {"number", "ask", "choices"} for q in quiz["questions"])
     graded, status = _results(rehearsal, "t-a-quiz-answers")
-    assert graded["quiz"]["correct"] == 9 and graded["quiz"]["passed"] is True
+    assert graded["quiz"]["correct"] == 11 and graded["quiz"]["passed"] is True
     assert [m["number"] for m in graded["quiz"]["missed"]] == [9]
     assert status["ready"] is True
     assert [c["id"] for c in status["readiness"] if c["met"]] == [
@@ -89,9 +91,26 @@ def test_a_works_the_whole_path_and_code_decides_each_step(rehearsal) -> None:
     ]
 
 
+def test_a_forwarded_post_is_checked_by_code_and_nothing_is_kept(rehearsal) -> None:
+    [check] = _results(rehearsal, "t-a-material-check", "material_check")
+    assert check["ok"] is True and check["forwarded_included"] is True
+    assert {"no-ai-employee", "no-guarantee", "no-replace-people", "no-timeframe"} <= {
+        m["rule"] for m in check["rules_missed"]
+    }
+    # What it saw: her note and the forwarded post (the harness's turn marker
+    # rides at the end of the body), each once.
+    assert check["chars_checked"] > len(FORWARDED_POST)
+    assert check["checked"].startswith(f"Checked {check['chars_checked']} characters: your own")
+    # It wrote nothing: the check ran after A's clean tone check and before the
+    # quiz, and her readiness still counts that clean check as the last one.
+    _graded, status = _results(rehearsal, "t-a-quiz-answers")
+    tone = next(c for c in status["readiness"] if c["id"] == "tone")
+    assert tone["met"] is True and status["ready"] is True
+
+
 def test_b_sees_only_b_and_fails_the_quiz(rehearsal) -> None:
     [start] = _results(rehearsal, "t-b-starts")
-    assert start["lessons_complete"] == 0, "B's status shows nothing of A's ten lessons"
+    assert start["lessons_complete"] == 0, "B's status shows nothing of A's eleven lessons"
     graded, status = _results(rehearsal, "t-b-quiz-answers")
     assert graded["quiz"]["correct"] == 3 and graded["quiz"]["passed"] is False
     assert status["ready"] is False and status["lessons_complete"] == 1
@@ -112,6 +131,9 @@ def test_every_tool_a_procedure_names_is_on_the_email_surface(rehearsal) -> None
         if "`read_file`" in text:
             named.add("read_file")
     assert {"training_record", "tone_check", "invite_code_issue", "read_file"} <= named
+    assert "material_check" in {
+        t.removeprefix("mcp__") for t in _turn(rehearsal, "t-a-starts")["offered"]
+    }
     offered = {t.removeprefix("mcp__") for t in _turn(rehearsal, "t-a-starts")["offered"]}
     assert named <= offered, sorted(named - offered)
 

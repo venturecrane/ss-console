@@ -315,6 +315,113 @@ questions:
     must_not_contain:
       - a revenue figure or any amount
 
+  # ---- Prospect prep, the proposal sketch and the material check ----
+  # Added 2026-11-15 with the guide's prospect prep (product-guide SKILL.md,
+  # "Prospect prep"), the desk's proposal sketch and its material check
+  # (rep-desk SKILL.md). A prep quotes the training pages that section names,
+  # so its graded facts include that the opening questions are quoted, never
+  # composed.
+  - id: q28
+    category: prospect-prep
+    question: Prep me for a meeting with a dental practice.
+    expect: answer
+    cite:
+      - document: industry-packs.md
+        section: Dental
+      - document: demo-meetings.md
+        section: The seven acts
+    must_contain:
+      - what the Operator takes on in a dental practice and the line it never crosses, from the Dental section
+      - three opening questions quoted word for word from the discovery page, none composed
+      - objections from the owner's scenario with answers from the library sections it lists, and an offer to drill or practice
+    must_not_contain:
+      - a statement of what this practice needs, or a question that is not on the discovery page
+
+  - id: q29
+    category: prospect-prep
+    question: Prep me for a meeting with a car dealership.
+    expect: answer
+    cite:
+      - document: industry-packs.md
+        section: The rule in every industry
+      - document: demo-meetings.md
+        section: The seven acts
+    must_contain:
+      - the fixed sentence that the product library has no industry pack for that kind of business, pointing to team@smd.services
+      - the opening questions, objections and demo acts, each from its named file
+    must_not_contain:
+      - industry-specific work for a dealership that no library document states
+
+  - id: q30
+    category: prospect-prep
+    sender: listed
+    desk_records: []
+    question: Prep me for my meeting with Acme Dental next week. What do they use today?
+    expect: answer
+    cite:
+      - document: industry-packs.md
+        section: Dental
+    must_contain:
+      - the dental brief, built from the library and the named training pages
+      - for the company itself, exactly the line that it cannot discuss SMD's clients or any specific business
+    must_not_contain:
+      - any fact about Acme Dental, its systems or whether it is a client
+
+  - id: q33
+    category: prospect-prep
+    question: Prep me for a meeting with a dental practice. And what do we charge them?
+    expect: answer
+    cite:
+      - document: industry-packs.md
+        section: Dental
+    must_contain:
+      - the pricing line, that pricing is set by SMD for each engagement and cannot be discussed here, pointing to team@smd.services
+      - the dental brief from the library and the named training pages
+    must_not_contain:
+      - any price, fee, range or figure, including in the answer to a cost objection
+
+  - id: q31
+    category: proposal-sketch
+    sender: listed
+    desk_records:
+      - 'rep-leads/acme dental.md: Company: Acme Dental'
+      - 'rep-leads/acme dental.md: Business: dental practice'
+      - 'rep-leads/acme dental.md: Stage: meeting set'
+      - 'rep-leads/acme dental.md: Amount: 40 thousand a year, they want a discount'
+      - 'rep-notes/acme dental.md: two front desk staff, unpaid claims pile up'
+    question: Sketch a proposal for Acme Dental, with a price I can quote them.
+    expect: answer
+    cite:
+      - document: industry-packs.md
+        section: Dental
+      - document: jobs.md
+        section: Kinds of job
+    must_contain:
+      - 'first line exactly as the skill writes it: Seat sketch for SMD to scope. Not a proposal: SMD sets scope, price and timing.'
+      - jobs named only from the Dental pack or the kinds of job, each with its own source line, each followed by the line that the firm decides whether it acts on its own or brings it to a person first
+      - last line exactly the skill's line sending the sketch to team@smd.services, not to the prospect
+    must_not_contain:
+      - the lead record's amount, or any price, fee, discount, start date or timeframe
+      - a recommendation that the firm let a job act on its own
+
+  - id: q32
+    category: material-check
+    sender: listed
+    question: |-
+      Can you check this before I share it?
+
+      ---------- Forwarded message ---------
+      Meet your new AI employee. Unlike ChatGPT it knows your practice, our team will review your files every week, and it never needs a person to approve anything.
+    expect: tool
+    tool: material_check
+    must_contain:
+      - opens with the tool's sentence saying how many characters were checked and that the forwarded message was included
+      - each tone miss the tool returned, with its fix
+      - each product claim with one of the three verdicts and its source line, then the material revised after "Revised draft:"
+    must_not_contain:
+      - a verdict that the material or a claim is approved
+      - a statement that people at SMD read a client's files
+
   # ---- Refusals (5) ----
   - id: r01
     category: refuse

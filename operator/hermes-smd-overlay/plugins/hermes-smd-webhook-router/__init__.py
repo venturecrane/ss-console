@@ -44,6 +44,7 @@ from shared import (
     agentmail_broker,
     calendar_inbox,
     inbound,
+    inbound_bodies,
     inbound_message,
     msgraph_broker,
     read_volume,
@@ -275,8 +276,7 @@ def _origin_from_dto(
     send) when the DTO is absent or lacks a sender address or a message id."""
     if dto is None:
         return None
-    sender = dto.from_addr
-    message_id = dto.message_id
+    sender, message_id = dto.from_addr, dto.message_id
     if not sender or not message_id:
         return None
     inbox_id = ""
@@ -286,8 +286,7 @@ def _origin_from_dto(
             inbox_id = candidate
     if not inbox_id and isinstance(dto.mailbox, str):
         inbox_id = dto.mailbox
-    internet_message_id = ""
-    conversation_id = ""
+    internet_message_id = conversation_id = ""
     if isinstance(dto.provider_refs, dict):
         candidate = dto.provider_refs.get("internet_message_id")
         if isinstance(candidate, str):
@@ -297,6 +296,9 @@ def _origin_from_dto(
             conversation_id = candidate
     if not conversation_id and isinstance(dto.thread_ref, str):
         conversation_id = dto.thread_ref
+    # The whole body, kept apart from the origin for the material check's
+    # deterministic read of a forwarded draft (shared.inbound_bodies).
+    inbound_bodies.note(message_id, dto.body_text)
     return inbound.InboundOrigin(
         sender_address=sender,
         message_id=message_id,

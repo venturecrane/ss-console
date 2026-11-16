@@ -40,7 +40,7 @@ CRON = "cron_abc123def456_20261110_090000"
 A_MARK = "CANARY-A-7f3k9q"
 B_MARK = "CANARY-B-2m8x4w"
 #: Every answer right except question 9.
-A_QUIZ = "1 B\n2. C\nQ3: A\n4) D\n5 A\n6 C\n7 B\n8 C\n9 B\n10 A"
+A_QUIZ = "1 B\n2. C\nQ3: A\n4) D\n5 A\n6 C\n7 B\n8 C\n9 B\n10 A\n11 B\n12 D"
 
 
 def _seat_doc(
@@ -124,10 +124,14 @@ def seat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_ctx: FakePluginCo
     inbound.SESSION_INBOUND_ORIGIN._reset_for_tests()
 
 
-def _email(seat: dict, sender: str, body: str) -> str:
+def _email(
+    seat: dict, sender: str, body: str, *, own: str | None = None, subject: str = "training"
+) -> str:
     """One verified email bound to a fresh session, with the provider's
-    quoted-history-free text (``extracted_text``) as AgentMail sends it.
-    Returns the session id."""
+    quoted-history-free text (``extracted_text``) as AgentMail sends it: the
+    whole ``body`` unless ``own`` names the sender's own words above a quoted
+    or forwarded part. Returns the session id."""
+    own = body if own is None else own
     from bootstrap.translate import _INBOUND_EMAIL_PROMPT
 
     seat["n"] += 1
@@ -140,9 +144,9 @@ def _email(seat: dict, sender: str, body: str) -> str:
             "inbox_id": "guide@agentmail.to",
             "message_id": mid,
             "from": sender,
-            "subject": "training",
+            "subject": subject,
             "text": body,
-            "extracted_text": body,
+            "extracted_text": own,
         },
     }
     dto = inbound_message.normalize_inbound("agentmail", payload)
@@ -166,7 +170,7 @@ def _email(seat: dict, sender: str, body: str) -> str:
         )
 
     _on_thread(pre_llm_call)
-    assert inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session).reply_text == body
+    assert inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session).reply_text == own
     return session
 
 
@@ -193,7 +197,7 @@ def _cur() -> training.Curriculum:
 
 
 def test_registers_both_tools_only_where_training_is_authored(seat, tmp_path, monkeypatch) -> None:
-    assert set(seat["tools"]) == {"training_record", "tone_check"}
+    assert set(seat["tools"]) == {"training_record", "tone_check", "material_check"}
     for variant in (
         {"role": "marketing"},
         {"skill": False},
@@ -231,7 +235,7 @@ def test_every_lesson_and_question_cites_a_library_section_that_exists() -> None
             if not (LIBRARY / s.document).exists() or s.section not in _sections(s.document):
                 missing.append(f"{q.id}: {s.document} {s.section!r}")
     assert missing == []
-    assert len(cur.lessons) == 10 and len(cur.questions) == 10 and cur.pass_correct == 8
+    assert len(cur.lessons) == 11 and len(cur.questions) == 12 and cur.pass_correct == 10
     # The answer key is spread across the letters, so a run of one letter fails.
     assert {q.answer for q in cur.questions} == set(training.LETTERS)
     # The industry example is not a buyer readiness counts.
@@ -248,8 +252,9 @@ def test_the_progress_store_named_in_the_curriculum_is_the_one_code_writes() -> 
 # ---------------------------------------------------------------------------
 
 
-KEY = "BCADACBCDA"
-ALL = {i + 1: x for i, x in enumerate(KEY)}
+KEY = "BCADACBCDABD"
+#: The parser cases below parse ten answers (``parse_answers(text, 10)``).
+ALL = {i + 1: x for i, x in enumerate(KEY[:10])}
 
 
 @pytest.mark.parametrize(
@@ -284,21 +289,21 @@ def test_a_quiz_with_answers_missing_is_not_graded_and_names_what_is_missing() -
     p = training.new_progress()
     result = training.grade_quiz(cur, p, "1-B 2-C 3-A\nThanks, Sam")
     assert result is not None and not result.complete
-    assert result.missing == (4, 5, 6, 7, 8, 9, 10)
+    assert result.missing == (4, 5, 6, 7, 8, 9, 10, 11, 12)
     assert p["quiz"] == training.new_progress()["quiz"], "nothing is recorded"
     assert training.missing_sentence(result.missing).startswith(
-        "This email does not answer questions 4, 5, 6, 7, 8, 9, 10, so the quiz was not graded"
+        "This email does not answer questions 4, 5, 6, 7, 8, 9, 10, 11, 12, so the quiz was not graded"
     )
 
 
 def test_every_attempt_is_counted_and_readiness_uses_the_best() -> None:
     cur = _cur()
     p = training.new_progress()
-    for letters in ("A" * 10, KEY[:8] + "BB", "A" * 10):
+    for letters in ("A" * 12, KEY[:10] + "AA", "A" * 12):
         training.grade_quiz(cur, p, ", ".join(letters))
-    assert p["quiz"] == {"attempts": 3, "best_correct": 8, "last_correct": 3}
+    assert p["quiz"] == {"attempts": 3, "best_correct": 10, "last_correct": 3}
     quiz = next(c for c in training.readiness(cur, p)[1] if c.id == "quiz")
-    assert quiz.met and quiz.value == "best quiz result 8 of 10 correct, 8 needed, 3 attempts"
+    assert quiz.met and quiz.value == "best quiz result 10 of 12 correct, 10 needed, 3 attempts"
 
 
 def test_lessons_go_in_order_and_requirements_are_code_checked() -> None:
@@ -316,6 +321,7 @@ def test_lessons_go_in_order_and_requirements_are_code_checked() -> None:
     for n in range(1, 7):
         assert training.record_objection(cur, p, "owner", n, "a real answer in several words")[0]
     assert training.complete_lesson(cur, p, "l10")[0] is True
+    assert training.complete_lesson(cur, p, "l11") == (True, "Lesson l11 is complete.")
 
 
 def test_an_objection_counts_only_when_answered_in_order_with_an_answer() -> None:
@@ -354,7 +360,7 @@ def test_readiness_is_the_four_code_checked_facts_and_nothing_else() -> None:
     # Each fact alone breaks it.
     for broken in (
         {"lessons_complete": p["lessons_complete"][:-1]},
-        {"quiz": {**p["quiz"], "best_correct": 7}},
+        {"quiz": {**p["quiz"], "best_correct": 9}},
         {"mock_pitch": {"owner": [1, 2, 3, 4, 5]}},
         {"tone": {**p["tone"], "last_misses": 1}},
     ):
@@ -387,6 +393,8 @@ def test_every_tone_rule_fires_on_a_planted_draft_and_a_clean_draft_has_none() -
         "no-claim-to-know": "I know what your business needs.",
         "no-replace-people": "It will replace your staff.",
         "no-guarantee": "We guarantee results.",
+        "no-competitor-names": "Unlike ChatGPT, it knows your firm.",
+        "no-smd-people-see-files": "Our team will review your files each week.",
         "no-long-dash": "Fast — and safe.",
         "no-exclamation": "Great news!",
         "no-shouting": "This is TRULY AMAZING.",
@@ -452,19 +460,23 @@ def test_a_whole_path_to_ready_is_recorded_by_code(seat) -> None:
     assert _call(seat, "training_record", {"action": "complete_lesson", "lesson_id": "l10"}, s)[
         "ok"
     ]
+    s = _email(seat, A, f"I would run the seven acts in order. {A_MARK}")
+    assert _call(seat, "training_record", {"action": "complete_lesson", "lesson_id": "l11"}, s)[
+        "ok"
+    ]
     s = _email(seat, A, "quiz please")
     quiz = _call(seat, "training_record", {"action": "quiz"}, s)
     # The key never reaches the model: each question is its words and choices only.
-    assert len(quiz["questions"]) == 10
+    assert len(quiz["questions"]) == 12
     assert all(set(q) == {"number", "ask", "choices"} for q in quiz["questions"])
     s = _email(seat, A, f"{A_QUIZ}\nthanks {A_MARK}")
     graded = _call(seat, "training_record", {"action": "grade_quiz"}, s)
-    assert graded["quiz"]["correct"] == 9 and graded["quiz"]["passed"] is True
+    assert graded["quiz"]["correct"] == 11 and graded["quiz"]["passed"] is True
     assert [m["number"] for m in graded["quiz"]["missed"]] == [9]
     assert graded["ready"] is True
     record = _record(seat, A)
     assert A_MARK not in json.dumps(record)
-    assert record["quiz"] == {"attempts": 1, "best_correct": 9, "last_correct": 9}
+    assert record["quiz"] == {"attempts": 1, "best_correct": 11, "last_correct": 11}
 
 
 def test_the_grade_comes_from_the_email_never_from_the_model(seat) -> None:
@@ -474,7 +486,7 @@ def test_the_grade_comes_from_the_email_never_from_the_model(seat) -> None:
     assert not (seat["progress"] / person_slug(B)).exists()
     s = _email(seat, B, "1-B 2-C\nThanks, Sam")
     out = _call(seat, "training_record", {"action": "grade_quiz"}, s)
-    assert out == {"ok": False, "say": training.missing_sentence((3, 4, 5, 6, 7, 8, 9, 10))}
+    assert out == {"ok": False, "say": training.missing_sentence((3, 4, 5, 6, 7, 8, 9, 10, 11, 12))}
     assert not (seat["progress"] / person_slug(B)).exists()
 
 
@@ -488,7 +500,7 @@ def test_each_person_sees_only_their_own_progress(seat) -> None:
     assert _record(seat, B)["lessons_complete"] == []
 
 
-@pytest.mark.parametrize("tool", ["training_record", "tone_check"])
+@pytest.mark.parametrize("tool", ["training_record", "tone_check", "material_check"])
 def test_a_turn_with_no_verified_sender_is_refused(seat, tool: str) -> None:
     _on_thread(provenance.note_session, CRON)
     args = {"action": "status"} if tool == "training_record" else {}
@@ -548,3 +560,110 @@ def test_a_seat_without_training_gets_the_old_welcome_and_writes_nothing(seat, t
     cfg = CustomerConfig.from_volume(str(path))
     assert seat["router"]._start_training(cfg, A) is False
     assert not seat["progress"].exists()
+
+
+# ---------------------------------------------------------------------------
+# the material check: what was read is decided by code, and nothing is kept
+# ---------------------------------------------------------------------------
+
+#: A competitor's post the representative forwards, with several misses.
+FORWARDED_POST = (
+    "---------- Forwarded message ---------\n"
+    "From: Someone <someone@example.test>\n"
+    "Subject: our launch\n\n"
+    "Meet your new AI employee, guaranteed to replace your staff in two weeks!"
+)
+
+
+def test_a_forwarded_draft_is_checked_and_nothing_is_recorded(seat) -> None:
+    own = f"Can you check this post before I share it? {A_MARK}"
+    s = _email(seat, A, f"{own}\n\n{FORWARDED_POST}", own=own, subject="Fwd: our launch")
+    out = _call(seat, "material_check", {}, s)
+    assert out["ok"] is True and out["forwarded_included"] is True
+    rules = {m["rule"] for m in out["rules_missed"]}
+    assert {"no-ai-employee", "no-guarantee", "no-replace-people", "no-timeframe"} <= rules
+    assert "no-exclamation" in rules
+    # Both parts were read, once each: the own words are not counted twice.
+    assert out["chars_checked"] == len(own) + 2 + len(FORWARDED_POST)
+    assert out["checked"].startswith(f"Checked {out['chars_checked']} characters: your own words")
+    assert "Attached files are not read" in out["checked"]
+    # Nothing is written: no progress record, so readiness cannot move.
+    assert not seat["progress"].exists() or not any(seat["progress"].iterdir())
+
+
+def test_the_quoted_history_of_an_ordinary_reply_is_not_material(seat) -> None:
+    own = "Where are you trying to take the business?"
+    quoted = "On Mon, Nov 9, 2026 at 9:00 AM Guide <guide@example.test> wrote:\n> Great news!"
+    s = _email(seat, A, f"{own}\n\n{quoted}", own=own, subject="Re: training")
+    out = _call(seat, "material_check", {}, s)
+    assert out["ok"] is True and out["misses"] == 0
+    assert out["forwarded_included"] is False and out["chars_checked"] == len(own)
+    assert "nothing forwarded was included" in out["checked"]
+
+
+def test_a_forward_with_no_note_checks_the_forwarded_part(seat) -> None:
+    s = _email(seat, A, FORWARDED_POST, own="", subject="Fwd: our launch")
+    out = _call(seat, "material_check", {}, s)
+    assert out["ok"] is True and out["forwarded_included"] is True
+    assert out["checked"].startswith("Checked ") and "of the forwarded message" in out["checked"]
+
+
+def test_a_tone_check_after_a_material_check_is_unchanged_by_it(seat) -> None:
+    own = "Check this."
+    s = _email(seat, A, f"{own}\n\n{FORWARDED_POST}", own=own, subject="Fwd: x")
+    assert _call(seat, "material_check", {}, s)["misses"] > 0
+    s = _email(seat, A, "Where are you trying to take the business?")
+    assert _call(seat, "tone_check", {}, s)["misses"] == 0
+    assert _record(seat, A)["tone"]["checks"] == 1
+
+
+#: Each real client shape: (own words, whole body, subject, is it a forward).
+_OWN = "Can you check this?"
+_FORWARD_SHAPES = {
+    "outlook-plain-reply": (
+        _OWN,
+        f"{_OWN}\n\n-----Original Message-----\nFrom: Guide <guide@example.test>\n"
+        "Sent: Monday\nTo: rep\nSubject: training\n\nGreat news! Lesson 2 is next.",
+        "RE: training",
+        False,
+    ),
+    "reply-quoting-an-old-gmail-forward": (
+        _OWN,
+        f"{_OWN}\n\nOn Mon, Nov 9, 2026 at 9:00 AM Guide <guide@example.test> wrote:\n"
+        "> Here is what I found.\n> ---------- Forwarded message ---------\n> Great news!",
+        "Re: our launch",
+        False,
+    ),
+    "reply-quoting-with-angle-brackets-first": (
+        _OWN,
+        f"{_OWN}\n\n> Earlier words\n\n---------- Forwarded message ---------\nGreat news!",
+        "Re: our launch",
+        False,
+    ),
+    "gmail-forward": (
+        _OWN,
+        f"{_OWN}\n\n---------- Forwarded message ---------\nFrom: Someone\n\nGreat news!",
+        "our launch",
+        True,
+    ),
+    "apple-mail-forward": (
+        _OWN,
+        f"{_OWN}\n\nBegin forwarded message:\n\nFrom: Someone\n\nGreat news!",
+        "our launch",
+        True,
+    ),
+    "fwd-subject-alone": (_OWN, f"{_OWN}\n\nGreat news!", "Fwd: our launch", True),
+}
+
+
+@pytest.mark.parametrize("shape", sorted(_FORWARD_SHAPES))
+def test_a_forward_is_told_from_a_reply_by_code(shape: str) -> None:
+    from shared import material_check
+
+    own, body, subject, forward = _FORWARD_SHAPES[shape]
+    material = material_check.material_text(own, body, subject)
+    assert material.forwarded_included is forward, shape
+    if not forward:
+        # Only the own words were read: the earlier thread is never material.
+        assert material.text == own
+        assert "nothing forwarded was included" in material.checked_sentence()

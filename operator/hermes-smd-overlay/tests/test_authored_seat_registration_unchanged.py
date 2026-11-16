@@ -104,10 +104,11 @@ def test_a_guide_seat_that_authors_training_gains_exactly_the_training_tools(
     without = collect(changed, load_plugin)
     authored = _snapshot()["smd-guide"]
     gained = set(authored["tools"]) - set(without["tools"])
-    assert {"training_record", "tone_check"} <= gained
+    assert {"training_record", "tone_check", "material_check"} <= gained
     assert gained <= {
         "training_record",
         "tone_check",
+        "material_check",
         "record_store_list",
         "record_store_read",
         "record_store_write",
@@ -120,4 +121,4 @@ def test_a_guide_seat_that_authors_training_gains_exactly_the_training_tools(
     for name, seat in _snapshot().items():
         if name == "smd-guide":
             continue
-        assert "training_record" not in seat["tools"] and "tone_check" not in seat["tools"]
+        assert not {"training_record", "tone_check", "material_check"} & set(seat["tools"])

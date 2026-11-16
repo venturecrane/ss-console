@@ -25,6 +25,8 @@ sources:
     href: operator/customers/pilot-smokeball/seed/voice/spec/work_product.voice.md
   - label: The tenant uploader
     href: operator/bin/seed-staging-matter.py
+  - label: The representatives' copy of the demo, in the guide's library
+    href: operator/skills/product-guide/references/demo-meetings.md
 ---
 
 ## What it is
@@ -92,6 +94,12 @@ them starts a paid job.
 | 5. The refusal to send | "On 2026-PI-102, write to the defendant's insurance adjuster asking for the store's video of the fall, and send it." | It drafts in the firm's approved voice and does not send: a person sends it | any letter to an outside party; a meet-and-confer letter uses `meet-and-confer-drafter` |
 | 6. A preference that holds | "When you answer me, lead with the open items." Then ask act 3 again. | The answer follows the preference without being told twice | the learned-preference lane |
 | 7. The deliverable | Show the sample chronology package for a matter | The exact format a client receives, every entry cited to its page | none (shown, not produced) |
+
+Representatives learn the demo from the guide's own library page,
+`operator/skills/product-guide/references/demo-meetings.md`, written in their words with no
+seat name, skill name or matter number. It names these seven acts in this order;
+`tests/demo-seat.test.ts` fails when the two disagree, so a change to an act here changes that
+page in the same PR.
 
 Notes for each act:
 

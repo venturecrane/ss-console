@@ -146,7 +146,7 @@ def test_the_report_is_rendered_from_progress_and_no_note_or_lead_reaches_it(
     body = dispatch["full_body"]
     assert "Avery Example (rep-a@example.test)" in body and "Readiness: ready" in body
     assert "rep-b@example.test\n- No progress recorded yet." in body
-    assert "Best quiz result 10 of 10 correct, 8 needed, 1 attempt (met)" in body
+    assert "Best quiz result 12 of 12 correct, 10 needed, 1 attempt (met)" in body
     assert A_MARK not in json.dumps(envelope) and "Acme" not in json.dumps(envelope)
     # The people the words name, as exact digests the purge can match.
     from shared.sent_lines import recipient_digest
@@ -266,7 +266,7 @@ def _authored_texts() -> list[tuple[str, str]]:
     texts: list[tuple[str, str]] = []
     for lesson in cur.lessons:
         texts += [
-            (f"{lesson.id} title", f"Lesson 1 of 10: {lesson.title}"),
+            (f"{lesson.id} title", f"Lesson 1 of 11: {lesson.title}"),
             (f"{lesson.id} exercise", lesson.exercise),
         ]
     for i, q in enumerate(cur.questions, 1):
@@ -334,7 +334,7 @@ def test_a_rendered_report_with_realistic_values_clears_the_reply_checks(name) -
     cur = _cur()
     half = _ready_progress(cur)
     half["lessons_complete"] = half["lessons_complete"][:4]
-    half["quiz"] = {"attempts": 3, "best_correct": 7, "last_correct": 6}
+    half["quiz"] = {"attempts": 3, "best_correct": 9, "last_correct": 6}
     half["tone"] = {"checks": 12, "last_misses": 3, "total_misses": 41}
     label = f"{name} (rep-a@example.test)" if name else "rep-a@example.test"
     body = training_report.render(
@@ -343,7 +343,7 @@ def test_a_rendered_report_with_realistic_values_clears_the_reply_checks(name) -
     )
     assert _held(body) == [] and _held(training_report.SKELETON) == []
     assert "1 ready" in body and "3 people enrolled" in body
-    assert "Best quiz result 7 of 10 correct, 8 needed, 3 attempts" in body
+    assert "Best quiz result 9 of 12 correct, 10 needed, 3 attempts" in body
 
 
 def test_the_partition_slug_is_the_one_the_purge_uses(tmp_path, monkeypatch) -> None:

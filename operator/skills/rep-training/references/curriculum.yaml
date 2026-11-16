@@ -150,8 +150,21 @@ lessons:
       answer every objection that buyer raises.
     requires: mock_pitch
 
+  - id: l11
+    title: The demo meeting
+    read:
+      - document: demo-meetings.md
+        section: The seven acts
+      - document: demo-meetings.md
+        section: Cautions
+    exercise: >-
+      A prospect asks you to show them the Operator. Say which acts you would
+      run, in order, what you would email for the first two, and how you would
+      answer if they asked to see something the demo does not show.
+    requires: none
+
 quiz:
-  pass_correct: 8
+  pass_correct: 10
   questions:
     - id: q01
       ask: What happens to a capability that is not written down for a client's seat?
@@ -272,3 +285,27 @@ quiz:
       source:
         document: who-smd-sells-to.md
         section: The buyer
+
+    - id: q11
+      ask: In a demo meeting, a prospect asks you to make the demo seat actually send a letter to an outside party. What do you do?
+      choices:
+        A: Look for a way to make the demo seat send it for real
+        B: Show that it keeps every outside letter as a draft for a person, and describe sending on its own as something SMD sets up per client
+        C: Tell them it cannot send letters
+        D: Forward the draft to the prospect yourself
+      answer: B
+      source:
+        document: demo-meetings.md
+        section: Cautions
+
+    - id: q12
+      ask: A prospect asks about a capability the demo does not show, such as texting. What do you say?
+      choices:
+        A: That it is not available
+        B: That you cannot discuss it
+        C: That it is planned for later
+        D: That it is something SMD configures for a client, and, if they ask what a client has today, the library's label for it
+      answer: D
+      source:
+        document: demo-meetings.md
+        section: Cautions

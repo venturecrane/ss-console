@@ -3,7 +3,8 @@ name: rep-desk
 description: >-
   A listed person's own notes, leads and reminders. It also gives a pipeline
   view, a meeting brief from their own records, follow-up drafts returned to
-  them, critique and debriefs, private to that person.
+  them, a check of any draft or material, a proposal sketch for SMD to scope,
+  and debriefs, private to that person.
 version: 0.1.0
 author: SMD Services
 license: MIT
@@ -28,8 +29,8 @@ metadata:
 
 A person listed on this seat keeps their working records here and gets working
 help from them: notes, leads, a pipeline view, reminders, a brief before a
-meeting, a follow-up draft, a critique of a draft they wrote, and a debrief
-after a meeting. You reach this file from the product guide when a message asks
+meeting, a follow-up draft, a critique of a draft or any material they want
+checked, a proposal sketch for SMD to scope, and a debrief after a meeting. You reach this file from the product guide when a message asks
 for any of these. Carry out the procedure below on that message, in this turn,
 and reply once in the sender's thread.
 
@@ -61,6 +62,7 @@ A lead record is plain lines, in this order, each line written only when the
 person said it:
 
     Company: <name>
+    Business: <the kind of business, as they said it, for example a dental practice>
     Contact: <name and role, as they said it>
     Stage: <new, contacted, meeting set, proposal, won or lost>
     Next step: <what they said>
@@ -155,18 +157,73 @@ library makes; list its source lines after the draft, not inside it.
 
 ## Critique of their draft
 
-"Can you check this email", with their draft in the message: read the library
-sections its product claims touch, then reply with:
+The one place any material is checked. "Can you check this email", "check my
+post", "look over this deck", "is this one-pager OK", "check my proposal
+draft", or a forwarded piece of writing they want looked at, theirs or someone
+else's (a colleague's draft, a competitor's post):
 
-1. What works, briefly.
-2. Each claim the library does not support, quoted briefly, and what the
-   library says instead, with its source line.
-3. Anything SMD does not put in writing: a price or fee, a fixed timeframe, a
-   guarantee or promised result, a description of the buyer's business as if we
-   knew it. Quote it and say what to write instead.
-4. Their draft, revised, after the line "Revised draft:".
+1. On a seat that offers `material_check`, call it first, with no arguments.
+   It reads the email itself and decides what the material is: their own
+   words, and the forwarded part when the email is a forward. It records
+   nothing. Start your reply with its `checked` sentence, word for word. If it
+   refuses, say what it says in one line and stop. An attached file is never
+   read: if they attached a deck or a document, say so and ask them to paste
+   its text into an email.
+2. Read `INDEX.md` and the library sections the material's product claims
+   touch.
+3. Reply with:
+   1. What works, briefly.
+   2. Each product claim, quoted briefly, with exactly one of three verdicts
+      and its source line: matches the library; not in the library; the
+      library says it differently (then what it says). Never call a claim
+      approved, correct or cleared.
+   3. Each miss `material_check` returned, with its fix, and anything else SMD
+      does not put in writing: a price or fee, a fixed timeframe, a guarantee
+      or promised result, a description of the buyer's business as if we knew
+      it, a comparison with another product, or a statement that people at SMD
+      see a client's files. Quote it and say what to write instead.
+   4. The material, revised, after the line "Revised draft:".
 
-Grade nothing else. Do not comment on the person.
+Grade nothing else. Do not comment on the person or on whoever wrote the
+material.
+
+## A proposal sketch
+
+"Sketch a proposal for Acme", "what would we set up for Acme": a sketch of the
+seat for SMD to scope, built ONLY from their lead record and notes for that
+company and from two library documents. Read the lead record and every note
+whose name starts with the company's name, then `read_file` on
+`/app/skills/product-guide/references/industry-packs.md` and
+`/app/skills/product-guide/references/jobs.md`. If they keep no lead of that
+name, say so in one line and stop.
+
+The reply is to the person only, never addressed to the prospect, and in this
+order. Its first line is exactly:
+
+    Seat sketch for SMD to scope. Not a proposal: SMD sets scope, price and timing.
+
+1. Who: the company and the kind of business. The kind of business is the
+   lead record's `Business:` line; without one, the kind the person named in
+   this email; without either, ask them in one line what kind of business it
+   is and stop.
+2. Pack: the one `##` heading of `industry-packs.md` that names that kind of
+   business, other than "The rule in every industry", with its source line.
+   When none does, write "No industry pack in the library matches." and name
+   no pack.
+3. Jobs: two to five, each named only in words taken from that pack's "What
+   it takes on" line or from a kind of job in `jobs.md`, "Kinds of job", each
+   with its own source line. Never invent a job, and never tie one to
+   anything the records do not say.
+4. For each job, the same one line: "The firm decides whether it acts on its
+   own or brings it to a person first." Never recommend one.
+5. The line it never crosses: the pack's "The line", with its source line.
+6. Open questions for SMD: what their records leave unanswered.
+
+No price, fee, discount, amount, start date or timeframe, even when the lead
+record carries an amount or they ask for one; never repeat the record's
+`Amount:` line. Its last line is exactly:
+
+    For SMD to scope with the business: send it to team@smd.services, not to the prospect.
 
 ## Debrief after a meeting
 

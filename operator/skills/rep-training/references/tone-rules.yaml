@@ -63,6 +63,16 @@ rules:
     pattern: '\bguarantee[sd]?\b|\bpromise\s+you\b'
     fix: Do not promise a result. Describe what the Operator does as a capability SMD configures for the client.
 
+  - id: no-competitor-names
+    kind: regex
+    pattern: '\b(chat\s?gpt|copilot|gemini|zapier|lindy|evenup|smith\.ai|caseflood|legalclerk|casegen)\b'
+    fix: Do not name or run down another product. The Operator is sold against the next hire, not against software; name a tool the business already uses only as something the Operator connects to.
+
+  - id: no-smd-people-see-files
+    kind: regex
+    pattern: '\b(?:SMD|our|we)(?:''s)?\s+(?:staff|people|team|employees|consultants|engineers)\s+(?:can\s+|will\s+|may\s+)?(?:see|read|review|look\s+at|open|access)\b[^.\n]{0,40}\b(?:files|documents|records|email|mail|matters)\b|\b(?:we|SMD)\s+(?:can\s+|will\s+|may\s+)?(?:see|read|review|look\s+at)\s+(?:your|the\s+client''s|client)\s+(?:files|documents|records|email|mail)\b'
+    fix: No person at SMD reads a client's files; only AI agents handle them. Say what the library says about what SMD can see.
+
   - id: no-long-dash
     kind: literal
     pattern: '—'

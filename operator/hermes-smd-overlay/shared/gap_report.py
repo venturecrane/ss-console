@@ -144,6 +144,7 @@ NON_PRODUCT_TOOLS = frozenset(
         "record_store_write",
         "reminder_set",
         "invite_code_issue",
+        "material_check",
     }
 )
 NON_PRODUCT_TOOL_PREFIXES = ("training_", "tone_check")
