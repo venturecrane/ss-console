@@ -140,6 +140,15 @@ _EXACT_REDRAFT_REASONS = frozenset({"fixed_wording"})
 #: delivered job's whole reply (a drafted document's marker and caption lines).
 _MAX_EXACT_DETAIL_LEN = 6000
 
+#: A reply that went out and then faulted before its record was finished
+#: (``relay_sent.trace_incomplete``). Not a hold: the one notice that says SENT.
+SENT_TRACE_INCOMPLETE = "sent_trace_incomplete"
+_SENT_TRACE_INCOMPLETE_TEXT = (
+    "[reply-channel] YOUR REPLY WAS SENT to {recipient}, but recording it hit an "
+    "error, so SMD has been told. Do not send it again and do not redraft it: a "
+    "second reply would reach them twice."
+)
+
 _GENERIC_HINT = (
     "The draft was not transmitted, and no automatic release is queued for it. "
     "Do not assume the person has been told."
@@ -177,6 +186,8 @@ def render(notice: HoldNotice) -> str:
     """The model-facing text for one hold. No em dashes (house style)."""
     reason = _sanitize(notice.reason, _MAX_REASON_LEN) or "unspecified"
     recipient = _sanitize(notice.recipient, _MAX_RECIPIENT_LEN) or "the inbound sender"
+    if reason == SENT_TRACE_INCOMPLETE:
+        return _SENT_TRACE_INCOMPLETE_TEXT.format(recipient=recipient)
     exact = reason in _EXACT_REDRAFT_REASONS
     if exact:
         guidance = _REASON_HINTS[reason]
@@ -233,9 +244,13 @@ class HoldNoticeStore:
         recipient: str,
         message_id: str,
         detail: str = "",
+        counted: bool = True,
     ) -> None:
+        """``counted=False`` for a notice that is not a hold of this email (a
+        reply that WAS sent): it must not make the email's next hold read as a
+        second refusal."""
         key = tool_call_id if isinstance(tool_call_id, str) else ""
-        msg = message_id if isinstance(message_id, str) else ""
+        msg = message_id if isinstance(message_id, str) and counted else ""
         with self._lock:
             if len(self._counts) >= self._max_counts:
                 self._counts.clear()
@@ -247,7 +262,7 @@ class HoldNoticeStore:
             self._pending[key] = HoldNotice(
                 reason=reason or "",
                 recipient=recipient or "",
-                message_id=msg,
+                message_id=message_id if isinstance(message_id, str) else "",
                 attempt=attempt,
                 detail=detail if isinstance(detail, str) else "",
             )

@@ -19,7 +19,8 @@ object everywhere.
 THE RETURN SHAPES. A guard returns ``True`` to go on. A step that hands values
 to the next returns them as a tuple, or ``None`` once it has decided the call.
 Steps 8 to 10 (send-posture routing, transmit or hold, the catch-all) live in
-the plugin itself, beside the transports they call.
+the plugin itself, beside the transports they call; what step 9 does once the
+reply is out (its record, and a fault after the send) is in ``relay_sent``.
 """
 
 from __future__ import annotations

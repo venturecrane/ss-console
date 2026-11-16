@@ -11,7 +11,8 @@
  *   failed      a call failed and nothing in the session recovered it, a reply
  *               was held or failed, a delivery was unproven, or a reply went
  *               out saying the Operator could not do what was asked
- *               (`reply_could_not:<code>`, 2026-11-01)
+ *               (`reply_could_not:<code>`, 2026-11-01), or a reply went out
+ *               and then its record broke (`reply_sent:trace_incomplete`)
  *   partial     the mail routine filed fewer pages than it was handed
  *   not_allowed a check stopped the call: the trust gate, a plugin, or a banned
  *               tool. The ledger keeps which, never why.
@@ -21,9 +22,11 @@
  *
  * WHO IS EMAILED (Captain, 2026-11-02: "mostly noise"). Every event is still
  * recorded, and operator/bin/work-health.py lists them for the triage agent. Only
- * two kinds email, because only they need a person: a reply a check held or that
+ * three kinds email, because only they need a person: a reply a check held or that
  * failed (someone may be waiting, and the NO REPLY alarm stands down while a reply
- * is held), and a limit (someone decides whether to go past it). The rest are for
+ * is held), a reply that went out but whose record broke (TRACE_INCOMPLETE: the
+ * person has it, so the email says not to send it again), and a limit (someone
+ * decides whether to go past it). The rest are for
  * the agent or are already said elsewhere: a reply that said no and a job that held
  * or failed each have their own request email, and a late delivery proof was the
  * false alarm that repeated one paragraph four times on 2026-11-02.
@@ -185,10 +188,20 @@ async function pendingRows(
   return res.results ?? []
 }
 
+/**
+ * A reply that went out and then faulted before its record finished. It emails
+ * because the record is wrong in a way only a person can settle, and its words
+ * say the opposite of a failed reply: the person has it, so nobody resends it.
+ */
+export const TRACE_INCOMPLETE = 'reply_sent:trace_incomplete'
+
 /** The kinds that need a person. Everything else is the triage agent's. */
 export function emailsAPerson(r: Pick<LedgerRow, 'class' | 'code'>): boolean {
   return (
-    r.class === 'limit' || r.code.startsWith('reply_held:') || r.code.startsWith('reply_failed:')
+    r.class === 'limit' ||
+    r.code === TRACE_INCOMPLETE ||
+    r.code.startsWith('reply_held:') ||
+    r.code.startsWith('reply_failed:')
   )
 }
 
@@ -198,9 +211,9 @@ async function throttled(db: D1Database, slug: string, nowMs: number): Promise<b
     .prepare(
       `SELECT MAX(notified_at) AS last FROM operator_shortfalls
         WHERE customer_slug = ?
-          AND (class = 'limit' OR code LIKE 'reply_held:%' OR code LIKE 'reply_failed:%')`
+          AND (class = 'limit' OR code = ? OR code LIKE 'reply_held:%' OR code LIKE 'reply_failed:%')`
     )
-    .bind(slug)
+    .bind(slug, TRACE_INCOMPLETE)
     .first<{ last: string | null }>()
   if (!row?.last) return false
   const lastMs = Date.parse(row.last.replace(' ', 'T') + 'Z')
@@ -253,6 +266,9 @@ export function whatHappened(r: Pick<LedgerRow, 'class' | 'code'>): string {
     return 'The Operator wrote a reply, but a check held it before it was sent.'
   }
   if (r.code.startsWith('reply_failed:')) return "The Operator's reply did not go out."
+  if (r.code === TRACE_INCOMPLETE) {
+    return "The Operator's reply went out, but an error stopped its record from being finished."
+  }
   return `A limit stopped the work (${r.code}).`
 }
 
@@ -273,6 +289,12 @@ export function nextStep(
     return (
       `Decide whether it should go past the limit (${request} says what was asked). ` +
       `If yes, an agent can raise it for this job. If no, tell the person what does fit.`
+    )
+  }
+  if (r.code === TRACE_INCOMPLETE) {
+    return (
+      `Do not send the reply again: the person has it (${request} says what was asked). ` +
+      `Give this email to an agent to find why its record broke.`
     )
   }
   if (r.code === 'reply_held:matter_files_review') {
@@ -324,10 +346,14 @@ function detailLines(rows: LedgerRow[]): string {
 
 /** The subject, in words, naming what happened. */
 export function shortfallSubject(slug: string, rows: LedgerRow[]): string {
-  const replies = rows.filter((r) => r.class !== 'limit').length
-  const limits = rows.length - replies
+  const traced = rows.filter((r) => r.code === TRACE_INCOMPLETE).length
+  const replies = rows.filter((r) => r.class !== 'limit').length - traced
+  const limits = rows.length - replies - traced
   const parts = [
     ...(replies > 0 ? [`a reply did not go out${replies > 1 ? ` (${replies})` : ''}`] : []),
+    ...(traced > 0
+      ? [`a reply went out but its record broke${traced > 1 ? ` (${traced})` : ''}`]
+      : []),
     ...(limits > 0 ? [`a limit stopped the work${limits > 1 ? ` (${limits})` : ''}`] : []),
   ]
   return `[SMD Ops] ${slug}: ${parts.join(', ')}`

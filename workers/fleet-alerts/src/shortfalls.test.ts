@@ -14,6 +14,7 @@ import {
   notifyShortfalls,
   parseShortfallEvents,
   phoenixTime,
+  shortfallSubject,
   emailsAPerson,
   THROTTLE_MINUTES,
   whatHappened,
@@ -436,6 +437,7 @@ describe('shape', () => {
         /may be waiting/,
       ],
       [{ class: 'limit', code: 'over_page_cap' }, /limit stopped/, /past the limit/],
+      [{ class: 'failed', code: 'reply_sent:trace_incomplete' }, /reply went out/, /Do not send/],
     ]
     for (const [r, happened, step] of cases) {
       const row = { ...r, request_at: null } as never
@@ -445,6 +447,13 @@ describe('shape', () => {
       expect(nextStep('ashton-price', row)).toContain('ashton-price request emails')
       expect(`${whatHappened(row)} ${nextStep('ashton-price', row)}`).not.toMatch(/\u2014/)
     }
+  })
+  it('never calls a reply that went out a reply that did not', () => {
+    const row = { class: 'failed', code: 'reply_sent:trace_incomplete', request_at: null } as never
+    expect(whatHappened(row)).not.toMatch(/did not go out/)
+    expect(shortfallSubject('ashton-price', [row])).toBe(
+      '[SMD Ops] ashton-price: a reply went out but its record broke'
+    )
   })
   it('reads times as Phoenix time, and leaves an unparseable one alone', () => {
     expect(phoenixTime('2026-10-28T01:03:34.941Z')).toBe('Oct 27, 6:03 PM MST')
