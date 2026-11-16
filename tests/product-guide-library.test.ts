@@ -437,9 +437,9 @@ describe('product guide answer key (ADR 0105)', () => {
   // Champion mode (a brokerage brainstorm, a price, a practice request, "we
   // are in your pilot", and "can ours do it today"), which adds two refusal
   // kinds of that mode.
-  it('has 45 questions with unique ids, 11 of them refusals of the eight kinds', () => {
-    expect(qs.length).toBe(45)
-    expect(new Set(qs.map((q) => q.id)).size).toBe(45)
+  it('has 46 questions with unique ids, 11 of them refusals of the eight kinds', () => {
+    expect(qs.length).toBe(46)
+    expect(new Set(qs.map((q) => q.id)).size).toBe(46)
     expect(qs.every((q) => ['answer', 'refuse', 'tool'].includes(q.expect))).toBe(true)
     const refusals = qs.filter((q) => q.expect === 'refuse')
     expect(refusals.length).toBe(11)
@@ -629,13 +629,14 @@ describe('Champion mode', () => {
     'That is not available on this guide; for anything else, ask SMD Services at team@smd.services.'
 
   it('the key covers a brainstorm, a price, practice, the pilot and "can ours do it today"', () => {
-    expect(champion.map((q) => q.id)).toEqual(['c01', 'c02', 'c03', 'c04', 'c05'])
+    expect(champion.map((q) => q.id)).toEqual(['c01', 'c02', 'c03', 'c04', 'c05', 'c06'])
     expect(champion.map((q) => q.refusal ?? q.expect)).toEqual([
       'answer',
       'pricing',
       'champion-unavailable',
       'champion-own-business',
       'champion-own-business',
+      'answer',
     ])
     for (const q of champion.filter((q) => q.refusal?.startsWith('champion-'))) {
       const sentence = q.refusal === 'champion-unavailable' ? UNAVAILABLE : OWN_BUSINESS

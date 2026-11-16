@@ -2,6 +2,8 @@
 
 This document describes how a residential real estate brokerage works, where its coordinators' time goes, what the Operator can take on for the brokerage, its agents and their clients, the line it never crosses, the systems it connects to, and questions a brokerage can explore. The industry facts come from the public sources listed at the end, with Arizona as the worked example where a state's rules matter. Every item under "What the Operator takes on" and "Systems it connects to" names the part of the library or of SMD's site it comes from. A brokerage seat is shaped with the brokerage the same way as every other industry pack: what follows is a starting point to react to, not the only way it can run.
 
+[real-estate-use-ideas.md](real-estate-use-ideas.md) lists use ideas by role, for the broker, agents, coordinators and office staff, and buyers and sellers, to brainstorm with a brokerage.
+
 ## How the business works
 
 - **The broker supervises.** In Arizona the employing broker and the designated broker must exercise reasonable supervision and control over the brokerage's licensees, keep written policies and procedures, and review the brokerage's transactions. Electronic review of a document is accepted in place of initials when the review is recorded in a history that cannot be altered.
