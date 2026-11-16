@@ -711,7 +711,18 @@ def test_no_reply_anywhere_in_the_local_part_is_automated_and_watch_senders_over
 
 def _person_msg(addr: str) -> mk.Message:
     return mk.Message(
-        id="m1", thread_id="t1", internal_ms=0, labels=frozenset({"INBOX"}), sender=addr, sender_name="",
-        subject="s", in_reply_to="", references="", auth_results="", list_unsubscribe=False, bulk=False,
-        alert_state="", first_paragraph="",
+        id="m1",
+        thread_id="t1",
+        internal_ms=0,
+        labels=frozenset({"INBOX"}),
+        sender=addr,
+        sender_name="",
+        subject="s",
+        in_reply_to="",
+        references="",
+        auth_results="",
+        list_unsubscribe=False,
+        bulk=False,
+        alert_state="",
+        first_paragraph="",
     )
