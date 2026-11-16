@@ -39,7 +39,7 @@ import json
 import logging
 from typing import Any
 
-from shared import material_check, training
+from shared import champion, material_check, training
 from shared.tool_registration import register_wrapped_tool
 
 logger = logging.getLogger(__name__)
@@ -260,10 +260,11 @@ def material_handler(args: dict[str, Any], **kwargs: Any) -> str:
         return _refused("The tone rules could not be opened just now; nothing was checked.")
 
 
+#: A client champion (``shared.champion``) is refused by every one of them.
 _HANDLERS = {
-    TOOL_RECORD: record_handler,
-    TOOL_TONE: tone_handler,
-    TOOL_MATERIAL: material_handler,
+    TOOL_RECORD: champion.refuse_champion(record_handler),
+    TOOL_TONE: champion.refuse_champion(tone_handler),
+    TOOL_MATERIAL: champion.refuse_champion(material_handler),
 }
 
 

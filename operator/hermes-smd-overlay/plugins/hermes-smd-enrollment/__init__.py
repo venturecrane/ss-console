@@ -20,6 +20,14 @@ WHO MAY ASK, decided here in code and again by the broker:
 * the name is a plain name (``shared.sender_enrollment.valid_name``), else the
   fixed :data:`shared.sender_enrollment.NAME_REFUSAL`.
 
+WHICH KIND OF CODE, decided here in code and never by the model: a CHAMPION
+code (a client champion, ``shared.champion``) when the administrator's own
+words in the email that opened the turn say "champion code for" this
+person's name, on a guide seat; a
+REPRESENTATIVE code otherwise. The tool has no argument for it; an argument
+the model invents is ignored. The broker re-reads the email and checks the
+word again before it labels the code.
+
 ANYONE NOT CONFIRMED AS AN ADMINISTRATOR learns nothing about codes. The
 first two checks, and an unreadable or switched-off config before them, all
 return :data:`_NOT_ADMIN`: the one sentence :data:`DECLINE`, which says only
@@ -99,9 +107,20 @@ TOOLS: dict[str, tuple[str, dict[str, Any]]] = {
 
 _REFUSED = "{tool} refused: {why} No code was issued."
 _DONE = (
-    "DONE: invite code {code_id} for {name} was emailed to you in this thread. "
+    "DONE: {kind} code {code_id} for {name} was emailed to you in this thread. "
     "Tell the administrator it is in their inbox, in one line, and add nothing else."
 )
+
+
+def _kind(cfg: Any, origin: Any, name: str) -> str:
+    """The kind of code, decided here from the administrator's OWN words in the
+    email that opened this turn (``reply_text``, the provider's quoted-history-free
+    text; never the subject): "champion code for <name>", naming this person,
+    asks for a champion code, and only on a guide seat. The model passes no
+    kind, and any argument naming one is ignored."""
+    if se.is_demo(cfg.raw):
+        return se.KIND_REPRESENTATIVE
+    return se.kind_for(getattr(origin, "reply_text", ""), name)
 
 
 def _tainted(session_id: str) -> bool:
@@ -165,6 +184,7 @@ def issue_handler(args: dict[str, Any], **kwargs: Any) -> str:
         return _REFUSED.format(
             tool=TOOL_ISSUE, why="days runs from 1 to 90 and max uses from 1 to 100."
         )
+    kind = _kind(cfg, origin, str(name))
     try:
         result = se.issue(
             message_id=origin.message_id,
@@ -172,6 +192,7 @@ def issue_handler(args: dict[str, Any], **kwargs: Any) -> str:
             name=str(name),
             days=days,
             max_uses=uses,
+            kind=kind,
         )
     except Exception as exc:  # noqa: BLE001 - a fault is a refusal, never a raise
         logger.warning("hermes-smd-enrollment: issue failed (%s)", type(exc).__name__)
@@ -180,7 +201,7 @@ def issue_handler(args: dict[str, Any], **kwargs: Any) -> str:
     if not code_id or result.get("sent") is not True:
         return _REFUSED.format(tool=TOOL_ISSUE, why="the code could not be issued and sent.")
     logger.info("hermes-smd-enrollment: code %s issued to an administrator", code_id)
-    return _DONE.format(code_id=code_id, name=name)
+    return _DONE.format(kind=kind, code_id=code_id, name=name)
 
 
 _HANDLERS = {TOOL_ISSUE: issue_handler}

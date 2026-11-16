@@ -213,6 +213,19 @@ This is for the administrators of a guide seat (its `scope.admins` addresses) th
 
 Anyone else who asks for a code, or asks who makes them, gets one fixed sentence decided in code, not by the model: "Access to the guide comes from SMD Services, at team@smd.services." It does not say the seat makes codes or anything about the asker's role. A request in chat gets the same sentence, because no chat id on a guide seat is mapped to an administrator (`operator/hermes-smd-overlay/plugins/hermes-smd-enrollment/__init__.py`). A code is stopped with `revoke`, and a connected person removed with `remove`, in `operator/workspace_broker/sender_enrollment_cli.py` on the seat, run as root. `remove` also purges what that person kept on the seat (their notes and leads in a store walled per person, and the rows the seat keys to their address), then reads the volume back and exits nonzero if anything of theirs is still there. `purge <address>` clears data an address left behind after it was removed, and `purge --probe <address>` checks without changing anything. `orphans` lists the walled-store directories that belong to nobody listed, by count and slug, never their content.
 
+### A champion code
+
+A champion is a person inside a client business who carries the case for the Operator to the people who decide there. On a guide seat, an administrator gets a champion code by writing "champion code for" followed by the person's name, as given, in their own request ("I need a champion code for Dana Reyes"). Code reads that phrase from the administrator's own words in that email, never the subject, quoted history or the model, and only for the person the code is for; anything else is a representative code. The broker reads the email again before it labels the code `champion`. The code email and the guide's one-line confirmation say "champion code"; every other code is a "representative code". The demo seat issues representative codes only. The `SENDER_ENROLLMENT_CODE_ISSUED` row carries the label, and SMD's notice when the person connects names it.
+
+A champion gets product answers only, and everything for representatives is held back by code (`operator/hermes-smd-overlay/shared/champion.py`):
+
+- They get their own welcome. It says what the guide answers for them and asks for the first question in a reply. No progress record or library-change mark is made for them.
+- A reply to a champion is held when it carries a practice, drill, lesson or quiz, or cites a library document or heading that is not open to champions. The champion then gets one fixed sentence: "That is not available on this guide; for anything else, ask SMD Services at team@smd.services." A document is open to champions only when the Audience column of the library index (`operator/skills/product-guide/references/INDEX.md`) names `champion`; an index without that column opens nothing to them. The hold shows on the work-health email, reason `champion_wall`.
+- During a champion's turn, the seat reads only the product guide's own instructions and the documents open to champions, and the training, reminder and record-store tools answer them with the same sentence.
+- They get no daily digest, no library-change email, and no line in the weekly progress report, and at most 20 emails a day are answered, whatever the seat's own limit.
+
+A champion is removed like anyone else, with `remove`, and `purge --probe` proves it.
+
 ### What a guide seat's people are told when something stops their email
 
 Three seat keys decide it, each off unless the seat's `customer.yaml` authors it, and each sends fixed words from code, never a model's (ADR 0106, second amendment of 2026-11-10).

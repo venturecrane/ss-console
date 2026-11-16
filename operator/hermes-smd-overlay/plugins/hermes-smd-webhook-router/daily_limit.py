@@ -18,7 +18,10 @@ router, where the sender is already verified, and before any model turn:
 
   A second email over the limit the same day gets nothing more.
 
-Administrators (``scope.admins``) are never limited. A day is a UTC calendar
+Administrators (``scope.admins``) are never limited. A client champion
+(an enrolled sender whose code was a champion code) is held to at most
+``CHAMPION_DAILY_LIMIT`` (20) a day, whether or not the seat authors a
+limit (:func:`limit_for`). A day is a UTC calendar
 day. The shared inbound gate (``shared/gate_inbound_cap.py``) and the cost meter
 are not changed. A seat that does not author the key never reaches this
 module: it is read only where enrollment is switched on (a guide seat or SMD's
@@ -84,6 +87,19 @@ def authored_limit(raw_config: Any) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         return None
     return value
+
+
+def limit_for(raw_config: Any, address: Any) -> int | None:
+    """One sender's limit today: the authored one, except that a client
+    champion (``shared.sender_enrollment.CHAMPION_LABEL``) is held to at most
+    ``CHAMPION_DAILY_LIMIT`` whether or not the seat authors a limit. ``None``
+    (no limit) only where enrollment is off, or for a non-champion on a seat
+    that authors none."""
+    from shared import sender_enrollment
+
+    if not sender_enrollment.enabled_in(raw_config):
+        return None
+    return sender_enrollment.daily_limit_for(address, authored_limit(raw_config))
 
 
 @dataclass(frozen=True)
@@ -162,4 +178,5 @@ __all__ = [
     "authored_limit",
     "db_path",
     "decide",
+    "limit_for",
 ]

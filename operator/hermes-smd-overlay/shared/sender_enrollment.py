@@ -63,7 +63,17 @@ NAME_REFUSAL = (
     "hyphens and periods only, on one line, no links or addresses, at most 60 characters."
 )
 
+#: The label of a client champion's code: an insider at a client business who
+#: carries the internal case to the people who decide there. The broker writes
+#: it on the enrolled entry at redeem; everything a champion may not see is
+#: walled by code (``shared.champion``).
+CHAMPION_LABEL = "champion"
+#: Emails a day a champion is answered, whatever the seat authors for others,
+#: so one brainstorm cannot use up the representatives' day.
+CHAMPION_DAILY_LIMIT = 20
+
 WELCOME_SUBJECT = "You are connected to the SMD Services product guide"
+CHAMPION_WELCOME_SUBJECT = WELCOME_SUBJECT
 DEMO_WELCOME_SUBJECT = "You are connected to the SMD Services demo Operator"
 _WELCOME_BODY = (
     "{greeting}\n\n"
@@ -113,6 +123,23 @@ _TRAINING_WELCOME_BODY = (
 )
 
 
+#: A champion's welcome: what the guide is for them, and nothing about practice,
+#: training or notes, which are for representatives and are walled from them.
+_CHAMPION_WELCOME_BODY = (
+    "{greeting}\n\n"
+    "This address is now connected to the SMD Services product guide. Ask it what an "
+    "Operator can take on for your kind of business, for its staff and for its customers, "
+    "and for help making the case inside your business. Each answer names the library "
+    "document and section it came from.\n\n"
+    "What SMD would set up for your own business is a conversation with SMD Services, "
+    "at team@smd.services.\n\n"
+    "The email that carried your code is not answered as a question. Ask your first "
+    "question in a reply to this email.\n\n"
+    "If you did not expect this message, tell SMD Services and we will disconnect this "
+    "address.\n"
+)
+
+
 def first_name(name: str | None) -> str | None:
     """The first word of the name an invite was issued for, when it is valid."""
     return name.split()[0] if valid_name(name) else None
@@ -122,7 +149,7 @@ NOTICE_SUBJECT = "Guide seat: a new person connected with an invite code"
 DEMO_NOTICE_SUBJECT = "Demo seat: a new person connected with an invite code"
 _NOTICE_BODY = (
     "{address} connected to the {what} seat {slug} with invite code {code_id}"
-    "{named}.\n\n"
+    "{named}.{labelled}\n\n"
     "They are now answered like a listed person on this seat. To disconnect them, run "
     "sender_enrollment_cli remove {address} on the seat.\n"
 )
@@ -176,6 +203,29 @@ def enrolled_addresses() -> list[str]:
     return sorted({_norm(e["address"]) for e in enrolled()})
 
 
+def enrolled_label(address: Any) -> str | None:
+    """The label of the code this enrolled person redeemed, or None."""
+    wanted = _norm(address)
+    for entry in enrolled():
+        if _norm(entry.get("address")) == wanted:
+            label = entry.get("label")
+            return label if isinstance(label, str) else None
+    return None
+
+
+def is_champion(address: Any) -> bool:
+    """Whether this address enrolled with a champion code, read live."""
+    return bool(_norm(address)) and enrolled_label(address) == CHAMPION_LABEL
+
+
+def daily_limit_for(address: Any, authored: int | None) -> int | None:
+    """The day's limit for one sender: a champion's is at most
+    :data:`CHAMPION_DAILY_LIMIT`; everyone else's is the authored one."""
+    if not is_champion(address):
+        return authored
+    return CHAMPION_DAILY_LIMIT if authored is None else min(authored, CHAMPION_DAILY_LIMIT)
+
+
 def enrolled_name(address: Any) -> str | None:
     """The name SMD issued this enrolled person's code for, re-validated, or None."""
     wanted = _norm(address)
@@ -205,10 +255,17 @@ def valid_name(value: Any) -> bool:
     )
 
 
-def welcome_text(name: str | None, *, demo: bool = False, training: bool = False) -> str:
-    """The fixed welcome. ``demo`` is the demo seat's; ``training`` (a guide
-    seat that authors representative training) is the guide's own introduction,
-    greeting the person by first name. Every other seat's welcome is unchanged."""
+def welcome_text(
+    name: str | None, *, demo: bool = False, training: bool = False, champion: bool = False
+) -> str:
+    """The fixed welcome. ``demo`` is the demo seat's; ``champion`` is a client
+    champion's on a guide seat; ``training`` (a guide seat that authors
+    representative training) is the guide's own introduction, greeting the
+    person by first name. Every other seat's welcome is unchanged."""
+    if champion and not demo:
+        return _CHAMPION_WELCOME_BODY.format(
+            greeting=f"Hello {name}," if valid_name(name) else "Hello,"
+        )
     if demo:
         return _DEMO_WELCOME_BODY.format(
             greeting=f"Hello {name}," if valid_name(name) else "Hello,"
@@ -223,16 +280,31 @@ def notice_subject(*, demo: bool = False) -> str:
     return DEMO_NOTICE_SUBJECT if demo else NOTICE_SUBJECT
 
 
+_LABEL_SHAPE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$")
+
+
 def notice_text(
-    *, address: str, slug: str, code_id: str, name: str | None, demo: bool = False
+    *,
+    address: str,
+    slug: str,
+    code_id: str,
+    name: str | None,
+    demo: bool = False,
+    label: str | None = None,
 ) -> str:
     named = f", issued for {name}" if valid_name(name) else ""
+    labelled = ""
+    if isinstance(label, str) and _LABEL_SHAPE.match(label):
+        labelled = f" The code's label is {label}."
+        if label == CHAMPION_LABEL:
+            labelled += " They are a client champion: the guide gives them product answers only."
     return _NOTICE_BODY.format(
         address=address,
         what="demo" if demo else "guide",
         slug=slug,
         code_id=code_id,
         named=named,
+        labelled=labelled,
     )
 
 
@@ -257,9 +329,44 @@ def redeem(
     )
 
 
-def issue(*, message_id: str, admin: str, name: str, days: int, max_uses: int) -> dict:
-    """Ask the broker to issue a code for ``name`` and send it to ``admin``,
-    in the thread of ``message_id``. Returns ``{code_id, sent}``; never the code."""
+#: The two kinds of code an administrator can ask for.
+KIND_CHAMPION = "champion"
+KIND_REPRESENTATIVE = "representative"
+
+
+def _fold(value: Any) -> str:
+    """Case-folded, NFC, whitespace collapsed to single spaces."""
+    if not isinstance(value, str):
+        return ""
+    return " ".join(unicodedata.normalize("NFC", value).casefold().split())
+
+
+def kind_for(own_words: Any, name: Any) -> str:
+    """The kind of code an administrator's own words ask for, for this one
+    person. A champion code only when the phrase "champion code for <name>"
+    appears, ``<name>`` being the person the code is issued for; anything else
+    (the word alone, a subject line, quoted history, another person's name) is
+    a representative code. Decided here, in code; never from a model's
+    argument. Mirrored by ss-console ``workspace_broker/enrollment_verbs.py``."""
+    words, wanted = _fold(own_words), _fold(name)
+    if not words or not wanted:
+        return KIND_REPRESENTATIVE
+    phrase = re.compile(r"(?<![\w])champion code for " + re.escape(wanted) + r"(?![\w'-])")
+    return KIND_CHAMPION if phrase.search(words) else KIND_REPRESENTATIVE
+
+
+def issue(
+    *,
+    message_id: str,
+    admin: str,
+    name: str,
+    days: int,
+    max_uses: int,
+    kind: str = KIND_REPRESENTATIVE,
+) -> dict:
+    """Ask the broker to issue a code of ``kind`` for ``name`` and send it to
+    ``admin``, in the thread of ``message_id``. Returns ``{code_id, sent}``;
+    never the code."""
     from shared.workspace_broker import request
 
     return request(
@@ -271,6 +378,7 @@ def issue(*, message_id: str, admin: str, name: str, days: int, max_uses: int) -
                 "name": name,
                 "days": int(days),
                 "max_uses": int(max_uses),
+                "kind": KIND_CHAMPION if kind == KIND_CHAMPION else KIND_REPRESENTATIVE,
             },
         },
         timeout=25.0,
@@ -278,16 +386,22 @@ def issue(*, message_id: str, admin: str, name: str, days: int, max_uses: int) -
 
 
 __all__ = [
+    "CHAMPION_DAILY_LIMIT",
+    "CHAMPION_LABEL",
     "CODE_PATTERN",
     "NAME_PATTERN",
     "NAME_REFUSAL",
     "enabled_in",
     "enrolled",
+    "daily_limit_for",
     "enrolled_addresses",
+    "enrolled_label",
     "enrolled_name",
     "first_name",
     "find_code",
+    "is_champion",
     "issue",
+    "kind_for",
     "notice_text",
     "redeem",
     "valid_name",

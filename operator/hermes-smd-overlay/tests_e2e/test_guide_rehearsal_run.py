@@ -529,6 +529,9 @@ def run(root: Path) -> dict[str, Any]:
         from tests_e2e._desk_turns import run_desk
 
         r.extra["desk"] = run_desk(r, A, B, A_MARK, B_MARK)
+        from tests_e2e._champion_turns import run_champion
+
+        r.extra["champion"] = run_champion(r)
     finally:
         r.stop()
     (root / "cards.json").write_text(json.dumps(cards, default=str), encoding="utf-8")

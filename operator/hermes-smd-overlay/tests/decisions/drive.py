@@ -150,6 +150,8 @@ def _isolate(mp: pytest.MonkeyPatch, tmp: Path) -> None:
     mp.setenv("SMD_REQUEST_CARDS_DB_PATH", str(tmp / "smd-gate" / "request_cards.db"))
     mp.setenv("SMD_CUSTOMER_YAML_PATH", str(tmp / "customer.yaml"))
     mp.setenv("HERMES_ACTIVE_PROFILE", "operator")
+    # Nobody is enrolled unless a case says the recipient is a client champion.
+    mp.setenv("SMD_SENDER_ENROLLMENT_ENROLLED", str(tmp / "enrolled.json"))
 
 
 def run_relay(case: C.Case, raise_at: tuple[int, ...] = ()) -> recorder.Scope:
@@ -168,6 +170,9 @@ def run_relay(case: C.Case, raise_at: tuple[int, ...] = ()) -> recorder.Scope:
         mp.setattr(mod, "_YAML_PATH", tmp / "customer.yaml")
         mp.setattr(mod, "_HELD_STORE", mod.held_store.HeldReplyStore(str(tmp / "held.db")))
         mp.setattr(mod.relay, "send_reply", agentmail_transport)
+        if knobs.get("champion"):
+            enrolled = {"schema": 1, "enrolled": [{"address": SENDER, "label": "champion"}]}
+            (tmp / "enrolled.json").write_text(json.dumps(enrolled), encoding="utf-8")
         recorder.reset_registers()
         session = knobs.get("session_id", "s1")
         if knobs.get("origin", "turn") == "turn":

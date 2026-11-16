@@ -88,13 +88,20 @@ FOOTER = "To keep another reminder, reply in this thread with what it is and whe
 
 def people(cfg: Any) -> list[str]:
     """Every exact address on the seat's roster (authored, and enrolled on a
-    guide seat), in a fixed order: by the person's partition directory name."""
+    guide seat), in a fixed order: by the person's partition directory name.
+    A client champion (``shared.champion``) is never one of them: the digest
+    and the library-change notice are representatives' mail."""
+    from shared import sender_enrollment
     from shared.person_prefs import normalize_person_address, person_slug
 
     out: dict[str, str] = {}
     for entry in cfg.inbound_roster:
         norm = normalize_person_address(entry)
-        if norm is not None and not entry.startswith("@"):
+        if (
+            norm is not None
+            and not entry.startswith("@")
+            and not sender_enrollment.is_champion(norm)
+        ):
             out[person_slug(norm)] = norm
     return [out[slug] for slug in sorted(out)]
 
