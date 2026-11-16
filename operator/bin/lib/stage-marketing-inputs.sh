@@ -31,10 +31,8 @@ if [ -f "${MARKETING_INPUTS_DIR}/marketing-firm.yaml" ]; then
   uv run --quiet --with pyyaml python3 "${REPO_ROOT}/operator/bin/lib/check-marketing-registers.py" \
       "${MARKETING_INPUTS_DIR}/marketing-firm.yaml" \
     || die "the marketing registers for ${SLUG} do not load under this checkout's advertising gate (see the line above); not uploading them"
-  log "Syncing the marketing registers to R2: s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/marketing/"
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 sync "${MARKETING_INPUTS_DIR}/" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/marketing/" --delete \
-      --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors \
+  log "Syncing the marketing registers to R2: $(r2_uri "vaults/${SLUG}/marketing/")"
+  r2 s3 sync "${MARKETING_INPUTS_DIR}/" "$(r2_uri "vaults/${SLUG}/marketing/")" --delete --only-show-errors \
     || die "R2 sync of the marketing registers failed"
   log "R2 upload OK (marketing registers)"
 else

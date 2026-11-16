@@ -36,7 +36,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 AFTER="${AFTER_SHA:?AFTER_SHA required}"
 BEFORE="${BEFORE_SHA:-}"
-R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG:-smd-customer-config}"
 
 [[ "$AFTER" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::AFTER_SHA must be a 40-hex commit"; exit 1; }
 
@@ -65,11 +64,6 @@ assert_skills_key() {
   fi
 }
 
-r2() {
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"
-}
-
 # ---------- the overlay's tool map at the commit being published (data, not code) ----------
 # The overlay is operator/hermes-smd-overlay in this tree (ADR 0095), so the map
 # a skills release is checked against is the one at AFTER_SHA, read from git so a
@@ -88,18 +82,18 @@ fi
     --action-classes "$ACTION_CLASSES" --out "${work}/manifest.json" --objects-dir "${work}/objects" )
 
 existing="${work}/existing.txt"
-r2 s3 ls "s3://${R2_BUCKET_CONFIG}/fleet/skills/objects/" 2>/dev/null | awk '{print $4}' > "$existing" || true
+r2 s3 ls "$(r2_uri "fleet/skills/objects/")" 2>/dev/null | awk '{print $4}' > "$existing" || true
 uploaded=0
 for obj in "${work}/objects"/*; do
   sha="$(basename "$obj")"
   grep -qx "$sha" "$existing" && continue
   key="fleet/skills/objects/${sha}"
   assert_skills_key "$key"
-  r2 s3 cp "$obj" "s3://${R2_BUCKET_CONFIG}/${key}" --only-show-errors --content-type application/octet-stream
+  r2 s3 cp "$obj" "$(r2_uri "${key}")" --only-show-errors --content-type application/octet-stream
   uploaded=$((uploaded + 1))
 done
 # Every object the manifest names must now be present before the manifest is.
-r2 s3 ls "s3://${R2_BUCKET_CONFIG}/fleet/skills/objects/" | awk '{print $4}' > "$existing"
+r2 s3 ls "$(r2_uri "fleet/skills/objects/")" | awk '{print $4}' > "$existing"
 missing=0
 for obj in "${work}/objects"/*; do
   grep -qx "$(basename "$obj")" "$existing" || { echo "::error::object $(basename "$obj") missing after upload"; missing=1; }
@@ -107,10 +101,10 @@ done
 [[ "$missing" = 0 ]] || exit 1
 
 assert_skills_key "$MANIFEST_KEY"
-r2 s3 cp "${work}/manifest.json" "s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY}" --only-show-errors --content-type application/json
-r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY}" "${work}/readback.json" --only-show-errors
+r2 s3 cp "${work}/manifest.json" "$(r2_uri "${MANIFEST_KEY}")" --only-show-errors --content-type application/json
+r2 s3 cp "$(r2_uri "${MANIFEST_KEY}")" "${work}/readback.json" --only-show-errors
 cmp -s "${work}/manifest.json" "${work}/readback.json" || { echo "::error::manifest read-back does not match"; exit 1; }
-echo "skills release ${VERSION} published: s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY} (${uploaded} new object(s))"
+echo "skills release ${VERSION} published: $(r2_uri "${MANIFEST_KEY}") (${uploaded} new object(s))"
 echo "  candidate only. The release controller (release-tick.yml) rolls it through the rings;"
 echo "  by hand: operator/bin/fleet release --skills ${VERSION}"
 

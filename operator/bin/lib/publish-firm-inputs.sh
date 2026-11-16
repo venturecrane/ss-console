@@ -52,6 +52,11 @@ set -euo pipefail
 
 _HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _DEFAULT_RUNNER="$(cd "${_HERE}/../../.." && pwd)"
+# r2, r2_bucket, r2_first_unset_cred: the one home of how a laptop or CI shell
+# reaches R2. Located from this file, so a worktree or the engagements
+# workflow's .ss-console checkout each use their own copy.
+# shellcheck source=../../../scripts/lib/r2-creds.sh
+source "${_HERE}/../../../scripts/lib/r2-creds.sh"
 
 # The lane lists come from the one declaration, never a hand copy here.
 # shellcheck source=../../templates/_job-lanes.generated.sh
@@ -84,16 +89,9 @@ KEY_LANES="$(printf '%s' "${SMD_FIRM_INPUT_DIR_LANES} ${SMD_FIRM_INPUT_EXTRAS}" 
 [ -d "${SRC}" ] || _usage "no such directory: ${SRC}"
 [ -f "${SRC}/${MARKER}" ] || _usage "no ${MARKER} in ${SRC}"
 [ -d "${RUNNER}" ] || _usage "no runner checkout at ${RUNNER}"
-for _v in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL; do
-  [ -n "${!_v:-}" ] || _usage "${_v} is not set"
-done
-BUCKET="${R2_BUCKET_CONFIG:-smd-customer-config}"
+if _unset="$(r2_first_unset_cred)"; then _usage "${_unset} is not set"; fi
+BUCKET="$(r2_bucket)"
 if [ "${LANE}" = "medchron" ]; then PREFIX="vaults/${SLUG}/medchron-firm.yaml"; else PREFIX="vaults/${SLUG}/${LANE}/"; fi
-
-_r2() {
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"
-}
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
@@ -170,7 +168,7 @@ PY
       exit 1
     fi
     mkdir -p "$(dirname "${STAGE}/${rel_in}")"
-    _r2 s3 cp "s3://${BUCKET}/vaults/${SLUG}/drafting/${rel_in}" "${STAGE}/${rel_in}" --only-show-errors \
+    r2 s3 cp "s3://${BUCKET}/vaults/${SLUG}/drafting/${rel_in}" "${STAGE}/${rel_in}" --only-show-errors \
       || _say "WARN pinned drafting input ${rel_in} is in neither the checkout nor R2"
   done <<< "${missing}"
 fi
@@ -231,19 +229,19 @@ _included "${MARKER}" || [ "${LANE}" = "medchron" ] || { _say "the lane filters 
 # ---------- 3. the write ----------
 _say "publishing ${nkeys} file(s) to s3://${BUCKET}/${PREFIX}"
 if [ "${LANE}" = "medchron" ]; then
-  _r2 s3 cp "${STAGE}/${MARKER}" "s3://${BUCKET}/${PREFIX}" --only-show-errors \
+  r2 s3 cp "${STAGE}/${MARKER}" "s3://${BUCKET}/${PREFIX}" --only-show-errors \
     || { _say "R2 upload of the medchron firm config failed"; exit 3; }
   MKEY="${PREFIX}"
 else
-  _r2 s3 sync "${STAGE}/" "s3://${BUCKET}/${PREFIX}" --delete "${FILTERS[@]}" --only-show-errors \
+  r2 s3 sync "${STAGE}/" "s3://${BUCKET}/${PREFIX}" --delete "${FILTERS[@]}" --only-show-errors \
     || { _say "R2 sync of the ${LANE} firm inputs failed"; exit 3; }
   MKEY="${PREFIX}${MARKER}"
 fi
 
 # ---------- 4. read the marker back, byte for byte ----------
-_r2 s3 cp "s3://${BUCKET}/${MKEY}" "${WORK}/readback" --only-show-errors \
+r2 s3 cp "s3://${BUCKET}/${MKEY}" "${WORK}/readback" --only-show-errors \
   || { _say "could not read ${MKEY} back"; exit 3; }
 cmp -s "${STAGE}/${MARKER}" "${WORK}/readback" \
   || { _say "the read-back of ${MKEY} differs from what was published"; exit 3; }
-etag="$(_r2 s3api head-object --bucket "${BUCKET}" --key "${MKEY}" --query ETag --output text 2>/dev/null | tr -d '"' || true)"
+etag="$(r2 s3api head-object --bucket "${BUCKET}" --key "${MKEY}" --query ETag --output text 2>/dev/null | tr -d '"' || true)"
 echo "published ${SLUG}/${LANE} etag=${etag:0:8}"

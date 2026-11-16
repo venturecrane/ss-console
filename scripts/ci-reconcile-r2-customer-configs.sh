@@ -48,7 +48,6 @@ source "${SCRIPT_DIR}/lib/seat-dir.sh"
 source "${SCRIPT_DIR}/lib/r2-creds.sh"
 
 R2_CONFIG_BASENAME="customer.yaml"
-R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG:-smd-customer-config}"
 
 if [[ "$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)" != "false" ]]; then
   echo "::error::refusing to reconcile from a shallow clone (the checkout needs fetch-depth: 0)"
@@ -70,19 +69,13 @@ if [[ -n "$dirty" ]]; then
   printf '%s\n' "$dirty" | sed 's/^/    /'
   exit 1
 fi
-echo "Reconciling s3://${R2_BUCKET_CONFIG}/vaults/*/ against HEAD ${head_sha} (read-only)"
+echo "Reconciling $(r2_uri "vaults/*/") against HEAD ${head_sha} (read-only)"
 
 command -v aws >/dev/null 2>&1 || {
   echo "::error::aws CLI not found (required to read R2)"
   exit 1
 }
 derive_r2_creds
-
-r2() {
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
-  AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"
-}
 
 # shellcheck source=lib/seat-spec-inputs.sh
 source "${SCRIPT_DIR}/lib/seat-spec-inputs.sh"
@@ -186,13 +179,13 @@ reconcile_seat() {
     return 0
   fi
   head_err="${work_dir}/${slug}.head.err"
-  if ! r2 s3api head-object --bucket "${R2_BUCKET_CONFIG}" --key "$key" >/dev/null 2>"$head_err"; then
+  if ! r2 s3api head-object --bucket "$(r2_bucket)" --key "$key" >/dev/null 2>"$head_err"; then
     if grep -q '(404)' "$head_err"; then
-      echo "::warning::${slug} has no object at s3://${R2_BUCKET_CONFIG}/${key}; first publish is Captain-gated; run operator/bin/provision-customer.sh."
+      echo "::warning::${slug} has no object at $(r2_uri "${key}"); first publish is Captain-gated; run operator/bin/provision-customer.sh."
       n_missing=$((n_missing + 1))
       return 0
     fi
-    echo "::error::${slug}: could not read s3://${R2_BUCKET_CONFIG}/${key} (not a 404); refusing to guess whether the seat is provisioned"
+    echo "::error::${slug}: could not read $(r2_uri "${key}") (not a 404); refusing to guess whether the seat is provisioned"
     sed 's/^/    /' "$head_err"
     hard_fail=1
     return 0
@@ -223,19 +216,19 @@ done
 # Objects with no authored file: warn-only, and a failed listing does not fail
 # the control (it feeds a warning that never alerts; the drift check above did run).
 listing="${work_dir}/listing.txt"
-if r2 s3api list-objects-v2 --bucket "${R2_BUCKET_CONFIG}" --prefix "vaults/" \
+if r2 s3api list-objects-v2 --bucket "$(r2_bucket)" --prefix "vaults/" \
      --query 'Contents[].Key' --output text >"$listing" 2>"${work_dir}/list.err"; then
   for k in $(tr '\t' '\n' <"$listing"); do
     case "$k" in vaults/*/"${R2_CONFIG_BASENAME}") ;; *) continue ;; esac
     obj_slug=${k#vaults/}
     obj_slug=${obj_slug%/${R2_CONFIG_BASENAME}}
     case "${authored_slugs}" in *" ${obj_slug} "*) continue ;; esac
-    echo "::warning::${obj_slug} has an object at s3://${R2_BUCKET_CONFIG}/${k} but no customer.yaml on HEAD; seat retirement is manual (no automatic R2 delete)."
+    echo "::warning::${obj_slug} has an object at $(r2_uri "${k}") but no customer.yaml on HEAD; seat retirement is manual (no automatic R2 delete)."
     n_unauthored=$((n_unauthored + 1))
     add_finding "  UNAUTHORED  ${obj_slug}"
   done
 else
-  echo "::warning::could not list s3://${R2_BUCKET_CONFIG}/vaults/; the unauthored-object check did not run (the drift check above did)"
+  echo "::warning::could not list $(r2_uri "vaults/"); the unauthored-object check did not run (the drift check above did)"
   sed 's/^/    /' "${work_dir}/list.err"
 fi
 

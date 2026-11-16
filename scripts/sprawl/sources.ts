@@ -39,10 +39,17 @@ function readAll(paths: string[], cwd: string): SourceFile[] {
 /**
  * The single declarations a literal is meant to live in. Naming a value in its
  * one home is the cure, not the sprawl, so these files are not counted.
+ *
+ * operator/hermes-smd-overlay/contracts/consumes.yaml is the consumer-side twin
+ * of env-consumption.yaml: one entry per env var the overlay reads, each with
+ * where and why, held to the code by shared/consumes_conformance.py (an
+ * undeclared literal read fails CI, and so does a stale entry). Naming a var
+ * there is declaring it, as in env-consumption.yaml, not restating it.
  */
 const DECLARATIONS = new Set([
   'operator/contracts/seat-layout.yaml',
   'operator/contracts/env-consumption.yaml',
+  'operator/hermes-smd-overlay/contracts/consumes.yaml',
 ])
 
 /**

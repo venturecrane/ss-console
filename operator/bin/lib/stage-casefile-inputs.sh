@@ -35,9 +35,7 @@ if [ -f "${CASEFILE_INPUTS_DIR}/casefile-firm.yaml" ]; then
     done
     unset _cf_rel
   fi
-  R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-  R2_ENDPOINT_URL="${R2_ENDPOINT_URL}" R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG}" \
-    bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" casefile "${CASEFILE_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
+  bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" casefile "${CASEFILE_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
     || die "the casefile firm inputs for ${SLUG} were not published (publish-firm-inputs exit $?: 1 refused by this checkout's runner, 3 R2, 4 the validator could not run; the lines above say which)"
   log "R2 upload OK (casefile firm inputs)"
 else

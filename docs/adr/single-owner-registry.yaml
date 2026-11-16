@@ -122,6 +122,8 @@ entries:
     signature:
       match:
         - 's3 (cp|sync|mv)\s+(?!["'']?s3://)\S+\s+["'']?s3://'
+        # the same write with its destination built by r2_uri (scripts/lib/r2-creds.sh)
+        - 's3 (cp|sync|mv)\s+(?!["'']?(s3://|\$\(r2_uri ))\S+\s+["'']?\$\(r2_uri '
         - 'put_object\('
         - 's3api put-object'
         - '(bucket|BUCKET|R2_[A-Z_]*|r2)\.put\('
@@ -149,6 +151,8 @@ entries:
     signature:
       match:
         - 's3 (cp|sync|mv)\s+(?!["'']?s3://)\S+\s+["'']?s3://'
+        # the same write with its destination built by r2_uri (scripts/lib/r2-creds.sh)
+        - 's3 (cp|sync|mv)\s+(?!["'']?(s3://|\$\(r2_uri ))\S+\s+["'']?\$\(r2_uri '
         - 'put_object\('
         - 's3api put-object'
         - '(bucket|BUCKET|R2_[A-Z_]*|r2)\.put\('

@@ -60,7 +60,6 @@ AFTER="${AFTER_SHA:?AFTER_SHA required}"
 
 # The ONLY customer.yaml object name this publisher may write.
 R2_CONFIG_BASENAME="customer.yaml"
-R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG:-smd-customer-config}"
 
 # A force-push or branch-create event has a zero BEFORE sha.
 if [[ "$BEFORE" =~ ^0+$ ]]; then
@@ -105,12 +104,6 @@ assert_spec_key() {
   fi
 }
 
-r2() {
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
-  AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"
-}
-
 # shellcheck source=lib/seat-spec-inputs.sh
 source "${SCRIPT_DIR}/lib/seat-spec-inputs.sh"
 
@@ -121,11 +114,11 @@ trap 'rm -rf "${work_dir}"' EXIT
 put_and_prove() {
   local src="$1" dest="$2" back
   back="${work_dir}/readback.$$"
-  if ! r2 s3 cp "$src" "s3://${R2_BUCKET_CONFIG}/${dest}" --only-show-errors; then
+  if ! r2 s3 cp "$src" "$(r2_uri "${dest}")" --only-show-errors; then
     echo "::error::R2 upload of ${dest} failed"
     return 1
   fi
-  if ! r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${dest}" "$back" --only-show-errors; then
+  if ! r2 s3 cp "$(r2_uri "${dest}")" "$back" --only-show-errors; then
     echo "::error::${dest} was uploaded but could not be read back to verify"
     return 1
   fi
@@ -171,11 +164,11 @@ publish_spec() {
 publish_customer_yaml() {
   local slug="$1" cfg="$2" key="$3" published="$4"
   if [[ -f "$published" ]] && cmp -s "$cfg" "$published"; then
-    echo "${slug}: s3://${R2_BUCKET_CONFIG}/${key} already holds these bytes"
+    echo "${slug}: $(r2_uri "${key}") already holds these bytes"
     return 0
   fi
   put_and_prove "$cfg" "$key" || return 1
-  echo "$slug published: s3://${R2_BUCKET_CONFIG}/${key} (git $(git rev-list -1 "$AFTER" -- "$cfg" || echo unknown))"
+  echo "$slug published: $(r2_uri "${key}") (git $(git rev-list -1 "$AFTER" -- "$cfg" || echo unknown))"
   echo "  the seat adopts this on its next restart; live-writable fields apply sooner via the ADR 0044 poller"
 }
 
@@ -207,12 +200,12 @@ publish_seat() {
     return 0
   fi
   head_err="${work_dir}/${slug}.head.err"
-  if ! r2 s3api head-object --bucket "${R2_BUCKET_CONFIG}" --key "$key" >/dev/null 2>"$head_err"; then
+  if ! r2 s3api head-object --bucket "$(r2_bucket)" --key "$key" >/dev/null 2>"$head_err"; then
     if grep -q '(404)' "$head_err"; then
-      echo "::warning::$slug has no object at s3://${R2_BUCKET_CONFIG}/${key}; first publish is Captain-gated; run operator/bin/provision-customer.sh."
+      echo "::warning::$slug has no object at $(r2_uri "${key}"); first publish is Captain-gated; run operator/bin/provision-customer.sh."
       return 0
     fi
-    echo "::error::$slug: could not read s3://${R2_BUCKET_CONFIG}/${key} (not a 404); refusing to guess whether the seat is provisioned"
+    echo "::error::$slug: could not read $(r2_uri "${key}") (not a 404); refusing to guess whether the seat is provisioned"
     sed 's/^/    /' "$head_err"
     fail=1
     return 0

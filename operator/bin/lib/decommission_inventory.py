@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Mapping, Optional
 
 from bin.lib import seat_layout
+from bin.lib.fleet import r2
 
 # ---------------------------------------------------------------------------
 # Cloud resources, named the way provisioning names them
@@ -239,7 +240,7 @@ def infisical_names(slug: str, env: Mapping[str, str]) -> dict:
     """
     suffix = "__" + secret_suffix(slug)
     names = sorted(k for k in env if k.endswith(suffix))
-    loaded = any(k in env for k in ("R2_ACCESS_KEY_ID", "CF_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID"))
+    loaded = r2.creds_in_env(env) or any(k in env for k in ("CF_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID"))
     return {
         "layer": "infisical",
         "target": f"/ss prod keys ending {suffix}",
