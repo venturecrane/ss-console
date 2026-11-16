@@ -58,6 +58,13 @@ def seat(tmp_path, monkeypatch, voice_certified):
     client = FakeD1Client()
     monkeypatch.setattr(audit, "_WRITER", audit.AuditLogWriter(client))
     monkeypatch.setattr(audit, "_CUSTOMER_SLUG", "testco")
+    # The audit hook feeds every plugin block to the sticky-stop ladder's
+    # refusal arm, which persists to SMD_STICKY_STOP_DB_PATH (default
+    # /opt/data/smd/sticky_stop.db, writable on a CI runner). Unisolated, these
+    # blocks summed across the corpus replays to HARD_STOP and paused every
+    # later test's pre_tool_call. The ladder is not under test here.
+    monkeypatch.setenv("SMD_STICKY_STOP_DB_PATH", str(tmp_path / "sticky_stop.db"))
+    monkeypatch.setattr(audit, "_cost_breaker", lambda: None)
     matter_binding._reset_for_tests()
     TRUST_DECISIONS.clear()
     yield client
