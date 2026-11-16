@@ -124,7 +124,7 @@ personas:
           # notice senders that were listed as people. (A client seat's own
           # mailbox may not be named here: client identity lives only in that
           # client's customer.yaml.) watch_senders are automated but need him (taxes).
-          system_senders: '@mail.anthropic.com,@stripe.com,@updates.napkin.ai'
+          system_senders: '@mail.anthropic.com,@stripe.com,@updates.napkin.ai,@invoicing.resend.com,@npmjs.com'
           watch_senders: '@azdor.gov'
           # Every verified SMD Ops thread leaves the inbox under this label;
           # the kinds that need him are named in the morning list.

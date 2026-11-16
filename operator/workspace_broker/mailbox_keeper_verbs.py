@@ -260,7 +260,7 @@ def _waiting_needs(plan: mk.Plan, state: dict[str, Any], zone: str) -> tuple[lis
 def _digest(settings, state, sweep, reading, by_id, needs, still) -> mkd.Digest:
     d = mkd.Digest(needs=needs, still_open=still[0], still_open_since=still[1], receipts_label=settings.receipts_label)
     where = f"{settings.alert_label} label" if settings.alert_label else "in the inbox"
-    d.needs += [mkd.Need(f"{p['line']} ({where}).") for p in state["ops_pending"]]
+    d.needs += [mkd.Need(f"{line} ({where}).") for line in mkd.ops_lines(state["ops_pending"], settings.timezone)]
     for o in reading.outcomes:
         c = by_id[o.thread_id]
         if o.kind == "receipt":

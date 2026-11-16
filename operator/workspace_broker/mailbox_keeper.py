@@ -109,6 +109,8 @@ class Message:
     recipients: tuple[str, ...] = ()
     #: The message as plain text (the text part, else the HTML part's text).
     text: str = ""
+    #: Sent by an SMD Operator: every audited send carries X-SMD-Audit-Row.
+    from_operator: bool = False
 
 
 @dataclass(frozen=True)
@@ -277,6 +279,7 @@ def parse_message(raw: dict[str, Any]) -> Message:
             a.lower() for _, a in getaddresses([*(headers.get("to") or []), *(headers.get("cc") or [])]) if "@" in a
         ),
         text=body_text(payload),
+        from_operator=bool(headers.get("x-smd-audit-row")),
     )
 
 
@@ -353,7 +356,7 @@ def is_person(m: Message, settings: Settings) -> bool:
         return False
     if sender in settings.watch_senders or f"@{domain}" in settings.watch_senders:
         return True
-    if m.list_unsubscribe or m.bulk:
+    if m.list_unsubscribe or m.bulk or m.from_operator:
         return False
     if sender in settings.system_senders or f"@{domain}" in settings.system_senders:
         return False
