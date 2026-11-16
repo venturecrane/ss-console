@@ -702,10 +702,10 @@ def test_dkim_pass_reads_only_the_mailbox_verdict() -> None:
 
 def test_no_reply_anywhere_in_the_local_part_is_automated_and_watch_senders_override() -> None:
     # 2026-11-15 smd-office dry run: anchored matching listed these as people.
-    s = mk.settings_from({"mailbox": "me@example.com", "watch_senders": "@azdor.gov"})
+    s = mk.settings_from({"mailbox": "me@example.com", "watch_senders": "@taxoffice.example"})
     for addr in ("microsoft-noreply@microsoft.com", "donotreplytpt9@other.gov", "billing-no-reply@x.example"):
         assert not mk._is_person(_person_msg(addr), s), addr
-    assert mk._is_person(_person_msg("donotreplytpt1@azdor.gov"), s)
+    assert mk._is_person(_person_msg("donotreplytpt1@taxoffice.example"), s)
     assert mk._is_person(_person_msg("dana@prospect.example"), s)
 
 
