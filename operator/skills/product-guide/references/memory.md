@@ -50,7 +50,7 @@ Who writes it: the client's administrator, by conversation with the Operator; th
 
 How voice works: The Operator drafts in the firm's voice. The voice is written per kind of document from the firm's own examples, and past letters can be the source. It sharpens as the firm's people correct drafts, and the firm's administrators confirm which of those corrections become standing rules (see "Administrator corrections" above). Each voice specification is checked by a gate on outgoing content.
 
-Running for a client today: declared on the paying client's seat, and checked by the gate on outgoing content.
+Running for a client today: declared on a client's seat, and checked by the gate on outgoing content.
 
 ## Record stores
 

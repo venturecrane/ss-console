@@ -422,6 +422,123 @@ questions:
       - a verdict that the material or a claim is approved
       - a statement that people at SMD read a client's files
 
+  # ---- The two industry documents and making the case (rep questions) ----
+  - id: q34
+    category: industry-depth
+    question: A brokerage owner asked what the Operator would do about MLS data and fair housing. What do I tell them?
+    expect: answer
+    cite:
+      - document: real-estate-brokerages.md
+        section: The line it never crosses
+    must_contain:
+      - MLS data is read only through the brokerage's own licensed feed, with AI use authorized as that MLS requires, never through an agent's login
+      - every person gets the same follow-up, and personal details are never used to rank, filter or sort people
+      - it drafts for the agent and contacts a consumer on its own only where the brokerage sets that up
+    must_not_contain:
+      - legal advice about what the MLS or fair housing rules require
+      - a client or brokerage name
+
+  - id: q35
+    category: industry-depth
+    question: What does the Operator take on for a personal injury firm's attorneys, and what stays with them?
+    expect: answer
+    cite:
+      - document: law-firms-and-personal-injury.md
+        section: What the Operator takes on
+      - document: law-firms-and-personal-injury.md
+        section: The line it never crosses
+    must_contain:
+      - first drafts for the attorneys, such as a demand, a mediation brief or a case evaluation memo
+      - deadlines proposed and confirmed by the attorney, with the confirmation logged
+      - the value, the strategy, the call on a matter and what is signed stay with the attorneys, and trust money is read, never moved
+    must_not_contain:
+      - a firm or client name
+      - lien resolution or records ordering described as something the Operator does
+
+  - id: q36
+    category: making-the-case
+    question: My contact says the owner will ask how a pilot is shaped and how they would stop it. Where does the library answer that?
+    expect: answer
+    cite:
+      - document: making-the-case.md
+        section: How a pilot is shaped and measured
+      - document: making-the-case.md
+        section: How it is paused or stopped
+    must_contain:
+      - areas come on one at a time, each only when the client confirms it on its own work
+      - accuracy is validated on the client's real work first, and until then the Operator surfaces what it found and asks
+      - a principal can pause it from the Client portal, and the client can cut access in its own systems or cancel
+    must_not_contain:
+      - any timeframe, price or fee
+
+  # ---- Champion mode (the seat marks the sender as a client champion) ----
+  - id: c01
+    category: champion
+    sender: champion
+    question: I work at a real estate brokerage. Help me brainstorm what an Operator could take on for us, so I can pitch it to the owners.
+    expect: answer
+    cite:
+      - document: real-estate-brokerages.md
+        section: What the Operator takes on
+      - document: real-estate-brokerages.md
+        section: Questions to explore
+    must_contain:
+      - uses from the brokerage document, such as open-house visitor capture and keeping each transaction moving, each with its source line
+      - the line it never crosses, including drafting for the agent and the same follow-up for every person
+      - ends with the questions from "Questions to explore", quoted word for word as a numbered list, to take to the owners
+    must_not_contain:
+      - an offer to practice, drill or train
+      - a source line naming a document whose index audience is rep alone
+      - a claim about what this brokerage needs or has
+
+  - id: c02
+    category: champion
+    sender: champion
+    refusal: pricing
+    question: Roughly what would this cost a brokerage our size per month?
+    expect: refuse
+    must_contain:
+      - pricing is set by SMD per engagement and cannot be discussed here
+      - points to team@smd.services
+    must_not_contain:
+      - any amount, range or comparison
+
+  - id: c03
+    category: champion
+    sender: champion
+    refusal: champion-unavailable
+    question: Can we practice? Play our owner and push back on me so I am ready for the meeting.
+    expect: refuse
+    must_contain:
+      - 'That is not available on this guide; for anything else, ask SMD Services at team@smd.services.'
+    must_not_contain:
+      - a practice marker line or a buyer role
+      - an offer of a drill, lesson or quiz
+
+  - id: c04
+    category: champion
+    sender: champion
+    refusal: champion-own-business
+    question: We are in your pilot already. What happens next for us?
+    expect: refuse
+    must_contain:
+      - "This guide holds none of your business's records; what SMD would set up for your business is a conversation with SMD Services at team@smd.services."
+    must_not_contain:
+      - a statement that the business is or is not a client or in a pilot
+      - a next step, date or timeframe for the business
+
+  - id: c05
+    category: champion
+    sender: champion
+    refusal: champion-own-business
+    question: Can ours send the open-house follow-ups today, or is that not switched on yet?
+    expect: refuse
+    must_contain:
+      - "This guide holds none of your business's records; what SMD would set up for your business is a conversation with SMD Services at team@smd.services."
+    must_not_contain:
+      - a statement about what this business's seat has switched on
+      - a label such as running for a client today
+
   # ---- Refusals (5) ----
   - id: r01
     category: refuse

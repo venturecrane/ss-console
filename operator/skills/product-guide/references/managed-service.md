@@ -22,7 +22,7 @@ Billing starts only when SMD states in writing that testing is complete and the 
 
 - A seat is updated through four separately shipped parts: the seat image (built once for all seats), the skills version (applied without a restart), the jobs bundle (sent only to seats that run jobs), and the configuration.
 - Changes build automatically once merged, and a controller rolls them out in rings. There is no fixed release schedule.
-- Ring order: a release twin of the paying client's seat first, then the paying client's seat, then SMD's own seats.
+- Ring order: a release twin of a client's seat first, then the client's seat, then SMD's own seats.
 - Each seat's release follows the same sequence: check for a hold, preflight, wait if a job is running (never release mid-job), take a storage volume snapshot as a rollback point, release, then verify with the seat's own self-test. A real failure rolls the seat back and halts the rollout.
 - Every change passes seven required checks in a merge queue. Changes to the running seat also need a recorded verification.
 
@@ -41,7 +41,7 @@ Billing starts only when SMD states in writing that testing is complete and the 
 - Incidents use a severity ladder. SMD does not publish an uptime percentage and does not offer service credits.
 - At the highest severity, the seat is paused and the routines involved are stepped down until the fix is merged and the incident has become a rehearsal case.
 - The standard agreement states that the client is notified within 24 hours when its data or access is affected.
-- A storage volume snapshot is taken before every release, and the audit record is archived daily. Some recovery procedures, including restoring SMD's console database, are stated as not yet written.
+- A storage volume snapshot is taken before every release, and the audit record is archived daily.
 
 ## Change requests
 
@@ -62,7 +62,7 @@ SMD keeps one register of everything it owes each client. Most entries are creat
 
 ## Offboarding
 
-Decommissioning is one procedure, run first as a dry run and then for real. It removes the machine, storage, workspace, stores, mailbox, monitoring and console records; builds a signed evidence packet; refuses to run while the register shows anything still owed; and re-checks every layer at the end. It is built, set up per client: it has run on one of SMD's own seats, not yet for a client.
+Decommissioning is one procedure, run first as a dry run and then for real. It removes the machine, storage, workspace, stores, mailbox, monitoring and console records; builds a signed evidence packet; refuses to run while the register shows anything still owed; and re-checks every layer at the end. It is built, set up per client.
 
 ## Who does what
 

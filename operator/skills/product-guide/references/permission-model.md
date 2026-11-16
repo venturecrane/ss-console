@@ -48,7 +48,7 @@ What each limit means differs by kind of action, because the risks differ:
 | `destructive`          | Still needs approval in the current exchange | Approvable for one narrow kind of deletion only      | Refused                         | Refused          |
 | `code_execution`       | Runs                                         | Refused                                              | Refused                         | Refused          |
 
-Two points representatives are often asked about:
+Two points that are often asked about:
 
 - Asks first works for sends, for commitments, and for one narrow kind of deletion (deleting a listed set of calendar events). Any other deletion given the limit asks first is refused. Asks first on commitments and on sends as a staff member is running for a client today; on other sends it is built, set up per client.
 - Commitments and destructive actions never run on the Operator's word alone. Even at acts on its own, they need a person's approval in the current exchange.

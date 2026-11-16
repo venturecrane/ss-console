@@ -232,7 +232,7 @@ Pricing is set per engagement and is not covered here.
 
 Explainer view: #edges
 
-A technical buyer will test these. Describe each as a capability of the Operator. When the buyer asks what is live today, say which of these a client is running.
+Each of these is a capability of the Operator. They are grouped by where each stands for clients today.
 
 ### Running for a client today
 
