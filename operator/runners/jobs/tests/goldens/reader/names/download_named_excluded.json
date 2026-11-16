@@ -1,0 +1,39 @@
+{
+  "cell": {
+    "named_excluded": [
+      {
+        "id": "n-bare",
+        "name": "README",
+        "why": "outside the firm's folder rules (an excluded folder or kind)"
+      },
+      {
+        "id": "n-emailed",
+        "name": "x.pdf.pdf",
+        "why": "outside the firm's folder rules (an excluded folder or kind)"
+      },
+      {
+        "id": "n-filed",
+        "name": "x.pdf",
+        "why": "outside the firm's folder rules (an excluded folder or kind)"
+      },
+      {
+        "id": "n-plain",
+        "name": "Clinic Note 01-20-26.docx",
+        "why": "outside the firm's folder rules (an excluded folder or kind)"
+      },
+      {
+        "id": "n-upper",
+        "name": "Scan.PDF.PDF",
+        "why": "outside the firm's folder rules (an excluded folder or kind)"
+      }
+    ],
+    "returned": 3
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
+}

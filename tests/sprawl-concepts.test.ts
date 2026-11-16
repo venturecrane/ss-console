@@ -470,6 +470,146 @@ describe('send-record-copies', () => {
   })
 })
 
+describe('pdf-text-readers', () => {
+  const R = 'operator/runners/jobs/jobs/'
+  const C = 'operator/connectors/smokeball/'
+  it('counts a module that imports a PDF library and reads a text layer, at the top or in a function', () => {
+    const files = [
+      {
+        path: `${R}a.py`,
+        text: 'import pymupdf\n\ndef t(p):\n    return pymupdf.open(p)[0].get_text()',
+      },
+      {
+        path: `${C}b.py`,
+        text: 'def t(b):\n    from pypdf import PdfReader\n    return PdfReader(b).pages[0].extract_text()',
+      },
+    ]
+    expect(found('pdf-text-readers', files)).toEqual([`${C}b.py`, `${R}a.py`])
+  })
+
+  it('ignores HTML text, the connector entry point, a PDF writer, a test and the overlay', () => {
+    const files = [
+      { path: `${R}c.py`, text: 'from bs4 import BeautifulSoup\nsoup.get_text("\\n")' },
+      { path: `${R}d.py`, text: 'import pypdf\nr = extract_text_ex(blob)' },
+      { path: `${R}e.py`, text: 'import pymupdf\ndoc = pymupdf.open()\ndoc.new_page()' },
+      { path: `${R}../tests/test_f.py`, text: 'import pymupdf\np.get_text()' },
+      { path: 'operator/hermes-smd-overlay/g.py', text: 'import pypdf\np.extract_text()' },
+    ]
+    expect(found('pdf-text-readers', files)).toEqual([])
+  })
+})
+
+describe('readable-tests', () => {
+  const R = 'operator/runners/jobs/jobs/'
+  it('counts a module that defines a named page-readability predicate', () => {
+    const files = [
+      { path: `${R}a.py`, text: 'def ocr_pages(texts):\n    return []' },
+      { path: `${R}b.py`, text: 'def thin(text):\n    return len(text) < 200' },
+      {
+        path: 'operator/connectors/c.py',
+        text: 'def _looks_scanned(text, pages):\n    return False',
+      },
+    ]
+    expect(found('readable-tests', files)).toEqual([
+      'operator/connectors/c.py',
+      `${R}a.py`,
+      `${R}b.py`,
+    ])
+  })
+
+  it('ignores a caller, a near name, a comment and a test', () => {
+    const files = [
+      { path: `${R}d.py`, text: 'picks = ocr_pages(texts)' },
+      { path: `${R}e.py`, text: 'def thinner(text):\n    pass' },
+      { path: `${R}f.py`, text: '# def garbled(t): moved' },
+      { path: `${R}../tests/test_g.py`, text: 'def garbled(t):\n    pass' },
+    ]
+    expect(found('readable-tests', files)).toEqual([])
+  })
+})
+
+describe('paid-page-store-writers', () => {
+  const R = 'operator/runners/jobs/jobs/'
+  it('counts a store method or function that writes paid text', () => {
+    const files = [
+      {
+        path: `${R}a.py`,
+        text: 'class TextCache:\n    def put_text(self, sha, text):\n        pass',
+      },
+      { path: 'operator/connectors/b.py', text: 'def cache_put(blob, text):\n    pass' },
+    ]
+    expect(found('paid-page-store-writers', files)).toEqual([
+      'operator/connectors/b.py',
+      `${R}a.py`,
+    ])
+  })
+
+  it('ignores a caller, a reader and a test', () => {
+    const files = [
+      { path: `${R}c.py`, text: 'cache.put_text(sha, text, scanned_pages=1, matter_id=m)' },
+      { path: `${R}d.py`, text: 'def get_text(self, sha):\n    pass' },
+      { path: `${R}../tests/test_e.py`, text: 'def put_text(self, s, t):\n    pass' },
+    ]
+    expect(found('paid-page-store-writers', files)).toEqual([])
+  })
+})
+
+describe('downloaders', () => {
+  const R = 'operator/runners/jobs/jobs/'
+  it('counts a runner module that downloads through the seat', () => {
+    const files = [
+      { path: `${R}a.py`, text: 'got = sr.seat.fetch(url, dest, size)' },
+      { path: `${R}b.py`, text: 'seat.fetch(url, dest, None)' },
+    ]
+    expect(found('downloaders', files)).toEqual([`${R}a.py`, `${R}b.py`])
+  })
+
+  it('ignores a mint, another fetch, a comment, a test and the connector', () => {
+    const files = [
+      { path: `${R}c.py`, text: 'minted = seat.mint(m, ids)' },
+      { path: `${R}d.py`, text: 'rows = fetch_mod.fetch_matter(seat, m, files, ids, d, log)' },
+      { path: `${R}e.py`, text: '# seat.fetch(url, dest, None)' },
+      { path: `${R}../tests/test_f.py`, text: 'seat.fetch(u, d, None)' },
+      { path: 'operator/connectors/g.py', text: 'seat.fetch(u, d, None)' },
+    ]
+    expect(found('downloaders', files)).toEqual([])
+  })
+})
+
+describe('file-name-display-joins', () => {
+  const R = 'operator/runners/jobs/jobs/'
+  it('counts every line that joins a name and an extension, one instance per line', () => {
+    const files = [
+      {
+        path: `${R}a.py`,
+        text: [
+          "full = f\"{r.get('name') or ''}{r.get('ext') or ''}\"",
+          'key = r["name"] + (r.get("ext") or "")',
+        ].join('\n'),
+      },
+      { path: `${R}b.py`, text: 'key = name + str(r.get("ext") or "")' },
+      { path: `${R}c.py`, text: "same = f\"{m.get('name') or ''}{m.get('fileExtension') or ''}\"" },
+    ]
+    expect(found('file-name-display-joins', files)).toEqual([
+      `${R}a.py#1`,
+      `${R}a.py#2`,
+      `${R}b.py#1`,
+      `${R}c.py#1`,
+    ])
+  })
+
+  it('ignores a path built from an id, a name alone, two lines, a comment and a test', () => {
+    const files = [
+      { path: `${R}d.py`, text: 'dest = raw / (b["id"] + (b.get("ext") or ""))' },
+      { path: `${R}e.py`, text: 'shown = r["name"]' },
+      { path: `${R}f.py`, text: 'a = f"name: {doc[\'name\']}"\nb = f"type: {doc.get(\'ext\')}"' },
+      { path: `${R}g.py`, text: '# r["name"] + (r.get("ext") or "")' },
+      { path: `${R}../tests/test_h.py`, text: 'k = r["name"] + (r.get("ext") or "")' },
+    ]
+    expect(found('file-name-display-joins', files)).toEqual([])
+  })
+})
+
 describe('conceptRatchet', () => {
   const rows = conceptCensus(
     [{ path: 'a/x.py', text: 'L = ("medchron", "demand", "drafting", "records")' }],

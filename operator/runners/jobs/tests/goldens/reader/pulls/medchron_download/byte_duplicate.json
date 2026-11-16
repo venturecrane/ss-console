@@ -1,0 +1,116 @@
+{
+  "cell": {
+    "attempts": [
+      {
+        "returned": 0
+      }
+    ],
+    "files": {
+      "folders.json": [
+        {
+          "id": "fold-med",
+          "name": "MEDICAL",
+          "parentId": null,
+          "path": "/MEDICAL"
+        }
+      ],
+      "include.json": {
+        "_decided": {
+          "by": "jobs.medchron.decisions.selection",
+          "excluded_top_level": []
+        },
+        "exclude_substrings": [],
+        "include_prefixes": ["/MEDICAL"],
+        "root_pdfs": true
+      },
+      "manifest.json": {
+        "documents": [
+          {
+            "created": "<AT>",
+            "deleted": false,
+            "ext": ".pdf",
+            "folderId": "fold-med",
+            "id": "r-digital",
+            "modified": "<AT>",
+            "name": "Digital",
+            "size": 3264
+          },
+          {
+            "created": "<AT>",
+            "deleted": false,
+            "ext": ".pdf",
+            "folderId": "fold-med",
+            "id": "r-scan2",
+            "modified": "<AT>",
+            "name": "Scan2",
+            "size": 3264
+          },
+          {
+            "created": "<AT>",
+            "deleted": false,
+            "ext": ".txt",
+            "folderId": "fold-med",
+            "id": "r-note-txt",
+            "modified": "<AT>",
+            "name": "Phone Note",
+            "size": 71
+          }
+        ]
+      },
+      "raw/r-digital.pdf": {
+        "bytes": 3264
+      },
+      "raw_manifest.jsonl": [
+        {
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-digital",
+          "name": "Digital",
+          "ok": true,
+          "path": "<TMP>/mc/data/example-matter/raw/r-digital.pdf",
+          "sha256": "<sha:digital>",
+          "size_expected": 3264,
+          "size_got": 3264
+        },
+        {
+          "duplicate_of": "r-digital",
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-scan2",
+          "name": "Scan2",
+          "ok": true,
+          "path": null,
+          "sha256": "<sha:digital>",
+          "size_expected": 3264,
+          "size_got": 3264
+        }
+      ]
+    },
+    "seat": [
+      {
+        "call": "mint",
+        "ids": ["r-digital", "r-scan2"]
+      },
+      {
+        "call": "fetch",
+        "expected": 3264,
+        "id": "r-digital",
+        "served": 3264
+      },
+      {
+        "call": "fetch",
+        "expected": 3264,
+        "id": "r-scan2",
+        "served": 3264
+      }
+    ],
+    "sleeps": []
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
+}

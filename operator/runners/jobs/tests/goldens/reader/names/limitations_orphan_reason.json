@@ -1,0 +1,16 @@
+{
+  "cell": {
+    "Clinic Note 01-20-26.docx": "the stored reason",
+    "README": "the stored reason",
+    "Scan.PDF.PDF": "the stored reason",
+    "x.pdf": "the bare filed name",
+    "x.pdf.pdf": "the bare emailed name"
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
+}

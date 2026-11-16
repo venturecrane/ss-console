@@ -38,6 +38,18 @@ NORMALISERS: dict[str, tuple[str, ...]] = {
     "test_wire_snapshot": ("direct",),
     "ledger_golden_kit": ("normal", "fix_clock", "Clock"),
     "filing_kit": ("normal", "_row"),
+    "reader_kit": (
+        "scrub",
+        "_tmp_out",
+        "tree",
+        "paged",
+        "shape",
+        "page_of",
+        "reply_for",
+        "_colour_page",
+        "Seat",
+        "Model",
+    ),
 }
 
 #: The decision corpus's instrument (wave 4), under ``operator/``: frozen for the
@@ -46,6 +58,22 @@ NORMALISERS: dict[str, tuple[str, ...]] = {
 #: table or replay is a changed normaliser.
 DECISIONS = "hermes-smd-overlay/tests/decisions"
 FROZEN = ("recorder.py", "census.py", "tables.py", "cases.py", "drive.py", "replay.py")
+#: The reader family's instrument (wave 5), under ``operator/``: frozen the same
+#: way for the PRs that move every lane onto one reader, one downloader and one
+#: page store (``reader_frozen.<name>``). A changed fixture, recorder, entry
+#: point or census is a changed normaliser, named in
+#: ``allowed-instrument-changes.json``.
+READER = "runners/jobs/tests"
+READER_FROZEN = (
+    "reader_fixtures.py",
+    "reader_kit.py",
+    "reader_lanes.py",
+    "reader_pulls.py",
+    "reader_names.py",
+    "reader_connector.py",
+    "test_reader_goldens.py",
+    "test_reader_census.py",
+)
 
 
 def _paths(operator: Path) -> None:
@@ -116,6 +144,14 @@ def _load() -> dict[str, Any]:
         import test_filing_goldens
 
         out["test_filing_goldens"] = test_filing_goldens
+    with contextlib.suppress(ImportError):
+        import reader_kit
+
+        out["reader_kit"] = reader_kit
+    with contextlib.suppress(ImportError):
+        import test_reader_goldens
+
+        out["test_reader_goldens"] = test_reader_goldens
     return out
 
 
@@ -164,6 +200,10 @@ def frozen(operator: Path) -> dict[str, str]:
         path = operator / DECISIONS / name
         if path.is_file():
             out[f"decisions_frozen.{name}"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    for name in READER_FROZEN:
+        path = operator / READER / name
+        if path.is_file():
+            out[f"reader_frozen.{name}"] = hashlib.sha256(path.read_bytes()).hexdigest()
     return out
 
 
@@ -189,6 +229,8 @@ def cases() -> dict[str, list[str]]:
         ("filing.cells", "test_filing_goldens", "CELLS"),
         ("filing.frozen", "test_filing_goldens", "FROZEN"),
         ("filing.not_applicable", "test_filing_goldens", "NOT_APPLICABLE"),
+        ("reader.cells", "test_reader_goldens", "CELLS"),
+        ("reader.not_applicable", "test_reader_goldens", "NOT_APPLICABLE"),
     ):
         m = _module(mod)
         if m is not None and hasattr(m, attr):

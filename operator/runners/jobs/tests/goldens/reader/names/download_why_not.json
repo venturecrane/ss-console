@@ -1,0 +1,16 @@
+{
+  "cell": [
+    "a doubled name",
+    "the filed name",
+    null,
+    "outside the firm's folder rules (an excluded folder or kind)",
+    null
+  ],
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
+}

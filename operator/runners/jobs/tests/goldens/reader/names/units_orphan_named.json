@@ -1,0 +1,16 @@
+{
+  "cell": [
+    "n-emailed \"x.pdf.pdf\" in /MEDICAL",
+    "n-filed \"x.pdf\" in /MEDICAL",
+    "n-plain \"Clinic Note 01-20-26.docx\" in /MEDICAL",
+    "n-bare \"README\" in /MEDICAL",
+    "n-upper \"Scan.PDF.PDF\" in /MEDICAL"
+  ],
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
+}

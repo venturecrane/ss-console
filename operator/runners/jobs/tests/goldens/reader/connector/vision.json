@@ -1,0 +1,505 @@
+{
+  "cell": {
+    "cache": {
+      "<sha:edge14>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 1,
+        "text": "[p.1]\nTRANSCRIPT OF edge14 PAGE 1"
+      },
+      "<sha:empty_layer>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 1,
+        "text": "[p.1]\nTRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "<sha:photo_jpg>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 1,
+        "text": "[p.1]\nTRANSCRIPT OF photo_jpg PAGE 1"
+      },
+      "<sha:scan2>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 2,
+        "text": "[p.1]\nTRANSCRIPT OF scan2 PAGE 1\n\n[p.2]\nTRANSCRIPT OF scan2 PAGE 2"
+      },
+      "<sha:scan8>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 8,
+        "text": "[p.1]\nTRANSCRIPT OF scan8 PAGE 1\n\n[p.2]\nTRANSCRIPT OF scan8 PAGE 2\n\n[p.3]\nTRANSCRIPT OF scan8 PAGE 3\n\n[p.4]\nTRANSCRIPT OF scan8 PAGE 4\n\n[p.5]\nTRANSCRIPT OF scan8 PAGE 5\n\n[p.6]\nTRANSCRIPT OF scan8 PAGE 6\n\n[p.7]\nTRANSCRIPT OF scan8 PAGE 7\n\n[p.8]\nTRANSCRIPT OF scan8 PAGE 8"
+      }
+    },
+    "files": {
+      "absent399": {
+        "method": "none_scanned",
+        "pages": 200,
+        "reason": "over_page_cap",
+        "text": [""]
+      },
+      "absent400": {
+        "method": "none_scanned",
+        "pages": 200,
+        "reason": "over_page_cap",
+        "text": [""]
+      },
+      "cipher": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": [
+          "Wkh sdwlhqw zdv vhhq lq wkh folqlf wrgd| iru d iroorz xs ylvlw diwhu wkh froolvlrq dqg uhsruwv\nwkdw wkh sdlq lq wkh qhfn lv lpsurylqj zlwk wkhuds|. Wkh h{dp lv xqfkdqjhg iurp wkh sulru ylvlw\ndqg wkh sodq lv wr frqwlqxh wkh fxuuhqw fduh zlwk d uhwxuq ylvlw lq irxu zhhnv. Wkh sdwlhqw zdv\njlyhq d frs| ri wkh krph h{huflvh surjudp dqg dvnhg wr fdoo wkh riilfh zlwk dq| qhz frpsodlqw\nru txhvwlrq derxw wkh sodq ri fduh. Wkh sdwlhqw zdv vhhq lq wkh folqlf wrgd| iru d iroorz xs\nylvlw diwhu wkh froolvlrq dqg uhsruwv wkdw wkh sdlq lq wkh qhfn lv lpsurylqj zlwk wkhuds|. Wkh\nh{dp lv xqfkdqjhg iurp wkh sulru ylvlw dqg wkh sodq lv wr frqwlqxh wkh fxuuhqw fduh zlwk d\nuhwxuq ylvlw lq irxu zhhnv. Wkh sdwlhqw zdv jlyhq d frs| ri wkh krph h{huflvh surjudp dqg dvnhg\nwr fdoo wkh riilfh zlwk dq| qhz frpsodlqw ru txhvwlrq derxw wkh sodq ri fduh."
+        ]
+      },
+      "control": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": [
+          "Statement of charges \u0001\u0002\u0003\u0004\u0005\u0001\u0002\u0003\u0004\u0005\u0001\u0002\u0003\u0004\u0005\u0001\u0002\u0003\u0004\u0005\u0001\u0002\u0003\u0004\u0005\u0001\u0002\u0003\u0004\u0005\u0001\u0002\u0003\u0004\u0005\u0001\u0002\u0003\u0004\u0005 total due on receipt"
+        ]
+      },
+      "corrupt": {
+        "refused": "PDF could not be parsed: startxref not found"
+      },
+      "cover_scans": {
+        "method": "pypdf",
+        "pages": 6,
+        "reason": null,
+        "text": [
+          "COVER SHEET\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+        ]
+      },
+      "digital": {
+        "method": "pypdf",
+        "pages": 2,
+        "reason": null,
+        "text": [
+          "The patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\nThe patient was seen in the clinic again for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+        ]
+      },
+      "dotx": {
+        "method": "docx",
+        "pages": null,
+        "reason": null,
+        "text": [
+          "LETTER OF REPRESENTATION\nWe represent Alpha Example for injuries from the collision on 01/15/2026.\nSincerely, Example Law Office"
+        ]
+      },
+      "edge14": {
+        "method": "vision",
+        "pages": 1,
+        "reason": null,
+        "text": ["[p.1]\nTRANSCRIPT OF edge14 PAGE 1"]
+      },
+      "edge15": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": ["stamp stamp sta"]
+      },
+      "edge24": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": ["stamp stamp stamp stampx"]
+      },
+      "edge25": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": ["stamp stamp stamp stamp s"]
+      },
+      "empty_layer": {
+        "method": "vision",
+        "pages": 1,
+        "reason": null,
+        "text": ["[p.1]\nTRANSCRIPT OF AN UNMARKED PAGE"]
+      },
+      "glyph_junk": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": [
+          "/0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1\n/2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3\n/4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5\n/6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7\n/8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9\n/0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1\n/2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3\n/4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5\n/6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7\n/8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9\n/0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1\n/2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9 /0 /1 /2 /3\n/4 /5 /6 /7 /8 /9 /0 /1 /2 /3 /4 /5 /6 /7 /8 /9"
+        ]
+      },
+      "locked": {
+        "refused": "PDF could not be parsed: File has not been decrypted"
+      },
+      "mail_eml": {
+        "method": "plain",
+        "pages": null,
+        "reason": null,
+        "text": [
+          {
+            "chars": 56632,
+            "head": "From: adjuster@carrier.example\nTo: intake@firm.example\nSubject: Records and offer\nDate: Wed, 07 Oct 2026 10:00:00 -0700\nMessage-ID: <fixture-1@carrier.example>\nMIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=\"fixture-boundary-1\"\n\n--fixture-boundary-1\nContent-Type: text/plain; charset=\"utf-",
+            "sha12": "<sha12:mail_eml>",
+            "tail": "AABiAQAAGAAAAAAAAAAAAAAAgAEXgQAAY3VzdG9tWG1sL2l0ZW1Qcm9wczEueG1sUEsBAhQD\nFAAAAAgAgxgiXJDQh4lrAwAAiRUAABIAAAAAAAAAAAAAAIABLoIAAHdvcmQvbnVtYmVyaW5nLnht\nbFBLAQIUAxQAAAAIAIMYIlyiyNZnvQUAAIQgAAAXAAAAAAAAAAAAAACAAcmFAABkb2NQcm9wcy90\naHVtYm5haWwuanBlZ1BLBQYAAAAAEQARAGEEAAC7iwAAAAA=\n\n--fixture-boundary-1--\n"
+          }
+        ]
+      },
+      "merged_docx": {
+        "method": "docx",
+        "pages": null,
+        "reason": null,
+        "text": [
+          "LETTER OF REPRESENTATION\nWe represent Alpha Example for injuries from the collision on 01/15/2026.\nSincerely, Example Law Office\nProvider summary | Provider summary | Provider summary\nExample Clinic | 01/20/2026 | 1,250.00\nTotal | Total | 1,250.00"
+        ]
+      },
+      "note_txt": {
+        "method": "plain",
+        "pages": null,
+        "reason": null,
+        "text": ["Phone note: the adjuster called on 04/12/2026 and asked for the bills.\n"]
+      },
+      "notice_htm": {
+        "method": "plain",
+        "pages": null,
+        "reason": null,
+        "text": [
+          "<html><head><style>p{color:red}</style><script>var x=1;</script></head><body><h1>Notice of Hearing</h1><p>The hearing is set for 03/02/2026 in Department 4.</p></body></html>"
+        ]
+      },
+      "outlook_msg": {
+        "refused": "'RE Offer.msg' is a legacy Office file (.xls/.doc/.msg) or an encrypted one; needs manual review"
+      },
+      "photo_jpg": {
+        "method": "vision",
+        "pages": 1,
+        "reason": null,
+        "text": ["[p.1]\nTRANSCRIPT OF photo_jpg PAGE 1"]
+      },
+      "pleading": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": [
+          "1   The patient was seen in the clinic today for a follow up visit after the\n2   collision and reports that the pain in the neck is improving with therapy. The\n3   exam is unchanged from the prior visit and the plan is to continue the current\n4   care with a return visit in four weeks. The patient was given a copy of the home\n5   exercise program and asked to call the office with any new complaint or question\n6   about the plan of care. The patient was seen in the clinic today for a follow up\n7   visit after the collision and reports that the pain in the neck is improving\n8   with therapy. The exam is unchanged from the prior visit and the plan is to\n9   continue the current care with a return visit in four weeks. The patient was\n10   given a copy of the home exercise program and asked to call the office with any\n11   new complaint or question about the plan of care. The patient was seen in the\n12   clinic today for a follow up visit after the collision and reports that the pain\n13   in the neck is improving with therapy. The exam is unchanged from the prior\n14   visit and the plan is to continue the current care with a return visit in four\n15   weeks. The patient was given a copy of the home exercise program and asked to\n16   call the office with any new complaint or question about the plan of care. The\n17   patient was seen in the clinic today for a follow up visit after the collision\n18   and reports that the pain in the neck is improving with therapy. The exam is\n19   unchanged from the prior visit and the plan is to continue the current care with\n20   a return visit in four weeks. The patient was given a copy of the home exercise\n21   program and asked to call the office with any new complaint or question about\n22   the plan of care. The patient was seen in the clinic today for a follow up visit\n23   after the collision and reports that the pain in the neck is improving with\n24   therapy. The exam is unchanged from the prior visit and the plan is to continue\n25   the current care with a return visit in four weeks. The patient was given a copy\n26   of the home exercise program and asked to call the office with any new complaint\n27   or question about the plan of care. The patient was seen in the clinic today for\n28   a follow up visit after the collision and reports that the pain in the neck is"
+        ]
+      },
+      "proof_rtf": {
+        "method": "plain",
+        "pages": null,
+        "reason": null,
+        "text": [
+          "{\\rtf1\\ansi{\\fonttbl{\\f0 Helvetica;}}\\f0 Proof of service\\par Served on 04/10/2026 by mail.\\par}"
+        ]
+      },
+      "scan2": {
+        "method": "vision",
+        "pages": 2,
+        "reason": null,
+        "text": ["[p.1]\nTRANSCRIPT OF scan2 PAGE 1\n\n", "[p.2]\nTRANSCRIPT OF scan2 PAGE 2"]
+      },
+      "scan8": {
+        "method": "vision",
+        "pages": 8,
+        "reason": null,
+        "text": [
+          "[p.1]\nTRANSCRIPT OF scan8 PAGE 1\n\n",
+          "[p.2]\nTRANSCRIPT OF scan8 PAGE 2\n\n",
+          "[p.3]\nTRANSCRIPT OF scan8 PAGE 3\n\n",
+          "[p.4]\nTRANSCRIPT OF scan8 PAGE 4\n\n",
+          "[p.5]\nTRANSCRIPT OF scan8 PAGE 5\n\n",
+          "[p.6]\nTRANSCRIPT OF scan8 PAGE 6\n\n",
+          "[p.7]\nTRANSCRIPT OF scan8 PAGE 7\n\n",
+          "[p.8]\nTRANSCRIPT OF scan8 PAGE 8"
+        ]
+      },
+      "thin199": {
+        "method": "pypdf",
+        "pages": 2,
+        "reason": null,
+        "text": [
+          "The patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\nwords words words words words words words words words words words words words words words words\nwords words words words words words words words words words words words words words words words\nwords words words words words words words xxxx"
+        ]
+      },
+      "thin200": {
+        "method": "pypdf",
+        "pages": 2,
+        "reason": null,
+        "text": [
+          "The patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\nwords words words words words words words words words words words words words words words words\nwords words words words words words words words words words words words words words words words\nwords words words words words words words words"
+        ]
+      },
+      "typed60": {
+        "method": "pypdf",
+        "pages": 60,
+        "reason": null,
+        "text": [
+          {
+            "chars": 25915,
+            "head": "Page 1 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. T",
+            "sha12": "3fa732c612e3",
+            "tail": "neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+          }
+        ]
+      },
+      "x_emailed": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": [
+          "EMAILED COPY\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+        ]
+      },
+      "x_filed": {
+        "method": "pypdf",
+        "pages": 1,
+        "reason": null,
+        "text": [
+          "FILED COPY\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+        ]
+      },
+      "zero": {
+        "refused": "PDF could not be parsed: Cannot read an empty file"
+      }
+    },
+    "sent": {
+      "sent": [
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": null,
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan2",
+                "page": 1
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan2",
+                "page": 2
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan8",
+                "page": 1
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan8",
+                "page": 2
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan8",
+                "page": 3
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan8",
+                "page": 4
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan8",
+                "page": 5
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan8",
+                "page": 6
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan8",
+                "page": 7
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "scan8",
+                "page": 8
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "application/pdf",
+              "pages": 1,
+              "shows": {
+                "fixture": "edge14",
+                "page": 1
+              },
+              "size": [612, 792]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/jpeg",
+              "shows": {
+                "fixture": "photo_jpg",
+                "page": 1
+              },
+              "size": [64, 80]
+            }
+          ],
+          "shape": 1
+        }
+      ],
+      "shapes": [
+        {
+          "blocks": ["document", "text"],
+          "effort": "low",
+          "keys": ["max_tokens", "messages", "model", "output_config", "stream"],
+          "max_tokens": 6000,
+          "model": "claude-opus-5-5",
+          "prompt_sha256": "<sha256:5722c39630ae>",
+          "system_sha256": null,
+          "url": "https://api.anthropic.com/v1/messages"
+        },
+        {
+          "blocks": ["image", "text"],
+          "effort": "low",
+          "keys": ["max_tokens", "messages", "model", "output_config", "stream"],
+          "max_tokens": 6000,
+          "model": "claude-opus-5-5",
+          "prompt_sha256": "<sha256:8ea1804d31ad>",
+          "system_sha256": null,
+          "url": "https://api.anthropic.com/v1/messages"
+        }
+      ]
+    }
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {
+      "<sha:edge14>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 1,
+        "text": "[p.1]\nTRANSCRIPT OF edge14 PAGE 1"
+      },
+      "<sha:empty_layer>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 1,
+        "text": "[p.1]\nTRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "<sha:photo_jpg>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 1,
+        "text": "[p.1]\nTRANSCRIPT OF photo_jpg PAGE 1"
+      },
+      "<sha:scan2>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 2,
+        "text": "[p.1]\nTRANSCRIPT OF scan2 PAGE 1\n\n[p.2]\nTRANSCRIPT OF scan2 PAGE 2"
+      },
+      "<sha:scan8>.json": {
+        "created_at": "<AT>",
+        "method": "vision",
+        "pages": 8,
+        "text": "[p.1]\nTRANSCRIPT OF scan8 PAGE 1\n\n[p.2]\nTRANSCRIPT OF scan8 PAGE 2\n\n[p.3]\nTRANSCRIPT OF scan8 PAGE 3\n\n[p.4]\nTRANSCRIPT OF scan8 PAGE 4\n\n[p.5]\nTRANSCRIPT OF scan8 PAGE 5\n\n[p.6]\nTRANSCRIPT OF scan8 PAGE 6\n\n[p.7]\nTRANSCRIPT OF scan8 PAGE 7\n\n[p.8]\nTRANSCRIPT OF scan8 PAGE 8"
+      }
+    }
+  }
+}

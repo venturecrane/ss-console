@@ -1,0 +1,3450 @@
+{
+  "cell": {
+    "exits": {
+      "extract": 0,
+      "vision": 0
+    },
+    "files": {
+      "absent399": {
+        "record": {
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-absent399",
+          "name": "Absent399",
+          "pages": 200,
+          "scan": true
+        },
+        "text": [
+          "[p.1] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.2] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.3] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.4] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.5] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.6] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.7] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.8] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.9] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.10] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.11] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.12] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.13] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.14] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.15] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.16] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.17] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.18] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.19] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.20] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.21] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.22] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.23] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.24] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.25] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.26] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.27] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.28] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.29] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.30] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.31] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.32] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.33] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.34] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.35] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.36] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.37] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.38] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.39] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.40] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.41] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.42] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.43] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.44] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.45] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.46] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.47] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.48] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.49] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.50] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.51] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.52] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.53] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.54] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.55] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.56] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.57] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.58] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.59] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.60] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.61] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.62] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.63] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.64] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.65] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.66] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.67] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.68] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.69] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.70] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.71] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.72] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.73] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.74] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.75] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.76] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.77] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.78] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.79] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.80] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.81] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.82] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.83] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.84] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.85] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.86] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.87] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.88] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.89] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.90] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.91] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.92] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.93] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.94] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.95] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.96] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.97] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.98] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.99] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.100] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.101] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.102] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.103] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.104] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.105] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.106] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.107] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.108] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.109] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.110] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.111] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.112] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.113] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.114] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.115] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.116] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.117] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.118] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.119] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.120] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.121] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.122] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.123] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.124] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.125] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.126] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.127] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.128] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.129] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.130] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.131] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.132] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.133] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.134] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.135] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.136] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.137] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.138] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.139] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.140] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.141] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.142] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.143] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.144] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.145] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.146] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.147] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.148] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.149] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.150] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.151] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.152] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.153] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.154] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.155] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.156] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.157] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.158] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.159] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.160] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.161] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.162] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.163] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.164] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.165] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.166] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.167] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.168] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.169] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.170] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.171] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.172] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.173] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.174] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.175] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.176] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.177] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.178] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.179] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.180] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.181] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.182] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.183] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.184] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.185] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.186] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.187] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.188] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.189] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.190] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.191] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.192] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.193] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.194] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.195] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.196] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.197] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.198] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.199] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE\n",
+          "[p.200] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE"
+        ]
+      },
+      "absent400": {
+        "record": {
+          "chars": 2091,
+          "empty_pages": [
+            2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+            26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+            48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69,
+            70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91,
+            92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+            111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+            128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144,
+            145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161,
+            162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178,
+            179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195,
+            196, 197, 198, 199, 200
+          ],
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-absent400",
+          "name": "Absent400",
+          "pages": 200,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-absent400.txt"
+        },
+        "text": [
+          "[p.1]\nthe note the note the note the note the note the note the note the note the note the note the\nnote the note the note the note the note the note the note the note the note the note the note\nthe note the note the note the note the note the note the note the note the note the note the\nnote the note the note the note the note the note the note the note the note the note the note\nthe note the note thex\n",
+          "[p.2]\n\n",
+          "[p.3]\n\n",
+          "[p.4]\n\n",
+          "[p.5]\n\n",
+          "[p.6]\n\n",
+          "[p.7]\n\n",
+          "[p.8]\n\n",
+          "[p.9]\n\n",
+          "[p.10]\n\n",
+          "[p.11]\n\n",
+          "[p.12]\n\n",
+          "[p.13]\n\n",
+          "[p.14]\n\n",
+          "[p.15]\n\n",
+          "[p.16]\n\n",
+          "[p.17]\n\n",
+          "[p.18]\n\n",
+          "[p.19]\n\n",
+          "[p.20]\n\n",
+          "[p.21]\n\n",
+          "[p.22]\n\n",
+          "[p.23]\n\n",
+          "[p.24]\n\n",
+          "[p.25]\n\n",
+          "[p.26]\n\n",
+          "[p.27]\n\n",
+          "[p.28]\n\n",
+          "[p.29]\n\n",
+          "[p.30]\n\n",
+          "[p.31]\n\n",
+          "[p.32]\n\n",
+          "[p.33]\n\n",
+          "[p.34]\n\n",
+          "[p.35]\n\n",
+          "[p.36]\n\n",
+          "[p.37]\n\n",
+          "[p.38]\n\n",
+          "[p.39]\n\n",
+          "[p.40]\n\n",
+          "[p.41]\n\n",
+          "[p.42]\n\n",
+          "[p.43]\n\n",
+          "[p.44]\n\n",
+          "[p.45]\n\n",
+          "[p.46]\n\n",
+          "[p.47]\n\n",
+          "[p.48]\n\n",
+          "[p.49]\n\n",
+          "[p.50]\n\n",
+          "[p.51]\n\n",
+          "[p.52]\n\n",
+          "[p.53]\n\n",
+          "[p.54]\n\n",
+          "[p.55]\n\n",
+          "[p.56]\n\n",
+          "[p.57]\n\n",
+          "[p.58]\n\n",
+          "[p.59]\n\n",
+          "[p.60]\n\n",
+          "[p.61]\n\n",
+          "[p.62]\n\n",
+          "[p.63]\n\n",
+          "[p.64]\n\n",
+          "[p.65]\n\n",
+          "[p.66]\n\n",
+          "[p.67]\n\n",
+          "[p.68]\n\n",
+          "[p.69]\n\n",
+          "[p.70]\n\n",
+          "[p.71]\n\n",
+          "[p.72]\n\n",
+          "[p.73]\n\n",
+          "[p.74]\n\n",
+          "[p.75]\n\n",
+          "[p.76]\n\n",
+          "[p.77]\n\n",
+          "[p.78]\n\n",
+          "[p.79]\n\n",
+          "[p.80]\n\n",
+          "[p.81]\n\n",
+          "[p.82]\n\n",
+          "[p.83]\n\n",
+          "[p.84]\n\n",
+          "[p.85]\n\n",
+          "[p.86]\n\n",
+          "[p.87]\n\n",
+          "[p.88]\n\n",
+          "[p.89]\n\n",
+          "[p.90]\n\n",
+          "[p.91]\n\n",
+          "[p.92]\n\n",
+          "[p.93]\n\n",
+          "[p.94]\n\n",
+          "[p.95]\n\n",
+          "[p.96]\n\n",
+          "[p.97]\n\n",
+          "[p.98]\n\n",
+          "[p.99]\n\n",
+          "[p.100]\n\n",
+          "[p.101]\n\n",
+          "[p.102]\n\n",
+          "[p.103]\n\n",
+          "[p.104]\n\n",
+          "[p.105]\n\n",
+          "[p.106]\n\n",
+          "[p.107]\n\n",
+          "[p.108]\n\n",
+          "[p.109]\n\n",
+          "[p.110]\n\n",
+          "[p.111]\n\n",
+          "[p.112]\n\n",
+          "[p.113]\n\n",
+          "[p.114]\n\n",
+          "[p.115]\n\n",
+          "[p.116]\n\n",
+          "[p.117]\n\n",
+          "[p.118]\n\n",
+          "[p.119]\n\n",
+          "[p.120]\n\n",
+          "[p.121]\n\n",
+          "[p.122]\n\n",
+          "[p.123]\n\n",
+          "[p.124]\n\n",
+          "[p.125]\n\n",
+          "[p.126]\n\n",
+          "[p.127]\n\n",
+          "[p.128]\n\n",
+          "[p.129]\n\n",
+          "[p.130]\n\n",
+          "[p.131]\n\n",
+          "[p.132]\n\n",
+          "[p.133]\n\n",
+          "[p.134]\n\n",
+          "[p.135]\n\n",
+          "[p.136]\n\n",
+          "[p.137]\n\n",
+          "[p.138]\n\n",
+          "[p.139]\n\n",
+          "[p.140]\n\n",
+          "[p.141]\n\n",
+          "[p.142]\n\n",
+          "[p.143]\n\n",
+          "[p.144]\n\n",
+          "[p.145]\n\n",
+          "[p.146]\n\n",
+          "[p.147]\n\n",
+          "[p.148]\n\n",
+          "[p.149]\n\n",
+          "[p.150]\n\n",
+          "[p.151]\n\n",
+          "[p.152]\n\n",
+          "[p.153]\n\n",
+          "[p.154]\n\n",
+          "[p.155]\n\n",
+          "[p.156]\n\n",
+          "[p.157]\n\n",
+          "[p.158]\n\n",
+          "[p.159]\n\n",
+          "[p.160]\n\n",
+          "[p.161]\n\n",
+          "[p.162]\n\n",
+          "[p.163]\n\n",
+          "[p.164]\n\n",
+          "[p.165]\n\n",
+          "[p.166]\n\n",
+          "[p.167]\n\n",
+          "[p.168]\n\n",
+          "[p.169]\n\n",
+          "[p.170]\n\n",
+          "[p.171]\n\n",
+          "[p.172]\n\n",
+          "[p.173]\n\n",
+          "[p.174]\n\n",
+          "[p.175]\n\n",
+          "[p.176]\n\n",
+          "[p.177]\n\n",
+          "[p.178]\n\n",
+          "[p.179]\n\n",
+          "[p.180]\n\n",
+          "[p.181]\n\n",
+          "[p.182]\n\n",
+          "[p.183]\n\n",
+          "[p.184]\n\n",
+          "[p.185]\n\n",
+          "[p.186]\n\n",
+          "[p.187]\n\n",
+          "[p.188]\n\n",
+          "[p.189]\n\n",
+          "[p.190]\n\n",
+          "[p.191]\n\n",
+          "[p.192]\n\n",
+          "[p.193]\n\n",
+          "[p.194]\n\n",
+          "[p.195]\n\n",
+          "[p.196]\n\n",
+          "[p.197]\n\n",
+          "[p.198]\n\n",
+          "[p.199]\n\n",
+          "[p.200]\n"
+        ]
+      },
+      "cipher": {
+        "record": {
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "glyph_junk": true,
+          "id": "r-cipher",
+          "name": "Cipher",
+          "pages": 1,
+          "scan": true
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE"]
+      },
+      "control": {
+        "record": {
+          "chars": 88,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-control",
+          "name": "Control",
+          "pages": 1,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-control.txt",
+          "vision_pages": [1]
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF control PAGE 1\n"]
+      },
+      "corrupt": {
+        "record": {
+          "error": "startxref not found",
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-corrupt",
+          "name": "Corrupt Upload"
+        },
+        "text": null
+      },
+      "cover_scans": {
+        "record": {
+          "chars": 469,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-cover-scans",
+          "name": "Cover Scans",
+          "pages": 6,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-cover-scans.txt",
+          "vision_pages": [2, 3, 4, 5, 6]
+        },
+        "text": [
+          "[p.1]\nCOVER SHEET\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.2] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 2\n",
+          "[p.3] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 3\n",
+          "[p.4] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 4\n",
+          "[p.5] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 5\n",
+          "[p.6] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 6\n"
+        ]
+      },
+      "digital": {
+        "record": {
+          "chars": 845,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-digital",
+          "name": "Digital",
+          "pages": 2,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-digital.txt"
+        },
+        "text": [
+          "[p.1]\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.2]\nThe patient was seen in the clinic again for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+        ]
+      },
+      "dotx": {
+        "record": {
+          "error": "unhandled ext",
+          "ext": ".dotx",
+          "folder": "/MEDICAL",
+          "id": "r-dotx",
+          "name": "Firm Letterhead"
+        },
+        "text": null
+      },
+      "edge14": {
+        "record": {
+          "chars": 20,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-edge14",
+          "name": "Edge14",
+          "pages": 1,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-edge14.txt",
+          "vision_pages": [1]
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF edge14 PAGE 1\n"]
+      },
+      "edge15": {
+        "record": {
+          "chars": 21,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-edge15",
+          "name": "Edge15",
+          "pages": 1,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-edge15.txt",
+          "vision_pages": [1]
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF edge15 PAGE 1\n"]
+      },
+      "edge24": {
+        "record": {
+          "chars": 30,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-edge24",
+          "name": "Edge24",
+          "pages": 1,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-edge24.txt",
+          "vision_pages": [1]
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF edge24 PAGE 1\n"]
+      },
+      "edge25": {
+        "record": {
+          "chars": 31,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-edge25",
+          "name": "Edge25",
+          "pages": 1,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-edge25.txt",
+          "vision_pages": [1]
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF edge25 PAGE 1\n"]
+      },
+      "empty_layer": {
+        "record": {
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-empty-layer",
+          "name": "Empty Layer",
+          "pages": 1,
+          "scan": true
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE"]
+      },
+      "glyph_junk": {
+        "record": {
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "glyph_junk": true,
+          "id": "r-glyph-junk",
+          "name": "Glyph Junk",
+          "pages": 1,
+          "scan": true
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF AN UNMARKED PAGE"]
+      },
+      "locked": {
+        "record": {
+          "error": "File has not been decrypted",
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-locked",
+          "name": "Locked Motion"
+        },
+        "text": null
+      },
+      "mail_eml": {
+        "record": {
+          "error": "unhandled ext",
+          "ext": ".eml",
+          "folder": "/MEDICAL",
+          "id": "r-mail-eml",
+          "name": "Records And Offer"
+        },
+        "text": null
+      },
+      "merged_docx": {
+        "record": {
+          "chars": 247,
+          "ext": ".docx",
+          "folder": "/MEDICAL",
+          "id": "r-merged-docx",
+          "name": "Representation Letter",
+          "text_path": "<TMP>/mc/data/example-matter/text/r-merged-docx.txt"
+        },
+        "text": [
+          "LETTER OF REPRESENTATION\nWe represent Alpha Example for injuries from the collision on 01/15/2026.\nSincerely, Example Law Office\nProvider summary | Provider summary | Provider summary\nExample Clinic | 01/20/2026 | 1,250.00\nTotal | Total | 1,250.00"
+        ]
+      },
+      "note_txt": {
+        "record": {
+          "error": "unhandled ext",
+          "ext": ".txt",
+          "folder": "/MEDICAL",
+          "id": "r-note-txt",
+          "name": "Phone Note"
+        },
+        "text": null
+      },
+      "notice_htm": {
+        "record": {
+          "error": "unhandled ext",
+          "ext": ".htm",
+          "folder": "/MEDICAL",
+          "id": "r-notice-htm",
+          "name": "Notice Of Hearing"
+        },
+        "text": null
+      },
+      "photo_jpg": {
+        "record": {
+          "ext": ".jpg",
+          "folder": "/MEDICAL",
+          "id": "r-photo-jpg",
+          "image": true,
+          "name": "Photo Of Card",
+          "scan": true
+        },
+        "text": ["[p.1] (machine transcription)\nTRANSCRIPT OF photo_jpg PAGE 1"]
+      },
+      "pleading": {
+        "record": {
+          "chars": 2214,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-pleading",
+          "name": "Pleading",
+          "pages": 1,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-pleading.txt"
+        },
+        "text": [
+          "[p.1]\nThe patient was seen in the clinic today for a follow up visit after the\ncollision and reports that the pain in the neck is improving with therapy. The\nexam is unchanged from the prior visit and the plan is to continue the current\ncare with a return visit in four weeks. The patient was given a copy of the home\nexercise program and asked to call the office with any new complaint or question\nabout the plan of care. The patient was seen in the clinic today for a follow up\nvisit after the collision and reports that the pain in the neck is improving\nwith therapy. The exam is unchanged from the prior visit and the plan is to\ncontinue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any\nnew complaint or question about the plan of care. The patient was seen in the\nclinic today for a follow up visit after the collision and reports that the pain\nin the neck is improving with therapy. The exam is unchanged from the prior\nvisit and the plan is to continue the current care with a return visit in four\nweeks. The patient was given a copy of the home exercise program and asked to\ncall the office with any new complaint or question about the plan of care. The\npatient was seen in the clinic today for a follow up visit after the collision\nand reports that the pain in the neck is improving with therapy. The exam is\nunchanged from the prior visit and the plan is to continue the current care with\na return visit in four weeks. The patient was given a copy of the home exercise\nprogram and asked to call the office with any new complaint or question about\nthe plan of care. The patient was seen in the clinic today for a follow up visit\nafter the collision and reports that the pain in the neck is improving with\ntherapy. The exam is unchanged from the prior visit and the plan is to continue\nthe current care with a return visit in four weeks. The patient was given a copy\nof the home exercise program and asked to call the office with any new complaint\nor question about the plan of care. The patient was seen in the clinic today for\na follow up visit after the collision and reports that the pain in the neck is"
+        ]
+      },
+      "proof_rtf": {
+        "record": {
+          "error": "unhandled ext",
+          "ext": ".rtf",
+          "folder": "/MEDICAL",
+          "id": "r-proof-rtf",
+          "name": "Proof Of Service"
+        },
+        "text": null
+      },
+      "scan2": {
+        "record": {
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-scan2",
+          "name": "Scan2",
+          "pages": 2,
+          "scan": true
+        },
+        "text": [
+          "[p.1] (machine transcription)\nTRANSCRIPT OF scan2 PAGE 1\n",
+          "[p.2] (machine transcription)\nTRANSCRIPT OF scan2 PAGE 2"
+        ]
+      },
+      "scan8": {
+        "record": {
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-scan8",
+          "name": "Scan8",
+          "pages": 8,
+          "scan": true
+        },
+        "text": [
+          "[p.1] (machine transcription)\nTRANSCRIPT OF scan8 PAGE 1\n",
+          "[p.2] (machine transcription)\nTRANSCRIPT OF scan8 PAGE 2\n",
+          "[p.3] (machine transcription)\nTRANSCRIPT OF scan8 PAGE 3\n",
+          "[p.4] (machine transcription)\nTRANSCRIPT OF scan8 PAGE 4\n",
+          "[p.5] (machine transcription)\nTRANSCRIPT OF scan8 PAGE 5\n",
+          "[p.6] (machine transcription)\nTRANSCRIPT OF scan8 PAGE 6\n",
+          "[p.7] (machine transcription)\nTRANSCRIPT OF scan8 PAGE 7\n",
+          "[p.8] (machine transcription)\nTRANSCRIPT OF scan8 PAGE 8"
+        ]
+      },
+      "thin199": {
+        "record": {
+          "chars": 667,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-thin199",
+          "name": "Thin199",
+          "pages": 2,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-thin199.txt",
+          "vision_pages": [2]
+        },
+        "text": [
+          "[p.1]\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.2] (machine transcription)\nTRANSCRIPT OF thin199 PAGE 2\n"
+        ]
+      },
+      "thin200": {
+        "record": {
+          "chars": 668,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-thin200",
+          "name": "Thin200",
+          "pages": 2,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-thin200.txt"
+        },
+        "text": [
+          "[p.1]\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.2]\nwords words words words words words words words words words words words words words words words\nwords words words words words words words words words words words words words words words words\nwords words words words words words words words"
+        ]
+      },
+      "typed60": {
+        "record": {
+          "chars": 26271,
+          "empty_pages": [20, 41],
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-typed60",
+          "name": "Typed60",
+          "pages": 60,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-typed60.txt"
+        },
+        "text": [
+          "[p.1]\nPage 1 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.2]\nPage 2 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.3]\nPage 3 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.4]\nPage 4 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.5]\nPage 5 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.6]\nPage 6 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.7]\nPage 7 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.8]\nPage 8 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.9]\nPage 9 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.10]\nPage 10 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.11]\nPage 11 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.12]\nPage 12 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.13]\nPage 13 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.14]\nPage 14 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.15]\nPage 15 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.16]\nPage 16 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.17]\nPage 17 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.18]\nPage 18 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.19]\nPage 19 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.20]\n\n",
+          "[p.21]\nPage 21 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.22]\nPage 22 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.23]\nPage 23 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.24]\nPage 24 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.25]\nPage 25 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.26]\nPage 26 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.27]\nPage 27 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.28]\nPage 28 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.29]\nPage 29 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.30]\nPage 30 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.31]\nPage 31 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.32]\nPage 32 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.33]\nPage 33 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.34]\nPage 34 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.35]\nPage 35 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.36]\nPage 36 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.37]\nPage 37 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.38]\nPage 38 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.39]\nPage 39 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.40]\nPage 40 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.41]\n\n",
+          "[p.42]\nPage 42 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.43]\nPage 43 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.44]\nPage 44 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.45]\nPage 45 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.46]\nPage 46 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.47]\nPage 47 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.48]\nPage 48 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.49]\nPage 49 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.50]\nPage 50 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.51]\nPage 51 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.52]\nPage 52 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.53]\nPage 53 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.54]\nPage 54 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.55]\nPage 55 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.56]\nPage 56 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.57]\nPage 57 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.58]\nPage 58 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.59]\nPage 59 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n",
+          "[p.60]\nPage 60 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+        ]
+      },
+      "x_emailed": {
+        "record": {
+          "chars": 435,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-x-emailed",
+          "name": "x.pdf",
+          "pages": 1,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-x-emailed.txt"
+        },
+        "text": [
+          "[p.1]\nEMAILED COPY\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+        ]
+      },
+      "x_filed": {
+        "record": {
+          "chars": 433,
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-x-filed",
+          "name": "x",
+          "pages": 1,
+          "text_path": "<TMP>/mc/data/example-matter/text/r-x-filed.txt"
+        },
+        "text": [
+          "[p.1]\nFILED COPY\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+        ]
+      },
+      "zero": {
+        "record": {
+          "error": "Cannot read an empty file",
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-zero",
+          "name": "Zero Bytes"
+        },
+        "text": null
+      }
+    },
+    "ocr_results": [
+      {
+        "failed_pages": 0,
+        "id": "r-empty-layer",
+        "illegible_marks": 0,
+        "name": "Empty Layer",
+        "pages": 1,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-scan2",
+        "illegible_marks": 0,
+        "name": "Scan2",
+        "pages": 2,
+        "pages_out": 2
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-scan8",
+        "illegible_marks": 0,
+        "name": "Scan8",
+        "pages": 8,
+        "pages_out": 8
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-cover-scans",
+        "illegible_marks": 0,
+        "name": "Cover Scans",
+        "pages": 6,
+        "pages_out": 5
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-edge14",
+        "illegible_marks": 0,
+        "name": "Edge14",
+        "pages": 1,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-edge15",
+        "illegible_marks": 0,
+        "name": "Edge15",
+        "pages": 1,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-edge24",
+        "illegible_marks": 0,
+        "name": "Edge24",
+        "pages": 1,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-edge25",
+        "illegible_marks": 0,
+        "name": "Edge25",
+        "pages": 1,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-thin199",
+        "illegible_marks": 0,
+        "name": "Thin199",
+        "pages": 2,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-absent399",
+        "illegible_marks": 0,
+        "name": "Absent399",
+        "pages": 200,
+        "pages_out": 200
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-glyph-junk",
+        "illegible_marks": 0,
+        "name": "Glyph Junk",
+        "pages": 1,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-cipher",
+        "illegible_marks": 0,
+        "name": "Cipher",
+        "pages": 1,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-control",
+        "illegible_marks": 0,
+        "name": "Control",
+        "pages": 1,
+        "pages_out": 1
+      },
+      {
+        "failed_pages": 0,
+        "id": "r-photo-jpg",
+        "illegible_marks": 0,
+        "name": "Photo Of Card",
+        "pages": 1,
+        "pages_out": 1
+      }
+    ],
+    "paid": {
+      "sent": [
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan2",
+                "page": 1
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan2",
+                "page": 2
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan8",
+                "page": 1
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan8",
+                "page": 2
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan8",
+                "page": 3
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan8",
+                "page": 4
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan8",
+                "page": 5
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan8",
+                "page": 6
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan8",
+                "page": 7
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "scan8",
+                "page": 8
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 2
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 3
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 4
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 5
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "cover_scans",
+                "page": 6
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "edge14",
+                "page": 1
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "edge15",
+                "page": 1
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "edge24",
+                "page": 1
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "edge25",
+                "page": 1
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "thin199",
+                "page": 2
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": null,
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "control",
+                "page": 1
+              },
+              "size": [1275, 1650]
+            }
+          ],
+          "shape": 0
+        },
+        {
+          "pages": [
+            {
+              "media": "image/png",
+              "shows": {
+                "fixture": "photo_jpg",
+                "page": 1
+              },
+              "size": [100, 125]
+            }
+          ],
+          "shape": 0
+        }
+      ],
+      "shapes": [
+        {
+          "blocks": ["image", "text"],
+          "effort": null,
+          "keys": ["max_tokens", "messages", "model", "system"],
+          "max_tokens": 8000,
+          "model": "claude-sonnet-5",
+          "prompt_sha256": "<sha256:d6dd1b6f3684>",
+          "system_sha256": "<sha256:7fde71fed2c7>"
+        }
+      ]
+    },
+    "scan_queue": [
+      {
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-empty-layer",
+        "name": "Empty Layer",
+        "pages": 1,
+        "scan": true
+      },
+      {
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-scan2",
+        "name": "Scan2",
+        "pages": 2,
+        "scan": true
+      },
+      {
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-scan8",
+        "name": "Scan8",
+        "pages": 8,
+        "scan": true
+      },
+      {
+        "chars": 469,
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-cover-scans",
+        "name": "Cover Scans",
+        "pages": 6,
+        "text_path": "<TMP>/mc/data/example-matter/text/r-cover-scans.txt",
+        "vision_pages": [2, 3, 4, 5, 6]
+      },
+      {
+        "chars": 20,
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-edge14",
+        "name": "Edge14",
+        "pages": 1,
+        "text_path": "<TMP>/mc/data/example-matter/text/r-edge14.txt",
+        "vision_pages": [1]
+      },
+      {
+        "chars": 21,
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-edge15",
+        "name": "Edge15",
+        "pages": 1,
+        "text_path": "<TMP>/mc/data/example-matter/text/r-edge15.txt",
+        "vision_pages": [1]
+      },
+      {
+        "chars": 30,
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-edge24",
+        "name": "Edge24",
+        "pages": 1,
+        "text_path": "<TMP>/mc/data/example-matter/text/r-edge24.txt",
+        "vision_pages": [1]
+      },
+      {
+        "chars": 31,
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-edge25",
+        "name": "Edge25",
+        "pages": 1,
+        "text_path": "<TMP>/mc/data/example-matter/text/r-edge25.txt",
+        "vision_pages": [1]
+      },
+      {
+        "chars": 667,
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-thin199",
+        "name": "Thin199",
+        "pages": 2,
+        "text_path": "<TMP>/mc/data/example-matter/text/r-thin199.txt",
+        "vision_pages": [2]
+      },
+      {
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-absent399",
+        "name": "Absent399",
+        "pages": 200,
+        "scan": true
+      },
+      {
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "glyph_junk": true,
+        "id": "r-glyph-junk",
+        "name": "Glyph Junk",
+        "pages": 1,
+        "scan": true
+      },
+      {
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "glyph_junk": true,
+        "id": "r-cipher",
+        "name": "Cipher",
+        "pages": 1,
+        "scan": true
+      },
+      {
+        "chars": 88,
+        "ext": ".pdf",
+        "folder": "/MEDICAL",
+        "id": "r-control",
+        "name": "Control",
+        "pages": 1,
+        "text_path": "<TMP>/mc/data/example-matter/text/r-control.txt",
+        "vision_pages": [1]
+      },
+      {
+        "ext": ".jpg",
+        "folder": "/MEDICAL",
+        "id": "r-photo-jpg",
+        "image": true,
+        "name": "Photo Of Card",
+        "scan": true
+      }
+    ]
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
+}

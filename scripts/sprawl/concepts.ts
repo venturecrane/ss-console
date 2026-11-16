@@ -220,6 +220,45 @@ function keepsItsOwnSendRecord(code: string[]): boolean {
   return code.some((l) => SEAT_FILE_WRITE.test(l)) && code.some((l) => SEND_FLAG.test(l))
 }
 
+// ---- wave 5: how a firm's file is read, downloaded and named ------------------------------
+const CONNECTOR = 'operator/connectors/'
+
+/** A PDF library imported (pymupdf, fitz or pypdf; at the top or inside a function). */
+const PDF_LIB_IMPORT = /^\s*(import (pymupdf|fitz|pypdf)\b|from (pymupdf|fitz|pypdf)[ .])/
+/** A text layer read: `.get_text(` or `.extract_text(` (not `extract_text_ex(`). */
+const TEXT_LAYER_READ = /\.(get_text|extract_text)\(/
+
+function readsPdfText(code: string[]): boolean {
+  return code.some((l) => PDF_LIB_IMPORT.test(l)) && code.some((l) => TEXT_LAYER_READ.test(l))
+}
+
+/** A page-readability predicate, by the names the lanes gave them: which pages have no usable text
+ * layer and go to paid reading (wave 5 PR R moves each verbatim, under its own name). */
+const READABLE_TEST =
+  /^\s*def (ocr_pages|_no_text|_needs_reading|junk_page|thin|garbled|glyph_junk|not_english|_text_layer_absent|vision_pages|_looks_scanned|page_needs_vision)\(/
+
+/** A writer of paid transcription text into a store reused across jobs. */
+const PAGE_STORE_WRITE = /^\s*def (put_text|cache_put|put_page|put_pages)\(/
+
+/** A download through the seat: `seat.fetch(` (`sr.seat.fetch`, `self.seat.fetch`). */
+const SEAT_FETCH = /\bseat\.fetch\(/
+
+/** A file's name and its extension joined on one line: a `name` key or variable, then `}{` or `+`,
+ * then an `ext` / `fileExtension` key. Every such line is one site. */
+const NAME_EXT_JOIN =
+  /(?:\[\s*["']name["']\s*\]|\.get\(\s*["']name["']\s*\)|\bname\b)[^\n]{0,30}?(?:\}\{|\+)[^\n]{0,30}?(?:\[\s*["']ext["']|\.get\(\s*["'](?:ext|fileExtension)["'])/
+
+/** One instance per joining line, named `<path>#<n>` (the n-th in its file), so an edit above a
+ * join moves no instance. */
+function joinSites(files: SourceFile[]): string[] {
+  const out: string[] = []
+  for (const f of files) {
+    const n = codeLines(f.text).filter((l) => NAME_EXT_JOIN.test(l)).length
+    for (let i = 1; i <= n; i++) out.push(`${f.path}#${i}`)
+  }
+  return out.sort()
+}
+
 export const CONCEPTS: Concept[] = [
   {
     id: 'lane-host-loops',
@@ -352,6 +391,41 @@ export const CONCEPTS: Concept[] = [
     rule: `Distinct bodies of the "${WRITING_RULES}" section across SKILL.md files.`,
     target: '1 plus stated additions',
     instances: distinctWritingRuleBodies,
+  },
+  {
+    id: 'pdf-text-readers',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ or operator/connectors/ that imports pymupdf, fitz or pypdf and calls `.get_text(` or `.extract_text(`.',
+    target: "1 (jobs/matter/pdf.py) plus the connector's own pypdf reader",
+    instances: (files) => matching(python(files, RUNNER, CONNECTOR), readsPdfText),
+  },
+  {
+    id: 'readable-tests',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ or operator/connectors/ defining a page-readability predicate by name (ocr_pages, _no_text, _needs_reading, junk_page, thin, garbled, glyph_junk, not_english, _text_layer_absent, vision_pages, _looks_scanned, page_needs_vision).',
+    target: '1 (jobs/matter/readable.py) plus the connector',
+    instances: (files) =>
+      matching(python(files, RUNNER, CONNECTOR), (code) => code.some((l) => READABLE_TEST.test(l))),
+  },
+  {
+    id: 'paid-page-store-writers',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ or operator/connectors/ defining put_text, cache_put, put_page or put_pages.',
+    target: '1 (jobs/textcache.py) plus the connector',
+    instances: (files) =>
+      matching(python(files, RUNNER, CONNECTOR), (code) =>
+        code.some((l) => PAGE_STORE_WRITE.test(l))
+      ),
+  },
+  {
+    id: 'downloaders',
+    rule: 'Non-test Python file under operator/runners/jobs/jobs/ calling `seat.fetch(`.',
+    target: '1 (jobs/matter/pull.py)',
+    instances: (files) =>
+      matching(python(files, RUNNER), (code) => code.some((l) => SEAT_FETCH.test(l))),
+  },
+  {
+    id: 'file-name-display-joins',
+    rule: 'Line of a non-test Python file under operator/runners/jobs/jobs/ joining a `name` key or variable and an `ext` / `fileExtension` key with `}{` or `+`; one instance per line.',
+    target: '1 display rule (de-doubled) plus the match keys',
+    instances: (files) => joinSites(python(files, RUNNER)),
   },
 ]
 

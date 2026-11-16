@@ -1,0 +1,80 @@
+{
+  "cell": {
+    "attempts": [
+      {
+        "returned": {
+          "fetched": 3,
+          "integrity": [],
+          "retry": []
+        }
+      }
+    ],
+    "files": {
+      "m/11111111-1111-4111-8111-111111111111/pulled.jsonl": [
+        {
+          "ext": ".pdf",
+          "folder": "fold-med",
+          "id": "r-digital",
+          "name": "Digital",
+          "ok": true,
+          "path": "<TMP>/lit/m/11111111-1111-4111-8111-111111111111/raw/r-digital.pdf",
+          "sha256": "<sha:digital>"
+        },
+        {
+          "duplicate_of": "r-digital",
+          "ext": ".pdf",
+          "folder": "fold-med",
+          "id": "r-scan2",
+          "name": "Scan2",
+          "ok": true,
+          "sha256": "<sha:digital>"
+        },
+        {
+          "ext": ".txt",
+          "folder": "fold-med",
+          "id": "r-note-txt",
+          "name": "Phone Note",
+          "ok": true,
+          "path": "<TMP>/lit/m/11111111-1111-4111-8111-111111111111/raw/r-note-txt.txt",
+          "sha256": "<sha:note_txt>"
+        }
+      ],
+      "m/11111111-1111-4111-8111-111111111111/raw/r-digital.pdf": {
+        "bytes": 3264
+      },
+      "m/11111111-1111-4111-8111-111111111111/raw/r-note-txt.txt": "Phone note: the adjuster called on 04/12/2026 and asked for the bills.\n"
+    },
+    "seat": [
+      {
+        "call": "mint",
+        "ids": ["r-digital", "r-scan2", "r-note-txt"]
+      },
+      {
+        "call": "fetch",
+        "expected": 3264,
+        "id": "r-digital",
+        "served": 3264
+      },
+      {
+        "call": "fetch",
+        "expected": 3264,
+        "id": "r-scan2",
+        "served": 3264
+      },
+      {
+        "call": "fetch",
+        "expected": 71,
+        "id": "r-note-txt",
+        "served": 71
+      }
+    ],
+    "sleeps": []
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
+}

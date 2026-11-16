@@ -1,0 +1,34 @@
+{
+  "cell": [
+    {
+      "x.pdf": false,
+      "x.pdf.pdf": true
+    },
+    {
+      "x.pdf": true,
+      "x.pdf.pdf": false
+    },
+    {
+      "Clinic Note 01-20-26.docx": true,
+      "x.pdf": false,
+      "x.pdf.pdf": false
+    },
+    {
+      "README": true,
+      "x.pdf": false,
+      "x.pdf.pdf": false
+    },
+    {
+      "Scan.PDF.PDF": true,
+      "x.pdf": false,
+      "x.pdf.pdf": false
+    }
+  ],
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
+}
