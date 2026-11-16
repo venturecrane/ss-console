@@ -179,7 +179,7 @@ class RunBase:
             self._progress.add("vision pages")
         model, pol = self.firm.model("transcription"), extract_mod.POLICY
 
-        def read() -> str:
+        def read() -> tuple[str, str]:
             return matter_paid.ocr_plain(
                 self.doorway, "litigation_ocr", model=model, png=png, prompt=extract_mod.OCR_PROMPT,
                 max_tokens=pol.max_tokens,

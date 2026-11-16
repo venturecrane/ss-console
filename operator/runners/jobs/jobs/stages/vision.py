@@ -177,8 +177,8 @@ class PageStore:
     def get(self, rid: str, pno: int) -> str | None:
         return self.store.get(self.sha(rid), pno, self.method, self.matter)
 
-    def put(self, rid: str, pno: int, text: str) -> None:
-        self.store.put(self.sha(rid), pno, self.method, text, self.matter)
+    def put(self, rid: str, pno: int, text: str, stop_reason: str | None) -> None:
+        self.store.put(self.sha(rid), pno, self.method, text, self.matter, stop_reason=stop_reason)
 
 
 def _gather(
@@ -309,7 +309,7 @@ def run(sr: StageRun) -> int:
         else:
             text = handwriting_field(r.text) if r is not None else FAILED
             if r is not None:
-                store.put(item.meta["id"], pno, r.text)
+                store.put(item.meta["id"], pno, r.text, r.stop_reason)
         append_jsonl(f["part"], {"page": pno, "text": text})
         f["done"][pno] = text
         n = len(f["done"])

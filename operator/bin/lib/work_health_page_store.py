@@ -2,18 +2,23 @@
 
 Every job lane reads a firm's pages through one store (wave 5,
 ``runners/jobs/jobs/matter/store.py``): a page a model already read the same
-way is served from it instead of paid for again. A store that is off, or never
-hit, looks exactly like a store working on new files, and the cost shows up
-only as a bill. So each job that read a page reports ``page_store`` on its
-final audit row (``workspace_broker/page_store_meta.py``: ``{store, hits,
-misses}``, counts only), and this module turns those rows into two digest
-lines per lane:
+way is served from it instead of paid for again. A store that is off, or one
+that does not serve what it holds, looks exactly like a store working on new
+files, and the cost shows up only as a bill. So each job that read a page
+reports ``page_store`` on its final audit row
+(``workspace_broker/page_store_meta.py``: ``{store, hits, misses, repeats}``,
+counts only), and this module turns those rows into two digest lines per lane:
 
 * ``page_store_off``: the lane's newest such job ran with the store OFF (the
   seat's page-store env var did not reach the child), so every page is paid
   for again.
-* ``page_store_cold``: the lane's last ``page_store_cold_jobs`` (work-health.yaml,
-  3) jobs that each paid for pages hit the store not once.
+* ``page_store_cold``: a job among the lane's last ``page_store_cold_jobs``
+  (work-health.yaml, 3) that read pages paid again for a page the store
+  already held read the same way (``repeats``: its page file was there and was
+  not served, so a miss the store could have served). Hits alone prove nothing: most pages a lane reads are new
+  (the litigation lane serves a repeat file whole before any page is asked
+  for, the chronology seeds an update from the delivered job first), so a
+  run of jobs with no hit is a healthy seat, and only a repeat miss is not.
 
 Pure: rows, the contract and a clock in, items out.
 """
@@ -70,19 +75,21 @@ def page_store_items(seat: str, rows: list[dict], cfg: Config, now: datetime) ->
                 )
             )
             continue
-        paid = [r for r in runs if _count(r[2], "misses")]
-        last = paid[-cfg.page_store_cold_jobs :] if cfg.page_store_cold_jobs > 0 else []
-        if len(last) >= cfg.page_store_cold_jobs > 0 and not any(_count(r[2], "hits") for r in last):
-            pages = sum(_count(r[2], "misses") for r in last)
+        read = [r for r in runs if _count(r[2], "misses") or _count(r[2], "hits")]
+        window = read[-cfg.page_store_cold_jobs :] if cfg.page_store_cold_jobs > 0 else []
+        cold = [r for r in window if _count(r[2], "repeats")]
+        if cold:
+            ts, job_id, store = cold[-1]
             out.append(
                 item(
                     seat,
                     "page_store_cold",
-                    f"{lane}:{last[-1][1]}:page_store_cold",
-                    last[-1][0],
-                    f"The last {len(last)} {label} jobs paid for {pages} page(s) and the page store served none.",
-                    "Run python -m jobs.textcache stats on the seat: no hits across jobs means the store is not "
-                    "keeping pages (quiet writes, a full disk, or a method key that changes every job).",
+                    f"{lane}:{job_id}:page_store_cold",
+                    ts,
+                    f"The {label} job that ended {hhmm(ts)} paid again for {_count(store, 'repeats')} page(s) "
+                    "the page store already held, read the same way.",
+                    "Run python -m jobs.textcache stats on the seat: a repeat miss means a stored page was not "
+                    "served (a page refused or unreadable in the store, or its writes went quiet).",
                 )
             )
     return out

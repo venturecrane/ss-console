@@ -19,7 +19,7 @@ from test_negotiation_verbs import call, seat, submit  # noqa: F401 - seat is th
 
 def test_take_removes_it_and_keeps_counts_only() -> None:
     fields = {"cents": 1, "page_store": {"store": "on", "hits": 3, "misses": -1, "text": "page words"}}
-    assert page_store_meta.take(fields) == {"store": "on", "hits": 3, "misses": 0}
+    assert page_store_meta.take(fields) == {"store": "on", "hits": 3, "misses": 0, "repeats": 0}
     assert fields == {"cents": 1}
     assert page_store_meta.take({"page_store": {"store": "maybe"}}) is None
     assert page_store_meta.take({}) is None
@@ -41,4 +41,4 @@ def test_a_negotiation_record_carrying_it_is_accepted_and_audited(seat) -> None:
         rows = conn.execute("SELECT metadata FROM audit_log WHERE action_type = 'NEGOTIATION_JOB_DELIVERED'").fetchall()
     finally:
         conn.close()
-    assert [json.loads(r[0])["page_store"] for r in rows] == [store]
+    assert [json.loads(r[0])["page_store"] for r in rows] == [{**store, "repeats": 0}]

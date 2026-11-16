@@ -54,7 +54,16 @@ ENV = "JOBS_TEXTCACHE_DIR"
 PAGES = "pages"
 LOCK = ".lock"
 STATS = ".stats.json"
+#: The bytes ``pages/`` holds, shared by every process that writes it (each
+#: write adds its delta under the lock; only a write that crosses the cap scans).
+BYTES = ".bytes"
 CAP_BYTES = 512 * 1024 * 1024
+#: Past the cap, eviction runs down to this share of it, so the next scan is
+#: many writes away instead of on the very next one.
+LOW_WATER = 0.9
+#: The stop reasons of a reading that finished. Anything else (a refusal, a
+#: reply cut off at its token limit, a tool call) is never stored.
+COMPLETE_STOPS = frozenset({"end_turn", "stop_sequence"})
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 #: Texts that are a failure, never a reading (``stages/vision`` FAILED / REFUSED).
 FAILED_TEXTS = frozenset({"[page transcription failed]", "[page transcription refused]"})
@@ -137,10 +146,14 @@ class PageStore:
         #: Where the job's summary is written (``page_store.json`` in its job dir).
         self.record_to = record_to
         self.hits = self.misses = self.writes = 0
+        #: Misses of a page the store already holds read this way (its page
+        #: file is there, and was not served: unreadable, or text it refuses):
+        #: a page a working store would have served, which the hourly
+        #: work-health watches. A new page of a file the store holds is not one.
+        self.repeats = 0
         self.quiet = False
         self.quiet_reason = ""
-        self._bytes: int | None = None
-        self._flushed = (0, 0)
+        self._flushed = (0, 0, 0)
         self._lock = threading.Lock()
 
     @property
@@ -161,6 +174,8 @@ class PageStore:
         if not isinstance(doc, dict) or refused(doc.get("text")):
             with self._lock:
                 self.misses += 1
+                if p is not None and p.is_file():
+                    self.repeats += 1
             return None
         with self._lock:
             self.hits += 1
@@ -172,19 +187,28 @@ class PageStore:
         if self.read_only or self.quiet or self.root is None:
             return
         try:
-            os.utime(p)  # a hit is a touch: the cap evicts the oldest-touched first
             with self._lock, locked(self.root / PAGES):
+                os.utime(p)  # a hit is a touch: the cap evicts the oldest-touched first
                 doc = _read(p)
                 if isinstance(doc, dict) and matter_id and matter_id not in _ids(doc):
                     doc["matter_ids"] = sorted({*_ids(doc), matter_id})
                     write_atomic(p, json.dumps(doc, indent=1))
+        except FileNotFoundError:
+            return  # a purge or an eviction removed the page after it was read: the text served stands
         except OSError as exc:
             self._quiet(exc)
 
     # ---- writes ----------------------------------------------------------------------
-    def put(self, sha: str | None, page: int, method: str, text: str, matter_id: str) -> bool:
+    def put(
+        self, sha: str | None, page: int, method: str, text: str, matter_id: str, *, stop_reason: str | None
+    ) -> bool:
+        """Keep one fresh reading. ``stop_reason`` is the model's: only a
+        reading that finished (:data:`COMPLETE_STOPS`) is kept, so a refusal's
+        prose or a cut-off reply is never served as a page."""
         p = self._path(str(sha or ""), page, method)
         if p is None or self.read_only or self.quiet or not matter_id or refused(text):
+            return False
+        if stop_reason not in COMPLETE_STOPS:
             return False
         try:
             with self._lock, locked(p.parents[2]):
@@ -201,24 +225,17 @@ class PageStore:
         return True
 
     def _account(self, delta: int) -> None:
-        """Keep ``pages/`` under the cap (called holding the lock)."""
-        if self._bytes is None:
-            self._bytes = sum(f.stat().st_size for f in page_files(self.root)) if self.root else 0
-        else:
-            self._bytes += delta
-        if self._bytes <= self.cap_bytes or self.root is None:
+        """Keep ``pages/`` under the cap (called holding the lock). The total
+        is the shared ``.bytes`` file plus this write; only a total past the
+        cap scans, and then it evicts down to :data:`LOW_WATER` of it."""
+        if self.root is None:
             return
-        for f in sorted(page_files(self.root), key=lambda x: x.stat().st_mtime):
-            if self._bytes <= self.cap_bytes:
-                break
-            size = f.stat().st_size
-            f.unlink(missing_ok=True)
-            self._bytes -= size
-            for d in (f.parent, f.parent.parent):
-                try:
-                    d.rmdir()
-                except OSError:
-                    break
+        counter = self.root / PAGES / BYTES
+        raw = _read(counter)
+        total = (raw if isinstance(raw, int) and raw >= 0 else _scan(self.root)) + delta
+        if total > self.cap_bytes:
+            total = _evict(self.root, int(self.cap_bytes * LOW_WATER), self.cap_bytes)
+        write_atomic(counter, json.dumps(max(total, 0)))
 
     def _quiet(self, exc: BaseException) -> None:
         if not self.quiet:
@@ -235,22 +252,56 @@ class PageStore:
 
     # ---- the job's record ------------------------------------------------------------
     def summary(self) -> dict[str, Any]:
-        return {"store": "on" if self.on else "off", "hits": self.hits, "misses": self.misses}
+        return {"store": "on" if self.on else "off", "hits": self.hits, "misses": self.misses, "repeats": self.repeats}
 
     def flush(self) -> None:
         """Add what this run counted since the last flush to the job's
         ``page_store.json`` and to the store's per-lane stats. Never raises."""
         with self._lock:
             hits, misses = self.hits - self._flushed[0], self.misses - self._flushed[1]
-            self._flushed = (self.hits, self.misses)
+            repeats = self.repeats - self._flushed[2]
+            self._flushed = (self.hits, self.misses, self.repeats)
         try:
             if self.record_to is not None and (hits or misses):  # a job that read no page records nothing
-                record(self.record_to, self.lane, self.on, hits, misses, self.quiet_reason)
+                record(self.record_to, self.lane, self.on, hits, misses, self.quiet_reason, repeats)
             if self.root is not None and not self.read_only and (hits or misses) and (self.root / PAGES).is_dir():
                 with locked(self.root / PAGES):
                     _add_stats(self.root / PAGES / STATS, self.lane, hits, misses)
         except OSError as exc:
             self.log(f"[page store] WARN: the job's page-store record was not written ({type(exc).__name__})")
+
+
+def _scan(root: Path) -> int:
+    """The bytes ``pages/`` holds now (a page removed mid-scan counts nothing)."""
+    total = 0
+    for f in page_files(root):
+        try:
+            total += f.stat().st_size
+        except FileNotFoundError:
+            continue
+    return total
+
+
+def _evict(root: Path, low: int, cap: int) -> int:
+    """A fresh scan; past ``cap``, the oldest-touched pages go until ``low`` is
+    reached. The bytes left. A page another process removed is skipped."""
+    sized: list[tuple[float, int, Path]] = []
+    for f in page_files(root):
+        try:
+            st = f.stat()
+        except FileNotFoundError:
+            continue
+        sized.append((st.st_mtime, st.st_size, f))
+    total = sum(size for _, size, _ in sized)
+    if total <= cap:
+        return total
+    for _, size, f in sorted(sized, key=lambda x: x[0]):
+        if total <= low:
+            break
+        f.unlink(missing_ok=True)
+        total -= size
+        _prune(f)
+    return total
 
 
 def _add_stats(path: Path, lane: str, hits: int, misses: int) -> None:
@@ -268,7 +319,7 @@ def _add_stats(path: Path, lane: str, hits: int, misses: int) -> None:
 RECORD = "page_store.json"
 
 
-def record(path: Path, lane: str, on: bool, hits: int, misses: int, quiet: str = "") -> None:
+def record(path: Path, lane: str, on: bool, hits: int, misses: int, quiet: str = "", repeats: int = 0) -> None:
     """Merge one run's counts into a job's ``page_store.json``."""
     old = _read(path) if path.is_file() else None
     old = old if isinstance(old, dict) else {}
@@ -277,6 +328,7 @@ def record(path: Path, lane: str, on: bool, hits: int, misses: int, quiet: str =
         "store": "on" if on else "off",
         "hits": int(old.get("hits") or 0) + int(hits),
         "misses": int(old.get("misses") or 0) + int(misses),
+        "repeats": int(old.get("repeats") or 0) + int(repeats),
     }
     if quiet:
         doc["quiet"] = quiet[:200]
@@ -290,7 +342,10 @@ def read_record(job_dir: Path) -> dict[str, Any] | None:
     doc = _read(Path(job_dir) / RECORD)
     if not isinstance(doc, dict) or doc.get("store") not in ("on", "off"):
         return None
-    return {"store": doc["store"], "hits": int(doc.get("hits") or 0), "misses": int(doc.get("misses") or 0)}
+    return {
+        key: (doc["store"] if key == "store" else int(doc.get(key) or 0))
+        for key in ("store", "hits", "misses", "repeats")
+    }
 
 
 def from_env(
@@ -338,6 +393,8 @@ def purge_matter(root: Path, matter_id: str, dry_run: bool = False) -> dict[str,
             else:
                 p.unlink(missing_ok=True)
                 _prune(p)
+        if not dry_run:
+            (root / PAGES / BYTES).unlink(missing_ok=True)  # the next write counts what is left afresh
     return out
 
 
@@ -361,6 +418,7 @@ def purge_sha(root: Path, sha: str, dry_run: bool = False) -> int:
             for p in files:
                 p.unlink(missing_ok=True)
                 _prune(p)
+            (root / PAGES / BYTES).unlink(missing_ok=True)
     return len(files)
 
 

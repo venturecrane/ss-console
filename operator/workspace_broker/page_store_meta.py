@@ -2,7 +2,7 @@
 
 The jobs runner keeps each page a model read in one store (wave 5,
 ``runners/jobs/jobs/matter/store.py``), and each job that read a page reports
-``page_store`` in its final record: ``{store: on|off, hits, misses}``. No
+``page_store`` in its final record: ``{store: on|off, hits, misses, repeats}``. No
 ledger keeps it as a column (each refuses a field it does not know), so a
 lane's ``_record`` takes it out of the fields first (:func:`take`) and puts
 the checked copy on the transition's audit row, where the hourly work-health
@@ -29,7 +29,7 @@ def take(fields: dict[str, Any]) -> dict[str, Any] | None:
     raw = fields.pop(FIELD, None)
     if not isinstance(raw, dict) or raw.get("store") not in ("on", "off"):
         return None
-    return {"store": raw["store"], "hits": _count(raw.get("hits")), "misses": _count(raw.get("misses"))}
+    return {"store": raw["store"], **{k: _count(raw.get(k)) for k in ("hits", "misses", "repeats")}}
 
 
 def add(meta: dict[str, Any], store: dict[str, Any] | None) -> dict[str, Any]:

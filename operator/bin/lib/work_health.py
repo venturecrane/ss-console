@@ -75,8 +75,8 @@ class Config:
     # Seat slug -> purpose (ADR 0107, operator/fleet/seats.yaml). A seat the
     # file does not name takes the default threshold.
     seat_purposes: dict[str, str] = field(default_factory=dict)
-    #: A lane whose last this-many jobs that paid for pages hit the page store
-    #: never is an item (``work_health_page_store``).
+    #: How many of a lane's latest page-reading jobs the page store's repeat
+    #: misses are read over (``work_health_page_store``).
     page_store_cold_jobs: int = 3
 
     def no_reply_for(self, seat: str) -> int:

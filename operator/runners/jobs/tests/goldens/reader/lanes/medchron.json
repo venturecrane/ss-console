@@ -3444,6 +3444,7 @@
     "JOBS_DATA_DIR": {},
     "JOBS_LITIGATION_TEXTCACHE_DIR": {},
     "JOBS_TEXTCACHE_DIR": {
+      "pages/.bytes": "27978",
       "pages/.lock": "",
       "pages/.stats.json": {
         "medchron": {

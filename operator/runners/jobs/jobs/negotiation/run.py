@@ -183,7 +183,7 @@ class NegotiationRun:
     def _ocr(self, png: bytes) -> str:
         pol = text_mod.POLICY
 
-        def read() -> str:
+        def read() -> tuple[str, str]:
             return matter_paid.ocr_plain(
                 self.doorway, "negotiation_ocr", model=OCR_MODEL, png=png, prompt=text_mod.OCR_PROMPT,
                 max_tokens=pol.max_tokens,

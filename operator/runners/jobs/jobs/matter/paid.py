@@ -47,8 +47,9 @@ def method(policy: Policy, model: str, render: str | None = None) -> Method:
     return Method(policy.system, policy.prompt, policy.model or model, policy.max_tokens, render or policy.render)
 
 
-def ocr_plain(doorway: Any, stage: str, *, model: str, png: bytes, prompt: str, max_tokens: int) -> str:
-    """One page image, then the prompt: the court lanes' transcription request."""
+def ocr_plain(doorway: Any, stage: str, *, model: str, png: bytes, prompt: str, max_tokens: int) -> tuple[str, str]:
+    """One page image, then the prompt: the court lanes' transcription request.
+    (its text, its stop reason)."""
     img = {
         "type": "image",
         "source": {"type": "base64", "media_type": "image/png", "data": base64.standard_b64encode(png).decode()},
@@ -60,7 +61,7 @@ def ocr_plain(doorway: Any, stage: str, *, model: str, png: bytes, prompt: str, 
         max_tokens=max_tokens,
         cache_blocks=(),
     )
-    return r.text
+    return r.text, str(getattr(r, "stop_reason", "") or "")
 
 
 def sha_bytes(data: bytes) -> str:
@@ -110,28 +111,29 @@ def for_matter(matter_id: str) -> Iterator[None]:
         _HERE.matter = prev
 
 
-def stored(store: Any, method_of: Callable[[str], Method], read: Callable[[], str]) -> str:
-    """``read()`` (the paid call) unless the store holds this page read this
-    way; a fresh read is then kept. With no store, or no page named, it is the
-    paid call alone (counted as paid when a store is there to count it)."""
+def stored(store: Any, method_of: Callable[[str], Method], read: Callable[[], tuple[str, str]]) -> str:
+    """``read()`` (the paid call: its text and stop reason) unless the store
+    holds this page read this way; a fresh read is then kept when it finished
+    (``store.COMPLETE_STOPS``). With no store, or no page named, it is the paid
+    call alone (counted as paid when a store is there to count it)."""
     here = getattr(_HERE, "page", None)
     if store is None:
-        return read()
+        return read()[0]
     if here is None:
         store.missed()
-        return read()
+        return read()[0]
     src, n, render = here
     sha = src() if callable(src) else src
     m = method_of(render).version
     matter = getattr(_HERE, "matter", "")
     if not sha:
         store.missed()
-        return read()
+        return read()[0]
     hit = store.get(sha, n, m, matter)
     if hit is not None:
         return hit
-    text = read()
-    store.put(sha, n, m, text, matter)
+    text, stop = read()
+    store.put(sha, n, m, text, matter, stop_reason=stop)
     return text
 
 

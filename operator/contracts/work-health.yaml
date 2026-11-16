@@ -63,9 +63,10 @@ missed_run_after_minutes: 90
 all_clear_hour_utc: 15
 
 # The store of paid page text (wave 5, runners/jobs/jobs/matter/store.py): a
-# lane whose last this-many jobs that each paid a model to read pages were never
-# served a page from the store is an item (bin/lib/work_health_page_store.py),
-# as is a lane whose newest such job ran with the store off.
+# job among a lane's last this-many jobs that read pages, which paid again for
+# a page of a file the store already held read the same way, is an item
+# (bin/lib/work_health_page_store.py), as is a lane whose newest such job ran
+# with the store off. A run of jobs with no hit is not: most pages are new.
 page_store_cold_jobs: 3
 
 # Per lane: how long a job may wait to start, and how long it may run, before

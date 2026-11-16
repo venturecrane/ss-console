@@ -1,6 +1,7 @@
 {
   "_why": "Paths (dotted, list indexes as numbers) that may differ from the reader goldens, per cell (lanes/<lane>, pulls/<site>/<scenario>, connector/<mode>, names/<site>). Introduced by wave 5 PR A with nothing allowed: each later wave 5 PR names here exactly the paths its named change (S1-S3, P1, D1, K1) moves.",
   "lanes/litigation": [
+    "cell.store_after_first.pages/.bytes",
     "cell.store_after_first.pages/.lock",
     "cell.store_after_first.pages/<sha256:4e08d1263453>/b017b42eaf37/1.json",
     "cell.store_after_first.pages/<sha256:4e08d1263453>/b017b42eaf37/2.json",
@@ -33,6 +34,7 @@
     "cell.store_after_first.pages/<sha:scan8>/b017b42eaf37/3.json",
     "cell.store_after_first.pages/<sha:scan8>/b017b42eaf37/7.json",
     "cell.store_after_first.pages/<sha:scan8>/b017b42eaf37/8.json",
+    "cell.store_after_second.pages/.bytes",
     "cell.store_after_second.pages/.lock",
     "cell.store_after_second.pages/<sha256:4e08d1263453>/b017b42eaf37/1.json",
     "cell.store_after_second.pages/<sha256:4e08d1263453>/b017b42eaf37/2.json",
@@ -67,6 +69,7 @@
     "cell.store_after_second.pages/<sha:scan8>/b017b42eaf37/8.json"
   ],
   "lanes/medchron": [
+    "env_stores.JOBS_TEXTCACHE_DIR.pages/.bytes",
     "env_stores.JOBS_TEXTCACHE_DIR.pages/.lock",
     "env_stores.JOBS_TEXTCACHE_DIR.pages/.stats.json",
     "env_stores.JOBS_TEXTCACHE_DIR.pages/<sha:absent399>/1e7699df11f7/1.json",
@@ -296,6 +299,7 @@
     "env_stores.JOBS_TEXTCACHE_DIR.pages/<sha:thin199>/1e7699df11f7/2.json"
   ],
   "lanes/negotiation": [
+    "env_stores.JOBS_TEXTCACHE_DIR.pages/.bytes",
     "env_stores.JOBS_TEXTCACHE_DIR.pages/.lock",
     "env_stores.JOBS_TEXTCACHE_DIR.pages/.stats.json",
     "env_stores.JOBS_TEXTCACHE_DIR.pages/<sha256:4e08d1263453>/b017b42eaf37/1.json",

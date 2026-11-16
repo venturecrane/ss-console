@@ -77,7 +77,7 @@ def _queued(
     doorway: Any,
     model: str,
     jobs: list[tuple[dict[str, Any], int, str]],
-    keep: Callable[[dict[str, Any], int, str], None],
+    keep: Callable[[dict[str, Any], int, str, str | None], None],
     log: Callable[[str], None],
 ) -> None:
     """Every page through the batch queue. A page that failed or was refused
@@ -94,7 +94,10 @@ def _queued(
         r, n = by_id[item.custom_id]
         if res is None:
             log(f"  {str(r['name'])[:30]} p{n}: {str(err)[:200]}")
-        keep(r, n, res.text if res is not None else (REFUSED if err == "refusal" else FAILED))
+        if res is None:
+            keep(r, n, REFUSED if err == "refusal" else FAILED, None)
+        else:
+            keep(r, n, res.text, res.stop_reason)  # a refusal's text is kept as before, never stored
 
     summary = doorway.batch_call(
         "vision",
@@ -175,11 +178,12 @@ def run(
         + (f"; {same} more carry the same image as one of them" if same else "")
     )
 
-    def keep(r: dict[str, Any], n: int, text: str) -> None:
-        """The reading, written to the page and to every page with its image."""
+    def keep(r: dict[str, Any], n: int, text: str, stop: str | None) -> None:
+        """The reading, written to the page and to every page with its image;
+        stored only when the model finished it (``stop``: its stop reason)."""
         for row, page in [(r, n), *twins.get((str(r["id"]), n), [])]:
             append_jsonl(data / "partial" / f"{row['id']}.jsonl", {"page": page, "text": text})
-            st.store.put(st.sha(row), page, st.method, text, matter_id)
+            st.store.put(st.sha(row), page, st.method, text, matter_id, stop_reason=stop)
 
     def one(job: tuple[dict[str, Any], int, str]) -> None:
         r, n, b64 = job
@@ -194,13 +198,13 @@ def run(
                 effort="",
                 custom_id=item.custom_id,
             )
-            text = REFUSED if res.stop_reason == "refusal" else res.text
+            text, stop = (REFUSED if res.stop_reason == "refusal" else res.text), res.stop_reason
         except LimitHold:
             raise
         except Exception as exc:  # noqa: BLE001 - a page that will not transcribe is marked, never dropped
             log(f"  {str(r['name'])[:30]} p{n}: {str(exc)[:200]}")
-            text = FAILED
-        keep(r, n, text)
+            text, stop = FAILED, None
+        keep(r, n, text, stop)
 
     if "vision" in getattr(doorway, "batch_stages", ()):
         _queued(data, doorway, model, jobs, keep, log)
