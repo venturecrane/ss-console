@@ -36,10 +36,20 @@ import { fileURLToPath } from 'node:url'
 
 import { afterAll, describe, expect, it } from 'vitest'
 
+import {
+  FIRM_INPUT_EXTRAS,
+  FIRM_INPUT_FILE_LANES,
+  FIRM_INPUT_LANES,
+  LANE_SKILL,
+} from '../src/lib/operator/job-lanes.generated'
+
 const PUBLISHER = fileURLToPath(
   new URL('../operator/bin/lib/publish-firm-inputs.sh', import.meta.url)
 )
 const LIB = dirname(PUBLISHER)
+
+/** The firm-input directory lanes, from the one declaration (operator/contracts/job-lanes.yaml). */
+const DIR_LANES = FIRM_INPUT_LANES.filter((l) => !FIRM_INPUT_FILE_LANES.includes(l))
 
 function hasUv(): boolean {
   try {
@@ -323,15 +333,45 @@ describe.skipIf(!hasUv())('publish-firm-inputs.sh', () => {
     expect(writes(r.aws)).toEqual([])
   })
 
+  // The filter table is per-lane behaviour keyed by lane id. Its key set is held to the
+  // declaration by running it: every declared directory lane and every extra must
+  // publish through a filter arm of its own (an arm missing would sync with no filter
+  // at all), and a job lane the declaration gives no firm inputs is not publishable.
+  for (const lane of [...DIR_LANES, ...FIRM_INPUT_EXTRAS]) {
+    it(`declared firm input ${lane} publishes through a filter arm of its own`, () => {
+      const marker = lane === 'attorneys' ? 'attorneys.json' : `${lane}-firm.yaml`
+      // The fake validator reads the first *-firm.yaml it finds; the roster has none of its own.
+      const s = scene(lane, { [marker]: 'inputs: {}\n', 'zz-firm.yaml': 'inputs: {}\n' })
+      const r = publish(s, lane)
+      expect(r.code).toBe(0)
+      const sync = r.aws.find((l) => l.startsWith('s3 sync')) ?? ''
+      expect(sync).toContain(`s3://cfg/vaults/acme/${lane}/ --delete --exclude `)
+    })
+  }
+
+  it('a job lane with no firm inputs in the declaration is not a lane here', () => {
+    const none = Object.keys(LANE_SKILL).filter((l) => !FIRM_INPUT_LANES.includes(l))
+    expect(none.length).toBeGreaterThan(0)
+    for (const lane of none) {
+      const s = scene(lane, { [`${lane}-firm.yaml`]: 'inputs: {}\n' })
+      const r = publish(s, lane)
+      expect(r.code).toBe(2)
+      expect(r.out).toContain(`not a lane: ${lane}`)
+      expect(writes(r.aws)).toEqual([])
+    }
+  })
+
   it('usage errors exit 2', () => {
     const s = scene('demand', { 'demand-firm.yaml': 'inputs: {}\n' })
     expect(publish({ ...s, src: join(s.root, 'nowhere') }, 'demand').code).toBe(2)
     expect(publish(s, 'not-a-lane').code).toBe(2)
+    // Two declared lanes as one argument must not match the list as a substring.
+    expect(publish(s, 'demand drafting').code).toBe(2)
   })
 })
 
 describe('provisioning and the merge workflow share the one publisher', () => {
-  for (const lane of ['demand', 'drafting', 'litigation', 'casefile', 'records']) {
+  for (const lane of DIR_LANES) {
     it(`stage-${lane}-inputs.sh publishes through it, after its engagements-main gate`, () => {
       const body = readFileSync(join(LIB, `stage-${lane}-inputs.sh`), 'utf8')
       const gate = body.indexOf('SS_ALLOW_DIVERGENT_SOURCE')
