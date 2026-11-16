@@ -564,3 +564,42 @@ def test_purge_clears_a_representatives_progress_and_the_report_that_names_them(
     assert (progress / person_purge.person_slug(B) / "progress.json").is_file()
     kept = json.loads(envelope.read_text(encoding="utf-8"))["dispatches"]
     assert kept == [other] and A not in envelope.read_text(encoding="utf-8")
+
+
+def test_purge_clears_a_representatives_library_mark_and_their_pending_notice(seat: dict) -> None:
+    """The library-change email (``shared.library_notice``): each person's mark,
+    ``library-seen.json``, sits in their own directory of the walled progress
+    store, and the pending envelope (``product-guide.dispatch.json``) names each
+    person as the only recipient of their dispatch. Purging A removes A's mark
+    and A's dispatch; B's mark and dispatch stay."""
+    progress = seat["data"] / "rep" / "progress"
+    for person in (A, B):
+        directory = progress / person_purge.person_slug(person)
+        directory.mkdir(parents=True)
+        (directory / "library-seen.json").write_text('{"seen":1}', encoding="utf-8")
+
+    def dispatch(person: str) -> dict:
+        return {
+            "recipients": [person],
+            "cc": [],
+            "subject": "What changed in the product library",
+            "full_body": "Hello,\n\n- We now say the first thing.",
+        }
+
+    envelope = seat["home"] / ".smd" / "pre_run" / "product-guide.dispatch.json"
+    envelope.parent.mkdir(parents=True, exist_ok=True)
+    envelope.write_text(
+        json.dumps({"skill": "product-guide", "dispatches": [dispatch(A), dispatch(B)]}), encoding="utf-8"
+    )
+    targets = person_purge.PurgeTargets(data_root=seat["data"], partition_roots=[progress])
+
+    before = person_purge.probe(A, targets)
+    assert {"partitioned store directory", "scheduled-send envelope"} <= _layers(before)
+
+    result = person_purge.purge(A, targets)
+
+    assert result.clean, [f.line() for f in result.remaining]
+    assert not (progress / person_purge.person_slug(A)).exists()
+    assert (progress / person_purge.person_slug(B) / "library-seen.json").is_file()
+    assert json.loads(envelope.read_text(encoding="utf-8"))["dispatches"] == [dispatch(B)]
+    assert person_purge.probe(A, targets) == []

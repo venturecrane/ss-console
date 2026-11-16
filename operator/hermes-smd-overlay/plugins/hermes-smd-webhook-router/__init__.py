@@ -696,17 +696,18 @@ def _enrollment_attempt(source: str, payload: Any) -> dict | None:
 
 def _start_training(cfg: Any, address: str) -> bool:
     """On a seat that authors representative training (ss-console #3946),
-    create the person's progress record by code, at enrollment, and say so,
-    so the welcome points them at the learning path. Every other seat: False,
-    nothing written, the welcome unchanged. Never raises."""
+    create the person's progress record and library-change mark by code at
+    enrollment, and say so, so the welcome points them at the learning path.
+    Every other seat: False, nothing written, the welcome unchanged. Never raises."""
     try:
-        from shared import training
+        from shared import library_notice, training
 
         if not training.authored(cfg):
             return False
         if not training.start_progress(address, config=cfg):
             logger.warning("hermes-smd-webhook-router: progress record not created at enrollment")
-        return True
+        # The newest entry, so no change made before they joined is emailed to them.
+        return library_notice.mark_newest(cfg, address) or True
     except Exception as exc:  # noqa: BLE001 - the enrollment stands; the first lesson creates it
         logger.warning("hermes-smd-webhook-router: training start failed (%s)", type(exc).__name__)
         return False

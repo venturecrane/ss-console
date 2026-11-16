@@ -335,6 +335,18 @@ skills:
       model composes nothing, and the envelope's in_turn declares the skeleton
       as the only body the woken turn may send. Stamps: body_sha256 entries on
       EMITTED_WAKE (full and skeleton).
+  product-guide:
+    render: templated
+    template: operator/hermes-smd-overlay/shared/library_notice.py
+    note: >-
+      The daily library-change email, one email per listed person, to that
+      person only. Code renders each body from the authored entries in
+      operator/skills/product-guide/changes.yaml (library_notice.py), choosing
+      the entries by each person's own mark, and the overlay's
+      prerendered-dispatch hook sends them out of turn; the model composes
+      nothing, and the envelope's in_turn declares the skeleton as the only
+      body the woken turn may send. Stamps: body_sha256 entries on EMITTED_WAKE
+      (full and skeleton).
 
   # ---- open-house and status-report cron rows ----
   status-report-assembler:
