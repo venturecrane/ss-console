@@ -13,6 +13,7 @@ resolves the same way in CI and on a laptop.
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 
@@ -236,8 +237,20 @@ class FakeSeat:
         return len(data)
 
 
+#: Numbers the trailer /ID of each ``make_pdf`` file. MuPDF otherwise writes a
+#: fresh random ID on each save, UTF-8 encoded, so its length varied and the
+#: same page came out at 881, 884 or 885 bytes. The litigation read lists each
+#: file's size in its prompt, so the paid-call golden failed at random (#4041,
+#: #4045). Each file still gets its own ID, so two files with the same pages are
+#: still different files (the corpus tests dedupe by sha256), but every ID is
+#: 32 hex places per half, the length MuPDF's common case writes, so the sizes
+#: the goldens pinned do not move.
+_PDF_IDS = itertools.count(1)
+
+
 def make_pdf(pages: list[str]) -> bytes:
-    """A real PDF with one text page per string (empty string = no text layer)."""
+    """A real PDF with one text page per string (empty string = no text layer).
+    The same pages always give the same SIZE; each call's bytes are its own."""
     import pymupdf
 
     doc = pymupdf.open()
@@ -245,7 +258,9 @@ def make_pdf(pages: list[str]) -> bytes:
         page = doc.new_page()
         if text:
             page.insert_text((72, 72), text, fontsize=11)
-    data = doc.tobytes()
+    n = next(_PDF_IDS)
+    doc.xref_set_key(-1, "ID", f"[<{n:032X}><{n:032X}>]")
+    data = doc.tobytes(no_new_id=True)
     doc.close()
     return data
 
