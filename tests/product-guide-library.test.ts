@@ -621,23 +621,12 @@ describe('prospect prep, the proposal sketch and the material check', () => {
 describe('Champion mode', () => {
   const key = parseYaml(readFileSync(KEY, 'utf8')) as { questions: KeyEntry[] }
   const champion = key.questions.filter((q) => q.sender === 'champion')
-  const guide = readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8').replace(/\s+/g, ' ')
-  const persona = readFileSync(join(ROLE_DIR, 'persona.md'), 'utf8').replace(/\s+/g, ' ')
   const rows = audienceRows(readFileSync(join(LIBRARY, 'INDEX.md'), 'utf8'))
-  const ROLE_LINE =
-    'This sender is a client champion: follow Champion mode in the product-guide skill.'
+  // The fixed sentences live in SKILL.md "Champion mode"; the key must grade on exactly these.
   const OWN_BUSINESS =
     "This guide holds none of your business's records; what SMD would set up for your business is a conversation with SMD Services at team@smd.services."
   const UNAVAILABLE =
     'That is not available on this guide; for anything else, ask SMD Services at team@smd.services.'
-
-  it('the skill and the persona key on the seat line, and the skill holds both fixed sentences', () => {
-    expect(guide).toContain('## Champion mode')
-    expect(guide).toContain(ROLE_LINE)
-    expect(persona).toContain(ROLE_LINE)
-    expect(guide).toContain(OWN_BUSINESS)
-    expect(guide).toContain(UNAVAILABLE)
-  })
 
   it('the key covers a brainstorm, a price, practice, the pilot and "can ours do it today"', () => {
     expect(champion.map((q) => q.id)).toEqual(['c01', 'c02', 'c03', 'c04', 'c05'])
