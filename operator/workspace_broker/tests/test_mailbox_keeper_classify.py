@@ -184,7 +184,7 @@ ANSWERS: dict[str, Any] = {
     "Enabling 2FA": {"kind": "notice", "what": "Registry now supports 2FA."},
     "Filing reminder": {"kind": "notice", "what": "A filing reminder."},
     "Re: Contract": {"kind": "notice", "what": "The contract is signed."},
-    "Big sale": {"kind": "notice", "what": "A 40% off sale."},
+    "Big sale": {"kind": "decision", "what": "A 40% off sale.", "recommend": "Skip it.", "reply_needed": False},
 }
 
 
@@ -632,11 +632,23 @@ def test_amounts_parse_to_cents_and_currency() -> None:
 
 def test_the_schema_is_strict() -> None:
     assert mkc.validate({"kind": "notice", "what": "x"}) == {"kind": "notice", "what": "x"}
-    assert mkc.validate({"kind": "notice", "what": "x", "recommend": "y"}) == "schema"
-    assert mkc.validate({"kind": "decision", "what": "x", "recommend": "y", "reply_needed": True}) == "schema"
-    assert mkc.validate({"kind": "decision", "what": "x" * 161, "recommend": "y", "reply_needed": False}) == "schema"
+    # A notice's stray fields are dropped, never acted on.
+    assert mkc.validate({"kind": "notice", "what": "x", "recommend": "y"}) == {"kind": "notice", "what": "x"}
+    assert mkc.validate({"kind": "decision", "what": "x", "recommend": "y", "reply_needed": True}) == "schema:draft"
+    # Too long is cut at a word by code, not refused.
+    long = mkc.validate({"kind": "decision", "what": "word " * 60, "recommend": "y", "reply_needed": False})
+    assert isinstance(long, dict) and len(long["what"]) <= mkc.WHAT_CHARS and long["what"].endswith("...")
     assert mkc.validate({"kind": "receipt", "what": "x", "amount": "$1"})["amount"] == "$1"
-    assert mkc.validate({"kind": "answered", "what": "x"}) == "schema"
+    assert mkc.validate({"kind": "answered", "what": "x"}) == "schema:kind"
+    assert mkc.validate({"kind": "notice", "what": "x", "mood": "y"}) == "schema:extra_key"
+
+
+def test_a_notices_own_words_are_not_figure_checked(tmp_path, monkeypatch) -> None:
+    """A notice is listed by sender and subject; its what is never shown."""
+    answers = {**ANSWERS, "Enabling 2FA": {"kind": "notice", "what": "Security setup, 2 steps, due 12/1."}}
+    broker, *_ = _broker(tmp_path, monkeypatch, [notice()], answers=answers)
+    out = fk.run(broker, mode="dry_run", classify=True)
+    assert out["classified"][0]["kind"] == "notice"
 
 
 def test_the_draft_carries_the_rfc_threading_headers_through_the_real_operation(tmp_path, monkeypatch) -> None:

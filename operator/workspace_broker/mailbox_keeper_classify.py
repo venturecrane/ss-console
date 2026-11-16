@@ -64,12 +64,16 @@ SYSTEM_PROMPT = (
     'contract, a deadline). "receipt": a record of money already paid, with the amount stated (an invoice '
     "marked paid, a payment receipt) for something HE bought; money paid TO him or his firm (a client's "
     'payment, a payout) is never a receipt but a notice. "notice": nothing for him to do (a product announcement, a newsletter, '
-    "a shipping update, a security notice about something he did himself). When unsure, it is a decision. "
+    "a shipping update, a security notice about something he did himself, and any monitoring alert: an "
+    "error tracker (Sentry), an uptime or health check, a DMARC report, which SMD's own hourly triage "
+    "already watches). When unsure, it is a decision. "
     'Return ONLY a JSON object with these keys: "kind"; "what", at most 160 characters, what the email is, '
     'plainly; for a decision, "recommend", at most 160 characters, the one thing you recommend he do, and '
     '"reply_needed", true when he should answer by email, and "draft", the reply body when reply_needed is '
     "true (at most 1,500 characters, concise, plain, no greeting line beyond the person's first name, no "
-    "sign-off, and never a date, price, figure or promise the thread does not state); for a receipt, "
+    "sign-off, and never a date, price, figure, promise, reason or opinion of his that the thread does not "
+    "state; when a good reply would need one, set reply_needed false and say in recommend what he should "
+    "decide); for a receipt, "
     '"amount", the amount paid copied exactly as the email writes it, with its currency sign or code. Omit '
     "keys that do not apply. Use only numbers that appear in the thread."
 )
@@ -214,10 +218,16 @@ def build_request(c: Candidate, model: str) -> dict[str, Any]:
 
 
 def _line(value: Any, limit: int) -> str | None:
+    """One line of at most ``limit`` characters. A longer line is cut at a
+    word, not refused: its length is code's to set, and the 2026-11-16
+    rehearsal lost eleven good readings to a refusal for length."""
     if not isinstance(value, str):
         return None
     text = mk._clean(value, 10_000)
-    return text if 0 < len(text) <= limit else None
+    if len(text) > limit:
+        cut = text[: limit - 3].rsplit(" ", 1)[0].rstrip(" ,;:.")
+        text = f"{cut}..."
+    return text or None
 
 
 def _empty(doc: dict[str, Any], *keys: str) -> bool:
@@ -226,26 +236,29 @@ def _empty(doc: dict[str, Any], *keys: str) -> bool:
 
 def validate(doc: Any) -> dict[str, Any] | str:
     """The model's value as kept fields, or the reason it is refused."""
-    if not isinstance(doc, dict) or set(doc) - _FIELDS:
-        return "schema"
+    if not isinstance(doc, dict):
+        return "schema:not_object"
+    if set(doc) - _FIELDS:
+        return "schema:extra_key"
     kind, what = doc.get("kind"), _line(doc.get("what"), WHAT_CHARS)
-    if kind not in KINDS or what is None:
-        return "schema"
+    if kind not in KINDS:
+        return "schema:kind"
+    if what is None:
+        return "schema:what"
     if kind == "receipt":
-        amount = _line(doc.get("amount"), 40)
-        ok = amount is not None and _empty(doc, "recommend", "draft", "reply_needed")
-        return {"kind": kind, "what": what, "amount": amount} if ok else "schema"
+        amount = doc.get("amount")
+        if not (isinstance(amount, str) and 0 < len(amount.strip()) <= 40):
+            return "schema:amount"
+        return {"kind": kind, "what": what, "amount": amount.strip()}
     if kind == "notice":
-        return {"kind": kind, "what": what} if _empty(doc, "recommend", "draft", "reply_needed", "amount") else "schema"
+        return {"kind": kind, "what": what}
     recommend, reply = _line(doc.get("recommend"), WHAT_CHARS), doc.get("reply_needed")
-    if recommend is None or not isinstance(reply, bool) or not _empty(doc, "amount"):
-        return "schema"
-    draft = doc.get("draft")
-    if reply and not (isinstance(draft, str) and 0 < len(draft.strip()) <= DRAFT_CHARS):
-        return "schema"
-    if not reply and draft not in (None, ""):
-        return "schema"
-    return {"kind": kind, "what": what, "recommend": recommend, "draft": (draft or "").strip() if reply else ""}
+    if recommend is None:
+        return "schema:recommend"
+    draft = doc.get("draft") if reply is True else None
+    if reply is True and not (isinstance(draft, str) and 0 < len(draft.strip()) <= DRAFT_CHARS):
+        return "schema:draft"
+    return {"kind": kind, "what": what, "recommend": recommend, "draft": (draft or "").strip()}
 
 
 def unsupported_figure(text: str, source: str) -> bool:
@@ -274,6 +287,10 @@ def parse_amount(amount: str) -> tuple[int, str] | None:
     return None
 
 
+#: A thread code keeps in the inbox although the reading found nothing to do.
+_KEPT = "Nothing needed by the read; left in your inbox because a person or a watched sender wrote it."
+
+
 def _clamp_reason(c: Candidate) -> str:
     if c.watched:
         return "watch_sender"
@@ -289,11 +306,15 @@ def outcome(c: Candidate, value: dict[str, Any] | str) -> Outcome:
     base: dict[str, Any] = {"thread_id": c.thread_id, "message_id": c.message_id}
     if isinstance(value, str):
         return Outcome(**base, kind="unread", reason=value)
-    if unsupported_figure(value["what"], c.text) or unsupported_figure(value.get("recommend", ""), c.text):
-        return Outcome(**base, kind="unread", reason="unsupported_figure")
     clamp = _clamp_reason(c)
+    # The figure check guards what the list SHOWS: a decision's what and
+    # recommend. A notice or receipt is listed by sender and subject (and a
+    # receipt by its verified amount), so its own words are never shown.
+    shown = value["kind"] == "decision" or bool(clamp)
+    if shown and (unsupported_figure(value["what"], c.text) or unsupported_figure(value.get("recommend", ""), c.text)):
+        return Outcome(**base, kind="unread", reason="unsupported_figure")
     if value["kind"] != "decision" and clamp:
-        return Outcome(**base, kind="decision", what=value["what"], recommend="Read it in the inbox.", floor=clamp)
+        return Outcome(**base, kind="decision", what=value["what"], recommend=_KEPT, floor=clamp)
     if value["kind"] == "receipt":
         parsed = parse_amount(value["amount"]) if value["amount"] in c.text else None
         if parsed is None:
