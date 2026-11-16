@@ -89,6 +89,14 @@ def _read(path: Path) -> Any:
         return None
 
 
+def _is_file(path: Path) -> bool:
+    """Whether a page file is there; a store this process cannot read holds nothing it can serve."""
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def _ids(doc: Any) -> list[str]:
     """A stored page's matter ids ([] for anything that is not one)."""
     ids = doc.get("matter_ids") if isinstance(doc, dict) else None
@@ -174,7 +182,7 @@ class PageStore:
         if not isinstance(doc, dict) or refused(doc.get("text")):
             with self._lock:
                 self.misses += 1
-                if p is not None and p.is_file():
+                if p is not None and _is_file(p):
                     self.repeats += 1
             return None
         with self._lock:
