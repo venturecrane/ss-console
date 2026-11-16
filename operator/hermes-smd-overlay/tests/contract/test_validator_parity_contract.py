@@ -38,7 +38,7 @@ _MANIFEST = (
 # (src/lib/operator/customer-yaml/__contract__/validator-parity.test.ts); both
 # read the one manifest above since the 2026-10-22 fold. Update both pins
 # whenever the fixture data changes.
-_PINNED_CONTENT_SHA256 = "0fe119de229d24ec266cb051678c5db40eb15a6e8e42c54adab55e2b72df58f7"
+_PINNED_CONTENT_SHA256 = "22a4d731cc7443d5025cf7b5062ce2792cf49d5393b994d716c5f0a1fafdaf6b"
 
 
 def _load() -> dict:

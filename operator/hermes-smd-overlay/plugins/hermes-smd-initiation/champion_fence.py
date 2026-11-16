@@ -30,9 +30,10 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
-from shared import champion, provenance
+from shared import champion, champion_audience, provenance
 
 from . import skill_fence
 
@@ -122,14 +123,47 @@ def check(tool_name: str, args: Any) -> str | None:
     return REFUSAL
 
 
+_REFERENCES = re.compile(r"/skills/+product-guide/+references(?:/+([^/]*))?/*$")
+
+
+def audience_check(tool_name: str, args: Any) -> str | None:
+    """On a seat whose product-guide entry authors ``audience: champion``, for
+    everyone: reads under ``product-guide/references/`` reach only the index
+    and the documents open to champions. Every other path, skill and tool is
+    as it was (the seat's own skill, its records, its references shelf)."""
+    if tool_name not in skill_fence.FENCED_TOOLS or not isinstance(args, dict):
+        return None
+    readable = _readable()
+    if tool_name == "skill_view":
+        names = [args.get(k) for k in ("name", "skill", "slug") if isinstance(args.get(k), str)]
+        if [n.strip() for n in names] != [champion.SKILL]:
+            return None
+        return None if _skill_view_allowed(args, readable) else REFUSAL
+    if tool_name == "read_file":
+        for key in _PATH_KEYS:
+            value = args.get(key)
+            if not isinstance(value, str) or not value.strip():
+                continue
+            hit = _REFERENCES.search(os.path.realpath(os.path.expanduser(value.strip())))
+            if hit and (hit.group(1) or "") not in readable:
+                return REFUSAL
+        return None
+    return REFUSAL if champion.SKILL in skill_fence.touched_skills(tool_name, args) else None
+
+
 def on_pre_tool_call(**kwargs: Any) -> dict[str, Any] | None:
     tool_name = str(kwargs.get("tool_name") or "")
     if tool_name not in skill_fence.FENCED_TOOLS:
         return None
     try:
-        if not champion.IN_FLIGHT.any() or not _champion_thread():
+        message = (
+            audience_check(tool_name, kwargs.get("args"))
+            if champion_audience.live_seat_has_audience()
+            else None
+        )
+        if message is None and (not champion.IN_FLIGHT.any() or not _champion_thread()):
             return None
-        message = check(tool_name, kwargs.get("args"))
+        message = message or check(tool_name, kwargs.get("args"))
     except Exception:  # noqa: BLE001 - a fence that cannot decide refuses
         logger.exception("hermes-smd-initiation: champion fence could not decide; refusing")
         return {"action": "block", "message": REFUSAL}
@@ -150,6 +184,8 @@ def on_turn_start(**kwargs: Any) -> dict[str, str] | None:
 
         session_id = kwargs.get("session_id")
         sid = session_id if isinstance(session_id, str) else ""
+        # A new turn has read nothing yet (shared.champion_audience).
+        champion_audience.GUIDE_READ.clear(sid)
         origin = SESSION_INBOUND_ORIGIN.get(sid) if sid else None
         if origin is None or not champion.is_champion(origin.sender_address):
             return None
@@ -159,6 +195,20 @@ def on_turn_start(**kwargs: Any) -> dict[str, str] | None:
     except Exception:  # noqa: BLE001 - the relay's wall still holds what reaches them
         logger.warning("hermes-smd-initiation: champion turn start failed", exc_info=True)
         return None
+
+
+def on_tool_done(**kwargs: Any) -> None:
+    """``post_tool_call`` (it carries the real session id): a turn that read
+    product-guide's procedure must cite the library in its reply
+    (``shared.champion_audience``). Never raises."""
+    try:
+        session_id = kwargs.get("session_id")
+        if isinstance(session_id, str) and champion_audience.read_guide_procedure(
+            kwargs.get("tool_name"), kwargs.get("args")
+        ):
+            champion_audience.GUIDE_READ.mark(session_id)
+    except Exception:  # noqa: BLE001 - an unmarked turn is only checked less
+        logger.warning("hermes-smd-initiation: champion audience mark failed", exc_info=True)
 
 
 def on_turn_end(**kwargs: Any) -> None:
@@ -181,7 +231,9 @@ def register(ctx: Any) -> None:
         raw = CustomerConfig.from_volume().raw
         seat = raw.get("seat") if isinstance(raw, dict) else None
         role = seat.get("role") if isinstance(seat, dict) else None
-        if role != sender_enrollment.ROLE or not sender_enrollment.enabled_in(raw):
+        guide = role == sender_enrollment.ROLE and sender_enrollment.enabled_in(raw)
+        audience = champion_audience.seat_has_audience(raw)
+        if not guide and not audience:
             return
     except Exception:  # noqa: BLE001 - no config, no champion
         logger.info("hermes-smd-initiation: config unreadable; no champion fence")
@@ -192,6 +244,17 @@ def register(ctx: Any) -> None:
     # An interrupted turn fires on_session_end (interrupted=True) and no
     # post_llm_call; without this its mark would outlive the turn.
     ctx.register_hook("on_session_end", on_turn_end)
+    if audience:
+        ctx.register_hook("post_tool_call", on_tool_done)
 
 
-__all__ = ["REFUSAL", "check", "on_pre_tool_call", "on_turn_end", "on_turn_start", "register"]
+__all__ = [
+    "REFUSAL",
+    "audience_check",
+    "check",
+    "on_pre_tool_call",
+    "on_tool_done",
+    "on_turn_end",
+    "on_turn_start",
+    "register",
+]
