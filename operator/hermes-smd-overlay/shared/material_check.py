@@ -11,8 +11,8 @@ someone else's wording, never moves anyone's readiness.
 
 WHAT IS READ. The representative's own words in the verified email that opened
 the turn (``InboundOrigin.reply_text``, the provider's quoted-history-free
-text), always; the rest of the body (``InboundOrigin.body_text``) only when the
-email is a forward, by its subject ("Fwd:", "Fw:") or by a mail client's
+text), always; the rest of the body (:mod:`shared.inbound_bodies`, by message
+id) only when the email is a forward, by its subject ("Fwd:", "Fw:") or by a mail client's
 forwarded-message line in the body above any quoted reply history ("On ... wrote:"
 or a line starting with ">"). The quoted history of an ordinary reply is
 earlier conversation, not material, so it is never read. An attachment is never
@@ -111,6 +111,7 @@ def material_text(reply_text: str, body_text: str, subject: str) -> Material:
 def turn_material(session_id: Any) -> tuple[training.TurnPerson | None, Material | None]:
     """The verified sender of this turn and the material their email carries.
     ``(None, None)`` when the turn has no verified sender on the roster."""
+    from shared import inbound_bodies
     from shared.inbound import SESSION_INBOUND_ORIGIN
 
     person = training.turn_person(session_id)
@@ -119,7 +120,7 @@ def turn_material(session_id: Any) -> tuple[training.TurnPerson | None, Material
     origin = SESSION_INBOUND_ORIGIN.bound_this_turn(session_id)
     material = material_text(
         person.reply_text,
-        getattr(origin, "body_text", "") or "",
+        inbound_bodies.body_for(getattr(origin, "message_id", "")),
         getattr(origin, "subject", "") or "",
     )
     return person, material
