@@ -71,7 +71,9 @@ SYSTEM_PROMPT = (
     'plainly; for a decision, "recommend", at most 160 characters, the one thing you recommend he do, and '
     '"reply_needed", true when he should answer by email, and "draft", the reply body when reply_needed is '
     "true (at most 1,500 characters, concise, plain, no greeting line beyond the person's first name, no "
-    "sign-off, and never a date, price, figure or promise the thread does not state); for a receipt, "
+    "sign-off, and never a date, price, figure, promise, reason or opinion of his that the thread does not "
+    "state; when a good reply would need one, set reply_needed false and say in recommend what he should "
+    "decide); for a receipt, "
     '"amount", the amount paid copied exactly as the email writes it, with its currency sign or code. Omit '
     "keys that do not apply. Use only numbers that appear in the thread."
 )
@@ -285,6 +287,10 @@ def parse_amount(amount: str) -> tuple[int, str] | None:
     return None
 
 
+#: A thread code keeps in the inbox although the reading found nothing to do.
+_KEPT = "Nothing needed by the read; left in your inbox because a person or a watched sender wrote it."
+
+
 def _clamp_reason(c: Candidate) -> str:
     if c.watched:
         return "watch_sender"
@@ -308,7 +314,7 @@ def outcome(c: Candidate, value: dict[str, Any] | str) -> Outcome:
     if shown and (unsupported_figure(value["what"], c.text) or unsupported_figure(value.get("recommend", ""), c.text)):
         return Outcome(**base, kind="unread", reason="unsupported_figure")
     if value["kind"] != "decision" and clamp:
-        return Outcome(**base, kind="decision", what=value["what"], recommend="Read it in the inbox.", floor=clamp)
+        return Outcome(**base, kind="decision", what=value["what"], recommend=_KEPT, floor=clamp)
     if value["kind"] == "receipt":
         parsed = parse_amount(value["amount"]) if value["amount"] in c.text else None
         if parsed is None:
