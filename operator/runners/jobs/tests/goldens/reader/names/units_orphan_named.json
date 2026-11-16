@@ -1,10 +1,10 @@
 {
   "cell": [
-    "n-emailed \"x.pdf.pdf\" in /MEDICAL",
+    "n-emailed \"x.pdf\" in /MEDICAL",
     "n-filed \"x.pdf\" in /MEDICAL",
     "n-plain \"Clinic Note 01-20-26.docx\" in /MEDICAL",
     "n-bare \"README\" in /MEDICAL",
-    "n-upper \"Scan.PDF.PDF\" in /MEDICAL"
+    "n-upper \"Scan.PDF\" in /MEDICAL"
   ],
   "env_stores": {
     "JOBS_DATA_DIR": {},

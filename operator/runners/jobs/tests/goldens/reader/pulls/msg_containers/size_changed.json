@@ -4,13 +4,18 @@
       {
         "returned": [
           {
-            "error": "size mismatch: got 5000, expected 3264; re-pull",
             "ext": ".pdf",
             "folder": "/MEDICAL",
             "id": "r-digital",
             "name": "Digital",
-            "ok": false,
-            "size_expected": 3264
+            "ok": true,
+            "path": "<TMP>/mc/data/example-matter/msg_raw/r-digital.msg",
+            "size_changed": {
+              "fetched": 5000,
+              "listed": 3264
+            },
+            "size_expected": 3264,
+            "size_got": 5000
           },
           {
             "ext": ".pdf",
@@ -38,13 +43,18 @@
     "files": {
       "msg_manifest.jsonl": [
         {
-          "error": "size mismatch: got 5000, expected 3264; re-pull",
           "ext": ".pdf",
           "folder": "/MEDICAL",
           "id": "r-digital",
           "name": "Digital",
-          "ok": false,
-          "size_expected": 3264
+          "ok": true,
+          "path": "<TMP>/mc/data/example-matter/msg_raw/r-digital.msg",
+          "size_changed": {
+            "fetched": 5000,
+            "listed": 3264
+          },
+          "size_expected": 3264,
+          "size_got": 5000
         },
         {
           "ext": ".pdf",
@@ -67,6 +77,9 @@
           "size_got": 71
         }
       ],
+      "msg_raw/r-digital.msg": {
+        "bytes": 5000
+      },
       "msg_raw/r-note-txt.msg": "Phone note: the adjuster called on 04/12/2026 and asked for the bills.\n",
       "msg_raw/r-scan2.msg": {
         "bytes": 4416
@@ -80,6 +93,12 @@
       {
         "call": "fetch",
         "expected": 3264,
+        "id": "r-digital",
+        "served": 5000
+      },
+      {
+        "call": "fetch",
+        "expected": null,
         "id": "r-digital",
         "served": 5000
       },

@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from litigation_testkit import M1, M2, LitSeat
-from jobs.demand import pull as pull_mod
+from jobs.matter import pull as pull_mod
 from jobs.litigation import extract as extract_mod, fetch as fetch_mod, textcache
 from jobs_testkit import make_pdf
 from test_litigation_textcache import SCAN, CountingSeat, _docs, _ocr_calls, _through_extract

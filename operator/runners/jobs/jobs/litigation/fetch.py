@@ -1,6 +1,6 @@
 """`fetch`: the candidate files of every matter this run reads, onto the job's
-disk. $0, read-only, resumable (``demand.pull.fetch_all`` and its
-``pulled.jsonl``: a row already ``ok`` is never fetched again).
+disk. $0, read-only, resumable (``matter.pull.fetch_all``, the one downloader,
+and its ``pulled.jsonl``: a row already ``ok`` is never fetched again).
 
 Two outcomes are kept apart because the 2026-10-07 hand run confused them:
 
@@ -32,8 +32,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from ..demand import pull as pull_mod
-from ..demand.pull import _pull, _retryable, fetch_all
+from ..matter import pull as matter_pull
+from ..matter.pull import fetch_all
 from ..stages.base import append_jsonl, read_jsonl
 
 HTTP_ABSENT = 404
@@ -85,22 +85,8 @@ def matter_dir(data: Path, matter_id: str) -> Path:
     return d
 
 
-def _nosuchkey(path: Path) -> bool:
-    try:
-        head = path.read_bytes()[:600]
-    except OSError:
-        return False
-    return head.lstrip().startswith(b"<?xml") and b"NoSuchKey" in head
-
-
-def _target(f: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": str(f["id"]),
-        "name": f.get("name"),
-        "ext": f.get("ext") or "",
-        "size": f.get("size"),
-        "folder": f.get("folderId"),
-    }
+#: The storage service's error document served in place of a file (``matter.pull``).
+_nosuchkey = matter_pull.storage_error_body
 
 
 def classify(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -124,7 +110,7 @@ def fetch_matter(
     seat: Any, matter_id: str, files: list[dict[str, Any]], ids: list[str], data: Path, log: Callable[[str], None]
 ) -> dict[str, Any]:
     by_id = {str(f["id"]): f for f in files}
-    targets = [_target(by_id[i]) for i in ids if i in by_id]
+    targets = [matter_pull.target(by_id[i]) for i in ids if i in by_id]
     rows = fetch_all(seat, matter_id, targets, matter_dir(data, matter_id), log) if targets else []
     missing, retry = classify(rows)
     return {"fetched": sum(1 for r in rows if r.get("ok")), "integrity": missing, "retry": [r["id"] for r in retry]}
@@ -139,7 +125,7 @@ def fetch_one(seat: Any, matter_id: str, f: dict[str, Any], data: Path, log: Cal
     row = pulled(data, matter_id).get(str(f["id"])) or {}
     if row.get("ok") and row.get("cached") and not row.get("path"):
         return download_cached(seat, matter_id, f, data, log)
-    return fetch_all(seat, matter_id, [_target(f)], d, log)[0]
+    return fetch_all(seat, matter_id, [matter_pull.target(f)], d, log)[0]
 
 
 def download_cached(
@@ -155,11 +141,13 @@ def download_cached(
     scratch = d / f".download-{f['id']}.jsonl"
     try:
         row: dict[str, Any] = {}
-        for n in range(pull_mod.RETRY_PASSES + 1):
+        for n in range(matter_pull.RETRY_PASSES + 1):
             if n:
-                time.sleep(pull_mod.RETRY_PAUSE_SECONDS)
-            row = _pull(seat, matter_id, [_target(f)], d / "raw", seen, scratch, log)[str(f["id"])]
-            if not _retryable(row):
+                time.sleep(matter_pull.RETRY_PAUSE_SECONDS)
+            row = matter_pull.pull_rows(seat, matter_id, [matter_pull.target(f)], d / "raw", seen, scratch, log)[
+                str(f["id"])
+            ]
+            if not matter_pull.retryable(row):
                 break
     finally:
         scratch.unlink(missing_ok=True)
@@ -188,7 +176,7 @@ def fill_one(cache: Any, data: Path, matter_id: str, f: dict[str, Any]) -> bool:
         return False
     sha, text = hit
     d = matter_dir(data, matter_id)
-    t = _target(f)
+    t = matter_pull.target(f)
     row = {**{k: t[k] for k in ("id", "name", "ext", "folder")}, "ok": True, "sha256": sha, "cached": True}
     first = _same_content(rows, sha, str(f["id"]))
     if first is not None:
@@ -254,15 +242,7 @@ def pulled(data: Path, matter_id: str) -> dict[str, dict[str, Any]]:
 
 def local_path(data: Path, matter_id: str, file_id: str) -> Path | None:
     """The bytes for a file id; a content duplicate resolves to its original."""
-    rows = pulled(data, matter_id)
-    r = rows.get(file_id)
-    for _ in range(3):
-        if not r or not r.get("ok"):
-            return None
-        if r.get("path") and Path(r["path"]).is_file():
-            return Path(r["path"])
-        r = rows.get(str(r.get("duplicate_of") or ""))
-    return None
+    return matter_pull.resolve(pulled(data, matter_id), file_id)
 
 
 def write_report(data: Path, report: dict[str, Any]) -> None:

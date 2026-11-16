@@ -7,19 +7,16 @@ by a model, and a record the map read is never named away here.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Callable
 
 from .. import unopened
+from ..filing import shown
 from .base import read_json
 
 
-def _shown(name: str) -> str:
-    """A file name as the firm sees it. An email attachment's pulled row keeps
-    its extension in its name and again in ``ext`` (stages/msg.py), so the key
-    the coverage gate matches on reads "x.pdf.pdf"; the firm is shown "x.pdf"."""
-    return re.sub(r"(\.[A-Za-z0-9]{2,5})\1$", r"\1", name)
+#: A file name as the firm sees it: the one display rule (``jobs/filing.shown``).
+_shown = shown
 
 
 def _pages(pages: list[int]) -> str:

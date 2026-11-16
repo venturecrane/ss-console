@@ -31,6 +31,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from ..matter import pull as matter_pull
+
 READBACK_TRIES = 8
 READBACK_PAUSE_SECONDS = 15.0
 
@@ -73,14 +75,13 @@ def rows_in(seat: Any, matter_id: str, folder_id: str) -> dict[str, dict[str, An
 def remote_sha(seat: Any, matter_id: str, file_id: str, scratch: Path) -> str | None:
     """The sha256 of one file as the vendor serves it, or None when no download
     URL could be minted (a lag, not a verdict: the caller retries)."""
-    minted = seat.mint(matter_id, [str(file_id)])
-    url = (minted[0] if minted else {}).get("url")
+    url = matter_pull.mint_one(seat, matter_id, str(file_id)).get("url")
     if not url:
         return None
     scratch.mkdir(parents=True, exist_ok=True)
     dest = scratch / f".readback-{file_id}"
     try:
-        seat.fetch(url, dest, None)
+        matter_pull.fetch_one(seat, url, dest, None)
         h = hashlib.sha256()
         with dest.open("rb") as fh:
             for chunk in iter(lambda: fh.read(1 << 20), b""):

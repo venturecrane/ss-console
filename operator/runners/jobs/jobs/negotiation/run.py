@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import arrivals, limits as limits_mod, paid
-from ..demand.pull import fetch_all
+from ..matter import pull as matter_pull
 from ..stages.base import read_jsonl
 from . import extract as read_mod, notice as notice_mod, offer_check, rows as rows_mod, summary as summary_mod
 from . import text as text_mod
@@ -225,23 +225,8 @@ class NegotiationRun:
         """The document's bytes on the job's disk; a content duplicate resolves
         to its original."""
         mdir = self.data / "m" / mid
-        target = {
-            "id": str(f["id"]),
-            "name": f.get("name"),
-            "ext": f.get("ext") or "",
-            "size": f.get("size"),
-            "folder": f.get("folderId"),
-        }
-        fetch_all(self.seat, mid, [target], mdir, self.log)
-        rows = {r["id"]: r for r in read_jsonl(mdir / "pulled.jsonl")}
-        r = rows.get(str(f["id"]))
-        for _ in range(3):
-            if not r or not r.get("ok"):
-                return None
-            if r.get("path") and Path(r["path"]).is_file():
-                return Path(r["path"])
-            r = rows.get(str(r.get("duplicate_of") or ""))
-        return None
+        matter_pull.fetch_all(self.seat, mid, [matter_pull.target(f)], mdir, self.log)
+        return matter_pull.resolve({r["id"]: r for r in read_jsonl(mdir / "pulled.jsonl")}, str(f["id"]))
 
     def _plaintiff_names(self, mid: str) -> dict[int, str]:
         """{plaintiff index: name} from the matter's Plaintiff contacts. A tab

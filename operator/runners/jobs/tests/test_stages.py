@@ -259,17 +259,22 @@ def test_download_exits_1_when_the_vendor_has_none_of_the_objects(
     assert any("there is nothing to chronicle" in line for line in log)
 
 
-def test_download_size_mismatch_is_a_failed_row_not_a_silent_file(
+def test_download_size_mismatch_is_a_recorded_change_not_a_silent_file(
     job_dir: Path, firm_config_path: Path, data_root: Path, seat: FakeSeat
 ) -> None:
+    """Wave 5 P1: a file whose bytes no longer match the listed size (edited
+    after the listing) is pulled again unchecked and taken as it is now, as
+    the demand pull already did; the row says the size changed, so it is never
+    a silent file. A size that keeps moving still fails (``matter.pull``,
+    ``test_one_downloader_and_shown_names``)."""
     seat.docs[0]["size"] = 12345  # the listing lies about f1's size
     seed_seat_files(data_root, seat)
     sr = _sr(job_dir, firm_config_path, data_root, seat)
     decisions.selection(sr.job, sr.cfg, sr.slug_dir, dry_run=False)
-    assert download_stage.run(sr) == download_stage.EXIT_INFRA
+    assert download_stage.run(sr) == 0
     rows = {r["id"]: r for r in map(json.loads, (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines())}
-    assert not rows["f1"]["ok"] and "size mismatch" in rows["f1"]["error"]
-    assert not (sr.slug_dir / "raw" / "f1.pdf").exists()
+    assert rows["f1"]["ok"] and rows["f1"]["size_changed"]["listed"] == 12345
+    assert (sr.slug_dir / "raw" / "f1.pdf").stat().st_size == rows["f1"]["size_got"]
 
 
 # ---- extract ------------------------------------------------------------------

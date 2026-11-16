@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,6 +86,20 @@ def full_name(row: dict[str, Any], fold: bool = False) -> str:
     if fold:
         name, ext = name.strip(), folded_ext(row)
     return name if not ext or name.lower().endswith(ext.lower()) else name + ext
+
+
+_DOUBLED = re.compile(r"(\.[A-Za-z0-9]{2,5})\1$", re.I)
+
+
+def shown(name: str) -> str:
+    """A joined file name as a firm or a model is shown it: a doubled trailing
+    extension read once ("x.pdf.pdf" is shown "x.pdf"). An email attachment's
+    pulled row keeps its extension in its name and again in ``ext``
+    (``stages/msg.py``), so a name and extension joined to KEY a file read
+    "x.pdf.pdf"; the key stays as it is (the coverage gate, the exhibit map and
+    the composer's citations all match on it), and only what is displayed goes
+    through here. ``full_name`` is the same rule applied to a row."""
+    return _DOUBLED.sub(r"\1", name)
 
 
 def files_in(seat: Any, matter_id: str, folder_id: str) -> dict[str, int]:

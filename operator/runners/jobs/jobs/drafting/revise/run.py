@@ -34,6 +34,7 @@ from typing import Any
 
 from ... import proof_mode
 from ...demand import deliver
+from ...matter import pull as matter_pull
 from .. import format_check
 from .. import review as review_mod
 from ..outcome import DraftingFailed, DraftingHold, Verdict, markers
@@ -122,12 +123,11 @@ class ReviseRun(DraftingRun):
         f = self._file_entry(role)
         if f is None:
             return None
-        minted = self.seat.mint(self.job.file_to_id, [f["file_id"]])
-        url = (minted[0] if minted else {}).get("url")
+        url = matter_pull.mint_one(self.seat, self.job.file_to_id, f["file_id"]).get("url")
         if not url:
             raise DraftingFailed(f"stage_unfinished: revise-base: no download could be minted for the filed {role}")
         dest = self._base_dir / f"{role}.docx"
-        self.seat.fetch(url, dest, None)
+        matter_pull.fetch_one(self.seat, url, dest, None)
         return dest
 
     def _base(self) -> None:

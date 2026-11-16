@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ..filing import shown
 from ..medchron.gates import cross_client, foreign_identity as FI
 from .base import StageRun, read_jsonl
 
@@ -69,7 +70,7 @@ def _named(hold: dict[str, Any]) -> str:
     if hold.get("name"):
         out += f' "{hold["name"]}"'
     if hold.get("container"):
-        out += f' attached to the email "{hold["container"]}"'
+        out += f' attached to the email "{shown(str(hold["container"]))}"'
     return out
 
 

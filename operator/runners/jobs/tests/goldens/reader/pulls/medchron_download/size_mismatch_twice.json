@@ -97,6 +97,12 @@
       },
       {
         "call": "fetch",
+        "expected": null,
+        "id": "r-digital",
+        "served": 6000
+      },
+      {
+        "call": "fetch",
         "expected": 4416,
         "id": "r-scan2",
         "served": 4416
