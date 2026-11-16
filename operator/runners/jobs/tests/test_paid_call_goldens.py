@@ -577,6 +577,21 @@ def test_every_limit_sentence_matches_the_golden() -> None:
     assert bad == [], bad[:20]
 
 
+# ---- the inputs hold still ---------------------------------------------------------
+def test_the_fixture_pdfs_are_the_same_size_on_every_call() -> None:
+    """The litigation read puts each file's size in its prompt. With MuPDF's
+    random trailer ID one page came out at 881, 884 or 885 bytes, and the
+    litigation case failed on about one run in eight, on PRs that never
+    touched litigation. The same pages must give the same size, and each call
+    its own bytes (two files with the same pages are still two files)."""
+    from jobs_testkit import make_pdf
+    from litigation_testkit import ANSWER
+
+    made = [make_pdf([ANSWER]) for _ in range(50)]
+    assert {len(b) for b in made} == {885}, sorted({len(b) for b in made})
+    assert len(set(made)) == 50
+
+
 # ---- the instrument can fail ------------------------------------------------------
 def test_a_planted_effort_change_fails_the_chronology_case(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: Any
