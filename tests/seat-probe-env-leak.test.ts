@@ -49,11 +49,24 @@ beforeAll(() => {
   writeFileSync(
     join(bin, 'fly'),
     `#!/bin/bash
-echo x >> "${dir}/fly-calls"
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = "-C" ]; then C="$2"; break; fi
-  shift
-done
+echo "$1 $2" >> "${dir}/fly-calls"
+if [ "$1 $2" = "ssh console" ] && [ -n "\${FAKE_TUNNEL_REFUSED:-}" ]; then
+  echo "Error: can't build tunnel for personal: Not authorized to access this organization" >&2
+  exit 1
+fi
+if [ "$1 $2" = "machine list" ]; then
+  echo '[{"id":"m-stopped","state":"stopped"},{"id":"m-live","state":"started"}]'
+  exit 0
+fi
+if [ "$1 $2" = "machine exec" ]; then
+  [ "$3" = "m-live" ] || { echo "wrong machine $3" >&2; exit 9; }
+  for C in "$@"; do :; done
+else
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-C" ]; then C="$2"; break; fi
+    shift
+  done
+fi
 C="$(printf '%s' "$C" | sed "s#/proc/#${dir}/proc/#g")"
 if [ -n "\${FAKE_BLANK_PAYLOAD:-}" ]; then
   C="$(printf '%s' "$C" | sed -E 's/CMD_B64=[A-Za-z0-9+\\/=]*/CMD_B64=/')"
@@ -87,6 +100,24 @@ function probe(args: string[], extraEnv: Record<string, string> = {}) {
   const out = `${r.stdout}\n${r.stderr}`
   return { status: r.status, stdout: r.stdout, out }
 }
+
+describe('seat-probe.sh falls back to fly machine exec when Fly refuses the tunnel (2026-11-16)', () => {
+  it('runs the probe through machine exec on the started machine, canary unprinted', () => {
+    const r = probe(['test "$SECRET_CANARY" = ' + CANARY + ' && echo via-exec'], {
+      FAKE_TUNNEL_REFUSED: '1',
+    })
+    expect(r.stdout.trim()).toBe('via-exec')
+    expect(r.status).toBe(0)
+    expect(r.out).toMatch(/running the probe through fly machine exec/)
+    expect(r.out).not.toContain(CANARY)
+  })
+
+  it('a probe that fails for another reason is not retried', () => {
+    const r = probe(['echo boom >&2; exit 7'])
+    expect(r.status).toBe(7)
+    expect(r.out).not.toMatch(/machine exec/)
+  })
+})
 
 describe('seat-probe.sh never hands env a bare word (2026-10-18 env dump)', () => {
   it('a command with == and a pipe runs, and the canary never appears', () => {
