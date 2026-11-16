@@ -81,9 +81,12 @@ def test_the_read_fence_refuses_pitch_practice_on_a_champions_turn(rehearsal) ->
 
 def test_the_champions_turn_was_told_the_role(rehearsal) -> None:
     lines = (Path(rehearsal["root"]) / "model-requests.jsonl").read_text(encoding="utf-8")
+    # Only this slice's turns: in the whole tests_e2e run the other slices'
+    # model requests carry the product-guide skill, whose text names the line.
     told = {
         r["turn"]
         for r in map(json.loads, lines.splitlines())
-        if "This sender is a client champion" in json.dumps(r["body"])
+        if r["turn"].startswith("c-")
+        and "CHAMPION (platform-decided for this email)" in json.dumps(r["body"])
     }
     assert told == {"c-asks-for-the-demo-playbook", "c-reads-the-skills"}, told
