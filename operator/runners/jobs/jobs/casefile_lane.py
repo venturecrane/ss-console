@@ -39,6 +39,7 @@ from typing import Any, Callable
 from . import spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .firm_inputs import pin_env
+from .matter import store as page_store_mod
 from .daemon import RUNNER_BIN, Daemon
 from .drafting_lane import DraftingLane
 from .proof import holds as proof_holds, watch as proof_watch
@@ -160,7 +161,7 @@ class CasefileLane(DraftingLane):
         return None
 
     def _lane_env(self, job_id: str) -> dict[str, str]:
-        out: dict[str, str] = {}
+        out: dict[str, str] = page_store_mod.child_env()
         for key, value in (
             (INPUTS_ENV, pin_env(self.inputs_dir)),
             (STATE_ENV, self.state_dir),
@@ -282,7 +283,7 @@ def build_lane(d: Daemon) -> CasefileLane | None:
         logger.info("no %s; the case file lane is not started", QUEUE_ENV)
         return None
     from .casefile.state import state_dir
-    from .litigation.textcache import cache_dir
+    from .textcache import cache_dir
 
     return CasefileLane(
         run_dir=d.run_dir,

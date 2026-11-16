@@ -171,6 +171,16 @@
       "kind": "file",
       "when": "lanes"
     },
+    "jobs_textcache": {
+      "path": "/run/smd-jobs/litigation/textcache",
+      "env": [
+        "JOBS_TEXTCACHE_DIR",
+        "JOBS_LITIGATION_TEXTCACHE_DIR"
+      ],
+      "expect": "present",
+      "kind": "dir",
+      "when": "lanes"
+    },
     "lanes_run": {
       "path": "/run/smd-lanes",
       "when": "always"

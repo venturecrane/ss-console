@@ -44,6 +44,7 @@ JOBS_PYTHON = "/opt/jobs/.venv/bin/python"
 JOBS_QUEUE = "/run/smd-jobs/queue"
 JOBS_RUN = "/run/smd-jobs"
 JOBS_SPEND_WATCH = "/run/smd-jobs/spend-watch.json"
+JOBS_TEXTCACHE = "/run/smd-jobs/litigation/textcache"
 LANES_RUN = "/run/smd-lanes"
 LEGACY_AUDIT_DB = "/opt/data/audit.db"
 LITIGATION_BROKER_FIRM_YAML = "/var/lib/smd-config/litigation-broker-firm.yaml"
@@ -105,6 +106,7 @@ PATHS: dict[str, str] = {
     "jobs_queue": JOBS_QUEUE,
     "jobs_run": JOBS_RUN,
     "jobs_spend_watch": JOBS_SPEND_WATCH,
+    "jobs_textcache": JOBS_TEXTCACHE,
     "lanes_run": LANES_RUN,
     "legacy_audit_db": LEGACY_AUDIT_DB,
     "litigation_broker_firm_yaml": LITIGATION_BROKER_FIRM_YAML,

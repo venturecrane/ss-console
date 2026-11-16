@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof, drafting_additions, library_setup_verbs
+from . import delivery_proof, drafting_additions, library_setup_verbs, page_store_meta
 from .audit_ledger import _iso_utc
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
@@ -436,6 +436,8 @@ class DraftingVerbs:
         fields = request.get("fields")
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("drafting_job_record requires job_id, a known state, and a fields object")
+        fields = dict(fields)
+        store = page_store_meta.take(fields)  # audit-only: the job's page-store counts
         row = self._db.record(job_id, state, dict(fields))
         if row.get("prev_state") == state:
             return {"ok": True, "job": DraftingLedger.project(row)}
@@ -461,7 +463,7 @@ class DraftingVerbs:
             for key in REPORT_LISTS:
                 if isinstance(delivery.get(key), list):
                     meta[f"{key}_count"] = len(delivery[key])
-        self._audit(AUDIT_TYPES[state], meta, row["matter_id"])
+        self._audit(AUDIT_TYPES[state], page_store_meta.add(meta, store), row["matter_id"])
         return {"ok": True, "job": DraftingLedger.project(row)}
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:

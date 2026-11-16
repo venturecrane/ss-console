@@ -99,11 +99,10 @@ class PageText:
         if name not in self._pages:
             pages: list[str] = []
             if name in self.path:
-                import pymupdf
+                from ..matter import pdf as matter_pdf
 
                 try:
-                    with pymupdf.open(self.path[name]) as doc:
-                        pages = [pg.get_text() for pg in doc]
+                    pages = matter_pdf.page_texts(self.path[name])
                 except (OSError, RuntimeError, ValueError):
                     pages = []
             self._pages[name] = pages

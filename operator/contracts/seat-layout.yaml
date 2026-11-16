@@ -118,6 +118,19 @@ paths:
     kind: file
     when: lanes
 
+  # The store of paid page text every job lane reads through (wave 5,
+  # jobs/textcache.py + jobs/matter/store.py): the litigation text cache's dir,
+  # made on every lane seat by entrypoint-lanes.sh. Client data (transcribed
+  # matter text), child-only 0700; on the volume through the run dir's bind
+  # mount of jobs_data. JOBS_TEXTCACHE_DIR switches the page store on;
+  # JOBS_LITIGATION_TEXTCACHE_DIR is its older name, kept for one release.
+  jobs_textcache:
+    path: '{jobs_run}/litigation/textcache'
+    env: [JOBS_TEXTCACHE_DIR, JOBS_LITIGATION_TEXTCACHE_DIR]
+    expect: present
+    kind: dir
+    when: lanes
+
   # ---- PR B: jobs family additions (W1) ----
   jobs_bin:
     path: '{jobs_bundle}/.venv/bin/jobs'

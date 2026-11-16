@@ -16,7 +16,7 @@ import { readSeatScript } from './_support/seat-layout'
 const entry = readFileSync(resolve('operator/templates/entrypoint-litigation.sh'), 'utf8')
 const checks = readSeatScript('operator/templates/seat-checks.sh')
 const lane = readFileSync(resolve('operator/runners/jobs/jobs/litigation_lane.py'), 'utf8')
-const cache = readFileSync(resolve('operator/runners/jobs/jobs/litigation/textcache.py'), 'utf8')
+const cache = readFileSync(resolve('operator/runners/jobs/jobs/textcache.py'), 'utf8')
 /**
  * What the REAL job host launched for an ordinary litigation job: the host
  * matrix golden (operator/runners/jobs/tests/test_host_matrix_goldens.py)

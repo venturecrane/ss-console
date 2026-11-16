@@ -175,6 +175,12 @@ check |casefile-queue-root-owned| |[ "$(stat -c %U:%G:%a /run/smd-jobs/casefile-
 check |casefile-jobs-dir-root-owned-child-traversable| |[ "$(stat -c %U:%G:%a /run/smd-jobs/casefile-jobs)" = root:jobs:710 ]|
 check |casefile-state-dir-child-only| |[ "$(stat -c %U:%G:%a /run/smd-jobs/casefile/state)" = jobs:jobs:700 ]|
 check |casefile-broker-config-matches-runner| |r=/var/lib/smd-config/casefile/casefile-firm.yaml; b=/var/lib/smd-config/casefile-broker-firm.yaml; if [ -f $r ]; then [ "$(stat -c %U:%G:%a $b)" = root:workspace-broker:640 ] && cmp -s $r $b; else ! test -e $b; fi|
+check |medchron-page-store-dir-child-only| |[ "$(stat -c %U:%G:%a /run/smd-jobs/litigation/textcache)" = jobs:jobs:700 ]|
+check |demand-page-store-dir-child-only| |[ "$(stat -c %U:%G:%a /run/smd-jobs/litigation/textcache)" = jobs:jobs:700 ]|
+check |drafting-page-store-dir-child-only| |[ "$(stat -c %U:%G:%a /run/smd-jobs/litigation/textcache)" = jobs:jobs:700 ]|
+check |litigation-page-store-dir-child-only| |[ "$(stat -c %U:%G:%a /run/smd-jobs/litigation/textcache)" = jobs:jobs:700 ]|
+check |casefile-page-store-dir-child-only| |[ "$(stat -c %U:%G:%a /run/smd-jobs/litigation/textcache)" = jobs:jobs:700 ]|
+check |negotiation-page-store-dir-child-only| |[ "$(stat -c %U:%G:%a /run/smd-jobs/litigation/textcache)" = jobs:jobs:700 ]|
 check_file |lane-memory-caps-leave-gateway-reserve| |/opt/jobs/.venv/bin/python| |lane-memory-caps-probe.py|
 check_file |jobs-firm-inputs-current| |/opt/hermes/.venv/bin/python3| |firm-inputs-current-probe.py|
 check_file |attorney-roster-agrees| |/opt/jobs/.venv/bin/python| |attorney-roster-agrees-probe.py|

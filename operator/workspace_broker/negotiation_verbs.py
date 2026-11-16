@@ -33,7 +33,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof
+from . import delivery_proof, page_store_meta
 from .broker_context import BrokerContext
 from .medchron_ledger import admins_from_customer_yaml
 from .negotiation_intake import (
@@ -263,6 +263,8 @@ class NegotiationVerbs:
         fields = request.get("fields")
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("negotiation_job_record requires job_id, a known state, and a fields object")
+        fields = dict(fields)
+        store = page_store_meta.take(fields)  # audit-only: the job's page-store counts
         row = self._db.record(job_id, state, dict(fields))
         ids = list(row.get("notice_ids") or [])
         if row.get("prev_state") == state:
@@ -276,7 +278,7 @@ class NegotiationVerbs:
             "notices": len(ids),
             **{k: row.get(k) for k in COUNT_FIELDS},
         }
-        self._audit(AUDIT_TYPES[state], meta)
+        self._audit(AUDIT_TYPES[state], page_store_meta.add(meta, store))
         return {"ok": True, "job": NegotiationLedger.project(row), "notice_ids": ids}
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:

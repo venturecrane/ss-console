@@ -46,6 +46,7 @@ from typing import Any, Callable
 from operator_connector_sdk.library import readers
 
 from .. import firm_wording, limits as limits_mod, paid, proof_mode
+from ..matter import store as page_store_mod
 from ..proof import review as proof_review
 from . import (
     asked,
@@ -515,7 +516,16 @@ class DemandRun:
         self._batching()
         self._stage(
             "transcribe",
-            lambda: transcribe.run(self.data, self.doorway, self.firm.model("transcription"), self.log, self._workers),
+            lambda: transcribe.run(
+                self.data,
+                self.doorway,
+                self.firm.model("transcription"),
+                self.log,
+                self._workers,
+                matter_id=self.job.matter_id,
+                lane="demand",
+                record_to=self.job.job_dir / page_store_mod.RECORD,
+            ),  # fmt: skip
         )
         client = set(self._json("facts.json").get("client_emails") or [])
         self._stage("wall-transcribed", lambda: preflight.wall_printed_emails(self.data, self.firm, client, self.log))

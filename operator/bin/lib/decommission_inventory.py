@@ -37,6 +37,8 @@ import re
 from pathlib import Path
 from typing import Mapping, Optional
 
+from bin.lib import seat_layout
+
 # ---------------------------------------------------------------------------
 # Cloud resources, named the way provisioning names them
 # ---------------------------------------------------------------------------
@@ -191,6 +193,41 @@ def remaining_by_design(slug: str) -> list[dict]:
     ]
 
 
+#: The stores of transcribed matter text on the seat's volume (``/opt/data``)
+#: that survive a REPROVISION by design, so they are gone only with the volume
+#: (step 06 destroys the app and its volume). Each names the command that purges
+#: one matter while the seat still runs, and the probe that shows it absent.
+#: ``python -m jobs.textcache probe --matter <id>`` exits nonzero while the job
+#: lanes' store (the litigation lane's whole-file entries and every lane's paid
+#: page text, wave 5) still names the matter.
+VOLUME_TEXT_STORES: tuple[dict[str, str], ...] = (
+    {
+        "path": f"{seat_layout.JOBS_DATA}/litigation/textcache/",
+        "what": "the job lanes' store of paid text: whole-file entries and pages/<sha256>/<method>/<page>.json",
+        "purge": "python -m jobs.textcache purge --matter <id>",
+        "probe": "python -m jobs.textcache probe --matter <id>",
+    },
+    {
+        "path": f"{seat_layout.SMOKEBALL_EXTRACT_CACHE}/",
+        "what": "the Smokeball connector's extraction cache",
+        "purge": "removed with the volume",
+        "probe": f"test ! -d {seat_layout.SMOKEBALL_EXTRACT_CACHE}",
+    },
+    {
+        "path": f"{seat_layout.JOBS_DATA}/page-index/",
+        "what": "the page finder's index (what each page of a matter PDF says, per file sha256)",
+        "purge": "python -m smokeball_connector.page_finder purge --matter <id>",
+        "probe": f"test ! -d {seat_layout.JOBS_DATA}/page-index",
+    },
+    {
+        "path": f"{seat_layout.JOBS_DATA}/casefile/state/",
+        "what": "the case file manager's state (each matter's last File Status)",
+        "purge": "python -m jobs.casefile.state purge --matter <id>",
+        "probe": f"test ! -d {seat_layout.JOBS_DATA}/casefile/state",
+    },
+)
+
+
 def infisical_names(slug: str, env: Mapping[str, str]) -> dict:
     """The ``NAME__<SUFFIX>`` vault keys for the seat, by NAME only.
 
@@ -300,6 +337,7 @@ def residue_report(
         "infisical": infisical_names(slug, os.environ if env is None else env),
         "retained_by_design": remaining_by_design(slug),
         "retained_d1_tables": {t: reason for t, (_, reason) in RETAINED_SEAT_TABLES.items()},
+        "removed_with_volume": [dict(s) for s in VOLUME_TEXT_STORES],
     }
 
 
@@ -313,6 +351,7 @@ __all__ = [
     "SEAT_PROJECTION_TABLES",
     "SHARED_CONFIG_BUCKET",
     "TERMINAL_OBLIGATION_STATES",
+    "VOLUME_TEXT_STORES",
     "infisical_names",
     "ops_sweep_github_names",
     "r2_targets",

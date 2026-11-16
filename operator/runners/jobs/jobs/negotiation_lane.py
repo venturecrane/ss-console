@@ -40,6 +40,7 @@ from typing import Any, Callable
 from . import spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .daemon import RUNNER_BIN, Daemon
+from .matter import store as page_store_mod
 from .proof import watch as proof_watch
 from .skill_load import load_line
 from .drafting_lane import DraftingLane
@@ -136,7 +137,10 @@ class NegotiationLane(DraftingLane):
         return None  # the negotiation lane loads no firm inputs before it runs
 
     def _lane_env(self, job_id: str) -> dict[str, str]:
-        return {STATE_ENV: str(self.state_dir)} if self.state_dir else {}
+        out = page_store_mod.child_env()
+        if self.state_dir:
+            out[STATE_ENV] = str(self.state_dir)
+        return out
 
     def _report(self, job_id: str, code: int, out: str) -> str:
         v = verdict_mod.one(self.job_dir(job_id), out, self.ONE_VERDICT)
@@ -154,6 +158,7 @@ class NegotiationLane(DraftingLane):
         fields["notices"] = [n for n in v.get("notices") or [] if isinstance(n, dict)] if state == "delivered" else []
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
+        fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
         state, fields = proof_watch.settle(self, job_id, [v], state, fields)
         fields.setdefault("notices", [])
         notice_ids: list[str] = []

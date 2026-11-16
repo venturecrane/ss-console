@@ -3415,6 +3415,131 @@
         "modified": "<AT>",
         "sha256": "<sha:zero>",
         "size": 0
+      },
+      "pages/.lock": "",
+      "pages/<sha256:4e08d1263453>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF outlook_msg PAGE 1"
+      },
+      "pages/<sha256:4e08d1263453>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF outlook_msg PAGE 2"
+      },
+      "pages/<sha256:688a28294b88>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF mail_eml PAGE 1"
+      },
+      "pages/<sha256:688a28294b88>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF mail_eml PAGE 2"
+      },
+      "pages/<sha:absent399>/b017b42eaf37/199.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent399>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent399>/b017b42eaf37/200.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent399>/b017b42eaf37/3.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent400>/b017b42eaf37/199.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent400>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent400>/b017b42eaf37/200.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent400>/b017b42eaf37/3.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:cipher>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:control>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF control PAGE 1"
+      },
+      "pages/<sha:cover_scans>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF cover_scans PAGE 2"
+      },
+      "pages/<sha:cover_scans>/b017b42eaf37/3.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF cover_scans PAGE 3"
+      },
+      "pages/<sha:cover_scans>/b017b42eaf37/5.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF cover_scans PAGE 5"
+      },
+      "pages/<sha:cover_scans>/b017b42eaf37/6.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF cover_scans PAGE 6"
+      },
+      "pages/<sha:edge14>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF edge14 PAGE 1"
+      },
+      "pages/<sha:edge15>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF edge15 PAGE 1"
+      },
+      "pages/<sha:edge24>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF edge24 PAGE 1"
+      },
+      "pages/<sha:empty_layer>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:glyph_junk>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:photo_jpg>/6fc101043236/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF photo_jpg PAGE 1"
+      },
+      "pages/<sha:scan2>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan2 PAGE 1"
+      },
+      "pages/<sha:scan2>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan2 PAGE 2"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 1"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 2"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/3.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 3"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/7.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 7"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/8.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 8"
       }
     },
     "store_after_second": {
@@ -3888,6 +4013,131 @@
         "modified": "<AT>",
         "sha256": "<sha:zero>",
         "size": 0
+      },
+      "pages/.lock": "",
+      "pages/<sha256:4e08d1263453>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF outlook_msg PAGE 1"
+      },
+      "pages/<sha256:4e08d1263453>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF outlook_msg PAGE 2"
+      },
+      "pages/<sha256:688a28294b88>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF mail_eml PAGE 1"
+      },
+      "pages/<sha256:688a28294b88>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF mail_eml PAGE 2"
+      },
+      "pages/<sha:absent399>/b017b42eaf37/199.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent399>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent399>/b017b42eaf37/200.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent399>/b017b42eaf37/3.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent400>/b017b42eaf37/199.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent400>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent400>/b017b42eaf37/200.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:absent400>/b017b42eaf37/3.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:cipher>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:control>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF control PAGE 1"
+      },
+      "pages/<sha:cover_scans>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF cover_scans PAGE 2"
+      },
+      "pages/<sha:cover_scans>/b017b42eaf37/3.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF cover_scans PAGE 3"
+      },
+      "pages/<sha:cover_scans>/b017b42eaf37/5.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF cover_scans PAGE 5"
+      },
+      "pages/<sha:cover_scans>/b017b42eaf37/6.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF cover_scans PAGE 6"
+      },
+      "pages/<sha:edge14>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF edge14 PAGE 1"
+      },
+      "pages/<sha:edge15>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF edge15 PAGE 1"
+      },
+      "pages/<sha:edge24>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF edge24 PAGE 1"
+      },
+      "pages/<sha:empty_layer>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:glyph_junk>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF AN UNMARKED PAGE"
+      },
+      "pages/<sha:photo_jpg>/6fc101043236/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF photo_jpg PAGE 1"
+      },
+      "pages/<sha:scan2>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan2 PAGE 1"
+      },
+      "pages/<sha:scan2>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan2 PAGE 2"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/1.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 1"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/2.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 2"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/3.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 3"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/7.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 7"
+      },
+      "pages/<sha:scan8>/b017b42eaf37/8.json": {
+        "matter_ids": ["11111111-1111-4111-8111-111111111111"],
+        "text": "TRANSCRIPT OF scan8 PAGE 8"
       }
     }
   },

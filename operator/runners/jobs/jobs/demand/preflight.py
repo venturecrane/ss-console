@@ -21,51 +21,32 @@ from __future__ import annotations
 
 import json
 import re
-import unicodedata
 from pathlib import Path
 from typing import Any, Callable
 
 from .. import unopened
-from ..stages.extract import docx_text, glyph_junk, not_english
+from ..matter import pdf as matter_pdf, readable, word
+from ..matter.readable import (  # demand's rules (``matter/readable``), under the names it always used
+    CONTROL_THRESHOLD as CONTROL_THRESHOLD,
+    MIN_PAGE_CHARS as MIN_PAGE_CHARS,
+    glyph_junk as glyph_junk,
+    junk_page as junk_page,
+    not_english as not_english,
+)
 from .firm import DemandFirm
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
-CONTROL_THRESHOLD = 0.10  # share of a page's characters that are control/private-use/replacement
-MIN_PAGE_CHARS = 25
+docx_text = word.record_docx_text
 BILL_NAME = re.compile(
     r"(?i)\b(bill|billing|statement|ledger|itemi[sz]|ub-?04|hcfa|cms-?1500|invoice|balance|charges)\b"
 )
 
 
-def junk_page(text: str) -> bool:
-    """A text layer that cannot be read: control characters, private-use
-    glyphs and replacement marks (the 2026-09-24 bills), or glyph indices, or
-    a cipher. The share is over non-whitespace characters."""
-    chars = [c for c in text if not c.isspace()]
-    if not chars:
-        return False
-    bad = sum(1 for c in chars if unicodedata.category(c) in ("Cc", "Co", "Cs") or c == "�")
-    return bad / len(chars) > CONTROL_THRESHOLD or glyph_junk(text) or not_english(text)
-
-
 def _pdf_pages(path: Path) -> list[dict[str, Any]]:
-    import pymupdf
-
-    out = []
-    with pymupdf.open(str(path)) as doc:
-        unopened.refuse_locked(doc)
-        for i, page in enumerate(doc, 1):
-            text = page.get_text() or ""
-            has_image = bool(page.get_images(full=False))
-            out.append({"page": i, "text": text, "has_image": has_image})
-    return out
+    return matter_pdf.record_layers(path)
 
 
-def _needs_reading(p: dict[str, Any]) -> bool:
-    stripped = p["text"].strip()
-    if len(stripped) < MIN_PAGE_CHARS:
-        return p["has_image"]
-    return junk_page(stripped)
+_needs_reading = readable.needs_reading
 
 
 def extract_one(row: dict[str, Any], text_dir: Path) -> dict[str, Any]:

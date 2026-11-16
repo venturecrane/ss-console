@@ -243,10 +243,9 @@ def pdf_text(path: Path) -> str:
     suffix = path.suffix.lower()
     try:
         if suffix == ".pdf":
-            import pymupdf
+            from ...matter import pdf as matter_pdf
 
-            with pymupdf.open(str(path)) as doc:
-                return "\n".join(pg.get_text() for pg in doc)
+            return "\n".join(matter_pdf.page_texts(path))
         if suffix == ".docx":
             import docx
 

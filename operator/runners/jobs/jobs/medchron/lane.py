@@ -46,6 +46,7 @@ from .. import (
 )
 from ..broker_client import BrokerError
 from ..daemon import RUNNER_BIN, TERMINAL, Daemon
+from ..matter import store as page_store_mod
 from ..proof import holds as proof_holds, watch as proof_watch
 from ..skill_load import load_line
 from ..stages import vision_seed
@@ -100,6 +101,9 @@ class MedchronLane(Daemon):
             logger.warning("firm config not usable yet, deferring %s: %s", job_id, exc)
             return "deferred"
         return None
+
+    def _lane_env(self, job_id: str) -> dict[str, str]:
+        return page_store_mod.child_env()  # the store of paid page text (jobs/matter/store.py)
 
     def _write_job(self, job_id: str) -> Path:
         """``job.yaml``, from the envelope, the staged vision seed and the
@@ -204,6 +208,7 @@ class MedchronLane(Daemon):
         # Proven delivery: a dry run is never a delivery, a delivered claim
         # without its proof is a failure, and a hold or read-back failure pages.
         paged_before = dict(self._daemon_state(job_id).get("proof_alerts") or {})
+        fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
         state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
         try:
             self.broker.record(job_id, state, fields)

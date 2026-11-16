@@ -84,7 +84,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof, hold_class, litigation_allowance
+from . import delivery_proof, hold_class, litigation_allowance, page_store_meta
 from .broker_context import BrokerContext
 from .litigation_intake import (
     DEADLINES_FOLDER_KEY,
@@ -575,6 +575,7 @@ class LitigationVerbs:
         # current state), never a column, as the chronology lane keeps it
         # (2026-10-30: a litigation job's lost wake was refused twice).
         wake = fields.pop("wake", None)
+        store = page_store_meta.take(fields)  # audit-only: the job's page-store counts
         row = self._db.record(job_id, state, fields)
         if row.get("prev_state") == state and not isinstance(wake, dict):
             return {"ok": True, "job": LitigationLedger.project(row)}
@@ -597,7 +598,7 @@ class LitigationVerbs:
             meta["writes"] = report_writes(fields["writes"])
         if isinstance(wake, dict):
             meta["wake"] = {k: wake.get(k) for k in ("wake_failed", "outcome")}
-        self._audit(AUDIT_TYPES[state], meta)
+        self._audit(AUDIT_TYPES[state], page_store_meta.add(meta, store))
         return {"ok": True, "job": projected}
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:

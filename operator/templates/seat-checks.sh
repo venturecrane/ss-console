@@ -731,6 +731,16 @@ check "casefile-jobs-dir-root-owned-child-traversable" "[ \"\$(stat -c %U:%G:%a 
 check "casefile-state-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_RUN}/casefile/state)\" = jobs:jobs:700 ]"
 check "casefile-broker-config-matches-runner" "r=${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/casefile/casefile-firm.yaml; b=${SEAT_ROOT}${SMD_LAYOUT_SMD_CONFIG}/casefile-broker-firm.yaml; if [ -f \$r ]; then [ \"\$(stat -c %U:%G:%a \$b)\" = root:workspace-broker:640 ] && cmp -s \$r \$b; else ! test -e \$b; fi"
 fi
+# The store of paid page text (wave 5): every lane that reads a firm's pages
+# reads through it, so each such lane checks it is there and the child's alone
+# (entrypoint-lanes.sh makes it). A lane whose store is missing pays for every
+# page again and looks healthy, which only this check would see.
+for _ps_lane in medchron demand drafting litigation casefile negotiation; do
+  if lane_runs "${_ps_lane}"; then
+    check "${_ps_lane}-page-store-dir-child-only" "[ \"\$(stat -c %U:%G:%a ${SEAT_ROOT}${SMD_LAYOUT_JOBS_TEXTCACHE})\" = jobs:jobs:700 ]"
+  fi
+done
+unset _ps_lane
 # MEMORY BUDGET (2026-10-07). Every lane child runs under a memory cgroup cap,
 # and the gateway runs under none, so the caps must leave the gateway room: the
 # sum of every lane cgroup's limit must not exceed the authored machine memory

@@ -45,10 +45,11 @@ from . import (
     read,
     seedcheck,
     statusshadow,
-    textcache,
     update,
     vocab,
 )
+from .. import textcache
+from ..matter import store as page_store_mod
 from .progress import Progress
 from .bookstages import DISCOVERY_AS_LAST_READ, PER_CASE_ROLE, PRINTOUT_ROLE, BookStages  # noqa: F401 - re-exported for tests and callers that import these from run
 from .runbase import RunBase
@@ -146,6 +147,14 @@ class LitigationRun(BookStages, RunBase):
             method_version=textcache.method_version(self.firm.model("transcription")),
             job_id=self.job.job_id,
             log=log,
+        )
+        # Each page a model read, by its own key (``matter/store``), beside the
+        # whole-file entries: on when the seat names the store (``matter/store.ENV``).
+        self.page_store = page_store_mod.PageStore(
+            self.cache.root if page_store_mod.enabled() else None,
+            lane="litigation",
+            log=log,
+            record_to=self.job.job_dir / page_store_mod.RECORD,
         )
 
     # ---- plumbing -------------------------------------------------------------------

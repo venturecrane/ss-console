@@ -46,6 +46,7 @@ from typing import Any, Callable
 from . import job_notes, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .firm_inputs import pin_env
+from .matter import store as page_store_mod
 from .daemon import RUNNER_BIN, Daemon
 from .proof import holds as proof_holds, watch as proof_watch
 from .skill_load import load_line
@@ -57,7 +58,7 @@ logger = logging.getLogger("jobs.litigation")
 QUEUE_ENV = "SMD_LITIGATION_QUEUE_DIR"
 INPUTS_ENV = "JOBS_LITIGATION_INPUTS"
 STATE_ENV = "JOBS_LITIGATION_STATE_DIR"
-#: The text cache (``litigation/textcache.py``): a dir the child owns on the
+#: The text cache (``jobs/textcache.py``, its older env name): a dir the child owns on the
 #: volume, made by entrypoint-litigation.sh. Passed like the state dir, so the
 #: child writes where the boot made room, never an unwritable default.
 TEXTCACHE_ENV = "JOBS_LITIGATION_TEXTCACHE_DIR"
@@ -163,7 +164,7 @@ class LitigationLane(DraftingLane):
         return None
 
     def _lane_env(self, job_id: str) -> dict[str, str]:
-        out: dict[str, str] = {}
+        out: dict[str, str] = page_store_mod.child_env()
         if self.inputs_dir:
             out[INPUTS_ENV] = str(pin_env(self.inputs_dir))
         if self.state_dir:
@@ -273,6 +274,7 @@ class LitigationLane(DraftingLane):
             fields["writes"] = [w for w in v["writes"] if isinstance(w, dict)]
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
+        fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
         state, fields = proof_watch.settle(self, job_id, [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)
@@ -381,7 +383,7 @@ def build_lane(d: Daemon) -> LitigationLane | None:
         logger.info("no %s; the litigation lane is not started", QUEUE_ENV)
         return None
     from .litigation.manifest import state_dir
-    from .litigation.textcache import cache_dir
+    from .textcache import cache_dir
 
     return LitigationLane(
         run_dir=d.run_dir,

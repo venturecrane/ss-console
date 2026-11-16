@@ -75,11 +75,11 @@ class Pages:
             pdf = exhibit_paths(self.out).get(exhibit)
             if pdf is not None:
                 try:
-                    import pymupdf
+                    from ..matter import pdf as matter_pdf
 
-                    with pymupdf.open(str(pdf)) as doc:
-                        if 1 <= page <= len(doc):
-                            parts.append(doc[page - 1].get_text())
+                    got = matter_pdf.page_text(pdf, page)
+                    if got is not None:
+                        parts.append(got)
                 except Exception:  # noqa: BLE001 - an unreadable PDF page is no text
                     pass
             self._cache[key] = "\n".join(p for p in parts if p)

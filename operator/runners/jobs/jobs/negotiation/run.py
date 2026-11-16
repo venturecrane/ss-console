@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import arrivals, limits as limits_mod, paid
-from ..matter import pull as matter_pull
+from ..matter import paid as matter_paid, pull as matter_pull, store as page_store_mod
 from ..stages.base import read_jsonl
 from . import extract as read_mod, notice as notice_mod, offer_check, rows as rows_mod, summary as summary_mod
 from . import text as text_mod
@@ -42,7 +42,8 @@ from .job import load as load_job
 from .select import extension, full_name, select
 
 LANE = "negotiation"
-OCR_MODEL = "claude-sonnet-5"
+#: The transcription model, fixed for this lane (its row in ``matter/policy``).
+OCR_MODEL = str(text_mod.POLICY.model)
 MAX_ATTEMPTS = 3
 EXIT = {"delivered": 0, "held": 1, "failed": 2}
 
@@ -171,21 +172,26 @@ class NegotiationRun:
             self._layout = layout_tools
         return self._layout
 
-    def _ocr(self, png: bytes) -> str:
-        import base64
+    @property
+    def page_store(self) -> Any:
+        """The store of paid page text (``matter/store``): on when the seat names it."""
+        if getattr(self, "_page_store", None) is None:
+            record = self.job.job_dir / page_store_mod.RECORD
+            self._page_store = page_store_mod.from_env(LANE, log=self.log, record_to=record)
+        return self._page_store
 
-        img = {
-            "type": "image",
-            "source": {"type": "base64", "media_type": "image/png", "data": base64.standard_b64encode(png).decode()},
-        }
-        r = self.doorway.call(
-            "negotiation_ocr",
-            model=OCR_MODEL,
-            messages=[{"role": "user", "content": [img, {"type": "text", "text": text_mod.OCR_PROMPT}]}],
-            max_tokens=8000,
-            cache_blocks=(),
-        )
-        return r.text
+    def _ocr(self, png: bytes) -> str:
+        pol = text_mod.POLICY
+
+        def read() -> str:
+            return matter_paid.ocr_plain(
+                self.doorway, "negotiation_ocr", model=OCR_MODEL, png=png, prompt=text_mod.OCR_PROMPT,
+                max_tokens=pol.max_tokens,
+            )  # fmt: skip
+
+        text = matter_paid.stored(self.page_store, lambda render: matter_paid.method(pol, OCR_MODEL, render), read)
+        self.page_store.flush()
+        return text
 
     def _attempts(self) -> dict[str, int]:
         return _load(self.state / "attempts.json", {})
@@ -250,7 +256,8 @@ class NegotiationRun:
         path = self._fetch(mid, f)
         if path is None:
             raise RuntimeError("the document could not be fetched")
-        text, _ = text_mod.text_of(path, extension(f), self._ocr)
+        with matter_paid.for_matter(mid):
+            text, _ = text_mod.text_of(path, extension(f), self._ocr)
         if not text.strip():
             raise RuntimeError("the document produced no text")
         return text

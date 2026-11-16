@@ -175,6 +175,22 @@ fi
 unset -f _jv_files _jv_held
 unset _rd _smd_jobs_run_dirs _SMD_JV _jv_old _jv_new _jv_refused _jv_outcome _jv_before _jv_after _jv_n _jv_state
 # <<< jobs-volume
+# The store of paid page text (wave 5, jobs/textcache.py and jobs/matter/store.py):
+# every page a lane paid a model to read, kept by file sha, page and method so no
+# lane pays for it again. On EVERY lane seat, not only a litigation one: the
+# chronology, demand, drafting and negotiation lanes read pages too, and
+# JOBS_TEXTCACHE_DIR is what switches the page store on (the daemon passes it to
+# each child, CHILD_ENV_PASS). Same dir as the litigation text cache, so one
+# purge covers both: transcribed matter text, child-only 0700, its parent
+# root:jobs 0750 so the child could not make it itself. Survives reprovision by
+# design; a matter leaves it with `python -m jobs.textcache purge --matter <id>`.
+# JOBS_LITIGATION_TEXTCACHE_DIR is the older name, kept for one release.
+if [ -n "${SMD_AUTHORED_LANES//,/}" ]; then
+  install -d -o root -g jobs -m 0750 "${JOBS_DATA_DIR}/litigation"
+  install -d -o jobs -g jobs -m 0700 "${JOBS_DATA_DIR}/litigation/textcache"
+  export JOBS_TEXTCACHE_DIR="${JOBS_RUN_DIR}/litigation/textcache"
+  export JOBS_LITIGATION_TEXTCACHE_DIR="${JOBS_TEXTCACHE_DIR}"
+fi
 if lane_on medchron; then
 install -d -o root -g workspace-broker -m 0770 "${JOBS_DATA_DIR}/queue"
 # jobs/: root-owned, group jobs EXECUTE-ONLY (0710) — the driver child

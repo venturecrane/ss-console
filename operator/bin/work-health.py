@@ -50,6 +50,7 @@ from bin.lib import work_health_auth as auth
 from bin.lib import work_health_casefile as casefile_wh
 from bin.lib import work_health_keeper as keeper_wh
 from bin.lib import work_health_mail as mail
+from bin.lib import work_health_page_store as page_store_wh
 from bin.lib import work_health_sources as src
 from bin.lib import seat_config
 
@@ -278,6 +279,7 @@ def _operator_items(
     items += src.delivery_proof_items(slug, rows, cfg, now)
     items += casefile_wh.casefile_schedule_items(slug, rows, now)
     items += keeper_wh.keeper_items(slug, rows, now, config)
+    items += page_store_wh.page_store_items(slug, rows, cfg, now)
     if has_smokeball:
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)

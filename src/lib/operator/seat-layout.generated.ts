@@ -38,6 +38,7 @@ export const SEAT_LAYOUT = {
   jobs_queue: '/run/smd-jobs/queue',
   jobs_run: '/run/smd-jobs',
   jobs_spend_watch: '/run/smd-jobs/spend-watch.json',
+  jobs_textcache: '/run/smd-jobs/litigation/textcache',
   lanes_run: '/run/smd-lanes',
   legacy_audit_db: '/opt/data/audit.db',
   litigation_broker_firm_yaml: '/var/lib/smd-config/litigation-broker-firm.yaml',

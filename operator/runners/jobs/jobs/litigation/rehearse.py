@@ -46,7 +46,8 @@ from typing import Any, Callable
 
 from ..seat import SeatError
 from ..stages.base import append_jsonl
-from . import extract as extract_mod, manifest, textcache, vocab
+from .. import textcache
+from . import extract as extract_mod, manifest, vocab
 from .outcome import LitigationFailed, LitigationHold, Verdict
 from .rehearse_report import OCR_LOG, _reads, build_report, write_report
 from .rehearse_report import REHEARSAL_STAGES, REPORT_KEYS  # noqa: F401 - re-exported: callers and tests read them here
@@ -178,6 +179,10 @@ class RehearsalRun(LitigationRun):
         self.read_matters = list(read_matters or [])
         self.seeded = seed_state(self.state, self.firm.root)
         self.cache.read_only = True
+        self.page_store.read_only, self.page_store.record_to = (
+            True,
+            None,
+        )  # a rehearsal writes no page and no job record
         self._ocr_lock = threading.Lock()
 
     def _ocr(self, png: bytes) -> str:
