@@ -95,6 +95,7 @@ from shared.trust_decision import (
 )
 
 from . import evaluate_steps as _steps
+from . import held_record as _held
 from . import send_as, voice_gate  # noqa: F401
 
 # Action classes that must never fire autonomously on a turn that ingested
@@ -1568,21 +1569,20 @@ def _evaluate_tool_call(
     )
     if proposed:
         return verdict
-    held = _steps.matter_identity(
-        tool_name, args, session_id, tool_call_id, session_match, persona_slug, call, decision
+    held = (
+        _steps.matter_identity(
+            tool_name, args, session_id, tool_call_id, session_match, persona_slug, call, decision
+        )
+        or _steps.structure_floor(tool_name, args, session_id, tool_call_id, call, decision)
+        or _steps.content_floor_and_voice(tool_name, args, session_id, call, decision)
+        or _steps.authored_spec(tool_name, args, session_id, call, decision)
     )
-    if held is not None:
-        return held
-    held = _steps.structure_floor(tool_name, args, session_id, tool_call_id, call, decision)
-    if held is not None:
-        return held
-    held = _steps.content_floor_and_voice(tool_name, args, session_id, call, decision)
-    if held is not None:
-        return held
-    held = _steps.authored_spec(tool_name, args, session_id, call, decision)
-    if held is not None:
-        return held
-    return _steps.release(tool_name, session_id, call, decision)
+    if held is None:
+        return _steps.release(tool_name, session_id, call, decision)
+    # 7. A gate after the ceiling held the call: the register says so.
+    return _held.record_refused(
+        tool_name, tool_call_id, session_id, session_match, persona_slug, decision, held
+    )
 
 
 __all__ = [

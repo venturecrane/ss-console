@@ -167,9 +167,10 @@ class TrustDecisionRegister:
 
     * ``_by_call`` — process-wide, keyed by the per-call ``tool_call_id``. Safe
       to share because the key is unique per call. Bounded FIFO so a long-lived
-      Machine whose pre-hook decisions are never collected (a refused call never
-      dispatches, so it never reaches ``post_tool_call``) cannot grow it without
-      limit. Guarded by a lock: the eviction bookkeeping is a read-then-mutate
+      Machine whose pre-hook decisions are never collected (a dark audit writer
+      takes nothing) cannot grow it without limit. A refused call IS collected:
+      Hermes fires ``post_tool_call`` for a plugin block, so its row takes the
+      refusal (``tests/test_blocked_after_allow_row.py``). Guarded by a lock: the eviction bookkeeping is a read-then-mutate
       sequence, which concurrent recorders would otherwise interleave.
     * ``_local.last`` — THREAD-LOCAL. See the module docstring: concurrent
       ``delegate_task`` worker threads each run their own pre→dispatch→post
