@@ -100,6 +100,12 @@
         "expected": 4416,
         "id": "r-scan2",
         "served": 128
+      },
+      {
+        "call": "fetch",
+        "expected": null,
+        "id": "r-scan2",
+        "served": 128
       }
     ],
     "sleeps": []

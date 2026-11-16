@@ -30,14 +30,14 @@ import hashlib
 import json
 import os
 import shutil
-import time
 from pathlib import Path
 from typing import Any
 
+from ..matter import pull as matter_pull
 from ..medchron.gates import foreign_identity as FI
 from . import email_parents
 from .base import StageRefusal, StageRun, append_jsonl, read_json, read_jsonl
-from .download import BATCH, BATCH_PAUSE_SECONDS, _mint_with_retry
+from .download import BATCH, BATCH_PAUSE_SECONDS
 
 CONTAINER_EXTS = {".msg", ".rpmsg"}
 # Attachment kinds that are never a medical record.
@@ -107,33 +107,39 @@ def pull_containers(sr: StageRun, targets: list[dict[str, Any]], fpath: dict[str
     done = {r["id"] for r in read_jsonl(log_path) if r.get("ok")}
     todo = [t for t in targets if t["id"] not in done]
     sr.log(f"{sr.slug}: {len(targets)} containers on the matter, {len(done)} already pulled, {len(todo)} to pull")
-    for i in range(0, len(todo), BATCH):
-        batch = todo[i : i + BATCH]
-        byid = {m["id"]: m for m in _mint_with_retry(sr, [b["id"] for b in batch])}
-        for b in batch:
-            m = byid.get(b["id"]) or {}
-            rec: dict[str, Any] = {
-                "id": b["id"],
-                "name": b["name"],
-                "ext": b["ext"],
-                "folder": fpath.get(b.get("folderId"), "/(root)"),
-                "size_expected": b.get("size"),
-            }
-            url = m.get("url")
-            if not url:
-                rec.update(ok=False, error=m.get("error", "no url"))
-            else:
-                dest = raw / f"{b['id']}.msg"
-                try:
-                    got = sr.seat.fetch(url, dest, b.get("size"))
-                    rec.update(ok=True, path=str(dest), size_got=got)
-                except Exception as exc:  # noqa: BLE001 - a fetch failure is recorded on the email's record and the partial file removed; the loop continues
-                    dest.unlink(missing_ok=True)
-                    rec.update(ok=False, error=str(exc)[:160])
-            append_jsonl(log_path, rec)
-        sr.log(f"  pulled {min(i + BATCH, len(todo))}/{len(todo)}")
-        if i + BATCH < len(todo):
-            time.sleep(BATCH_PAUSE_SECONDS)
+
+    def one(b: dict[str, Any], m: dict[str, Any]) -> None:
+        rec: dict[str, Any] = {
+            "id": b["id"],
+            "name": b["name"],
+            "ext": b["ext"],
+            "folder": fpath.get(b.get("folderId"), "/(root)"),
+            "size_expected": b.get("size"),
+        }
+        url = m.get("url")
+        if not url:
+            rec.update(ok=False, error=m.get("error", "no url"))
+        else:
+            dest = raw / f"{b['id']}.msg"
+            try:
+                # A container edited since the listing is taken as it is now (``matter.pull.fetch_one``).
+                got, changed = matter_pull.fetch_one(sr.seat, url, dest, b.get("size"), refuse_error_body=True)
+                rec.update(ok=True, path=str(dest), size_got=got, **changed)
+            except Exception as exc:  # noqa: BLE001 - a fetch failure is recorded on the email's record and the partial file removed; the loop continues
+                dest.unlink(missing_ok=True)
+                rec.update(ok=False, error=str(exc)[:160])
+        append_jsonl(log_path, rec)
+
+    matter_pull.pull(
+        sr.seat,
+        sr.job.matter_id,
+        todo,
+        one,
+        log=sr.log,
+        how=matter_pull.STAGES,
+        done=lambda i: sr.log(f"  pulled {min(i + BATCH, len(todo))}/{len(todo)}"),
+        pause=BATCH_PAUSE_SECONDS,
+    )
     return read_jsonl(log_path)
 
 

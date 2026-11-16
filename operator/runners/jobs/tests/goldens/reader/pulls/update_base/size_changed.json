@@ -2,10 +2,13 @@
   "cell": {
     "attempts": [
       {
-        "returned": ["Digital.pdf (size mismatch: got 5000, expected 3264; re-pull)"]
+        "returned": []
       }
     ],
     "files": {
+      "update-base/Digital.pdf": {
+        "bytes": 5000
+      },
       "update-base/Phone Note.txt": "Phone note: the adjuster called on 04/12/2026 and asked for the bills.\n",
       "update-base/Scan2.pdf": {
         "bytes": 4416
@@ -19,6 +22,12 @@
       {
         "call": "fetch",
         "expected": 3264,
+        "id": "r-digital",
+        "served": 5000
+      },
+      {
+        "call": "fetch",
+        "expected": null,
         "id": "r-digital",
         "served": 5000
       },

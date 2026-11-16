@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ..filing import full_name
 from ..medchron.gates import foreign_identity as FI
 from .base import StageRun, read_json, read_jsonl
 from .transcript import ABSENT, CONTENTLESS, UNREAD, contentless_reason, merged, recorded_ids, transcript_state
@@ -247,7 +248,7 @@ ORPHAN_HOLDS_FILE = "orphan_holds.json"
 def _orphan_named(r: dict[str, Any]) -> str:
     """How the log names one file: its id, its name as the firm sees it, and
     its folder. Never what its text says about anyone."""
-    out = f'{r.get("id")} "{r.get("name")}{r.get("ext") or ""}"'
+    out = f'{r.get("id")} "{full_name(r)}"'
     return out + (f" in {r['folder']}" if r.get("folder") else "")
 
 

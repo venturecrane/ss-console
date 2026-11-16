@@ -1,3 +1,89 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the reader goldens, per cell (lanes/<lane>, pulls/<site>/<scenario>, connector/<mode>, names/<site>). Introduced by wave 5 PR A with nothing allowed: each later wave 5 PR names here exactly the paths its named change (S1-S3, P1, D1, K1) moves."
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the reader goldens, per cell (lanes/<lane>, pulls/<site>/<scenario>, connector/<mode>, names/<site>). Introduced by wave 5 PR A with nothing allowed: each later wave 5 PR names here exactly the paths its named change (S1-S3, P1, D1, K1) moves. Wave 5 PR P (one downloader, jobs/matter/pull.py) names two. P1: the chronology's three downloads (stages/download.py, stages/msg.py, stages/update_base.py) take a file edited since it was listed, as the demand pull already did: a size the listing no longer matches is pulled again unchecked, and two pulls of one new size are the file as it is now (the row gains size_changed; a file that held the job as infra is now read); a re-pull that is the storage service's NoSuchKey document is still refused, so those cells gain only the second fetch. D1: a displayed file name drops a doubled extension (jobs/filing.shown, full_name for a row): the build_units log line (units_orphan_named) and the named-but-excluded name Records Reviewed shows (download_named_excluded). Every key stays byte-equal. Clear this list once it merges.",
+  "names/download_named_excluded": ["cell.named_excluded.1.name", "cell.named_excluded.4.name"],
+  "names/units_orphan_named": ["cell.0", "cell.4"],
+  "pulls/medchron_download/size_changed": [
+    "cell.attempts.0.returned",
+    "cell.files.raw/r-digital.pdf",
+    "cell.files.raw_manifest.jsonl.0.error",
+    "cell.files.raw_manifest.jsonl.0.http_status",
+    "cell.files.raw_manifest.jsonl.0.ok",
+    "cell.files.raw_manifest.jsonl.0.path",
+    "cell.files.raw_manifest.jsonl.0.sha256",
+    "cell.files.raw_manifest.jsonl.0.size_changed",
+    "cell.files.raw_manifest.jsonl.0.size_got",
+    "cell.seat",
+    "cell.seat.2.expected",
+    "cell.seat.2.id",
+    "cell.seat.2.served"
+  ],
+  "pulls/medchron_download/size_mismatch_twice": [
+    "cell.seat",
+    "cell.seat.2.expected",
+    "cell.seat.2.id",
+    "cell.seat.2.served"
+  ],
+  "pulls/medchron_download/storage_error_body": ["cell.seat"],
+  "pulls/msg_containers/size_changed": [
+    "cell.attempts.0.returned.0.error",
+    "cell.attempts.0.returned.0.ok",
+    "cell.attempts.0.returned.0.path",
+    "cell.attempts.0.returned.0.size_changed",
+    "cell.attempts.0.returned.0.size_got",
+    "cell.files.msg_manifest.jsonl.0.error",
+    "cell.files.msg_manifest.jsonl.0.ok",
+    "cell.files.msg_manifest.jsonl.0.path",
+    "cell.files.msg_manifest.jsonl.0.size_changed",
+    "cell.files.msg_manifest.jsonl.0.size_got",
+    "cell.files.msg_raw/r-digital.msg",
+    "cell.seat",
+    "cell.seat.2.expected",
+    "cell.seat.2.id",
+    "cell.seat.2.served",
+    "cell.seat.3.expected",
+    "cell.seat.3.id",
+    "cell.seat.3.served"
+  ],
+  "pulls/msg_containers/size_mismatch_twice": [
+    "cell.seat",
+    "cell.seat.2.expected",
+    "cell.seat.2.id",
+    "cell.seat.2.served",
+    "cell.seat.3.expected",
+    "cell.seat.3.id",
+    "cell.seat.3.served"
+  ],
+  "pulls/msg_containers/storage_error_body": [
+    "cell.seat",
+    "cell.seat.3.expected",
+    "cell.seat.3.id",
+    "cell.seat.3.served"
+  ],
+  "pulls/update_base/size_changed": [
+    "cell.attempts.0.returned",
+    "cell.attempts.0.returned.0",
+    "cell.files.update-base/Digital.pdf",
+    "cell.seat",
+    "cell.seat.2.expected",
+    "cell.seat.2.id",
+    "cell.seat.2.served",
+    "cell.seat.3.expected",
+    "cell.seat.3.id",
+    "cell.seat.3.served"
+  ],
+  "pulls/update_base/size_mismatch_twice": [
+    "cell.seat",
+    "cell.seat.2.expected",
+    "cell.seat.2.id",
+    "cell.seat.2.served",
+    "cell.seat.3.expected",
+    "cell.seat.3.id",
+    "cell.seat.3.served"
+  ],
+  "pulls/update_base/storage_error_body": [
+    "cell.seat",
+    "cell.seat.3.expected",
+    "cell.seat.3.id",
+    "cell.seat.3.served"
+  ]
 }

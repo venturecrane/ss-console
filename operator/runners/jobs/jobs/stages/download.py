@@ -34,23 +34,22 @@ keeps the hard exit.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
-import time
 from pathlib import Path
 from typing import Any
 
+from ..filing import full_name
+from ..matter import pull as matter_pull
 from ..seat import SeatError
 from . import email_parents
 from .base import StageRun, append_jsonl, read_json, read_jsonl
 
-BATCH = 8
+BATCH = matter_pull.BATCH
 # The vendor's storage does not have this object. Structured off the response
 # rather than parsed out of the message, because a presigned URL can itself
 # contain the digits.
 HTTP_ABSENT = 404
-MINT_RETRY_PAUSE_SECONDS = 5.0
 BATCH_PAUSE_SECONDS = 1.0
 #: The stage's exits (dag.py reads EXITS); 75 is compose.INFRA_EXIT.
 #: EXIT_ALL_EXCLUDED (2026-10-25): every named document is excluded by the
@@ -143,50 +142,57 @@ def run(sr: StageRun) -> int:
     pulled = dupes = 0
     failed: list[dict[str, Any]] = []
     batches = (len(todo) + BATCH - 1) // BATCH
-    for i in range(0, len(todo), BATCH):
-        batch = todo[i : i + BATCH]
-        ids = [b["id"] for b in batch]
-        minted = _mint_with_retry(sr, ids)
-        byid = {m["id"]: m for m in minted}
-        for b in batch:
-            m = byid.get(b["id"]) or {}
-            rec: dict[str, Any] = {
-                "id": b["id"],
-                "name": b["name"],
-                "ext": b["ext"],
-                "folder": fpath.get(b.get("folderId"), "/(root)"),
-                "size_expected": b.get("size"),
-            }
-            url = m.get("url")
-            if not url:
-                rec.update(ok=False, error=m.get("error", "no url"))
-                failed.append(rec)
-                append_jsonl(log_path, rec)
-                continue
-            dest = raw / (b["id"] + (b.get("ext") or ""))
-            try:
-                got = sr.seat.fetch(url, dest, b.get("size"))
-                sha = hashlib.sha256(dest.read_bytes()).hexdigest()
-                rec.update(ok=True, path=str(dest), size_got=got, sha256=sha)
-                dup = seen_sha.get(sha)
-                if dup:
-                    dest.unlink()
-                    rec.update(duplicate_of=dup, path=None)
-                    dupes += 1
-                else:
-                    seen_sha[sha] = b["id"]
-                    pulled += 1
-            except Exception as exc:  # noqa: BLE001 - one file's failure is one row
-                Path(dest).unlink(missing_ok=True)
-                rec.update(ok=False, error=str(exc)[:200])
-                rec["http_status"] = getattr(getattr(exc, "response", None), "status_code", None)
-                failed.append(rec)
-            append_jsonl(log_path, rec)
+
+    def one(b: dict[str, Any], m: dict[str, Any]) -> None:
+        nonlocal pulled, dupes
+        rec = _pull_one(sr, b, m, fpath, raw, seen_sha)
+        if not rec["ok"]:
+            failed.append(rec)
+        elif rec.get("duplicate_of"):
+            dupes += 1
+        else:
+            pulled += 1
+        append_jsonl(log_path, rec)
+
+    def after(i: int) -> None:
         sr.log(f"batch {i // BATCH + 1}/{batches} done ({pulled} pulled, {dupes} byte-duplicates skipped)")
-        if i + BATCH < len(todo):
-            time.sleep(BATCH_PAUSE_SECONDS)
+
+    matter_pull.pull(
+        sr.seat, sr.job.matter_id, todo, one, log=sr.log, how=matter_pull.STAGES, done=after, pause=BATCH_PAUSE_SECONDS
+    )
     sr.log(f"DONE {pulled} pulled, {dupes} byte-duplicates skipped, {len(failed)} failed")
     return _settle(sr, failed, n_targets=len(targets), landed=len(done) + pulled)
+
+
+def _pull_one(
+    sr: StageRun, b: dict[str, Any], m: dict[str, Any], fpath: dict[str, str], raw: Path, seen_sha: dict[str, str]
+) -> dict[str, Any]:
+    """One target's ``raw_manifest.jsonl`` row. A file edited since the
+    listing is taken as it is now, its row saying the size changed
+    (``matter.pull.fetch_one``; until wave 5 only the demand pull did)."""
+    rec: dict[str, Any] = {
+        "id": b["id"],
+        "name": b["name"],
+        "ext": b["ext"],
+        "folder": fpath.get(b.get("folderId"), "/(root)"),
+        "size_expected": b.get("size"),
+    }
+    url = m.get("url")
+    if not url:
+        rec.update(ok=False, error=m.get("error", "no url"))
+        return rec
+    dest = raw / (b["id"] + (b.get("ext") or ""))
+    try:
+        got, changed = matter_pull.fetch_one(sr.seat, url, dest, b.get("size"), refuse_error_body=True)
+        sha, dup = matter_pull.keep(dest, seen_sha, b["id"])
+        rec.update(ok=True, path=str(dest), size_got=got, sha256=sha, **changed)
+        if dup:
+            rec.update(duplicate_of=dup, path=None)
+    except Exception as exc:  # noqa: BLE001 - one file's failure is one row
+        Path(dest).unlink(missing_ok=True)
+        rec.update(ok=False, error=str(exc)[:200])
+        rec["http_status"] = matter_pull.http_status(exc)
+    return rec
 
 
 CONTAINER_EXTS = {".msg", ".rpmsg"}
@@ -302,7 +308,7 @@ def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rul
         d = by_id[i]
         why = _why_not(d, fpath.get(str(d.get("folderId") or ""), "/(root)"), rule, names, chron, firm)
         if why:
-            excluded.append({"id": i, "name": f"{d.get('name') or ''}{d.get('ext') or ''}", "why": why})
+            excluded.append({"id": i, "name": full_name(d), "why": why})
         elif (d.get("ext") or "").lower() not in CONTAINER_EXTS:
             targets.append(d)
     (sr.slug_dir / "named_excluded.json").write_text(json.dumps(excluded, indent=1), encoding="utf-8")
@@ -317,15 +323,9 @@ def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rul
 
 
 def _mint_with_retry(sr: StageRun, ids: list[str]) -> list[dict[str, Any]]:
-    try:
-        return sr.seat.mint(sr.job.matter_id, ids)
-    except Exception as exc:  # noqa: BLE001 - a mint failure of any kind is retried once; the second failure is recorded per file id below
-        sr.log(f"MINT FAIL ({str(exc)[:120]}); retrying once")
-        time.sleep(MINT_RETRY_PAUSE_SECONDS)
-        try:
-            return sr.seat.mint(sr.job.matter_id, ids)
-        except Exception as exc2:  # noqa: BLE001 - the second mint failure is recorded per file id so the download stage reports exactly which files failed
-            return [{"id": i, "error": f"mint failed twice: {str(exc2)[:120]}"} for i in ids]
+    """The chronology's mint (``matter.pull.STAGES``: one retry after five
+    seconds, the second failure recorded per file id)."""
+    return list(matter_pull.mint(sr.seat, sr.job.matter_id, ids, sr.log, matter_pull.STAGES).values())
 
 
 def _settle(sr: StageRun, failed: list[dict[str, Any]], *, n_targets: int, landed: int) -> int:

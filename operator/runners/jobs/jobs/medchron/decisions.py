@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import unopened
+from ..filing import shown
 from .config import FirmConfig
 from .decision_rules import (  # the shared parts, and the control hook (split out 2026-10-24)
     Decision,
@@ -241,7 +242,7 @@ def _named(hold: dict[str, Any]) -> str:
     if hold.get("name"):
         out += f' "{hold["name"]}"'
     if hold.get("container"):
-        out += f' attached to the email "{hold["container"]}"'
+        out += f' attached to the email "{shown(str(hold["container"]))}"'
     return out
 
 

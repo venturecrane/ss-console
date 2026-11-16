@@ -36,9 +36,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from ..matter import pull as matter_pull
 from ..medchron.update import body as B, docx_md, locate as L
 from .base import StageRun, read_json
-from .download import _mint_with_retry
 from .render import render_text
 
 HELD = "update_held: "
@@ -61,21 +61,23 @@ def _pull(sr: StageRun, rows: list[dict[str, Any]], dest: Path) -> list[str]:
     Read-only: a mint and an https GET per file, nothing written to the matter."""
     dest.mkdir(parents=True, exist_ok=True)
     failed = []
-    for i in range(0, len(rows), 8):
-        batch = rows[i : i + 8]
-        minted = {m["id"]: m for m in _mint_with_retry(sr, [r["id"] for r in batch])}
-        for r in batch:
-            url = (minted.get(r["id"]) or {}).get("url")
-            target = dest / r["name"]
-            if target.is_file() and r.get("size") and target.stat().st_size == int(r["size"]):
-                continue
-            try:
-                if not url:
-                    raise RuntimeError((minted.get(r["id"]) or {}).get("error") or "no url")
-                sr.seat.fetch(url, target, r.get("size"))
-            except Exception as exc:  # noqa: BLE001 - one file's failure is named in the exit line; the pass is retried whole
-                target.unlink(missing_ok=True)
-                failed.append(f"{r['name']} ({str(exc)[:80]})")
+
+    def one(r: dict[str, Any], m: dict[str, Any]) -> None:
+        url = m.get("url")
+        target = dest / r["name"]
+        if target.is_file() and r.get("size") and target.stat().st_size == int(r["size"]):
+            return
+        try:
+            if not url:
+                raise RuntimeError(m.get("error") or "no url")
+            # A delivered file edited since the listing is taken as it is now
+            # (``matter.pull.fetch_one``); the base proof below reads its bytes.
+            matter_pull.fetch_one(sr.seat, url, target, r.get("size"), refuse_error_body=True)
+        except Exception as exc:  # noqa: BLE001 - one file's failure is named in the exit line; the pass is retried whole
+            target.unlink(missing_ok=True)
+            failed.append(f"{r['name']} ({str(exc)[:80]})")
+
+    matter_pull.pull(sr.seat, sr.job.matter_id, rows, one, log=sr.log, how=matter_pull.STAGES)
     return failed
 
 

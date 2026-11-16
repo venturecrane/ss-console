@@ -30,6 +30,12 @@
       },
       {
         "call": "fetch",
+        "expected": null,
+        "id": "r-scan2",
+        "served": 128
+      },
+      {
+        "call": "fetch",
         "expected": 71,
         "id": "r-note-txt",
         "served": 71

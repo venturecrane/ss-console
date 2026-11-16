@@ -26,15 +26,14 @@ import hashlib
 import json
 import os
 import re
-import time
+import time  # noqa: F401 - the pull's tests patch ``pull.time.sleep``; the pauses are in jobs/matter/pull.py
 from pathlib import Path
 from typing import Any, Callable
 
-from ..stages.base import append_jsonl, read_jsonl
+from ..matter import pull as matter_pull
+from ..stages.base import read_jsonl  # noqa: F401 - the pull's tests read ``pull.read_jsonl``
 from .firm import DemandFirm
 
-BATCH = 8
-HTTP_ABSENT = 404
 _ADDR = re.compile(r"[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 ATTACH_KEEP = {".pdf", ".docx", ".doc", ".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 ATTACH_MIN_BYTES = 20_000  # signature images and logos
@@ -170,123 +169,13 @@ def _line(text: str, field: str) -> str:
 
 
 # ---- the pull ------------------------------------------------------------------
-def _mint(seat: Any, matter_id: str, ids: list[str], log: Callable[[str], None]) -> dict[str, dict[str, Any]]:
-    for attempt in (1, 2):
-        try:
-            return {m["id"]: m for m in seat.mint(matter_id, ids)}
-        except Exception as exc:  # noqa: BLE001 - a mint failure is retried once, then recorded per file
-            log(f"mint failed ({str(exc)[:120]}); attempt {attempt} of 2")
-            time.sleep(2.0 * attempt)
-    return {i: {"id": i, "error": "mint failed twice"} for i in ids}
-
-
-def _fetch_one(seat: Any, d: dict[str, Any], minted: dict[str, Any], raw: Path, seen: dict[str, str]) -> dict[str, Any]:
-    rec = {k: d.get(k) for k in ("id", "name", "ext", "folder")}
-    url = minted.get("url")
-    if not url:
-        return {**rec, "ok": False, "error": minted.get("error", "no url")}
-    dest = raw / (str(d["id"]) + (d.get("ext") or ""))
-    changed: dict[str, Any] = {}
-    try:
-        try:
-            seat.fetch(url, dest, d.get("size"))
-        except Exception as exc:  # a listed size the file no longer has is checked below; else re-raised
-            got = _mismatch_got(exc)
-            if got is None:
-                raise
-            # The file changed after the listing (2026-10-23: three A&P files
-            # edited mid-run failed a 230-matter list on every retry, because
-            # each re-pull was checked against the stale listed size). Pull it
-            # again unchecked: two pulls of the same new size are the file as
-            # it is now, and the row says the size changed.
-            again = seat.fetch(url, dest, None)
-            if again != got:
-                raise
-            changed = {"size_changed": {"listed": d.get("size"), "fetched": got}}
-    except Exception as exc:  # noqa: BLE001 - one file's failure is one row
-        dest.unlink(missing_ok=True)
-        status = getattr(getattr(exc, "response", None), "status_code", None)
-        return {**rec, "ok": False, "error": str(exc)[:200], "http_status": status}
-    sha = hashlib.sha256(dest.read_bytes()).hexdigest()
-    if sha in seen:
-        dest.unlink()
-        return {**rec, "ok": True, "sha256": sha, "duplicate_of": seen[sha], **changed}
-    seen[sha] = str(d["id"])
-    return {**rec, "ok": True, "sha256": sha, "path": str(dest), **changed}
-
-
-_MISMATCH = re.compile(r"size mismatch: got (\d+), expected (\d+)")
-
-
-def _mismatch_got(exc: BaseException) -> int | None:
-    """The byte count a size-mismatch refusal fetched, or None for any other failure."""
-    m = _MISMATCH.search(str(exc))
-    return int(m.group(1)) if m else None
-
-
-#: A file whose fetch failed for a reason time fixes is fetched again, after a
-#: pause, before the run gives up on it. 2026-10-14: the A&P litigation proof
-#: fetched ~400 files and Smokeball answered HTTP 429 on two of them after the
-#: connector's own four attempts (1+2+4+8 s); the run failed `fetch_unfinished`
-#: and would have needed a person to resume it. A rate limit clears in seconds;
-#: a run of two hundred matters must not stop for one. Not retried: a file
-#: Smokeball will not serve (403) or does not hold (404), which a retry does
-#: not change, and which `litigation.fetch` records as findings.
-RETRY_PASSES = 2
-RETRY_PAUSE_SECONDS = 20.0
-_FINAL = re.compile(r"HTTP 40[34]\b")
-
-
-def _retryable(row: dict[str, Any]) -> bool:
-    if row.get("ok"):
-        return False
-    if row.get("http_status") in (HTTP_ABSENT, 403):
-        return False
-    return not _FINAL.search(str(row.get("error") or ""))
-
-
-def _refused(row: dict[str, Any]) -> bool:
-    return row.get("http_status") == 403 or bool(re.search(r"HTTP 403\b", str(row.get("error") or "")))
-
-
-def _pull(
-    seat: Any, matter_id: str, todo: list[dict[str, Any]], raw: Path, seen: dict[str, str], log_path: Path, log: Any
-) -> dict[str, dict[str, Any]]:
-    rows: dict[str, dict[str, Any]] = {}
-    for i in range(0, len(todo), BATCH):
-        batch = todo[i : i + BATCH]
-        minted = _mint(seat, matter_id, [b["id"] for b in batch], log)
-        for b in batch:
-            row = _fetch_one(seat, b, minted.get(b["id"]) or {}, raw, seen)
-            rows[b["id"]] = row
-            append_jsonl(log_path, row)
-        log(f"pulled {min(i + BATCH, len(todo))}/{len(todo)}")
-    return rows
-
-
-def fetch_all(
-    seat: Any, matter_id: str, targets: list[dict[str, Any]], data: Path, log: Callable[[str], None]
-) -> list[dict[str, Any]]:
-    """Resumable: a row already ``ok`` in ``pulled.jsonl`` is not fetched again.
-    A row that failed for a reason time fixes is tried again, ``RETRY_PASSES``
-    times after a pause, within this call."""
-    raw = data / "raw"
-    raw.mkdir(parents=True, exist_ok=True)
-    log_path = data / "pulled.jsonl"
-    rows = {r["id"]: r for r in read_jsonl(log_path)}
-    seen = {r["sha256"]: r["id"] for r in rows.values() if r.get("ok") and r.get("path")}
-    todo = [t for t in targets if not (rows.get(t["id"]) or {}).get("ok")]
-    rows.update(_pull(seat, matter_id, todo, raw, seen, log_path, log))
-    for n in range(1, RETRY_PASSES + 1):
-        again = [t for t in todo if _retryable(rows.get(t["id"]) or {})]
-        if not again:
-            break
-        log(
-            f"{len(again)} not pulled for a reason a retry can fix; retry {n} of {RETRY_PASSES} in {RETRY_PAUSE_SECONDS:.0f}s"
-        )
-        time.sleep(RETRY_PAUSE_SECONDS)
-        rows.update(_pull(seat, matter_id, again, raw, seen, log_path, log))
-    return [rows[t["id"]] for t in targets]
+# One downloader for every lane (``jobs/matter/pull.py``); the names below are
+# what this lane's callers and tests reach it by.
+fetch_all = matter_pull.fetch_all
+_retryable = matter_pull.retryable
+_refused = matter_pull.refused
+RETRY_PASSES = matter_pull.RETRY_PASSES
+RETRY_PAUSE_SECONDS = matter_pull.RETRY_PAUSE_SECONDS
 
 
 # ---- emails ----------------------------------------------------------------------

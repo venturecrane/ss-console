@@ -8,7 +8,7 @@
       },
       {
         "id": "n-emailed",
-        "name": "x.pdf.pdf",
+        "name": "x.pdf",
         "why": "outside the firm's folder rules (an excluded folder or kind)"
       },
       {
@@ -23,7 +23,7 @@
       },
       {
         "id": "n-upper",
-        "name": "Scan.PDF.PDF",
+        "name": "Scan.PDF",
         "why": "outside the firm's folder rules (an excluded folder or kind)"
       }
     ],
