@@ -1,107 +1,101 @@
 {
- "cell": {
-  "attempts": [
-   {
-    "returned": [
-     "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-digital.pdf",
-     "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-scan2.pdf",
-     "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-note-txt.txt"
-    ]
-   }
-  ],
-  "files": {
-   "m/11111111-1111-4111-8111-111111111111/pulled.jsonl": [
-    {
-     "ext": ".pdf",
-     "folder": "fold-med",
-     "id": "r-digital",
-     "name": "Digital",
-     "ok": true,
-     "path": "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-digital.pdf",
-     "sha256": "<sha256:775e2a05b523>",
-     "size_changed": {
-      "fetched": 5000,
-      "listed": 3264
-     }
+  "cell": {
+    "attempts": [
+      {
+        "returned": [
+          "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-digital.pdf",
+          "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-scan2.pdf",
+          "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-note-txt.txt"
+        ]
+      }
+    ],
+    "files": {
+      "m/11111111-1111-4111-8111-111111111111/pulled.jsonl": [
+        {
+          "ext": ".pdf",
+          "folder": "fold-med",
+          "id": "r-digital",
+          "name": "Digital",
+          "ok": true,
+          "path": "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-digital.pdf",
+          "sha256": "<sha256:775e2a05b523>",
+          "size_changed": {
+            "fetched": 5000,
+            "listed": 3264
+          }
+        },
+        {
+          "ext": ".pdf",
+          "folder": "fold-med",
+          "id": "r-scan2",
+          "name": "Scan2",
+          "ok": true,
+          "path": "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-scan2.pdf",
+          "sha256": "<sha:scan2>"
+        },
+        {
+          "ext": ".txt",
+          "folder": "fold-med",
+          "id": "r-note-txt",
+          "name": "Phone Note",
+          "ok": true,
+          "path": "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-note-txt.txt",
+          "sha256": "<sha:note_txt>"
+        }
+      ],
+      "m/11111111-1111-4111-8111-111111111111/raw/r-digital.pdf": {
+        "bytes": 5000
+      },
+      "m/11111111-1111-4111-8111-111111111111/raw/r-note-txt.txt": "Phone note: the adjuster called on 04/12/2026 and asked for the bills.\n",
+      "m/11111111-1111-4111-8111-111111111111/raw/r-scan2.pdf": {
+        "bytes": 4416
+      }
     },
-    {
-     "ext": ".pdf",
-     "folder": "fold-med",
-     "id": "r-scan2",
-     "name": "Scan2",
-     "ok": true,
-     "path": "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-scan2.pdf",
-     "sha256": "<sha:scan2>"
-    },
-    {
-     "ext": ".txt",
-     "folder": "fold-med",
-     "id": "r-note-txt",
-     "name": "Phone Note",
-     "ok": true,
-     "path": "<TMP>/neg-job/data/m/11111111-1111-4111-8111-111111111111/raw/r-note-txt.txt",
-     "sha256": "<sha:note_txt>"
-    }
-   ],
-   "m/11111111-1111-4111-8111-111111111111/raw/r-digital.pdf": {
-    "bytes": 5000
-   },
-   "m/11111111-1111-4111-8111-111111111111/raw/r-note-txt.txt": "Phone note: the adjuster called on 04/12/2026 and asked for the bills.\n",
-   "m/11111111-1111-4111-8111-111111111111/raw/r-scan2.pdf": {
-    "bytes": 4416
-   }
+    "seat": [
+      {
+        "call": "mint",
+        "ids": ["r-digital"]
+      },
+      {
+        "call": "fetch",
+        "expected": 3264,
+        "id": "r-digital",
+        "served": 5000
+      },
+      {
+        "call": "fetch",
+        "expected": null,
+        "id": "r-digital",
+        "served": 5000
+      },
+      {
+        "call": "mint",
+        "ids": ["r-scan2"]
+      },
+      {
+        "call": "fetch",
+        "expected": 4416,
+        "id": "r-scan2",
+        "served": 4416
+      },
+      {
+        "call": "mint",
+        "ids": ["r-note-txt"]
+      },
+      {
+        "call": "fetch",
+        "expected": 71,
+        "id": "r-note-txt",
+        "served": 71
+      }
+    ],
+    "sleeps": []
   },
-  "seat": [
-   {
-    "call": "mint",
-    "ids": [
-     "r-digital"
-    ]
-   },
-   {
-    "call": "fetch",
-    "expected": 3264,
-    "id": "r-digital",
-    "served": 5000
-   },
-   {
-    "call": "fetch",
-    "expected": null,
-    "id": "r-digital",
-    "served": 5000
-   },
-   {
-    "call": "mint",
-    "ids": [
-     "r-scan2"
-    ]
-   },
-   {
-    "call": "fetch",
-    "expected": 4416,
-    "id": "r-scan2",
-    "served": 4416
-   },
-   {
-    "call": "mint",
-    "ids": [
-     "r-note-txt"
-    ]
-   },
-   {
-    "call": "fetch",
-    "expected": 71,
-    "id": "r-note-txt",
-    "served": 71
-   }
-  ],
-  "sleeps": []
- },
- "env_stores": {
-  "JOBS_DATA_DIR": {},
-  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
-  "JOBS_TEXTCACHE_DIR": {},
-  "SMD_POST_JOURNAL_DIR": {},
-  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
- }
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
 }

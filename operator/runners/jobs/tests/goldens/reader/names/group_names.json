@@ -1,32 +1,32 @@
 {
- "cell": {
-  "index_rows": [
-   {
-    "n-bare": "README",
-    "n-emailed": "x.pdf.pdf",
-    "n-filed": "x.pdf",
-    "n-plain": "Clinic Note 01-20-26.docx",
-    "n-upper": "Scan.PDF.PDF"
-   }
-  ],
-  "looked_up": [
-   "x.pdf.pdf",
-   "x.pdf.pdf",
-   "x.pdf",
-   "x.pdf",
-   "Clinic Note 01-20-26.docx",
-   "Clinic Note 01-20-26.docx",
-   "README",
-   "README",
-   "Scan.PDF.PDF",
-   "Scan.PDF.PDF"
-  ]
- },
- "env_stores": {
-  "JOBS_DATA_DIR": {},
-  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
-  "JOBS_TEXTCACHE_DIR": {},
-  "SMD_POST_JOURNAL_DIR": {},
-  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
- }
+  "cell": {
+    "index_rows": [
+      {
+        "n-bare": "README",
+        "n-emailed": "x.pdf.pdf",
+        "n-filed": "x.pdf",
+        "n-plain": "Clinic Note 01-20-26.docx",
+        "n-upper": "Scan.PDF.PDF"
+      }
+    ],
+    "looked_up": [
+      "x.pdf.pdf",
+      "x.pdf.pdf",
+      "x.pdf",
+      "x.pdf",
+      "Clinic Note 01-20-26.docx",
+      "Clinic Note 01-20-26.docx",
+      "README",
+      "README",
+      "Scan.PDF.PDF",
+      "Scan.PDF.PDF"
+    ]
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
 }

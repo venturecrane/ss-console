@@ -1,41 +1,31 @@
 {
- "cell": {
-  "by_hash": [
-   {
-    "already_pulled_as": null,
-    "bytes": 36703,
-    "container_ids": [
-     "n-emailed",
-     "n-filed",
-     "n-plain",
-     "n-bare",
-     "n-upper"
+  "cell": {
+    "by_hash": [
+      {
+        "already_pulled_as": null,
+        "bytes": 36703,
+        "container_ids": ["n-emailed", "n-filed", "n-plain", "n-bare", "n-upper"],
+        "containers": [
+          "x.pdf.msg",
+          "x.msg",
+          "Clinic Note 01-20-26.msg",
+          "README.msg",
+          "Scan.PDF.msg"
+        ],
+        "emails": ["RE: offer"],
+        "kind": "doc",
+        "local": "91b8bbb02954.docx",
+        "names": ["Letter.docx"],
+        "sha256": "<sha256:91b8bbb02954>"
+      }
     ],
-    "containers": [
-     "x.pdf.msg",
-     "x.msg",
-     "Clinic Note 01-20-26.msg",
-     "README.msg",
-     "Scan.PDF.msg"
-    ],
-    "emails": [
-     "RE: offer"
-    ],
-    "kind": "doc",
-    "local": "91b8bbb02954.docx",
-    "names": [
-     "Letter.docx"
-    ],
-    "sha256": "<sha256:91b8bbb02954>"
-   }
-  ],
-  "errors": []
- },
- "env_stores": {
-  "JOBS_DATA_DIR": {},
-  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
-  "JOBS_TEXTCACHE_DIR": {},
-  "SMD_POST_JOURNAL_DIR": {},
-  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
- }
+    "errors": []
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
 }

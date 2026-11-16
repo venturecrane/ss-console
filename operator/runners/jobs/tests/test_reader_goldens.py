@@ -120,4 +120,24 @@ def test_a_reader_cell_records_what_its_golden_holds(
     got = RUNS[cell](tmp_path, monkeypatch)
     got = {"cell": got, "env_stores": {v: rk.tree(tmp_path / sub, tmp_path) for v, sub in STORE_ENV.items()}}
     bad = gk.write_or_compare(ROOT / f"{cell}.json", got, ALLOWED.get(cell, []))
+    if gk.writing():
+        _prettier(ROOT / f"{cell}.json")
     assert not bad, f"{cell}: differs at {bad[:20]}"
+
+
+REPO = Path(__file__).resolve().parents[4]
+
+
+def _prettier(path: Path) -> None:
+    """A rewritten golden in the repo's own JSON style, so the format check
+    (``npm run format:check``) passes on the file as written and a rewrite of
+    unchanged behaviour is byte for byte the committed file. The comparison
+    reads JSON, so a tree without node (the integrity job's base) compares the
+    same; there the file is left as ``goldens_kit.dump`` wrote it."""
+    import shutil
+    import subprocess
+
+    exe = REPO / "node_modules" / ".bin" / "prettier"
+    if not exe.exists() or shutil.which("node") is None:
+        return
+    subprocess.run([str(exe), "--write", "--log-level", "warn", str(path)], cwd=REPO, check=True)  # noqa: S603 - the repo's own pinned formatter on a file this test just wrote

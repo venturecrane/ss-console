@@ -1,36 +1,34 @@
 {
- "cell": {
-  "attempts": [
-   {
-    "message": "read-back mismatch: Digital.pdf: the downloaded bytes differ from the bytes built",
-    "raised": "ReadbackMismatch"
-   }
-  ],
-  "files": {},
-  "seat": [
-   {
-    "call": "list_files"
-   },
-   {
-    "call": "mint",
-    "ids": [
-     "r-digital"
-    ]
-   },
-   {
-    "call": "fetch",
-    "expected": null,
-    "id": "r-digital",
-    "served": 5000
-   }
-  ],
-  "sleeps": []
- },
- "env_stores": {
-  "JOBS_DATA_DIR": {},
-  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
-  "JOBS_TEXTCACHE_DIR": {},
-  "SMD_POST_JOURNAL_DIR": {},
-  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
- }
+  "cell": {
+    "attempts": [
+      {
+        "message": "read-back mismatch: Digital.pdf: the downloaded bytes differ from the bytes built",
+        "raised": "ReadbackMismatch"
+      }
+    ],
+    "files": {},
+    "seat": [
+      {
+        "call": "list_files"
+      },
+      {
+        "call": "mint",
+        "ids": ["r-digital"]
+      },
+      {
+        "call": "fetch",
+        "expected": null,
+        "id": "r-digital",
+        "served": 5000
+      }
+    ],
+    "sleeps": []
+  },
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
 }

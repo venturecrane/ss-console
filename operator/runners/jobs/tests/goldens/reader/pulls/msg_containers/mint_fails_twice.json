@@ -1,96 +1,86 @@
 {
- "cell": {
-  "attempts": [
-   {
-    "returned": [
-     {
-      "error": "mint failed twice: mint: the vendor answered 503",
-      "ext": ".pdf",
-      "folder": "/MEDICAL",
-      "id": "r-digital",
-      "name": "Digital",
-      "ok": false,
-      "size_expected": 3264
-     },
-     {
-      "error": "mint failed twice: mint: the vendor answered 503",
-      "ext": ".pdf",
-      "folder": "/MEDICAL",
-      "id": "r-scan2",
-      "name": "Scan2",
-      "ok": false,
-      "size_expected": 4416
-     },
-     {
-      "error": "mint failed twice: mint: the vendor answered 503",
-      "ext": ".txt",
-      "folder": "/MEDICAL",
-      "id": "r-note-txt",
-      "name": "Phone Note",
-      "ok": false,
-      "size_expected": 71
-     }
-    ]
-   }
-  ],
-  "files": {
-   "msg_manifest.jsonl": [
-    {
-     "error": "mint failed twice: mint: the vendor answered 503",
-     "ext": ".pdf",
-     "folder": "/MEDICAL",
-     "id": "r-digital",
-     "name": "Digital",
-     "ok": false,
-     "size_expected": 3264
+  "cell": {
+    "attempts": [
+      {
+        "returned": [
+          {
+            "error": "mint failed twice: mint: the vendor answered 503",
+            "ext": ".pdf",
+            "folder": "/MEDICAL",
+            "id": "r-digital",
+            "name": "Digital",
+            "ok": false,
+            "size_expected": 3264
+          },
+          {
+            "error": "mint failed twice: mint: the vendor answered 503",
+            "ext": ".pdf",
+            "folder": "/MEDICAL",
+            "id": "r-scan2",
+            "name": "Scan2",
+            "ok": false,
+            "size_expected": 4416
+          },
+          {
+            "error": "mint failed twice: mint: the vendor answered 503",
+            "ext": ".txt",
+            "folder": "/MEDICAL",
+            "id": "r-note-txt",
+            "name": "Phone Note",
+            "ok": false,
+            "size_expected": 71
+          }
+        ]
+      }
+    ],
+    "files": {
+      "msg_manifest.jsonl": [
+        {
+          "error": "mint failed twice: mint: the vendor answered 503",
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-digital",
+          "name": "Digital",
+          "ok": false,
+          "size_expected": 3264
+        },
+        {
+          "error": "mint failed twice: mint: the vendor answered 503",
+          "ext": ".pdf",
+          "folder": "/MEDICAL",
+          "id": "r-scan2",
+          "name": "Scan2",
+          "ok": false,
+          "size_expected": 4416
+        },
+        {
+          "error": "mint failed twice: mint: the vendor answered 503",
+          "ext": ".txt",
+          "folder": "/MEDICAL",
+          "id": "r-note-txt",
+          "name": "Phone Note",
+          "ok": false,
+          "size_expected": 71
+        }
+      ]
     },
-    {
-     "error": "mint failed twice: mint: the vendor answered 503",
-     "ext": ".pdf",
-     "folder": "/MEDICAL",
-     "id": "r-scan2",
-     "name": "Scan2",
-     "ok": false,
-     "size_expected": 4416
-    },
-    {
-     "error": "mint failed twice: mint: the vendor answered 503",
-     "ext": ".txt",
-     "folder": "/MEDICAL",
-     "id": "r-note-txt",
-     "name": "Phone Note",
-     "ok": false,
-     "size_expected": 71
-    }
-   ]
+    "seat": [
+      {
+        "call": "mint",
+        "ids": ["r-digital", "r-scan2", "r-note-txt"]
+      },
+      {
+        "call": "mint",
+        "ids": ["r-digital", "r-scan2", "r-note-txt"]
+      }
+    ],
+    "sleeps": [5.0]
   },
-  "seat": [
-   {
-    "call": "mint",
-    "ids": [
-     "r-digital",
-     "r-scan2",
-     "r-note-txt"
-    ]
-   },
-   {
-    "call": "mint",
-    "ids": [
-     "r-digital",
-     "r-scan2",
-     "r-note-txt"
-    ]
-   }
-  ],
-  "sleeps": [
-   5.0
-  ]
- },
- "env_stores": {
-  "JOBS_DATA_DIR": {},
-  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
-  "JOBS_TEXTCACHE_DIR": {},
-  "SMD_POST_JOURNAL_DIR": {},
-  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
- }
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
 }

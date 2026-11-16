@@ -1,54 +1,47 @@
 {
- "cell": {
-  "attempts": [
-   {
-    "returned": [
-     "<TMP>/revise/base/draft.docx",
-     "<TMP>/revise/base/attorney_notes.docx"
-    ]
-   }
-  ],
-  "files": {
-   "base/attorney_notes.docx": {
-    "bytes": 4416
-   },
-   "base/draft.docx": {
-    "bytes": 5000
-   }
+  "cell": {
+    "attempts": [
+      {
+        "returned": ["<TMP>/revise/base/draft.docx", "<TMP>/revise/base/attorney_notes.docx"]
+      }
+    ],
+    "files": {
+      "base/attorney_notes.docx": {
+        "bytes": 4416
+      },
+      "base/draft.docx": {
+        "bytes": 5000
+      }
+    },
+    "seat": [
+      {
+        "call": "mint",
+        "ids": ["r-digital"]
+      },
+      {
+        "call": "fetch",
+        "expected": null,
+        "id": "r-digital",
+        "served": 5000
+      },
+      {
+        "call": "mint",
+        "ids": ["r-scan2"]
+      },
+      {
+        "call": "fetch",
+        "expected": null,
+        "id": "r-scan2",
+        "served": 4416
+      }
+    ],
+    "sleeps": []
   },
-  "seat": [
-   {
-    "call": "mint",
-    "ids": [
-     "r-digital"
-    ]
-   },
-   {
-    "call": "fetch",
-    "expected": null,
-    "id": "r-digital",
-    "served": 5000
-   },
-   {
-    "call": "mint",
-    "ids": [
-     "r-scan2"
-    ]
-   },
-   {
-    "call": "fetch",
-    "expected": null,
-    "id": "r-scan2",
-    "served": 4416
-   }
-  ],
-  "sleeps": []
- },
- "env_stores": {
-  "JOBS_DATA_DIR": {},
-  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
-  "JOBS_TEXTCACHE_DIR": {},
-  "SMD_POST_JOURNAL_DIR": {},
-  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
- }
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
+  }
 }

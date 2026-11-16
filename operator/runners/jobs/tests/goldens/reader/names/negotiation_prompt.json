@@ -1,31 +1,31 @@
 {
- "cell": [
-  {
-   "check": " THE DOCUMENT | file name: x.pdf | type: .pdf ",
-   "read": " THE NEW DOCUMENT | file name: x.pdf | saved in Smokeball: 2026-10-07 | type: .pdf "
-  },
-  {
-   "check": " THE DOCUMENT | file name: x | type: .pdf ",
-   "read": " THE NEW DOCUMENT | file name: x | saved in Smokeball: 2026-10-07 | type: .pdf "
-  },
-  {
-   "check": " THE DOCUMENT | file name: Clinic Note 01-20-26 | type: .docx ",
-   "read": " THE NEW DOCUMENT | file name: Clinic Note 01-20-26 | saved in Smokeball: 2026-10-07 | type: .docx "
-  },
-  {
-   "check": " THE DOCUMENT | file name: README | type: unknown ",
-   "read": " THE NEW DOCUMENT | file name: README | saved in Smokeball: 2026-10-07 | type: unknown "
-  },
-  {
-   "check": " THE DOCUMENT | file name: Scan.PDF | type: .PDF ",
-   "read": " THE NEW DOCUMENT | file name: Scan.PDF | saved in Smokeball: 2026-10-07 | type: .PDF "
+  "cell": [
+    {
+      "check": " THE DOCUMENT | file name: x.pdf | type: .pdf ",
+      "read": " THE NEW DOCUMENT | file name: x.pdf | saved in Smokeball: 2026-10-07 | type: .pdf "
+    },
+    {
+      "check": " THE DOCUMENT | file name: x | type: .pdf ",
+      "read": " THE NEW DOCUMENT | file name: x | saved in Smokeball: 2026-10-07 | type: .pdf "
+    },
+    {
+      "check": " THE DOCUMENT | file name: Clinic Note 01-20-26 | type: .docx ",
+      "read": " THE NEW DOCUMENT | file name: Clinic Note 01-20-26 | saved in Smokeball: 2026-10-07 | type: .docx "
+    },
+    {
+      "check": " THE DOCUMENT | file name: README | type: unknown ",
+      "read": " THE NEW DOCUMENT | file name: README | saved in Smokeball: 2026-10-07 | type: unknown "
+    },
+    {
+      "check": " THE DOCUMENT | file name: Scan.PDF | type: .PDF ",
+      "read": " THE NEW DOCUMENT | file name: Scan.PDF | saved in Smokeball: 2026-10-07 | type: .PDF "
+    }
+  ],
+  "env_stores": {
+    "JOBS_DATA_DIR": {},
+    "JOBS_LITIGATION_TEXTCACHE_DIR": {},
+    "JOBS_TEXTCACHE_DIR": {},
+    "SMD_POST_JOURNAL_DIR": {},
+    "SMOKEBALL_EXTRACT_CACHE_DIR": {}
   }
- ],
- "env_stores": {
-  "JOBS_DATA_DIR": {},
-  "JOBS_LITIGATION_TEXTCACHE_DIR": {},
-  "JOBS_TEXTCACHE_DIR": {},
-  "SMD_POST_JOURNAL_DIR": {},
-  "SMOKEBALL_EXTRACT_CACHE_DIR": {}
- }
 }
