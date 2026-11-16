@@ -155,7 +155,7 @@ CMD_B64="$(printf '%s' "${CMD}" | base64 | tr -d '\n')"
 # allowlist is the AGENT-uid process's environ (entrypoint.sh drops to hermes
 # before bootstrap.sh execs the gateway), never a root process's that happens to
 # match the pattern.
-exec fly ssh console -a "${APP_NAME}" -C "sh -c '
+REMOTE="sh -c '
 GPID=\$(pgrep -u hermes -f \"hermes.*gateway run\" | head -1)
 if [ -z \"\${GPID}\" ]; then
   echo \"seat-probe: no hermes-uid gateway process found on ${APP_NAME}\" >&2
@@ -170,3 +170,35 @@ case \"\${CMD}\" in
 esac
 exec runuser -u hermes -- env -i \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin SMD_DIRECT_WRITE_ACTOR=${DIRECT_WRITE_ACTOR} /bin/sh -c \"\${CMD}\"
 '"
+
+# How the remote script reaches the seat (2026-11-16). The ssh tunnel is the
+# default. On 2026-11-16 Fly refused the org-level calls a tunnel needs ("can't
+# build tunnel for personal: Not authorized to access this organization", and
+# "Not authorized to read this organization's WireGuard peers") for about six
+# hours while app-level calls with the same login kept working, so every probe
+# failed. `fly machine exec` uses the app API, not a tunnel, and runs the same
+# REMOTE string in the container, so on that one refusal the probe takes that
+# path instead. Any other ssh failure is reported as it is. stderr is held
+# until ssh exits so the refusal can be read; stdout still streams.
+ERR_FILE="$(mktemp)"
+trap 'rm -f "${ERR_FILE}"' EXIT
+set +e
+fly ssh console -a "${APP_NAME}" -C "${REMOTE}" 2>"${ERR_FILE}"
+RC=$?
+set -e
+cat "${ERR_FILE}" >&2
+if [ "${RC}" -eq 0 ]; then exit 0; fi
+if ! grep -qE "can't build tunnel|Not authorized to access this organization|Not authorized to read this organization's WireGuard peers" "${ERR_FILE}"; then
+  exit "${RC}"
+fi
+echo "seat-probe: Fly refused the ssh tunnel; running the probe through fly machine exec" >&2
+MACHINE_ID="$(fly machine list -a "${APP_NAME}" --json | python3 -c 'import json,sys
+ids=[m["id"] for m in json.load(sys.stdin) if m.get("state")=="started"]
+print(ids[0] if ids else "")')"
+if [ -z "${MACHINE_ID}" ]; then
+  echo "seat-probe: no started machine on ${APP_NAME}" >&2
+  exit 1
+fi
+trap - EXIT
+rm -f "${ERR_FILE}"
+exec fly machine exec "${MACHINE_ID}" -a "${APP_NAME}" --timeout 300 "${REMOTE}"
