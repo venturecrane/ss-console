@@ -1,28 +1,6 @@
 {
   "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges.",
-  "existing/test_champion_audience": [
-    "<file>"
-  ],
-  "existing/test_champion_wall": [
-    "tests/test_champion_wall.py::test_a_champion_hold_sends_the_sentence_even_where_the_seat_authors_no_line.timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[bad_heading].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[drill].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[lesson].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[named_in_text].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[practice].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[quiz_answers].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[quiz_choices].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[rep_document].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_a_rep_only_reply_to_a_champion_is_held_and_the_sentence_sent[unparseable_source].timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_an_allowed_champion_reply_is_sent.timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_an_index_without_the_audience_column_opens_nothing_to_champions.timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_each_reason_is_the_one_recorded.timeline.0.events.23.kwargs",
-    "tests/test_champion_wall.py::test_each_reason_is_the_one_recorded.timeline.2.events.23.kwargs",
-    "tests/test_champion_wall.py::test_each_reason_is_the_one_recorded.timeline.4.events.23.kwargs",
-    "tests/test_champion_wall.py::test_each_reason_is_the_one_recorded.timeline.6.events.23.kwargs"
-  ],
-  "synthetic/relay.guard": [
-    "champion_answered.0.events.23.kwargs",
-    "champion_wall.0.events.23.kwargs"
-  ]
+  "existing/test_champion_audience": [],
+  "existing/test_champion_wall": [],
+  "synthetic/relay.guard": []
 }
