@@ -18,6 +18,8 @@ module the tree does not have yet is left out (nothing to lose).
 from __future__ import annotations
 
 import contextlib
+import hashlib
+import importlib.util
 import inspect
 import json
 import re
@@ -37,6 +39,13 @@ NORMALISERS: dict[str, tuple[str, ...]] = {
     "ledger_golden_kit": ("normal", "fix_clock", "Clock"),
     "filing_kit": ("normal", "_row"),
 }
+
+#: The decision corpus's instrument (wave 4), under ``operator/``: frozen for the
+#: PRs that split the two decision functions, so each file is pinned whole, as a
+#: hash under ``decisions_frozen.<name>``. A changed recorder, census, case
+#: table or replay is a changed normaliser.
+DECISIONS = "hermes-smd-overlay/tests/decisions"
+FROZEN = ("recorder.py", "census.py", "tables.py", "cases.py", "drive.py", "replay.py")
 
 
 def _paths(operator: Path) -> None:
@@ -110,6 +119,54 @@ def _load() -> dict[str, Any]:
     return out
 
 
+def _decisions(operator: Path) -> None:
+    """The corpus tables, loaded by file (stdlib only, no ``tests`` package)."""
+    for name in ("tables", "cases"):
+        path = operator / DECISIONS / f"{name}.py"
+        if not path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location(f"decisions_{name}", path)
+        if spec is None or spec.loader is None:
+            continue
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        with contextlib.suppress(ImportError):
+            spec.loader.exec_module(mod)
+            _MODULES[spec.name] = mod
+
+
+def decision_cases() -> dict[str, list[str]]:
+    """Every name the corpus tables list: a dropped one is a dropped case, and
+    a newly unrecorded call (``not_applicable``) is named the same way."""
+    out: dict[str, list[str]] = {}
+    t = _module("decisions_tables")
+    if t is not None:
+        for d in t.DECISIONS:
+            out[f"decisions.{d.key}.wrap"] = sorted(d.wrap)
+            out[f"decisions.{d.key}.local"] = sorted(f"{n}={h}" for n, h in d.local)
+            out[f"decisions.{d.key}.edges"] = sorted(d.edges)
+            out[f"decisions.{d.key}.registers"] = sorted(d.registers)
+            out[f"decisions.{d.key}.resets"] = sorted(d.resets)
+            out[f"decisions.{d.key}.not_applicable"] = sorted(n for n, _ in d.unwrapped)
+        out["decisions.shared_edges"] = sorted(t.SHARED_EDGES)
+        out["decisions.hooks"] = sorted("/".join(h) for h in t.HOOKS)
+        out["decisions.selection"] = sorted(t.SELECTION)
+        out["decisions.unstable.not_applicable"] = sorted(n for n, _ in t.UNSTABLE)
+    c = _module("decisions_cases")
+    if c is not None:
+        out["decisions.cases"] = sorted(c.case_names())
+    return out
+
+
+def frozen(operator: Path) -> dict[str, str]:
+    out = {}
+    for name in FROZEN:
+        path = operator / DECISIONS / name
+        if path.is_file():
+            out[f"decisions_frozen.{name}"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return out
+
+
 _MODULES: dict[str, Any] = {}
 
 
@@ -139,6 +196,7 @@ def cases() -> dict[str, list[str]]:
     ledgers = _module("ledger_golden_kit")
     if ledgers is not None:
         out["ledgers.lanes"] = sorted(ledgers.LANES)
+    out.update(decision_cases())
     return out
 
 
@@ -161,7 +219,8 @@ def normalisers() -> dict[str, str]:
 def manifest(operator: Path) -> dict[str, Any]:
     _paths(operator)
     _MODULES.update(_load())
-    return {"cases": cases(), "normalisers": normalisers()}
+    _decisions(operator)
+    return {"cases": cases(), "normalisers": {**normalisers(), **frozen(operator)}}
 
 
 if __name__ == "__main__":
