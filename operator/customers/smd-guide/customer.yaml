@@ -81,13 +81,16 @@ personas:
     skills:
       # Every email to the seat lands here (webhook_triggers below); a
       # practice request is handed to pitch-practice in the same turn.
+      # Scheduled for the library-change email below.
       - name: product-guide
         version: pending
         initiation:
           manual: true
-          scheduled: false
+          scheduled: true
           webhook: true
         enabled: true
+        settings:
+          recipients: roster
       # The role's second job: practice pitching against an authored buyer.
       # Reached from product-guide on email, or chosen directly in chat.
       - name: pitch-practice
@@ -140,6 +143,14 @@ personas:
       # nobody enrolled wakes no model and sends nothing.
       - skill: rep-training
         schedule: '0 15 * * 1'
+        pre_run: pre_run.py
+        wake_policy: pre_run_decides
+      # Daily library-change email, 9:23 AM Arizona (16:23 UTC). Code renders
+      # one email per listed person from the authored entries in
+      # product-guide/changes.yaml that person has not been sent; nobody due
+      # means no email and no model call.
+      - skill: product-guide
+        schedule: '23 16 * * *'
         pre_run: pre_run.py
         wake_policy: pre_run_decides
 
