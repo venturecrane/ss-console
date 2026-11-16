@@ -47,7 +47,7 @@
     "hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py::_review_one": 79,
     "hermes-smd-overlay/plugins/hermes-smd-reply/sweeper.py::run_sweep_once": 99,
     "hermes-smd-overlay/plugins/hermes-smd-trust/__init__.py::_dispatch_internal_message": 201,
-    "hermes-smd-overlay/plugins/hermes-smd-trust/__init__.py::on_pre_tool_call": 105,
+    "hermes-smd-overlay/plugins/hermes-smd-trust/__init__.py::on_pre_tool_call": 92,
     "hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py::_enforce_resolved": 84,
     "hermes-smd-overlay/plugins/hermes-smd-trust/enforce.py::enforce": 99,
     "hermes-smd-overlay/plugins/hermes-smd-trust/outbound.py::_check_checklist": 82,

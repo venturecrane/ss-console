@@ -116,7 +116,10 @@ from shared import (
 from shared.action_classes import ActionClass, BannedToolError, classify_tool
 from shared.audit_client import audit_client_from_env
 from shared.audit_contract import INSERT_SQL as _INSERT_SQL
-from shared.audit_contract import agent_event_params, sender_key
+from shared.audit_contract import (
+    agent_event_params,
+    sender_key,  # noqa: F401 - relay_sent reads it via _plugin
+)
 from shared.customer_config import CustomerConfig, CustomerConfigError
 from shared.pending_acts import PENDING_ACTS
 from shared.recipient_classifier import RecipientClass, classify_recipients_typed
@@ -142,6 +145,9 @@ from . import (
 # loaded twice (the tests load it per test) must not share the first load's copy.
 sys.modules.pop(f"{__name__}.relay_checks", None)
 relay_checks = importlib.import_module(f"{__name__}.relay_checks")
+# What the relay does once the reply is out (the send record), likewise fresh.
+sys.modules.pop(f"{__name__}.relay_sent", None)
+relay_sent = importlib.import_module(f"{__name__}.relay_sent")
 
 logger = logging.getLogger(__name__)
 
@@ -756,6 +762,7 @@ def _notify_hold(
     message_id: str,
     body_digest: str,
     pending: int | None = None,
+    title: str = "reply_held",
 ) -> None:
     """Report a held/expired reply to Sentry — silence is never the failure mode.
 
@@ -779,7 +786,7 @@ def _notify_hold(
             scope.set_extra("recipient_digest", digest)
             if pending is not None:
                 scope.set_extra("pending_count", pending)
-            sentry_sdk.capture_message(f"reply_held: {reason}", level="warning")
+            sentry_sdk.capture_message(f"{title}: {reason}", level="warning")
     except Exception as exc:  # noqa: BLE001 — monitoring must never break the hook
         logger.debug("hermes-smd-reply: hold notification skipped (%s)", exc)
 
@@ -1536,49 +1543,12 @@ def _relay_transmit_or_hold(
     )
 
 
-def _relay_sent(
-    session_id: str,
-    origin: Any,
-    reply_key: str,
-    reply_to: Any,
-    scan_text: str,
-    wire: tuple[str, str],
-    matter: tuple[Any, Any],
-    sent_id: Any,
-    adapter: str,
-    recipient_class: Any,
-    internal: bool,
-) -> None:
-    """The reply is on the wire: commit it, audit it, send its continuations."""
-    wire_text, wire_html = wire
-    cited_matter_ref, prepared = matter
-    _CURRENT_CALL.transmitted = True
-    if prepared is not None:
-        # The files are on their way: the staging is spent either way.
-        matter_file_reply.discard(session_id)
-
-    # (f) The reply for this inbound is now committed — record it before the
-    # audit emission so a retry cannot race between the send and the mark.
-    _commit_reply(reply_key, origin)
-    # The only evidence the end-of-turn act delivery trusts: bytes the
-    # transport was actually handed (act_delivery module docstring).
-    _ACT_BODIES.note(session_id, wire_text, wire_html)
-
-    _relay_audit_sent(
-        session_id,
-        origin,
-        reply_to,
-        recipient_class,
-        internal,
-        adapter,
-        sent_id,
-        scan_text,
-        wire,
-        matter,
-    )
-    # (h) The reply is out: its working drafts (this one, and any held ones
-    # it superseded in this turn) leave the Drafts folder. Never raises.
-    _discard_drafts(_WORKING_DRAFTS.take(session_id, reply_key))
+# The reply is out (step 9's send record): in ``relay_sent``. The names stay
+# here, where the transmit step and the tests reach them.
+_relay_sent = relay_sent.sent
+_relay_audit_sent = relay_sent.audit_sent
+#: A fault after the send: wrapped by name in the decision corpus (tables.RELAY).
+_sent_trace_incomplete = relay_sent.trace_incomplete
 
 
 def _relay_rate_limit(
@@ -1787,80 +1757,6 @@ def _relay_transmit(
         return _RELAY_DECIDED
 
 
-def _relay_audit_sent(
-    session_id: str,
-    origin: Any,
-    reply_to: Any,
-    recipient_class: Any,
-    internal: bool,
-    adapter: str,
-    sent_id: Any,
-    scan_text: str,
-    wire: tuple[str, str],
-    matter: tuple[Any, Any],
-) -> None:
-    """(g) Audit the send — digest + recipient + message ids, never the body —
-    then send any file continuations and card the reply's opening."""
-    wire_text, wire_html = wire
-    cited_matter_ref, prepared = matter
-
-    inbound_sender_key = sender_key(origin.sender_address)
-    sender_key_metadata = {"sender_key": inbound_sender_key} if inbound_sender_key else {}
-    _emit_reply_event(
-        action_type="REPLY_SENT",
-        metadata={
-            "recipient": reply_to,
-            # For a device redirect: which device wrote in. Absent otherwise.
-            **_reply_recipient(origin)[1],
-            "recipient_class": recipient_class.value if recipient_class else "unclassified",
-            "content_floor_applied": not internal,
-            "adapter": adapter,
-            "in_reply_to": origin.message_id,
-            "inbox_id": origin.inbox_id,
-            "sent_message_id": sent_id,
-            "body_digest": inbound.content_digest(scan_text),
-            # The digests an OUTSIDER can recompute (ss-console#2501). The
-            # line above stays what it has always been: sha256 of the string
-            # the floors scanned, which folds in a subject the wire never
-            # carries and is therefore only checkable inside this system.
-            # These two cover exactly the bytes handed to the transport, so
-            # counsel holding the firm's own Sent Items copy can verify the
-            # body without taking SMD's word for it. Recipe, per transport,
-            # is in ``relay.authored_digests``.
-            **relay.authored_digests(text=wire_text, html=wire_html),
-            # Which PERSON this answered, as a key rather than an address
-            # (ss-console#2497). ``recipient`` above is the raw address and
-            # predates this issue; ``sender_key`` is what joins this row to
-            # the INBOUND_RECEIVED row that opened the turn, without a second
-            # address leaving the Machine in an export.
-            **sender_key_metadata,
-            # 2026-11-01: a reply that told the person the Operator could
-            # not do what they asked, as a closed code (never the words).
-            # The heartbeat pages it as a shortfall and the request card
-            # marks the request NOT FULFILLED (shared/reply_could_not.py).
-            **reply_could_not.metadata(wire_text),
-            # ADR 0102: the files this reply carried (ids and hashes only).
-            **(
-                {
-                    **matter_file_reply.audit_fields(prepared.batches[0]),
-                    "file_reply_part": f"1/{len(prepared.batches)}",
-                }
-                if prepared is not None
-                else {}
-            ),
-        },
-        session_id=session_id,
-        matter_ref=cited_matter_ref,
-    )
-    if prepared is not None and len(prepared.batches) > 1:
-        _send_file_continuations(
-            prepared, origin, session_id=session_id, matter_ref=cited_matter_ref
-        )
-    # Request cards: the opening of the first reply, seat-local only (the
-    # audit row above carries digests, never words). Never raises.
-    request_index.record_reply_opening(origin.message_id, wire_text, sent_message_id=sent_id)
-
-
 # --------------------------------------------------------------------------
 # 10. The catch-all
 # --------------------------------------------------------------------------
@@ -1871,7 +1767,8 @@ def _relay_catch_all(exc: Exception) -> None:
     logger.warning("hermes-smd-reply: post_tool_call handler error: %s", exc)
     # A fault between resolving the email and handing bytes to the
     # transport is a reply nobody received. Tell the turn and page, unless
-    # this call already recorded a hold the agent will read.
+    # this call already recorded a hold the agent will read. A fault after
+    # the transport returned was told and paged by ``_relay_sent``.
     origin = getattr(_CURRENT_CALL, "origin", None)
     call_id = getattr(_CURRENT_CALL, "tool_call_id", "") or ""
     if (

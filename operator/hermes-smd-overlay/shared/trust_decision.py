@@ -205,6 +205,7 @@ class TrustDecisionRegister:
         key = tool_call_id or ""
         if key:
             with self._lock:
+                decision = self._carry_notes(key, decision)
                 decision = self._carry_report(key, decision)
                 self._by_call[key] = (tool_name, decision)
                 self._by_call.move_to_end(key)
@@ -212,6 +213,24 @@ class TrustDecisionRegister:
                     gone, _entry = self._by_call.popitem(last=False)
                     self._reports.pop(gone, None)
         self._local.last = (key, tool_name, decision)
+
+    def _carry_notes(self, key: str, decision: TrustDecision) -> TrustDecision:
+        """Keep the notes of the record a refusal supersedes. Caller holds the lock.
+
+        A reason is the verdict's own words followed by `` | ``-joined notes,
+        such as the matter gate's report-mode ``MULTI_MATTER_SESSION`` or
+        ``MATTER_MISMATCH``. A gate that refuses a call the wall had allowed
+        records again under the same key (``held_record``), and the replacement
+        dropped those notes: the refusal does not unmake them. The superseded
+        verdict's own words (the first fragment) go; a note the refusal already
+        carries is not repeated."""
+        entry = self._by_call.get(key)
+        if decision.allowed or entry is None or entry[1].audit_action == AUDIT_REPORT:
+            return decision
+        notes = [n for n in entry[1].reason.split(" | ")[1:] if n not in decision.reason]
+        if not notes:
+            return decision
+        return replace(decision, reason=" | ".join([decision.reason, *notes]))
 
     def _carry_report(self, key: str, decision: TrustDecision) -> TrustDecision:
         """Remember a report for ``key``, or append a remembered one to the
@@ -223,6 +242,26 @@ class TrustDecisionRegister:
         if report is None or report in decision.reason:
             return decision
         return replace(decision, reason=f"{decision.reason} | {report}")
+
+    def peek(self, tool_call_id: str, tool_name: str) -> TrustDecision | None:
+        """The decision already recorded for THIS call, left in place.
+
+        For a producer that must supersede its own earlier record (the trust
+        pre-hook blocking a call after the wall allowed it). Stricter than
+        ``take``: given a ``tool_call_id``, the thread slot answers only when it
+        holds that same call, so a stale slot can never lend this call another
+        call's ceiling."""
+        if not tool_name:
+            return None
+        if tool_call_id:
+            with self._lock:
+                entry = self._by_call.get(tool_call_id)
+            if entry is not None and entry[0] == tool_name:
+                return entry[1]
+        last = getattr(self._local, "last", None)
+        if last is not None and last[0] == (tool_call_id or "") and last[1] == tool_name:
+            return last[2]
+        return None
 
     # ------------------------------------------------------------------
     # Consumer — the audit plugin's post_tool_call

@@ -284,9 +284,15 @@ def _at(doc: Any, path: list[Any]) -> Any:
 def test_known_defects_are_visible_in_the_corpus() -> None:
     """Each defect ``known-defects.json`` names is in the corpus as recorded, so
     the split PRs reproduce it rather than fix it unseen; the PR that fixes one
-    changes its golden (named in the allowed list) and removes its entry here."""
-    defects = _read(KNOWN)["defects"]
-    assert defects, "the known-defects read is empty"
+    changes its golden (named in the allowed list) and removes its entry here.
+    An empty list is the end state once every recorded defect is fixed (wave 4:
+    the read-volume row #4039, the allow left on a blocked call #4041, the fault
+    after a send #4042); the read itself must still be there."""
+    known = _read(KNOWN)
+    assert "defects" in known and isinstance(known["defects"], list), (
+        "known-defects.json has no defects list"
+    )
+    defects = known["defects"]
     for d in defects:
         record = _at(_read(GOLDENS / d["golden"]), d["record"])
         if "steps" in d:

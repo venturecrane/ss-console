@@ -1,16 +1,4 @@
 {
   "_why": "What the decision corpus records today that is wrong, read from the corpus (wave 4, PR A). The split PRs B and C reproduce each of these exactly; a PR that fixes one changes its golden (each path named in goldens/allowed-changes.json) and removes or rewrites its entry here, which test_known_defects_are_visible_in_the_corpus checks against the corpus on every run. Lines are as of the commit that recorded the corpus.",
-  "defects": [
-    {
-      "id": "fault-after-transmit-leaves-no-trace",
-      "summary": "A fault after the reply's bytes reached the transport and before _commit_reply completes is swallowed by the relay's catch-all with no REPLY_SENT row, no REPLY_FAILED row, no notice and no page (the catch-all skips a transmitted reply), and the email's id is left uncommitted in _REPLIED, so a second draft in the same turn would be relayed again. Seen by injecting a raise at each call after the send.",
-      "where": [
-        "plugins/hermes-smd-reply/__init__.py:2014-2024 (transmitted, then commit)",
-        "plugins/hermes-smd-reply/__init__.py:2085-2097 (the catch-all skips a transmitted reply)"
-      ],
-      "golden": "synthetic/relay.raise.json",
-      "record": ["baseline@38:_commit_reply", 0],
-      "steps": ["_commit_reply!"]
-    }
-  ]
+  "defects": []
 }

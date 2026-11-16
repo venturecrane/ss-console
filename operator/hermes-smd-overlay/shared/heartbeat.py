@@ -786,6 +786,12 @@ REPLY_RELAY_TOOL = "reply_relay"
 #: could not do what they asked (``shared.reply_could_not``, 2026-11-01).
 REPLY_COULD_NOT_PREFIX = "reply_could_not:"
 
+#: The code of a reply that was SENT and then faulted before its record was
+#: finished (the reply plugin's ``relay_sent.trace_incomplete`` stamps the row
+#: ``trace_incomplete``). Never ``reply_failed``: the email is in their inbox, and
+#: a page that said it was not would invite a second, duplicate reply.
+REPLY_TRACE_INCOMPLETE_CODE = "reply_sent:trace_incomplete"
+
 #: The broker's delivery-proof vocabulary (ss-console
 #: ``workspace_broker/delivery_proof.py`` ``CODES``, mirroring
 #: ``jobs/proof/gate.py``). A CLOSED vocabulary for the reason
@@ -959,6 +965,11 @@ def count_shortfalls(
       tool failure to page on (2026-11-01). Not an event for a reply to SMD's
       own address. Code: ``reply_could_not:<code>`` from the closed
       ``reply_could_not.CODES`` (else ``reply_could_not:other``).
+    * ``failed`` (reply sent, trace incomplete) — a ``REPLY_SENT`` row the
+      reply plugin stamped ``trace_incomplete``: the reply went out, then a
+      fault stopped its record before it finished. Code:
+      ``reply_sent:trace_incomplete``, never ``reply_failed``: the person has the
+      reply, and SMD must not send it again.
     * ``failed`` (job delivery) — a ``DELIVERY_PROOF_FAILED`` row, written by
       the broker when a job lane (chronology, demand, drafting, litigation,
       negotiation, case file, an SMD note) could not prove its delivery reached the firm: the review
@@ -1132,7 +1143,8 @@ def _reply_events(
         " json_extract(metadata,'$.routine') AS routine,"
         " json_extract(metadata,'$.skill') AS skill,"
         " json_extract(metadata,'$.recipient') AS recipient,"
-        " json_extract(metadata,'$.could_not') AS could_not"
+        " json_extract(metadata,'$.could_not') AS could_not,"
+        " json_extract(metadata,'$.trace_incomplete') AS trace_incomplete"
         " FROM audit_log"
         " WHERE action_type IN ('REPLY_HELD', 'REPLY_FAILED', 'REPLY_SENT')"
         " AND substr(ts,1,19) >= ? AND substr(ts,1,19) <= ?"
@@ -1159,9 +1171,7 @@ def _reply_events(
         row_id, ts, action_type, skill_name, tool, reason, for_release, message_id = row[:8]
         session_id, routine, skill, recipient = row[9], row[10], row[11], row[12]
         if action_type == "REPLY_SENT":
-            event = _could_not_event(row, procedure_by_session)
-            if event is not None:
-                out.append(event)
+            out += _sent_reply_events(row, procedure_by_session)
             continue
         if action_type == "REPLY_HELD" and _iso_floor(ts) > grace:
             continue
@@ -1217,35 +1227,41 @@ def _could_not_code(value: object) -> str:
     return REPLY_COULD_NOT_PREFIX + (text if text in reply_could_not.CODES else "other")
 
 
-def _could_not_event(row: tuple, procedure_by_session: dict[str, str]) -> dict | None:
-    """A ``failed`` event for a reply SENT that told the person the Operator
-    could not do what they asked (2026-11-01, ashton-price: five records asked
-    for, "could not find or attach any of them", every tool call ok, nothing
-    paged). The reply plugin stamped the closed code at send time
-    (``shared.reply_could_not``); the words never left the seat.
+def _sent_reply_events(row: tuple, procedure_by_session: dict[str, str]) -> list[dict]:
+    """The ``failed`` events of a reply that was SENT.
 
-    Not an event when the reply went to SMD's own address (the Captain testing
-    a seat is told "I can't" by design, and no client is waiting). Nothing
-    later clears it: the person has already read the decline, and a later reply
-    in the same request is on its own ``followup`` card."""
+    * It declined: it told the person the Operator could not do what they asked
+      (2026-11-01, ashton-price: five records asked for, "could not find or
+      attach any of them", every tool call ok, nothing paged). The reply plugin
+      stamped the closed code at send time (``shared.reply_could_not``); the
+      words never left the seat. Not an event when the reply went to SMD's own
+      address (the Captain testing a seat is told "I can't" by design). Nothing
+      later clears it: the person has already read the decline, and a later
+      reply in the same request is on its own ``followup`` card.
+    * Its record broke: it went out, then faulted before its trace finished
+      (``trace_incomplete``, ``REPLY_TRACE_INCOMPLETE_CODE``). The person HAS the
+      reply; SMD reads why the trace broke and must not resend it. An event to
+      any address: the fault is the seat's, not the person's.
+    """
     row_id, ts, _action, skill_name, tool = row[:5]
-    in_reply_to, session_id, routine, skill, recipient, could_not = row[8:14]
-    if not could_not or _is_smd_address(recipient):
-        return None
-    return _shortfall_event(
-        ts=ts,
-        cls="failed",
-        tool=_token(tool) or REPLY_RELAY_TOOL,
-        routine=(
-            routine
-            or skill
-            or skill_name
-            or procedure_by_session.get(session_id if isinstance(session_id, str) else "")
-        ),
-        code=_could_not_code(could_not),
-        key=_event_key("failed", row_id),
-        join=("message", in_reply_to),
-    )
+    in_reply_to, session_id, routine, skill, recipient, could_not, trace = row[8:15]
+    found = [(REPLY_TRACE_INCOMPLETE_CODE, f"{row_id}:trace")] if trace in (1, True) else []
+    if could_not and not _is_smd_address(recipient):
+        found.insert(0, (_could_not_code(could_not), row_id))
+    # A row's session id is a str or NULL; a NULL names no procedure either way.
+    routine = routine or skill or skill_name or procedure_by_session.get(session_id)
+    return [
+        _shortfall_event(
+            ts=ts,
+            cls="failed",
+            tool=_token(tool) or REPLY_RELAY_TOOL,
+            routine=routine,
+            code=code,
+            key=_event_key("failed", key),
+            join=("message", in_reply_to),
+        )
+        for code, key in found
+    ]
 
 
 def _proof_code(code: object) -> str:
