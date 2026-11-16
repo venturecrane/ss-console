@@ -131,9 +131,9 @@ personas:
           alert_label: 'SMD Ops'
           # The first scheduled run at or after this seat-local hour sends the list.
           send_after_hour: 6
-          # A model reads the remaining threads. Off until the rehearsal dry
-          # run passes its answer key; switched on by its own PR.
-          classify: false
+          # A model reads the remaining threads (on 2026-11-16, after one paid
+          # rehearsal on this mailbox; code floors bound every action).
+          classify: true
           classify_model: claude-sonnet-5-5
           receipts_label: 'Receipts'
           # Per run, in fractional cents; also bounded by the seat's daily cap below.
