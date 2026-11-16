@@ -127,7 +127,9 @@ def evidence(
         try:
             _info, blob = client.download_file(matter_id, f["id"])
             # mechanical text, or the seat's own transcription cache for a
-            # scanned page (free; never a new transcription)
+            # scanned page (free; never a new transcription). A ``mixed`` file
+            # gives its typed pages; an unread scan's marker carries no ZIP,
+            # city or phone, so it adds no evidence, as an uncached scan never did
             text = extract_text_ex(
                 blob, file_name=str(f.get("name") or ""), file_extension=str(f.get("fileExtension") or "")
             ).text

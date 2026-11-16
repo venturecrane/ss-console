@@ -329,5 +329,23 @@
     "env_stores.JOBS_TEXTCACHE_DIR.pages/<sha:scan8>/b017b42eaf37/3.json",
     "env_stores.JOBS_TEXTCACHE_DIR.pages/<sha:scan8>/b017b42eaf37/7.json",
     "env_stores.JOBS_TEXTCACHE_DIR.pages/<sha:scan8>/b017b42eaf37/8.json"
+  ],
+  "connector/cached": [
+    "cell.files.cover_scans.method",
+    "cell.files.cover_scans.text.0",
+    "cell.files.typed60.text",
+    "cell.files.typed60.text.0"
+  ],
+  "connector/mechanical": [
+    "cell.files.cover_scans.method",
+    "cell.files.cover_scans.text.0",
+    "cell.files.typed60.text",
+    "cell.files.typed60.text.0"
+  ],
+  "connector/vision": [
+    "cell.files.cover_scans.method",
+    "cell.files.cover_scans.text.0",
+    "cell.files.typed60.text",
+    "cell.files.typed60.text.0"
   ]
 }

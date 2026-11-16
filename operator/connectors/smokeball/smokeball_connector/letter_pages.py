@@ -8,24 +8,17 @@ three jobs. It decides nothing about WHICH matter a letter belongs to; that is
 ``matter_resolution``'s arithmetic and the model's reading, fenced by a
 resolution token.
 
-WHY IT DOES ITS OWN PAGE EXTRACTION RATHER THAN CALLING ``extract_text_ex``.
-Two reasons, both of which silently lose letters:
-
-1. ``extract._looks_scanned`` decides vision-versus-pypdf for the WHOLE
-   document on an average: ``len(text) < SCANNED_CHARS_PER_PAGE * pages``. Its
-   docstring says the average exists "so a scan bundle with one text-layer
-   cover sheet still reads as scanned", and for a bundle that is not true. A
-   60-page bundle needs under 900 characters to read as scanned, and one
-   ordinary digital page carries two thousand. So one cover sheet routes 59
-   scanned pages onto the pypdf road.
-2. The pypdf road then DROPS every page it found no text on:
-   ``"\\n\\n".join(p.strip() for p in pages if p.strip())``. Block K is not page
-   K, empty pages vanish rather than being reported, and ``method`` comes back
-   ``pypdf`` with nothing to say anything is wrong.
-
-Together those turn "five letters were scans" into "five letters were never
-here". So the road is decided PER PAGE here, and every page 1..N gets an entry
-whether or not it carried text.
+WHY IT DOES ITS OWN PAGE READING RATHER THAN CALLING ``extract_text_ex``.
+``extract.file_looks_scanned`` decides vision-versus-text-layer for the WHOLE
+document on an average: ``len(text) < SCANNED_CHARS_PER_PAGE * pages``. A
+60-page bundle needs under 900 characters to read as scanned, and one ordinary
+digital page carries two thousand. So one cover sheet routes 59 scanned pages
+onto the text-layer road, and that road never transcribes. Until wave 5 (K1)
+it also DROPPED every page it found no text on, so "five letters were scans"
+became "five letters were never here". ``extract_text_ex`` now keeps and marks
+those pages (``read_pages``, ``page_kind``, ``compose_kept``, below), but it
+still does not pay to read them; this module does, page by page, so every page
+1..N gets an entry whether or not it carried text.
 
 THE MARKERS ARE THE CONTRACT. Composed the same way on both roads, in the
 grammar ``shared`` vision already uses: a legible page is the line ``[p.N]``
@@ -49,11 +42,12 @@ import threading
 from dataclasses import dataclass
 from typing import Any
 
-from .extract import SCANNED_CHARS_PER_PAGE, UnsupportedDocumentError
+from .extract import SCANNED_CHARS_PER_PAGE, UnsupportedDocumentError, page_has_text
 
 #: A page that produced fewer than this many characters is paper rather than a
-#: document, judged PER PAGE. Shares the connector's existing number so the two
-#: roads agree about what "has text" means.
+#: document, judged PER PAGE. It is the connector's one number, and the rule
+#: that applies it lives with it (``extract.page_has_text``), so this reader and
+#: ``extract_text_ex`` agree about what "has text" means.
 PAGE_TEXT_FLOOR = SCANNED_CHARS_PER_PAGE
 
 NO_CONTENT = "[no legible content]"
@@ -87,6 +81,102 @@ class PagedText:
     scanned_pages: int
 
 
+@dataclass(frozen=True)
+class PdfPage:
+    """One page as its text layer left it. ``has_image`` and ``has_content``
+    are read only for a page with no text (``read_pages``); a page with text
+    keeps the defaults, which ``page_kind`` never consults for it."""
+
+    text: str
+    has_image: bool = False
+    has_content: bool = True
+
+
+#: What a page is, decided in code at no cost (``page_kind``).
+PAGE_TEXT = "text"
+PAGE_BLANK = "blank"
+PAGE_UNREAD = "unread"
+
+BLANK_MARK = "blank"
+UNREAD_MARK = "scanned page, not read"
+
+
+def read_pages(blob: bytes, *, marks: bool = True) -> list[PdfPage]:
+    """Every page of a PDF, in order, NOTHING dropped: the connector's one
+    per-page reader (``page_texts`` here, ``extract_text_ex`` for any PDF that
+    is not a whole scan).
+
+    ``marks`` also reads, for each page with no text, whether it holds an image
+    and whether anything is drawn on it, so a blank page can be told from a scan.
+    """
+    from pypdf import PdfReader
+
+    try:
+        reader = PdfReader(io.BytesIO(blob))
+        texts = [(page.extract_text() or "").strip() for page in reader.pages]
+    except Exception as exc:  # pypdf raises a wide family; every one means "not a PDF we can page"
+        raise PageReadError("not_pdf", f"PDF could not be parsed: {exc}") from exc
+    if not marks:
+        return [PdfPage(t) for t in texts]
+    out: list[PdfPage] = []
+    for text, page in zip(texts, reader.pages, strict=True):
+        out.append(PdfPage(text) if page_has_text(text) else PdfPage(text, *_marks(page)))
+    return out
+
+
+#: The content-stream operators that paint a picture: an XObject (a scan is an
+#: image XObject, sometimes inside a form) or an inline image.
+_IMAGE_OPERATORS = (b"Do", b"INLINE IMAGE")
+
+
+def _marks(page: Any) -> tuple[bool, bool]:
+    """``(has_image, has_content)`` for a page with no text, read from what its
+    content stream DRAWS, never from its resources: a resource dictionary is
+    often shared by every page of a file, so an image declared there need not be
+    on this page. Read in the safe direction: a page whose parts cannot be read
+    counts as an image, so a page is called blank only when it provably holds
+    nothing (no content stream, or one with no operators, and no annotations)."""
+    try:
+        contents = page.get_contents()
+        operators = [] if contents is None else [op for _operands, op in contents.operations]
+    except Exception:  # noqa: BLE001 - an unreadable page part is never evidence the page is blank
+        return True, True
+    has_image = any(op in _IMAGE_OPERATORS for op in operators)
+    return has_image, bool(operators) or "/Annots" in page
+
+
+def page_kind(page: PdfPage) -> str:
+    """``PAGE_TEXT`` (its text layer is the page), ``PAGE_BLANK`` (nothing on
+    it), or ``PAGE_UNREAD`` (a scan, or a drawing, whose content no text layer
+    carries). A page under the floor that holds an image is a scan even when a
+    stamp or a Bates number gives it a few characters; one with a few
+    characters and no image is a short typed page."""
+    if page_has_text(page.text):
+        return PAGE_TEXT
+    if page.has_image:
+        return PAGE_UNREAD
+    if page.text:
+        return PAGE_TEXT
+    return PAGE_UNREAD if page.has_content else PAGE_BLANK
+
+
+def compose_kept(pages: list[PdfPage]) -> str:
+    """Every page as marked text, none dropped: ``[p.N]`` then the page's text,
+    ``[p.N: blank]``, or ``[p.N: scanned page, not read]`` followed by whatever
+    short text layer the scan carried (a stamp is still what the page says).
+    Joined by a blank line, the grammar ``compose`` uses."""
+    blocks: list[str] = []
+    for index, page in enumerate(pages, start=1):
+        kind = page_kind(page)
+        if kind == PAGE_TEXT:
+            blocks.append(f"[p.{index}]\n{page.text}")
+        elif kind == PAGE_BLANK:
+            blocks.append(f"[p.{index}: {BLANK_MARK}]")
+        else:
+            blocks.append(f"[p.{index}: {UNREAD_MARK}]" + (f"\n{page.text}" if page.text else ""))
+    return "\n\n".join(blocks)
+
+
 def page_texts(blob: bytes) -> list[str]:
     """Every page's mechanically extracted text, in order, NOTHING dropped.
 
@@ -94,13 +184,7 @@ def page_texts(blob: bytes) -> list[str]:
     module exists to close is a list whose length stopped matching the
     document's.
     """
-    from pypdf import PdfReader
-
-    try:
-        reader = PdfReader(io.BytesIO(blob))
-        return [(page.extract_text() or "").strip() for page in reader.pages]
-    except Exception as exc:  # pypdf raises a wide family; every one means "not a PDF we can page"
-        raise PageReadError("not_pdf", f"PDF could not be parsed: {exc}") from exc
+    return [p.text for p in read_pages(blob, marks=False)]
 
 
 #: A token that reads as a word, a number, or a date. Calibrated as-is on a real
@@ -143,7 +227,7 @@ def page_needs_vision(text: str) -> bool:
     Either too little text (paper with no layer), or a layer that is mostly not
     words (OCR of handwriting, stamps, or a bad scan).
     """
-    if len(text) < PAGE_TEXT_FLOOR:
+    if not page_has_text(text):
         return True
     if len(text.split()) < MIN_TOKENS_FOR_LEGIBILITY:
         return False
@@ -471,6 +555,15 @@ FILED_DOCS = FiledDocs()
 
 
 __all__ = [
+    "BLANK_MARK",
+    "PAGE_BLANK",
+    "PAGE_TEXT",
+    "PAGE_UNREAD",
+    "PdfPage",
+    "UNREAD_MARK",
+    "compose_kept",
+    "page_kind",
+    "read_pages",
     "FILED_DOCS",
     "FILED_PAGES",
     "FiledDocs",
