@@ -126,23 +126,113 @@ def read_pages(blob: bytes, *, marks: bool = True) -> list[PdfPage]:
 
 #: The content-stream operators that paint a picture: an XObject (a scan is an
 #: image XObject, sometimes inside a form) or an inline image.
-_IMAGE_OPERATORS = (b"Do", b"INLINE IMAGE")
+_IMAGE_OPERATORS = frozenset({b"Do", b"INLINE IMAGE", b"BI"})
+#: Operators that show text: ink only when the string shown has a glyph in it.
+_TEXT_OPERATORS = frozenset({b"Tj", b"TJ", b"'", b'"'})
+#: Operators that paint a path (fill, stroke, or both) or a shading.
+_PATH_PAINT = frozenset({b"f", b"F", b"f*", b"S", b"s", b"B", b"B*", b"b", b"b*", b"sh"})
+_FILLS = frozenset({b"f", b"F", b"f*"})
+#: Fill-colour operators, and the operands each takes for white.
+_WHITE = {b"g": [1.0], b"rg": [1.0, 1.0, 1.0], b"k": [0.0, 0.0, 0.0, 0.0]}
 
 
 def _marks(page: Any) -> tuple[bool, bool]:
     """``(has_image, has_content)`` for a page with no text, read from what its
-    content stream DRAWS, never from its resources: a resource dictionary is
-    often shared by every page of a file, so an image declared there need not be
-    on this page. Read in the safe direction: a page whose parts cannot be read
-    counts as an image, so a page is called blank only when it provably holds
-    nothing (no content stream, or one with no operators, and no annotations)."""
+    content stream PAINTS (``_paints``), never from its resources: a resource
+    dictionary is often shared by every page of a file, so an image declared
+    there need not be on this page. A page whose parts cannot be read counts as
+    an image, so an unreadable page is never called blank."""
     try:
         contents = page.get_contents()
-        operators = [] if contents is None else [op for _operands, op in contents.operations]
+        operations = [] if contents is None else list(contents.operations)
+        box = [float(v) for v in page.mediabox]
+        annotated = _annotation_appears(page)
     except Exception:  # noqa: BLE001 - an unreadable page part is never evidence the page is blank
         return True, True
-    has_image = any(op in _IMAGE_OPERATORS for op in operators)
-    return has_image, bool(operators) or "/Annots" in page
+    has_image = any(op in _IMAGE_OPERATORS for _operands, op in operations)
+    return has_image, has_image or annotated or _paints(operations, box)
+
+
+def _annotation_appears(page: Any) -> bool:
+    """True when an annotation on the page has an appearance stream (a filled
+    form field, a stamp). A link or a note with no appearance paints nothing."""
+    for ref in page.get("/Annots") or []:
+        annotation = ref.get_object()
+        if "/AP" in annotation:
+            return True
+    return False
+
+
+def _paints(operations: list[tuple[list[Any], bytes]], box: list[float]) -> bool:
+    """True when the content stream puts any ink on the page: shown text with a
+    glyph in it, a painted path or a shading. Graphics state (``q``/``Q``,
+    ``cm``, ``gs``), an empty text object (``BT`` ``/F1 12 Tf`` ``ET``, a
+    reportlab blank page) and a path built but not painted are not ink.
+
+    DECIDED (wave 5 review): one rectangle covering the whole page, filled
+    white, with nothing else painted, is a page's background and so blank. A
+    full-page fill in any other colour, or in the default fill colour (black),
+    is ink: a black page is a redaction or a dark scan, never nothing."""
+    fill_white, transformed = False, False
+    saved: list[tuple[bool, bool]] = []
+    rects: list[list[float]] = []
+    backgrounds = 0
+    for operands, op in operations:
+        if op in _TEXT_OPERATORS:
+            if _shows_glyph(operands):
+                return True
+        elif op == b"q":
+            saved.append((fill_white, transformed))
+        elif op == b"Q":
+            fill_white, transformed = saved.pop() if saved else (False, False)
+        elif op in _WHITE or op in (b"sc", b"scn"):
+            fill_white = _is_white(op, operands)
+        elif op == b"cs":
+            fill_white = False  # a new colour space starts at its initial colour, black
+        elif op == b"cm":
+            transformed = transformed or [float(v) for v in operands] != [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+        elif op == b"re":
+            rects.append([float(v) for v in operands])
+        elif op in (b"m", b"l", b"c", b"v", b"y", b"h"):
+            rects.append([])  # a path that is not one rectangle
+        elif op == b"n":
+            rects = []
+        elif op in _PATH_PAINT:
+            if not (op in _FILLS and fill_white and not transformed and _whole_page(rects, box)):
+                return True
+            backgrounds += 1
+            rects = []
+    return backgrounds > 1
+
+
+def _shows_glyph(operands: list[Any]) -> bool:
+    """True when a text-showing operator's string has a non-blank character."""
+    for operand in operands:
+        for item in operand if isinstance(operand, list) else [operand]:
+            if isinstance(item, (str, bytes)) and item.strip():
+                return True
+    return False
+
+
+def _is_white(op: bytes, operands: list[Any]) -> bool:
+    try:
+        values = [float(v) for v in operands]
+    except (TypeError, ValueError):
+        return False
+    if op in _WHITE:
+        return values == _WHITE[op]
+    return bool(values) and all(v == 1.0 for v in values) and len(values) in (1, 3)
+
+
+def _whole_page(rects: list[list[float]], box: list[float]) -> bool:
+    """True when the current path is exactly one rectangle covering the page."""
+    if len(rects) != 1 or len(rects[0]) != 4:
+        return False
+    x, y, w, h = rects[0]
+    left, right = sorted((x, x + w))
+    bottom, top = sorted((y, y + h))
+    llx, lly, urx, ury = box
+    return left <= llx + 1 and bottom <= lly + 1 and right >= urx - 1 and top >= ury - 1
 
 
 def page_kind(page: PdfPage) -> str:
@@ -162,13 +252,15 @@ def page_kind(page: PdfPage) -> str:
 
 #: How a scanned page read on its own is marked, after its page marker.
 TRANSCRIBED_MARK = "(machine transcription)"
+#: A scanned page that was read and that the model could not read at all.
+ILLEGIBLE_MARK = "(machine transcription: no legible content)"
 
 
 def compose_kept(pages: list[PdfPage], read: dict[int, str] | None = None) -> str:
     """Every page as marked text, none dropped: ``[p.N]`` then the page's text,
     or ``[p.N: blank]``. A scan whose 1-based number is in ``read`` is
     ``[p.N] (machine transcription)`` then its transcription (or
-    ``[p.N: no legible content] (machine transcription)``); any other scan is
+    ``[p.N] (machine transcription: no legible content)``); any other scan is
     ``[p.N: scanned page, not read]`` followed by whatever short text layer it
     carried (a stamp is still what the page says). Joined by a blank line, the
     grammar ``compose`` uses."""
@@ -183,11 +275,7 @@ def compose_kept(pages: list[PdfPage], read: dict[int, str] | None = None) -> st
         elif index in read:
             body = read[index].strip()
             legible = bool(body) and body != NO_CONTENT
-            blocks.append(
-                f"[p.{index}] {TRANSCRIBED_MARK}\n{body}"
-                if legible
-                else f"[p.{index}: no legible content] {TRANSCRIBED_MARK}"
-            )
+            blocks.append(f"[p.{index}] {TRANSCRIBED_MARK}\n{body}" if legible else f"[p.{index}] {ILLEGIBLE_MARK}")
         else:
             blocks.append(f"[p.{index}: {UNREAD_MARK}]" + (f"\n{page.text}" if page.text else ""))
     return "\n\n".join(blocks)
@@ -573,6 +661,7 @@ FILED_DOCS = FiledDocs()
 __all__ = [
     "BLANK_MARK",
     "TRANSCRIBED_MARK",
+    "ILLEGIBLE_MARK",
     "PAGE_BLANK",
     "PAGE_TEXT",
     "PAGE_UNREAD",

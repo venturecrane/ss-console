@@ -130,13 +130,13 @@ def _isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("SMOKEBALL_VISION_WORKERS", "1")
 
 
-def _sse(text: str) -> bytes:
+def _sse(text: str, stop: str = "end_turn") -> bytes:
     events = [
         {"type": "message_start", "message": {"id": "msg_1"}},
         {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
         {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": text}},
         {"type": "content_block_stop", "index": 0},
-        {"type": "message_delta", "delta": {"stop_reason": "end_turn"}},
+        {"type": "message_delta", "delta": {"stop_reason": stop}},
         {"type": "message_stop"},
     ]
     return b"".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n".encode() for e in events)
@@ -487,3 +487,211 @@ def test_a_mixed_vendor_invoice_is_flagged_scanned_never_keyed_from_its_cover(mo
     again = vi.read_attachment(client, url, "invoice.pdf")
     assert (again["readable"], again["method"], again["reason"]) == (False, METHOD_VISION_CACHED, "scanned")
     assert len(calls) == 2, "the invoice reader itself never transcribes"
+
+
+# ---- review fixes: what counts as a blank page, what is stored, one payer ----
+
+
+def _pypdf_file(middle: bytes | None, *, annots: list[dict[str, Any]] | None = None) -> bytes:
+    """Typed page, a middle page with exactly ``middle`` as its content stream
+    (None: no content stream), typed page. Built with pypdf, as another
+    producer's file would be."""
+    import io
+
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, DecodedStreamObject, DictionaryObject, NameObject
+
+    w = PdfWriter()
+    font = w._add_object(
+        DictionaryObject(
+            {
+                NameObject("/Type"): NameObject("/Font"),
+                NameObject("/Subtype"): NameObject("/Type1"),
+                NameObject("/BaseFont"): NameObject("/Helvetica"),
+            }
+        )
+    )
+
+    def page(content: bytes | None) -> Any:
+        p = w.add_blank_page(612, 792)
+        p[NameObject("/Resources")] = DictionaryObject(
+            {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})}
+        )
+        if content is not None:
+            stream = DecodedStreamObject()
+            stream.set_data(content)
+            p[NameObject("/Contents")] = w._add_object(stream)
+        return p
+
+    page(f"BT /F1 12 Tf 72 700 Td ({PROSE[:80]}) Tj ET".encode())
+    mid = page(middle)
+    if annots:
+        mid[NameObject("/Annots")] = ArrayObject(
+            [w._add_object(DictionaryObject({NameObject(k): v for k, v in a.items()})) for a in annots]
+        )
+    page(f"BT /F1 12 Tf 72 700 Td ({PROSE[80:160]}) Tj ET".encode())
+    buf = io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def _link_annotation() -> dict[str, Any]:
+    from pypdf.generic import ArrayObject, FloatObject, NameObject
+
+    rect = ArrayObject([FloatObject(v) for v in (72, 72, 200, 90)])
+    return {"/Type": NameObject("/Annot"), "/Subtype": NameObject("/Link"), "/Rect": rect}
+
+
+#: Pages that put no ink on paper, each as a producer writes one.
+BLANK_PATTERNS: dict[str, tuple[bytes | None, bool]] = {
+    "no content stream": (None, False),
+    "save and restore only (q Q)": (b"q Q", False),
+    "an empty text object (a reportlab blank page)": (b"BT /F1 12 Tf 14.4 TL ET", False),
+    "a white background over the whole page": (b"1 1 1 rg 0 0 612 792 re f", False),
+    "a white background in grey": (b"q 1 g 0 0 612 792 re f Q", False),
+    "a path built and never painted": (b"0 0 m 100 100 l n", False),
+    "a text object showing only spaces": (b"BT /F1 12 Tf 72 700 Td (   ) Tj ET", False),
+    "a link annotation with no appearance": (b"q Q", True),
+}
+
+
+@pytest.mark.parametrize("label", sorted(BLANK_PATTERNS))
+def test_a_page_with_no_ink_is_blank_and_leaves_a_typed_file_typed(label: str, monkeypatch) -> None:
+    middle, link = BLANK_PATTERNS[label]
+    blob = _pypdf_file(middle, annots=[_link_annotation()] if link else None)
+    assert [letter_pages.page_kind(p) for p in letter_pages.read_pages(blob)] == ["text", "blank", "text"], label
+    calls = _counting_vision(monkeypatch)
+    result = extract_text_ex(blob, file_extension="pdf", allow_vision=True)
+    assert (result.method, result.unread_pages) == (METHOD_PYPDF, ()), label
+    assert "[p.2: blank]" in result.text
+    assert calls == [], "a blank page is never paid for"
+
+
+#: Pages that DO put ink on paper, though no text layer says what.
+INK_PATTERNS: dict[str, bytes] = {
+    # DECIDED: a full-page fill in the default colour (black) is a black page, a
+    # redaction or a dark scan, never nothing.
+    "a full-page fill in the default colour": b"0 0 612 792 re f",
+    "a full-page fill in grey": b"0.5 g 0 0 612 792 re f",
+    "a white background with a box on it": b"1 1 1 rg 0 0 612 792 re f 0 g 72 72 100 100 re f",
+    "a white fill over part of the page": b"1 1 1 rg 72 72 100 100 re f",
+    "a white fill under a scaled page": b"q 2 0 0 2 0 0 cm 1 1 1 rg 0 0 612 792 re f Q",
+    "a white fill whose colour was restored away": b"q 1 1 1 rg Q 0 0 612 792 re f",
+    "a stroked line": b"0 0 m 100 100 l S",
+    "a shading": b"/Sh0 sh",
+}
+
+
+@pytest.mark.parametrize("label", sorted(INK_PATTERNS))
+def test_a_page_with_ink_and_no_text_is_never_called_blank(label: str) -> None:
+    blob = _pypdf_file(INK_PATTERNS[label])
+    assert [letter_pages.page_kind(p) for p in letter_pages.read_pages(blob)] == ["text", "unread", "text"], label
+    result = extract_text_ex(blob, file_extension="pdf")
+    assert (result.method, result.unread_pages) == (METHOD_MIXED, (2,)), label
+
+
+def _scripted_vision(monkeypatch: pytest.MonkeyPatch, answers: list[tuple[str, str]], delay: float = 0.0):
+    """The Messages API answering call k with ``answers[k]`` (text, stop
+    reason), and any call past the list with a transcription."""
+    import threading
+    import time
+
+    calls: list[httpx.Request] = []
+    guard = threading.Lock()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        with guard:
+            calls.append(request)
+            k = len(calls) - 1
+        if delay:
+            time.sleep(delay)
+        text, stop = answers[k] if k < len(answers) else ("IMPRESSION: transcribed.", "end_turn")
+        return httpx.Response(200, content=_sse(text, stop))
+
+    monkeypatch.setattr(vision, "_http_client", lambda _t: httpx.Client(transport=httpx.MockTransport(handler)))
+    return calls
+
+
+ONE_SCAN = _pdf([("text", "COVER SHEET " + PROSE), ("scan",), ("text", PROSE)])
+
+
+def test_an_illegible_page_is_stored_as_read_and_paid_for_once(monkeypatch) -> None:
+    """The model's own "cannot read this page" is a reading: stored, marked, and
+    never bought again. (Before the fix every read of this file paid again.)"""
+    calls = _scripted_vision(monkeypatch, [(vision.NO_CONTENT_SENTINEL, "end_turn")] * 5)
+    results = [extract_text_ex(ONE_SCAN, file_extension="pdf", allow_vision=True) for _ in range(3)]
+    assert len(calls) == 1
+    assert [r.method for r in results] == [METHOD_VISION, METHOD_VISION_CACHED, METHOD_VISION_CACHED]
+    assert "[p.2] (machine transcription: no legible content)" in results[0].text
+    assert results[0].unread_pages == () and results[0].transcribed_pages == (2,)
+    record = extract_text_ex(ONE_SCAN, file_extension="pdf")
+    assert (record.method, record.unread_pages) == (METHOD_VISION_CACHED, ()), "the record check sees it read"
+
+
+def test_one_failing_page_keeps_the_others_and_is_retried_only_to_its_cap(monkeypatch) -> None:
+    ok = ("IMPRESSION: transcribed.", "end_turn")
+    refused = ("", "refusal")
+    calls = _scripted_vision(monkeypatch, [ok, refused, ok, refused, refused])
+    first = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    assert len(calls) == 3
+    assert (first.method, first.unread_pages, first.reason) == (METHOD_MIXED, (3,), extract.REASON_REFUSED)
+    assert first.transcribed_pages == (2, 4), "the pages that read are kept"
+    second = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    assert len(calls) == 4, "a re-read pays only the failed page"
+    assert second.unread_pages == (3,)
+    third = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    assert len(calls) == 2 + mixed_read.PAGE_ATTEMPTS, "the page has used its attempts: never paid again"
+    assert (third.unread_pages, third.reason) == ((3,), extract.REASON_REFUSED)
+    assert "[p.3: scanned page, not read]" in third.text
+
+
+def test_a_transport_fault_is_not_counted_against_the_page(monkeypatch) -> None:
+    """A fault of the seat or the network says nothing about the page: no
+    attempt is recorded, and the next read tries again."""
+    from smokeball_connector import extract_cache
+
+    monkeypatch.setattr(vision, "BACKOFF_BASE_SECONDS", 0.0)
+    failing: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        failing.append(1)
+        return httpx.Response(400, json={"error": {"message": "bad request"}})
+
+    monkeypatch.setattr(vision, "_http_client", lambda _t: httpx.Client(transport=httpx.MockTransport(handler)))
+    result = extract_text_ex(ONE_SCAN, file_extension="pdf", allow_vision=True)
+    assert (result.method, result.reason) == (METHOD_MIXED, extract.REASON_API_ERROR)
+    sha, version = extract_cache.cache_key(ONE_SCAN), mixed_read.method_version()
+    assert extract_cache.page_failure_get(sha, 2, version) is None
+    calls = _counting_vision(monkeypatch)
+    assert extract_text_ex(ONE_SCAN, file_extension="pdf", allow_vision=True).method == METHOD_VISION
+    assert len(calls) == 1
+
+
+def test_two_reads_racing_on_one_file_pay_for_each_page_once(monkeypatch) -> None:
+    """Both reads choose their pages, then both reach the gate together; the one
+    that waits for the lock looks again and sends nothing."""
+    import threading
+
+    calls = _scripted_vision(monkeypatch, [], delay=0.2)
+    both_planned = threading.Barrier(2, timeout=10)
+    real_gate = vision.gate
+
+    def gate(*args: Any, **kwargs: Any) -> Any:
+        both_planned.wait()
+        return real_gate(*args, **kwargs)
+
+    monkeypatch.setattr(vision, "gate", gate)
+    results: list[Any] = []
+
+    def read() -> None:
+        results.append(extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True))
+
+    threads = [threading.Thread(target=read) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert len(results) == 2
+    assert len(calls) == 3, "each of the three scanned pages is paid for once"
+    assert sorted(r.method for r in results) == [METHOD_VISION, METHOD_VISION_CACHED]
+    assert results[0].text == results[1].text

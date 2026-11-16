@@ -131,6 +131,35 @@ def page_put(sha: str, page: int, version: str, text: str) -> None:
     _write(root, path, {"method": "vision_page", "text": text, "page": int(page), "created_at": time.time()})
 
 
+def page_failure_get(sha: str, page: int, version: str) -> tuple[int, str] | None:
+    """How many times a read of this page failed in a way that would fail again
+    (the model refused it, or ran out of room), and the last reason; None when
+    none is recorded. No expiry: a page that has used its attempts is never
+    paid for again under this method version."""
+    root = cache_root()
+    path = entry_path(root, page_key(sha, page, version) + ".failed")
+    if path is None:
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    attempts, reason = (payload.get("attempts"), payload.get("reason")) if isinstance(payload, dict) else (None, None)
+    if not isinstance(attempts, int) or not isinstance(reason, str):
+        return None
+    return attempts, reason
+
+
+def page_failure_put(sha: str, page: int, version: str, attempts: int, reason: str) -> None:
+    """Record a failed read of one page (its attempts so far). Never raises."""
+    root = cache_root()
+    path = entry_path(root, page_key(sha, page, version) + ".failed")
+    if path is None:
+        return
+    record = {"method": "vision_page_failed", "attempts": int(attempts), "reason": reason, "created_at": time.time()}
+    _write(root, path, record)
+
+
 def _read_text(path: Path) -> str | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
