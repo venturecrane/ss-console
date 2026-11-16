@@ -24,4 +24,4 @@ entries:
       - A new lesson, the demo meeting, walks through the acts to show a prospect and how to describe everything else as what SMD configures. The quiz has new questions on it.
       - The guide describes the Operator by what SMD sets up for a client, and labels each job as running for a client today; built, set up per client; or configured per engagement.
       - When the product library changes, the guide emails you a short note like this one saying what we now say.
-    library_sha256: 7657c6ff4fb420f40a29c848d37d7beb2eeff20a02a4854fdd1b337008d29534
+    library_sha256: 0862188fd28e807906da4914e10edc5346241d97ece6bfe14586db669b3755d9
