@@ -6,13 +6,18 @@
     "volume_report.0.events.27.$ref",
     "volume_report.0.registers.@shared.trust_decision.TRUST_DECISIONS._local.last.new",
     "volume_report.0.registers.@shared.trust_decision.TRUST_DECISIONS._reports",
-    "volume_report.0.values"
+    "volume_report.0.values",
+    "volume_report.0.values.5",
+    "volume_report.0.values.6.reason",
+    "volume_report.0.values.7"
   ],
   "existing/test_read_volume_gate_placement": [
     "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.events.17.args",
     "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.registers.@shared.trust_decision.TRUST_DECISIONS._by_call.\"tc-rv\".new.1.$ref",
     "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.registers.@shared.trust_decision.TRUST_DECISIONS._local.last.new",
     "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.registers.@shared.trust_decision.TRUST_DECISIONS._reports",
-    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.values"
+    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.values",
+    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.values.1",
+    "tests/test_read_volume_gate_placement.py::test_report_mode_records_once_and_never_blocks.timeline.0.values.2"
   ]
 }

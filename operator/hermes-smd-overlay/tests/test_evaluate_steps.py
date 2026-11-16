@@ -31,7 +31,7 @@ from tests.conftest import load_plugin
 
 trust = load_plugin("hermes-smd-trust")
 enforce = trust.enforce
-steps = trust.evaluate_steps
+steps = enforce._steps  # the steps module the wall calls
 Ceiling = enforce.Ceiling
 Decision = enforce.EnforcementDecision
 
@@ -212,7 +212,7 @@ def test_capture_held_send(monkeypatch) -> None:
 
 
 def test_proposal_exit(monkeypatch) -> None:
-    monkeypatch.setattr(trust.send_as, "propose", lambda *a: {"proposed": a})
+    monkeypatch.setattr(steps.send_as, "propose", lambda *a: {"proposed": a})
     monkeypatch.setattr(enforce, "_propose_commitment_act", lambda t, s, a: {"act": t})
     held = _decision(allowed=False, audit="await_approval")
     assert steps.proposal_exit(SEND, {}, SID, "tc", _call(), held) == (False, None)
@@ -260,7 +260,7 @@ def test_structure_floor(monkeypatch) -> None:
 def test_content_floor_and_voice(monkeypatch) -> None:
     monkeypatch.setattr(enforce, "_apply_content_floor", lambda t, a: None)
     monkeypatch.setattr(
-        trust.voice_gate, "check_voice_gate", lambda **kw: {"action": "block", "message": "v"}
+        steps.voice_gate, "check_voice_gate", lambda **kw: {"action": "block", "message": "v"}
     )
     internal = _call(effective_action=ActionClass.EXTERNAL_SEND_INTERNAL)
     assert steps.content_floor_and_voice(SEND, {}, SID, internal, _decision()) is None
@@ -307,7 +307,7 @@ def test_turn_taint(monkeypatch) -> None:
 
 
 def test_effective_action(monkeypatch) -> None:
-    monkeypatch.setattr(trust.send_as, "requested_from", lambda t, a: (a or {}).get("from"))
+    monkeypatch.setattr(steps.send_as, "requested_from", lambda t, a: (a or {}).get("from"))
     monkeypatch.setattr(enforce, "_reclassify_send", lambda t, a, c, s, *, tainted: (c, tainted))
     send = ToolClassification(ActionClass.EXTERNAL_SEND, False)
     assert steps._effective_action(SEND, {"from": "x"}, SID, send, True) == (

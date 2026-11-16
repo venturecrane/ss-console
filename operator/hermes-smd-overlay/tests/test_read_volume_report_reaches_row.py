@@ -23,7 +23,7 @@ from tests.conftest import load_plugin
 
 trust = load_plugin("hermes-smd-trust")
 enforce = trust.enforce
-steps = trust.evaluate_steps
+steps = enforce._steps  # the steps module the wall calls
 
 READ = "mcp_smokeball_read_document"
 #: What the read-volume step records (``evaluate_steps.read_volume_fence``).
