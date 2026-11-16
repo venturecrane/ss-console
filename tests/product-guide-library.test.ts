@@ -655,7 +655,9 @@ describe('Champion mode', () => {
     const bad: string[] = []
     for (const [f, a] of rows) {
       if (a !== 'rep, champion') continue
-      for (const m of readFileSync(join(LIBRARY, f), 'utf8').matchAll(/\]\(([\w-]+\.md)\)/g))
+      for (const m of readFileSync(join(LIBRARY, f), 'utf8').matchAll(
+        /\]\(([\w-]+\.md)(?:#[^)]*)?\)/g
+      ))
         if (m[1] !== 'INDEX.md' && rows.get(m[1]) !== 'rep, champion') bad.push(`${f} -> ${m[1]}`)
     }
     expect(bad).toEqual([])

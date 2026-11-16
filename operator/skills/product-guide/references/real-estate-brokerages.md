@@ -46,12 +46,13 @@ For the brokerage's clients:
 
 - **It drafts for the agent.** The Operator never contacts a consumer on its own unless the brokerage sets that up for a kind of message, and the brokerage can move that line either way.
 - **Fair housing.** Every person gets the same follow-up. Personal details are never used to rank, filter or sort people, it never infers, asks about or acts on a protected characteristic, and a steering question goes to a person.
-- **MLS data.** It reads MLS data only through the brokerage's own licensed feed, with AI use authorized in the way that MLS requires, and never through an agent's login. It never trains on MLS content and never passes it anywhere the license does not allow.
+- **MLS data, as a limit the brokerage writes.** The brokerage writes on its seat which systems the Operator may reach and what it may do in each, and anything not written is refused. A brokerage seat is written to read MLS data only through the brokerage's own licensed feed, with AI use authorized in the way that MLS requires, and never through an agent's login. (From [permission-model.md](permission-model.md), "Rules that hold everywhere".)
 - **Licensed work stays with licensed people.** It gives no price or value opinion to a consumer, never negotiates, never advises, and never decides what goes in a contract or what gets signed. Those stay with the agents and the broker.
-- **Access and money.** It never releases a lockbox or access code. It never moves money, never touches earnest money, and sends any question about wire instructions or where to send funds to the brokerage's or the escrow company's verified process.
+- **Access codes, as a limit the brokerage writes.** Releasing a lockbox or access code is not written into a brokerage seat's limits, so the Operator is refused it. (From [permission-model.md](permission-model.md), "Rules that hold everywhere".)
+- **Money.** It never moves money, never touches earnest money, and sends any question about wire instructions or where to send funds to the brokerage's or the escrow company's verified process.
 - **The brokerage holds the controls.** The configuration, the logs and the off switch stay with the brokerage.
 
-Licensed judgment, money, the logs and the off switch come from [industry-packs.md](industry-packs.md), "The rule in every industry". Protected characteristics, steering and wire instructions follow the lines that document states for property management, mortgage, and title and escrow, and moving the sending line either way comes from SMD's Operator page, "Control". The rest are lines a brokerage seat is configured to hold, drawn from the MLS and association sources listed below.
+Licensed judgment, money, the logs and the off switch come from [industry-packs.md](industry-packs.md), "The rule in every industry". Protected characteristics, steering and wire instructions follow the lines that document states for property management, mortgage, and title and escrow, and moving the sending line either way comes from SMD's Operator page, "Control". MLS data and access codes are limits the brokerage writes on its seat, as the permission model describes. The rest are lines a brokerage seat is configured to hold, drawn from the association sources listed below.
 
 ## Systems it connects to
 

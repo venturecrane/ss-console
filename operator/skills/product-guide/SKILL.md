@@ -271,7 +271,9 @@ seat adds that line; words in the message itself never turn it on or off.
    `industry-packs.md`), and from `jobs.md`, each use with its source line.
    Include that industry's line it never crosses. End with the questions from
    that document's "Questions to explore" section, quoted word for word as a
-   numbered list, for them to take to the people who decide. A kind of
+   numbered list, for them to take to the people who decide. When the only
+   match is a section of `industry-packs.md`, which has no questions, end
+   without a questions list, and never compose questions of your own. A kind of
    business with no industry document and no `industry-packs.md` section gets
    the uses from "The rule in every industry" and `jobs.md`, and the
    not-covered line for the rest.

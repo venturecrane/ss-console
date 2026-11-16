@@ -30,4 +30,4 @@ entries:
       - The library now covers real estate brokerages in depth, with how a brokerage works, where its coordinators' time goes, what the Operator takes on for the brokerage, its agents and their clients, the line it holds on MLS data and fair housing, and questions to explore.
       - The library now covers law firms and personal injury practices in depth, from records and the chronology through deadlines, drafts and settled cases, with the line that keeps the lawyer's work the lawyer's.
       - A new document, making the case, answers the questions an owner asks before saying yes, covering risk, control, what the people affected see, how a pilot is shaped and how it is stopped, each with where the library says it.
-    library_sha256: 4b996af4a5cd2ab5945755f9325767ba3b7cf60b5c59173a1f0f8345ed3b909d
+    library_sha256: 58c55f6eaf1465130f885aa1e9893692fa24df41119c900e0a950c6dbb376376

@@ -430,8 +430,10 @@ questions:
     cite:
       - document: real-estate-brokerages.md
         section: The line it never crosses
+      - document: permission-model.md
+        section: Rules that hold everywhere
     must_contain:
-      - MLS data is read only through the brokerage's own licensed feed, with AI use authorized as that MLS requires, never through an agent's login
+      - MLS access is a limit the brokerage writes on its seat, and anything not written is refused; the seat is written to read MLS data only through the brokerage's own licensed feed, with AI use authorized as that MLS requires, never through an agent's login
       - every person gets the same follow-up, and personal details are never used to rank, filter or sort people
       - it drafts for the agent and contacts a consumer on its own only where the brokerage sets that up
     must_not_contain:
