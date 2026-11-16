@@ -77,6 +77,9 @@ from . import seat_config
 #: layer. A machine transcription of a scan (``vision``/``vision_cached``) is
 #: never one of them, however it got into the cache. A spreadsheet is readable
 #: but can never feed a money write: ``stage_vendor_invoice`` refuses one below.
+#: ``mixed`` (typed pages plus scanned pages nobody read) is not one either: an
+#: invoice whose figures may sit on an unread page is flagged ``scanned``, the
+#: way a wholly scanned one is, and never keyed from its typed pages alone.
 _READABLE_METHODS = frozenset({*MECHANICAL_METHODS, METHOD_XLSX_OPERATOR})
 
 #: Why an attachment is unreadable. Closed set; the skill turns each into a
