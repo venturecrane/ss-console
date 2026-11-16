@@ -20,6 +20,7 @@ from __future__ import annotations
 import pytest
 
 from shared import matter_binding
+from tests.conftest import load_plugin
 from tests.test_blocked_after_allow_row import (
     _BLOCK,
     M_A,
@@ -36,6 +37,23 @@ from tests.test_blocked_after_allow_row import (
 __all__ = ["seat"]  # the fixture, imported for pytest to find
 
 _BODY = "Following up as discussed."
+
+audit = load_plugin("hermes-smd-audit")
+
+
+@pytest.fixture(autouse=True)
+def _no_ladder(tmp_path, monkeypatch):
+    """Each refused row here is a refusal the audit plugin feeds the sticky-stop
+    ladder. Unisolated, the breaker it builds lazily is a process global, and
+    its HARD_STOP pauses every later test's tool calls. Here no breaker is
+    armed (metering is not under test), the state file is this test's own, and
+    the trust plugin's pause cache is cleared on both sides."""
+    monkeypatch.setenv("SMD_STICKY_STOP_DB_PATH", str(tmp_path / "sticky-stop.db"))
+    monkeypatch.setattr(audit, "_COST_BREAKER", None)
+    monkeypatch.setattr(audit, "_COST_BREAKER_INIT", True)
+    monkeypatch.setitem(trust._pause_cache, "at", 0.0)
+    monkeypatch.setitem(trust._pause_cache, "hard", False)
+    yield
 
 
 @pytest.mark.parametrize(
