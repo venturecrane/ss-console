@@ -48,8 +48,6 @@ ledger, which is where a compliance review actually looks. The plugin's
 returns exactly that shape.
 """
 
-import copy
-import dataclasses
 import enum
 import logging
 import os
@@ -57,7 +55,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from shared import (
+# The wall's steps live in evaluate_steps, but its names stay bound here too:
+# tests read them as enforce.<name>, and the decision corpus resolves every name
+# the wall calls in this module's globals (tests/decisions/tables.py, WALL).
+from shared import (  # noqa: F401
     act_broker,
     content_floor,
     matter_gate,
@@ -89,12 +90,12 @@ from shared.inbound import (
 from shared.pending_acts import PENDING_ACTS
 from shared.pending_send import PENDING_SEND
 from shared.trust_decision import (
-    ACTION_CLASS_BANNED,
     TRUST_DECISIONS,
     TrustDecision,
 )
 
-from . import send_as, voice_gate
+from . import evaluate_steps as _steps
+from . import send_as, voice_gate  # noqa: F401
 
 # Action classes that must never fire autonomously on a turn that ingested
 # untrusted (non-internal) inbound content — the taint-gate. READ and
@@ -1524,589 +1525,64 @@ def _evaluate_tool_call(
         # genuine refusal. Allow and let downstream surfaces complain.
         return None
 
-    # 1. Banned tools — refuse before policy runs.
-    try:
-        classification = classify_tool(tool_name)
-    except BannedToolError as err:
-        message = _BANNED_REFUSAL_MESSAGE.get(err.tool_name, err.reason)
-        banned_persona = _resolve_active_persona()
-        logger.info(
-            "trust-decision tool=%s persona=%s action_class=banned decision=refuse reason=%s",
-            tool_name,
-            banned_persona or "(none)",
-            message,
-        )
-        # The audit plugin has its own defense-in-depth banned path at
-        # post_tool_call; if a banned name ever reaches it, the INVARIANT_VIOLATION
-        # row should carry the refusal that was actually made here.
-        _record_decision(
-            tool_call_id,
-            tool_name,
-            banned_persona,
-            action_class=ACTION_CLASS_BANNED,
-            audit_action="refuse",
-            allowed=False,
-            reason=message,
-            effective_ceiling=Ceiling.REFUSED,
-            session_id=session_id,
-            session_match=session_match,
-        )
-        return {"action": "block", "message": f"Refused: {message}"}
+    # 1. Banned tools: refused before policy runs.
+    classification = _steps.classify_or_refuse_banned(
+        tool_name, tool_call_id, session_id, session_match
+    )
+    if isinstance(classification, dict):
+        return classification
 
-    # 1b. The matter-mixing fence (ss#2167). Placed HERE, ahead of exposure
-    # resolution, because it is not an exposure question: no ceiling a firm can
-    # author should permit two clients' facts into one composition, so this
-    # refuses before the persona's entitlements are even consulted.
-    #
-    # It is also the only placement that works. Every other control in this file
-    # runs when a SEND is attempted, by which point the mixed draft exists and is
-    # in a paralegal's queue — and a firm finding that draft is the event the
-    # engagement does not survive, whether or not it was ever sent. Routing it to
-    # human review does not prevent that discovery, it schedules it.
-    mixing_refusal = matter_gate.content_read_refusal(session_id, tool_name, args or {})
-    if mixing_refusal is not None:
-        _record_decision(
-            tool_call_id,
-            tool_name,
-            _resolve_active_persona(),
-            action_class=ActionClass.READ.value,
-            audit_action="refuse",
-            allowed=False,
-            reason=f"MATTER_MIXING_FENCE: {mixing_refusal}",
-            effective_ceiling=Ceiling.REFUSED,
-            session_id=session_id,
-            session_match=session_match,
-        )
-        return {"action": "block", "message": f"Refused: {mixing_refusal}"}
+    # 2. The fences no exposure ceiling can open, ahead of the persona.
+    fenced = _steps.mixing_fence(tool_name, args, tool_call_id, session_id, session_match)
+    if fenced is not None:
+        return fenced
+    fenced = _steps.search_egress_fence(tool_name, args, tool_call_id, session_id, session_match)
+    if fenced is not None:
+        return fenced
+    fenced = _steps.read_volume_fence(tool_name, tool_call_id, session_id, session_match)
+    if fenced is not None:
+        return fenced
 
-    # 1b'. Search egress (ADR 0099). Same placement argument as the mixing
-    # fence: what a web query carries leaves the seat the moment the call runs,
-    # so no exposure ceiling can be the control. Layer 1 keeps web search out
-    # of a session that read client material on a client-data seat; Layer 2
-    # screens the query for identifiers, read tokens, matter numbers, party
-    # emails and client-side party names. The reason names kinds, never values,
-    # and the audit row gets the length and the verdict only.
-    if tool_name in search_egress.SEARCH_TOOLS:
-        egress = search_egress.evaluate(session_id, tool_name, args or {})
-        search_egress.record_verdict(tool_call_id, egress)
-        if egress.refused:
-            _record_decision(
-                tool_call_id,
-                tool_name,
-                _resolve_active_persona(),
-                action_class=ActionClass.READ.value,
-                audit_action="refuse",
-                allowed=False,
-                reason=f"SEARCH_EGRESS ({egress.verdict}): {egress.reason}",
-                effective_ceiling=Ceiling.REFUSED,
-                session_id=session_id,
-                session_match=session_match,
-            )
-            return {"action": "block", "message": f"Refused: {egress.reason}"}
-
-    # 1c. The read-volume gate (agreement §2.8, routine 5). Same placement
-    # argument as the mixing fence above: not an exposure question — the
-    # authored threshold is a commercial term no ceiling should override — and
-    # a read-time refusal is the only control the model cannot talk past. The
-    # verdict is evaluated unconditionally (mode, scope, and threshold checks
-    # live in shared/read_volume.py); report mode records the crossing ONCE as
-    # an allowed row so rehearsal has an artifact to cite, and never blocks.
-    volume_verdict = read_volume.evaluate_read(session_id, tool_name)
-    if volume_verdict.report is not None:
-        _record_decision(
-            tool_call_id,
-            tool_name,
-            _resolve_active_persona(),
-            action_class=ActionClass.READ.value,
-            audit_action="report",
-            allowed=True,
-            reason=f"READ_VOLUME_GATE: {volume_verdict.report}",
-            session_id=session_id,
-            session_match=session_match,
-        )
-    elif volume_verdict.refusal is not None:
-        _record_decision(
-            tool_call_id,
-            tool_name,
-            _resolve_active_persona(),
-            action_class=ActionClass.READ.value,
-            audit_action="refuse",
-            allowed=False,
-            reason=f"READ_VOLUME_GATE: {volume_verdict.refusal}",
-            effective_ceiling=Ceiling.REFUSED,
-            session_id=session_id,
-            session_match=session_match,
-        )
-        return {"action": "block", "message": f"Refused: {volume_verdict.refusal}"}
-
-    # 2. Resolve the active persona's exposure from the TRUSTED config + the
-    # vertical floors, then enforce.
-    #
-    # FAIL CLOSED on resolution failure (issue #12). A raise here — a customer.yaml
-    # parse error, malformed personas, an unexpected None — must NOT silently allow
-    # a sensitive action. READ is the one exception: it is always permitted and
-    # carries no external blast radius, so a transient config error must not brick
-    # read-only tooling. Every other action class refuses when exposure is
-    # indeterminate.
+    # 3-4. Persona, exposure and enforce(): the fail-closed zone (issue #12). A
+    # raise anywhere in it must not silently allow a sensitive action.
     persona_slug = _resolve_active_persona()
     try:
-        exposure = _resolve_persona_exposure(persona_slug)
-        vertical_floors = _resolve_vertical_floors()
-        session_taint = SESSION_TAINT.trust_class(session_id)
-        # ADR 0099: on a web_derived turn, a send whose every recipient is an
-        # authored admin is classified as written (the recipients are bounded by
-        # the trusted config, so a page cannot steer them anywhere else).
-        web_admin_send = session_taint == TRUST_CLASS_WEB_DERIVED and _web_derived_admin_send(
-            tool_name, args or {}, session_id
+        call = _steps.resolve_call(
+            tool_name, args, session_id, persona_slug, classification, code_fixed_recipients
         )
-
-        # Staff send-as (ss ADR 0089). A send carrying ``from`` is its own class,
-        # decided BEFORE the recipient axis and before the taint gate reads the
-        # class: it is a proposal to a named staff member, not a send, so it is
-        # not taint-gated, never a send class below (``is_send`` stays False, so
-        # it is never captured into PENDING_SEND or replayed from it), and it
-        # leaves this function through the proposal branch after the decision
-        # row. With no ``from`` nothing here changes.
-        is_send_as = send_as.requested_from(tool_name, args) is not None
-        if is_send_as:
-            effective_action = ActionClass.EXTERNAL_SEND_AS_STAFF
-        else:
-            # Recipient axis: a proactive send to a rostered internal recipient
-            # is governed by its own external_send_internal ceiling; anyone else
-            # (or an unresolved recipient) stays external_send. Decided here
-            # where the args (and, via the registry, the draft) are available.
-            effective_action = _reclassify_send(
-                tool_name,
-                args or {},
-                classification.action_class,
-                session_id,
-                # A code-fixed recipient did not come from tainted content, so
-                # its provenance is not tainted even when the turn is.
-                tainted=session_taint != TRUST_CLASS_INTERNAL
-                and not code_fixed_recipients
-                and not web_admin_send,
-            )
-        gate_trust_class = _taint_gate_input(session_taint, effective_action, code_fixed_recipients)
-
-        # Confirm-approval round-trip (ADR 0071 #1806). A send withheld at the
-        # confirm ceiling is CAPTURED below (on await_approval); a matching
-        # current-turn approval — marked by the trusted pre_llm_call path when the
-        # allowlisted owner replies over Telegram — is PEEKED here (not yet
-        # consumed) so it flows into enforce() as the current-turn approval. When
-        # approved, the STORED payload is replayed over the live args BEFORE
-        # enforce and every downstream scan (content-floor / voice / fabrication),
-        # so what ships and what is inspected is exactly the reviewed content —
-        # never the LLM's (possibly drifted) re-composition. Only a
-        # resolved-recipient send participates; an unresolved recipient stays
-        # fail-closed (never approvable). Consume happens once the send clears
-        # every gate (below).
-        # All send classes that can resolve at the confirm ceiling participate —
-        # the outside class, the internal-staff class, and the typed client /
-        # vendor classes (ADR 0075). _enforce_resolved routes all of them through
-        # the same confirm branch, so all must capture/replay identically.
-        is_send = effective_action in (
-            ActionClass.EXTERNAL_SEND,
-            ActionClass.EXTERNAL_SEND_INTERNAL,
-            ActionClass.EXTERNAL_SEND_CLIENT,
-            ActionClass.EXTERNAL_SEND_VENDOR,
-        )
-        send_recips = _resolve_send_recipients(tool_name, args, session_id) if is_send else set()
-        approved_replay = False
-        stored = PENDING_SEND.approved_match(tool_name, send_recips) if send_recips else None
-        if stored is not None:
-            # The MATCHED record, never the newest: several sends can be pending
-            # at once (one per requester binding, shared.pending_send).
-            if isinstance(args, dict):
-                args.clear()
-                args.update(copy.deepcopy(stored.args))
-            approved_replay = True
-
-        # The commitment half of the same round trip (ss-console
-        # operator-own-matter). Identical shape to the send replay above and for
-        # identical reasons: the payload the administrator READ is the payload
-        # that executes, so it is replayed over the live arguments BEFORE the
-        # ceiling decides and before anything downstream inspects them. A model
-        # that re-composes the call with a different matter number on the
-        # confirming turn changes nothing.
-        # "commitment" here means any act this channel proposes: every
-        # COMMITMENT, plus a DESTRUCTIVE tool with a call-payload act shape.
-        is_commitment = effective_action is ActionClass.COMMITMENT or (
-            effective_action is ActionClass.DESTRUCTIVE
-            and act_broker.is_call_payload_act(tool_name)
-        )
-        confirmed_act = (
-            PENDING_ACTS.peek_confirmed(session_id, tool_name) if is_commitment else None
-        )
-        if confirmed_act is not None and isinstance(args, dict):
-            # The stored payload is the authored block whole; the tool gets the
-            # subset it accepts. The two authored names are what the read-back
-            # said, not fields the connector has, so they are stripped here and
-            # kept on the record, which is what the committed row carries.
-            args.clear()
-            args.update(copy.deepcopy(act_broker.tool_arguments(tool_name, confirmed_act.payload)))
-            approved_replay = True
-
-        decision = enforce(
-            action=effective_action,
-            exposure=exposure,
-            tool_name=tool_name,
-            persona_slug=persona_slug,
-            current_turn_approval=approved_replay or _resolve_current_turn_approval(args),
-            vertical_floors=vertical_floors,
-            inbound_trust_class=gate_trust_class,
-            admin_recipients=web_admin_send,
-        )
-        if gate_trust_class != session_taint:
-            decision = dataclasses.replace(
-                decision,
-                reason=(
-                    f"{decision.reason} | TAINT_EXEMPT: {TAINT_EXEMPT_CODE_FIXED} "
-                    f"(turn trust_class={session_taint}; recipients fixed by the pre_run "
-                    "envelope, Captain decision 2026-09-28)"
-                ),
-            )
+        decision = _steps.decide(tool_name, args, persona_slug, call)
     except Exception:  # noqa: BLE001
-        if classification.action_class == ActionClass.READ:
-            logger.warning(
-                "trust: exposure resolution failed for READ tool %r; allowing "
-                "(read is low-risk and always permitted)",
-                tool_name,
-                exc_info=True,
-            )
-            # An allow the resolver did not actually decide. The row says so —
-            # effective_ceiling stays None (indeterminate, not "authored
-            # autonomous"), which is exactly the distinction an auditor needs.
-            _record_decision(
-                tool_call_id,
-                tool_name,
-                persona_slug,
-                action_class=ActionClass.READ.value,
-                audit_action="allow",
-                allowed=True,
-                reason="read allowed despite an indeterminate exposure resolution",
-                session_id=session_id,
-                session_match=session_match,
-            )
-            return None
-        logger.exception(
-            "trust: exposure resolution failed for sensitive tool %r (action=%s); "
-            "FAILING CLOSED — refusing the call",
-            tool_name,
-            classification.action_class,
+        return _steps.fail_closed(
+            tool_name, tool_call_id, session_id, session_match, persona_slug, classification
         )
-        _record_decision(
-            tool_call_id,
-            tool_name,
-            persona_slug,
-            action_class=classification.action_class.value,
-            audit_action="refuse",
-            allowed=False,
-            reason="trust decision unavailable; failing closed",
-            session_id=session_id,
-            session_match=session_match,
-        )
-        return {
-            "action": "block",
-            "message": (
-                f"Refused: trust decision unavailable for this "
-                f"{classification.action_class} action; failing closed"
-            ),
-        }
 
-    _audit_decision(tool_name, persona_slug, decision)
-    # The same six fields the line above logs, handed to the row this call
-    # produces (#2122). ``decision.action_class`` is the RESOLVED class — after
-    # recipient reclassification — so the typed send classes entitlements
-    # actually govern reach the ledger instead of stopping at the gate.
-    _record_decision(
-        tool_call_id,
-        tool_name,
-        persona_slug,
-        action_class=decision.action_class.value,
-        audit_action=decision.audit_action,
-        allowed=decision.allowed,
-        reason=decision.reason,
-        authored_ceiling=decision.authored_ceiling,
-        vertical_floor=decision.vertical_floor,
-        effective_ceiling=decision.effective_ceiling,
-        session_id=session_id,
-        session_match=session_match,
+    # 5. The record (#2122).
+    _steps.record_ceiling(
+        tool_name, tool_call_id, session_id, session_match, persona_slug, decision
     )
 
-    # Capture a send withheld at the confirm ceiling so a later current-turn
-    # approval releases exactly THIS payload (ADR 0071 #1806). A new compose
-    # supersedes any prior pending; only a resolved-recipient send is captured.
-    if is_send and send_recips and decision.audit_action == "await_approval":
-        # Captured with the anchor and lane it was held under (shared.send_anchor):
-        # the approval arrives on another turn, and the broker re-reads THIS
-        # anchor at replay.
-        held_anchor, held_lane = send_anchor.capture_context(session_id)
-        # Bound to the person and chat that raised it, so only they can approve
-        # it (shared.turn_principal; the two-principal seat, 2026-10-17).
-        PENDING_SEND.capture(
-            tool_name,
-            args,
-            send_recips,
-            anchor=held_anchor,
-            lane=held_lane,
-            requester=turn_principal.requester(),
-            # The scans at approval judge the body against what THIS session
-            # read (see trust _dispatch_approved_send).
-            session_id=session_id,
-        )
-
-    # Staff send-as (ss ADR 0089): the whole path ends here, one way or the
-    # other. A refused ceiling refuses; the confirm ceiling proposes, which runs
-    # the fabrication, identifier and matter gates on THIS session and asks the
-    # broker to email the draft to the named staff member. Returning here is
-    # what keeps a from-bearing send out of every branch below, the content
-    # floor above all: the approval IS the human review that floor forces
-    # (ADR 0031), and the transmit happens in the broker on the approver's
-    # reply, never through this tool path.
-    if is_send_as:
-        if decision.audit_action != "await_approval":
-            return {"action": "block", "message": f"Refused: {decision.reason}"}
-        return send_as.propose(tool_name, args, session_id, tool_call_id)
-
-    # A commitment withheld at the confirm ceiling starts its round trip here:
-    # the authored act is put to an administrator, and the model is told to carry
-    # the broker's sentence into its reply. Deliberately AFTER the decision row
-    # is written, so the ledger records the withhold whatever the proposal does,
-    # and deliberately not on the confirmed pass (``confirmed_act`` is None only
-    # when nothing has been approved yet).
-    if is_commitment and confirmed_act is None and decision.audit_action == "await_approval":
-        return _propose_commitment_act(tool_name, session_id, args)
-
-    # ---- Outbound matter identity (ss#2167) --------------------------------
-    # Deliberately OUTSIDE the ``decision.allowed`` guard below. On a seat where
-    # every send sits at the draft_for_review ceiling, ``allowed`` is False for
-    # EVERY send, so a check placed inside that block would never execute on the
-    # seat that most needs it — the same defect, one layer in, as placing it
-    # after the pre_tool_call early return.
-    #
-    # Neither side of the check is the model's word: the matter identifiers are
-    # the ones physically in the body it wrote, and membership comes from
-    # connector reads. A send declaring its own matter would be circular — the
-    # model resolves the recipient's matter to address them, so it would declare
-    # the recipient's matter and always agree with itself.
-    #
-    # EXTERNAL_SEND_INTERNAL is absent from this tuple by design: firm staff are
-    # not expected to be parties, and an internal alert CARRIES matter context to
-    # a colleague on purpose (ADR 0072).
-    if is_send and effective_action in (
-        ActionClass.EXTERNAL_SEND,
-        ActionClass.EXTERNAL_SEND_CLIENT,
-        ActionClass.EXTERNAL_SEND_VENDOR,
-    ):
-        matter_verdict = matter_gate.evaluate(
-            session_id=session_id,
-            body=matter_gate.body_from_args(args),
-            recipients=send_recips,
-            # A records vendor is not a party to the matter it is being written
-            # about; the roster that types it is the CLIENT's, not ours.
-            recipient_is_exempt=effective_action is ActionClass.EXTERNAL_SEND_VENDOR,
-        )
-        mismatch_withholds = matter_verdict.should_withhold and matter_gate.mode() == "block"
-        if mismatch_withholds and decision.allowed:
-            return {
-                "action": "block",
-                "message": (
-                    "Refused: this message cites "
-                    f"{', '.join(matter_verdict.matters) or 'a matter'} but "
-                    f"{matter_verdict.reason}; routing to draft for human review "
-                    "(ss#2167 matter identity)"
-                ),
-            }
-
-        # ss#2167 (mixing) — did this session read more than one matter's
-        # substance? Independent of the citation verdict above.
-        #
-        # Under `block` (the default) an otherwise-PERMITTED send is downgraded to
-        # a human draft. It is never refused and nothing is discarded: the same
-        # disposition the mismatch branch above uses, for the same reason — the
-        # safe answer to "this might mix two matters" is a person reading it, not
-        # a lost letter.
-        #
-        # This annotated without holding for one revision. The reasoning was that
-        # a firing rate should be measured first, and it was calibrated against an
-        # earlier signal keyed on `get_matter` that fired on ordinary work. After
-        # the signal narrowed to memo and document reads that reasoning no longer
-        # held and was not re-checked. The errors are asymmetric: a false positive
-        # costs one human read of a draft this seat already reads, a false
-        # negative is one client's facts in another client's letter. Waiting on
-        # data would have meant carrying that exposure for the length of the
-        # measurement.
-        multi_read = matter_gate.multi_matter_session(session_id)
-        if multi_read and decision.allowed and matter_gate.multi_matter_mode() == "block":
-            return {
-                "action": "block",
-                "message": (
-                    "Refused: this session read content from "
-                    f"{len(multi_read)} matters ({', '.join(multi_read)}) before "
-                    "composing this send; routing to draft for human review "
-                    "(ss#2167 matter mixing)"
-                ),
-            }
-
-        # ONE re-record, carrying every fragment that applies.
-        #
-        # Two _record_decision calls would NOT produce two annotations:
-        # TrustDecisionRegister.record overwrites unconditionally by
-        # tool_call_id (shared/trust_decision.py), so the second call would erase
-        # the first fragment — and it would do so on precisely the worst send
-        # there is, one that both cites a mismatched matter AND blended two.
-        #
-        # Re-record rather than rebuild, for the reason the mismatch path has
-        # always had: rebuilding the row from scratch writes the ceiling fields
-        # back to None and re-breaks the null-ceiling defect #2122 fixed.
-        fragments: list[str] = []
-        if mismatch_withholds:
-            # The ceiling already withheld this send, so there is nothing left to
-            # stop — but a reviewer working the draft queue must be able to tell a
-            # suspected cross-matter send from ordinary review traffic.
-            fragments.append(f"MATTER_MISMATCH: {matter_verdict.reason}")
-        if multi_read:
-            fragments.append(
-                f"MULTI_MATTER_SESSION: session read content from {len(multi_read)} "
-                f"matters ({', '.join(multi_read)})"
-            )
-        if fragments:
-            _record_decision(
-                tool_call_id,
-                tool_name,
-                persona_slug,
-                action_class=decision.action_class.value,
-                audit_action=decision.audit_action,
-                allowed=decision.allowed,
-                reason=" | ".join([decision.reason, *fragments]),
-                authored_ceiling=decision.authored_ceiling,
-                vertical_floor=decision.vertical_floor,
-                effective_ceiling=decision.effective_ceiling,
-                session_id=session_id,
-                session_match=session_match,
-            )
-
-    # ---- Message structure floor (ss#2090 refiled; the 2026-08-25 digest) --
-    # Deliberately OUTSIDE the ``decision.allowed`` guard below, for the reason
-    # the matter-identity gate above states in full: on a seat where every send
-    # sits at the draft_for_review ceiling, ``allowed`` is False for EVERY send,
-    # so a check placed inside that block would never execute on the seat that
-    # most needs it. The CHECK runs either way and always writes its row; only
-    # the DISPOSITION reads ``allowed``, inside the gate.
-    #
-    # ``is_send`` carries EXTERNAL_SEND_INTERNAL, unlike the matter gate's
-    # narrower tuple above. That is deliberate and is the whole point: the staff
-    # digest is the message this floor exists for. On 2026-08-25 one went out as
-    # 4,280 characters of unbroken paragraph with every identifier correct.
-    if is_send:
-        structure_block = spec_gate.check_structure_floor(
-            tool_name=tool_name,
-            action_class_value=getattr(effective_action, "value", ""),
-            session_id=session_id,
-            tool_call_id=tool_call_id,
-            body=_extract_send_body(args),
-            allowed=decision.allowed,
-        )
-        if structure_block is not None:
-            return structure_block
-
-    # Content-sensitivity floor (ADR 0031). Applies to sends that LEAVE the firm:
-    # the outside class plus the typed client / records-vendor classes. Money /
-    # contract / scope / legal content bound for a client or vendor is downgraded
-    # to a draft even under an autonomous exposure — a settlement dollar figure to
-    # a client must draft. Only the INTERNAL send (external_send_internal, to the
-    # firm's own rostered staff) is deliberately NOT content-floored — the whole
-    # value of an internal alert is that it CARRIES the matter/deadline/dollar
-    # context to a colleague; drafting it would re-break the ADR 0072 fix. Only a
-    # send the exposure would ALLOW is floored (a draft/refuse already withholds it).
-    if decision.allowed and effective_action in (
-        ActionClass.EXTERNAL_SEND,
-        ActionClass.EXTERNAL_SEND_CLIENT,
-        ActionClass.EXTERNAL_SEND_VENDOR,
-    ):
-        floor_block = _apply_content_floor(tool_name, args)
-        if floor_block is not None:
-            return floor_block
-
-        # Voice live-gate (ADR 0028 §2, #855; repointed per-class by ss#2086
-        # step 1). ONLY an AUTONOMOUS send that LEAVES the firm (outside, or the
-        # typed client / records-vendor classes) impersonates the principal's
-        # voice with no human review — confirm / draft / refused already route to
-        # a human, and external_send_internal is ops traffic, so it is out of
-        # scope. The gate resolves its regime per (seat × output class): a class
-        # declared `output_classes.<class>.voice_spec: expected` is governed by
-        # the authored-spec binding (installed + hash-verified + read this turn),
-        # and every OTHER class is undeclared and downgrades (the sample-transform
-        # fallback's fail-closed replacement, ss ADR 0083 decision 6). A downgrade
-        # uses the same block-directive plumbing as the content floor.
-        if decision.effective_ceiling == Ceiling.AUTONOMOUS:
-            voice_block = voice_gate.check_voice_gate(
-                tool_name=tool_name,
-                action_class_value=getattr(effective_action, "value", ""),
-                session_id=session_id,
-            )
-            if voice_block is not None:
-                return voice_block
-
-    # Authored-spec gate (ss ADR 0083, #2084). Distinct from the voice gate on
-    # both axes, which is why it is a separate block rather than another clause
-    # above. SCOPE: it covers external_send_internal too — the `staff` class,
-    # whose persona voice needs no customer corpus and is therefore the one
-    # provable from day one, and which is also the highest-volume output the
-    # firm forms its daily impression from. BINDING: it fires only where the
-    # seat DECLARES `output_classes.<class>.voice_spec: expected`, so a seat
-    # that authored nothing is untouched. A declared-but-never-READ spec
-    # downgrades to draft. A declared-but-never-INSTALLED one is a broken
-    # control, and since 2026-08-10 what that costs depends on who is waiting:
-    # `staff` proceeds in the persona's own register (a person is waiting on ops
-    # mail, and six days of silent refusals proved that refusing costs them the
-    # message — ss-console #2228), outbound routes to a human, work_product and
-    # record still refuse. Tamper and an unreadable manifest refuse everywhere.
-    # The gate owns that fan-out; this call site does not need to know it.
-    if decision.allowed and decision.effective_ceiling == Ceiling.AUTONOMOUS:
-        spec_block = spec_gate.check_spec_gate(
-            tool_name=tool_name,
-            action_class_value=getattr(effective_action, "value", ""),
-            session_id=session_id,
-            # The composed text, or None meaning INDETERMINATE — passed through
-            # UNCOERCED. It used to arrive here as `or ""`, which made the gate
-            # skip its format check on exactly the sends the content floor
-            # treats as most suspect: one value, two adjacent call sites,
-            # opposite dispositions (ss-console #2234).
-            #
-            # The gate used to ask only "did the model read
-            # its spec"; with the body it can also answer "does what it wrote
-            # have the authored shape" — the binary half of ADR 0083 §3, and
-            # the only half a machine can decide rather than grade.
-            body=_extract_send_body(args),
-            # ss-console#2546. True only for a body the OVERLAY templated (the
-            # out-of-turn rule-request notifications). It skips the voice-READ
-            # branch inside the gate and nothing else. See check_spec_gate.
-            templated=bool(args.get(spec_gate.TEMPLATED_BODY_ARG)),
-        )
-        if spec_block is not None:
-            return spec_block
-
-    if decision.allowed:
-        # A confirm-approved send has cleared the ceiling, the content-floor, and
-        # the voice-gate and is about to ship — consume the single-use approval so
-        # it can never release a second send (ADR 0071 #1806). The live args were
-        # already overwritten with the stored payload above.
-        if is_send and approved_replay:
-            replayed = PENDING_SEND.take_for_send(tool_name, send_recips)
-            if replayed is not None:
-                # The handler sends it under the anchor it was held with.
-                send_anchor.note_replay(replayed.anchor, replayed.lane, replayed.recipients)
-        # The commitment's approval is spent the same way and at the same moment,
-        # once the call has cleared every gate and is about to execute. The
-        # record survives the spend so ``post_tool_call`` can close the broker row
-        # against what the vendor actually recorded; what it no longer is, is an
-        # approval, so a second call this turn is withheld again.
-        if is_commitment and confirmed_act is not None:
-            PENDING_ACTS.take_in_flight(session_id, tool_name)
-        return None
-
-    return {"action": "block", "message": f"Refused: {decision.reason}"}
+    # 6. The dispositions, in order; the first that holds the call ends it.
+    _steps.capture_held_send(tool_name, args, session_id, call, decision)
+    proposed, verdict = _steps.proposal_exit(
+        tool_name, args, session_id, tool_call_id, call, decision
+    )
+    if proposed:
+        return verdict
+    held = _steps.matter_identity(
+        tool_name, args, session_id, tool_call_id, session_match, persona_slug, call, decision
+    )
+    if held is not None:
+        return held
+    held = _steps.structure_floor(tool_name, args, session_id, tool_call_id, call, decision)
+    if held is not None:
+        return held
+    held = _steps.content_floor_and_voice(tool_name, args, session_id, call, decision)
+    if held is not None:
+        return held
+    held = _steps.authored_spec(tool_name, args, session_id, call, decision)
+    if held is not None:
+        return held
+    return _steps.release(tool_name, session_id, call, decision)
 
 
 __all__ = [
