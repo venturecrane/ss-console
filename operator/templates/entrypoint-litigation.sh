@@ -31,12 +31,14 @@ install -d -o root -g jobs -m 0750 "${JOBS_DATA_DIR}/litigation"
 install -d -o jobs -g jobs -m 0700 "${JOBS_DATA_DIR}/litigation/state"
 export JOBS_LITIGATION_STATE_DIR="${JOBS_RUN_DIR}/litigation/state"
 
-# The text cache (2026-10-24, jobs/litigation/textcache.py): every page the
+# The text cache (2026-10-24, jobs/textcache.py since wave 5): every page the
 # lane paid to read, kept so a later list does not buy it again. Transcribed
 # matter text, so child-only 0700 like the state; the parent above is
 # root:jobs 0750, so the child could not make it itself (its writes would
-# stop on the first one). Survives reprovision by design; a matter leaves it
-# with `python -m jobs.litigation.textcache purge --matter <id>`.
+# stop on the first one). entrypoint-lanes.sh makes the same dir on every lane
+# seat and exports the page store's env var; these lines stay so this fragment holds
+# on its own. Survives reprovision by design; a matter leaves it with
+# `python -m jobs.textcache purge --matter <id>`.
 install -d -o jobs -g jobs -m 0700 "${JOBS_DATA_DIR}/litigation/textcache"
 export JOBS_LITIGATION_TEXTCACHE_DIR="${JOBS_RUN_DIR}/litigation/textcache"
 

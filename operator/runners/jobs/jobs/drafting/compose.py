@@ -246,10 +246,9 @@ class DraftingError(RuntimeError):
 def exemplar_text(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix == ".pdf":
-        import pymupdf
+        from ..matter import pdf as matter_pdf
 
-        with pymupdf.open(str(path)) as doc:
-            return "\n".join(page.get_text() for page in doc)
+        return "\n".join(matter_pdf.page_texts(path))
     if suffix == ".docx":
         import docx
 

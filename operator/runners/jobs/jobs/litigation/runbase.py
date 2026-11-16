@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..limits import LimitHold
+from ..matter import paid as matter_paid
 from . import eventmode, extract as extract_mod, fetch as fetch_mod, inventory
 from .outcome import LitigationFailed
 from .progress import Progress
@@ -24,6 +25,8 @@ class RunBase:
     doorway: Any
     firm: Any
     cache: Any = None
+    #: The store of paid page text (``matter/store.PageStore``); None reads without it.
+    page_store: Any = None
     #: The run's seat, opened on first use (``LitigationRun.seat``).
     seat: Any
     _progress: Progress | None = None
@@ -158,6 +161,8 @@ class RunBase:
         c = self.cache
         if c is not None and c.quiet and not self._state().get("cache_disabled"):
             self._put("cache_disabled", c.quiet_reason or "writes failed")
+        if self.page_store is not None:
+            self.page_store.flush()  # the job's page_store.json: store on or off, its hits and misses
 
     def _json(self, name: str) -> Any:
         return json.loads((self.data / name).read_text(encoding="utf-8"))
@@ -172,20 +177,15 @@ class RunBase:
     def _ocr(self, png: bytes) -> str:
         if self._progress is not None:
             self._progress.add("vision pages")
-        import base64
+        model, pol = self.firm.model("transcription"), extract_mod.POLICY
 
-        img = {
-            "type": "image",
-            "source": {"type": "base64", "media_type": "image/png", "data": base64.standard_b64encode(png).decode()},
-        }
-        r = self.doorway.call(
-            "litigation_ocr",
-            model=self.firm.model("transcription"),
-            messages=[{"role": "user", "content": [img, {"type": "text", "text": extract_mod.OCR_PROMPT}]}],
-            max_tokens=8000,
-            cache_blocks=(),
-        )
-        return r.text
+        def read() -> tuple[str, str]:
+            return matter_paid.ocr_plain(
+                self.doorway, "litigation_ocr", model=model, png=png, prompt=extract_mod.OCR_PROMPT,
+                max_tokens=pol.max_tokens,
+            )  # fmt: skip
+
+        return matter_paid.stored(self.page_store, lambda render: matter_paid.method(pol, model, render), read)
 
     def _reading(self, stage: str, audit: bool = False) -> Progress:
         n = sum(1 for p in self._plan().values() if p["read_groups"] or (audit and p["audit"] == "all"))

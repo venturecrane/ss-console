@@ -75,6 +75,9 @@ class Config:
     # Seat slug -> purpose (ADR 0107, operator/fleet/seats.yaml). A seat the
     # file does not name takes the default threshold.
     seat_purposes: dict[str, str] = field(default_factory=dict)
+    #: How many of a lane's latest page-reading jobs the page store's repeat
+    #: misses are read over (``work_health_page_store``).
+    page_store_cold_jobs: int = 3
 
     def no_reply_for(self, seat: str) -> int:
         purpose = self.seat_purposes.get(seat)
@@ -90,7 +93,7 @@ def load_config(path: Path = CONTRACT_PATH, seats: Optional[dict[str, dict[str, 
         lanes[name] = Lane(name, str(spec["label"]), int(spec["queue_minutes"]), int(spec["run_minutes"]))
     if set(lanes) != set(LANE_PREFIXES.values()):
         raise ValueError(f"{path}: lanes must be exactly {sorted(LANE_PREFIXES.values())}")
-    skip = ("lanes", "no_reply_minutes_by_purpose", "seat_purposes")
+    skip = ("lanes", "no_reply_minutes_by_purpose", "seat_purposes", "page_store_cold_jobs")
     keys = [k for k in Config.__dataclass_fields__ if k not in skip]
     by_purpose = {str(k): int(v) for k, v in (raw.get("no_reply_minutes_by_purpose") or {}).items()}
     unknown = set(by_purpose) - set(seat_purpose.PURPOSES)
@@ -102,6 +105,7 @@ def load_config(path: Path = CONTRACT_PATH, seats: Optional[dict[str, dict[str, 
         lanes=lanes,
         no_reply_minutes_by_purpose=by_purpose,
         seat_purposes=purposes,
+        page_store_cold_jobs=int(raw.get("page_store_cold_jobs", 3)),
     )
 
 
@@ -151,6 +155,8 @@ RANK = {
     "missed_slot": 40,
     "schedule_paused": 41,
     "schedule_drift": 44,
+    "page_store_off": 45,
+    "page_store_cold": 46,
     "silent_run": 42,
     "shortfall": 50,
     "sentry": 60,

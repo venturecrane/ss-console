@@ -1,6 +1,36 @@
 {
   "cell": {
     "cache": {
+      "<sha:cover_scans>.p2.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 2,
+        "text": "TRANSCRIPT OF cover_scans PAGE 2"
+      },
+      "<sha:cover_scans>.p3.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 3,
+        "text": "TRANSCRIPT OF cover_scans PAGE 3"
+      },
+      "<sha:cover_scans>.p4.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 4,
+        "text": "TRANSCRIPT OF cover_scans PAGE 4"
+      },
+      "<sha:cover_scans>.p5.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 5,
+        "text": "TRANSCRIPT OF cover_scans PAGE 5"
+      },
+      "<sha:cover_scans>.p6.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 6,
+        "text": "TRANSCRIPT OF cover_scans PAGE 6"
+      },
       "<sha:edge14>.json": {
         "created_at": "<AT>",
         "method": "vision",
@@ -65,11 +95,16 @@
         "refused": "PDF could not be parsed: startxref not found"
       },
       "cover_scans": {
-        "method": "pypdf",
+        "method": "vision_cached",
         "pages": 6,
         "reason": null,
         "text": [
-          "COVER SHEET\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
+          "[p.1]\nCOVER SHEET\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.2] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 2\n\n",
+          "[p.3] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 3\n\n",
+          "[p.4] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 4\n\n",
+          "[p.5] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 5\n\n",
+          "[p.6] (machine transcription)\nTRANSCRIPT OF cover_scans PAGE 6"
         ]
       },
       "digital": {
@@ -231,12 +266,64 @@
         "pages": 60,
         "reason": null,
         "text": [
-          {
-            "chars": 25915,
-            "head": "Page 1 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. T",
-            "sha12": "3fa732c612e3",
-            "tail": "neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
-          }
+          "[p.1]\nPage 1 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.2]\nPage 2 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.3]\nPage 3 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.4]\nPage 4 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.5]\nPage 5 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.6]\nPage 6 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.7]\nPage 7 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.8]\nPage 8 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.9]\nPage 9 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.10]\nPage 10 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.11]\nPage 11 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.12]\nPage 12 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.13]\nPage 13 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.14]\nPage 14 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.15]\nPage 15 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.16]\nPage 16 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.17]\nPage 17 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.18]\nPage 18 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.19]\nPage 19 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n[p.20: blank]\n\n",
+          "[p.21]\nPage 21 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.22]\nPage 22 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.23]\nPage 23 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.24]\nPage 24 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.25]\nPage 25 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.26]\nPage 26 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.27]\nPage 27 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.28]\nPage 28 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.29]\nPage 29 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.30]\nPage 30 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.31]\nPage 31 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.32]\nPage 32 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.33]\nPage 33 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.34]\nPage 34 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.35]\nPage 35 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.36]\nPage 36 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.37]\nPage 37 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.38]\nPage 38 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.39]\nPage 39 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.40]\nPage 40 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n[p.41: blank]\n\n",
+          "[p.42]\nPage 42 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.43]\nPage 43 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.44]\nPage 44 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.45]\nPage 45 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.46]\nPage 46 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.47]\nPage 47 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.48]\nPage 48 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.49]\nPage 49 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.50]\nPage 50 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.51]\nPage 51 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.52]\nPage 52 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.53]\nPage 53 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.54]\nPage 54 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.55]\nPage 55 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.56]\nPage 56 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.57]\nPage 57 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.58]\nPage 58 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.59]\nPage 59 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care.\n\n",
+          "[p.60]\nPage 60 of the typed record.\nThe patient was seen in the clinic today for a follow up visit after the collision and reports\nthat the pain in the neck is improving with therapy. The exam is unchanged from the prior visit\nand the plan is to continue the current care with a return visit in four weeks. The patient was\ngiven a copy of the home exercise program and asked to call the office with any new complaint\nor question about the plan of care."
         ]
       },
       "x_emailed": {
@@ -270,6 +357,36 @@
     "JOBS_TEXTCACHE_DIR": {},
     "SMD_POST_JOURNAL_DIR": {},
     "SMOKEBALL_EXTRACT_CACHE_DIR": {
+      "<sha:cover_scans>.p2.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 2,
+        "text": "TRANSCRIPT OF cover_scans PAGE 2"
+      },
+      "<sha:cover_scans>.p3.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 3,
+        "text": "TRANSCRIPT OF cover_scans PAGE 3"
+      },
+      "<sha:cover_scans>.p4.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 4,
+        "text": "TRANSCRIPT OF cover_scans PAGE 4"
+      },
+      "<sha:cover_scans>.p5.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 5,
+        "text": "TRANSCRIPT OF cover_scans PAGE 5"
+      },
+      "<sha:cover_scans>.p6.6036f2d4c7146aa5.json": {
+        "created_at": "<AT>",
+        "method": "vision_page",
+        "page": 6,
+        "text": "TRANSCRIPT OF cover_scans PAGE 6"
+      },
       "<sha:edge14>.json": {
         "created_at": "<AT>",
         "method": "vision",

@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import limits as limits_mod, paid, proof_mode, stop_request
-from ..litigation import textcache
+from .. import textcache
 from ..litigation.runbase import RunBase
 from ..litigation.tools import ReadIncomplete, dump
 from ..litigation.workers import in_parallel

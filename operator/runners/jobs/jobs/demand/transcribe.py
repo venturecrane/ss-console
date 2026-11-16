@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..limits import LimitHold
+from ..matter import paid as matter_paid, policy as matter_policy, store as page_store_mod
 from ..stages.base import append_jsonl, read_jsonl
 from ..stages.pleading_margin import strip_page
 from ..stages.vision import FAILED, MAX_TOKENS, REFUSED, SYSTEM, page_item, render_page, split_handwriting_field
@@ -76,7 +77,7 @@ def _queued(
     doorway: Any,
     model: str,
     jobs: list[tuple[dict[str, Any], int, str]],
-    keep: Callable[[dict[str, Any], int, str], None],
+    keep: Callable[[dict[str, Any], int, str, str | None], None],
     log: Callable[[str], None],
 ) -> None:
     """Every page through the batch queue. A page that failed or was refused
@@ -93,7 +94,10 @@ def _queued(
         r, n = by_id[item.custom_id]
         if res is None:
             log(f"  {str(r['name'])[:30]} p{n}: {str(err)[:200]}")
-        keep(r, n, res.text if res is not None else (REFUSED if err == "refusal" else FAILED))
+        if res is None:
+            keep(r, n, REFUSED if err == "refusal" else FAILED, None)
+        else:
+            keep(r, n, res.text, res.stop_reason)  # a refusal's text is kept as before, never stored
 
     summary = doorway.batch_call(
         "vision",
@@ -111,26 +115,60 @@ def _queued(
         )
 
 
+class _Store:
+    """The store of paid page text (``matter/store``) for this corpus: a page
+    the chronology's method already read for a file with the same sha256 is
+    written from it, never paid again; a fresh reading is kept (raw: the
+    merge removes its handwriting field as from a fresh one)."""
+
+    def __init__(self, lane: str, model: str, matter_id: str, log: Callable[[str], None], record_to: Path | None):
+        self.store = page_store_mod.from_env(lane, log=log, record_to=record_to)
+        self.method = matter_paid.method(matter_policy.DEMAND, model).version
+        self.matter = matter_id
+        self._shas: dict[str, str] = {}
+
+    def sha(self, r: dict[str, Any]) -> str:
+        rid = str(r["id"])
+        if rid not in self._shas:
+            try:
+                self._shas[rid] = matter_paid.sha_file(Path(r["source_path"])) if self.store.on else ""
+            except OSError:
+                self._shas[rid] = ""
+        return self._shas[rid]
+
+
 def run(
     data: Path,
     doorway: Any,
     model: str,
     log: Callable[[str], None],
     concurrency: int,
+    *,
+    matter_id: str = "",
+    lane: str = "demand",
+    record_to: Path | None = None,
 ) -> list[str]:
     """Transcribe every queued page. Returns the names of the documents whose
     text is now (partly) a machine transcription; raises ``LimitHold`` through
-    when a limit stops it, leaving every finished page checkpointed."""
+    when a limit stops it, leaving every finished page checkpointed. A page
+    the store holds (``matter/store``, on when the seat names it) is written
+    from it; ``matter_id`` is what a fresh reading is kept for (none: nothing
+    is kept), ``record_to`` the job's ``page_store.json``."""
     import pymupdf
 
     rows = [json.loads(line) for line in (data / "extracted.jsonl").read_text(encoding="utf-8").splitlines() if line]
     (data / "partial").mkdir(parents=True, exist_ok=True)
+    st = _Store(lane, model, matter_id, log, record_to)
     jobs: list[tuple[dict[str, Any], int, str]] = []
     for r, pages in _todo(rows):
         have = _done(data, r["id"])
         with pymupdf.open(r["source_path"]) as doc:
             for n in pages:
                 if n not in have and n <= len(doc):
+                    hit = st.store.get(st.sha(r), n, st.method, matter_id)
+                    if hit is not None:
+                        append_jsonl(data / "partial" / f"{r['id']}.jsonl", {"page": n, "text": hit})
+                        continue
                     jobs.append((r, n, render_page(doc[n - 1], log, str(r["name"]), n)))
     jobs, twins = repeats.same_images(jobs)
     repeats.save(data, "scanned", repeats.scanned_record(jobs, twins), add=True)
@@ -140,10 +178,12 @@ def run(
         + (f"; {same} more carry the same image as one of them" if same else "")
     )
 
-    def keep(r: dict[str, Any], n: int, text: str) -> None:
-        """The reading, written to the page and to every page with its image."""
+    def keep(r: dict[str, Any], n: int, text: str, stop: str | None) -> None:
+        """The reading, written to the page and to every page with its image;
+        stored only when the model finished it (``stop``: its stop reason)."""
         for row, page in [(r, n), *twins.get((str(r["id"]), n), [])]:
             append_jsonl(data / "partial" / f"{row['id']}.jsonl", {"page": page, "text": text})
+            st.store.put(st.sha(row), page, st.method, text, matter_id, stop_reason=stop)
 
     def one(job: tuple[dict[str, Any], int, str]) -> None:
         r, n, b64 = job
@@ -158,19 +198,20 @@ def run(
                 effort="",
                 custom_id=item.custom_id,
             )
-            text = REFUSED if res.stop_reason == "refusal" else res.text
+            text, stop = (REFUSED if res.stop_reason == "refusal" else res.text), res.stop_reason
         except LimitHold:
             raise
         except Exception as exc:  # noqa: BLE001 - a page that will not transcribe is marked, never dropped
             log(f"  {str(r['name'])[:30]} p{n}: {str(exc)[:200]}")
-            text = FAILED
-        keep(r, n, text)
+            text, stop = FAILED, None
+        keep(r, n, text, stop)
 
     if "vision" in getattr(doorway, "batch_stages", ()):
         _queued(data, doorway, model, jobs, keep, log)
     else:
         with ThreadPoolExecutor(max_workers=concurrency) as ex:
             list(ex.map(one, jobs))
+    st.store.flush()
     machine = []
     for r, pages in _todo(rows):
         have = _done(data, r["id"])

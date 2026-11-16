@@ -77,10 +77,9 @@ def pages_of_text(text: str) -> dict[int, str]:
 
 
 def pdf_pages(path: Path) -> list[str]:
-    import pymupdf
+    from ...matter import pdf as matter_pdf
 
-    with pymupdf.open(str(path)) as doc:
-        return [pg.get_text() for pg in doc]
+    return matter_pdf.page_texts(path)
 
 
 def seen_shingles(delivered_pdfs: list[Path]) -> Delivered:

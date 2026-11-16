@@ -58,6 +58,7 @@ from . import (
 from .broker_client import BrokerClient, BrokerError
 from .drafting import firm_rules, layout_into_library, repair_budget
 from .firm_inputs import pin_env
+from .matter import store as page_store_mod
 from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
 from .skill_load import load_line
@@ -222,7 +223,7 @@ class DraftingLane(Daemon):
             firm_wording.alert_unusable(self, job_id)
 
     def _lane_env(self, job_id: str) -> dict[str, str]:
-        out: dict[str, str] = {}
+        out: dict[str, str] = page_store_mod.child_env()
         if os.environ.get(firm_rules.PINS_ENV):
             out[firm_rules.PINS_ENV] = os.environ[firm_rules.PINS_ENV]
         if self.inputs_dir:
@@ -315,6 +316,7 @@ class DraftingLane(Daemon):
             edit = library_edit_handoff.delivery_note(self.job_dir(job_id) / "data")
             if edit is not None:
                 fields["delivery"]["library_edit"] = edit
+        fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
         state, fields = proof_watch.settle(self, job_id, outcomes or [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)

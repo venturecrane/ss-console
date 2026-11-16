@@ -26,6 +26,14 @@ discipline:
    never initiates one, so a scanned matter's draft path still opens only
    after a human deliberately read each scan.
 
+A PDF THAT IS NOT A WHOLE SCAN is read page by page (wave 5, K1) and no page is
+dropped: a typed document whose every page has text reads exactly as it always
+did; otherwise each page is marked, a blank one ``[p.N: blank]``. A scan behind
+a typed cover is read on its own (``mixed_read``: only those pages, stored one
+by one, vision only where the caller allows it, up to the page bound) and marked
+``[p.N] (machine transcription)``; one left unread is
+``[p.N: scanned page, not read]`` (method ``mixed``).
+
 ``extract_text`` (the original) keeps its exact signature and behaviour and
 NEVER reaches the network. It has callers outside this connector — the voice
 corpus builders (``operator/bin/voice-fetch-corpus.py``,
@@ -37,8 +45,12 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from .xlsx_io import OLE_MAGIC, OPERATOR_CREATOR, is_pptx, is_xlsx, xlsx_creator, xlsx_text
+
+if TYPE_CHECKING:
+    from .letter_pages import PdfPage
 
 _PDF_MAGIC = b"%PDF"
 _ZIP_MAGIC = b"PK\x03\x04"
@@ -53,6 +65,13 @@ METHOD_PLAIN = "plain"
 METHOD_VISION = "vision"
 METHOD_VISION_CACHED = "vision_cached"
 METHOD_NONE_SCANNED = "none_scanned"
+#: A PDF whose typed pages were read from their text layer and which also holds
+#: scanned pages nobody has transcribed (none stored, and no vision read allowed
+#: or possible within the bound). Every page is in the text, each unread scan as
+#: ``[p.N: scanned page, not read]``, and ``ExtractResult.unread_pages`` names
+#: them. It is never the firm's whole record: a caller treats the unread pages
+#: the way it treats an unread scan (wave 5, K1).
+METHOD_MIXED = "mixed"
 METHOD_XLSX = "xlsx"
 #: A workbook the Operator itself built (``add_workbook``). Readable like any
 #: other, but never counted as the firm's record by the drafting check: the
@@ -67,6 +86,7 @@ METHODS = frozenset(
         METHOD_VISION,
         METHOD_VISION_CACHED,
         METHOD_NONE_SCANNED,
+        METHOD_MIXED,
         METHOD_XLSX,
         METHOD_XLSX_OPERATOR,
     }
@@ -112,9 +132,28 @@ REASONS = frozenset(
 
 #: A PDF page carrying fewer than this many characters of extracted text is
 #: paper, not a document: scanner artefacts, a stamped exhibit number, a fax
-#: header. Averaged across the file so a scan bundle with one text-layer cover
-#: sheet still reads as scanned.
+#: header. THE connector's one "no text" number: :func:`page_has_text` applies
+#: it to one page, :func:`file_looks_scanned` averages it over a file, and
+#: ``letter_pages.page_needs_vision`` starts from :func:`page_has_text`.
 SCANNED_CHARS_PER_PAGE = 15
+
+
+def page_has_text(text: str) -> bool:
+    """True when one page's text layer carries at least the floor of text."""
+    return len(text.strip()) >= SCANNED_CHARS_PER_PAGE
+
+
+def file_looks_scanned(page_texts: list[str]) -> bool:
+    """True when the file's text layer yields ~nothing per page on AVERAGE: the
+    same floor as :func:`page_has_text`, over the whole file. This decides the
+    whole-scan road (the cache, then vision under its page cap) and is exactly
+    the rule that road has always used; a file it passes over is then read page
+    by page (``_typed_pdf_result``), so a typed cover no longer hides the scans
+    behind it."""
+    if not page_texts:
+        return False
+    joined = "\n\n".join(t.strip() for t in page_texts if t.strip())
+    return len(joined.strip()) < SCANNED_CHARS_PER_PAGE * len(page_texts)
 
 
 class UnsupportedDocumentError(RuntimeError):
@@ -129,12 +168,42 @@ class ExtractResult:
     ``text`` is empty for every non-success method. ``reason`` is set only for
     ``none_scanned`` and is one of :data:`REASONS`. ``pages`` is the PDF page
     count when known (it is what an attorney needs to judge an over-cap refusal)
-    and None for every other type."""
+    and None for every other type. ``unread_pages`` (1-based) is set only for
+    ``mixed``: the scanned pages whose text is a marker, not a reading, and then
+    ``reason`` may say why they were left (``over_page_cap``, or a failed read).
+    ``transcribed_pages`` names the scanned pages of a text-layer PDF that are a
+    machine transcription (``[p.N] (machine transcription)``)."""
 
     text: str
     method: str
     reason: str | None = None
     pages: int | None = None
+    unread_pages: tuple[int, ...] = ()
+    transcribed_pages: tuple[int, ...] = ()
+
+    def report(self) -> dict[str, Any]:
+        """The fields ``read_document`` returns beside the text, in its order:
+        the road, the PDF page count, why there is no text (or, for ``mixed``,
+        why pages were left), whether a person must read it (a scan this tool
+        could not read, or a ``mixed`` file), which pages a ``mixed`` file did
+        not read and how many, and which pages are a machine transcription."""
+        out: dict[str, Any] = {"extraction": self.method}
+        if self.pages is not None:
+            out["pageCount"] = self.pages
+        if self.reason is not None:
+            out["extractionReason"] = self.reason
+        if self.method in (METHOD_NONE_SCANNED, METHOD_MIXED):
+            out["needsHumanRead"] = True
+        if self.unread_pages:
+            out["unreadPages"] = list(self.unread_pages)
+            out["unreadCount"] = len(self.unread_pages)
+        if self.transcribed_pages:
+            out["transcribedPages"] = list(self.transcribed_pages)
+        return out
+
+    def unread_note(self) -> str:
+        """The scanned pages not read, said the way a refusal names them."""
+        return "scanned pages not read: " + ", ".join(str(n) for n in self.unread_pages)
 
 
 def extract_text(blob: bytes, *, file_name: str = "", file_extension: str = "") -> str:
@@ -269,35 +338,79 @@ def _image_result(
 
 
 def _pdf_result(blob: bytes, *, allow_vision: bool, allow_cache: bool) -> ExtractResult:
-    """The PDF road: pypdf, then (only for paper) the cache, then vision."""
-    text, pages = _pdf_text_and_pages(blob)
-    if not _looks_scanned(text, pages):
-        return ExtractResult(text, METHOD_PYPDF, pages=pages)
+    """The PDF road: a whole scan goes to the cache, then vision; any other
+    file is read page by page from its text layer, every page kept."""
+    pages = _pdf_pages(blob)
+    count = len(pages)
+    if not file_looks_scanned([p.text for p in pages]):
+        return _typed_pdf_result(blob, pages, allow_vision=allow_vision, allow_cache=allow_cache)
     if not allow_cache:
-        return ExtractResult("", METHOD_NONE_SCANNED, reason=REASON_NOT_ATTEMPTED, pages=pages)
+        return ExtractResult("", METHOD_NONE_SCANNED, reason=REASON_NOT_ATTEMPTED, pages=count)
 
     from .extract_cache import cache_get, cache_put
 
     cached = cache_get(blob)
     if cached is not None:
-        return ExtractResult(cached, METHOD_VISION_CACHED, pages=pages)
+        return ExtractResult(cached, METHOD_VISION_CACHED, pages=count)
     if not allow_vision:
-        return ExtractResult("", METHOD_NONE_SCANNED, reason=REASON_NOT_ATTEMPTED, pages=pages)
+        return ExtractResult("", METHOD_NONE_SCANNED, reason=REASON_NOT_ATTEMPTED, pages=count)
 
     from .vision import transcribe_pdf
 
-    outcome = transcribe_pdf(blob, pages=pages)
+    outcome = transcribe_pdf(blob, pages=count)
     if outcome.reason is not None:
-        return ExtractResult("", METHOD_NONE_SCANNED, reason=outcome.reason, pages=pages)
-    cache_put(blob, outcome.text, pages=pages)
-    return ExtractResult(outcome.text, METHOD_VISION, pages=pages)
+        return ExtractResult("", METHOD_NONE_SCANNED, reason=outcome.reason, pages=count)
+    cache_put(blob, outcome.text, pages=count)
+    return ExtractResult(outcome.text, METHOD_VISION, pages=count)
 
 
-def _looks_scanned(text: str, pages: int) -> bool:
-    """True when the text layer yields ~nothing per page — i.e. this is paper."""
-    if pages <= 0:
-        return False
-    return len(text.strip()) < SCANNED_CHARS_PER_PAGE * pages
+def _typed_pdf_result(blob: bytes, pages: list[PdfPage], *, allow_vision: bool, allow_cache: bool) -> ExtractResult:
+    """A PDF with a text layer, read page by page, NO page dropped.
+
+    Until wave 5 (K1) this road joined the pages that had text and dropped the
+    rest, so the scans behind a typed cover sheet vanished with method ``pypdf``
+    and nothing to say so. Now each page is decided on its own
+    (``letter_pages.page_kind``):
+
+    * every page has text: the text exactly as before, unmarked, so a typed
+      document reads byte for byte as it always did;
+    * some pages are blank (no image, nothing drawn): every page is marked
+      ``[p.N]``, a blank one ``[p.N: blank]``, method ``pypdf``;
+    * some pages are scans with no text: a whole-file transcription in the cache
+      is served as it always was; otherwise ``mixed_read`` serves each scan's
+      stored reading and, only with ``allow_vision``, reads the rest, up to the
+      page bound. A page read that way is ``[p.N] (machine transcription)``. With
+      every scan read the method is ``vision`` (paid by this call) or
+      ``vision_cached``; with any left, ``mixed``, and each one left is
+      ``[p.N: scanned page, not read]``."""
+    from .letter_pages import PAGE_TEXT, PAGE_UNREAD, compose_kept, page_kind
+
+    count = len(pages)
+    kinds = [page_kind(p) for p in pages]
+    if all(k == PAGE_TEXT for k in kinds):
+        return ExtractResult("\n\n".join(p.text for p in pages), METHOD_PYPDF, pages=count)
+    unread = tuple(n for n, kind in enumerate(kinds, start=1) if kind == PAGE_UNREAD)
+    if not unread:
+        return ExtractResult(compose_kept(pages), METHOD_PYPDF, pages=count)
+    if not allow_cache:
+        return ExtractResult(compose_kept(pages), METHOD_MIXED, pages=count, unread_pages=unread)
+
+    from .extract_cache import cache_get
+    from .mixed_read import read_unread
+
+    cached = cache_get(blob)
+    if cached is not None:
+        return ExtractResult(cached, METHOD_VISION_CACHED, pages=count)
+    got = read_unread(blob, unread, allow_vision=allow_vision)
+    text = compose_kept(pages, got.read)
+    read = tuple(sorted(got.read))
+    left = tuple(n for n in unread if n not in got.read)
+    if left:
+        return ExtractResult(
+            text, METHOD_MIXED, reason=got.reason, pages=count, unread_pages=left, transcribed_pages=read
+        )
+    method = METHOD_VISION if got.paid else METHOD_VISION_CACHED
+    return ExtractResult(text, method, pages=count, transcribed_pages=read)
 
 
 def _office_kind(blob: bytes) -> str | None:
@@ -323,15 +436,15 @@ def _looks_like_docx(blob: bytes) -> bool:
     return b"[Content_Types].xml" in blob[:4096] or b"word/" in blob[:4096]
 
 
-def _pdf_text_and_pages(blob: bytes) -> tuple[str, int]:
-    from pypdf import PdfReader
+def _pdf_pages(blob: bytes) -> list[PdfPage]:
+    """Every page of the PDF (``letter_pages.read_pages``), or the refusal
+    this module has always raised for a PDF that will not parse."""
+    from .letter_pages import PageReadError, read_pages
 
     try:
-        reader = PdfReader(io.BytesIO(blob))
-        pages = [page.extract_text() or "" for page in reader.pages]
-    except Exception as exc:
-        raise UnsupportedDocumentError(f"PDF could not be parsed: {exc}") from exc
-    return "\n\n".join(p.strip() for p in pages if p.strip()), len(pages)
+        return read_pages(blob)
+    except PageReadError as exc:
+        raise UnsupportedDocumentError(str(exc)) from exc
 
 
 def _docx_text(blob: bytes) -> str:

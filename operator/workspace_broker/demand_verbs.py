@@ -43,7 +43,7 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
-from . import delivery_proof
+from . import delivery_proof, page_store_meta
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .demand_ledger import (
@@ -336,6 +336,8 @@ class DemandVerbs:
         fields = request.get("fields")
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("demand_job_record requires job_id, a known state, and a fields object")
+        fields = dict(fields)
+        store = page_store_meta.take(fields)  # audit-only: the job's page-store counts
         row = self._db.record(job_id, state, dict(fields))
         if row.get("prev_state") == state:
             # A note on an unchanged state (the runner's lost-wake note): the
@@ -356,7 +358,7 @@ class DemandVerbs:
                 if isinstance(f, dict)
             ][:20]
             meta["coverage_report"] = delivery.get("coverage_report") is True
-        self._audit(AUDIT_TYPES[state], meta, row["matter_id"])
+        self._audit(AUDIT_TYPES[state], page_store_meta.add(meta, store), row["matter_id"])
         return {"ok": True, "job": DemandLedger.project(row)}
 
     def _rerun(self, request: dict[str, Any]) -> dict[str, Any]:

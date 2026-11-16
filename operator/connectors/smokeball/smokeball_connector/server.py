@@ -1139,8 +1139,15 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
     ``api_error``, ``truncated``, ``incomplete_transcription``, ``disabled``,
     ``busy`` — another scan was being read; ask again in a few minutes)
     and ``needsHumanRead`` is true. That is never an empty document — say so
-    rather than treating silence as content."""
-    from .extract import METHOD_NONE_SCANNED, UnsupportedDocumentError, extract_text_ex
+    rather than treating silence as content. In a PDF read from its text layer,
+    a scanned page read on its own is ``[p.N] (machine transcription)``
+    (``transcribedPages``), to be cited as a transcription like ``vision``; with
+    any scan left, ``extraction`` is ``mixed``, and a
+    ``[p.N: scanned page, not read]`` marker means that page exists and was not
+    transcribed (``unreadPages`` and ``unreadCount`` say which and how many,
+    ``extractionReason`` why, and ``needsHumanRead`` is true), so never read it as
+    an empty page."""
+    from .extract import UnsupportedDocumentError, extract_text_ex
 
     client = _get_client()
     info, blob = client.download_file(matter_id, file_id)
@@ -1175,17 +1182,12 @@ def read_document(matter_id: str, file_id: str, max_chars: int = 40000, offset: 
         "offset": offset,
         "truncated": offset + max_chars < len(text),
         "text": window,
-        "extraction": result.method,
+        # The road, the page count, why there is no text, and whether a person
+        # must read it: a scan we could not read is NOT an empty document
+        # (ss#2464), and a ``mixed`` file names the scanned pages it left unread
+        # and why (wave 5, K1). See ExtractResult.report.
+        **result.report(),
     }
-    if result.pages is not None:
-        read["pageCount"] = result.pages
-    if result.reason is not None:
-        read["extractionReason"] = result.reason
-    if result.method == METHOD_NONE_SCANNED:
-        # A scan we could not read is NOT an empty document. Before this the
-        # response was total_chars: 0 with no error and a skill could not tell
-        # the two apart (ss#2464).
-        read["needsHumanRead"] = True
     _attach_matter_ref(client, read)
     return read
 
@@ -1571,7 +1573,7 @@ def _collect_matter_sources(
     Discipline: a scanned matter's draft path opens only after a person
     deliberately read each scan, so an uncached scan still lands in
     ``unextractable`` and still hard-refuses the draft, exactly as before."""
-    from .extract import MECHANICAL_METHODS, METHOD_VISION_CACHED, METHOD_XLSX_OPERATOR, extract_text_ex
+    from .extract import MECHANICAL_METHODS, METHOD_MIXED, METHOD_VISION_CACHED, METHOD_XLSX_OPERATOR, extract_text_ex
     from .library import find_folder_id, is_library_file, load_library_config
 
     client = _get_client()
@@ -1604,7 +1606,15 @@ def _collect_matter_sources(
         # the text came from is what decides how it may be used.
         if result.method == METHOD_XLSX_OPERATOR:
             continue  # the Operator's own workbook is not the firm's record
-        if result.method == METHOD_VISION_CACHED:
+        if result.method == METHOD_MIXED:
+            # Typed pages read, scanned pages not (none stored, and this path
+            # never transcribes): the record is partial in exactly the way an
+            # uncached scan's is, so it is reported the same way, with the pages
+            # named, and the draft refuses. Once ``read_document`` has read
+            # those pages they are stored, and the file comes back
+            # ``vision_cached``, a transcription source like any other.
+            unextractable.append(f"{name} ({result.unread_note()})")
+        elif result.method == METHOD_VISION_CACHED:
             vision_sources.append((name, result.text))
         elif result.method in MECHANICAL_METHODS and result.text.strip():
             sources.append((name, result.text))

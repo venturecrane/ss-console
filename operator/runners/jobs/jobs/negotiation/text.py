@@ -18,15 +18,15 @@ never an empty document.
 
 from __future__ import annotations
 
+import functools
 from email import policy
 from email.parser import BytesParser
 from pathlib import Path
 
-from .. import unopened
+from ..matter import paid, pdf as matter_pdf, policy as matter_policy, readable
 from ..text_rules import (
     OCR_PROMPT,
     PASSWORD,
-    SCAN_FLOOR,
     ExtractFailure,
     Ocr,
     doc_text,
@@ -35,53 +35,35 @@ from ..text_rules import (
     paged as _pages,
 )
 
-HEAD, TAIL = 3, 2
-DEFERRED = "[scanned page {n}: not transcribed]"
+#: This lane's reading rules (``matter/policy``): the floor alone, the 3 + 2
+#: scanned pages transcribed, and its own marker for one left unread.
+POLICY = matter_policy.NEGOTIATION
+HEAD, TAIL = int(POLICY.head or 0), int(POLICY.tail or 0)
+DEFERRED = str(POLICY.deferred)
 
 
-def render_png(pdf_bytes: bytes, page: int, long_side: int = 1600) -> bytes:
-    import pymupdf
-
-    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
-    try:
-        pg = doc[page - 1]
-        zoom = long_side / (max(pg.rect.width, pg.rect.height) or 1.0)
-        return pg.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("png")
-    finally:
-        doc.close()
+def render_png(pdf_bytes: bytes, page: int, long_side: int = matter_policy.COURT_LONG_SIDE) -> bytes:
+    return matter_pdf.render_png(pdf_bytes, page, long_side)
 
 
-def ocr_pages(texts: list[str]) -> list[int]:
-    """The scanned pages to transcribe: all of them on a short document, only
-    those among the first ``HEAD`` and last ``TAIL`` pages on a long one."""
-    n = len(texts)
-    keep = set(range(n)) if n <= HEAD + TAIL else set(range(HEAD)) | set(range(n - TAIL, n))
-    return [i for i in sorted(keep) if len(texts[i].strip()) < SCAN_FLOOR]
+#: The scanned pages to transcribe: all of them on a short document, only those
+#: among the first ``HEAD`` and last ``TAIL`` pages on a long one.
+ocr_pages = functools.partial(readable.negotiation_ocr_pages, floor=int(POLICY.floor or 0), head=HEAD, tail=TAIL)
 
 
 def pdf_text(data: bytes, ocr: Ocr | None) -> tuple[str, int]:
     """(paged text, scanned pages sent to vision)."""
-    import pymupdf
-
-    try:
-        doc = pymupdf.open(stream=data, filetype="pdf")
-    except Exception as exc:  # noqa: BLE001 - a PDF that does not open is one failure record
-        raise ExtractFailure(f"pdf_unreadable: {type(exc).__name__}") from None
-    try:
-        if unopened.locked(doc):
-            raise ExtractFailure(f"{PASSWORD}: {unopened.REASON}")
-        texts = [pg.get_text() or "" for pg in doc]
-    finally:
-        doc.close()
-    scanned, picks = 0, ocr_pages(texts)
-    for i in picks:
-        if ocr is None:
-            raise ExtractFailure("scan_without_vision: a page has no text layer and no vision reader was given")
-        texts[i] = ocr(render_png(data, i + 1))
+    texts, _picks, images = matter_pdf.court_layers(data, ocr_pages, vision=ocr is not None)
+    deferred = readable.plan(texts, POLICY).deferred
+    sha = paid.content_sha(data)
+    scanned = 0
+    for i, png in images:
+        assert ocr is not None
+        with paid.page(sha, i + 1, POLICY.render):
+            texts[i] = ocr(png)
         scanned += 1
-    for i, t in enumerate(texts):
-        if len(t.strip()) < SCAN_FLOOR and i not in picks:
-            texts[i] = DEFERRED.format(n=i + 1)
+    for i in deferred:
+        texts[i] = DEFERRED.format(n=i + 1)
     return _pages(texts), scanned
 
 

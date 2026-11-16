@@ -161,7 +161,13 @@ def value_after_label(text: str, value: str, labels: tuple[str, ...]) -> bool:
 def _document_text(client: Any, matter_id: str, file_id: str, *, allow_vision: bool = True) -> tuple[str, str]:
     """(text, file name) of a matter document, through the same extraction road
     ``read_document`` uses (cache first, so a document the agent just read costs
-    nothing). Raises on a document that cannot be read."""
+    nothing). Raises on a document that cannot be read.
+
+    A text-layer PDF with scans among its pages has those pages read here when
+    ``allow_vision`` is on (``mixed_read``: only those pages, within the page
+    bound, stored once). A scan still left unread (``mixed``) is a marker: a
+    value that sits on it is not found, so it is refused as unconfirmed, never
+    confirmed from a page nobody read."""
     from .extract import extract_text_ex
 
     info, blob = client.download_file(matter_id, file_id)

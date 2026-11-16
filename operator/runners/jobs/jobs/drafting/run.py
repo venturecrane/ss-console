@@ -59,6 +59,7 @@ from ..demand.firm import DemandFirm
 from operator_connector_sdk.library import readers
 
 from ..attorneys.seat import roster_for
+from ..matter import store as page_store_mod
 from ..proof import readback as readback_mod, review as proof_review
 from . import (
     caption as caption_mod,
@@ -478,7 +479,16 @@ class DraftingRun(EvidenceLane, Placing):
         transcribing = not self._is_done("transcribe")
         self._stage(
             "transcribe",
-            lambda: transcribe.run(self.data, self.doorway, self.firm.model("transcription"), self.log, CONCURRENCY),
+            lambda: transcribe.run(
+                self.data,
+                self.doorway,
+                self.firm.model("transcription"),
+                self.log,
+                CONCURRENCY,
+                matter_id=self.job.matter_id,
+                lane="drafting",
+                record_to=self.job.job_dir / page_store_mod.RECORD,
+            ),  # fmt: skip
         )
         if transcribing and self.reexec is not None:
             # Reading page images grows the heap far past what the rest of the

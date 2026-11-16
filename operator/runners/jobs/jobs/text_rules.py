@@ -20,17 +20,21 @@ The system's own words
 Document readers (the litigation status job and the negotiation watch)
     :class:`ExtractFailure`, :func:`paged`, :func:`docx_text`,
     :func:`html_text`, :func:`doc_text` and the constants they use. Each lane
-    keeps its own PDF reader and email walk, because those differ.
+    keeps its own email walk; the PDF reading, the page rules, the prompt and
+    the Word form are each lane's row in ``matter/policy`` (wave 5), named here
+    under the names these readers always used.
 """
 
 from __future__ import annotations
 
-import io
 import re
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Callable
+
+from .matter import policy as _policy
+from .matter.word import docx_text as docx_text
 
 # ---- the chronology's text ----------------------------------------------------
 #: Where a chronology entry starts: a line that opens with MM/DD/YYYY, alone or
@@ -57,12 +61,9 @@ US_DATE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
 SENTINEL_LINE = re.compile(r"(?m)^\W*===\s*[A-Z][A-Z ]+[^=\n]*===\s*$")
 
 # ---- document readers --------------------------------------------------------
-PAGE_MARK = "===== page {n} ====="
-SCAN_FLOOR = 25  # characters: a page with less carries no text layer
-OCR_PROMPT = (
-    "Transcribe every word on this page exactly as printed, top to bottom, including stamps, handwriting you can "
-    "read, and form labels. For a checkbox write [X] when it is marked and [ ] when it is empty. Output the text only."
-)
+PAGE_MARK = _policy.COURT_MARK
+SCAN_FLOOR = int(_policy.LITIGATION.floor or 0)  # characters: a page with less carries no text layer
+OCR_PROMPT = _policy.COURT_PROMPT
 Ocr = Callable[[bytes], str]
 
 
@@ -80,17 +81,6 @@ PASSWORD = "pdf_password"
 
 def paged(texts: list[str]) -> str:
     return "\n".join(f"{PAGE_MARK.format(n=i)}\n{t.strip()}" for i, t in enumerate(texts, 1))
-
-
-def docx_text(data: bytes) -> str:
-    import docx
-
-    d = docx.Document(io.BytesIO(data))
-    parts = [p.text for p in d.paragraphs]
-    for table in d.tables:
-        for row in table.rows:
-            parts.append(" | ".join(c.text for c in row.cells))
-    return "\n".join(parts)
 
 
 def html_text(raw: bytes | str) -> str:

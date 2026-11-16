@@ -72,7 +72,7 @@ import json
 import re
 from typing import Any
 
-from . import delivery_proof, hold_class, medchron_coverage, medchron_credits, medchron_identity
+from . import delivery_proof, hold_class, medchron_coverage, medchron_credits, medchron_identity, page_store_meta
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
@@ -660,6 +660,7 @@ class MedchronVerbs:
         if not job_id or state not in STATES or not isinstance(fields, dict):
             raise ValueError("medchron_job_record requires job_id, a known state, and a fields object")
         wake = fields.pop("wake", None)  # audit-only metadata (a lost deliver wake), never a column
+        store = page_store_meta.take(fields)  # audit-only: the job's page-store counts
         row = self._db.record(job_id, state, fields)
         meta = {
             "job_id": job_id,
@@ -679,7 +680,7 @@ class MedchronVerbs:
                 for f in (d.get("files") or [])
                 if isinstance(f, dict)
             ][:50]
-        self._audit(AUDIT_TYPE[state], meta, row["matter_id"])
+        self._audit(AUDIT_TYPE[state], page_store_meta.add(meta, store), row["matter_id"])
         return {"ok": True, "job": self._db.project(row)}
 
     def _backfill(self, request: dict[str, Any]) -> dict[str, Any]:

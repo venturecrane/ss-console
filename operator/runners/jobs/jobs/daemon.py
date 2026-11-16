@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any, Callable, ClassVar
 
 from .broker_client import BrokerClient, BrokerError
+from .matter.store import ENV as PAGE_STORE_ENV
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, job_lanes, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
@@ -93,6 +94,10 @@ CHILD_ENV_PASS = (
     "MEDCHRON_FIRM_CONFIG",
     "JOBS_PRICING_JSON",
     "CUSTOMER_SLUG",
+    # The store of paid page text every lane reads through (jobs/textcache.py,
+    # matter/store.py): set on every lane seat by entrypoint-lanes.sh, and the
+    # switch that turns the page store on.
+    PAGE_STORE_ENV,
 )
 #: ``stopped_by_smd`` is SMD's job stop (``smd_stop.py``): final, so a stopped
 #: job is never resumed, requeued or claimed again by any lane.

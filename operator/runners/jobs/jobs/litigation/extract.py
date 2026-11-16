@@ -24,6 +24,7 @@ kind has its own reader and nothing falls through silently:
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import threading
@@ -32,15 +33,14 @@ from email.parser import BytesParser
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import unopened
 from ..deadline import is_transient
 from ..limits import LimitHold
+from ..matter import paid, pdf as matter_pdf, policy as matter_policy, readable
 from ..stages.base import append_jsonl, read_jsonl
 from ..stages.pleading_margin import strip_page
 from ..text_rules import (
     OCR_PROMPT as OCR_PROMPT,  # the vision prompt the runner and the text cache key read from here
-    PASSWORD,
-    SCAN_FLOOR,
+    SCAN_FLOOR as SCAN_FLOOR,
     ExtractFailure,
     Ocr,
     doc_text,
@@ -49,13 +49,18 @@ from ..text_rules import (
     paged as _pages,
 )
 
-HEAD, TAIL = 3, 2
-DEFERRED = "[scanned page {n}: not transcribed; call view_page with this doc and page {n} to see it]"
+#: This lane's reading rules (``matter/policy``): its floor, its 3 + 2 pages
+#: transcribed at extract, its marker for a scanned page left for ``view_page``.
+POLICY = matter_policy.LITIGATION
+HEAD, TAIL = int(POLICY.head or 0), int(POLICY.tail or 0)
+DEFERRED = str(POLICY.deferred)
 MIN_TEXT = 1
 #: Bump by hand with ANY change to how a reader turns bytes into text (a new
 #: decoding, a new file kind, a fixed email body, a changed page rule): it is
 #: part of the text cache's method version (``textcache.method_version``), so
-#: text made the old way is read again instead of served forever.
+#: text made the old way is read again instead of served forever. A page a
+#: model read is kept under its own key (``matter/store``), so a bump re-reads
+#: the text layers and pays for no scanned page read the same way before.
 EXTRACT_VERSION = 1
 #: The file and page a vision call is for, per thread (read by the
 #: rehearsal's counting OCR stub, which records them).
@@ -82,84 +87,39 @@ def _stop(exc: BaseException) -> bool:
     return isinstance(exc, LimitHold) or is_transient(exc)
 
 
-# MEMORY (2026-10-13: A&P litigation job 01M4V2G6 was OOM-killed in its 1 GiB
-# cgroup at 2525 of 4808 documents). MuPDF keeps a PROCESS-WIDE store of
-# decoded images and fonts that outlives ``doc.close()`` (it fills toward its
-# 256 MB default and stays there), and pymupdf appends every MuPDF warning to a
-# module-level list nothing trims. Both grow with the number of documents read,
-# not with the largest one. So every MuPDF use here runs under ``_MUPDF`` and
-# ends with ``_release()``, a PDF is opened from its path (its bytes are never
-# all in Python at once), and no PDF stays open across a vision call: a
-# document's footprint is gone before the next one starts.
-_MUPDF = threading.Lock()
-RENDER_LONG_SIDE = 1600
-
-
-def _release() -> None:
-    """Drop MuPDF's cached decoded objects and pymupdf's warning list. What an
-    open document still references MuPDF keeps; only the leftovers go."""
-    import pymupdf
-
-    pymupdf.TOOLS.store_shrink(100)
-    pymupdf.TOOLS.reset_mupdf_warnings()
+# MEMORY: every MuPDF use of this lane runs under the one MuPDF lock and ends by
+# releasing MuPDF's process-wide store (``matter/pdf`` says why).
+_MUPDF = matter_pdf.MUPDF
+_release = matter_pdf.release
+RENDER_LONG_SIDE = matter_policy.COURT_LONG_SIDE
 
 
 def _open_pdf(src: bytes | Path) -> Any:
-    import pymupdf
-
-    if isinstance(src, Path):
-        return pymupdf.open(str(src), filetype="pdf")
-    return pymupdf.open(stream=src, filetype="pdf")
+    return matter_pdf.open_pdf(src)
 
 
 def _png(doc: Any, page: int, long_side: int) -> bytes:
-    import pymupdf
-
-    pg = doc[page - 1]
-    zoom = long_side / (max(pg.rect.width, pg.rect.height) or 1.0)
-    return pg.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom)).tobytes("png")
+    return matter_pdf.png(doc, page, long_side)
 
 
 def render_png(pdf: bytes | Path, page: int, long_side: int = RENDER_LONG_SIDE) -> bytes:
-    with _MUPDF:
-        try:
-            doc = _open_pdf(pdf)
-        except Exception:
-            _release()
-            raise
-        try:
-            return _png(doc, page, long_side)
-        finally:
-            doc.close()
-            _release()
+    return matter_pdf.render_png(pdf, page, long_side, opener=lambda s: _open_pdf(s))
 
 
 def pdf_text(data: bytes | Path, ocr: Ocr | None) -> tuple[str, int]:
     """(paged text, scanned pages sent to vision). The page images vision
     needs (at most ``HEAD + TAIL``) are rendered and the document closed
-    BEFORE the first vision call."""
-    with _MUPDF:
-        try:
-            doc = _open_pdf(data)
-        except Exception as exc:  # noqa: BLE001 - a PDF that does not open is one failure record
-            _release()
-            raise ExtractFailure(f"pdf_unreadable: {type(exc).__name__}") from None
-        try:
-            if unopened.locked(doc):
-                raise ExtractFailure(f"{PASSWORD}: {unopened.REASON}")
-            texts = [pg.get_text() or "" for pg in doc]
-            picks = ocr_pages(texts)
-            if picks and ocr is None:
-                raise ExtractFailure("scan_without_vision: a page has no text layer and no vision reader was given")
-            images = [(i, _png(doc, i + 1, RENDER_LONG_SIDE)) for i in picks]
-        finally:
-            doc.close()
-            _release()
+    BEFORE the first vision call (``matter/pdf.court_layers``)."""
+    texts, picks, images = matter_pdf.court_layers(
+        data, ocr_pages, vision=ocr is not None, long_side=RENDER_LONG_SIDE, opener=lambda s: _open_pdf(s)
+    )
+    sha = paid.content_sha(data)
     scanned = 0
     while images and ocr is not None:
         i, png = images.pop(0)  # each image is let go once it is transcribed
         CURRENT.page = i + 1
-        texts[i] = ocr(png)
+        with paid.page(sha, i + 1, POLICY.render):
+            texts[i] = ocr(png)
         scanned += 1
     for i, t in enumerate(texts):
         if _no_text(t) and i not in picks:
@@ -169,34 +129,17 @@ def pdf_text(data: bytes | Path, ocr: Ocr | None) -> tuple[str, int]:
     return _pages(texts), scanned
 
 
-#: Common words a real text layer carries; a long page with none is garbled.
-_REAL_WORD = re.compile(r"(?i)\b(the|and|of|to|for|in|on|by|or|is|at|with|this|that|from|be|was|date|court|case)\b")
+#: This lane's "no text" rules (``matter/readable``), under the names it always used.
+_REAL_WORD = readable._REAL_WORD
+garbled = readable.litigation_garbled
+_no_text = readable.litigation_no_text
 
 
-def garbled(t: str) -> bool:
-    """A text layer that is not the page's words: a Type 3 font's glyph codes
-    read out as control bytes, or a long run with no common word (2026-10-29:
-    process servers' job sheets carried ~1,700 such characters a page, so the
-    date of service never reached a read and seven values held a list)."""
-    s = t.strip()
-    if len(s) < SCAN_FLOOR:
-        return False
-    ctrl = sum(1 for c in s if ord(c) < 32 and c not in "\n\r\t")
-    return ctrl > 0.10 * len(s) or (len(s) >= 300 and not _REAL_WORD.search(s))
-
-
-def _no_text(t: str) -> bool:
-    return len(t.strip()) < SCAN_FLOOR or garbled(t)
-
-
-def ocr_pages(texts: list[str]) -> list[int]:
-    """The scanned pages transcribed at extract: every one on a short
-    document; on a long one only those among its first ``HEAD`` and last
-    ``TAIL`` pages (the caption, the filing stamp, the signature and the
-    proof of service). The rest are read on demand: ``view_page``."""
-    n = len(texts)
-    keep = set(range(n)) if n <= HEAD + TAIL else set(range(HEAD)) | set(range(n - TAIL, n))
-    return [i for i in sorted(keep) if _no_text(texts[i]) and not texts[i].startswith("[scanned page")]
+#: The scanned pages transcribed at extract: every one on a short document; on
+#: a long one only those among its first ``HEAD`` and last ``TAIL`` pages (the
+#: caption, the filing stamp, the signature and the proof of service). The rest
+#: are read on demand: ``view_page``.
+ocr_pages = functools.partial(readable.litigation_ocr_pages, head=HEAD, tail=TAIL)
 
 
 def _attachment_text(name: str, blob: bytes, ocr: Ocr | None) -> str:
@@ -333,7 +276,8 @@ def text_of(path: Path, ext: str, ocr: Ocr | None) -> tuple[str, int]:
     if ext == ".txt":
         return data.decode("utf-8", errors="replace"), 0
     if ext in (".jpg", ".jpeg", ".png", ".tif", ".tiff") and ocr is not None:
-        return _pages([ocr(data)]), 1
+        with paid.page(paid.content_sha(data), 1, matter_policy.RAW_IMAGE):
+            return _pages([ocr(data)]), 1
     raise ExtractFailure(f"unsupported: no reader for {ext or 'a file without an extension'}")
 
 
@@ -384,7 +328,8 @@ def extract_matter(
 
     def one(r: dict[str, Any]) -> dict[str, Any]:
         fid = str(r["id"])
-        return {"file_id": fid, "name": r.get("name"), **extract_cached(mdir, r, ocr, cache)}
+        with paid.for_matter(mdir.name):
+            return {"file_id": fid, "name": r.get("name"), **extract_cached(mdir, r, ocr, cache)}
 
     def record(rec: dict[str, Any]) -> None:
         append_jsonl(log, rec)

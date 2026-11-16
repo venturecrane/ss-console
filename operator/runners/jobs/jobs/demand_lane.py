@@ -38,6 +38,7 @@ from typing import Any, Callable
 from . import firm_wording, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .firm_inputs import pin_env
+from .matter import store as page_store_mod
 from .library_edit import handoff as library_edit_handoff
 from .proof import watch as proof_watch
 from .skill_load import load_line
@@ -160,7 +161,10 @@ class DemandLane(Daemon):
         return None
 
     def _lane_env(self, job_id: str) -> dict[str, str]:
-        return {INPUTS_ENV: str(pin_env(self.inputs_dir))} if self.inputs_dir else {}
+        out = page_store_mod.child_env()
+        if self.inputs_dir:
+            out[INPUTS_ENV] = str(pin_env(self.inputs_dir))
+        return out
 
     def _before_child(self, job_id: str) -> None:
         firm_wording.alert_unusable(self, job_id)
@@ -189,6 +193,7 @@ class DemandLane(Daemon):
             edit = library_edit_handoff.delivery_note(self.job_dir(job_id) / "data")
             if edit is not None:
                 fields["delivery"]["library_edit"] = edit
+        fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
         state, fields = proof_watch.settle(self, job_id, outcomes or [v], state, fields)
         try:
             self.broker.record(job_id, state, fields)
