@@ -1,4 +1,4 @@
-"""The connector keeps every page of a firm's PDF (wave 5, K1).
+"""The connector keeps every page of a firm's PDF, and reads only the scans (wave 5, K1).
 
 The defect: ``extract_text_ex`` decided "scanned" for the WHOLE file on an
 average, so one typed cover sheet sent the scans behind it down the text-layer
@@ -8,14 +8,15 @@ came back ``pypdf`` and nothing said five pages were never read.
 What these tests hold:
 
 * a typed PDF whose every page has text reads byte for byte as before;
-* a blank page is kept as ``[p.N: blank]`` and a scan behind a typed cover as
-  ``[p.N: scanned page, not read]``, with method ``mixed`` and the pages named;
-* a whole scan keeps today's road (the cache, then vision under its cap);
-* NOTHING here starts a paid call or writes a cache entry for a mixed file:
-  ``test_no_fixture_starts_a_new_vision_call`` counts every request at the
-  Messages API seam across every fixture;
+* a blank page is kept as ``[p.N: blank]``;
+* a scan behind a typed cover is ``[p.N: scanned page, not read]`` wherever
+  vision is not allowed, and where it is (``read_document``) ONLY those pages
+  are sent, one call each, up to the page bound, each stored under its own
+  page name and marked ``[p.N] (machine transcription)``; a second read pays 0;
+* a whole scan keeps today's road, calls and cache entry;
 * each caller that branches on the method has a rule for ``mixed``: the record
-  check reports it and refuses, ``read_document`` names the unread pages, the
+  check reports it and refuses until ``read_document`` has read those pages, then
+  reads them from the store; ``read_document`` names what is left and why; the
   vendor-invoice reader flags it as scanned.
 """
 
@@ -26,9 +27,9 @@ from typing import Any
 
 import httpx
 import pytest
-from test_vision_extraction import _forbid_http, _matter_client, _read_document_client
+from test_vision_extraction import _matter_client, _read_document_client
 
-from smokeball_connector import extract, extract_cache, letter_pages, server, vision
+from smokeball_connector import extract, extract_cache, letter_pages, mixed_read, server, vision
 from smokeball_connector.extract import (
     METHOD_MIXED,
     METHOD_NONE_SCANNED,
@@ -159,15 +160,22 @@ def _cache_files(tmp_path) -> list[str]:
     return sorted(p.name for p in root.glob("*.json")) if root.is_dir() else []
 
 
+def _page_entries(tmp_path, blob: bytes) -> list[str]:
+    sha = extract_cache.cache_key(blob)
+    return [name for name in _cache_files(tmp_path) if name.startswith(f"{sha}.p")]
+
+
 # ---- the page-by-page read ---------------------------------------------------
 
 
-def test_a_typed_pdf_reads_byte_for_byte_as_before() -> None:
+def test_a_typed_pdf_reads_byte_for_byte_as_before(monkeypatch) -> None:
+    calls = _counting_vision(monkeypatch)
     result = extract_text_ex(TYPED, file_extension="pdf", allow_vision=True)
     assert result.method == METHOD_PYPDF
     assert result.text == "\n\n".join(letter_pages.page_texts(TYPED))
     assert "[p." not in result.text
-    assert result.unread_pages == ()
+    assert result.unread_pages == () and result.transcribed_pages == ()
+    assert calls == []
 
 
 def test_a_short_typed_page_is_text_not_a_scan() -> None:
@@ -179,30 +187,98 @@ def test_a_short_typed_page_is_text_not_a_scan() -> None:
     assert "[p." not in result.text
 
 
-def test_a_blank_page_is_kept_and_marked() -> None:
-    result = extract_text_ex(TYPED_WITH_BLANKS, file_extension="pdf")
+def test_a_blank_page_is_kept_and_marked(monkeypatch) -> None:
+    calls = _counting_vision(monkeypatch)
+    result = extract_text_ex(TYPED_WITH_BLANKS, file_extension="pdf", allow_vision=True)
     assert result.method == METHOD_PYPDF
     assert result.pages == 4
     assert result.text.startswith("[p.1]\n")
     assert "\n\n[p.2: blank]\n\n[p.3]\n" in result.text
     assert result.text.endswith("[p.4: blank]")
     assert result.unread_pages == ()
+    assert calls == [], "a blank page is never sent"
 
 
-def test_scans_behind_a_typed_cover_are_kept_and_marked_not_read(tmp_path, monkeypatch) -> None:
+def test_scans_behind_a_typed_cover_are_kept_and_marked_where_vision_is_not_allowed(tmp_path, monkeypatch) -> None:
     calls = _counting_vision(monkeypatch)
-    result = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    result = extract_text_ex(COVER_AND_SCANS, file_extension="pdf")
     assert result.method == METHOD_MIXED
     assert result.unread_pages == (2, 3, 4)
     assert result.reason is None
     assert result.text.startswith("[p.1]\nCOVER SHEET")
     for n in (2, 3, 4):
         assert f"[p.{n}: scanned page, not read]" in result.text
-    assert calls == [], "a mixed file never calls vision in this release"
-    assert _cache_files(tmp_path) == [], "and writes no cache entry"
+    assert calls == [], "only a caller that allows vision pays"
+    assert _cache_files(tmp_path) == []
 
 
-def test_a_stamped_scan_is_a_scan_and_keeps_its_stamp() -> None:
+def test_only_the_unread_pages_are_read_once_each_and_stored(tmp_path, monkeypatch) -> None:
+    calls = _counting_vision(monkeypatch)
+    result = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    assert len(calls) == 3, "one call per scanned page; the typed cover is never sent"
+    assert result.method == METHOD_VISION
+    assert result.transcribed_pages == (2, 3, 4) and result.unread_pages == ()
+    assert result.text.startswith("[p.1]\nCOVER SHEET")
+    for n in (2, 3, 4):
+        assert f"[p.{n}] (machine transcription)\nIMPRESSION: transcribed." in result.text
+    assert "not read" not in result.text
+    sha = extract_cache.cache_key(COVER_AND_SCANS)
+    version = mixed_read.method_version()
+    assert _page_entries(tmp_path, COVER_AND_SCANS) == [f"{sha}.p{n}.{version}.json" for n in (2, 3, 4)]
+    assert f"{sha}.json" not in _cache_files(tmp_path), "the whole-file entry is never written for a mixed file"
+
+    again = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    assert len(calls) == 3, "a second read pays 0"
+    assert (again.method, again.text) == (METHOD_VISION_CACHED, result.text)
+
+
+def test_each_sent_page_is_the_scanned_page_itself(monkeypatch) -> None:
+    """The pages sent are the file's own scans, cut out one by one: each request
+    carries a one-page PDF drawing the image, and never the typed cover."""
+    import base64
+    import io
+
+    from pypdf import PdfReader
+
+    calls = _counting_vision(monkeypatch)
+    extract_text_ex(STAMPED_SCANS, file_extension="pdf", allow_vision=True)
+    assert len(calls) == 2
+    for request in calls:
+        body = json.loads(request.content)
+        assert body["model"] == vision.model()
+        assert body["messages"][0]["content"][1]["text"] == vision.INSTRUCTION
+        sent = base64.b64decode(body["messages"][0]["content"][0]["source"]["data"])
+        reader = PdfReader(io.BytesIO(sent))
+        assert len(reader.pages) == 1
+        assert "COVER SHEET" not in (reader.pages[0].extract_text() or "")
+
+
+def test_the_page_bound_is_counted_on_pages_sent_and_held_across_reads(monkeypatch) -> None:
+    monkeypatch.setenv("SMOKEBALL_VISION_PAGE_CAP", "2")
+    calls = _counting_vision(monkeypatch)
+    result = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    assert len(calls) == 2, "the bound is enforced before any call"
+    assert result.method == METHOD_MIXED
+    assert result.transcribed_pages == (2, 3) and result.unread_pages == (4,)
+    assert result.reason == extract.REASON_OVER_PAGE_CAP
+    assert "[p.4: scanned page, not read]" in result.text
+    report = result.report()
+    assert (report["unreadCount"], report["unreadPages"], report["extractionReason"]) == (1, [4], "over_page_cap")
+    again = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    assert len(calls) == 2, "pages already read count against the bound: a second read sends nothing"
+    assert again.unread_pages == (4,)
+
+
+def test_a_failed_read_stores_nothing_and_leaves_the_pages_unread(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("SMOKEBALL_VISION_DISABLED", "1")
+    calls = _counting_vision(monkeypatch)
+    result = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
+    assert calls == []
+    assert (result.method, result.reason, result.unread_pages) == (METHOD_MIXED, extract.REASON_DISABLED, (2, 3, 4))
+    assert _cache_files(tmp_path) == []
+
+
+def test_a_stamped_scan_is_a_scan_and_keeps_its_stamp_until_read() -> None:
     result = extract_text_ex(STAMPED_SCANS, file_extension="pdf")
     assert result.method == METHOD_MIXED
     assert result.unread_pages == (2, 3)
@@ -222,15 +298,17 @@ def test_a_cached_reading_of_a_mixed_file_is_served_for_nothing(monkeypatch) -> 
     reading = "[p.1]\nCOVER SHEET\n\n[p.2]\nA\n\n[p.3]\nB\n\n[p.4]\nC"
     extract_cache.cache_put(COVER_AND_SCANS, reading, pages=4)
     calls = _counting_vision(monkeypatch)
-    result = extract_text_ex(COVER_AND_SCANS, file_extension="pdf")
+    result = extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
     assert (result.method, result.text, result.pages) == (METHOD_VISION_CACHED, reading, 4)
     assert calls == []
 
 
-def test_the_old_entry_point_keeps_every_page_too_and_never_reads_the_cache() -> None:
-    extract_cache.cache_put(COVER_AND_SCANS, "[p.1]\ncached", pages=4)
+def test_the_old_entry_point_keeps_every_page_and_never_reads_a_store(monkeypatch) -> None:
+    _counting_vision(monkeypatch)
+    extract_text_ex(COVER_AND_SCANS, file_extension="pdf", allow_vision=True)
     text = extract_text(COVER_AND_SCANS, file_extension="pdf")
     assert "[p.2: scanned page, not read]" in text
+    assert "machine transcription" not in text
 
 
 def test_a_whole_scan_keeps_todays_road(tmp_path, monkeypatch) -> None:
@@ -241,7 +319,7 @@ def test_a_whole_scan_keeps_todays_road(tmp_path, monkeypatch) -> None:
     read = extract_text_ex(WHOLE_SCAN, file_extension="pdf", allow_vision=True)
     assert read.method == METHOD_VISION
     assert len(calls) == 2, "one call per page, exactly as before"
-    assert len(_cache_files(tmp_path)) == 1
+    assert _cache_files(tmp_path) == [f"{extract_cache.cache_key(WHOLE_SCAN)}.json"], "the whole-file entry, as before"
 
 
 def test_the_no_text_rule_lives_in_one_place() -> None:
@@ -256,61 +334,131 @@ def test_the_no_text_rule_lives_in_one_place() -> None:
     assert extract.file_looks_scanned([]) is False
 
 
-def test_no_fixture_starts_a_new_vision_call(monkeypatch) -> None:
-    """The release's spend bound: across every fixture, read the way
-    ``read_document`` reads (``allow_vision=True``), the only calls are the
-    whole scan's two pages, which today's code already makes."""
+def test_the_method_version_names_the_model_and_the_prompt(monkeypatch) -> None:
+    base = mixed_read.method_version()
+    monkeypatch.setenv("SMOKEBALL_VISION_MODEL", "claude-other-model")
+    assert mixed_read.method_version() != base
+    monkeypatch.delenv("SMOKEBALL_VISION_MODEL")
+    monkeypatch.setattr(vision, "INSTRUCTION", vision.INSTRUCTION + " ")
+    assert mixed_read.method_version() != base
+
+
+#: The calls each fixture makes, read the way ``read_document`` reads: the
+#: typed ones none, the whole scan its two pages as today, each mixed one a call
+#: per scanned page and nothing for its typed pages.
+CALLS_PER_FIXTURE = {
+    "typed": 0,
+    "typed_with_blanks": 0,
+    "cover_and_scans": 3,
+    "stamped_scans": 2,
+    "drawn_page": 1,
+    "whole_scan": 2,
+    "short_typed": 0,
+}
+
+
+def test_every_fixture_calls_once_per_unread_page_and_never_again(monkeypatch) -> None:
+    """The spend bound across every fixture, with a counting stub at the
+    Messages API seam: once per scanned page that had no reading, and 0 on the
+    second pass."""
+    assert set(CALLS_PER_FIXTURE) == set(FIXTURES)
     calls = _counting_vision(monkeypatch)
-    methods: dict[str, str] = {}
     for key, blob in FIXTURES.items():
         before = len(calls)
-        methods[key] = extract_text_ex(blob, file_extension="pdf", allow_vision=True).method
-        if key != "whole_scan":
-            assert len(calls) == before, f"{key} started a vision call"
-    assert len(calls) == 2
-    assert methods["whole_scan"] == METHOD_VISION
-    assert {methods[k] for k in ("cover_and_scans", "stamped_scans", "drawn_page")} == {METHOD_MIXED}
+        extract_text_ex(blob, file_extension="pdf", allow_vision=True)
+        assert len(calls) - before == CALLS_PER_FIXTURE[key], key
+    first = len(calls)
+    for blob in FIXTURES.values():
+        extract_text_ex(blob, file_extension="pdf", allow_vision=True)
+    assert len(calls) == first, "a second read of any fixture pays 0"
 
 
 # ---- each caller's rule for ``mixed`` ---------------------------------------
 
 
-def test_read_document_names_the_unread_pages_and_asks_for_a_person(monkeypatch) -> None:
+def test_read_document_reads_the_scans_and_names_them_as_transcription(monkeypatch) -> None:
     _read_document_client(COVER_AND_SCANS, monkeypatch)
-    no_http = _forbid_http(monkeypatch)
+    calls = _counting_vision(monkeypatch)
     read = server.read_document("m-1", "file-9")
-    assert read["extraction"] == METHOD_MIXED
-    assert read["unreadPages"] == [2, 3, 4]
-    assert read["needsHumanRead"] is True
+    assert len(calls) == 3
+    assert read["extraction"] == METHOD_VISION
+    assert read["transcribedPages"] == [2, 3, 4]
+    assert "needsHumanRead" not in read and "unreadPages" not in read
     assert read["pageCount"] == 4
+    assert "[p.3] (machine transcription)" in read["text"]
+
+
+def test_read_document_names_what_it_left_unread_and_why(monkeypatch) -> None:
+    monkeypatch.setenv("SMOKEBALL_VISION_DISABLED", "1")
+    _read_document_client(COVER_AND_SCANS, monkeypatch)
+    calls = _counting_vision(monkeypatch)
+    read = server.read_document("m-1", "file-9")
+    assert calls == []
+    assert read["extraction"] == METHOD_MIXED
+    assert (read["unreadPages"], read["unreadCount"]) == ([2, 3, 4], 3)
+    assert read["extractionReason"] == extract.REASON_DISABLED
+    assert read["needsHumanRead"] is True
     assert "[p.3: scanned page, not read]" in read["text"]
-    assert no_http == [], "read_document starts no vision call for a mixed file"
 
 
-def test_read_document_tells_the_agent_what_a_not_read_marker_means() -> None:
-    doc = server.read_document.__doc__ or ""
+def test_read_document_tells_the_agent_what_the_markers_mean() -> None:
+    doc = " ".join((server.read_document.__doc__ or "").split())
     assert "``mixed``" in doc
     assert "page exists and was not transcribed" in doc
+    assert "(machine transcription)" in doc
 
 
-def test_the_record_check_reports_a_mixed_file_and_refuses(monkeypatch) -> None:
-    entries = [
-        {"id": "mixed", "name": "Records Bundle.pdf", "fileExtension": ".pdf"},
-        {"id": "typed", "name": "Police Report.pdf", "fileExtension": ".pdf"},
-    ]
-    _matter_client(entries, {"mixed": COVER_AND_SCANS, "typed": TYPED}, monkeypatch)
-    no_http = _forbid_http(monkeypatch)
+_MATTER = [
+    {"id": "mixed", "name": "Records Bundle.pdf", "fileExtension": ".pdf"},
+    {"id": "typed", "name": "Police Report.pdf", "fileExtension": ".pdf"},
+]
+
+
+def test_the_record_check_reports_a_mixed_file_and_refuses_and_never_reads(monkeypatch) -> None:
+    _matter_client(_MATTER, {"mixed": COVER_AND_SCANS, "typed": TYPED}, monkeypatch)
+    calls = _counting_vision(monkeypatch)
     sources, vision_sources, unextractable = server._collect_matter_sources("m-1")
     assert [name for name, _ in sources] == ["Police Report.pdf"]
     assert vision_sources == []
     assert unextractable == ["Records Bundle.pdf (scanned pages not read: 2, 3, 4)"]
-    assert no_http == []
+    assert calls == [], "the record check never transcribes"
+
+
+def test_the_record_check_reads_the_stored_pages_once_read_document_has_read_them(monkeypatch) -> None:
+    _read_document_client(COVER_AND_SCANS, monkeypatch)
+    calls = _counting_vision(monkeypatch)
+    server.read_document("m-1", "file-9")
+    paid = len(calls)
+    _matter_client(_MATTER, {"mixed": COVER_AND_SCANS, "typed": TYPED}, monkeypatch)
+    sources, vision_sources, unextractable = server._collect_matter_sources("m-1")
+    assert unextractable == [], "the refusal clears"
+    assert [name for name, _ in vision_sources] == ["Records Bundle.pdf"]
+    assert "[p.2] (machine transcription)" in vision_sources[0][1]
+    assert [name for name, _ in sources] == ["Police Report.pdf"]
+    assert len(calls) == paid, "served from the store at $0"
+
+    import os
+    from pathlib import Path
+
+    from smokeball_connector import record_check
+
+    checker = Path(__file__).resolve().parents[3] / "templates" / "drafting" / "drafting_gate_check.py"
+    assert checker.is_file(), "the real checker must be present or this proves nothing"
+    monkeypatch.setitem(os.environ, record_check.CHECKER_PATH_ENV, str(checker))
+    verdict = record_check.run_record_check(
+        "# DRAFT\n\nThe records note that the patient reports the neck pain is improving with therapy.\n",
+        sources,
+        unextractable=unextractable,
+        vision_sources=vision_sources,
+    )
+    assert verdict.passed, verdict.refusals
+    assert "Records Bundle.pdf" in verdict.warnings[0], "named as a machine transcription"
 
 
 def test_the_record_check_reads_a_typed_file_with_blank_pages_as_record(monkeypatch) -> None:
     entries = [{"id": "typed", "name": "Notes.pdf", "fileExtension": ".pdf"}]
     _matter_client(entries, {"typed": TYPED_WITH_BLANKS}, monkeypatch)
-    _forbid_http(monkeypatch)
+    _counting_vision(monkeypatch)
     sources, _vision, unextractable = server._collect_matter_sources("m-1")
     assert unextractable == []
     assert [name for name, _ in sources] == ["Notes.pdf"]
@@ -318,6 +466,7 @@ def test_the_record_check_reads_a_typed_file_with_blank_pages_as_record(monkeypa
 
 def test_a_mixed_vendor_invoice_is_flagged_scanned_never_keyed_from_its_cover(monkeypatch) -> None:
     from smokeball_connector import vendor_invoice as vi
+    from smokeball_connector.client import SmokeballClient
 
     url = "https://download.agentmail.to/attachments/att_1?token=tok123"
 
@@ -328,10 +477,13 @@ def test_a_mixed_vendor_invoice_is_flagged_scanned_never_keyed_from_its_cover(mo
             return httpx.Response(200, content=STAMPED_SCANS)
         return httpx.Response(404)
 
-    from smokeball_connector.client import SmokeballClient
-
+    calls = _counting_vision(monkeypatch)
     client = SmokeballClient(region="us", environment="staging", client_id="c", client_secret="s", api_key="k")
     client._http = httpx.Client(transport=httpx.MockTransport(handler))
     out: dict[str, Any] = vi.read_attachment(client, url, "invoice.pdf")
     assert (out["readable"], out["method"], out["reason"], out["text"]) == (False, METHOD_MIXED, "scanned", "")
     assert vi._source_text(STAMPED_SCANS, "invoice.pdf", None) is None
+    extract_text_ex(STAMPED_SCANS, file_extension="pdf", allow_vision=True)  # pages read and stored
+    again = vi.read_attachment(client, url, "invoice.pdf")
+    assert (again["readable"], again["method"], again["reason"]) == (False, METHOD_VISION_CACHED, "scanned")
+    assert len(calls) == 2, "the invoice reader itself never transcribes"

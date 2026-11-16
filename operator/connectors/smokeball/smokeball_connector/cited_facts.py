@@ -163,11 +163,11 @@ def _document_text(client: Any, matter_id: str, file_id: str, *, allow_vision: b
     ``read_document`` uses (cache first, so a document the agent just read costs
     nothing). Raises on a document that cannot be read.
 
-    A ``mixed`` document (typed pages plus scans nobody read) gives its typed
-    pages and a marker for each scan, and no transcription is paid for here. A
-    value printed on a typed page confirms; one that sits on an unread page is
-    not found, so it is refused as unconfirmed, never confirmed from a page
-    nobody read."""
+    A text-layer PDF with scans among its pages has those pages read here when
+    ``allow_vision`` is on (``mixed_read``: only those pages, within the page
+    bound, stored once). A scan still left unread (``mixed``) is a marker: a
+    value that sits on it is not found, so it is refused as unconfirmed, never
+    confirmed from a page nobody read."""
     from .extract import extract_text_ex
 
     info, blob = client.download_file(matter_id, file_id)

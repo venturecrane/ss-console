@@ -331,10 +331,21 @@
     "env_stores.JOBS_TEXTCACHE_DIR.pages/<sha:scan8>/b017b42eaf37/8.json"
   ],
   "connector/cached": [
+    "cell.cache.<sha:cover_scans>.p2.6036f2d4c7146aa5.json",
+    "cell.cache.<sha:cover_scans>.p3.6036f2d4c7146aa5.json",
+    "cell.cache.<sha:cover_scans>.p4.6036f2d4c7146aa5.json",
+    "cell.cache.<sha:cover_scans>.p5.6036f2d4c7146aa5.json",
+    "cell.cache.<sha:cover_scans>.p6.6036f2d4c7146aa5.json",
     "cell.files.cover_scans.method",
+    "cell.files.cover_scans.text",
     "cell.files.cover_scans.text.0",
     "cell.files.typed60.text",
-    "cell.files.typed60.text.0"
+    "cell.files.typed60.text.0",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p2.6036f2d4c7146aa5.json",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p3.6036f2d4c7146aa5.json",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p4.6036f2d4c7146aa5.json",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p5.6036f2d4c7146aa5.json",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p6.6036f2d4c7146aa5.json"
   ],
   "connector/mechanical": [
     "cell.files.cover_scans.method",
@@ -343,9 +354,29 @@
     "cell.files.typed60.text.0"
   ],
   "connector/vision": [
+    "cell.cache.<sha:cover_scans>.p2.6036f2d4c7146aa5.json",
+    "cell.cache.<sha:cover_scans>.p3.6036f2d4c7146aa5.json",
+    "cell.cache.<sha:cover_scans>.p4.6036f2d4c7146aa5.json",
+    "cell.cache.<sha:cover_scans>.p5.6036f2d4c7146aa5.json",
+    "cell.cache.<sha:cover_scans>.p6.6036f2d4c7146aa5.json",
     "cell.files.cover_scans.method",
+    "cell.files.cover_scans.text",
     "cell.files.cover_scans.text.0",
     "cell.files.typed60.text",
-    "cell.files.typed60.text.0"
+    "cell.files.typed60.text.0",
+    "cell.sent.sent",
+    "cell.sent.sent.11.pages.0.shows.fixture",
+    "cell.sent.sent.11.pages.0.shows.page",
+    "cell.sent.sent.12.pages.0.media",
+    "cell.sent.sent.12.pages.0.shows.fixture",
+    "cell.sent.sent.12.pages.0.shows.page",
+    "cell.sent.sent.12.pages.0.size.0",
+    "cell.sent.sent.12.pages.0.size.1",
+    "cell.sent.sent.12.shape",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p2.6036f2d4c7146aa5.json",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p3.6036f2d4c7146aa5.json",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p4.6036f2d4c7146aa5.json",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p5.6036f2d4c7146aa5.json",
+    "env_stores.SMOKEBALL_EXTRACT_CACHE_DIR.<sha:cover_scans>.p6.6036f2d4c7146aa5.json"
   ]
 }

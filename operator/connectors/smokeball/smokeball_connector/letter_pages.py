@@ -160,11 +160,19 @@ def page_kind(page: PdfPage) -> str:
     return PAGE_UNREAD if page.has_content else PAGE_BLANK
 
 
-def compose_kept(pages: list[PdfPage]) -> str:
+#: How a scanned page read on its own is marked, after its page marker.
+TRANSCRIBED_MARK = "(machine transcription)"
+
+
+def compose_kept(pages: list[PdfPage], read: dict[int, str] | None = None) -> str:
     """Every page as marked text, none dropped: ``[p.N]`` then the page's text,
-    ``[p.N: blank]``, or ``[p.N: scanned page, not read]`` followed by whatever
-    short text layer the scan carried (a stamp is still what the page says).
-    Joined by a blank line, the grammar ``compose`` uses."""
+    or ``[p.N: blank]``. A scan whose 1-based number is in ``read`` is
+    ``[p.N] (machine transcription)`` then its transcription (or
+    ``[p.N: no legible content] (machine transcription)``); any other scan is
+    ``[p.N: scanned page, not read]`` followed by whatever short text layer it
+    carried (a stamp is still what the page says). Joined by a blank line, the
+    grammar ``compose`` uses."""
+    read = read or {}
     blocks: list[str] = []
     for index, page in enumerate(pages, start=1):
         kind = page_kind(page)
@@ -172,6 +180,14 @@ def compose_kept(pages: list[PdfPage]) -> str:
             blocks.append(f"[p.{index}]\n{page.text}")
         elif kind == PAGE_BLANK:
             blocks.append(f"[p.{index}: {BLANK_MARK}]")
+        elif index in read:
+            body = read[index].strip()
+            legible = bool(body) and body != NO_CONTENT
+            blocks.append(
+                f"[p.{index}] {TRANSCRIBED_MARK}\n{body}"
+                if legible
+                else f"[p.{index}: no legible content] {TRANSCRIBED_MARK}"
+            )
         else:
             blocks.append(f"[p.{index}: {UNREAD_MARK}]" + (f"\n{page.text}" if page.text else ""))
     return "\n\n".join(blocks)
@@ -556,6 +572,7 @@ FILED_DOCS = FiledDocs()
 
 __all__ = [
     "BLANK_MARK",
+    "TRANSCRIBED_MARK",
     "PAGE_BLANK",
     "PAGE_TEXT",
     "PAGE_UNREAD",
