@@ -3,6 +3,13 @@ name: Deploy
 on:
   push:
     branches: [main]
+  # After a release lands on a seat, release-tick.yml dispatches this workflow
+  # so publish-customer-configs compiles every seat's spec against the image the
+  # seat NOW runs (a push compiles it against the image before the tick replaced
+  # it; 2026-11-04, "spec unverified" open for hours). On a dispatch only that
+  # job and the migrations it needs run, and only from main; every other job is
+  # a push's.
+  workflow_dispatch:
 
 jobs:
   # D1 migrations first, as their own job. Every other job waits on this one,
@@ -12,8 +19,8 @@ jobs:
   migrate:
     name: Apply D1 migrations
     runs-on: ubuntu-latest
-    # Only run when Cloudflare secrets are configured
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # Only run when Cloudflare secrets are configured; a dispatch only from main.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' && (github.event_name == 'push' || github.ref == 'refs/heads/main') }}
     permissions:
       contents: read
       # Required so npm ci can fetch @venturecrane/crane-test-harness from
@@ -50,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: migrate
     # Only deploy when Cloudflare secrets are configured
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    if: ${{ github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true' }}
     permissions:
       contents: read
       deployments: write
@@ -155,7 +162,7 @@ jobs:
     runs-on: ubuntu-latest
     # D1 only (the projection rows): the migrated schema, not the web build.
     needs: migrate
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    if: ${{ github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true' }}
     permissions:
       contents: read
       packages: read
@@ -242,7 +249,9 @@ jobs:
           # exposure without adding capability.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          BEFORE_SHA: ${{ github.event.before }}
+          # A dispatch has no push range: an empty one at main's head, so every
+          # seat converges against what it now runs.
+          BEFORE_SHA: ${{ github.event.before || github.sha }}
           AFTER_SHA: ${{ github.sha }}
           # Resolve each seat's CURRENT image (heartbeat image_ref -> the
           # fleet release's manifest) through wrangler; off by default so a
@@ -270,7 +279,7 @@ jobs:
     runs-on: ubuntu-latest
     # The schema, not the web build: skills reach seats without waiting on wrangler.
     needs: migrate
-    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    if: ${{ github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true' }}
     permissions:
       contents: read
       packages: read
@@ -346,7 +355,7 @@ jobs:
     # FLEET_RELEASE_ENABLED is set only once the fleet-release environment exists
     # with its main-only branch policy and its secrets (ADR 0096). Evaluated
     # before the environment is entered, so a disabled run never creates it.
-    if: ${{ vars.DEPLOY_ENABLED == 'true' && vars.FLEET_RELEASE_ENABLED == 'true' }}
+    if: ${{ github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true' && vars.FLEET_RELEASE_ENABLED == 'true' }}
     environment: fleet-release
     # Three push attempts of a fast transport failure (BUILD_RETRY_DELAYS_S, 3 minutes of waits) fit; each attempt's own budget is fly.py's 3600 s; the job timeout is the ceiling.
     timeout-minutes: 90
@@ -502,7 +511,7 @@ jobs:
     needs: [migrate, build-seat-image]
     # !cancelled(): build-seat-image skips when no image path moved, and a bundle
     # path can still have moved. The migrate job must have succeeded.
-    if: ${{ !cancelled() && needs.migrate.result == 'success' && vars.DEPLOY_ENABLED == 'true' && vars.FLEET_RELEASE_ENABLED == 'true' }}
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.migrate.result == 'success' && vars.DEPLOY_ENABLED == 'true' && vars.FLEET_RELEASE_ENABLED == 'true' }}
     environment: fleet-release
     timeout-minutes: 60
     concurrency:

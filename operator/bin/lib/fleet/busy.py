@@ -15,6 +15,13 @@ BUSY means any of:
     no lane and no cron. Asked live first (the gateway's ``active-work`` control
     verb, what Hermes' own restart guard asks); the ``active_agents`` snapshot in
     gateway_state.json is read only from a gateway that does not answer it;
+  * a gateway process is still STARTING: no gateway_state.json names its pid
+    as running or degraded. Hermes' startup runs state.db maintenance under a
+    progress lease held in its own memory (``state_db_auto_sweep`` and its
+    siblings); a restart then starts it over (captain-mark 2026-11-09: 16
+    minutes, and a release replaced the Machine mid-startup). One starting for
+    longer than GATEWAY_STARTING_MAX_S is wedged, not working, and is not busy:
+    a release is then the remedy, not the harm;
   * a lane daemon is alive but its heartbeat is STALE: it cannot be shown idle,
     so it is treated as busy (a stale heartbeat never reads as idle), unless
     the live daemon started after that beat was written: then it is a lane the
@@ -69,6 +76,10 @@ TURN_BUSY_S = 600.0
 # interrupted reply left 2 "turns" on an idle seat and the gate held a fix for
 # 30 minutes). Unknown silence (no reading) still counts as busy.
 GATEWAY_QUIET_S = 1800.0
+# A gateway still starting after this long is wedged (Hermes' own watchdog
+# exits a startup that holds no progress lease well before it, and a phase that
+# is working renews its lease): the gate stops waiting on it.
+GATEWAY_STARTING_MAX_S = 1800.0
 QUIESCE_TTL_S = 1800.0
 POLL_S = 30.0
 # A wait can run for an hour of ssh calls; one of them losing its connection to
@@ -125,6 +136,32 @@ def _cron_reasons(cron: dict[str, Any], ahead: float, behind: float) -> list[str
     return []
 
 
+def _starting_reasons(facts: dict[str, Any]) -> list[str]:
+    """A gateway process that no live record names as serving is still starting."""
+    serving: set[int] = set()
+    for gw in facts.get("gateways") or []:
+        if gw.get("alive") and gw.get("state") in ("running", "degraded"):
+            try:
+                serving.add(int(gw.get("pid")))
+            except (TypeError, ValueError):
+                continue
+    procs = list(facts.get("gateway_processes") or [])
+    seen = {p.get("pid") for p in procs}
+    # A live record that says "starting" counts even when the process scan did not
+    # find its process (a launch shape the scan does not recognise).
+    for gw in facts.get("gateways") or []:
+        if gw.get("alive") and gw.get("state") == "starting" and gw.get("pid") not in seen:
+            procs.append({"pid": gw.get("pid"), "age_s": gw.get("age_s")})
+    out = []
+    for proc in procs:
+        age = proc.get("age_s")
+        if proc.get("pid") in serving or (isinstance(age, (int, float)) and float(age) > GATEWAY_STARTING_MAX_S):
+            continue
+        when = f" for {float(age):.0f}s" if isinstance(age, (int, float)) else ""
+        out.append(f"gateway pid {proc.get('pid')} is still starting{when}; a restart now would start it over")
+    return out
+
+
 def decide(
     facts: dict[str, Any],
     stale_after: float = STALE_AFTER_S,
@@ -162,6 +199,7 @@ def decide(
         leaked = isinstance(quiet, (int, float)) and float(quiet) > GATEWAY_QUIET_S
         if gw.get("alive") and active > 0 and not leaked:
             reasons.append(f"{gw.get('file')}: the gateway is running {active} turn(s)")
+    reasons.extend(_starting_reasons(facts))
     for turn in facts.get("turns") or []:
         ago = turn.get("sent_ago_s")
         if turn.get("reply_open") and ago is not None and 0 <= float(ago) <= TURN_BUSY_S:

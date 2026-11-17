@@ -312,6 +312,37 @@ def undefined_caps(doc: str, record_names: Iterable[str] = ()) -> list[str]:
     return out
 
 
+def is_abbreviation(term: str, doc: str) -> bool:
+    """True for a flagged term that is an abbreviation: one short word (five
+    letters at most, periods allowed) that the document never writes in lower
+    case. An abbreviation ("CAD") cannot be written in lower case, so the only
+    repair is to define it or spell it out; a capitalized phrase or ordinary
+    word ("SURVEILLANCE FOOTAGE", or an emphasized "ALL" the set also writes as
+    "all") can be."""
+    word = term.strip(".,;:'&-")
+    if " " in word or not word or len(word.replace(".", "")) > 5:
+        return False
+    lower = re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
+    return not any(m.group(0) != m.group(0).upper() for m in lower.finditer(doc))
+
+
+def undefined_caps_advice(undefined: list[str], doc: str) -> str:
+    """The repair advice the format check hands the one repair pass for the
+    terms ``undefined_caps`` flagged. An abbreviation is told to be defined or
+    spelled out, never to be written in lower case (2026-11-05: an abbreviation
+    got "or write it in lower case", which no repair can follow)."""
+    terms = undefined[:12]
+    abbrevs = [t for t in terms if is_abbreviation(t, doc)]
+    phrases = [t for t in terms if t not in abbrevs]
+    head = "defined terms: capitalized as defined terms but not defined in this set's DEFINITIONS: "
+    parts = []
+    if phrases:
+        parts.append(", ".join(phrases) + " (define each, or write it in lower case)")
+    if abbrevs:
+        parts.append(", ".join(abbrevs) + " (abbreviations: define each, or spell it out)")
+    return head + "; ".join(parts)
+
+
 # ---- one front matter across the sets of one request ---------------------------------------
 #
 # The sets one request asks for are served together on the same party: the

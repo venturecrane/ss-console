@@ -99,6 +99,15 @@ if grep -q '^- ' "$FIXES/.$now"; then mv -f "$FIXES/.$now" "$FIXES/$now.txt"; el
 # No decision for the Captain, no email. A report with no readable count (the
 # format-not-followed subject above) still emails: that is itself worth seeing.
 needs=$(printf '%s' "$subject" | sed -n -E 's/.*[^0-9]([0-9]+) needs? you.*/\1/p')
+# TRIAGE.md says to omit a section whose count is 0, so a followed-format
+# subject can carry no "N need you" at all ("Triage: 2 handled"). Then the
+# body decides: its "NEEDS YOU (N)" heading, and no heading means 0. Until
+# 2026-11-13 such a report fell through to Resend with an empty body, got a
+# 422, and left the window uncommitted (tests/ops-triage.test.ts).
+if [ -z "$needs" ] && [ -n "$subject_line" ] && [ "$subject" != "[SMD Ops] Triage: report (format not followed)" ]; then
+  needs=$(sed -n -E 's/^NEEDS YOU \(([0-9]+)\).*/\1/p' "$report" | head -1)
+  needs=${needs:-0}
+fi
 if [ "$needs" = "0" ]; then echo "nothing for the Captain; report kept at $report"; commit_window; exit 0; fi
 
 email="$STATE/triage-email-$now.txt"
@@ -117,6 +126,9 @@ email="$STATE/triage-email-$now.txt"
     printf '\n--- agent stderr: %s line(s) in %s on smd-ops\n' "$n_err" "$report_err"
   fi
 } > "$email"
+# An email with nothing in it is not sent: Resend refuses an empty text with a
+# 422, which would keep the window and report this run as failed.
+if ! grep -q '[^[:space:]]' "$email"; then echo "empty email body; nothing sent; report kept at $report"; commit_window; exit 0; fi
 "$HOME/bin/ss-env" python3 - "$subject" "$email" <<'PY'
 import json, os, sys, urllib.request
 subject, path = sys.argv[1], sys.argv[2]

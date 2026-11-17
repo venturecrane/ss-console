@@ -787,3 +787,34 @@ def test_the_release_verifier_defaults_to_the_seat_self_test() -> None:
     args = cli._parser().parse_args(["release", "img-202610260720-67b2d972"])
     assert args.verify == "selftest"
     assert cli._parser().parse_args(["release", "img-202610260720-67b2d972", "--verify", "bash"]).verify == "bash"
+
+
+# -- the seats a run changed, for the spec republish (2026-11-04) -------------------------
+
+
+def test_every_seat_a_run_decided_is_named_for_the_spec_republish(tmp_path, monkeypatch) -> None:
+    """A release that lands an image changes what the seat's signed spec must be
+    compiled against; until 2026-11-16 nothing republished it until the next push,
+    and the seat reported "spec unverified" for hours. The run names every seat it
+    decided in FLEET_LANDED_FILE so release-tick.yml can start the republish.
+    FALSIFIER: drop landed.note from Waves._ring and the file is never written."""
+    sink = tmp_path / "landed.txt"
+    monkeypatch.setenv("FLEET_LANDED_FILE", str(sink))
+    w = World()
+    stale = {
+        "lanes": [{"file": "heartbeat.json", "age_s": 4000, "running": None, "wakes_pending": 0, "daemon_alive": True}],
+        "children": [],
+        "crons": [],
+        "errors": [],
+    }
+    w.fly.probe_facts["ap-staging"] = [stale]
+    w.release_all(only="ap-staging", max_idle_wait=120)
+    assert not sink.exists(), "a seat left waiting_idle changed nothing and is not named"
+    w.fly.probe_facts.pop("ap-staging")
+    w.release_all()
+    assert sorted(sink.read_text(encoding="utf-8").split()) == sorted(
+        ["ap-staging", "pilot-smokeball", "scott", "brokery", "ashton-price"]
+    )
+    sink.unlink()
+    w.release_all()
+    assert not sink.exists(), "a seat already done on the release was not redeployed and is not named"

@@ -928,6 +928,23 @@ describe('ci-publish-customer-configs: the signed seat spec (Wave 2 W4)', () => 
     expect(objectAt(fx, 'vaults/seat-beta/spec-pointer.json')).toContain('spec_sha256')
   })
 
+  it('an empty range (the post-release republish) converges every seat and publishes its spec', () => {
+    // A dispatched Deploy (release-tick.yml) runs the publisher with BEFORE_SHA = AFTER_SHA
+    // after a release lands, so a spec compiled against the older image is
+    // replaced by one compiled against the image the seat now runs.
+    const fx = makeFixture([])
+    const head = addSeat(fx, 'seat-beta', configBody('seat-beta'))
+    fx.before = head
+    fx.after = head
+    seedObject(fx, 'vaults/seat-beta/customer.yaml', configBody('seat-beta'))
+
+    const res = runPublisher(fx, testSigningEnv(fx.root))
+
+    expect(res.code, res.stdout + res.stderr).toBe(0)
+    expect(res.stdout).toContain('nothing to publish from the range')
+    expect(objectAt(fx, 'vaults/seat-beta/spec-pointer.json')).toContain('spec_sha256')
+  })
+
   it('a refusal for a seat outside the push range is a warning, not a red deploy', () => {
     const fx = makeFixture([])
     const head = addSeat(

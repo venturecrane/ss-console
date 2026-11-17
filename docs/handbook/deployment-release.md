@@ -374,7 +374,11 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   used ssh, and a fresh tunnel per GitHub run lost two of three probes. A running job (a live job child, or a lane
   heartbeat naming one), pending wakes, a heartbeat gone stale (over 5 minutes) while its daemon
   lives, a managed cron firing within 6 minutes (or fired within the last 2),
-  a gateway with turns in flight, or a store the probe could not read means busy. The gateway is
+  a gateway with turns in flight, a gateway still starting, or a store the probe could not read means busy.
+  A gateway is starting while no `gateway_state.json` names its process as running or degraded:
+  Hermes runs its state.db maintenance at startup under a progress lease it keeps in memory, and on
+  2026-11-09 a release replaced captain-mark mid-startup after more than 16 minutes of it. One
+  starting for over 30 minutes is wedged and does not hold the release. The gateway is
   asked live, by its own `active-work` control verb (from a child that drops to the gateway's uid,
   since the socket accepts no other); the `active_agents` number in `gateway_state.json` is read
   only from a gateway that does not answer, because Hermes writes that number only when a chat
@@ -867,6 +871,16 @@ environment and of nothing else, read only when the repository variable
 `customer.yaml` and skips the spec with a warning. Seats whose `customer.yaml`
 did not change in the push are converged too, so a push range that was never
 processed is healed by the next one.
+
+A push compiles each spec against the image the seat runs at that moment, which
+for a schema-changing release is still the older image. So after any release
+run that decided a seat, the release tick dispatches Deploy. A dispatched
+Deploy runs only the migrations and this publisher, from main, over an empty
+range at main's head: every seat converges against what it now runs, and a
+spec already current is left alone. Before 2026-11-16 a spec stayed pinned to
+the older lane schemas until some later push, and the seat reported "spec
+unverified" for hours (2026-11-04). The key keeps its one reader
+(`tests/deploy-seat-spec-gate.test.ts`).
 
 The compiler refuses a config the seat's running image cannot run: a skill,
 pin or pre_run neither the image's manifest nor its skills release carries, or

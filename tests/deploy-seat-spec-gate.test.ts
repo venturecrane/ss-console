@@ -9,7 +9,7 @@
  * protected environment exists and the variable is set, the job names no
  * environment and publishes customer.yaml exactly as before.
  */
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -62,5 +62,16 @@ describe('deploy.yml publish-customer-configs: seat-spec signing is gated', () =
   it('no other job in deploy.yml reads the signing key', () => {
     const outside = DEPLOY.replace(publishJob(DEPLOY), '')
     expect(outside).not.toContain('SEAT_SPEC_SIGNING_KEY')
+  })
+})
+
+describe('the signing key has one reader', () => {
+  it('no workflow but deploy.yml reads the signing key', () => {
+    const dir = join(REPO_ROOT, '.github', 'workflows')
+    const readers = readdirSync(dir)
+      .filter((f) => /\.ya?ml$/.test(f))
+      .filter((f) => readFileSync(join(dir, f), 'utf8').includes('secrets.SEAT_SPEC_SIGNING_KEY'))
+      .sort()
+    expect(readers).toEqual(['deploy.yml'])
   })
 })

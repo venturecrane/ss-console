@@ -987,3 +987,45 @@ def test_the_tick_rolls_bundles_only_behind_the_switch_and_the_urgent_path_can_s
     branch = urgent.split('if [ "$ARTIFACT" = "bundle" ]; then', 1)[1].split("else", 1)[0]
     assert '--bundle "$RELEASE"' in branch and '--only "$SEAT"' in branch and "--max-idle-wait" in branch
     assert "--tick" not in branch
+
+
+def test_a_tick_that_decided_a_seat_starts_the_seat_spec_republish() -> None:
+    """A release that lands an image leaves the seat's signed spec compiled against
+    the older image until something republishes it (2026-11-04: "spec unverified" on
+    a client seat for hours). The fleet CLI names every seat it decided in
+    FLEET_LANDED_FILE (landed.py) and the tick dispatches Deploy after any run that
+    named one, halted or not; a dispatched Deploy runs only the migrations and the
+    spec publisher, from main. FALSIFIER: drop the env from the Tick
+    step, the step, its always(), or point it at another workflow, and this fails."""
+    from bin.lib.fleet import landed
+
+    wf = yaml.safe_load(RELEASE_TICK_PATH.read_text(encoding="utf-8"))
+    steps = wf["jobs"]["tick"]["steps"]
+    names = [s.get("name") for s in steps]
+    tick = steps[names.index("Tick")]
+    repub = steps[names.index("Republish the seat specs")]
+    assert names.index("Republish the seat specs") > names.index("Tick")
+    sink = (tick.get("env") or {}).get(landed.ENV)
+    assert sink and (repub.get("env") or {}).get(landed.ENV) == sink, "both steps must name the same file"
+    cond = str(repub.get("if"))
+    assert "always()" in cond and "env.DRY_RUN == ''" in cond
+    run = repub["run"]
+    assert "gh workflow run deploy.yml" in run and "--ref main" in run
+    assert run.count("--workflow deploy.yml --status queued") == 1
+    assert run.count("--workflow deploy.yml --status pending") == 1
+    deploy = yaml.safe_load(DEPLOY_PATH.read_text(encoding="utf-8"))
+    assert "workflow_dispatch" in _on_block(deploy)
+    for name, job in deploy["jobs"].items():
+        cond = str(job.get("if"))
+        if name == "publish-customer-configs":
+            assert "github.event_name == 'push'" not in cond, "the dispatch exists to run this job"
+        elif name == "migrate":
+            assert "github.ref == 'refs/heads/main'" in cond, "a dispatch migrates only from main"
+        else:
+            assert "github.event_name == 'push'" in cond, f"{name} must not run on the spec dispatch"
+    env = next(
+        s["env"]
+        for s in deploy["jobs"]["publish-customer-configs"]["steps"]
+        if "ci-publish-customer-configs" in (s.get("run") or "")
+    )
+    assert env["BEFORE_SHA"] == "${{ github.event.before || github.sha }}", "a dispatch publishes over an empty range"

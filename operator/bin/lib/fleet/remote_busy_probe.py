@@ -13,6 +13,7 @@ it reads has existed on every seat since the runner lanes shipped:
   /opt/data/profiles/*/cron/jobs.json Hermes' per-profile cron store
   /opt/data/cron/jobs.json            the root cron store
   /run/smd-jobs/quiesce           the fleet's no-new-work marker
+  /proc/*/cmdline                 each `hermes ... gateway run` process and its age
 
 On a seat whose image predates the ADR 0103 volume move the run dir is
 /run/smd-medchron, and that is the one read when /run/smd-jobs is absent.
@@ -40,6 +41,7 @@ CRON_STORES = ("/opt/data/profiles/*/cron/jobs.json", "/opt/data/cron/jobs.json"
 MANAGED_PREFIX = "op-managed:"
 TURN_SCAN_S = 1800
 GATEWAY_STATES = ("/opt/data/gateway_state.json", "/opt/data/profiles/*/gateway_state.json")
+PROC = "/proc"
 
 
 def pid_alive(pid):
@@ -61,9 +63,9 @@ def pid_alive(pid):
 def started_at(pid):
     """When process ``pid`` started (epoch seconds), from /proc; None if unknown."""
     try:
-        with open("/proc/%d/stat" % int(pid)) as fh:
+        with open(PROC + "/%d/stat" % int(pid)) as fh:
             ticks = int(fh.read().rsplit(")", 1)[1].split()[19])
-        with open("/proc/stat") as fh:
+        with open(PROC + "/stat") as fh:
             btime = next(int(line.split()[1]) for line in fh if line.startswith("btime "))
         return btime + ticks / os.sysconf("SC_CLK_TCK")
     except (OSError, ValueError, TypeError, IndexError, StopIteration):
@@ -213,9 +215,12 @@ def gateways(errors):
             if not isinstance(st, dict):
                 continue
             alive = pid_alive(st.get("pid"))
+            began = started_at(st.get("pid")) if alive else None
             out.append(
                 {
                     "file": path,
+                    "pid": st.get("pid"),
+                    "age_s": round(time.time() - began, 1) if began is not None else None,
                     "alive": alive,
                     "state": st.get("gateway_state"),
                     "active_agents": st.get("active_agents"),
@@ -223,6 +228,39 @@ def gateways(errors):
                     "live": live_work(os.path.dirname(path), gateway_python(st)) if alive else None,
                 }
             )
+    return out
+
+
+def gateway_processes(now):
+    """Every top-level ``hermes ... gateway run`` process, with its age in seconds.
+
+    WHY (captain-mark, 2026-11-09). A starting gateway runs state.db maintenance
+    under a progress lease Hermes keeps in its own memory (the startup watchdog);
+    it took more than 16 minutes there, and a release replaced the Machine
+    mid-startup because nothing the gate read showed it: gateway_state.json says
+    "starting" only once that write is reached, and before it the file is the
+    previous process's. The process itself is the fact: busy.decide counts a
+    gateway process that no record names as running or degraded as starting.
+    A child forked from a gateway shares its argv and is left out by its parent."""
+    found = {}
+    for path in glob.glob(PROC + "/[0-9]*/cmdline"):
+        try:
+            with open(path, "rb") as fh:
+                argv = [a.decode("utf-8", "replace") for a in fh.read().split(b"\0") if a]
+            pid = int(path.split("/")[-2])
+            with open(PROC + "/%d/stat" % pid) as fh:
+                ppid = int(fh.read().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            continue
+        runs = any(argv[i] == "gateway" and argv[i + 1] == "run" for i in range(len(argv) - 1))
+        if runs and any(os.path.basename(a) == "hermes" for a in argv):
+            found[pid] = ppid
+    out = []
+    for pid in sorted(found):
+        if found[pid] in found:
+            continue
+        began = started_at(pid)
+        out.append({"pid": pid, "age_s": round(now - began, 1) if began is not None else None})
     return out
 
 
@@ -380,6 +418,7 @@ def main():
         "crons": crons(now, errors),
         "turns": turns(now, errors),
         "gateways": gateways(errors),
+        "gateway_processes": gateway_processes(now),
         "quiesce": quiesce(),
         "errors": errors,
     }

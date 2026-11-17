@@ -369,13 +369,10 @@ class Finish:
         if self.cls == "discovery_set":
             # A capitalized term the set uses and never defines: the code check
             # that blocks, behind the audit's TERM verdict (compose.py).
-            undefined = sets.undefined_caps(render.split_notes(md)[0], self.corpus())
+            set_text = render.split_notes(md)[0]
+            undefined = sets.undefined_caps(set_text, self.corpus())
             if undefined:
-                res.model(
-                    "defined terms: capitalized as defined terms but not defined in this set's DEFINITIONS: "
-                    + ", ".join(undefined[:12])
-                    + " (define each, or write it in lower case)"
-                )
+                res.model(sets.undefined_caps_advice(undefined, set_text))
         page_limits.step(self, u, path, fmt, res)
         if res.content and not res.ours and not self._is_done(u.stage("format_repair")):
             self.log(f"  format check: {len(res.content)} content finding(s); one repair pass")
