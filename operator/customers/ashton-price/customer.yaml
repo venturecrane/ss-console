@@ -1668,11 +1668,8 @@ staff_mailbox_reads:
 # without one gets the letter at its root and the reply says so; no folder is
 # ever created by this setting.
 #
-# 2026-11-17: an ordered list. Christa's email of 11-17 asked for that day's
-# mail "in the MEDICAL folder", and the firm's matters carry "MEDICAL" (2,976 of
-# 4,255 matters) far more than "MEDICAL RECORDS" (114), read from Smokeball that
-# day. The single name sent every medical bill of that day's post to the root.
-# The first name the matter has wins.
+# An ordered list: the firm's matters carry "MEDICAL" far more often than
+# "MEDICAL RECORDS", and the first name the matter has wins.
 combined_post_intake:
   medical_folder: [MEDICAL, MEDICAL RECORDS]
 
