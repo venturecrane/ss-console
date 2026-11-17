@@ -467,7 +467,7 @@ def test_an_update_leaves_a_record_naming_another_person_out_by_rule(tmp_path, m
     monkeypatch.setattr(
         us,
         "_identity_holds",
-        lambda sr, rows: ["d9: a date of birth 01/02/1950 that is not the client's; a patient named Zedward"],
+        lambda sr, rows, ud=None: ["d9: a date of birth 01/02/1950 that is not the client's; a patient named Zedward"],
     )
     skipped: dict[str, list[str]] = {FI.WITHHELD_REASON: []}
     rows = us._leave_out_foreign(SR(), ud, [{"id": "d9"}, {"id": "d1"}], skipped)

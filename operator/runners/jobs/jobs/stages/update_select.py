@@ -168,16 +168,18 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
     return out, skipped
 
 
-def _identity_holds(sr: StageRun, rows: list[dict[str, Any]]) -> list[str]:
+def _identity_holds(sr: StageRun, rows: list[dict[str, Any]], ud: Path | None = None) -> list[str]:
     """Each row's id with what names another person (SMD's detail), as
-    ``"<id>: <findings>"``; [] when none does."""
+    ``"<id>: <findings>"``; [] when none does. `ud`: the update directory,
+    whose picture record (``pageid_io``) names the pages already delivered."""
     surnames, dobs = FI.identities(sr.job.units)
     free = FI.released(sr.slug_dir)
+    ident = PG.load(ud) if ud is not None else PG.Loaded()
     holds = []
     for r in rows:
         if FI.matches(str(r["id"]), free):
             continue
-        found = _page_findings(sr, str(r["id"]), surnames, dobs)
+        found = _page_findings(sr, str(r["id"]), surnames, dobs, _delivered_pages(ident, str(r["id"])))
         if found:
             holds.append(f"{r['id']}: {'; '.join(found)}")
     return holds
@@ -192,7 +194,7 @@ def _leave_out_foreign(
     a date of birth) stay in identity_holds.json for SMD, never in the log."""
     from . import identity_pages
 
-    holds = _identity_holds(sr, rows)
+    holds = _identity_holds(sr, rows, ud)
     identity_pages.record_cleared(sr, ud, {h.split(":", 1)[0] for h in holds})
     if not holds:
         return rows
@@ -207,18 +209,32 @@ def _leave_out_foreign(
     return [r for r in rows if str(r["id"]) not in set(ids)]
 
 
-def _page_findings(sr: StageRun, rid: str, surnames: set[str], dobs: set[str]) -> list[str]:
+def _delivered_pages(ident: PG.Loaded, rid: str) -> set[int]:
+    """The pages of `rid` whose picture is EXACTLY a page of a delivered
+    exhibit. Only those: a near match, or a match to another new document's
+    page, proves nothing about whose record it is."""
+    found = ident.pages.get(rid) or {}
+    return {n for n, h in found.items() if h.exact and PG.delivered_exhibit(h.other) is not None}
+
+
+def _page_findings(
+    sr: StageRun, rid: str, surnames: set[str], dobs: set[str], delivered: set[int] | None = None
+) -> list[str]:
     """What names another person, page by page. A hit on a TEXT-LAYER page
     is re-read on that page's vision transcript when the vision pass made
     one, and holds only if it survives: a garbled OCR layer once read the
     client's own date of birth as another person's. A page vision never
-    read keeps its text-layer finding."""
+    read keeps its text-layer finding. A page in `delivered` (its picture is
+    exactly a page already delivered as the client's own exhibit) has no
+    finding: it cannot be another person's (2026-11-17)."""
     tp = sr.slug_dir / "text" / f"{rid}.txt"
     doc = tp.read_text(encoding="utf-8", errors="replace") if tp.is_file() else ""
     pages, firsts = split_pages(doc), FI.first_names(sr.job.units)
     seen = load_partial(sr.slug_dir / "partial" / f"{rid}.jsonl")
     out: set[str] = set()
     for n, (suffix, text) in pages.items():
+        if n in (delivered or set()):
+            continue
         found = FI.findings(text, surnames, dobs, firsts, doc)
         if found and "machine transcription" not in suffix and n in seen:
             found = FI.findings(seen[n], surnames, dobs, firsts, doc)
