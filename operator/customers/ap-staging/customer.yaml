@@ -693,7 +693,7 @@ staff_mailbox_reads:
   mailboxes:
     - test-adjuster@smdopslab.onmicrosoft.com
 combined_post_intake:
-  medical_folder: MEDICAL RECORDS
+  medical_folder: [MEDICAL, MEDICAL RECORDS]
 smokeball_layouts:
   settlement_negotiations_design: f6719448-d924-4c59-9c1e-3bd2b76550ca
 records_orders:

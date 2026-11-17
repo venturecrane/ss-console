@@ -4,6 +4,13 @@ authors the folder, the tool resolves it, and the model never supplies an id.
 
     combined_post_intake:
       medical_folder: Medical   # medical records and medical bills
+      # or an ordered list, the first one the matter has wins:
+      medical_folder: [MEDICAL, MEDICAL RECORDS]
+
+A LIST, because a firm's matters do not all carry the same folder name (A&P,
+2026-11-17: 2,976 of 4,255 matters have "MEDICAL", 114 have "MEDICAL
+RECORDS", 10 have both). The firm's written rule named "MEDICAL RECORDS", so
+a single name sent the medical bills of most matters to the root.
 
 Unauthored (no file, no block, no key) means the matter root and nothing said
 about it: no folder is imposed on a firm that named none. A block that will not
@@ -28,7 +35,8 @@ KINDS = frozenset({"letter", *KIND_FOLDERS})
 
 @dataclass(frozen=True)
 class PostIntakeConfig:
-    folders: dict[str, str]
+    #: Per kind, the folder names to try in order; the first the matter has wins.
+    folders: dict[str, tuple[str, ...]]
     error: str | None = None
 
 
@@ -37,15 +45,29 @@ def parse_post_intake_config(block: Any) -> PostIntakeConfig:
         return PostIntakeConfig(folders={})
     if not isinstance(block, dict):
         return PostIntakeConfig(folders={}, error=f"{CONFIG_BLOCK} must be a mapping")
-    folders: dict[str, str] = {}
+    folders: dict[str, tuple[str, ...]] = {}
     for kind, key in KIND_FOLDERS.items():
         value = block.get(key)
         if value is None:
             continue
-        if not isinstance(value, str) or not value.strip():
-            return PostIntakeConfig(folders={}, error=f"{CONFIG_BLOCK}.{key} must be a folder name")
-        folders[kind] = value.strip()
+        names = _folder_names(value)
+        if not names:
+            return PostIntakeConfig(
+                folders={}, error=f"{CONFIG_BLOCK}.{key} must be a folder name or a list of folder names"
+            )
+        folders[kind] = names
     return PostIntakeConfig(folders=folders)
+
+
+def _folder_names(value: Any) -> tuple[str, ...]:
+    """The non-empty folder names ``value`` holds, in order, or () when it is not
+    a name or a list of names (any non-string entry refuses the whole list)."""
+    items = [value] if isinstance(value, str) else value
+    if not isinstance(items, list) or not items:
+        return ()
+    if not all(isinstance(v, str) and v.strip() for v in items):
+        return ()
+    return tuple(v.strip() for v in items)
 
 
 def load_post_intake_config(path: str | None = None) -> PostIntakeConfig:

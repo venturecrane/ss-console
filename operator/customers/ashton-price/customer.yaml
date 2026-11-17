@@ -1667,8 +1667,11 @@ staff_mailbox_reads:
 # connector at write time (smokeball_connector/post_intake_config.py). A matter
 # without one gets the letter at its root and the reply says so; no folder is
 # ever created by this setting.
+#
+# An ordered list: the firm's matters carry "MEDICAL" far more often than
+# "MEDICAL RECORDS", and the first name the matter has wins.
 combined_post_intake:
-  medical_folder: MEDICAL RECORDS
+  medical_folder: [MEDICAL, MEDICAL RECORDS]
 
 # smokeball_layouts.settlement_negotiations_design: the base guid of the firm's
 # Negotiation Details layout, learned 2026-10-09 from matters whose tab carries

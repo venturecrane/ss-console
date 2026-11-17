@@ -537,13 +537,15 @@ def _folder_for(matter: str, kind: str) -> dict[str, Any]:
     cfg = load_post_intake_config()
     if cfg.error:
         return {"note": f"the seat's filing folder setting could not be read ({cfg.error}); filed at the matter root"}
-    name = cfg.folders.get(kind)
-    if not name:
+    names = cfg.folders.get(kind)
+    if not names:
         return {}
-    folder_id = find_folder_id(_client(), matter, name)
-    if folder_id is None:
-        return {"note": f"this matter has no {name} folder, so it was filed at the matter root"}
-    return {"name": name, "id": folder_id}
+    for name in names:
+        folder_id = find_folder_id(_client(), matter, name)
+        if folder_id is not None:
+            return {"name": name, "id": folder_id}
+    wanted = " or ".join(names)
+    return {"note": f"this matter has no {wanted} folder, so it was filed at the matter root"}
 
 
 def register(server: Any) -> None:
