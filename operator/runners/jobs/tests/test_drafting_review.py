@@ -395,6 +395,27 @@ def test_a_word_the_records_own_name_prints_in_capitals_is_not_a_term():
     assert sets.undefined_caps(doc, {"Complaint - filed": "text"}) == ["CAD", "SURVEILLANCE FOOTAGE"]
 
 
+def test_an_abbreviation_is_never_told_to_be_written_in_lower_case():
+    # 2026-11-05: the repair advice for an undefined abbreviation said "or write
+    # it in lower case", which no repair can follow, and the set failed.
+    doc = (
+        '# DEFINITIONS\n\n1. "SURVEILLANCE VIDEO" means the store video.\n\n# REQUESTS FOR ADMISSION\n\n'
+        "REQUEST FOR ADMISSION NO. 1\n\nAdmit that the CAD log is genuine.\n\n"
+        "REQUEST FOR ADMISSION NO. 2\n\nAdmit that ALL of the SURVEILLANCE FOOTAGE is genuine, all of it.\n\nDated: x\n"
+    )
+    flagged = sets.undefined_caps(doc)
+    assert "CAD" in flagged and "SURVEILLANCE FOOTAGE" in flagged
+    assert sets.is_abbreviation("CAD", doc)
+    assert not sets.is_abbreviation("ALL", doc)  # the set also writes "all"
+    assert not sets.is_abbreviation("SURVEILLANCE FOOTAGE", doc)
+    advice = sets.undefined_caps_advice(flagged, doc)
+    phrase_part, abbrev_part = advice.split("; ")
+    assert "SURVEILLANCE FOOTAGE" in phrase_part and "lower case" in phrase_part
+    assert "CAD" in abbrev_part and "lower case" not in abbrev_part and "spell it out" in abbrev_part
+    only = sets.undefined_caps_advice(["CAD"], doc)
+    assert "lower case" not in only and "CAD" in only
+
+
 def test_the_firm_pleading_block_is_validated():
     from drafting_testkit import firm_data
 

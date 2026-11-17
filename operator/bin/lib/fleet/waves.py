@@ -53,7 +53,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from . import ids
+from . import ids, landed
 from .d1 import FleetStore, seat_lease_name
 from .rings import Ring, parallel_for
 from .rollout import SeatOutcome
@@ -208,6 +208,8 @@ class Waves:
             if waiting is not None:
                 return waiting
             out = do_seat(seat, ring.number)
+            if not dry_run:
+                landed.note(seat, out.state)
             if out.halts:
                 halt.set()
             if lease is not None:

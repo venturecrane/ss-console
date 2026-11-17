@@ -160,6 +160,28 @@ describe('ops-triage report subject', () => {
     expect(readFileSync(join(home, 'state', 'triage-since'), 'utf8')).toMatch(/^20/)
   })
 
+  it('sends nothing and commits the window when the subject omits the count and the body has no NEEDS YOU', () => {
+    const report = 'Subject: [SMD Ops] Triage: 2 handled\n\nHANDLED (2)\n- one.\n- two.\n'
+    const home = runTriageSilently(report)
+    expect(existsSync(join(home, 'sent-subject'))).toBe(false)
+    expect(readFileSync(join(home, 'state', 'triage-since'), 'utf8')).toMatch(/^20/)
+  })
+
+  it('reads the count from the NEEDS YOU heading when the subject omits it', () => {
+    const report =
+      'Subject: [SMD Ops] Triage: 2 handled\n\nNEEDS YOU (1)\n- seat: should we tell them.\n\nHANDLED (2)\n- one.\n'
+    const { subject, body } = runTriage(report)
+    expect(subject).toBe('[SMD Ops] Triage: 2 handled')
+    expect(body).toContain('should we tell them')
+  })
+
+  it('skips an email whose body would be empty, and commits the window', () => {
+    const report = 'Subject: [SMD Ops] Triage: 1 handled, 1 need you\n\nHANDLED (1)\n- one.\n'
+    const home = runTriageSilently(report)
+    expect(existsSync(join(home, 'sent-subject'))).toBe(false)
+    expect(readFileSync(join(home, 'state', 'triage-since'), 'utf8')).toMatch(/^20/)
+  })
+
   it('does not read 10 need you as 0', () => {
     const report = 'Subject: [SMD Ops] Triage: 0 handled, 10 need you\n\nNEEDS YOU (10)\n- x.\n'
     expect(runTriage(report).subject).toContain('10 need you')

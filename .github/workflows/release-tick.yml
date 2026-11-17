@@ -218,6 +218,9 @@ jobs:
           FLY_DEPLOY_TOKEN__SMD_GUIDE: ${{ secrets.FLY_DEPLOY_TOKEN__SMD_GUIDE }}
           FLY_DEPLOY_TOKEN__SMD_OFFICE: ${{ secrets.FLY_DEPLOY_TOKEN__SMD_OFFICE }}
           FLY_DEPLOY_TOKEN__ASHTON_PRICE: ${{ secrets.FLY_DEPLOY_TOKEN__ASHTON_PRICE }}
+          # Every seat the run decides is named here (operator/bin/lib/fleet/landed.py)
+          # for Republish the seat specs below.
+          FLEET_LANDED_FILE: ${{ runner.temp }}/fleet-landed.txt
         run: |
           set -euo pipefail
           # shellcheck source=/dev/null
@@ -302,6 +305,33 @@ jobs:
             gh workflow run release-tick.yml --repo "$GITHUB_REPOSITORY" --ref main
           else
             echo "a tick is already queued"
+          fi
+
+      # A seat that took a release must have its signed spec compiled against
+      # what it now runs, or it reports "spec unverified" until some later push
+      # (2026-11-04). Any run that decided a seat starts seat-spec-republish.yml,
+      # whatever its exit (a halted run may have landed seats before it halted),
+      # an urgent one-seat run included. Skipped when one is already waiting: it
+      # converges every seat at main's head when it starts.
+      - name: Republish the seat specs
+        if: always() && env.DRY_RUN == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FLEET_LANDED_FILE: ${{ runner.temp }}/fleet-landed.txt
+        run: |
+          if [ ! -s "$FLEET_LANDED_FILE" ]; then
+            echo "no seat was decided; no spec to republish"
+            exit 0
+          fi
+          echo "seats decided: $(sort -u "$FLEET_LANDED_FILE" | tr '\n' ' ')"
+          waiting=$(
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow seat-spec-republish.yml --status queued --json databaseId --jq '.[0].databaseId'
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow seat-spec-republish.yml --status pending --json databaseId --jq '.[0].databaseId'
+          )
+          if [ -z "$waiting" ]; then
+            gh workflow run seat-spec-republish.yml --repo "$GITHUB_REPOSITORY" --ref main
+          else
+            echo "a spec republish is already waiting"
           fi
 
   # No environment and no secrets: says why a run did nothing.

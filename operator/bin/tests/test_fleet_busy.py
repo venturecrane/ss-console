@@ -732,3 +732,74 @@ def _run_remote_source(name: str, tmp: Path) -> str:
     src = src.replace('"/run/smd-jobs"', json.dumps(str(tmp / "run" / "smd-jobs")))
     src = src.replace('"/run/smd-medchron"', json.dumps(str(tmp / "run" / "smd-medchron")))
     return src.replace('"/opt/data/', '"' + str(tmp / "opt" / "data") + "/")
+
+
+# ---- a gateway still starting (captain-mark, 2026-11-09) -------------------------------
+
+
+def test_a_gateway_process_no_record_names_as_serving_is_starting_and_busy() -> None:
+    """Hermes' startup runs state.db maintenance under a progress lease held in its
+    own memory; on 2026-11-09 it ran past 16 minutes and a release replaced the
+    Machine mid-startup. FALSIFIER: drop _starting_reasons from decide and the
+    first assertion fails."""
+    starting = _facts(gateway_processes=[{"pid": 700, "age_s": 420.0}])
+    verdict = busy.decide(starting)
+    assert verdict.busy and "gateway pid 700 is still starting for 420s" in verdict.reasons[0]
+    # The previous process's record (another pid, or not alive) proves nothing about this one.
+    old = {"file": "gs.json", "pid": 655, "alive": False, "state": "running", "active_agents": 0}
+    assert busy.decide(_facts(gateway_processes=[{"pid": 700, "age_s": 420.0}], gateways=[old])).busy
+    # Once its own record says running (or degraded), it is serving: not starting.
+    for state in ("running", "degraded"):
+        serving = dict(old, pid=700, alive=True, state=state, quiet_s=10.0)
+        assert not busy.decide(_facts(gateway_processes=[{"pid": 700, "age_s": 420.0}], gateways=[serving])).busy
+    # A live record that says "starting" is busy even when the scan found no process.
+    record = dict(old, pid=700, alive=True, state="starting", quiet_s=10.0, age_s=60.0)
+    assert busy.decide(_facts(gateways=[record])).busy
+    # Starting for longer than the cap is wedged, not working: a release is the remedy.
+    wedged = _facts(gateway_processes=[{"pid": 700, "age_s": busy.GATEWAY_STARTING_MAX_S + 1}])
+    assert not busy.decide(wedged).busy
+
+
+def _fake_proc(tmp: Path, procs: dict[int, tuple[int, list[str]]], now: float) -> Path:
+    """A /proc laid out for the probe: <pid>/cmdline, <pid>/stat and stat's btime.
+    Every process here started 300 s before ``now`` (start ticks over btime)."""
+    proc = tmp / "proc"
+    proc.mkdir()
+    hz = os.sysconf("SC_CLK_TCK")
+    btime = int(now) - 1000
+    (proc / "stat").write_text(f"cpu  1 2 3\nbtime {btime}\n")
+    ticks = int((now - 300 - btime) * hz)
+    for pid, (ppid, argv) in procs.items():
+        d = proc / str(pid)
+        d.mkdir()
+        (d / "cmdline").write_bytes(b"\0".join(a.encode() for a in argv) + b"\0")
+        fields = ["S", str(ppid)] + ["0"] * 17 + [str(ticks)]
+        (d / "stat").write_text(f"{pid} (python3) " + " ".join(fields) + "\n")
+    return proc
+
+
+def test_the_probe_finds_a_starting_gateway_process_and_not_its_forked_child(tmp_path: Path) -> None:
+    _seat(tmp_path)
+    now = time.time()
+    gw = ["/opt/hermes/.venv/bin/python", "/opt/hermes/.venv/bin/hermes", "-p", "operator", "gateway", "run"]
+    proc = _fake_proc(
+        tmp_path,
+        {
+            41: (1, ["/usr/bin/tini", "--", "/opt/smd/bootstrap.sh"]),
+            700: (41, gw),
+            733: (700, gw),  # forked from the gateway: same argv, not a second gateway
+            800: (41, ["/opt/hermes/.venv/bin/hermes", "gateway", "status"]),
+        },
+        now,
+    )
+    src = _run_remote_source("remote_busy_probe.py", tmp_path).replace(
+        'PROC = "/proc"', f"PROC = {json.dumps(str(proc))}"
+    )
+    proc_run = subprocess.run(
+        [sys.executable, "-I", "-"], input=src, capture_output=True, text=True, timeout=30, check=False
+    )
+    assert proc_run.returncode == 0, proc_run.stderr
+    facts = busy.parse_probe(proc_run.stdout)
+    assert [p["pid"] for p in facts["gateway_processes"]] == [700]
+    assert 290 <= facts["gateway_processes"][0]["age_s"] <= 310
+    assert busy.decide(facts).busy
