@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 
 from ..medchron.update import pageid as PI, pageid_io as PG
+from . import identity_pages
 from .base import StageRun
 from .update_base import plan, update_dir
 from .update_select import _candidates, delivered_read
@@ -59,6 +60,8 @@ def run(sr: StageRun) -> int:
     (ud / PG.NAME).write_text(json.dumps(PI.to_json(ident), indent=1), encoding="utf-8")
     skip = ident.skipped({d: len(s) for d, s in new})
     (sr.slug_dir / "vision_skip.json").write_text(json.dumps(skip, indent=1), encoding="utf-8")
+    # An other-person finding on a scan's OCR layer is read on the page before it withholds.
+    identity_pages.queue(sr, rows, ud)
     total = sum(len(v) for v in skip.values())
     sr.log(
         f"update_pages: {sum(len(s) for _, s in new)} new page(s) against {sum(len(s) for _, s in delivered)} "

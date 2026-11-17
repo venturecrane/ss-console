@@ -20,6 +20,7 @@ from typing import Any
 
 from .. import unopened
 from ..filing import shown
+from ..stages.name_rules import excluded_by_name
 from .config import FirmConfig
 from .decision_rules import (  # the shared parts, and the control hook (split out 2026-10-24)
     Decision,
@@ -354,7 +355,7 @@ def orphans(job: Job, cfg: FirmConfig, slug_dir: Path, unit: Unit, *, dry_run: b
         if str(r.get("id") or "") in locked:
             explained.append({"name": key, "reason": unopened.REASON})
             continue
-        reason = next((why for rx, why in exclusions if rx.search(name)), None)
+        reason = excluded_by_name(name, exclusions)  # the pull's own rule (``stages/name_rules``)
         if reason is None:
             reason = _tiny_image_reason(r)
         ex = extracted.get(str(r.get("id") or ""))

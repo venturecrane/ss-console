@@ -77,7 +77,11 @@ def exclusions(cfg: Any) -> list[tuple[re.Pattern, str]]:
 
 
 def classify_name(name: str, rules: list[tuple[re.Pattern, str]]) -> str | None:
-    return next((reason for rx, reason in rules if rx.search(name)), None)
+    """The firm's name rules as the pull applies them (``name_rules``): a
+    billing rule never explains away a file whose name says it is a record."""
+    from .name_rules import excluded_by_name
+
+    return excluded_by_name(name, rules)
 
 
 SEEN_LINE = re.compile(
