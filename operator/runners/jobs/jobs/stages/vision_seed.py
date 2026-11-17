@@ -82,6 +82,8 @@ def staged_fields(env: dict[str, Any], run_dir: Path, job_id: str) -> dict[str, 
     for key in ("delivered_cited", "delivered_files"):  # ``delivered_files``: 2026-11-17, ``update_supersede``
         if isinstance(env.get(key), dict) and env[key]:
             out[key] = env[key]
+    if isinstance(env.get("matter_clients"), list) and env["matter_clients"]:  # 2026-11-17, ``billing_update``
+        out["matter_clients"] = env["matter_clients"]
     return out
 
 

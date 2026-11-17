@@ -101,7 +101,17 @@ def test_a_named_ledger_refreshes_the_worksheet_and_retires_the_unedited_one(
     assert set(seat.deleted) == {"c1", "w1"}
     sup = json.loads((ud / "superseded.json").read_text())
     assert [x["name"] for x in sup["retired"]] == [WORKSHEET]
-    assert sup["left"] == [{"name": REVIEW, "kind": update_supersede.RECORDS_REVIEW, "why": "changed since delivery"}]
+    (left,) = sup["left"]
+    assert (left["name"], left["kind"], left["why"], left["id"]) == (
+        REVIEW,
+        update_supersede.RECORDS_REVIEW,
+        "changed since delivery",
+        "r1",
+    )
+    assert (
+        left["remove_with"].startswith("python -m jobs.medchron.update_retire ")
+        and "--file-id r1" in left["remove_with"]
+    )
     # The records review says what the ledger fed.
     review = docx_text(
         sd / "out" / "alpha" / next(n for n in (s["name"] for s in seat.sent) if " - Records Review " in n)
@@ -110,7 +120,7 @@ def test_a_named_ledger_refreshes_the_worksheet_and_retires_the_unedited_one(
     # The reply's billing sentence is code's.
     line = billing_update.reply_line(ud)
     assert line is not None and "1 date(s) of service appear only in billing records" in line
-    assert "left in the folder" not in line  # the worksheet was SMD's own, and it is retired
+    assert "still in the folder" not in line  # the worksheet was SMD's own, and it is retired
     # The page charge never counts a billing page.
     assert o.pages == _pages_without_billing(sd)
 
@@ -124,7 +134,7 @@ def test_an_edited_worksheet_is_left_beside_the_new_one_and_the_reply_says_so(
     assert o.outcome == "delivered", o
     assert "w1" not in seat.deleted and "c1" in seat.deleted
     line = billing_update.reply_line(data_root / "example-matter" / "runs" / "alpha" / "update")
-    assert line is not None and "left in the folder beside the new one" in line
+    assert line is not None and "The earlier billing worksheet is still in the folder" in line
 
 
 def test_an_update_naming_no_billing_record_refreshes_nothing(

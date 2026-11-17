@@ -301,14 +301,7 @@ def _retire_companions(
     go, stay = retirable(p, manifest, sr.cfg, sr.unit.client_name)
     done = rec.doc.setdefault("superseded", {})
     retired: list[dict[str, Any]] = []
-    left = [
-        {
-            "name": r["name"],
-            "kind": r["kind"],
-            "why": "changed since delivery" if r.get("recorded") else "no delivery record of it",
-        }
-        for r in stay
-    ]
+    left = [{**r, "why": "changed since delivery" if r.get("recorded") else "no delivery record of it"} for r in stay]
     for r in go:
         row = done.setdefault(r["id"], {"name": r["name"], "kind": r["kind"], "deleted": False})
         if not row["deleted"]:
@@ -328,5 +321,14 @@ def _retire_companions(
         sr.log(f"retired the delivered {x['kind']} {x['name']}; read back gone")
     for x in left:
         sr.log(f"left the delivered {x['kind']} {x['name']} beside the new one: {x['why']}")
-    out = {"retired": retired, "left": [{"name": x["name"], "kind": x["kind"], "why": x["why"]} for x in left]}
+    out = {"retired": retired, "left": [_left_row(x, where[1], sr.job.path.parent) for x in left]}
     (sr.slug_dir / "runs" / sr.unit.unit / "update" / "superseded.json").write_text(json.dumps(out, indent=1), "utf-8")
+
+
+def _left_row(x: dict[str, Any], folder_id: str, job_dir: Any) -> dict[str, Any]:
+    """A companion left beside the new one, with what SMD needs to remove it
+    in one recorded act (``jobs.medchron.update_retire``): its id, its folder,
+    its size and hash as they were read, and the command."""
+    keep = {k: x.get(k) for k in ("name", "kind", "why", "id", "size", "sha256")}
+    cmd = f"python -m jobs.medchron.update_retire {job_dir} --file-id {x.get('id')} --by <who> --reason <text>"
+    return {**keep, "folder_id": folder_id, "remove_with": cmd}

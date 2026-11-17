@@ -266,6 +266,11 @@ def _billed_no_record(doc: Any, sr: StageRun) -> None:
     makes no chronology entry (the house rule); its dates are listed here so
     they reach a filed document (2026-11-17: an update named two ledgers whose
     dates were in no record, and no filed page carried them)."""
+    lost = [x for x in read_json(sr.slug_dir / "billing" / "not_read.json", []) or [] if isinstance(x, dict)]
+    if lost:  # an update's billing record no read reached (``billing_update``): named, never a silent gap
+        doc.add_paragraph("Billing Records Not Read", style="Heading 1")
+        para(doc, f"{len(lost)} billing record(s) on file could not be read; nothing from them is in any figure above.")
+        table(doc, ["Billing Record", "Why"], [[str(x.get("name"))[:60], str(x.get("why"))] for x in lost], [4.4, 2.8])
     rep = read_json(sr.slug_dir / "runs" / sr.unit.unit / "dos_report.json", None)
     rows = [r for r in (rep or {}).get("billed_no_record") or [] if isinstance(r, dict) and r.get("date")]
     if not rows:

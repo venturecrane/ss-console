@@ -142,7 +142,7 @@ def build(sr: Any, files: list[dict[str, Any]], added: dict[str, str]) -> Path:
     billed = _on_worksheet(sr)
     for r in table:
         if r["id"] in billed and r["reason"] != ADDED:
-            r["finding"] = BILLING_ROW
+            r["finding"] = billed[r["id"]]
     return render(path, sr.unit.client_name, str(sr.job.matter_number), table)
 
 
@@ -151,14 +151,53 @@ BILLING_ROW = (
     "a billing record, not a medical record: its charges and dates of service are on the billing worksheet "
     "filed with this update"
 )
+NO_CHARGES_ROW = "read as a billing record: it holds no charges or dates of service"
+VENDOR_ROW = "an invoice to the firm (records or services), not a medical bill; it is in no total"
+OTHER_PATIENT_ROW = "a billing record that names another patient; set aside and listed on the billing worksheet"
+_NO_CHARGES = {"RECORDS_ONLY", "OTHER", "CERTIFICATE"}
 
 
-def _on_worksheet(sr: Any) -> set[str]:
-    """The ids of the billing files the refreshed worksheet was built from."""
+def _finding_of(chunks: list[dict[str, Any]], patient: str) -> str:
+    from ...stages.billing_chart import quarantined
+
+    real = [c for c in chunks if isinstance(c, dict)]
+    types = {str(c.get("doc_type")) for c in real}
+    if real and all(quarantined(c, patient) for c in real):
+        return OTHER_PATIENT_ROW
+    if not real or types <= _NO_CHARGES:
+        return NO_CHARGES_ROW
+    if types <= {"VENDOR_INVOICE"} | _NO_CHARGES:
+        return VENDOR_ROW
+    return BILLING_ROW
+
+
+def _on_worksheet(sr: Any) -> dict[str, str]:
+    """{file id: its row} for each billing file the refreshed worksheet was
+    built from, read and found not to be a bill, or planned and not read."""
     ud = sr.slug_dir / "runs" / sr.unit.unit / "update"
-    if not (read_json(ud / "billing_refresh.json", {}) or {}).get("worksheet"):
-        return set()
-    return {str(r["id"]) for r in read_jsonl(sr.slug_dir / "billing" / "pulled.jsonl") if r.get("ok")}
+    rec = read_json(ud / "billing_refresh.json", {}) or {}
+    if not rec.get("worksheet"):
+        return {}
+    chunks = {
+        str(r.get("file")): list(r.get("chunks") or []) for r in read_jsonl(sr.slug_dir / "billing_extract.jsonl")
+    }
+    who = str(sr.unit.client_name).lower()
+    out: dict[str, str] = {}
+    for r in read_jsonl(sr.slug_dir / "billing" / "pulled.jsonl"):
+        if r.get("ok"):
+            out[str(r["id"])] = _finding_of(chunks.get(str(r.get("name")), []), who)
+        elif str(r["id"]) not in out:
+            from ...stages.billing_update import not_read_why
+
+            out[str(r["id"])] = f"a billing record that was not read: {not_read_why(r)}"
+    from ...stages.billing_update import TOO_LARGE, too_large
+
+    for t in read_json(sr.slug_dir / "billing" / "plan.json", []) or []:
+        if too_large(t):
+            out.setdefault(str(t.get("id")), f"a billing record that was not read: {TOO_LARGE}")
+    for x in read_json(sr.slug_dir / "billing" / "set_aside.json", []) or []:
+        out.setdefault(str(x.get("id")), f"a billing record not used for this client: {x.get('why')}")
+    return out
 
 
 __all__ = ["ADDED", "BILLING_ROW", "TEMPLATE", "build", "name", "plain", "render", "rows"]

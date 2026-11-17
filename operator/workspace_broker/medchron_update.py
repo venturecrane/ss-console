@@ -226,4 +226,23 @@ def cited_block(ledger: Any, env: dict[str, Any]) -> dict[str, Any]:
     files = delivered_files(ledger, env["matter"]["id"])
     if files:
         out["delivered_files"] = files
+    clients = matter_clients(ledger, env["matter"]["id"])
+    if clients:
+        out["matter_clients"] = clients
+    return out
+
+
+def matter_clients(ledger: Any, matter_id: str) -> list[dict[str, str]]:
+    """Every client a delivered chronology on the matter was for, by name,
+    surname and folder prefix, never a date of birth (2026-11-17). An update
+    for one client of a joint matter is a one-unit job; without the other
+    clients' folder rules its billing refresh read the other client's ledgers
+    as this client's (``jobs.stages.billing_update``)."""
+    from .medchron_identity import delivered_clients
+
+    out = []
+    for c in delivered_clients(ledger, matter_id):
+        row = {k: str(c[k]) for k in ("client_name", "surname", "folder_prefix") if c.get(k)}
+        if row.get("client_name"):
+            out.append(row)
     return out

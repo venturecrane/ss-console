@@ -51,14 +51,35 @@ from pathlib import Path
 from typing import Any
 
 from .. import budget, llm
+from ..filing import full_name
 from ..matter import pull as matter_pull
 from .base import StageRun, read_json, read_jsonl
-from .update_base import plan, update_dir
+from .update_base import update_dir
 
 IN_TOKENS_PER_PAGE = 1900
 OUT_TOKENS_PER_PAGE = 800
 EXTS = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 REFRESH = "billing_refresh.json"
+#: ``billing/not_read.json``: each planned billing record no read reached, with why
+NOT_READ = "not_read.json"
+TOO_LARGE = "too large to read (over the seat's read limit)"
+
+
+#: The Smokeball connector's read limit (``smokeball_connector.client._MAX_DOWNLOAD_BYTES``,
+#: 25 MiB): a file the listing says is larger is never asked for (2026-11-17: a
+#: 29.5 MB billing file "could not be pulled" and the run went on silently).
+READ_LIMIT_BYTES = 25 * 1024 * 1024
+
+
+def too_large(t: dict[str, Any]) -> bool:
+    size = t.get("size")
+    return isinstance(size, int) and not isinstance(size, bool) and size > READ_LIMIT_BYTES
+
+
+def not_read_why(row: dict[str, Any]) -> str:
+    """Why a planned billing record was not read, in plain words."""
+    err = str(row.get("error") or "")
+    return TOO_LARGE if "read limit" in err or too_large(row) else "it could not be pulled from the matter"
 
 
 def _dir(sr: StageRun) -> Path:
@@ -85,33 +106,50 @@ def asked(sr: StageRun) -> list[str]:
 
 
 def run_docs(sr: StageRun) -> int:
-    """``billing/plan.json``: what the worksheet is refreshed from, or [] when
-    the request names no billing record (then no billing stage does anything)."""
+    """``billing/plan.json``: what the worksheet is refreshed from, scoped to
+    this client (``medchron.billing_plan``), or [] when the request names no
+    billing record (then no billing stage does anything). The files set aside
+    are kept in ``billing/set_aside.json`` with why."""
+    from ..medchron import billing_plan as BP
+
     out = _dir(sr)
     out.mkdir(parents=True, exist_ok=True)
     named = asked(sr)
-    targets: list[dict[str, Any]] = []
+    read: list[dict[str, Any]] = []
+    aside: list[dict[str, Any]] = []
     if named:
-        pats, chron = _patterns(sr), str(plan(sr).get("folder_id") or "")
-        for d in sr.manifest():
-            name, ext = str(d.get("name") or ""), str(d.get("ext") or "").lower()
-            if d.get("deleted") or ext not in EXTS or str(d.get("folderId") or "") == chron:
-                continue
-            if _is_billing(name, pats):
-                targets.append(matter_pull.target(d))
+        template = str(
+            sr.cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
+        )
+        pats = sr.cfg.get("billing", "name_patterns") or []
+        read, aside = BP.decide(sr.manifest(), sr.folder_paths(), pats, sr.unit, sr.job.matter_clients, template)
+    by_id = {str(d.get("id")): d for d in sr.manifest()}
+    targets = [{**matter_pull.target(by_id[r["id"]]), "why": r["why"]} for r in read]
     (out / "plan.json").write_text(json.dumps(targets, indent=1), encoding="utf-8")
+    (out / "set_aside.json").write_text(json.dumps(aside, indent=1), encoding="utf-8")
     if not named:
         sr.log("update_billing_docs: the request names no billing record; the billing worksheet is not refreshed")
     else:
         sr.log(
-            f"update_billing_docs: {len(named)} named billing record(s); the worksheet is refreshed from {len(targets)}"
+            f"update_billing_docs: {len(named)} named billing record(s); the worksheet is refreshed from "
+            f"{len(targets)} of this client's billing file(s); {len(aside)} set aside"
         )
     return 0
 
 
+def patient(sr: StageRun) -> str:
+    """The patient every billing page is checked against: this client, always
+    (a one-unit update on a joint matter is not ``job.joint``)."""
+    return str(sr.unit.client_name).lower()
+
+
 def rate_usd(sr: StageRun) -> float | None:
+    return rate_for(sr.cfg)
+
+
+def rate_for(cfg: Any) -> float | None:
     """Dollars per billing page on the transcription tier, or None unpriced."""
-    model = llm.model_for(sr.cfg, "transcription")
+    model = llm.model_for(cfg, "transcription")
     tree = Path(__file__).resolve().parents[4] / "adapter" / "cost_telemetry" / "anthropic_pricing.json"
     for path in (os.environ.get(budget.PRICING_ENV), budget.PRICING_DEFAULT, str(tree)):
         try:
@@ -142,6 +180,8 @@ def todo(sr: StageRun) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     pulled = {r["id"]: r for r in read_jsonl(_dir(sr) / "pulled.jsonl") if r.get("ok") and r.get("path")}
     have, missing = [], []
     for t in read_json(_dir(sr) / "plan.json", []) or []:
+        if too_large(t):
+            continue  # never asked for: named as not read (``run_extract``)
         r = pulled.get(t["id"])
         if r is None:
             missing.append(t)
@@ -182,15 +222,21 @@ def run_extract(sr: StageRun) -> int:
     _have, missing = todo(sr)
     # The seat is opened only for a file not pulled yet: a resume (or a
     # rehearsal copy) with every file on disk touches nothing outside.
+    big = [t for t in targets if too_large(t)]
+    small = [t for t in targets if not too_large(t)]
     if missing:
-        rows = matter_pull.fetch_all(sr.seat, sr.job.matter_id, targets, _dir(sr), sr.log)
+        rows = matter_pull.fetch_all(sr.seat, sr.job.matter_id, small, _dir(sr), sr.log)
     else:
         pulled = {r["id"]: r for r in read_jsonl(_dir(sr) / "pulled.jsonl")}
-        rows = [pulled[t["id"]] for t in targets]
+        rows = [pulled[t["id"]] for t in small]
     docs = [{"id": r["id"], "name": r.get("name"), "path": r["path"]} for r in rows if r.get("ok") and r.get("path")]
-    lost = [str(r.get("name")) for r in rows if not r.get("ok")]
-    if lost:
-        sr.log(f"billing: {len(lost)} billing file(s) could not be pulled and are not on the worksheet: {lost[:5]}")
+    lost = [{"name": full_name(t), "why": TOO_LARGE} for t in big]
+    lost += [{"name": full_name(r), "why": not_read_why(r)} for r in rows if not r.get("ok")]
+    (_dir(sr) / NOT_READ).write_text(json.dumps(lost, indent=1), encoding="utf-8")
+    for x in lost:
+        sr.log(
+            f"billing: a billing record was not read ({x['why']}): {x['name'][:60]}; the worksheet and the reply name it"
+        )
     (sr.slug_dir / "billing_docs.json").write_text(json.dumps({"docs": docs}, indent=1), encoding="utf-8")
     for line in projection_lines(sr):
         sr.log(line)
@@ -208,8 +254,7 @@ def run_dos(sr: StageRun) -> int:
         return 0
     rd = sr.slug_dir / "runs" / sr.unit.unit
     md = (update_dir(sr) / "updated-chronology.md").read_text(encoding="utf-8")
-    patient = sr.unit.client_name.lower() if sr.job.joint else None
-    rep = dos_check.check(sr.slug_dir, rd, sr.job.incident_date, patient, md, Matcher(sr.cfg, sr.slug_dir).match)
+    rep = dos_check.check(sr.slug_dir, rd, sr.job.incident_date, patient(sr), md, Matcher(sr.cfg, sr.slug_dir).match)
     dos_check.write(rd, rep)
     sr.log(
         f"dos_check (update): {rep['billed_dates']} billed date(s); with no medical record on file {len(rep['billed_no_record'])}"
@@ -222,7 +267,7 @@ def run_chart(sr: StageRun) -> int:
 
     if not read_json(_dir(sr) / "plan.json", []):
         return 0
-    return billing_chart.run(sr, update_dir(sr) / "updated-chronology.md")
+    return billing_chart.run(sr, update_dir(sr) / "updated-chronology.md", patient=patient(sr))
 
 
 def worksheet(sr: StageRun) -> Path | None:
@@ -242,7 +287,11 @@ def run_docx(sr: StageRun) -> int:
         return rc
     rep = read_json(sr.slug_dir / "runs" / sr.unit.unit / "dos_report.json", {}) or {}
     ws = worksheet(sr)
-    rec = {"worksheet": ws.name if ws else None, "billed_no_record": len(rep.get("billed_no_record") or [])}
+    rec = {
+        "worksheet": ws.name if ws else None,
+        "billed_no_record": len(rep.get("billed_no_record") or []),
+        "not_read": read_json(_dir(sr) / NOT_READ, []) or [],
+    }
     (update_dir(sr) / REFRESH).write_text(json.dumps(rec, indent=1), encoding="utf-8")
     return 0
 
@@ -261,13 +310,14 @@ def reply_line(ud: Path) -> str | None:
         if n
         else "; every billed date of service is in the chronology."
     )
+    lost = [x for x in rec.get("not_read") or [] if isinstance(x, dict)]
+    if lost:
+        named = "; ".join(f"{x.get('name')} ({x.get('why')})" for x in lost[:5])
+        line += f" {len(lost)} billing record(s) could not be read and are named on the worksheet: {named}."
     sup = read_json(ud / "superseded.json", {}) or {}
     left = [x for x in sup.get("left") or [] if isinstance(x, dict)]
     if any(x.get("kind") == "worksheet" for x in left):
-        line += (
-            " The earlier worksheet was left in the folder beside the new one: it could not be confirmed as the "
-            "unchanged copy we delivered."
-        )
+        line += " The earlier billing worksheet is still in the folder; the one filed with this update is current."
     return line
 
 
