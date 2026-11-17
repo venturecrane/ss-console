@@ -30,9 +30,18 @@
     "reconcile run 43226257555 PROPOSAL lines, each item_key seen with one code.",
     "The open-house-visitor-capture recipient proposal is deliberately NOT",
     "committed: the routine replies to any rostered agent, one has been observed,",
-    "and a one-hash set would page the next agent as recipient flapping."
+    "and a one-hash set would page the next agent as recipient flapping.",
+    "",
+    "2026-11-16: the mailbox-keeper recipient committed from the reconcile run",
+    "43982547333 PROPOSAL line. It is the keeper's one authored digest_recipient",
+    "(the Captain's own address; verified as sha256('mailbox-keeper|<that",
+    "address>')), so the set is complete at one hash and any other recipient is",
+    "the flapping finding. The open-house-visitor-capture proposal in the same",
+    "run stays uncommitted, for the 2026-11-12 reason above."
   ],
-  "recipients": {},
+  "recipients": {
+    "mailbox-keeper": ["133de339865883a9f5daeb6414e9ad572195def52480686333a8e5141a908490"]
+  },
   "ack_codes": {
     "03e222184b9b692e1aaf27c0a7d0f58bf208d1dd39dc3cb2b62c579a5d616332": "ACK-DR8B8W",
     "086e6c08bc26382fa9ae85c3db649573f95cf51323579f1d73c4dbaebeb71e76": "ACK-ATF552",

@@ -414,9 +414,12 @@ def run(
     *,
     dry: bool = False,
     skill_dir: Path | None = None,
+    wake: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Plan, mark, write the envelope and the handoff. Returns the verdict:
-    ``{"wakeAgent": bool, "status": str, **counts}``, content-free."""
+    ``{"wakeAgent": bool, "status": str, **counts}``, content-free. ``wake`` as
+    ``person_digest.run``: filled with the envelope's body hashes for the wake
+    row, never the verdict."""
     moment = now if now is not None else datetime.now(timezone.utc)
     try:
         entries = load_changes(skill_dir if skill_dir is not None else product_guide_dir())
@@ -434,7 +437,8 @@ def run(
         return {"wakeAgent": False, **verdict}
     marked = [d for d in p.chunk if write_mark(d.person, p.newest, cfg)]
     stamp = moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    if not marked or not write_envelope(envelope(marked, stamp)):
+    built = envelope(marked, stamp) if marked else {}
+    if not marked or not write_envelope(built):
         for d in marked:
             write_mark(d.person, d.previous_mark, cfg)
         # Wake the turn with nothing to send: the run's EMITTED_WAKE row then
@@ -444,6 +448,7 @@ def run(
     # test runs the reply checks over every rendered entry); the handoff still
     # records the run so the out-of-turn gate reads the same shape as the digest.
     pre_run_handoff.write_handoff(SKILL, moment, [])
+    person_digest._fill_wake(wake, built)
     return {
         "wakeAgent": True,
         "dispatch_expected": True,
@@ -461,20 +466,22 @@ def pre_run(*, dry: bool = False) -> dict[str, Any]:
     from shared.customer_config import CustomerConfig
 
     slug = ""
+    stamps: list[dict] = []
     try:
         cfg = CustomerConfig.from_volume()
         slug = cfg.slug
-        verdict = run(cfg, dry=dry)
+        verdict = run(cfg, dry=dry, wake=stamps)
     except Exception as exc:  # noqa: BLE001 - the verdict says it crashed; never raised
         logger.warning("library_notice: the run crashed (%s)", type(exc).__name__)
         verdict = {"wakeAgent": not dry, "status": "pre_run_crashed"}
     if not dry:
-        _wake_row(slug, verdict)
+        _wake_row(slug, verdict, stamps)
     return verdict
 
 
-def _wake_row(slug: str, verdict: dict[str, Any]) -> bool:
-    """``person_digest.wake_row`` with this skill's name on the row."""
+def _wake_row(slug: str, verdict: dict[str, Any], stamps: list[dict] | None = None) -> bool:
+    """``person_digest.wake_row`` with this skill's name on the row, the
+    bodies' hashes included."""
     from shared import workspace_broker
 
     woke = verdict.get("wakeAgent") is True
@@ -485,6 +492,7 @@ def _wake_row(slug: str, verdict: dict[str, Any]) -> bool:
         "customer": slug,
         **counts,
         **({"render_mode": "templated"} if verdict.get("dispatch_expected") else {}),
+        **({person_digest.WAKE_STAMPS: list(stamps)} if woke and stamps else {}),
     }
     row = {
         "action_type": "EMITTED_WAKE" if woke else "SUPPRESSED_WAKE",
