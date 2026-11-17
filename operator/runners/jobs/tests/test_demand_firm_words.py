@@ -160,7 +160,7 @@ def test_a_system_term_in_the_attorney_notes_holds_the_job_and_nothing_is_filed(
         readback_pause=0.0,
         vendor_factory=lambda: None,
     ).run()
-    assert v.outcome == "failed" and v.reason.startswith("review_held:") and "smd_deliver_draft" in v.reason
+    assert v.outcome == "failed" and v.reason.startswith("review_held:") and "smd_deliver_draft" in str(v.findings)
     assert seat.sent == [] and seat.created == []
 
 

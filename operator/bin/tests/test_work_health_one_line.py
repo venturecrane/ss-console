@@ -303,6 +303,38 @@ def test_a_negotiation_job_queued_behind_a_running_demand_job_is_not_stuck():
     assert _kinds(wh.job_items(SEAT, [queued, *ended_long_ago], CFG, NOW)) == ["job_stuck"]
 
 
+def test_a_chronology_queued_behind_a_running_chronology_is_not_stuck():
+    """FALSIFIER: one request queued two chronologies; the second waited behind
+    the first in its own lane (one job at a time) and the 30 minute queue limit
+    listed it stuck while the first was well inside its run limit (2026-11-17)."""
+    first = [
+        _job("MEDCHRON", "SUBMITTED", NOW - timedelta(minutes=80), job_id="MED1"),
+        _job("MEDCHRON", "RUNNING", NOW - timedelta(minutes=79), job_id="MED1"),
+    ]
+    second = _job("MEDCHRON", "SUBMITTED", NOW - timedelta(minutes=80), job_id="MED2")
+    assert wh.job_items(SEAT, [*first, second], CFG, NOW) == []
+    # The first past its own run limit is caught, and the second is stuck too.
+    hung = [
+        _job("MEDCHRON", "SUBMITTED", NOW - timedelta(hours=14), job_id="MED1"),
+        _job("MEDCHRON", "RUNNING", NOW - timedelta(hours=13), job_id="MED1"),
+    ]
+    old_second = _job("MEDCHRON", "SUBMITTED", NOW - timedelta(hours=14), job_id="MED2")
+    assert _kinds(wh.job_items(SEAT, [*hung, old_second], CFG, NOW)) == ["job_stuck", "job_stuck"]
+    # Once the first ends (here held for review), the queue limit counts from its end.
+    held_now = [*first, _job("MEDCHRON", "HELD", NOW - timedelta(minutes=5), job_id="MED1")]
+    assert [i for i in wh.job_items(SEAT, [*held_now, second], CFG, NOW) if i.job == "MED2"] == []
+    held_long_ago = [*first, _job("MEDCHRON", "HELD", NOW - timedelta(minutes=45), job_id="MED1")]
+    late = [i for i in wh.job_items(SEAT, [*held_long_ago, second], CFG, NOW) if i.job == "MED2"]
+    assert _kinds(late) == ["job_stuck"]
+    # A sibling that ran and ended before this job was queued does not excuse it.
+    before = [
+        _job("MEDCHRON", "SUBMITTED", NOW - timedelta(hours=3), job_id="MED0"),
+        _job("MEDCHRON", "RUNNING", NOW - timedelta(hours=3), job_id="MED0"),
+        _job("MEDCHRON", "DELIVERED", NOW - timedelta(hours=2), job_id="MED0"),
+    ]
+    assert _kinds(wh.job_items(SEAT, [*before, second], CFG, NOW)) == ["job_stuck"]
+
+
 def test_a_lane_that_does_not_wait_for_another_is_still_held_to_its_queue_limit():
     queued = _job("DRAFTING", "SUBMITTED", NOW - timedelta(minutes=40), job_id="DRF1")
     demand = [_job("DEMAND", "RUNNING", NOW - timedelta(minutes=30), job_id="DEM1")]

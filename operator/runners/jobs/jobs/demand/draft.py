@@ -308,7 +308,11 @@ class Drafter:
                 self.brief,
                 "THE FREE BILL RECONCILIATION (mechanical, by code; cite it as 'the bill reconciliation', and only "
                 "for its own rows):\n" + json.dumps(free, indent=1),
-                "THE RECORD DIGEST:\n\n" + digest,
+                # Headed as the firm names it: a block headed "THE RECORD DIGEST"
+                # taught the auditor the word, and on 2026-11-06 five "digest"
+                # phrases reached the firm's gap audit and the review held it.
+                "THE RECORD:\n\n" + digest,
+                FIRM_READS,
                 gapaudit.CONTRACT,
             ]
         )
@@ -320,7 +324,10 @@ class Drafter:
             self.workers,
             self.log,
         )
-        text = auditor.run(system, free, digest)
+        # The firm's words before the list is kept, so the cached file a
+        # resume or a redo reads is already clean (``gapaudit.firm_words``;
+        # the filing applies it once more, for lists cached before this).
+        text = gapaudit.firm_words(auditor.run(system, free, digest))
         self._commit("gap-audit.md", text)
         return text
 
@@ -367,7 +374,7 @@ class Drafter:
             + "\n\n---\n\n## THE MATTER RECORD (a valid source; the request itself is NOT one: a fact, name, "
             "date or figure that rests only on the requester's email is INVENTED)\n\n"
             + self.fields
-            + "\n\n---\n\n## THE RECORD DIGEST\n\n"
+            + "\n\n---\n\n## THE RECORD\n\n"
             + digest
         )
         secs = auditable(sections(draft))

@@ -329,3 +329,41 @@ def test_cents_used_is_the_pacific_calendar_month(seat) -> None:
     assert verbs._cents_this_month(b, november) == ("2026-11", 0)
     this_month = datetime.now(timezone.utc).astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
     assert call(broker, "demand_allowance", uid=0)["cents_month"] == this_month
+
+
+def test_a_review_holds_every_finding_reaches_the_audit_row_and_the_reason_stays_one_line(seat) -> None:
+    """2026-11-07: the ledger keeps 500 characters of a reason, and a hold with
+    five must-fix findings showed work health one and a half of them. The
+    runner now sends a one-line reason and every finding beside it; the row
+    never stores the findings, the transition's audit row carries all of them."""
+    broker, db, *_ = seat
+    job = submit(broker)["job_id"]
+    call(broker, "demand_job_record", uid=0, job_id=job, state="running", fields={})
+    findings = [
+        {"code": f"{n} invented check", "finding": f"finding {n}: " + "x" * 400, "cite": f"p. {n}", "by": "model"}
+        for n in range(1, 6)
+    ]
+    summary = "review_held: the pre-delivery review found 5 must-fix finding(s) (invented check x5); nothing was filed"
+    out = call(
+        broker,
+        "demand_job_record",
+        uid=0,
+        job_id=job,
+        state="failed",
+        fields={"reason": summary, "cents": 100, "findings": findings},
+    )
+    assert out["job"]["reason"] == summary
+    conn = sqlite3.connect(db)
+    try:
+        row = conn.execute("SELECT reason FROM demand_jobs WHERE id=?", (job,)).fetchone()
+        meta = json.loads(
+            conn.execute(
+                "SELECT metadata FROM audit_log WHERE action_type='DEMAND_JOB_FAILED' ORDER BY rowid DESC"
+            ).fetchone()[0]
+        )
+    finally:
+        conn.close()
+    assert row[0] == summary and "finding 5" not in row[0]
+    assert [f["code"] for f in meta["findings"]] == [f["code"] for f in findings]
+    assert meta["findings"][4]["finding"] == findings[4]["finding"]  # whole, not cut at 500
+    assert meta["reason"] == summary

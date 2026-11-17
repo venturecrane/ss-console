@@ -167,7 +167,7 @@ def test_system_vocabulary_in_the_letter_holds_before_anything_is_filed(tmp_path
     )
     seat = seat_with(standard_docs())
     _r, v = _run(tmp_path, pricing, seat, ScriptedClient(draft=planted))
-    assert v.outcome == "failed" and v.reason.startswith("review_held:") and "the pipeline" in v.reason
+    assert v.outcome == "failed" and v.reason.startswith("review_held:") and "pipeline" in str(v.findings)
     assert seat.sent == [] and seat.created == []
 
 
