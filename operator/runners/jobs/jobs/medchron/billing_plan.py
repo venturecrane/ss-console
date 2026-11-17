@@ -66,11 +66,28 @@ def chronology_folders(listing: list[dict[str, Any]], template: str) -> set[str]
     return {str(d.get("folderId")) for d in listing if d.get("folderId") and pat.match(str(d.get("name") or ""))}
 
 
-def _route(path: str, name: str, unit: Any, others: list[dict[str, str]]) -> str | None:
+def prefix_of(raw: str | None, tops: list[str]) -> str | None:
+    """A unit's ``folder_prefix`` as the folder paths carry it: one leading
+    slash, matched to the real top-level folder ignoring case and punctuation
+    (``decision_rules.resolve_prefix``, the one ``decisions.selection`` uses).
+    2026-11-17: the envelope carries the bare folder name and every folder path
+    starts with "/", so an unnormalised prefix routed nothing."""
+    if not raw or not str(raw).strip("/"):
+        return None
+    from .decision_rules import resolve_prefix
+
+    return resolve_prefix(str(raw), tops) or f"/{str(raw).strip('/')}"
+
+
+def _under(path: str, prefix: str | None) -> bool:
+    return bool(prefix) and (path == prefix or path.startswith(f"{prefix}/"))
+
+
+def _route(path: str, name: str, unit: Any, others: list[dict[str, str]], tops: list[str]) -> str | None:
     """OWN, OTHER_CLIENT or None (no rule routes it)."""
-    if unit.folder_prefix and path.startswith(unit.folder_prefix):
+    if _under(path, prefix_of(unit.folder_prefix, tops)):
         return OWN
-    if any(o.get("folder_prefix") and path.startswith(str(o["folder_prefix"])) for o in others):
+    if any(_under(path, prefix_of(o.get("folder_prefix"), tops)) for o in others):
         return OTHER_CLIENT
     if _token(unit.name_token or unit.surname, name):
         return OWN
@@ -92,6 +109,7 @@ def decide(
     me = {str(unit.client_name).lower(), str(unit.surname).lower()}
     others = [o for o in others if str(o.get("client_name") or "").lower() not in me]
     chron = chronology_folders(listing, chronology_template)
+    tops = sorted({p.strip("/").split("/", 1)[0] for p in folder_paths.values() if p.strip("/")})
     read, aside = [], []
     for d in listing:
         name, ext = str(d.get("name") or ""), str(d.get("ext") or "").lower()
@@ -102,7 +120,7 @@ def decide(
         if fid in chron:
             aside.append({**row, "why": IN_CHRONOLOGY})
             continue
-        route = _route(folder, name, unit, others)
+        route = _route(folder, name, unit, others, tops)
         if route == OTHER_CLIENT:
             aside.append({**row, "why": OTHER_CLIENT})
         else:

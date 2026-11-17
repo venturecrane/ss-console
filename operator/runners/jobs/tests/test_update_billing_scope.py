@@ -25,7 +25,11 @@ from test_update_billing_refresh import BILL, _scene as _billing_scene
 from test_update_e2e import MEDICAL, _driver, _Model, _text, _upload_pause, scene  # noqa: F401 - scene is a pytest fixture the tests request by name
 
 OTHER_DIR, SHARED_DIR, OTHER_CHRON = "fold-gamma", "fold-shared", "fold-gamma-chron"
-OTHER = {"client_name": "Gamma Other", "surname": "Other", "folder_prefix": "/Gamma Other"}
+OTHER = {
+    "client_name": "Gamma Other",
+    "surname": "Other",
+    "folder_prefix": "Gamma Other",
+}  # bare, as the envelope carries it
 SHARED_BILL = {**BILL, "patient": "Gamma Other", "provider": "Shared Clinic", "line_items": [
     {"date": "04/04/2026", "description": "office visit", "charge": "$90.00", "page": 1}
 ]}  # fmt: skip
@@ -119,12 +123,59 @@ def test_billing_files_route_as_a_joint_matters_files_do(folder: str, name: str,
         listing,
         {"d1": folder},
         [r"(?i)ledger|statement"],
-        _unit(folder_prefix="/Alpha Example"),
+        _unit(folder_prefix="Alpha Example"),
         [OTHER],
         "{CLIENT} - Medical Chronology {MM-DD-YY}.docx",
     )
     got = (read or aside)[0]["why"]
     assert got == want
+
+
+#: Two clients' folders on one matter, every path with its leading slash, as folders.json carries them.
+FOLDERS = {"a": "/ALPHA EXAMPLE/MEDICAL", "g": "/Gamma Other/Billing", "s": "/SHARED"}
+LISTING = [
+    {"id": "a1", "name": "Clinic Ledger", "ext": ".pdf", "folderId": "a", "size": 10},
+    {"id": "g1", "name": "Clinic Ledger", "ext": ".pdf", "folderId": "g", "size": 10},
+    {"id": "s1", "name": "Clinic Statement", "ext": ".pdf", "folderId": "s", "size": 10},
+]
+
+
+@pytest.mark.parametrize(
+    ("me", "them", "read_ids", "aside_ids"),
+    [
+        # Prefixes arrive bare, as the real envelope and the broker's matter_clients carry them,
+        # and in another case and punctuation than the folder ("Alpha_Example" for "ALPHA EXAMPLE").
+        (
+            {"client_name": "Alpha Example", "surname": "Example", "folder_prefix": "Alpha_Example"},
+            {"client_name": "Gamma Other", "surname": "Other", "folder_prefix": "Gamma Other"},
+            ["a1", "s1"],
+            ["g1"],
+        ),
+        (
+            {"client_name": "Gamma Other", "surname": "Other", "folder_prefix": "Gamma Other"},
+            {"client_name": "Alpha Example", "surname": "Example", "folder_prefix": "Alpha_Example"},
+            ["g1", "s1"],
+            ["a1"],
+        ),
+    ],
+)
+def test_unslashed_prefixes_route_both_clients_files(me, them, read_ids, aside_ids) -> None:
+    unit = _unit(
+        client_name=me["client_name"],
+        surname=me["surname"],
+        name_token=me["surname"],
+        folder_prefix=me["folder_prefix"],
+    )
+    read, aside = BP.decide(
+        LISTING, FOLDERS, [r"(?i)ledger|statement"], unit, [them], "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
+    )
+    assert sorted(r["id"] for r in read) == read_ids and [r["id"] for r in aside] == aside_ids
+    assert {r["id"]: r["why"] for r in read}[read_ids[0]] == BP.OWN
+
+
+def test_a_prefix_names_a_whole_folder_never_a_longer_one() -> None:
+    assert BP.prefix_of("Alpha", ["Alpha", "Alpha Example"]) == "/Alpha"
+    assert BP._under("/Alpha/MEDICAL", "/Alpha") and not BP._under("/Alpha Example/MEDICAL", "/Alpha")
 
 
 def test_a_file_in_any_delivered_chronology_folder_is_never_a_billing_source() -> None:
