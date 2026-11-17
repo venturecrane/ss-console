@@ -175,19 +175,49 @@ def _backend() -> Any:
     )
 
 
-def _turn_message_id() -> str:
+def _session(kwargs: dict[str, Any]) -> str | None:
+    """The session id Hermes passed this tool call, or None.
+
+    THE DEFECT (A&P, 2026-11-17 10:50 MST). These handlers used to drop their
+    kwargs, so the anchor lookup ran with no session and fell back to the
+    process-wide guess. Two of the firm's emails arrived 40 seconds apart, two
+    sessions were live, the guess is refused as ambiguous by design, and the
+    turn got "message_id is required". It read that as "no attachment" and told
+    the firm her 21-page scanned post carried nothing. The send tool has always
+    keyed on this id (``hermes-smd-trust._tool_send_fence``); these now do too.
+    """
+    raw = kwargs.get("session_id")
+    return raw if isinstance(raw, str) and raw else None
+
+
+def _turn_message_id(session_id: str | None = None) -> str:
     """The id of the email THIS turn is answering, or "" (a wake, a cron, no email).
 
     Read from the platform's own record of the turn (``send_anchor``), never
     from the model, so it is the one id a turn cannot mis-copy.
     """
     try:
-        anchor = send_anchor.message_origin()
+        anchor = send_anchor.message_origin(session_id)
     except Exception:  # noqa: BLE001 - no anchor is no default, never a crash
         return ""
     if not anchor:
         return ""
     return str(anchor.get("graph_message_id") or anchor.get("message_id") or "").strip()
+
+
+#: What a call that cannot tell which email it is about says. Worded so no
+#: reader can take it for "the email has no attachments": that reading is the
+#: 2026-11-17 defect, where a false "nothing attached" reached the firm.
+UNRESOLVED_MESSAGE = (
+    "ATTACHMENTS NOT CHECKED: the platform could not tell which email this turn "
+    "is answering, so nothing was looked up. This is NOT a finding that the email "
+    "has no attachments, and it must not be reported as one. Call this tool again "
+    "with message_id set to the id of the email you read."
+)
+
+
+class UnresolvedMessage(RuntimeError):
+    """No message id was given and the turn's own email could not be resolved."""
 
 
 def _is_mangled_copy(given: str, own: str) -> bool:
@@ -209,7 +239,9 @@ def _is_mangled_copy(given: str, own: str) -> bool:
     return all(ch in rest for ch in given)
 
 
-def _message_id(args: dict[str, Any], *, own_mailbox: bool = True) -> str:
+def _message_id(
+    args: dict[str, Any], *, own_mailbox: bool = True, session_id: str | None = None
+) -> str:
     """The message the call is about: as given, defaulted, or repaired.
 
     Empty means this turn's own email. A mangled copy of this turn's own id is
@@ -220,8 +252,10 @@ def _message_id(args: dict[str, Any], *, own_mailbox: bool = True) -> str:
     given = str(args.get("message_id") or "").strip()
     if not own_mailbox:
         return given
-    own = _turn_message_id()
+    own = _turn_message_id(session_id)
     if not given:
+        if not own:
+            raise UnresolvedMessage(UNRESOLVED_MESSAGE)
         return own
     if given != own and _is_mangled_copy(given, own):
         logger.warning(
@@ -234,8 +268,8 @@ def _message_id(args: dict[str, Any], *, own_mailbox: bool = True) -> str:
     return given
 
 
-def _list_handler(args: dict[str, Any], **_: Any) -> str:
-    found = _backend().list_attachments(_message_id(args))
+def _list_handler(args: dict[str, Any], **kwargs: Any) -> str:
+    found = _backend().list_attachments(_message_id(args, session_id=_session(kwargs)))
     return json.dumps({"attachments": found, "count": len(found)}, ensure_ascii=False)
 
 
@@ -252,10 +286,10 @@ _OVER_SIZE_REFUSAL = {
 }
 
 
-def _spool_handler(args: dict[str, Any], **_: Any) -> str:
+def _spool_handler(args: dict[str, Any], **kwargs: Any) -> str:
     try:
         receipt = _backend().spool_attachment(
-            _message_id(args),
+            _message_id(args, session_id=_session(kwargs)),
             str(args.get("attachment_id") or ""),
         )
     except attachment_spool.SpoolOverSizeError:
@@ -263,7 +297,7 @@ def _spool_handler(args: dict[str, Any], **_: Any) -> str:
     return json.dumps(receipt, ensure_ascii=False)
 
 
-def _spool_message_handler(args: dict[str, Any], **_: Any) -> str:
+def _spool_message_handler(args: dict[str, Any], **kwargs: Any) -> str:
     backend = _backend()
     spool = getattr(backend, "spool_message", None)
     if spool is None:
@@ -272,7 +306,10 @@ def _spool_message_handler(args: dict[str, Any], **_: Any) -> str:
         )
     try:
         mailbox = args.get("mailbox") or None
-        receipt = spool(_message_id(args, own_mailbox=mailbox is None), mailbox)
+        receipt = spool(
+            _message_id(args, own_mailbox=mailbox is None, session_id=_session(kwargs)),
+            mailbox,
+        )
     except attachment_spool.SpoolOverSizeError:
         return json.dumps(_OVER_SIZE_REFUSAL, ensure_ascii=False)
     return json.dumps(receipt, ensure_ascii=False)
