@@ -166,6 +166,285 @@
       "subject": "Mailbox: 10 waiting on you",
       "reported_in": 4070,
       "why": "The second of two morning lists 20 seconds apart, sent by a second Machine back from a host failure on its own volume (vol_vxmexkyoydog36z4, now pending_destroy). That Machine wrote its CONFIRM_SEND_DISPATCHED row to its own ledger, which the runtime-read seam does not reach; the first list (13:48:31Z) is matched exact on the surviving Machine's row. The duplicate itself is fixed by #4056 (one list per day across machines, checked against AgentMail's sent listing; seat-readiness fails on two started machines)."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160DCC2BAAFFDEE334A150897CE2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-07-25T04:24:31Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160926A9954168FF5F0521E97CE2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-07-25T04:24:37Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160B80BE0976C3CE868A2ED97CE2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-07-25T04:46:32Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71604701D35355A45972E41997DC2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-08-12T21:47:33Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB716085FE46952D949CA1495597832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T14:28:15Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71606D9C0CD0FF0E0B0307CB97832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T15:31:15Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160D94BDCB748E7E11E296897832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T16:50:24Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160212AB522D86C2D7E26DB97832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T16:52:51Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160378924E6C40BF68016B197832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T17:52:08Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71604127DAEEF5821CCA5A1597832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T17:52:14Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160D907C4B1A9E0FCE920A897832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T17:55:20Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160F6B56A9A98836F552F3597832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T17:57:27Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71608259703D93C965E590CF97832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T19:44:56Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160282997964CF70627B1E897832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T19:45:04Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB716098F3FB82EF5EA6095F0A97832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T19:47:27Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71605419CD71D92AE222139D97832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T19:47:33Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71602EACDF0B0A1FF53F3FE397832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T19:50:01Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160CCD1859891291AA3ACEA97832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T19:50:11Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160832611064C14ED390FDF97832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T23:15:31Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160180C6D65CA561496458697832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T23:26:52Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71601BE7DB3C6D30138228D597832@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-22T23:26:54Z",
+      "to": "SMD's own (smdopslab.onmicrosoft.com)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<SJ0PR03MB7149ED0A5E276A7FEBE53FAB97802@SJ0PR03MB7149.namprd03.prod.outlook.com>",
+      "timestamp": "2026-09-25T19:53:44Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB716097300024BC5EB9356ECE979E2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-13T18:16:26Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB716064B775366C5258CC317B979E2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-13T18:20:56Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160E56348D9CBB6A6D681D3979E2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-13T18:46:31Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160283DBB3E531B1E492064979E2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-13T18:46:36Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160990AD33E00E5ED2C4201979B2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-16T00:02:42Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB7160D59F7C20E603EB6E0E17979B2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-16T00:53:09Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<PH0PR03MB71606E5F001ECB9A0E2F5116979B2@PH0PR03MB7160.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-16T00:53:44Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<SJ0PR03MB7149A1CB885960269A804B3A979B2@SJ0PR03MB7149.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-16T16:13:53Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
+    },
+    {
+      "inbox": "operator@smdopslab.onmicrosoft.com",
+      "channel": "msgraph",
+      "message_id": "<SJ0PR03MB7149F57CEB1795BA58A7BAB7976F2@SJ0PR03MB7149.namprd03.prod.outlook.com>",
+      "timestamp": "2026-10-28T16:39:22Z",
+      "to": "SMD's own (smd.services)",
+      "reported_in": 3990,
+      "why": "Sent from the smdopslab lab mailbox while it belonged to smd-staging, before ap-staging existed (ap-staging's audit ledger begins 2026-11-10T19:27Z). Audited on smd-staging's own ledger: on run 42823542717 (2026-11-10) all 31 of this mailbox's then-unbaselined sends matched (exact=27, broker=4, unaccounted=0). smd-staging was decommissioned 2026-11-11 and ap-staging took the mailbox, so the runtime-read seam now reads a ledger that never held these rows; smd-staging's export is kept in the object-locked audit archive (audit/smd-staging/). Recipients are SMD's own: smd.services and the smdopslab test tenant."
     }
   ],
   "verify_dispositioned_what": "Reviewed dispositions for body-verify and invariant FINDINGS (operator/bin/lib/send_dispositions.py, ss#3030). Keyed narrowly: body = (seat, skill_name, dispatch_ts, actual_sha256); invariant = (seat, rule, hashed_key, actual). An entry without an int reported_in and a non-empty why is ignored, so it over-reports. A dispositioned finding is still printed, indented, with its issue.",
