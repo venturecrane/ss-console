@@ -25,7 +25,7 @@ from jobs.medchron import update_decide as UD
 from jobs.medchron.audit import claims as CL, coverage as audit_coverage
 from jobs.medchron.audit.run import AuditPaths
 from jobs.resume import MARKER_PREFIX
-from jobs.stages import update_review as UR
+from jobs.stages import update_review as UR, update_review_settle as URS
 from jobs.medchron.update import review_repair as RR, values as V
 
 JOB = "01M64DBE623E4VXNS2DEBD7YG2"
@@ -173,8 +173,6 @@ def test_hold_prefix_is_the_update_review_stage_hold() -> None:
     src = (Path(UD.__file__).parent / "dag_update.py").read_text(encoding="utf-8")
     stage = src[src.index('        "update_review",\n') :]
     assert f'"{UD.HOLD_PREFIX} ' in stage[: stage.index("    Stage(")]
-    from jobs.stages import update_review_settle as URS
-
     assert URS.hold_line([]).startswith(UD.HOLD_PREFIX)
 
 
@@ -185,3 +183,128 @@ def test_a_value_the_correction_takes_out_is_named_for_proof_10(tmp_path, job_di
     UD.apply(d, _plan(d, corrections=[{"old": WRONG, "new": fixed}]))
     rec = json.loads((sd / "runs" / "alpha" / "update" / UD.RECORD).read_text())
     assert set(V.lost(WRONG, fixed)) <= RR.named_values(rec)
+
+
+# ---- closures: the reviewer was wrong (2026-11-16) -------------------------------------
+# A class 2 "omitted content" finding whose content is already composed in
+# another entry: SMD closes it, no text changes, the attorney sees one NOTE.
+MISSED = RR.Finding("MUST", "2 omitted content", "N1", 3, 1, "the lumbar flexion is omitted", "add", "", "")
+MISSED2 = RR.Finding("MUST", "2 omitted content", "N2.c1", 3, 2, "the plan is omitted", "add", "", "")
+TO_N2 = {"anchor": "N1", "exhibit": 3, "page": 1, "composed_in": {"added": "N2"}, "why": "in the therapy entry"}
+#: the delivered entry's date line and heading line together: once in the delivered chronology
+POST_HEAD = "01/20/2026\nExample Clinic | Medical Diagnoses"
+TO_BASE = {"anchor": "N2", "exhibit": "3", "page": "2", "composed_in": {"delivered": POST_HEAD}, "why": "copy"}
+
+
+def _closures_seat(tmp_path, job_dir, data_root, findings=(MISSED,)):
+    return _seat(tmp_path, job_dir, data_root, open_=[f.as_dict() for f in findings])
+
+
+def _decide(tmp_path: Path, body: dict[str, Any]) -> Path:
+    staged = tmp_path / "decisions.json"
+    staged.write_text(json.dumps(body))
+    return staged
+
+
+def test_closures_only_close_the_hold_without_touching_the_document(tmp_path, job_dir, data_root) -> None:
+    d, sd, paths = _closures_seat(tmp_path, job_dir, data_root)
+    doc_before, rows_before = paths.doc.read_text(), paths.results.read_text()
+    side_before = (sd / "runs" / "alpha" / "entries_scoped_final.md").read_text()
+    staged = _decide(tmp_path, {"closures": [TO_N2]})
+    corrections, closures = UD.load_decisions(staged)
+    assert corrections == []
+    UD.apply(d, _plan(d, corrections=corrections, closures=closures), staged)
+    assert not staged.exists()
+    assert paths.doc.read_text() == doc_before and paths.results.read_text() == rows_before
+    assert (sd / "runs" / "alpha" / "entries_scoped_final.md").read_text() == side_before
+    rec = json.loads((sd / "runs" / "alpha" / "update" / UD.RECORD).read_text())
+    assert rec["status"] == "clean" and rec["open"] == [] and rec["doc_sha_out"] == UD._sha(doc_before)
+    (done,) = rec["rounds"][-1]["findings"]
+    assert done["outcome"] == UD.CLOSED and done["closure"]["composed_in"] == {"added": "N2"}
+    assert done["closure"]["by"] == "scott@smd.services" and done["closure"]["source"] == "vfy_x"
+    assert RR.named_values(rec) == set()  # proof 10: a closure names no value
+    notes = URS.notes(sd / "out" / "alpha")
+    assert notes[1] == f"## {URS.NOTES_HEADING}"
+    assert notes[3] == (
+        "- NOTE: the review asked for content from Exhibit 3 p. 1; it is already in the entry for "
+        "09/10/2026, Sample Therapy | All Other Information"
+    )
+    assert "—" not in "".join(notes)
+    marker = json.loads((d.queue / f"{MARKER_PREFIX}{JOB}.json").read_text())
+    assert marker["redo"] == [] and "closed by SMD" in marker["reason"]
+    assert resume.take_requests(d) == [JOB]
+
+
+def test_the_resumed_update_review_finds_a_closed_record_settled(tmp_path, job_dir, data_root) -> None:
+    d, sd, paths = _closures_seat(tmp_path, job_dir, data_root)
+    UD.apply(d, _plan(d, corrections=[], closures=[UD._closure(0, TO_N2)]))
+    rec = json.loads((sd / "runs" / "alpha" / "update" / UD.RECORD).read_text())
+    logged: list[str] = []
+    sr = SimpleNamespace(slug_dir=sd, unit=SimpleNamespace(unit="alpha"), log=logged.append)
+    assert UR._reuse(sr, rec, paths.doc.read_text()) == 0 and "closed" in logged[0]  # type: ignore[arg-type]
+    assert UR.projected_usd(sd, "alpha", None, None) == 0.0
+
+
+def test_corrections_and_closures_together(tmp_path, job_dir, data_root) -> None:
+    f1 = RR.Finding("MUST", "2 wrong time", "N1.c1", 2, 4, "backwards", "fix", "", "")
+    d, sd, paths = _closures_seat(tmp_path, job_dir, data_root, (f1, MISSED2))
+    staged = _decide(tmp_path, {"corrections": [{"old": WRONG, "new": RIGHT}], "closures": [TO_BASE]})
+    corrections, closures = UD.load_decisions(staged)
+    UD.apply(d, _plan(d, corrections=corrections, closures=closures), staged)
+    assert RIGHT in paths.doc.read_text()
+    rec = json.loads((sd / "runs" / "alpha" / "update" / UD.RECORD).read_text())
+    outcomes = [f["outcome"] for f in rec["rounds"][-1]["findings"]]
+    assert outcomes == ["applied", UD.CLOSED] and rec["status"] == "clean"
+    assert RR.named_values(rec) == set(V.lost(WRONG, RIGHT))
+    assert "the delivered entry for 01/20/2026 Example Clinic | Medical Diagnoses" in URS.notes(sd / "out" / "alpha")[3]
+
+
+def test_the_alias_and_the_old_flag_take_the_decisions_file(tmp_path, job_dir, data_root, monkeypatch) -> None:
+    d, _sd, _paths = _closures_seat(tmp_path, job_dir, data_root)
+    from jobs.medchron import lane as lane_mod
+
+    monkeypatch.setattr(lane_mod, "build", lambda: d)
+    staged = _decide(tmp_path, {"closures": [TO_N2]})
+    argv = [JOB, "--decisions", str(staged), "--by", "scott@smd.services", "--source", "vfy_x", "--reason", "r"]
+    assert UD.main([*argv, "--dry-run"]) == 0 and staged.exists()
+    assert not (d.queue / f"{MARKER_PREFIX}{JOB}.json").exists()
+    assert UD.main(["--corrections" if a == "--decisions" else a for a in argv]) == 0
+    assert not staged.exists() and (d.queue / f"{MARKER_PREFIX}{JOB}.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("closures", "findings", "needle"),
+    [
+        ([{**TO_N2, "page": 9}], (MISSED,), "matches 0 open findings"),
+        ([TO_N2, TO_N2], (MISSED,), "close the same open finding"),
+        ([{**TO_N2, "composed_in": {"added": "N9"}}], (MISSED,), "not an added entry"),
+        ([{**TO_N2, "composed_in": {"added": "N2.c1"}}], (MISSED,), "not an added entry"),
+        ([{**TO_N2, "composed_in": {"delivered": "03/03/2026"}}], (MISSED,), "delivered chronology does not hold"),
+        ([{**TO_N2, "composed_in": {"delivered": "Example Clinic"}}], (MISSED,), "with its date"),
+        # A bare date two delivered entries (or an entry and a table row) share names no ONE entry.
+        ([{**TO_N2, "composed_in": {"delivered": "01/20/2026"}}], (MISSED,), "occurs 3 times in the delivered"),
+        ([{**TO_N2, "composed_in": {"delivered": "12/01/2025"}}], (MISSED,), "give the date line and the heading"),
+        ([TO_N2], (MISSED, MISSED2), "no correction touches or closure closes: entry N2.c1"),
+    ],
+)
+def test_closures_refuse_what_they_cannot_close(tmp_path, job_dir, data_root, closures, findings, needle) -> None:
+    d, _sd, paths = _closures_seat(tmp_path, job_dir, data_root, findings)
+    before = paths.doc.read_text()
+    with pytest.raises(UD.Refused, match=needle):
+        _plan(d, corrections=[], closures=[UD._closure(i, c) for i, c in enumerate(closures)])
+    assert paths.doc.read_text() == before and not (d.queue / f"{MARKER_PREFIX}{JOB}.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("body", "needle"),
+    [
+        ({"closures": [{**TO_N2, "composed_in": ""}]}, "composed_in must be"),
+        ({"closures": [{**TO_N2, "composed_in": {"added": "N2", "delivered": "x"}}]}, "composed_in must be"),
+        ({"closures": [{**TO_N2, "why": " "}]}, "why is required"),
+        ({"closures": [{**TO_N2, "page": None}]}, "must name the open finding"),
+        ({"corrections": [], "closures": []}, "no corrections and no closures"),
+    ],
+)
+def test_a_malformed_decisions_file_is_refused(tmp_path, body, needle) -> None:
+    with pytest.raises(UD.Refused, match=needle):
+        UD.load_decisions(_decide(tmp_path, body))

@@ -190,6 +190,53 @@ def probe_before_spend(drv: Any, stage: dag.Stage, ctx: dag.Ctx, notes: list[str
         drv.log(f"[before-spend] {line}")
 
 
+#: Paid stages a rehearsal may RUN when their projection is exactly 0.0: the
+#: projection is 0.0 only when the stage reuses what it already settled.
+#: ``update_review``: a record that is clean on this document (``_reuse``), as
+#: ``update_decide`` leaves it (2026-11-16, so the stages behind a decided
+#: hold can be rehearsed). The model and the seat stay refused either way
+#: (``Driver._sdk_client`` / ``_open_seat`` raise in rehearse mode), so a stage
+#: that would have called one fails in the copy instead of spending.
+SETTLED_RUNNABLE = frozenset({"update_review"})
+
+
+def runs_in_copy(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[str]) -> bool:
+    """True when a rehearsal runs this stage in the copy; False when the walk
+    stops at it: every external stage, and every paid stage but a settled one."""
+    if not stage.paid and not stage.external:
+        return True
+    if stage.external or stage.name not in SETTLED_RUNNABLE:
+        return False
+    if drv._projection(stage, ctx, extracted) != 0.0:
+        return False
+    notes.append(f"rehearse {stage.name}: settled on this document (projected 0.00 USD); run in the copy")
+    return True
+
+
+def review_code_lines(sr: Any) -> list[str]:
+    """The pre-delivery review's CODE checks on the copy's package, settled by
+    the update's $0 rules (``review_policy.settle`` with no document: wording,
+    then ``flag_residual``), with no model call. What the model would add is
+    not known here; a code MUST-FIX left is a hold the paid review cannot
+    avoid. A check that cannot run is a line, never a crash."""
+    from ..proof import review as PR
+    from ..stages import review as RV, review_policy
+
+    try:
+        out, rd = sr.slug_dir / "out" / sr.unit.unit, sr.slug_dir / "runs" / sr.unit.unit
+        manifest = json.loads((out / "upload_manifest.json").read_text(encoding="utf-8"))
+        rows = [m for m in manifest if RV._NOTES_TAG not in m["name"]]
+        if not rows:
+            return ["code checks FAIL: the upload manifest is empty (the review exits 1)"]
+        found = review_policy.settle(sr, None, RV._code(sr, rd, rows, None)[0], repair=False).findings
+    except Exception as exc:  # noqa: BLE001 - an observer reports, never ends the walk
+        return [f"code checks could not run: {type(exc).__name__}: {str(exc)[:160]}"]
+    musts = [f for f in found if f.grade == PR.MUST]
+    head = "FAIL, would hold" if musts else "pass"
+    lines = [f"code checks {head}: {len(musts)} must-fix, {len(found) - len(musts)} other (no model call made)"]
+    return lines + [f"  {f.grade} {f.check}: {f.finding[:160]} ({f.cite})" for f in found]
+
+
 def stop(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[str]) -> Any:
     """A paid or external stage that is not done ends the walk. Before it
     does: the limits are probed (a note, never a hold), the projection is
@@ -210,7 +257,11 @@ def stop(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[
         money = "would write to the firm's matter" if stage.name == "upload" else "would touch the seat or network"
     notes.append(f"rehearse {stage.name}: STOP {kind}, not done ({money})")
     sr = drv._stage_run(ctx.unit, lambda _m: None)
-    for s in dag.stages_from(stage.name):
+    if stage.name == "review":
+        notes.extend(f"rehearse review: {line}" for line in review_code_lines(sr))
+    # An update walks the update's own stages (2026-11-16: the full DAG's
+    # order has no update_review, so an update rehearsal raised KeyError here).
+    for s in dag.stages_from(stage.name, update=drv.job.update is not None):
         if s.rehearse is not None:
             notes.extend(probe_lines(sr, s))
     pages = budget_mod.pages_read(extracted)
@@ -227,9 +278,17 @@ def summary(drv: Any, ctx: dag.Ctx, out: Any) -> Any:
     and must carry none (limits.py)."""
     ext = drv.slug_dir / "extracted.jsonl"
     where = f"stopped at {out.stage} ({out.outcome})" if out.stage else "walk complete: every stage done or $0"
+    if out.stage and out.outcome != "rehearsed":  # a stage that ran in the copy and did not pass
+        from .state import RunState
+
+        st = RunState.load_or_new(
+            drv.slug_dir / "runs" / ctx.unit.unit / "state.json", slug=drv.job.slug, unit=ctx.unit.unit
+        )
+        rec = st.stages.get(out.stage)
+        where += f", exit {rec.exit_code if rec is not None else 'none'}: {out.reason}"
     projected: list[str] = []
     unprojected: list[str] = []
-    for s in dag.STAGES:
+    for s in dag.stages(drv.job.update is not None):
         if not s.paid:
             continue
         p = drv._projection(s, ctx, ext)
