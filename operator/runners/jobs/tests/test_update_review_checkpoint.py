@@ -96,14 +96,28 @@ def _scene(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entries: list[str]) 
     return sr, doc
 
 
-def _go(sr: SimpleNamespace) -> int:
+def _go(sr: SimpleNamespace, reverted: list[str] | None = None) -> int:
+    """The stage, whose audit grades every finisher sentence SUPPORTED except,
+    on its FIRST grading, the sentences `reverted` names (the finisher and the
+    audit disagree about the page: what the narrow re-check settles)."""
+    first = list(reverted or [])
+
+    def verify(_before: str, after: str) -> list[dict[str, Any]]:
+        bad = [{"claim": c} for c in first if c in after]
+        first.clear()
+        return bad
+
     return UR.run(
         sr,  # type: ignore[arg-type]
         images=lambda ex, p: {"type": "image", "page": f"{ex}:{p}"} if p <= 3 else None,
         evidence=lambda _e, _p: None,
-        verify=lambda _a, _b: [],
+        verify=verify,
         npages=lambda _x: 3,
     )
+
+
+def _all_fixes(*fixes: dict[str, Any]) -> str:
+    return _reply("edits", [{**f, "finding": f"F{i}"} for i, f in enumerate(fixes, 1)])
 
 
 def test_a_review_killed_in_the_recheck_resumes_there_without_paying_round_one(
@@ -112,12 +126,13 @@ def test_a_review_killed_in_the_recheck_resumes_there_without_paying_round_one(
     entries = [_entry(1, 9, 1), _entry(2, 8, 2), _entry(3, 7, 3)]
     r1 = _reply("findings", [_finding("N1.c1", "a", 1), _finding("N2.c1", "b", 2), _finding("N3.c1", "c", 3)])
     r2 = _reply("findings", [_finding("N2.c1", "b", 2), _finding("N3.c1", "c", 3)])
-    first = _reply("edits", [_fix("N1.c1", 4, 1)])  # N2 and N3 are left open
+    # N2's and N3's edits are reverted by the audit: the pages are in dispute, so the re-check reads them
+    first = _all_fixes(_fix("N1.c1", 4, 1), _fix("N2.c1", 5, 2), _fix("N3.c1", 6, 3))
     last = _reply("edits", [_fix("N2.c1", 5, 2), {**_fix("N3.c1", 6, 3), "finding": "F2"}])
     sr, doc = _scene(tmp_path, monkeypatch, entries)
     sr.doorway = _Dies([r1, r2], [first], at=2)
     with pytest.raises(ConnectionError):
-        _go(sr)
+        _go(sr, reverted=[V.format(5, 2), V.format(6, 3)])
     assert {kw["custom_id"].split("-")[1] for kw in sr.doorway.seen} == {"r1"}  # round 2's first call died
     # The requeue: a fresh process, a fresh doorway, the same composed entries.
     sr.doorway = K.ScriptedDoor([r1, r2], [last])
@@ -167,9 +182,9 @@ def test_a_new_collect_is_a_new_review_never_a_resumed_one(tmp_path: Path, monke
     entries = [_entry(1, 9, 1), _entry(2, 8, 2)]
     reviews = [_reply("findings", [_finding("N1.c1", "a", 1), _finding("N2.c1", "b", 2)]), _reply("findings", [])]
     sr, doc = _scene(tmp_path, monkeypatch, entries)
-    sr.doorway = _Dies(reviews, [_reply("edits", [_fix("N1.c1", 4, 1)])], at=2)
+    sr.doorway = _Dies(reviews, [_all_fixes(_fix("N1.c1", 4, 1), _fix("N2.c1", 5, 2))], at=2)
     with pytest.raises(ConnectionError):
-        _go(sr)
+        _go(sr, reverted=[V.format(5, 2)])
     ud = sr.slug_dir / "runs" / "alpha" / "update"
     (ud / "new_entries.md").write_text("recomposed\n")  # compose ran again: another review
     sr.doorway = K.ScriptedDoor([_reply("findings", [])])
@@ -192,7 +207,7 @@ def test_a_checkpoint_from_the_earlier_loop_freezes_its_findings_on_the_entries_
     md = doc.read_text().replace(e2 + "\n\n", "")  # what the old finish left
     doc.write_text(md)
     old = RR.Finding("MUST", "1 wrong value", "N3.c1", 2, 3, "size misread", "none", "", "")
-    old.outcome = "declined by the finisher: x"
+    old.outcome = "reverted: the audit did not find the edited sentence on its page"  # a page in dispute
     rec = {"model": "m", "doc_sha_in": "x", "rounds": [{"round": 2, "findings": [old.as_dict()]}]}
     UR._checkpoint(sr.slug_dir / "runs" / "alpha" / "update", UR.At(2, md, rec))
     again = _reply("findings", [_finding("N2.c1", "size still misread", 3)])

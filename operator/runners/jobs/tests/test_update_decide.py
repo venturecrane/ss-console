@@ -225,10 +225,8 @@ def test_closures_only_close_the_hold_without_touching_the_document(tmp_path, jo
     assert RR.named_values(rec) == set()  # proof 10: a closure names no value
     notes = URS.notes(sd / "out" / "alpha")
     assert notes[1] == f"## {URS.NOTES_HEADING}"
-    assert notes[3] == (
-        "- NOTE: the review asked for content from Exhibit 3 p. 1; it is already in the entry for "
-        "09/10/2026, Sample Therapy | All Other Information"
-    )
+    assert notes[3] == ("- NOTE: Exhibit 3 p. 1 is already covered in the entry for 09/10/2026, Sample Therapy.")
+    assert "review" not in notes[3].lower()  # the attorney never saw the review
     assert "—" not in "".join(notes)
     marker = json.loads((d.queue / f"{MARKER_PREFIX}{JOB}.json").read_text())
     assert marker["redo"] == [] and "closed by SMD" in marker["reason"]

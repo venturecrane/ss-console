@@ -47,6 +47,19 @@ a new case. This stage is the laptop's step, in the lane, as one loop:
    they never hold the job. A part the review could not finish is held "not
    reviewed" and its entries are re-read by the re-check, whose must-fix on
    them is their first review (frozen, not advisory).
+4. BOUNDED RE-CHECK (2026-11-17, ``update/recheck.py``). Before the re-check
+   is paid, round 1's open findings go through the $0 rules
+   (``update_review_settle``; a class 2 omission whose content another entry
+   already holds is closed there). The re-check then reads ONLY findings the
+   finisher edited and the audit reverted (a page in dispute), that are not
+   omissions or duplicates and name a page: each on its page and the pages
+   either side, with its entry's own cited pages, never the whole exhibit or
+   the other entries of its date. Its projection (pages x the review tier's
+   rate) is logged before any call; over ``levers.update_recheck_cap_usd``
+   (default ``recheck.DEFAULT_CAP_USD``) the round is skipped. Every finding
+   not re-checked keeps its record row's ``recheck`` reason and is settled by
+   a rule or held, never dropped. A class 2 finding is also anchored to the
+   entry citing its page (``review_parts.anchor_by_page``), not the nearest.
 
 The delivered entries are never edited. Every call is a ledger row under this
 stage with its round in the custom id; the driver's cap binds each call, and
@@ -265,19 +278,26 @@ def _review_part(c: Ctx, p: RP.Part, ents: list[RR.Entry], base: list[str], key:
     return [_not_reviewed(p)]
 
 
-def review_round(c: Ctx, md: str, base: list[str], targets: set[int] | None) -> tuple[list[RR.Finding], int]:
-    """The independent review of the targeted added entries (all when None):
+def review_round(
+    c: Ctx, md: str, base: list[str], targets: set[int] | None, parts: list[RP.Part] | None = None
+) -> tuple[list[RR.Finding], int]:
+    """The independent review of the targeted added entries (all when None),
+    or of exactly `parts` (the narrow re-check, ``update/recheck``):
     deduplicated findings and the number of entries reviewed."""
     ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
     pick = [e for i, e in enumerate(ents) if targets is None or i in targets]
+    if parts is not None:
+        pick = list({e.anchor: e for p in parts for e in p.entries}.values())
     found: list[RR.Finding] = []
     seen: set[tuple] = set()
-    for i, part in enumerate(RP.plan(pick, _keep(c.sr), c.npages, c.already), 1):
+    for i, part in enumerate(RP.plan(pick, _keep(c.sr), c.npages, c.already) if parts is None else parts, 1):
         for f in _review_part(c, part, ents, base, f"p{i}"):
             k = (f.anchor, f.klass, f.exhibit, f.page, f.problem[:80])
             if k not in seen:
                 seen.add(k)
                 found.append(f)
+    if moved := RP.anchor_by_page(found, ents):
+        c.sr.log(f"  {moved} omission finding(s) moved to the entry that cites the page they rely on")
     found, settled = FN.settled_as_read(found, ents)
     if settled:
         c.sr.log(
@@ -486,18 +506,26 @@ def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
     return None
 
 
-def _dollars(usage: list[dict[str, Any]]) -> str:
-    """The round's dollars from the pricing table the driver reads: the env
-    override, the image's path, else the source tree's own copy."""
+def _pricing() -> budget.Pricing | None:
+    """The pricing table the driver reads: the env override, the image's
+    path, else the source tree's own copy."""
     tree = Path(__file__).resolve().parents[4] / "adapter" / "cost_telemetry" / "anthropic_pricing.json"
     for path in (os.environ.get(budget.PRICING_ENV), budget.PRICING_DEFAULT, str(tree)):
         try:
-            p = budget.Pricing.load(Path(path)) if path else None
-            if p is not None:
-                return f"{sum(p.price_row(u) for u in usage):.2f} USD"
+            if path:
+                return budget.Pricing.load(Path(path))
         except (OSError, ValueError, KeyError, budget.BudgetError):
             continue
-    return "not priced here"
+    return None
+
+
+def _dollars(usage: list[dict[str, Any]]) -> str:
+    """The round's dollars from the pricing table the driver reads."""
+    p = _pricing()
+    try:
+        return f"{sum(p.price_row(u) for u in usage):.2f} USD" if p is not None else "not priced here"
+    except budget.BudgetError:
+        return "not priced here"
 
 
 def _ctx(sr: StageRun, images: Images | None, evidence: RR.Evidence | None, verify: Verify | None) -> Ctx:
@@ -545,7 +573,14 @@ def run(
 
 
 def _review_once(
-    c: Ctx, rec: dict[str, Any], ud: Path, md: str, base: list[str], targets: set[int] | None, done: int
+    c: Ctx,
+    rec: dict[str, Any],
+    ud: Path,
+    md: str,
+    base: list[str],
+    targets: set[int] | None,
+    done: int,
+    parts: list[RP.Part] | None = None,
 ) -> tuple[list[RR.Finding], int]:
     """This round's review, paid once: a review a killed run already paid for
     (``rec["pending"]``, same round, same document) is read back; a new one is
@@ -554,7 +589,7 @@ def _review_once(
     if isinstance(pend, dict) and pend.get("round") == c.rnd and pend.get("md_sha") == _sha(md):
         c.sr.log(f"update review round {c.rnd}: the review was paid for before the interruption; not paid again")
         return [RR.Finding(**f) for f in pend.get("findings") or []], int(pend.get("entries") or 0)
-    found, n = review_round(c, md, base, targets)
+    found, n = review_round(c, md, base, targets, parts)
     rec["pending"] = {"round": c.rnd, "md_sha": _sha(md), "entries": n, "findings": [f.as_dict() for f in found]}
     _checkpoint(ud, At(done, md, rec))
     return found, n
@@ -614,62 +649,9 @@ def _loop(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: 
             _save(ud / RECORD, rec, "clean", doc)
             return 0
         _checkpoint(ud, At(REVIEW, md, rec))
-    return _recheck(c, rec, md, base, doc, ud)
+    from . import update_review_recheck as URC  # round 2; it imports this module
 
-
-def _recheck(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, ud: Path) -> int:
-    """The narrow re-check and the one more finish (``update/frozen.py``)."""
-    rows = rec["frozen"]
-    frozen = [FZ.finding(r) for r in rows]
-    open_ = [i for i, f in enumerate(frozen) if not _closed(f)]
-    if not open_:
-        _save(ud / RECORD, rec, "clean", doc)
-        return 0
-    c.rnd, c.calls, c.usage = RECHECK, 0, []
-    ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
-    targets = FZ.locate([rows[i] for i in open_], ents)
-    found, n = _review_once(c, rec, ud, md, base, targets, REVIEW)
-    todo, unreviewed, confirms = FZ.triage(rows, open_, found, ents)
-    keys = [FZ.key(f, ents) for f in found]  # before the finish moves any anchor
-    settled, rc = 0, 0
-    if todo:
-        try:
-            md, _edited, settled, rc = finish(c, md, todo, base, doc)
-        except GradeFailed as exc:
-            doc.write_text(md, encoding="utf-8")
-            c.sr.log(f"update review: {exc}; nothing is reverted or kept, a rerun grades again")
-            return 1
-    rec.pop("pending", None)
-    for i in open_:
-        f = frozen[i]
-        if f.klass == FZ.NOT_REVIEWED:
-            f.outcome = f.outcome if unreviewed else "settled: its entries were reviewed on the re-check"
-        elif i not in confirms:
-            f.outcome = FZ.SETTLED
-        elif all(_closed(g) for g in confirms[i]):
-            f.outcome = "applied"
-        else:
-            f.outcome = "confirmed on re-check; " + "; ".join(dict.fromkeys(g.outcome for g in confirms[i]))[:400]
-        rows[i]["finding"] = f.as_dict()
-    still = [f for f in todo if not _closed(f)] + unreviewed
-    advisory = sum(f.outcome == FZ.ADVISORY for f in found)
-    rec["rounds"].append(
-        {"round": RECHECK, "kind": "re-check", "entries": n, "must": len(_must(found)), "calls": c.calls}
-        | {"usage": c.usage, "confirmed": len(confirms), "advisory": advisory, "left": len(still)}
-        | {"keys": keys, "findings": [f.as_dict() for f in found]}
-    )
-    c.sr.log(
-        f"update review round {RECHECK} (re-check of {len(open_)} open frozen finding(s)): {n} entr(ies) reviewed, "
-        f"{len(confirms)} confirmed, {len(open_) - len(confirms)} settled as not raised again, {advisory} advisory; "
-        f"{settled} settled by the finisher, {len(still)} must-fix left; {c.calls} call(s), {_dollars(c.usage)}"
-    )
-    if rc != 0:
-        _save(ud / RECORD, rec, "audit_failed", doc)
-        return 3 if rc == 1 else 4
-    if not still:
-        _save(ud / RECORD, rec, "clean", doc)
-        return 0
-    return _hold(c, rec, still, doc, ud)
+    return URC.recheck(c, rec, md, base, doc, ud)
 
 
 def _hold(c: Ctx, rec: dict[str, Any], open_: list[RR.Finding], doc: Path, ud: Path) -> int:

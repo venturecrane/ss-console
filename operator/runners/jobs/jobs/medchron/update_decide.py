@@ -227,8 +227,9 @@ def _where(c: dict[str, Any], entries: list[str], base: str, n: int) -> str:
         k = _anchor_index(text)
         if "." in text or k is None or not 0 <= k < len(entries):
             raise Refused(f"closure {n}: {text} is not an added entry of the held document")
-        lines = [ln.strip() for ln in entries[k].split("\n")[:2] if ln.strip()]
-        return "the entry for " + ", ".join(lines)
+        from .update import elsewhere
+
+        return elsewhere.where(entries[k])  # its date and provider, as the lane's own rule names it
     if not _MDY.search(text) or text not in base:
         raise Refused(f"closure {n}: the delivered chronology does not hold {text[:80]!r} with its date")
     if (times := base.count(text)) != 1:  # it must name ONE delivered entry, never a date two entries share
@@ -424,9 +425,9 @@ def _close_record(rec: dict[str, Any], p: dict[str, Any], who: str, at: str) -> 
         closure = {"composed_in": c["composed_in"], "where": c["where"], "why": c["why"][:400], "by": dec["by"]}
         findings.append({**f, "outcome": CLOSED, "removed": [], "closure": {**closure, "source": dec["source"]}})
         ask = f"Exhibit {c['exhibit']} p. {c['page']}"
-        notes.append(
-            {"grade": "NOTE", "finding": f"the review asked for content from {ask}; it is already in {c['where']}"}
-        )
+        # The attorney never saw the review: the note says where the page's
+        # content is, in the same words as the lane's own rule (``update/elsewhere.note``).
+        notes.append({"grade": "NOTE", "finding": f"{ask} is already covered in {c['where']}."})
     rec["rounds"] = list(rec.get("rounds") or []) + [
         {
             "round": "smd",
