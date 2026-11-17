@@ -266,6 +266,34 @@ def test_a_templated_dispatch_with_no_wake_hash_holds_not_finds():
     assert verdicts[0].is_hold and not verdicts[0].is_finding
 
 
+def test_a_dispatch_before_the_skills_first_stamped_wake_is_pre_edge_not_a_hold():
+    """The 2026-11-16 guide-seat scene: a templated send whose wake row was
+    written before the seat stamped wake hashes. Once a LATER wake of the same
+    skill carries hashes, the old row can never be graded, so it is counted as
+    pre_stamp_edge and never reddens the run. Without that later wake it is
+    still a hold (the release is what clears it), and a hashless dispatch AFTER
+    the edge holds as before."""
+    sha = sv.canonical_body_sha256("body")
+    early_wake, early = _wake_row(minute=0), _dispatch_row(minute=1, sha=sha)
+    held = sv.verify_hash_join(sv.index_wakes([early_wake]), sv.index_dispatches([early]), _declares())
+    assert [v.verdict for v in held] == [sv.VERDICT_NO_WAKE_HASH]
+
+    later_wake = _wake_row(minute=30, hashes=[{"body_sha256_full": sha}])
+    later = _dispatch_row(minute=31, sha=sha)
+    after = _dispatch_row(minute=40, sha=sha)
+    verdicts = sv.verify_hash_join(
+        sv.index_wakes([early_wake, later_wake]), sv.index_dispatches([early, later, after]), _declares()
+    )
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_PRE_EDGE, sv.VERDICT_MATCH, sv.VERDICT_NO_WAKE_HASH]
+    assert not verdicts[0].is_hold and not verdicts[0].is_finding and verdicts[0].is_pre_edge
+    assert verdicts[2].is_hold
+
+    # Another skill's stamped wake is not this skill's edge.
+    other = _wake_row(skill="client-verification-tracker", minute=30, hashes=[{"body_sha256_full": sha}])
+    verdicts = sv.verify_hash_join(sv.index_wakes([early_wake, other]), sv.index_dispatches([early]), _declares())
+    assert [v.verdict for v in verdicts] == [sv.VERDICT_NO_WAKE_HASH]
+
+
 def test_a_templated_dispatch_with_no_stamp_holds():
     sha = sv.canonical_body_sha256("body")
     wakes = sv.index_wakes([_wake_row(hashes=[{"body_sha256_full": sha}])])
