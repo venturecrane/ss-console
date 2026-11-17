@@ -10,7 +10,9 @@ that while the script still printed MAP DONE. A refusal is NOT final (two
 chunks once refused and came back clean with identical input; accepting the
 first refusal would have dropped fifteen files silently). An emptied result
 (end_turn with almost nothing composed) halves the chunk once; the same bytes
-are never sent a third time.
+are never sent a third time. A short reply that is in the house shape and
+names every file of the chunk in FILES-SEEN is the chunk's answer, not an
+emptied one (``final_short``, 2026-11-17).
 
 A record the reader declines is decided by rule, never a stop (2026-10-24: a
 SANE exam or a self-harm note is a legitimate record, and a refusal on it
@@ -68,6 +70,35 @@ BLOCKS = ("## ENTRIES", "## INDEX", "## BILLING-DATES", "## CONFLICTS / REFERENC
 def well_formed(text: str) -> bool:
     """A map in the house shape, however short: every block heading present."""
     return all(b in text for b in BLOCKS)
+
+
+def unaccounted(source: str, reply: str) -> list[str]:
+    """The files of `source` (its FILE headers, ``chunking.pieces_pages``) no
+    FILES-SEEN line of `reply` names (``coverage.SEEN_LINE``), by id or name."""
+    from .coverage import SEEN_LINE
+
+    seen = list(SEEN_LINE.finditer(reply.split(BLOCKS[-1], 1)[-1]))
+    ids = {m.group("id") for m in seen if m.group("id")}
+    names = {m.group("name").strip() for m in seen}
+    out = []
+    for p in pieces_pages(source):
+        fid = re.match(r"[\w.-]+", p["file_id"] or "")
+        if not ((fid and fid.group() in ids) or str(p["file"]).strip() in names):
+            out.append(str(p["file"]))
+    return out
+
+
+def final_short(c: "Chunk", text: str) -> bool:
+    """A short reply is the piece's answer, not an emptied one, when it is in
+    the house shape and, for a whole chunk, its FILES-SEEN names every file
+    the chunk holds. WHY (2026-11-17): a whole 198K-character chunk drew a
+    correct "none in this chunk" reply, was read as EMPTY and split, and both
+    halves were paid for the same answer: half that job's spend. A reply that
+    leaves a file unaccounted for still splits, so a skipped file is still
+    caught. A part (already split) keeps the house-shape test alone."""
+    if not well_formed(text):
+        return False
+    return c.part is not None or (bool(pieces_pages(c.text)) and not unaccounted(c.text, text))
 
 
 REFUSAL_ATTEMPTS = 3
@@ -315,9 +346,11 @@ class _Composer:
             "sha": sha(c.text),
             "max_tokens": self.max_tokens,
         }
-        if r.empty and not (c.part is not None and well_formed(r.text)):
+        if r.empty and not final_short(c, r.text):
             self.log_usage(empty=True, **row)
-            self.sr.log(f"chunk {c.label} EMPTY: {len(r.text)}B from {len(c.text)}B of source")
+            missing = unaccounted(c.text, r.text) if well_formed(r.text) else []
+            why = f"; FILES-SEEN leaves {len(missing)} file(s) unaccounted for" if missing else ""
+            self.sr.log(f"chunk {c.label} EMPTY: {len(r.text)}B from {len(c.text)}B of source{why}")
             return "empty"
         if r.empty:
             # A half that is short because its source holds nothing to extract

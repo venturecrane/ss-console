@@ -658,7 +658,7 @@ already_current.`): the update read what was asked and found nothing to
      files named (and the <n> found inside them, when the counts line says
      "plus <n> found inside them"), none adds a visit:" then one line per kind the counts name,
      with its file count, in these words: `billing_only` "billing pages
-     only"; `read_no_new_visit` "read in full; no visit or finding the
+     only"; `read_no_new_visit` "read; no visit or finding the
      chronology does not already list"; `pages_already_delivered` "every page
      is already in the chronology's exhibits"; `repeats_another_new_file`
      "every page repeats another file in this request"; `duplicate` "exact

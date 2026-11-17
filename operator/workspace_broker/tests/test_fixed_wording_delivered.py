@@ -243,6 +243,17 @@ def test_an_already_current_update_lists_each_kind_in_the_skills_words() -> None
     )
 
 
+def test_a_file_read_with_nothing_new_is_never_said_to_be_read_in_full() -> None:
+    """2026-11-17: a 681-page file with 608 pages already delivered (not read
+    again) and 73 read was told to the firm as "read in full". The kind's
+    words now say it was read and adds nothing, without claiming every page."""
+    summary = {"requested": 1, "files": 1, "by_reason": {"read_no_new_visit": {"files": 1, "pages": 681}}}
+    row = {"state": "delivered", "matter_number": "900201", "delivery_json": json.dumps({"already_current": summary})}
+    (text,) = fixed_wording.render("medchron_job", row, {"allowance": ALLOWANCE, "job_pages_credited": 0})
+    assert text.endswith("none adds a visit:\n\nRead; no visit or finding the chronology does not already list: 1.")
+    assert "in full" not in text
+
+
 def test_a_demand_names_where_it_is_and_asks_the_one_question_only_with_a_list() -> None:
     files = _files(("demand", "Demand.Doe.docx"), ("gap_audit", "Gap Audit.docx"))
     row = {"state": "delivered", "matter_number": "900201", "matter_id": MATTER, "file_to_matter_id": MATTER}

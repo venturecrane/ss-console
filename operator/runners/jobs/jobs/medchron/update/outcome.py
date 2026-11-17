@@ -126,6 +126,31 @@ def _exhibit_reason(rec: dict[str, Any], *, collect: bool) -> str:
     return NO_PAGE
 
 
+#: How a page the update did not read is named beside the pages it read.
+_NOT_READ = {
+    S.ALREADY: "already in the delivered exhibits",
+    S.OVERLAP: "repeating another file read in this update",
+    BILLING: "billing pages",
+    S.BLANK: "blank",
+}
+
+
+def read_wording(rec: dict[str, Any]) -> str:
+    """What the update did with a selected document it found nothing new in,
+    page by page. "Read in full" only when every page was read: a 681-page file
+    with 608 pages identical to delivered pages and 73 read was once told to
+    the firm as "read in full" (2026-11-17)."""
+    total, read = int(rec.get("pages") or 0), len(rec.get("read") or [])
+    rest = {str(k): int(v) for k, v in (rec.get("excluded") or {}).items() if int(v or 0) > 0}
+    unread = len(rec.get("unread") or [])
+    if read >= total and not rest and not unread:
+        return WORDING[NO_NEW_VISIT]
+    parts = [f"{n} {_NOT_READ.get(k, 'set aside by rule')}" for k, n in sorted(rest.items())]
+    parts += [f"{unread} not readable"] if unread else []
+    tail = WORDING[NO_NEW_VISIT].split("; ", 1)[1]
+    return f"{read} of {total} pages read; the other pages were not read again ({', '.join(parts)}); {tail}"
+
+
 def _pages_on_file(slug_dir: Path, rid: str) -> int:
     tp = slug_dir / "text" / f"{rid}.txt"
     return len(S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace"))) if tp.is_file() else 0
@@ -195,6 +220,8 @@ def classify(slug_dir: Path, ud: Path, requested: list[str], *, collect: bool) -
             why = _exhibit_reason(rec, collect=collect)
             if why == NO_TEXT and str(r.get("ext") or "").lower() in IMAGE_EXTS:
                 out.append(_file(rid, name, why, "an image with no record text on it", int(rec.get("pages") or 0)))
+            elif why == NO_NEW_VISIT:
+                out.append(_file(rid, name, why, read_wording(rec), int(rec.get("pages") or 0)))
             else:
                 out.append(_file(rid, name, why, pages=int(rec.get("pages") or 0)))
         elif rid in subsets:

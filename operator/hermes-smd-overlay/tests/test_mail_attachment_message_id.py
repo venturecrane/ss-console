@@ -88,11 +88,13 @@ def test_a_staff_mailbox_id_is_never_rewritten(fake_ctx: Any, graph_tools) -> No
 
 
 def test_no_turn_email_leaves_the_id_as_given(fake_ctx: Any, graph_tools, monkeypatch) -> None:
-    """A wake or cron turn has no email of its own: nothing is defaulted or repaired."""
+    """A wake or cron turn has no email of its own: nothing is defaulted or repaired,
+    and an empty id is refused in words that cannot be read as "no attachments"."""
     monkeypatch.setattr(send_anchor, "message_origin", lambda *_, **__: None)
     _call(fake_ctx, "mail_list_attachments", {"message_id": MANGLED})
-    _call(fake_ctx, "mail_list_attachments", {})
-    assert graph_tools == [("list", MANGLED), ("list", "")]
+    with pytest.raises(RuntimeError, match="ATTACHMENTS NOT CHECKED"):
+        _call(fake_ctx, "mail_list_attachments", {})
+    assert graph_tools == [("list", MANGLED)]
 
 
 def test_a_failing_anchor_lookup_is_no_default_not_a_crash(
@@ -111,3 +113,67 @@ def test_message_id_is_optional_in_every_schema(fake_ctx: Any, graph_tools) -> N
         schema = fake_ctx.tools[name]["schema"]
         params = schema.get("parameters", schema)
         assert "message_id" not in params.get("required", []), name
+
+
+# --- 2026-11-17: the session Hermes passes is the one the id resolves under ---
+
+A_ID = "AAMkADEyOWU0MzEzLWZmMjctAAAAAAEMAABMDdTCAa5HR7muUjCUH-vUAAAp6AuAAAA="
+B_ID = "AAMkADEyOWU0MzEzLWZmMjctAAAAAAEMAABMDdTCAa5HR7muUjCUH-vUAAAp6AuBAAA="
+
+
+def _graph_turn(session: str, message_id: str) -> None:
+    """One verified email recorded, bound and named by THIS turn's prompt."""
+    from shared.inbound import SESSION_INBOUND_ORIGIN, InboundOrigin
+
+    SESSION_INBOUND_ORIGIN.record(
+        "", InboundOrigin(sender_address="admin@firm.example", message_id=message_id)
+    )
+    SESSION_INBOUND_ORIGIN.note_turn_prompt(session, message_id)
+    SESSION_INBOUND_ORIGIN.bind(session, message_id)
+
+
+@pytest.fixture
+def two_live_emails(fake_ctx: Any, monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
+    """The A&P shape: two of the firm's emails in flight at once, each its own
+    session, so the process-wide session guess is ambiguous. The REAL anchor
+    lookup (send_anchor, provenance, SESSION_INBOUND_ORIGIN) answers; only the
+    Graph transport is stubbed."""
+    from shared import provenance
+
+    monkeypatch.setattr(email_adapter, "email_connector_enabled", lambda *_, **__: True)
+    monkeypatch.setattr(
+        email_adapter, "email_adapter", lambda *_, **__: email_adapter.ADAPTER_MSGRAPH
+    )
+    monkeypatch.setattr(provenance, "_process_session", "s-a")
+    monkeypatch.setattr(provenance, "_process_ambiguous", True)
+    _graph_turn("s-a", A_ID)
+    _graph_turn("s-b", B_ID)
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        msgraph_attachments, "list_attachments", lambda mid: calls.append(("list", mid)) or []
+    )
+    load_plugin("hermes-smd-mail-attachments").register(fake_ctx)
+    return calls
+
+
+def test_each_turn_lists_its_own_email_under_the_session_hermes_passed(
+    fake_ctx: Any, two_live_emails
+) -> None:
+    """FALSIFIER: drop session_id from the handler (the pre-fix ``**_``) and both
+    calls raise, because the ambiguous process guess resolves to nothing."""
+    handler = fake_ctx.tools["mail_list_attachments"]["handler"]
+    handler({}, session_id="s-b", task_id="t")
+    handler({}, session_id="s-a", task_id="t")
+    assert two_live_emails == [("list", B_ID), ("list", A_ID)]
+
+
+def test_an_unresolvable_turn_says_not_checked_never_none(fake_ctx: Any, two_live_emails) -> None:
+    """The exact 10:50 MST call: no id, no session. It must not reach Graph and
+    must not say anything a model can relay as "no attachments"."""
+    handler = fake_ctx.tools["mail_list_attachments"]["handler"]
+    with pytest.raises(RuntimeError) as raised:
+        handler({})
+    text = str(raised.value)
+    assert "NOT CHECKED" in text and "NOT a finding that the email has no attachments" in text
+    assert "message_id is required" not in text
+    assert two_live_emails == []

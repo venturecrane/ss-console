@@ -140,7 +140,8 @@ PENDING_SKILLS = {
 COMPOSE_BRANCH_SHA256 = {
     "litigation": "77e75cb0372115bd391c63e4e42984a57c2f520fb18beaea790a9b46aa7622eb",
     "casefile": "394180288917b54a773207e6bcec49ccc08de22ec3cac6d80f35eb8713f62712",
-    "medchron": "3048e3b4e03af59439ec820de46eeca2e04c2f3b8c335e8eec861e50f431c27d",
+    # 2026-11-17: re-pinned for one deliberate edit, the read_no_new_visit kind no longer says "read in full".
+    "medchron": "ba5e9d38ce65a7ac457c84275b33397ef63521a5009a69f49146c1777e83762e",
     "negotiation": "fcd27092664680450b0e6a76b3ac4ee238a88d8153194050a2eab98c0e64c72f",
     "note": "32dfa6398ec8b9711726699d8fba69e8c47e34dd61cb33f13dc05622e916f764",
 }
