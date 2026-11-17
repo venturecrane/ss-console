@@ -112,12 +112,14 @@ def test_a_must_fix_that_never_settles_holds_for_smd_and_nothing_is_filed(
     assert o.reason.startswith("update_held:")
     assert holds.classify("medchron", o.reason)[0] == holds.SMD_FINISHING
     assert seat.sent == [] and seat.deleted == []
-    # The finisher settled nothing; the one re-check read only the entry the
-    # finding sits on, raised it again, and the one more finish failed too.
-    assert len(model.reviews) == 2 and _reviewed_anchors(model.reviews[1]) == ["N2"]
+    # The finisher's edit was refused before the audit read it, so no page is
+    # in dispute: no second review is paid (2026-11-17), and the finding holds.
+    assert len(model.reviews) == 1
     ud = data_root / "example-matter" / "runs" / "alpha" / "update"
     rec = json.loads((ud / "review_repair.json").read_text())
     assert rec["status"] == "held" and [f["anchor"] for f in rec["open"]] == ["N2.c1"]
+    assert rec["frozen"][0]["recheck"].startswith("not re-checked: the finisher made no edit the audit reverted")
+    assert rec["rounds"][-1]["skipped"] == "no finding a second read could settle"
     assert "4 mm" not in (data_root / "example-matter" / "runs" / "alpha" / "final-chronology.md").read_text()
 
 

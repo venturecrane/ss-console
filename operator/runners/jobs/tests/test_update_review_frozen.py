@@ -38,16 +38,35 @@ def _decline(*fids: str) -> str:
     return _edits(unresolved=[{"finding": f, "why": "the page is too faint to settle it"} for f in fids])
 
 
+#: A finisher correction the audit does not support (``_run(unsupported=...)``):
+#: the finisher and the audit disagree about the page, which is what the narrow
+#: re-check is paid to settle (2026-11-17, ``update/recheck``).
+DISPUTED = MRI.replace("4 mm", "6 mm")
+OTHER = "Therapy evaluation recorded lumbar flexion limited to fifty degrees. (Exhibit 3 - p. 1)"
+
+
+def _disputed(fid: str = "F1", anchor: str = "N1.c1", corrected: str = DISPUTED, exhibit: int = 2) -> dict[str, Any]:
+    return {
+        "finding": fid,
+        "anchor": anchor,
+        "action": "replace",
+        "exhibit": exhibit,
+        "page": 1,
+        "corrected": corrected,
+    }
+
+
 # (a) ----------------------------------------------------------------------------
 def test_a_must_fix_first_raised_after_round_one_is_advisory_and_never_blocks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Round 1 raises one must-fix the finisher declines; the re-check does
-    not raise it again but raises a NEW must-fix on the same entry. Before,
-    the new one went to the finisher and, unsettled, held the update."""
+    """Round 1 raises one must-fix whose correction the audit reverts; the
+    re-check does not raise it again but raises a NEW must-fix on the same
+    entry. Before, the new one went to the finisher and, unsettled, held the
+    update."""
     r1 = _review(_finding("N1.c1", "1 wrong value", "size misread"))
     r2 = _review(_finding("N1", "2 omitted content", "a plan on p. 3 is left out", page=3))
-    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r2], [_decline("F1")])
+    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r2], [_edits(_disputed())], unsupported=[DISPUTED])
     assert rc == 0, _record(sr)["open"]
     rec = _record(sr)
     (late,) = rec["rounds"][1]["findings"]
@@ -110,10 +129,10 @@ def test_two_entries_named_as_duplicates_of_each_other_fold_once(
 def test_the_loop_ends_after_one_recheck_holding_only_the_frozen_findings_it_confirmed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Two must-fix in round 1, both declined. The re-check raises one again
-    (confirmed), not the other (settled), plus a new one (advisory). The one
-    more finish declines again: held with exactly the confirmed one, and no
-    third review."""
+    """Two must-fix in round 1, both corrections reverted by the audit. The
+    re-check raises one again (confirmed), not the other (settled), plus a new
+    one (advisory). The one more finish declines: held with exactly the
+    confirmed one, and no third review."""
     r1 = _review(
         _finding("N1.c1", "1 wrong value", "size misread"),
         _finding("N2.c1", "3 truncated", "cut off", exhibit=3),
@@ -122,7 +141,10 @@ def test_the_loop_ends_after_one_recheck_holding_only_the_frozen_findings_it_con
         _finding("N1.c1", "1 wrong value", "size still misread"),
         _finding("N2", "1 wrong provider", "the provider line names another clinic", exhibit=3),
     )
-    rc, sr, _md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r2, _review()], [_decline("F1", "F2"), _decline("F1")])
+    both = _edits(_disputed(), _disputed("F2", "N2.c1", OTHER, 3))
+    rc, sr, _md = _run(
+        tmp_path, monkeypatch, [N1, LATER], [r1, r2, _review()], [both, _decline("F1")], unsupported=[DISPUTED, OTHER]
+    )
     assert rc == 2
     assert _review_rounds(sr) == {"r1", "r2"}
     rec = _record(sr)
@@ -145,7 +167,8 @@ def test_a_frozen_finding_the_recheck_does_not_raise_again_is_settled_and_the_co
     )
     r2 = _review(_finding("N1.c1", "1 wrong value", "size misread"))
     fix = _edits({"finding": "F1", "anchor": "N1.c1", "action": "replace", "exhibit": 2, "page": 1, "corrected": good})
-    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r2], [_decline("F1", "F2"), fix])
+    both = _edits(_disputed(), _disputed("F2", "N2.c1", OTHER, 3))
+    rc, sr, md = _run(tmp_path, monkeypatch, [N1, LATER], [r1, r2], [both, fix], unsupported=[DISPUTED, OTHER])
     assert rc == 0, _record(sr)["open"]
     assert good in md
     rec = _record(sr)

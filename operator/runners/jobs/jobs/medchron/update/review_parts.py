@@ -156,7 +156,8 @@ def _provider_words(e: str) -> set[str]:
     return set(_WORD.findall(B.provider_of(e).lower())) - _GENERIC
 
 
-def _delivered_cites(e: str) -> set[tuple[int, int]]:
+def delivered_cites(e: str) -> set[tuple[int, int]]:
+    """The (exhibit, page) pairs a delivered entry's citations name."""
     return {(int(m.group(1)), p) for m in CL.CITE.finditer(e) for p in CL.parse_pages(m.group(2)) or [1]}
 
 
@@ -193,7 +194,7 @@ def context(
     picks: list[tuple[int, int, int]] = []  # (priority, gap, index)
     for i, t in enumerate(delivered, 1):
         g = gap(t)
-        if _delivered_cites(t) & copied:
+        if delivered_cites(t) & copied:
             picks.append((0, g, i))
         elif g <= NEAR_DAYS:
             picks.append((1, g, i))
@@ -204,6 +205,33 @@ def context(
     if not rows:
         return ""
     return "NEARBY ENTRIES, READ ONLY:\n\n" + "\n\n".join(f"=== {a} ({k}) ===\n{t}" for a, k, t in rows)
+
+
+def anchor_by_page(found: list[RR.Finding], ents: list[RR.Entry]) -> int:
+    """A class 2 (omitted content) finding is moved to the added entry that
+    CITES the page it relies on, when the entry it names does not: the
+    content belongs to the visit composed from that page. A pages part whose
+    window no entry cites is shown with the nearest entry (``_owner``), so the
+    reviewer anchored such findings by nearness (2026-11-17: one of three
+    reviewer-wrong patterns). Of several entries citing the page, the one
+    whose date the finding names, else the first. Returns how many moved."""
+    moved = 0
+    by = {e.anchor: e for e in ents}
+    for f in found:
+        own = by.get(f.anchor.split(".")[0])
+        if not f.exhibit or not f.page or not re.match(r"\s*2\b", f.klass or ""):
+            continue
+        page = (f.exhibit, f.page)
+        if own is None or page in own.cites():
+            continue
+        cites = [e for e in ents if page in e.cites()]
+        said = set(re.findall(r"\d{2}/\d{2}/\d{4}", f"{f.page_says} {f.problem}"))
+        pick = next((e for e in cites if any(d in e.text.split("\n", 1)[0] for d in said)), cites[0] if cites else None)
+        if pick is None:
+            continue
+        f.anchor = next((c.anchor for c in pick.claims if c.exhibit == f.exhibit and f.page in c.pages), pick.anchor)
+        moved += 1
+    return moved
 
 
 def head(client: str) -> dict[str, Any]:

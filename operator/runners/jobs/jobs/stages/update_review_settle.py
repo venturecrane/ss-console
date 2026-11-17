@@ -33,6 +33,13 @@ shape they read:
   finisher edit the grid confirms that the audit would revert
   (``grid_confirmed``): a drafter and an audit read one page's time rows
   backwards, and the job held until SMD corrected it by hand (2026-10-29).
+* class 2 (omitted content) whose content another entry already holds
+  (2026-11-17, ``medchron/update/elsewhere``): the cited page is a copy of a
+  page another entry cites, or another entry (added, or delivered on the
+  same visit) reads like the page, AND that entry holds every clinical value
+  and finding term the page carries and every word and number of the
+  finding's point the page carries. It is closed as a NOTE naming where the
+  content is; one missing value keeps it open, so a real omission holds.
 
 A finding no rule settles still holds, as before. Every settled finding is
 recorded in the review record (``settled_by_rule``) and written to
@@ -51,10 +58,10 @@ from typing import Any
 from ..medchron import flowsheet_grid as FG
 from ..medchron.audit import claims as CL
 from ..proof import review
-from ..medchron.update import review_repair as RR, values as V
+from ..medchron.update import body as B, elsewhere as EL, review_repair as RR, values as V
 from . import review_policy, review_settle
 from .base import StageRun, read_json
-from .update_base import headings
+from .update_base import headings, update_dir
 from .update_review_io import page_text
 
 SETTLED = "update-review-settled.json"
@@ -219,6 +226,38 @@ def _scrub_one(sr: StageRun, doc: Path, g: review.Finding) -> review.Finding | N
     return out.findings[0]
 
 
+def covers(sr: StageRun, doc: Path, found: list[RR.Finding], ev: RR.Evidence) -> list[tuple[EL.Cover | None, str]]:
+    """Per finding: where its content is already composed, or why not
+    (``update/elsewhere``), on the document as it is now."""
+    ud = update_dir(sr)
+    base = ud / "base.md"
+    delivered = B.entries_of(base.read_text(encoding="utf-8"))[1] if base.is_file() else []
+    added = RR.anchor_entries(doc.read_text(encoding="utf-8"), _keep(sr), headings(sr.cfg))
+    s = EL.scene(added, delivered, ev, ud, read_json(ud / "new_exhibits.final.json", []) or [])
+    return [EL.cover(f, s) for f in found]
+
+
+def _covered(sr: StageRun, doc: Path, open_: list[RR.Finding], done: dict, ev: RR.Evidence, rec: dict) -> dict:
+    """The class 2 findings whose content another entry already holds, as
+    NOTEs naming that entry; each recorded with the entry and the arm."""
+    todo = [i for i, f in enumerate(open_) if i not in done and EL.is_omission(f)]
+    if not todo:
+        return {}
+    out: dict[int, review.Finding] = {}
+    rows = []
+    for i, (c, _why) in zip(todo, covers(sr, doc, [open_[i] for i in todo], ev)):
+        if c is None:
+            continue
+        out[i] = review.Finding(review.NOTE, "2 omitted content", EL.note(open_[i], c), "", "code")
+        rows.append({**open_[i].as_dict(), "outcome": f"covered elsewhere: {c.where}", "covered_by": c.anchor})
+        rows[-1]["arm"] = c.arm
+    if rows:
+        rec["rounds"] = list(rec.get("rounds") or []) + [
+            {"round": "rule", "kind": "covered_elsewhere", "findings": rows}
+        ]
+    return out
+
+
 def settle(sr: StageRun, doc: Path, open_: list[RR.Finding], rec: dict[str, Any]) -> list[RR.Finding]:
     """The open must-fix findings no rule settles (they hold). Each settled
     one is marked, recorded in `rec` and in ``update-review-settled.json``."""
@@ -247,6 +286,7 @@ def settle(sr: StageRun, doc: Path, open_: list[RR.Finding], rec: dict[str, Any]
         out = review_policy.Outcome(list(cand.values()))
         review_settle.disclose_differ(sr, doc, out, {"differ_disclosed": 0, "differ_flagged": 0})
         done |= {i: g for i, g in zip(cand, out.findings) if g.grade != review.MUST}
+    done |= _covered(sr, doc, open_, done, ev, rec)
     if not done:
         return open_
     for i, g in done.items():
@@ -257,7 +297,7 @@ def settle(sr: StageRun, doc: Path, open_: list[RR.Finding], rec: dict[str, Any]
     (out_dir / SETTLED).write_text(json.dumps(rec["settled_by_rule"], indent=1), encoding="utf-8")
     sr.log(
         f"update review: {len(done)} must-fix settled by the chronology review's rules "
-        "(scrubbed, disclosed, or corrected to the page's flowsheet grid)"
+        "(scrubbed, disclosed, corrected to the page's flowsheet grid, or already covered in another entry)"
     )
     return [f for i, f in enumerate(open_) if i not in done]
 
@@ -288,4 +328,4 @@ def notes(out_dir: Path) -> list[str]:
     ]
 
 
-__all__ = ["SETTLED", "attest", "grid_confirmed", "hold_line", "notes", "plain", "resume_held", "settle"]
+__all__ = ["SETTLED", "attest", "covers", "grid_confirmed", "hold_line", "notes", "plain", "resume_held", "settle"]
