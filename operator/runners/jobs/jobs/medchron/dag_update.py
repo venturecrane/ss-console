@@ -167,7 +167,16 @@ UPDATE_STAGES: tuple[Stage, ...] = (
     ),
     # A request that names a billing record refreshes the billing worksheet
     # (``stages/billing_update``, 2026-11-17); with none named, each is a no-op.
-    Stage("update_billing_docs", "", _slug_unit, requires=("update_proofs",), runner=_bupd.run_docs),
+    Stage(
+        "update_billing_docs",
+        "",
+        _slug_unit,
+        requires=("update_proofs",),
+        runner=_bupd.run_docs,
+        exit_map={
+            _bupd.EXIT_UNKNOWN: (HELD, "update_held: billing refresh not run: other clients on this matter are unknown")
+        },
+    ),
     Stage(
         "update_billing_extract",
         "",

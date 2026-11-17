@@ -60,6 +60,8 @@ IN_TOKENS_PER_PAGE = 1900
 OUT_TOKENS_PER_PAGE = 800
 EXTS = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 REFRESH = "billing_refresh.json"
+#: ``update_billing_docs`` holds: another client's folder on the matter, and no client named for it
+EXIT_UNKNOWN = 2
 #: ``billing/not_read.json``: each planned billing record no read reached, with why
 NOT_READ = "not_read.json"
 TOO_LARGE = "too large to read (over the seat's read limit)"
@@ -122,7 +124,17 @@ def run_docs(sr: StageRun) -> int:
             sr.cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
         )
         pats = sr.cfg.get("billing", "name_patterns") or []
-        read, aside = BP.decide(sr.manifest(), sr.folder_paths(), pats, sr.unit, sr.job.matter_clients, template)
+        classes = (
+            sr.cfg.get("selection", "shared_folder_classes") or [],
+            sr.cfg.get("selection", "exclude_folder_classes") or [],
+        )
+        try:
+            read, aside = BP.decide(
+                sr.manifest(), sr.folder_paths(), pats, sr.unit, sr.job.matter_clients, template, *classes
+            )
+        except BP.Unknown as exc:
+            sr.log(str(exc))
+            return EXIT_UNKNOWN
     by_id = {str(d.get("id")): d for d in sr.manifest()}
     targets = [{**matter_pull.target(by_id[r["id"]]), "why": r["why"]} for r in read]
     (out / "plan.json").write_text(json.dumps(targets, indent=1), encoding="utf-8")

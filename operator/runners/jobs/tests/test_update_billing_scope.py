@@ -233,3 +233,73 @@ def test_smd_retires_a_left_companion_in_one_recorded_act(
     after = json.loads(path.read_text())
     assert not any(x.get("id") == "w1" for x in after["left"])
     assert after["retired"][-1]["by"] == "scott@smd.services"
+
+
+# ---- an update queued before the broker named the matter's clients ----------------------------
+def _real_shaped(n_mine: int = 9, n_theirs: int = 18) -> tuple[list[dict], dict[str, str]]:
+    """The real matter's shape: this client's folder, the other client's, a shared one."""
+    folders = {"m": "/CLIENT A/MEDICAL", "t": "/CLIENT B/MEDICAL", "s": "/SHARED", "x": "/CLIENT B/BILLING"}
+    rows = [
+        {"id": f"m{i}", "name": f"Clinic {i} Ledger", "ext": ".pdf", "folderId": "m", "size": 9} for i in range(n_mine)
+    ]
+    rows += [
+        {"id": f"t{i}", "name": f"Clinic {i} Bill", "ext": ".pdf", "folderId": "tx"[i % 2], "size": 9}
+        for i in range(n_theirs)
+    ]
+    rows.append({"id": "st", "name": "Fire Department No Record Statement", "ext": ".pdf", "folderId": "s", "size": 9})
+    return rows, folders
+
+
+PATS = [r"(?i)\bbill|ledger|statement"]
+TEMPLATE = "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
+SHARED_CLASSES = [r"(?i)^shared$"]
+
+
+def test_no_named_clients_and_another_clients_folder_refuses_by_name() -> None:
+    """The 28/2 case: one unit, no matter_clients, a second client's folder: nothing is read."""
+    rows, folders = _real_shaped()
+    unit = _unit(folder_prefix="CLIENT A")  # bare, as the envelope carries it
+    with pytest.raises(BP.Unknown) as got:
+        BP.decide(rows, folders, PATS, unit, [], TEMPLATE, SHARED_CLASSES, [])
+    assert str(got.value) == BP.UNKNOWN_REASON
+    assert BP.UNKNOWN_REASON.startswith(
+        "update_held: billing refresh not run: other clients on this matter are unknown"
+    )
+    # With the clients named, the same matter plans this client's files and the shared statement only.
+    other = {"client_name": "Beta Example", "surname": "Beta", "folder_prefix": "CLIENT B"}
+    read, aside = BP.decide(rows, folders, PATS, unit, [other], TEMPLATE, SHARED_CLASSES, [])
+    assert len(read) == 10 and len(aside) == 18 and not any(r["id"].startswith("t") for r in read)
+
+
+def test_a_single_client_matter_with_no_named_clients_still_plans() -> None:
+    folders = {"m": "/MEDICAL", "b": "/BILLING"}
+    rows = [
+        {"id": "a", "name": "Clinic Ledger", "ext": ".pdf", "folderId": "m", "size": 9},
+        {"id": "b", "name": "Imaging Bill", "ext": ".pdf", "folderId": "b", "size": 9},
+    ]
+    read, aside = BP.decide(rows, folders, PATS, _unit(), [], TEMPLATE, SHARED_CLASSES, [])
+    assert [r["id"] for r in read] == ["a", "b"] and aside == []
+    # A client folder beside only shared and excluded classes is not another client.
+    folders = {"m": "/CLIENT A/MEDICAL", "s": "/SHARED", "p": "/Photos"}
+    rows = [{"id": i, "name": "Clinic Ledger", "ext": ".pdf", "folderId": i, "size": 9} for i in "msp"]
+    read, _ = BP.decide(
+        rows, folders, PATS, _unit(folder_prefix="CLIENT A"), [], TEMPLATE, SHARED_CLASSES, [r"(?i)^photos$"]
+    )
+    assert sorted(r["id"] for r in read) == ["m", "p", "s"]
+
+
+def test_the_update_holds_with_the_named_reason_and_reads_nothing(
+    scene, data_root, firm_config_path, pricing_path, monkeypatch
+) -> None:
+    job_dir, seat = _two_client_scene(scene, firm_config_path)
+    body = yaml.safe_load((job_dir / "job.yaml").read_text())
+    body.pop("matter_clients")  # queued before the broker named them
+    body["units"][0]["folder_prefix"] = "MEDICAL"
+    (job_dir / "job.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
+    _upload_pause(monkeypatch)
+    model = _TwoClients()
+    o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
+    assert o.outcome == "held" and o.stage == "update_billing_docs", o
+    assert o.reason == BP.UNKNOWN_REASON
+    assert not any(c.get("billing") for c in model.calls)
+    assert not {"og", "sh", "lg", "bs"} & {i for batch in seat.mints for i in batch}

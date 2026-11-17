@@ -103,8 +103,17 @@ def decide(
     unit: Any,
     others: list[dict[str, str]],
     chronology_template: str,
+    shared_classes: list[str] | tuple = (),
+    exclude_classes: list[str] | tuple = (),
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """(the files read, each with ``why``; the files set aside, each with ``why``)."""
+    """(the files read, each with ``why``; the files set aside, each with ``why``).
+
+    Raises ``Unknown`` when this client has a folder, no other client is known
+    (``others`` empty), and a billing file would be read from a top-level
+    folder that is neither this client's nor a shared or excluded folder class
+    (``selection.shared_folder_classes`` / ``exclude_folder_classes``, the
+    full run's own rule): that folder is another client's the job cannot name,
+    and its files are never read under the patient check alone."""
     pats = [re.compile(str(p), re.I) for p in patterns]
     me = {str(unit.client_name).lower(), str(unit.surname).lower()}
     others = [o for o in others if str(o.get("client_name") or "").lower() not in me]
@@ -125,7 +134,35 @@ def decide(
             aside.append({**row, "why": OTHER_CLIENT})
         else:
             read.append({**row, "why": OWN if route == OWN else SHARED, "folderId": fid})
+    _refuse_unknown(read, unit, others, tops, shared_classes, exclude_classes)
     return read, aside
+
+
+class Unknown(RuntimeError):
+    """The billing refresh cannot tell this client's files from another's."""
+
+
+#: The hold reason, named (2026-11-17): an update queued before the broker
+#: stamped ``matter_clients`` carries no other client, and on a two-client
+#: matter it read all 18 of the other client's billing files.
+UNKNOWN_REASON = (
+    "update_held: billing refresh not run: other clients on this matter are unknown "
+    "(a top-level folder that is not this client's holds billing records); "
+    "resubmit the update so the broker names the matter's clients"
+)
+
+
+def _refuse_unknown(read: list, unit: Any, others: list, tops: list[str], shared: Any, exclude: Any) -> None:
+    mine = prefix_of(unit.folder_prefix, tops)
+    if others or not mine:
+        return  # the other clients are known, or this is a matter with no client folders
+    classes = [re.compile(str(p)) for p in (*shared, *exclude)]
+    for r in read:
+        top = str(r.get("folder") or "").strip("/").split("/", 1)[0]
+        if r["why"] != SHARED or not top or top == "(root)" or f"/{top}" == mine:
+            continue
+        if not any(rx.search(top) for rx in classes):
+            raise Unknown(UNKNOWN_REASON)
 
 
 def _pages(path: Path) -> int | None:
@@ -158,6 +195,8 @@ def report(job_dir: Path, include: list[str] | None = None, firm_config: str | N
         job.units[0],
         job.matter_clients,
         str(cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"),
+        cfg.get("selection", "shared_folder_classes") or [],
+        cfg.get("selection", "exclude_folder_classes") or [],
     )
     from ..stages.base import read_jsonl
 
@@ -194,7 +233,11 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     from ..stages import billing_update as BU
 
-    rep = report(a.job_dir, [x for x in a.include.split(",") if x] or None, a.firm_config)
+    try:
+        rep = report(a.job_dir, [x for x in a.include.split(",") if x] or None, a.firm_config)
+    except Unknown as exc:
+        print(f"REFUSED: {exc}")
+        return 2
     if a.json:
         print(json.dumps(rep, indent=1))
         return 0
