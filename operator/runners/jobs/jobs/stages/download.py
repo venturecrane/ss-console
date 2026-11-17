@@ -43,6 +43,7 @@ from ..filing import full_name
 from ..matter import pull as matter_pull
 from ..seat import SeatError
 from . import email_parents
+from .name_rules import excluded_by_name
 from .base import StageRun, append_jsonl, read_json, read_jsonl
 
 BATCH = matter_pull.BATCH
@@ -205,23 +206,6 @@ def _name_rules(sr: StageRun) -> list[tuple[Any, str]]:
     return rules
 
 
-# A name rule that excludes billing or lien paper, and the words that say a
-# file is a medical record all the same. "Medical and Billing Records" is a
-# visit record with its bill attached: dropping it by `\bbill` dropped the
-# visits (2026-10-13). "Billing Records" alone stays billing.
-_BILLING_RULE = re.compile(r"(?i)bill|lien|ledger|invoice|statement")
-_BILLING_PHRASE = re.compile(r"(?i)\b(?:billing|bills?|itemi[sz]ed|lien)\s+(?:records?|statements?|notes?)\b")
-_MEDICAL_NAME = re.compile(r"(?i)\b(?:medical|chart|clinical|notes?|visits?|treatment|records?)\b")
-
-
-def medical_overrides(rx: Any, why: str, name: str) -> bool:
-    """True when a billing or lien name rule matched a name that also says
-    it holds medical records: the file is read, not excluded."""
-    if not (_BILLING_RULE.search(why) or _BILLING_RULE.search(str(getattr(rx, "pattern", "")))):
-        return False
-    return bool(_MEDICAL_NAME.search(_BILLING_PHRASE.sub(" ", name)))
-
-
 def _uncited_firm_exhibits(sr: StageRun) -> set[str]:
     """Ids of the firm's numbered files in the chronology folder ("Exhibit 6-
     ...") that the delivered Exhibit List does not name: the firm filed a
@@ -276,7 +260,7 @@ def _why_not(
     if not (ext in rule["doc_exts"] if is_firm else wanted(d, folder_path=folder, **rule)):
         return "outside the firm's folder rules (an excluded folder or kind)"
     full = f"{d.get('name') or ''}{d.get('ext') or ''}"
-    return next((why for rx, why in names if rx.search(full) and not medical_overrides(rx, why, full)), None)
+    return excluded_by_name(full, names)
 
 
 def _named_targets(sr: StageRun, sel: dict[str, Any], fpath: dict[str, str], rule: dict[str, Any]) -> list | int:

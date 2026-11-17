@@ -18,6 +18,7 @@ lane's ``preflight.extract_one`` / ``transcribe.run``.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,13 @@ def _files_json(data: Path, docs: list[dict[str, Any]]) -> None:
 
 
 # ---- litigation ---------------------------------------------------------------------------
+#: the run's frozen "today". Passed to the run, which writes it into its state
+#: on the first attempt: setting ``run.today`` after construction left the
+#: state holding the wall clock's date in the firm's zone, so the golden held
+#: one date and failed from the next midnight on (2026-11-17).
+TODAY = dt.date(2026, 11, 16)
+
+
 def _lit_run(tmp: Path, name: str, seat: rk.Seat, model: rk.Model, store: Path) -> Any:
     import litigation_testkit as lt
     from jobs.litigation.run import LitigationRun
@@ -71,19 +79,16 @@ def _lit_run(tmp: Path, name: str, seat: rk.Seat, model: rk.Model, store: Path) 
     job = lt.make_job(tmp / name, job_id=JOB_IDS[name])
     return LitigationRun(
         job, inputs_dir=str(inputs), pricing=_pricing(tmp), state_dir=tmp / "state", seat_factory=lambda: seat, client=model,
-        log=lambda _m: None, textcache_dir=store,
+        log=lambda _m: None, textcache_dir=store, today=lambda: TODAY,
     )  # fmt: skip
 
 
 def _lit_job(tmp: Path, name: str, keys: list[str], store: Path) -> dict[str, Any]:
-    import datetime as dt
-
     from jobs.litigation import fetch as fetch_mod
 
     docs, blobs = rk.listing(keys)
     seat, model = rk.Seat(docs, blobs), rk.Model()
     run = _lit_run(tmp, name, seat, model, store)
-    run.today = dt.date(2026, 11, 16)
     _files_json(run.data, docs)
     ids = [d["id"] for d in docs]
     (run.data / "plan.json").write_text(

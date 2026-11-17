@@ -316,7 +316,9 @@ def _orphan_reason(name: str, stored: str, byid: dict, cfg: Any) -> str:
         (str(r.get("name") or "") for r in byid.values() if str(r.get("name") or "") + str(r.get("ext") or "") == name),
         re.sub(r"\.[A-Za-z0-9]{2,5}$", "", name),
     )
-    return next((why for rx, why in cfg.compiled("coverage", "exclusions") if rx.search(bare)), stored)
+    from .name_rules import excluded_by_name
+
+    return excluded_by_name(bare, cfg.compiled("coverage", "exclusions")) or stored
 
 
 def _not_used_lines(d: Path, byid: dict, unit: str | None, cfg: Any) -> list[str]:
