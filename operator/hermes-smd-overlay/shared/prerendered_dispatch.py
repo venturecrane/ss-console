@@ -118,6 +118,28 @@ def canonical_body_sha256(text: str) -> str:
     return hashlib.sha256("\n".join(lines).rstrip("\n").encode("utf-8")).hexdigest()
 
 
+def wake_stamps(envelope: dict) -> list[dict]:
+    """The ``body_sha256`` value an EMITTED_WAKE row carries for an envelope:
+    one ``{body_sha256_full, body_sha256_skeleton}`` pair per dispatch, read
+    off the envelope's own stamps (plus ``body_sha256_without_attachment`` when
+    a dispatch has one).
+
+    The console's send reconcile (ss-console operator/bin/lib/send_verify.py)
+    grades each templated CONFIRM row against these, and it can grade nothing
+    without them: on 2026-11-16 the guide seat's first library-change email held
+    as ``no_wake_hash`` because its wake row carried counts and no hashes. One
+    entry per dispatch is also the wake's capacity there, so a wake stamped for
+    three people accounts for three sends and no fourth. Hashes only, never a
+    body."""
+    out: list[dict] = []
+    for dispatch in envelope.get("dispatches") or []:
+        stamp = {key: dispatch[key] for key in ("body_sha256_full", "body_sha256_skeleton")}
+        if dispatch.get("body_sha256_without_attachment"):
+            stamp["body_sha256_without_attachment"] = dispatch["body_sha256_without_attachment"]
+        out.append(stamp)
+    return out
+
+
 _SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
 _APPEND_TIMEOUT_SECONDS = 10
 

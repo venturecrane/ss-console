@@ -257,7 +257,12 @@ def run(
     write_envelope(envelope)
     ready = sum(1 for _, p in people if p is not None and training.readiness(cur, p)[0])
     counts = {"people": len(people), "ready": ready, "dispatch_count": 1}
-    _wake_row("emitted_wake_append", "EMITTED_WAKE", "report_ready", counts, cfg.slug)
+    from shared.prerendered_dispatch import wake_stamps
+
+    # The body's hashes ride the wake row, never the printed verdict: the
+    # console's send reconcile grades the sent report against them.
+    stamps = {"render_mode": "templated", "body_sha256": wake_stamps(envelope)}
+    _wake_row("emitted_wake_append", "EMITTED_WAKE", "report_ready", {**counts, **stamps}, cfg.slug)
     return {"wakeAgent": True, "dispatch_expected": True, "status": "report_ready", **counts}
 
 
