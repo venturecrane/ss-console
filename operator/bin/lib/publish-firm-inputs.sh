@@ -11,8 +11,10 @@
 #     configuration reaches its seat without a reprovision. The seat's live
 #     applier adopts what lands here.
 #
-# <lane> is demand | drafting | litigation | casefile | records | medchron | attorneys
-# (attorneys: the firm's attorney roster, one attorneys.json; not a job lane).
+# <lane> is a firm-input lane of operator/contracts/job-lanes.yaml (read here
+# from its generated shell form, operator/templates/_job-lanes.generated.sh):
+# medchron, the one-file lane, or a directory lane; or attorneys (the firm's
+# attorney roster, one attorneys.json; a firm input that is not a job lane).
 # <src-dir> is engagements operator/customers/<slug>/<lane>/ (for medchron, the
 # directory holding firm.yaml). Nothing here reads git: whoever calls this
 # decides that <src-dir> is reviewed (engagements origin/main).
@@ -51,7 +53,12 @@ set -euo pipefail
 _HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _DEFAULT_RUNNER="$(cd "${_HERE}/../../.." && pwd)"
 
+# The lane lists come from the one declaration, never a hand copy here.
+# shellcheck source=../../templates/_job-lanes.generated.sh
+. "${_HERE}/../../templates/_job-lanes.generated.sh"
+
 _say() { echo "publish-firm-inputs: $*" >&2; }
+_listed() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac; } # <word> <space-separated list>
 _usage() { _say "$*"; _say "usage: publish-firm-inputs.sh <slug> <lane> <src-dir> [--runner-checkout <path>] [--validator-log <file>]"; exit 2; }
 
 [ "$#" -ge 3 ] || _usage "expected <slug> <lane> <src-dir>"
@@ -66,12 +73,14 @@ while [ "$#" -gt 0 ]; do
 done
 
 [[ "${SLUG}" =~ ^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$ ]] || _usage "not a seat slug: ${SLUG}"
-case "${LANE}" in
-  demand|drafting|litigation|casefile|records) MARKER="${LANE}-firm.yaml" ;;
-  attorneys) MARKER="attorneys.json" ;;
-  medchron) MARKER="firm.yaml" ;;
-  *) _usage "not a lane: ${LANE}" ;;
-esac
+[[ "${LANE}" =~ ^[a-z][a-z0-9_]*$ ]] || _usage "not a lane: ${LANE}"
+if _listed "${LANE}" "${SMD_FIRM_INPUT_DIR_LANES}"; then MARKER="${LANE}-firm.yaml"
+elif [ "${LANE}" = "attorneys" ] && _listed "${LANE}" "${SMD_FIRM_INPUT_EXTRAS}"; then MARKER="attorneys.json"
+elif [ "${LANE}" = "medchron" ] && _listed "${LANE}" "${SMD_FIRM_INPUT_FILE_LANES}"; then MARKER="firm.yaml"
+else _usage "not a lane: ${LANE}"
+fi
+# The directory key spaces a publish may write: every directory lane, and the extras.
+KEY_LANES="$(printf '%s' "${SMD_FIRM_INPUT_DIR_LANES} ${SMD_FIRM_INPUT_EXTRAS}" | tr ' ' '|')"
 [ -d "${SRC}" ] || _usage "no such directory: ${SRC}"
 [ -f "${SRC}/${MARKER}" ] || _usage "no ${MARKER} in ${SRC}"
 [ -d "${RUNNER}" ] || _usage "no runner checkout at ${RUNNER}"
@@ -91,7 +100,10 @@ trap 'rm -rf "${WORK}"' EXIT
 
 # ---------- the lane's filters (aws s3 sync semantics: last match wins) ----------
 # One table, used twice: passed to aws, and applied here to list the keys the
-# sync will write, so the key guard judges exactly what is uploaded.
+# sync will write, so the key guard judges exactly what is uploaded. It is
+# per-lane behaviour keyed by lane id, not a lane list: its arms are checked
+# against the declaration (tests/publish-firm-inputs.test.ts), so a directory
+# lane added there cannot publish with no filter arm unnoticed.
 FILTERS=()
 case "${LANE}" in
   demand|drafting) FILTERS=(--exclude "eval/*" --exclude "request-brief-*") ;;
@@ -206,7 +218,7 @@ else
     rel="${f#"${STAGE}"/}"
     _included "${rel}" || continue
     key="${PREFIX}${rel}"
-    if [[ ! "${key}" =~ ^vaults/${SLUG}/(demand|drafting|litigation|casefile|records|attorneys)/[A-Za-z0-9._/-]+$ || "/${rel}/" == */../* ]]; then
+    if [[ ! "${key}" =~ ^vaults/${SLUG}/(${KEY_LANES})/[A-Za-z0-9._/-]+$ || "/${rel}/" == */../* ]]; then
       _say "refusing to write R2 key outside vaults/${SLUG}/${LANE}/: ${key}"
       keys_ok=0
     fi

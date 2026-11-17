@@ -336,6 +336,47 @@ def test_the_baseline_quiets_only_the_message_id_it_names():
     assert [m["message_id"] for m in fresh] == ["<a-different-id@email.amazonses.com>"]
 
 
+#: The office seat's two morning lists of 2026-11-16 (reconcile run 43982547333):
+#: ids and times verbatim from its sent folder. The first was audited on the
+#: surviving Machine; the second came from a second Machine whose ledger left
+#: with its volume, and is dispositioned in the shipped baseline (#4070).
+_OFFICE_INBOX = "smd-office@agentmail.to"
+_OFFICE_FIRST = "<010001a1e49dd4ef-53c869af-e266-4192-8773-6fdf8549c294-000000@email.amazonses.com>"
+_OFFICE_SECOND = "<010001a1e49e2278-6c6a6556-3f06-4ac0-ab0e-c754ad9b65e3-000000@email.amazonses.com>"
+
+
+def test_the_second_machines_morning_list_is_dispositioned_and_nothing_else_of_the_keepers_is():
+    first = _msg(_OFFICE_FIRST, "2026-11-16T13:48:31.273Z", to="keeper-recipient@example.test", subject="Mailbox: 8")
+    second = _msg(_OFFICE_SECOND, "2026-11-16T13:48:51.140Z", to="keeper-recipient@example.test", subject="Mailbox: 10")
+    planted = _msg("<planted-keeper-list@email.amazonses.com>", "2026-11-17T13:48:40.000Z", subject="Mailbox: 3")
+    rows = [
+        _audited_row("2026-11-16T13:48:31.621Z", outcome="sent", message_id=_OFFICE_FIRST, verb="agentmail_send"),
+    ]
+    report = rec.reconcile_inbox(
+        _OFFICE_INBOX,
+        ["smd-office"],
+        "key",
+        None,
+        opener=_fake_opener({"messages": [first, second]}),
+        client_factory=lambda slug: _Rows(rows),
+        baseline=_shipped_baseline(),
+    )
+    assert (report.matched_exact, report.unaccounted, report.baselined) == (1, [], 1)
+    assert report.is_finding is False
+    # THE FALSIFIER: the next unaudited list from the same keeper still fires.
+    report = rec.reconcile_inbox(
+        _OFFICE_INBOX,
+        ["smd-office"],
+        "key",
+        None,
+        opener=_fake_opener({"messages": [first, second, planted]}),
+        client_factory=lambda slug: _Rows(rows),
+        baseline=_shipped_baseline(),
+    )
+    assert report.is_finding is True
+    assert [m["message_id"] for m in report.unaccounted] == [planted["message_id"]]
+
+
 def test_the_baseline_cannot_reach_across_inboxes():
     """An entry naming the pilot inbox says nothing about anyone else's mail."""
     fresh, already = rec.split_baselined("ashton-price@agentmail.to", _captured_sends(), _shipped_baseline())

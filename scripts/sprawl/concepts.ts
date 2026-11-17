@@ -25,6 +25,7 @@ import {
   countRatchet,
   isTestPath,
 } from './analyze'
+import { LANE_SKILL } from '../../src/lib/operator/job-lanes.generated'
 
 export const CONCEPT_BASELINE = 'scripts/sprawl/concept-baseline.json'
 
@@ -63,19 +64,10 @@ function matching(files: SourceFile[], test: (code: string[]) => boolean): strin
     .sort()
 }
 
-/** The queued job lanes and the skill that authors each (marketing has firm inputs, no daemon job). */
-const LANE_SKILLS: Record<string, string> = {
-  medchron: 'medical-chronology-maintainer',
-  demand: 'demand-letter-drafter',
-  drafting: 'document-drafter',
-  litigation: 'litigation-status',
-  casefile: 'case-file-manager',
-  negotiation: 'negotiation-watch',
-  note: 'smd-note',
-  records: 'matter-records',
-  library_setup: 'document-drafter',
-  marketing: 'marketing-request-router',
-}
+/** The job lanes and the skill that authors each, from the one declaration
+ * (operator/contracts/job-lanes.yaml, projected into the console by
+ * operator/bin/gen-job-lanes.py), so a lane added there is counted here with no edit. */
+const LANE_SKILLS: Record<string, string> = { ...LANE_SKILL }
 const LANES = Object.keys(LANE_SKILLS)
 
 const LANE_SET = new Set(LANES)
@@ -95,6 +87,49 @@ function laneTokens(code: string[]): Set<string> {
     }
   }
   return out
+}
+
+/** A Python docstring opens here: a triple-quoted string first on its line, as the first
+ * statement of the module (no code line before it) or of a def or class (the code line before
+ * it is the header, or the `):` / `) -> T:` that closes a wrapped signature). */
+const DOCSTRING_OPEN = /^\s*[rRuUbB]{0,2}("""|''')/
+const DEF_HEADER = /^\s*((async\s+)?def|class)\b.*:\s*$|^\s*\)\s*(->.*)?:\s*$/
+
+/**
+ * A Python file's text with its docstrings blanked (line count kept). A docstring is prose
+ * the interpreter never runs as a list, so lanes it names in a sentence are not a restated
+ * lane list. Only docstrings go: a triple-quoted string bound to a name, passed to a call or
+ * held in a table is still code and still counted.
+ */
+function withoutDocstrings(text: string): string {
+  const lines = text.split('\n')
+  let previous: string | undefined
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const open = DOCSTRING_OPEN.exec(line)
+    if (open && (previous === undefined || DEF_HEADER.test(previous))) {
+      const quote = open[1]
+      const rest = line.slice(open[0].length)
+      let end = i
+      if (!rest.includes(quote)) {
+        while (end + 1 < lines.length && !lines[end + 1].includes(quote)) end++
+        end = Math.min(end + 1, lines.length - 1)
+      }
+      for (let j = i; j <= end; j++) lines[j] = ''
+      previous = 'docstring'
+      i = end
+      continue
+    }
+    if (line.trim() !== '' && !COMMENT_LINE.test(line)) previous = line
+  }
+  return lines.join('\n')
+}
+
+/** Program files for the lane rules: Python docstrings blanked, everything else as read. */
+function laneSources(files: SourceFile[]): SourceFile[] {
+  return programs(files).map((f) =>
+    f.path.endsWith('.py') ? { ...f, text: withoutDocstrings(f.text) } : f
+  )
 }
 
 function listsLanes(code: string[]): boolean {
@@ -321,15 +356,15 @@ export const CONCEPTS: Concept[] = [
   },
   {
     id: 'job-lane-lists',
-    rule: 'Non-test program file naming 4+ job lanes as quoted strings, object keys or case arms, or 4+ on one line.',
+    rule: 'Non-test program file naming 4+ declared job lanes (operator/contracts/job-lanes.yaml) as quoted strings, object keys or case arms, or 4+ on one line; Python docstrings are prose, not counted.',
     target: '1 declaration plus generated files',
-    instances: (files) => matching(programs(files), listsLanes),
+    instances: (files) => matching(laneSources(files), listsLanes),
   },
   {
     id: 'lane-skill-tables',
-    rule: 'Non-test program file pairing 4+ lanes with their skill names on the same line.',
+    rule: 'Non-test program file pairing 4+ declared lanes with their skill names on the same line; Python docstrings are prose, not counted.',
     target: '1',
-    instances: (files) => matching(programs(files), (code) => laneSkillPairs(code) >= 4),
+    instances: (files) => matching(laneSources(files), (code) => laneSkillPairs(code) >= 4),
   },
   {
     id: 'customer-yaml-hand-parsers',

@@ -63,6 +63,9 @@ from shared import pre_run_handoff, record_store, reminders
 logger = logging.getLogger(__name__)
 
 SKILL = reminders.SKILL
+#: The EMITTED_WAKE metadata key the bodies' hashes ride: the console's send
+#: reconcile (ss-console operator/bin/lib/send_verify.py) reads it by this name.
+WAKE_STAMPS = "body_sha256"
 #: ``prerendered_dispatch._MAX_DISPATCHES``; pinned equal by test.
 CHUNK = 10
 #: How many days back an open reminder is still listed.
@@ -344,9 +347,15 @@ def write_envelope(payload: dict[str, Any], hermes_home: str | None = None) -> b
         return False
 
 
-def run(cfg: Any, now: datetime | None = None, *, dry: bool = False) -> dict[str, Any]:
+def run(
+    cfg: Any, now: datetime | None = None, *, dry: bool = False, wake: list[dict] | None = None
+) -> dict[str, Any]:
     """Plan, mark, write the envelope and the handoff. Returns the verdict:
-    ``{"wakeAgent": bool, "status": str, **counts}``, content-free."""
+    ``{"wakeAgent": bool, "status": str, **counts}``, content-free.
+
+    ``wake``, when given, is filled with the written envelope's body hashes
+    (``prerendered_dispatch.wake_stamps``) for the wake row. They travel there
+    and never in the verdict, which is the job's printed output."""
     moment = now if now is not None else datetime.now(timezone.utc)
     p = plan(cfg, moment)
     verdict: dict[str, Any] = {"status": p.status, **p.counts()}
@@ -356,7 +365,8 @@ def run(cfg: Any, now: datetime | None = None, *, dry: bool = False) -> dict[str
     today = reminders.local_now(reminders.seat_zone(cfg), moment).date().isoformat()
     marked = [d for d in p.chunk if write_mark(store, d.person, today, cfg)]
     stamp = moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    if not marked or not write_envelope(envelope(marked, stamp)):
+    built = envelope(marked, stamp) if marked else {}
+    if not marked or not write_envelope(built):
         for d in marked:
             write_mark(store, d.person, d.previous_mark, cfg)
         # Wake the turn with nothing to send: the run's EMITTED_WAKE row then
@@ -364,6 +374,7 @@ def run(cfg: Any, now: datetime | None = None, *, dry: bool = False) -> dict[str
         return {"wakeAgent": True, **verdict, "status": "envelope_write_failed", "chunk": 0}
     dates = [d for item in marked for d in body_dates(item.body + "\n" + item.subject)]
     pre_run_handoff.write_handoff(SKILL, moment, dates)
+    _fill_wake(wake, built)
     return {
         "wakeAgent": True,
         "dispatch_expected": True,
@@ -373,10 +384,22 @@ def run(cfg: Any, now: datetime | None = None, *, dry: bool = False) -> dict[str
     }
 
 
-def wake_row(slug: str, verdict: dict[str, Any]) -> bool:
+def _fill_wake(wake: list[dict] | None, built: dict[str, Any]) -> None:
+    """Hand the written envelope's body hashes to the caller's wake row."""
+    if wake is not None:
+        from shared.prerendered_dispatch import wake_stamps
+
+        wake.extend(wake_stamps(built))
+
+
+def wake_row(slug: str, verdict: dict[str, Any], stamps: list[dict] | None = None) -> bool:
     """The run's one wake row, through the broker's agent-uid verb: an
-    EMITTED_WAKE when the turn wakes, else a SUPPRESSED_WAKE. The status and
-    the counts only. True on the broker's ack; never raises."""
+    EMITTED_WAKE when the turn wakes, else a SUPPRESSED_WAKE. The status, the
+    counts and, when the run wrote an envelope, its bodies' hashes under
+    ``WAKE_STAMPS``: the console's send reconcile grades every templated send
+    against them, and holds it ``no_wake_hash`` without them (2026-11-16, the
+    guide seat's first library-change email). True on the broker's ack; never
+    raises."""
     from shared import workspace_broker
 
     woke = verdict.get("wakeAgent") is True
@@ -387,6 +410,7 @@ def wake_row(slug: str, verdict: dict[str, Any]) -> bool:
         "customer": slug,
         **counts,
         **({"render_mode": "templated"} if verdict.get("dispatch_expected") else {}),
+        **({WAKE_STAMPS: list(stamps)} if woke and stamps else {}),
     }
     row = {
         "action_type": "EMITTED_WAKE" if woke else "SUPPRESSED_WAKE",
@@ -452,16 +476,17 @@ def pre_run(*, dry: bool = False) -> dict[str, Any]:
     from shared.customer_config import CustomerConfig
 
     slug = ""
+    stamps: list[dict] = []
     try:
         cfg = CustomerConfig.from_volume()
         slug = cfg.slug
-        verdict = run(cfg, dry=dry)
+        verdict = run(cfg, dry=dry, wake=stamps)
         verdict.update(orphan_counts(cfg))
     except Exception as exc:  # noqa: BLE001 - the verdict says it crashed; never raised
         logger.warning("person_digest: the run crashed (%s)", type(exc).__name__)
         verdict = {"wakeAgent": not dry, "status": "pre_run_crashed"}
     if not dry:
-        wake_row(slug, verdict)
+        wake_row(slug, verdict, stamps)
     return verdict
 
 
@@ -471,6 +496,7 @@ __all__ = [
     "MARK_NAME",
     "Plan",
     "SKELETON",
+    "WAKE_STAMPS",
     "body_dates",
     "digest_hour",
     "due_for",

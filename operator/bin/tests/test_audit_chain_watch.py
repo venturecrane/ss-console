@@ -578,3 +578,24 @@ def test_main_holds_when_no_authored_seat_is_provisioned(monkeypatch, tmp_path, 
     monkeypatch.setattr(watch.ConsoleD1, "provisioned_slugs", lambda self: [])
     assert watch.main([]) == watch.EXIT_HOLD
     assert "measured nothing" in capsys.readouterr().out
+
+
+def test_the_archive_upload_pins_r2_region_over_a_runner_aws_region(monkeypatch, tmp_path):
+    """2026-11-16: the runner set AWS_REGION=us-west-2 and R2 refused every
+    seat's off-box copy (InvalidRegionName). The upload must carry R2's region."""
+    monkeypatch.setenv("AWS_REGION", "us-west-2")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-west-2")
+    monkeypatch.setattr(watch, "r2_credentials", lambda: ("kid", "sec", "https://r2.example"))
+    seen = {}
+
+    def fake_run(argv, **kw):
+        seen.update(kw["env"])
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(watch.subprocess, "run", fake_run)
+    local = tmp_path / "x.json.gz"
+    local.write_bytes(b"x")
+    watch._aws_upload(local, "s3://bucket/key")
+    assert seen["AWS_REGION"] == "auto"
+    assert seen["AWS_DEFAULT_REGION"] == "auto"
+    assert seen["AWS_ACCESS_KEY_ID"] == "kid"

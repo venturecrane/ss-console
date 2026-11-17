@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { CONCEPTS, conceptCensus, conceptRatchet } from '../scripts/sprawl/concepts'
+import { LANE_SKILL } from '../src/lib/operator/job-lanes.generated'
 
 type File = { path: string; text: string }
 
@@ -50,6 +51,40 @@ describe('job-lane-lists', () => {
     ]
     expect(found('job-lane-lists', files)).toEqual([])
   })
+
+  it('takes its lanes from the declaration: every declared lane counts, ids that are not lanes do not', () => {
+    // A list of the declared lanes counts whatever the declaration holds, so a lane added to
+    // operator/contracts/job-lanes.yaml is counted with no edit to the census.
+    const declared = Object.keys(LANE_SKILL)
+    const files = [
+      { path: 'e/declared.py', text: `L = (${declared.map((l) => `"${l}"`).join(', ')})` },
+      // library_setup is a drafting job kind and marketing a firm-input-only skill, not lanes.
+      { path: 'e/kinds.py', text: 'K = ("medchron", "demand", "library_setup", "marketing")' },
+    ]
+    expect(found('job-lane-lists', files)).toEqual(['e/declared.py'])
+  })
+
+  it('ignores lanes a Python docstring names in prose, and still counts a triple-quoted string in code', () => {
+    const files = [
+      {
+        path: 'f/module_doc.py',
+        text: '"""A wake names its job: medchron, demand,\ndrafting or litigation."""\n\nX = 1\n',
+      },
+      {
+        path: 'f/def_doc.py',
+        text: 'def f(\n    a: int,\n) -> str:\n    """Runs for "medchron", "demand", "drafting" and "records"."""\n    return ""\n',
+      },
+      {
+        path: 'f/bound.py',
+        text: 'X = 1\nHELP = """\nmedchron demand drafting litigation\n"""\n',
+      },
+      {
+        path: 'f/argument.py',
+        text: 'X = 1\nprint(\n    """lanes: "medchron", "demand", "drafting", "records" """\n)\n',
+      },
+    ]
+    expect(found('job-lane-lists', files)).toEqual(['f/argument.py', 'f/bound.py'])
+  })
 })
 
 describe('lane-skill-tables', () => {
@@ -84,6 +119,16 @@ describe('lane-skill-tables', () => {
       },
     ]
     expect(found('lane-skill-tables', files)).toEqual([])
+  })
+
+  it('ignores pairs a module docstring names in prose, and counts the same pairs in code', () => {
+    const prose =
+      'medchron (medical-chronology-maintainer), demand (demand-letter-drafter), drafting (document-drafter), records (matter-records)'
+    const files = [
+      { path: 'g/doc.py', text: `"""Wakes: ${prose}."""\n\nX = 1\n` },
+      { path: 'g/code.py', text: `X = 1\nT = "${prose}"\n` },
+    ]
+    expect(found('lane-skill-tables', files)).toEqual(['g/code.py'])
   })
 })
 

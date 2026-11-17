@@ -1256,6 +1256,26 @@ def test_the_committed_invariants_file_parses():
     assert set(loaded) == {"recipients", "ack_codes"}
 
 
+def test_the_mailbox_keepers_committed_recipient_is_its_authored_digest_recipient():
+    """The keeper sends one list to one authored address (2026-11-16, run
+    43982547333). The committed set is exactly that address's hash, read from
+    the seat's own customer.yaml, so a change to the authored recipient fails
+    here before it reads as recipient flapping on a seat."""
+    import yaml
+
+    customer = Path(__file__).resolve().parents[2] / "customers" / "smd-office" / "customer.yaml"
+    doc = yaml.safe_load(customer.read_text(encoding="utf-8"))
+    authored = [
+        skill["settings"]["digest_recipient"]
+        for persona in doc.get("personas") or []
+        for skill in persona.get("skills") or []
+        if skill.get("name") == "mailbox-keeper"
+    ]
+    assert len(authored) == 1
+    committed = sv.load_invariants()["recipients"]["mailbox-keeper"]
+    assert committed == [sv._recipient_hash("mailbox-keeper", authored[0])]
+
+
 # ---------------------------------------------------------------------------
 # LEAK SAFETY (the public-repo constraint)
 # ---------------------------------------------------------------------------
