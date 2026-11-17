@@ -43,6 +43,19 @@ def test_every_cell_is_captured_or_declared_not_applicable():
     assert on_disk == {_file(c) for c in CELLS}
 
 
+@pytest.mark.parametrize("cell", [c for c in CELLS if c.endswith("/queued_behind_same_lane")])
+def test_a_job_queued_behind_its_own_lane_runs_after_it_and_gets_one_wake(tmp_path, monkeypatch, real_lane_gate, cell):
+    """Both jobs of the lane end, the second claimed only after the first, and
+    no job's wake is posted twice."""
+    steps = json.loads(json.dumps(run_cell(tmp_path, monkeypatch, cell), sort_keys=True))
+    first = next(s for s in steps if s["step"] == "first")
+    assert len(first["children"]) == 1
+    ended = steps[-1]["daemon"]
+    assert len(ended) == 2 and all(v.get("state") not in ("queued", "running", "submitted") for v in ended.values())
+    posted = [json.dumps(p["body"], sort_keys=True) for s in steps for p in s["wake_posts"]]
+    assert len(posted) == len(set(posted)) <= 2
+
+
 @pytest.mark.parametrize("cell", CELLS)
 def test_a_cell_matches_its_golden(tmp_path, monkeypatch, real_lane_gate, cell):
     """MUTATION: change what a lane host records, wakes, writes or launches for any ending and its cell fails."""

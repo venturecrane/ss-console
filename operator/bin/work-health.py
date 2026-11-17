@@ -53,6 +53,7 @@ from bin.lib import work_health_keeper as keeper_wh
 from bin.lib import work_health_mail as mail
 from bin.lib import work_health_page_store as page_store_wh
 from bin.lib import work_health_proof as proof_wh
+from bin.lib import work_health_runs as runs_wh
 from bin.lib import work_health_sources as src
 from bin.lib import seat_config
 
@@ -347,7 +348,14 @@ def _operator_items(
     return items + _graph_items(slug, now, status), resolved_shortfalls + resolved_silent
 
 
-def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, rows: Optional[list[dict]]):
+def evaluate_seat(
+    slug: str,
+    cfg: wh.Config,
+    console: Console,
+    now: datetime,
+    rows: Optional[list[dict]],
+    seen: Optional[dict[str, list[dict]]] = None,
+):
     """(items, gaps, resolved): resolved counts problems in the window that
     later work answered (history: one trailing count, never a line each)."""
     status = console.status.get(slug)
@@ -384,6 +392,8 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
             # checked against later work, and answered ones came back as NEW
             # (triage, 2026-11-05). The next readable run grades them.
             return [*items, *([unreadable] if unreadable else [])], [], 0
+    if seen is not None:
+        seen[slug] = rows
     operator_items, resolved = _operator_items(slug, cfg, console, now, rows)
     return items + operator_items, [], resolved
 
@@ -491,7 +501,35 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--machines", action="store_true", help="also count each seat's started Fly machines (needs a Fly credential)"
     )
+    ap.add_argument("--runs", action="store_true", help="print how many chronology runs needed nobody; send nothing")
+    ap.add_argument(
+        "--runs-days",
+        type=int,
+        default=runs_wh.DEFAULT_DAYS,
+        help="--runs window in days (reads every audit row in it, 50 per seam request)",
+    )
     return ap
+
+
+def runs_report(seats: list[str], offline: dict[str, str], now: datetime, days: int) -> int:
+    """``--runs``: each seat's chronology runs over its own window, and all seats."""
+    per_seat: dict[str, dict] = {}
+    for slug in seats:
+        if slug in offline:
+            rows = json.loads(Path(offline[slug]).read_text(encoding="utf-8"))
+        else:
+            client = seam_pull.seam_client_from_env(slug)
+            if client is None:
+                print(f"{slug}: not read (no runtime-read credential)")
+                continue
+            try:
+                rows = read_ledger(client, now - timedelta(days=days))
+            except Exception as exc:  # noqa: BLE001 - one unreadable seat is said, the rest still report
+                print(f"{slug}: not read ({type(exc).__name__})")
+                continue
+        per_seat[slug] = runs_wh.summarize(rows)
+    print(runs_wh.report(per_seat, days))
+    return EXIT_OK
 
 
 def _machine_check(slug: str, now: datetime, items: list[wh.Item], gaps: dict[str, list[str]]) -> None:
@@ -503,16 +541,31 @@ def _machine_check(slug: str, now: datetime, items: list[wh.Item], gaps: dict[st
     items += keeper_wh.machine_items(slug, machines, now)
 
 
+def _runs_footer(seen: dict[str, list[dict]], hours: int) -> str:
+    """The digest's one line about chronology runs, when any seat ran one."""
+    per_seat = {slug: runs_wh.summarize(rows) for slug, rows in seen.items()}
+    total = runs_wh.combine({s: c for s, c in per_seat.items() if c["runs"]})
+    if not total.get("runs"):
+        return ""
+    return "\n\n" + runs_wh.line(f"Chronology runs read this hour ({hours // 24} days)", total) + "\n"
+
+
 def _evaluate_all(
-    cfg: wh.Config, console: Console, seats: list[str], offline: dict[str, str], now: datetime, machines: bool = False
+    cfg: wh.Config,
+    console: Console,
+    seats: list[str],
+    offline: dict[str, str],
+    now: datetime,
+    machines: bool = False,
+    seen: Optional[dict[str, list[dict]]] = None,
 ):
-    """(items, gaps, resolved) over every seat."""
+    """(items, gaps, resolved) over every seat; ``seen`` collects each read ledger."""
     items: list[wh.Item] = []
     gaps: dict[str, list[str]] = {}
     resolved: dict[str, int] = {}
     for slug in seats:
         rows = json.loads(Path(offline[slug]).read_text(encoding="utf-8")) if slug in offline else None
-        seat_items, seat_gaps, seat_resolved = evaluate_seat(slug, cfg, console, now, rows)
+        seat_items, seat_gaps, seat_resolved = evaluate_seat(slug, cfg, console, now, rows, seen)
         items += seat_items
         if seat_resolved:
             resolved[slug] = seat_resolved
@@ -538,10 +591,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("HOLD: no runtime-read credential; nothing can be evaluated", file=sys.stderr)
         return EXIT_HOLD
 
+    if args.runs and (args.slug or offline):
+        return runs_report(args.slug or list(offline), offline, now, args.runs_days)
     cfg = wh.load_config()
     console = Console(console_d1.ConsoleD1()) if not offline else Console(_NoD1())
     seats = live_seats(console, args.slug or list(offline))
-    items, gaps, resolved = _evaluate_all(cfg, console, seats, offline, now, args.machines)
+    if args.runs:
+        return runs_report(seats, offline, now, args.runs_days)
+    seen: dict[str, list[dict]] = {}
+    items, gaps, resolved = _evaluate_all(cfg, console, seats, offline, now, args.machines, seen)
     items += wh.missed_run_items(since, cfg, now)
     plan = mail.decide(
         items=items,
@@ -571,6 +629,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"pages: {len(pages)} email(s){' (dry run)' if args.dry_run else ''}")
     if not plan.send or args.pages_only:
         return EXIT_SEND_FAILED if page_error else EXIT_OK
+    plan.text += _runs_footer(seen, cfg.ledger_lookback_hours)
     if args.print_body:
         print(f"Subject: {plan.subject}\n\n{plan.text}")
     if args.dry_run:

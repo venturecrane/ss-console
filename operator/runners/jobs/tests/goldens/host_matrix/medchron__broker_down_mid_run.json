@@ -60,6 +60,12 @@
           "job_id": "<ULID1>",
           "pages": 0,
           "reason": null,
+          "run": {
+            "by": "code",
+            "event": "start",
+            "release": "unknown",
+            "v": 1
+          },
           "state": "running"
         },
         "skill": "medical-chronology-maintainer"
@@ -120,6 +126,32 @@
         "finished_at": "<CLOCK+0.0>",
         "held_paused": false,
         "reason": null,
+        "record_pending": {
+          "fields": {
+            "cents": 500,
+            "delivery": {
+              "files": [
+                {
+                  "bytes": 10,
+                  "confirmed": true,
+                  "name": "A.docx",
+                  "sha256": "ab"
+                }
+              ]
+            },
+            "documents": 4,
+            "folder_id": "folder-9",
+            "pages": 30,
+            "run": {
+              "by": "code",
+              "event": "end",
+              "release": "unknown",
+              "v": 1
+            }
+          },
+          "proof": true,
+          "state": "delivered"
+        },
         "resume_redo": [],
         "resume_release": false,
         "resume_release_held": false,
@@ -136,7 +168,7 @@
     },
     "log": [
       "ERROR jobs.daemon medchron job <ULID1>: could not record its proof: broker socket: [Errno 2] No such file or directory",
-      "ERROR jobs.daemon could not record delivered for <ULID1>: broker socket: [Errno 2] No such file or directory (the state file keeps it)"
+      "ERROR jobs.daemon could not record delivered for <ULID1>: broker socket: [Errno 2] No such file or directory (recorded on a later tick)"
     ],
     "readers": {
       "busy_probe": {
@@ -277,7 +309,14 @@
         },
         "request": {
           "action": "medchron_job_record",
-          "fields": {},
+          "fields": {
+            "run": {
+              "by": "code",
+              "event": "start",
+              "release": "unknown",
+              "v": 1
+            }
+          },
           "job_id": "<ULID1>",
           "state": "running"
         }
@@ -285,7 +324,58 @@
     ]
   },
   {
-    "audit": [],
+    "audit": [
+      {
+        "action_type": "MEDCHRON_JOB_DELIVERED",
+        "actor": "workspace-broker",
+        "matter_ref": "m-1",
+        "metadata": {
+          "cents": 500,
+          "documents": 4,
+          "files": [
+            {
+              "bytes": 10,
+              "name": "A.docx",
+              "sha256": "ab"
+            }
+          ],
+          "folder_id": "folder-9",
+          "job_id": "<ULID1>",
+          "pages": 30,
+          "reason": null,
+          "run": {
+            "by": "code",
+            "event": "end",
+            "release": "unknown",
+            "v": 1
+          },
+          "state": "delivered"
+        },
+        "skill": "medical-chronology-maintainer"
+      },
+      {
+        "action_type": "DELIVERY_PROVEN",
+        "actor": "workspace-broker",
+        "matter_ref": null,
+        "metadata": {
+          "attempt": 1,
+          "files": [
+            {
+              "file_id": "f1",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "size": 10
+            }
+          ],
+          "job_id": "<ULID1>",
+          "lane": "medchron",
+          "review": "passed",
+          "review_cents": 0,
+          "review_model": "",
+          "rows": 0
+        },
+        "skill": null
+      }
+    ],
     "cgroup": {},
     "children": [],
     "daemon": {
@@ -296,6 +386,7 @@
         "finished_at": "<CLOCK+0.0>",
         "held_paused": false,
         "reason": null,
+        "record_pending": null,
         "reply_watch": {
           "attempt": 1,
           "due": "<CLOCK+1200.0>",
@@ -402,19 +493,92 @@
     "wire": [
       {
         "reply": {
+          "job": {
+            "cents": 500,
+            "covered_document_ids": null,
+            "covered_json": null,
+            "created_at": "<TS>",
+            "documents": 4,
+            "folder_id": "folder-9",
+            "id": "<ULID1>",
+            "matter_number": "2026-PI-102",
+            "pages": 30,
+            "reason": null,
+            "state": "delivered",
+            "uncovered_document_ids": null,
+            "uncovered_reasons": null,
+            "updated_at": "<TS>",
+            "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
+          },
+          "ok": true
+        },
+        "request": {
+          "action": "medchron_job_record",
+          "fields": {
+            "cents": 500,
+            "delivery": {
+              "files": [
+                {
+                  "bytes": 10,
+                  "confirmed": true,
+                  "name": "A.docx",
+                  "sha256": "ab"
+                }
+              ]
+            },
+            "documents": 4,
+            "folder_id": "folder-9",
+            "pages": 30,
+            "run": {
+              "by": "code",
+              "event": "end",
+              "release": "unknown",
+              "v": 1
+            }
+          },
+          "job_id": "<ULID1>",
+          "state": "delivered"
+        }
+      },
+      {
+        "reply": {
+          "audit_id": "<ULID2>",
+          "ok": true
+        },
+        "request": {
+          "action": "delivery_proof_record",
+          "attempt": 1,
+          "files": [
+            {
+              "file_id": "f1",
+              "name": "x.docx",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "size": 10
+            }
+          ],
+          "job_id": "<ULID1>",
+          "lane": "medchron",
+          "review": "passed",
+          "review_cents": 0,
+          "review_model": "",
+          "rows": 0
+        }
+      },
+      {
+        "reply": {
           "credits": [],
           "jobs": [
             {
-              "cents": 0,
+              "cents": 500,
               "covered_count": null,
               "created_at": "<TS>",
-              "documents": 0,
-              "folder_id": null,
+              "documents": 4,
+              "folder_id": "folder-9",
               "id": "<ULID1>",
               "matter_number": "2026-PI-102",
-              "pages": 0,
+              "pages": 30,
               "reason": null,
-              "state": "running",
+              "state": "delivered",
               "uncovered_count": null,
               "updated_at": "<TS>",
               "work_digest": "sha256:2c096b2d372d2312f1db4564fc7bc965a645f50eb0c7346ff52f56a4046b480a"
@@ -429,7 +593,7 @@
       {
         "reply": {
           "channel": "agentmail",
-          "expected_key": "",
+          "expected_key": "medchron_job:<ULID1>:1:delivered",
           "holds": 0,
           "ok": true,
           "replies": [],
@@ -457,6 +621,7 @@
         "finished_at": "<CLOCK+0.0>",
         "held_paused": false,
         "reason": null,
+        "record_pending": null,
         "reply_watch": {
           "attempt": 1,
           "due": "<CLOCK+1200.0>",
@@ -555,7 +720,7 @@
       {
         "reply": {
           "channel": "agentmail",
-          "expected_key": "",
+          "expected_key": "medchron_job:<ULID1>:1:delivered",
           "holds": 0,
           "ok": true,
           "replies": [],

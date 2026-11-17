@@ -38,7 +38,15 @@ from typing import Any
 import pytest
 from host_cross_version_worker import REPLY
 from host_matrix_cells import CELLS, STEPS, Run
-from host_matrix_kit import SLUG, build_broker, freeze_broker_clock, seed_random, serve
+from host_matrix_kit import (
+    GOLDENS,
+    SLUG,
+    build_broker,
+    freeze_broker_clock,
+    load_allowed,
+    seed_random,
+    serve,
+)
 from host_matrix_lanes import remove
 
 OLD_ENV = "JOBS_CROSS_VERSION_OLD"
@@ -70,6 +78,7 @@ TICKS = {
     "wake_lost": 7,
     "broker_down_mid_run": 3,
     "orphan_envelope": 1,
+    "queued_behind_same_lane": 3,
 }
 #: The note lane's cells have no run tick (``host_matrix_cells._note_job``).
 NOTE_TICKS = {"delivered": 1, "wake_paused": 2, "wake_lost": 6}
@@ -231,8 +240,17 @@ def test_a_job_folder_carries_across_versions(tmp_path, monkeypatch, real_lane_g
     for name, plan in plans.items():
         with monkeypatch.context() as mp:  # each run patches the broker's clock and ids afresh
             got[name] = _run(tmp_path, mp, cell, plan)
+    # A behaviour change the PR names for this cell in the host matrix's allowed
+    # list (reviewed with it, cleared after merge) may show across the restart,
+    # in the same step's same section (``<step>.wire``, ``<step>.audit``): a
+    # restart moves where in that section the change lands (an old host reads
+    # the row the new one recorded), not whether it is the reviewed change.
+    # Nothing else may differ, and with both sides one tree nothing is excused.
+    allowed = load_allowed(GOLDENS).get(cell.replace("/", "__"), []) if os.environ.get(OLD_ENV) else []
+    sections = {".".join(p.split(".")[:2]) for p in allowed}
     for name in ("old_new", "new_old"):
-        assert _diffs(got["same"], got[name]) == [], f"{name}: {cell} restarted after tick {k}"
+        found = [d for d in _diffs(got["same"], got[name]) if ".".join(d.split(".")[:2]) not in sections]
+        assert found == [], f"{name}: {cell} restarted after tick {k}"
 
 
 def test_a_host_that_reads_a_folder_differently_fails(tmp_path, monkeypatch, real_lane_gate):

@@ -544,10 +544,19 @@ def test_daemon_resumes_a_job_after_a_crash(tmp_path):
     assert d2._daemon_state("01A")["attempts"] == 2
 
 
+def _wake_sent(d: MedchronLane, job_id: str) -> None:
+    """The job's DELIVER wake went out (the next tick sends it, minutes after
+    the job ends): a workdir whose wake is still owed is never wiped."""
+    st = d._daemon_state(job_id)
+    if st.get("wake"):
+        d._write_state(job_id, wake={**st["wake"], "pending": False})
+
+
 def test_daemon_wipes_terminal_jobs_after_the_hold_and_never_live_ones(tmp_path):
     d, broker = _daemon(tmp_path, wipe_hours=72)
     _submit(d, broker, "01A")
     d.tick()
+    _wake_sent(d, "01A")
     assert (d.jobs / "01A").exists()
     d._now["t"] += 71 * 3600
     assert d.wipe_expired() == [] and (d.jobs / "01A").exists()
@@ -567,6 +576,7 @@ def _parked(d: MedchronLane, broker: FakeBroker, job_id: str, state: str = "held
     stamped (it always was) but the state is not terminal."""
     _submit(d, broker, job_id)
     d.tick()
+    _wake_sent(d, job_id)
     d._write_state(job_id, state=state, finished_at=d.clock())
 
 
@@ -651,11 +661,27 @@ def test_wiping_a_parked_job_takes_its_queue_entry_too(tmp_path):
     assert d._queued() == []
 
 
+def test_a_delivery_whose_wake_is_still_owed_is_never_wiped(tmp_path):
+    """A gateway paused for days kept a delivered job's one message pending,
+    and the 72-hour wipe deleted the only copy of it: the firm never heard and
+    nobody was paged (the lifecycle matrix, 2026-11-17). Falsifier: the same job
+    with its wake sent is wiped at the same instant."""
+    d, broker = _daemon(tmp_path, wipe_hours=72)
+    _submit(d, broker, "01A")
+    d.tick()
+    assert (d._daemon_state("01A").get("wake") or {}).get("pending")
+    d._now["t"] += 73 * 3600
+    assert d.wipe_expired() == [] and (d.jobs / "01A").exists()
+    _wake_sent(d, "01A")
+    assert d.wipe_expired() == ["01A"]
+
+
 def test_a_terminal_job_keeps_the_short_window(tmp_path):
     """The parked window must not loosen the one that already worked."""
     d, broker = _daemon(tmp_path, wipe_hours=72, held_wipe_hours=24 * 7)
     _submit(d, broker, "01A")
     d.tick()
+    _wake_sent(d, "01A")
     assert d._daemon_state("01A")["state"] == "delivered"
     d._now["t"] += 71 * 3600
     assert d.wipe_expired() == []

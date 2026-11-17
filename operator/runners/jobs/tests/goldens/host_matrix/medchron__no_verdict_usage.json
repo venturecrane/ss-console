@@ -60,6 +60,12 @@
           "job_id": "<ULID1>",
           "pages": 0,
           "reason": null,
+          "run": {
+            "by": "code",
+            "event": "start",
+            "release": "unknown",
+            "v": 1
+          },
           "state": "running"
         },
         "skill": "medical-chronology-maintainer"
@@ -75,6 +81,12 @@
           "job_id": "<ULID1>",
           "pages": 0,
           "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+          "run": {
+            "by": "code",
+            "code": "no_verdict",
+            "event": "stop",
+            "v": 1
+          },
           "state": "failed"
         },
         "skill": "medical-chronology-maintainer"
@@ -305,7 +317,14 @@
         },
         "request": {
           "action": "medchron_job_record",
-          "fields": {},
+          "fields": {
+            "run": {
+              "by": "code",
+              "event": "start",
+              "release": "unknown",
+              "v": 1
+            }
+          },
           "job_id": "<ULID1>",
           "state": "running"
         }
@@ -334,7 +353,13 @@
         "request": {
           "action": "medchron_job_record",
           "fields": {
-            "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)"
+            "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+            "run": {
+              "by": "code",
+              "code": "no_verdict",
+              "event": "stop",
+              "v": 1
+            }
           },
           "job_id": "<ULID1>",
           "state": "failed"

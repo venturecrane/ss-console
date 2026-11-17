@@ -1,12 +1,18 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the captured goldens for an ORDINARY completed job, per golden file. The goldens were captured on origin/main f72a4d411 before the wave 0 money fixes (0.1 spend recorded on a killed job, 0.2 a resumed job metered once, 0.5 one cache write per audit pass, 0.6 the handwriting field out of demand and drafting source text, 0.10 the unrecorded-spend sweep). None of those changes what an ordinary job records, so every list is empty but one: any other difference fails. A future intended change adds its path here, in the PR that makes it. medchron_rehearsed (added in wave 0 review) is a chronology rehearsed and then resumed: its row records the job's own spend, never the rehearsal's copied ledger. records (wave 2 Phase A): the three random review ids were committed raw and compared normalised; the golden now stores them as <ID>, the form the test compares. The three paths that once named them were cleared after it merged.",
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the captured goldens for an ORDINARY completed job, per golden file. The goldens were captured on origin/main f72a4d411 before the wave 0 money fixes (0.1 spend recorded on a killed job, 0.2 a resumed job metered once, 0.5 one cache write per audit pass, 0.6 the handwriting field out of demand and drafting source text, 0.10 the unrecorded-spend sweep). None of those changes what an ordinary job records, so every list is empty but one: any other difference fails. A future intended change adds its path here, in the PR that makes it. medchron_rehearsed (added in wave 0 review) is a chronology rehearsed and then resumed: its row records the job's own spend, never the rehearsal's copied ledger. records (wave 2 Phase A): the three random review ids were committed raw and compared normalised; the golden now stores them as <ID>, the form the test compares. The three paths that once named them were cleared after it merged. The lifecycle matrix and run record PR (2026-11-17): every chronology record carries a run block (fields.run on the wire, metadata.run on the audit row, run_pending in the state between a resume and its start); an ending the broker could not take waits as record_pending and is recorded, then announced, on a later tick (medchron__broker_down_mid_run); the new host ending queued_behind_same_lane is not applicable to the note, negotiation and library setup lanes.",
   "casefile": [],
   "demand": [],
   "drafting": [],
   "litigation": [],
   "litigation_held": [],
-  "medchron": [],
-  "medchron_rehearsed": [],
+  "medchron": ["records.0.2.run", "records.1.2.run"],
+  "medchron_rehearsed": [
+    "records.0.2.run",
+    "records.1.2.run",
+    "records.2.2.run",
+    "records.3.2.run",
+    "state.run_pending"
+  ],
   "negotiation": [],
   "records": []
 }

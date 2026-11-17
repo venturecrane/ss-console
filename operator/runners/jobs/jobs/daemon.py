@@ -50,7 +50,7 @@ from .matter.store import ENV as PAGE_STORE_ENV
 from .seat_probes import CGROUP_ROOT, memory_cap_mode, sticky_level
 
 from . import child as child_mod, job_lanes, lane_proof, proof_run, quiesce, requeue, rewake, smd_stop, wake_grace
-from . import resume as resume_mod, retention, spend, verdict as verdict_mod
+from . import resume as resume_mod, retention, run_record, spend, verdict as verdict_mod
 from .back_off import BackOff
 from .proof import watch as proof_watch
 from . import seat_layout
@@ -349,7 +349,7 @@ class Daemon(BackOff):
             self._log.warning(self.START_DEFERRED[0], job_id, exc)
             return None
         try:
-            self.broker.record(job_id, "running", {})
+            self.broker.record(job_id, "running", self._running_fields(job_id))
         except BrokerError as exc:
             self._log.warning(self.START_DEFERRED[1], job_id, exc)
             return None
@@ -382,6 +382,10 @@ class Daemon(BackOff):
         """HOOK. Write the job's input file from its envelope, fresh before
         every run and every resume; returns the job dir."""
         raise NotImplementedError(f"the {self.LANE or 'base'} lane defines no job file")
+
+    def _running_fields(self, job_id: str) -> dict[str, Any]:
+        """HOOK. The fields of the attempt's ``running`` record ({} on most lanes)."""
+        return {}
 
     def _lane_env(self, job_id: str) -> dict[str, str]:
         """HOOK. The lane's own child env: its firm inputs (pinned), state dirs."""
@@ -571,7 +575,8 @@ class Daemon(BackOff):
             return True
         if not self._daemon_state(job_id).get("held_paused"):
             try:
-                self.broker.record(job_id, "held", {"reason": "seat paused (sticky stop HARD_STOP)"})
+                run = run_record.fields_for(self, "stop", code="seat_paused")
+                self.broker.record(job_id, "held", {"reason": "seat paused (sticky stop HARD_STOP)", **run})
             except BrokerError as exc:
                 logger.warning("could not record the pause hold for %s: %s", job_id, exc)
             self._write_state(job_id, state="held", held_paused=True)

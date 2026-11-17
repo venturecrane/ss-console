@@ -41,6 +41,7 @@ from .. import (
     daemon as daemon_mod,
     job_notes,
     requeue,
+    run_record,
     spend,
     verdict as verdict_mod,
 )
@@ -56,6 +57,8 @@ from .covered import delivery_fields, wake_folder_lines
 logger = logging.getLogger("jobs.daemon")
 
 MEMORY_MAX_ENV = "SMD_MEDCHRON_MEMORY_MAX_BYTES"
+#: How long the lane waits before trying an unrecorded ending again.
+RECORD_RETRY_SECONDS = 60.0
 SKILL = "medical-chronology-maintainer"
 
 
@@ -79,6 +82,12 @@ class MedchronLane(Daemon):
     #: Explicit firm-config path; None resolves the env/default the seat uses.
     firm_config: str | None = None
     LANE = "medchron"
+    #: Every record carries a run block (``run_record.py``, ``bin/work-health.py --runs``).
+    RUN_RECORD = True
+    #: Whether this attempt's delivery proof landed (``proof/watch._record_proven``).
+    proof_recorded: bool | None = None
+    #: When ``poll_requests`` next tries an ending the broker could not take.
+    record_retry_at: float = 0.0
     HEARTBEAT = "heartbeat"
     TICK = "tick"
     CHILD_ARGS = ("--json",)
@@ -101,6 +110,30 @@ class MedchronLane(Daemon):
             logger.warning("firm config not usable yet, deferring %s: %s", job_id, exc)
             return "deferred"
         return None
+
+    def _running_fields(self, job_id: str) -> dict[str, Any]:
+        """The ``running`` record's run block: a resume's own event when
+        ``resume.take_requests`` left one for this attempt, else ``start``."""
+        pending = self._daemon_state(job_id).get("run_pending")
+        if isinstance(pending, dict) and pending.get("event"):
+            return {"run": {**pending, "release": run_record.release()}}
+        return {"run": run_record.block("start", with_release=True)}
+
+    def _before_child(self, job_id: str) -> None:
+        # The running record landed (``_start``): a resume's event is spent.
+        if self._daemon_state(job_id).get("run_pending") is not None:
+            self._write_state(job_id, run_pending=None)
+        super()._before_child(job_id)
+
+    def run_stages(self, job_id: str) -> dict[str, Any]:
+        """The job's stage table (a run's or an update's), for its run record."""
+        from . import dag
+
+        try:
+            env = json.loads((self.job_dir(job_id) / "envelope.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            env = {}
+        return dag.by_name(isinstance(env, dict) and env.get("update") is not None)
 
     def _lane_env(self, job_id: str) -> dict[str, str]:
         return page_store_mod.child_env()  # the store of paid page text (jobs/matter/store.py)
@@ -208,12 +241,24 @@ class MedchronLane(Daemon):
         # Proven delivery: a dry run is never a delivery, a delivered claim
         # without its proof is a failure, and a hold or read-back failure pages.
         paged_before = dict(self._daemon_state(job_id).get("proof_alerts") or {})
+        self.proof_recorded = None
         fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
         state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
+        fields["run"] = run_record.block(
+            "end" if state == "delivered" else "stop",
+            stage=stage,
+            reason=fields.get("reason") if state != "delivered" and outcomes else None,
+            code=None if outcomes or state == "delivered" else "no_verdict",
+            with_release=state == "delivered",
+            stages=self.run_stages(job_id),
+            extra=run_record.counts(self.job_dir(job_id)),
+        )
+        recorded = True
         try:
             self.broker.record(job_id, state, fields)
         except BrokerError as exc:
-            logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
+            recorded = False
+            logger.error("could not record %s for %s: %s (recorded on a later tick)", state, job_id, exc)
         finished = self.clock() if state in TERMINAL or state == "held" else None
         self._write_state(job_id, state=state, finished_at=finished, reason=fields.get("reason"))
         if state == "failed" and (self._daemon_state(job_id).get("proof_alerts") or {}) == paged_before:
@@ -226,7 +271,55 @@ class MedchronLane(Daemon):
                 job_id,
                 wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields, stage=stage)},
             )
+        if not recorded:
+            # The broker was away when the job ended (2026-11-17, the lifecycle
+            # matrix): the row said running for good while the firm was told it
+            # was delivered, and no verb accepted the row. The ending is kept and
+            # recorded on a later tick, and its wake waits for that record
+            # (``_wakes_pending``). The wake is still written as before, so a host
+            # rolled back to a version that does not know ``record_pending``
+            # behaves as that version always did.
+            proof = state == "delivered" and self.proof_recorded is False
+            self._write_state(job_id, record_pending={"state": state, "fields": fields, "proof": proof})
         return state
+
+    def _wakes_pending(self) -> list[str]:
+        """Every pending wake but those whose ending is not recorded yet."""
+        return [j for j in super()._wakes_pending() if not self._daemon_state(j).get("record_pending")]
+
+    def poll_requests(self) -> None:
+        """Each tick (before its wakes) and while idle: record any ending the
+        broker could not take, at most once a minute while it stays away."""
+        super().poll_requests()
+        if self.clock() < self.record_retry_at:
+            return
+        try:
+            if not self._record_pending():
+                self.record_retry_at = self.clock() + RECORD_RETRY_SECONDS
+        except Exception:  # a poll hook must not raise (daemon.poll_requests); logged with its trace
+            logger.exception("recording a pending ending failed")
+            self.record_retry_at = self.clock() + RECORD_RETRY_SECONDS
+
+    def _record_pending(self) -> bool:
+        """Record each ending the broker could not take when it happened, with
+        its delivery proof when that did not land either; its wake then goes."""
+        ok = True
+        if not self.jobs.is_dir():
+            return ok
+        for jd in sorted(self.jobs.iterdir()):
+            pending = self._daemon_state(jd.name).get("record_pending")
+            if not isinstance(pending, dict):
+                continue
+            try:
+                self.broker.record(jd.name, pending["state"], pending["fields"])
+            except BrokerError as exc:
+                logger.warning("still could not record %s for %s: %s", pending["state"], jd.name, exc)
+                ok = False
+                continue
+            if pending.get("proof"):
+                proof_watch.record_proven(self, jd.name, verdict_mod.read(jd, ""))
+            self._write_state(jd.name, record_pending=None)
+        return ok
 
     # -- the deliver wake (ss#2616) --------------------------------------------
     def _compose_wake(self, job_id: str, state: str, fields: dict[str, Any], *, stage: str | None = None) -> str:

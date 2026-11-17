@@ -60,6 +60,12 @@
           "job_id": "<ULID1>",
           "pages": 0,
           "reason": null,
+          "run": {
+            "by": "code",
+            "event": "start",
+            "release": "unknown",
+            "v": 1
+          },
           "state": "running"
         },
         "skill": "medical-chronology-maintainer"
@@ -75,6 +81,14 @@
           "job_id": "<ULID1>",
           "pages": 30,
           "reason": "extract: a stage failed",
+          "run": {
+            "by": "code",
+            "code": "extract",
+            "event": "stop",
+            "kind": "plumbing",
+            "stage": "extract",
+            "v": 1
+          },
           "state": "failed"
         },
         "skill": "medical-chronology-maintainer"
@@ -302,7 +316,14 @@
         },
         "request": {
           "action": "medchron_job_record",
-          "fields": {},
+          "fields": {
+            "run": {
+              "by": "code",
+              "event": "start",
+              "release": "unknown",
+              "v": 1
+            }
+          },
           "job_id": "<ULID1>",
           "state": "running"
         }
@@ -334,7 +355,15 @@
             "cents": 500,
             "documents": 4,
             "pages": 30,
-            "reason": "extract: a stage failed"
+            "reason": "extract: a stage failed",
+            "run": {
+              "by": "code",
+              "code": "extract",
+              "event": "stop",
+              "kind": "plumbing",
+              "stage": "extract",
+              "v": 1
+            }
           },
           "job_id": "<ULID1>",
           "state": "failed"
@@ -515,6 +544,12 @@
           "job_id": "<ULID1>",
           "pages": 30,
           "reason": null,
+          "run": {
+            "by": "smd",
+            "event": "resume",
+            "release": "unknown",
+            "v": 1
+          },
           "state": "running"
         },
         "skill": "medical-chronology-maintainer"
@@ -559,6 +594,12 @@
           "job_id": "<ULID1>",
           "pages": 30,
           "reason": null,
+          "run": {
+            "by": "code",
+            "event": "end",
+            "release": "unknown",
+            "v": 1
+          },
           "state": "delivered"
         },
         "skill": "medical-chronology-maintainer"
@@ -628,6 +669,7 @@
         "resume_release_by": "",
         "resume_release_held": false,
         "resumes": 1,
+        "run_pending": null,
         "state": "delivered",
         "wake": {
           "attempts": 0,
@@ -805,7 +847,14 @@
         },
         "request": {
           "action": "medchron_job_record",
-          "fields": {},
+          "fields": {
+            "run": {
+              "by": "smd",
+              "event": "resume",
+              "release": "unknown",
+              "v": 1
+            }
+          },
           "job_id": "<ULID1>",
           "state": "running"
         }
@@ -871,7 +920,13 @@
             },
             "documents": 4,
             "folder_id": "folder-9",
-            "pages": 30
+            "pages": 30,
+            "run": {
+              "by": "code",
+              "event": "end",
+              "release": "unknown",
+              "v": 1
+            }
           },
           "job_id": "<ULID1>",
           "state": "delivered"
@@ -931,6 +986,7 @@
         "resume_release_by": "",
         "resume_release_held": false,
         "resumes": 1,
+        "run_pending": null,
         "state": "delivered",
         "wake": {
           "attempts": 0,

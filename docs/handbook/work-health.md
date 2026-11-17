@@ -4,11 +4,13 @@ section: running
 order: 21
 owner: captain
 review_every: 30
-last_reviewed: "2026-11-16"
+last_reviewed: "2026-11-17"
 summary: The hourly check of the WORK on every live seat (requests with no reply, stuck or held jobs, missed and silent scheduled runs, failing connections, new errors), how it reaches you as the triage report and urgent sign-in emails, and what each line means.
 sources:
   - label: operator/bin/work-health.py - the evaluation
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/work-health.py
+  - label: operator/bin/lib/work_health_runs.py - how many chronology runs needed nobody
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/work_health_runs.py
   - label: operator/contracts/work-health.yaml - the rules (lane limits, windows, the all-clear hour)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/contracts/work-health.yaml
   - label: .github/workflows/work-health.yml - the ACTION-page backstop (pages only since 2026-10-16)
@@ -104,6 +106,22 @@ The hourly Smokeball check is the only detector of a dead Smokeball token: the c
 | A message the Operator tried to send on its own was blocked by the safety check | An out-of-turn send (an outcome letter, an alert) was refused by the outbound scan, N times. Nobody it was for has heard. | Agent: find what it was sending (the seat's `agent.log` names it). You: decide how that person is told. |
 | A call was refused / failed / hit a limit | Refused, limit, failed or partial tool results in the last 24 hours, one line per tool and reason with a count. Once reported it is NEW again only when a newer failure lands. | Agent: check whether a person was waiting and got an answer. |
 | New Operator error | A Sentry error reported in the last 24 hours. | Agent: triage it in Sentry. |
+
+## How many chronologies needed nobody
+
+`python3 operator/bin/work-health.py --runs` (with `--slug <seat>` for one seat, `--runs-days N` for the window, 30 by default) prints, per seat and across seats: chronology runs, unaided, aided, held now, failed, unrecorded, and the unaided rate. It sends nothing and nothing reaches a firm. It splits stops by cause: a stop at a check (a gate, a proof, a review: the product doing its job) is counted apart from a stop at plumbing (the pull, the reads, the render, the upload), so a new check that holds runs is never read as a plumbing regression. Infrastructure retries and blocks whose reason had no code (`uncoded`) are counted too. The hourly digest carries one line of the same counts, only when it is already being sent.
+
+Each chronology transition's audit row carries a `run` record (codes and counts, never matter text: `operator/workspace_broker/run_meta.py`), written by the jobs runner at every site that ends, stops, restarts or hands over a job (`operator/runners/jobs/jobs/run_record.py`). A run is **unaided** only when all of these hold (`operator/bin/lib/work_health_runs.py`):
+
+1. it delivered;
+2. every step on its rows was the runner's own (`by: code`);
+3. no later job replaced it and it replaced none;
+4. no running row follows a held or failed row, whatever the records say;
+5. no other chronology on the same matter was submitted within 7 days while either was not delivered.
+
+An infrastructure retry is the runner's own and does not make a run aided. The window reads every audit row in it, 50 rows per seam request, so a 30-day window on a busy seat is a few hundred requests; the hourly check reads its usual 8 days.
+
+There is no backfill. Rows written before the record existed carry none, so those runs show as `unrecorded` and are never counted unaided; history cannot be rebuilt from what the seats kept.
 
 ## What the list never carries
 

@@ -121,6 +121,10 @@ def wipe_expired(d: Any, terminal: frozenset[str]) -> list[str]:
         hours = _window_hours(d, state, terminal)
         if not done or hours is None or now - float(done) < hours * 3600:
             continue
+        if (st.get("wake") or {}).get("pending"):
+            # The job's one message has not gone out (a gateway paused for days):
+            # the workdir holds the only copy of it (the lifecycle matrix, 2026-11-17).
+            continue
         if state not in terminal:
             # Worth a line: a job nobody cleared for a week is a fact about us,
             # not about the job, and the workdir going is the only trace left.
@@ -167,7 +171,10 @@ def close_wiped_hold(d: Any, job_id: str, row: dict[str, Any] | None = None) -> 
         if not row or row.get("state") != "held":
             return False
         was = str(row.get("reason") or "no reason recorded")
-        d.broker.record(job_id, "failed", {"reason": f"{WIPED_HOLD_REASON} (held: {was})"[:500]})
+        from . import run_record
+
+        run = run_record.fields_for(d, "stop", code="expired")
+        d.broker.record(job_id, "failed", {"reason": f"{WIPED_HOLD_REASON} (held: {was})"[:500], **run})
     except Exception as exc:  # noqa: BLE001 - a broker error must not stop the wipe loop
         logger.warning("could not close the wiped hold %s: %s", job_id, exc)
         return False

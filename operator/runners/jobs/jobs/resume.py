@@ -22,7 +22,8 @@ import signal
 import time
 from typing import Any
 
-from . import smd_stop, stop_request, verdict as verdict_mod
+from . import run_record, smd_stop, stop_request, verdict as verdict_mod
+from .broker_client import BrokerError
 from .proof import review as _review
 
 #: The job-dir markers ``proof/review.gate`` reads: review.py's own constants,
@@ -72,7 +73,14 @@ def take_requests(d: Any) -> list[str]:
 
     A marker whose job dir or envelope is gone is refused and REMOVED, not left
     to be retried every tick: the artifacts a resume needs are gone, and the
-    honest answer is the one the ledger already gives -- still failed.
+    honest answer is the one the ledger already gives -- still failed. On a
+    lane that keeps run records the refusal is recorded on the row
+    (``resume_refused``), so the person who asked can see their step did not
+    take and resubmit (2026-11-17: before, it left only a log line).
+
+    On such a lane the marker's step (``run_record.marker_event``: a resume,
+    redo, release, or the ``*_decide`` / ``redo_doc`` tool that names itself)
+    is kept as ``run_pending`` and rides the attempt's ``running`` record.
     """
     if not d.queue.is_dir():
         return []
@@ -89,8 +97,20 @@ def take_requests(d: Any) -> list[str]:
         if not job_id or not env.is_file():
             logger.error("resume %s refused: the job dir or its envelope is gone (wiped?)", job_id or marker.name)
             marker.unlink(missing_ok=True)
+            if job_id and run_record.on(d):
+                _record_refused(d, job_id, req)
             continue
         st = d._daemon_state(job_id)
+        if st.get("state") == "delivered":
+            # A marker written for a job that has since DELIVERED (a decide tool
+            # run while the job ran on): resuming it would clear the delivery's
+            # pending wake, so the firm would never hear, and re-queue an envelope
+            # the claim then sets aside (the lifecycle matrix, 2026-11-17).
+            logger.error("resume %s refused: the job is delivered", job_id)
+            marker.unlink(missing_ok=True)
+            if run_record.on(d):
+                _record_refused(d, job_id, req)
+            continue
         # SMD chose to run a job it once stopped: the old stop is spent.
         smd_stop.clear(d.job_dir(job_id))
         (d.queue / f"{job_id}.json").write_text(env.read_text(encoding="utf-8"), encoding="utf-8")
@@ -109,10 +129,32 @@ def take_requests(d: Any) -> list[str]:
             resume_release_held=bool(req.get("release_held")),
             resume_release_by=str(req.get("by") or "")[:120],
         )
+        if run_record.on(d):
+            d._write_state(job_id, run_pending=run_record.block(run_record.marker_event(req), by=_by(req)))
         marker.unlink(missing_ok=True)
         logger.info("resume %s: re-queued, redo=%s", job_id, req.get("redo") or [])
         resumed.append(job_id)
     return resumed
+
+
+def _by(req: dict[str, Any]) -> str:
+    """Who took the step a marker carries: every marker is written by SMD
+    (root's ``medchron_job_resume``, a ``*_decide`` tool, ``redo_doc``) unless
+    it names the firm or the runner itself."""
+    by = req.get("by_class")
+    return by if by in ("firm", "smd", "code") else "smd"
+
+
+def _record_refused(d: Any, job_id: str, req: dict[str, Any]) -> None:
+    """A same-state note on the row that the asked-for step could not run."""
+    try:
+        row = d.broker.status(job_id)
+        state = str((row or {}).get("state") or "")
+        if state:
+            blk = run_record.block("resume_refused", by=_by(req), code=run_record.marker_event(req))
+            d.broker.record(job_id, state, {"run": blk})
+    except (BrokerError, ValueError) as exc:
+        logger.warning("could not record the refused resume of %s: %s", job_id, exc)
 
 
 def start_run(d: Any, job_id: str, base: list[str]) -> list[str]:

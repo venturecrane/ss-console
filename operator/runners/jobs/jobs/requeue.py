@@ -36,6 +36,7 @@ import logging
 import re
 from typing import Any
 
+from . import run_record
 from .broker_client import BrokerError
 
 logger = logging.getLogger("jobs.daemon")
@@ -156,7 +157,8 @@ def maybe_requeue(
     try:
         # A same-state note on the running row: legal, an audit row of its own,
         # and what a person reading the ledger sees.
-        d.broker.record(job_id, "running", {**counts, "reason": msg})
+        run = run_record.fields_for(d, "infra_requeue", stage=stage, code=why, stages=run_record.stages_of(d, job_id))
+        d.broker.record(job_id, "running", {**counts, "reason": msg, **run})
     except BrokerError as exc:
         logger.warning("could not record the requeue note for %s: %s (the state file keeps it)", job_id, exc)
     wait = delay_for(why)

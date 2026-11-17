@@ -429,7 +429,61 @@ def _orphan_envelope(r: Run) -> None:
     r.tick("claim")
 
 
+def _another(ref: str) -> str:
+    """Another request's reference, in the same shape: the next scheduled
+    slot, or another email's message id."""
+    if ref.startswith("scheduled:"):
+        return ref[:-2] + f"{(int(ref[-2:]) + 1) % 24:02d}"
+    if ref.startswith("<") and "@" in ref:
+        return ref.replace("@", "-second@", 1)
+    return f"{ref}-second"
+
+
+def _another_job(env: dict[str, Any]) -> dict[str, Any]:
+    """Another request for other work (another matter, another caseload), so
+    no lane's duplicate rule refuses it as the first job again."""
+    out = dict(env)
+    for key in ("request_ref", "message_ref"):
+        if key in out:
+            out[key] = _another(str(out[key]))
+    if isinstance(out.get("matter"), dict):
+        m = dict(out["matter"])
+        m["id"] = str(m.get("id", ""))[:-1] + "9"
+        m["number"] = f"{m.get('number', '')}-2"
+        out["matter"] = m
+    if isinstance(out.get("matter_id"), str):
+        out["matter_id"] = out["matter_id"][:-1] + "9"
+    scope = out.get("scope")
+    if isinstance(scope, dict) and scope.get("paralegal_staff_ids"):
+        out["scope"] = {**scope, "paralegal_staff_ids": [i[:-1] + "9" for i in scope["paralegal_staff_ids"]]}
+    elif isinstance(scope, dict) and isinstance(scope.get("assisting"), dict):
+        out["scope"] = {**scope, "assisting": {"names": ["Robin Example"]}}
+    return out
+
+
+def _queued_behind_same_lane(r: Run) -> None:
+    """A second job of the same lane, submitted before the first has run: it
+    waits in the lane's queue, is claimed once the first has finished, and
+    each job gets its one wake (the ending ``medchron/busy`` does not cover:
+    that is a wait behind another lane's child)."""
+    r.submit()
+    db = getattr(r.broker, r.kit.queue_lane)._db
+    real = db.submit
+
+    def second(env: dict[str, Any], *a: Any, **k: Any) -> str:
+        # Another request: its own message, so the lane's duplicate rule admits it.
+        return real(_another_job(env), *a, **k)
+
+    r.mp.setattr(db, "submit", second)
+    r.kit.submit(r.broker, r.seat)
+    r.snap("second submit", "queued")
+    r.tick("first")
+    r.tick("second")
+    r.tick("wake")
+
+
 STEPS: dict[str, Callable[[Run], None]] = {
+    "queued_behind_same_lane": _queued_behind_same_lane,
     "broker_down_mid_run": _broker_down_mid_run,
     "orphan_envelope": _orphan_envelope,
     "wake_paused": _wake_paused,

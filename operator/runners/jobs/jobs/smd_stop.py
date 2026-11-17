@@ -75,7 +75,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from . import spend, stop_request, verdict as verdict_mod
+from . import run_record, spend, stop_request, verdict as verdict_mod
 
 logger = logging.getLogger("jobs.daemon")
 
@@ -155,7 +155,11 @@ def finish(d: Any, job_id: str, code: int, out: str) -> bool:
     cents = spend.priced_cents(jd, d.LANE)
     recorded = True
     try:
-        d.broker.record(job_id, "failed", _fields(req, cents))
+        d.broker.record(
+            job_id,
+            "failed",
+            {**_fields(req, cents), **run_record.fields_for(d, "stop", by="smd", code="stopped_by_smd")},
+        )
     except (BrokerError, ValueError) as exc:
         recorded = False
         logger.error("could not record SMD's stop of %s job %s: %s (the state file keeps it)", d.LANE, job_id, exc)
@@ -283,7 +287,11 @@ def _record_unclaimed(d: Any, job_id: str, st: dict[str, Any]) -> bool:
     req = read(jd) or {"by": "unknown", "why": "unreadable stop request"}
     cents = spend.priced_cents(jd, d.LANE)
     try:
-        d.broker.record(job_id, "failed", _fields(req, cents))
+        d.broker.record(
+            job_id,
+            "failed",
+            {**_fields(req, cents), **run_record.fields_for(d, "stop", by="smd", code="stopped_by_smd")},
+        )
         recorded = True
     except (BrokerError, ValueError) as exc:
         try:

@@ -87,6 +87,7 @@ def plan(d: Any, job_id: str, *, keys: list[str], reason: str, by: str, source: 
                 ],
                 "marker": {
                     "job_id": job_id,
+                    "intervention": "decide_audit",
                     "reason": f"audit controls retired by SMD: {', '.join(keys)} ({by.strip()}, {source.strip()})"[
                         :500
                     ],

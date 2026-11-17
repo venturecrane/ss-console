@@ -70,3 +70,61 @@ def test_a_lost_wake_left_unrecorded_fails_the_golden(tmp_path, monkeypatch, rea
 
     monkeypatch.setattr(daemon, "WAKE_MAX_ATTEMPTS", 99)
     assert _differs(tmp_path, monkeypatch, cell) != []
+
+
+# -- the chronology lifecycle matrix (lifecycle_matrix.py): one planted defect per assertion --------
+
+
+def _lifecycle(tmp_path: Any, monkeypatch: Any, cell: str) -> list[str]:
+    from lifecycle_matrix import problems, run_cell as run_life
+
+    return problems(cell, run_life(tmp_path, monkeypatch, cell))
+
+
+@pytest.mark.parametrize("cell", ["submitted/claim", "held/claim", "running/broker_down"])
+def test_the_unplanted_lifecycle_cells_pass(tmp_path, monkeypatch, real_lane_gate, cell):
+    """The control: with nothing planted, these cells pass (a)-(e)."""
+    assert _lifecycle(tmp_path, monkeypatch, cell) == []
+
+
+def test_a_stop_nobody_is_paged_about_fails_a(tmp_path, monkeypatch, real_lane_gate):
+    from jobs.proof import watch
+
+    monkeypatch.setattr(watch, "alert", lambda *a, **k: False)
+    assert any(p.startswith("(a)") for p in _lifecycle(tmp_path, monkeypatch, "held/claim"))
+
+
+def test_an_ending_no_verb_accepts_fails_b(tmp_path, monkeypatch, real_lane_gate):
+    """The defect the matrix found: an ending the broker could not take is never recorded again."""
+    from jobs.medchron.lane import MedchronLane
+
+    monkeypatch.setattr(MedchronLane, "_record_pending", lambda self: None)
+    assert any(p.startswith("(b)") for p in _lifecycle(tmp_path, monkeypatch, "running/broker_down"))
+
+
+def test_a_delivery_the_firm_never_hears_of_fails_c(tmp_path, monkeypatch, real_lane_gate):
+    from jobs.proof import watch
+
+    monkeypatch.setattr(watch, "wake_owed", lambda *a, **k: False)
+    assert any(p.startswith("(c)") for p in _lifecycle(tmp_path, monkeypatch, "submitted/claim"))
+
+
+def test_a_second_filed_set_fails_d(tmp_path, monkeypatch, real_lane_gate):
+    from jobs.proof import watch
+
+    real = watch._record_proven
+
+    def twice(d: Any, job_id: str, outcomes: list[Any]) -> bool:
+        real(d, job_id, outcomes)
+        return real(d, job_id, outcomes)
+
+    monkeypatch.setattr(watch, "_record_proven", twice)
+    assert any(p.startswith("(d)") for p in _lifecycle(tmp_path, monkeypatch, "submitted/claim"))
+
+
+def test_an_ending_with_no_run_record_fails_e(tmp_path, monkeypatch, real_lane_gate):
+    from jobs import run_record
+
+    real = run_record.block
+    monkeypatch.setattr(run_record, "block", lambda event, **k: None if event == "end" else real(event, **k))
+    assert any(p.startswith("(e)") for p in _lifecycle(tmp_path, monkeypatch, "submitted/claim"))

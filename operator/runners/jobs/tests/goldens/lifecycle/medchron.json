@@ -1,0 +1,4097 @@
+{
+  "cells": {
+    "delivered/audit_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/broker_down": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/claim": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/coverage_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/expiry": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/hand_delivery": {
+      "code": "deliver_by_smd",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/identity_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/queue_behind_same_lane": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["reply_unproven"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/redo": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/redo_doc": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/release": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/reply_send_failure": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["reply_unproven"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/resubmit_while_running": {
+      "code": "medchron_job_submit",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/resume": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "delivered/update_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/audit_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/broker_down": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "failed/cap_hold": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "failed/claim": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "failed/coverage_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/deploy_stop": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "failed/expiry": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_submit"]
+    },
+    "failed/hand_delivery": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "smd",
+        "event": "hand_delivery",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/identity_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/machine_stop": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "failed/queue_behind_same_lane": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "failed/redo": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/redo_doc": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/release": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "failed/reply_send_failure": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "failed/resubmit_while_running": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_submit"]
+    },
+    "failed/resume": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/update_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "failed/upload_readback_mismatch": {
+      "code": "extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "held/audit_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "held/broker_down": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/cap_hold": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/claim": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/coverage_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "held/deploy_stop": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/expiry": {
+      "code": "expired",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "expired",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_submit"]
+    },
+    "held/hand_delivery": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "smd",
+        "event": "hand_delivery",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "held/identity_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "held/machine_stop": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/queue_behind_same_lane": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/redo": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "held/redo_doc": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "held/release": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/reply_send_failure": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/resubmit_while_running": {
+      "code": "medchron_job_submit",
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "held/resume": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "held/update_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "held/upload_readback_mismatch": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "parked/audit_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/broker_down": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/cap_hold": {
+      "code": "per_job_cap_usd",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "run": {
+        "by": "code",
+        "code": "per_job_cap_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["allowance approve"]
+    },
+    "parked/claim": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/coverage_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/deploy_stop": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/expiry": {
+      "code": "seat_paused",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "code": "seat_paused",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_submit", "sticky_release"]
+    },
+    "parked/hand_delivery": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "smd",
+        "event": "hand_delivery",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/identity_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/machine_stop": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/queue_behind_same_lane": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/redo": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/redo_doc": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/release": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/reply_send_failure": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/resubmit_while_running": {
+      "code": "medchron_job_submit",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/resume": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/update_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "parked/upload_readback_mismatch": {
+      "code": "readback_unproven",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["readback_unproven"],
+      "run": {
+        "by": "code",
+        "code": "readback_unproven",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "requeued_waiting/audit_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/broker_down": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/cap_hold": {
+      "code": "per_job_cap_usd",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "run": {
+        "by": "code",
+        "code": "per_job_cap_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["allowance approve"]
+    },
+    "requeued_waiting/claim": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/coverage_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/deploy_stop": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/expiry": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/hand_delivery": {
+      "code": "deliver_by_smd",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/identity_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/machine_stop": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/queue_behind_same_lane": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/redo": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/redo_doc": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/release": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/reply_send_failure": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/resubmit_while_running": {
+      "code": "medchron_job_submit",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/resume": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/update_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "requeued_waiting/upload_readback_mismatch": {
+      "code": "readback_unproven",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["readback_unproven"],
+      "run": {
+        "by": "code",
+        "code": "readback_unproven",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/audit_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/broker_down": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/cap_hold": {
+      "code": "per_job_cap_usd",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "run": {
+        "by": "code",
+        "code": "per_job_cap_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["allowance approve"]
+    },
+    "running/claim": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/coverage_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/deploy_stop": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.run.assemble.1": {
+      "code": "assemble",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "assemble",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "assemble",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.audit.1": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "running/exit.run.audit.2": {
+      "code": "audit",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.audit.3": {
+      "code": "audit",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.billing_docx.1": {
+      "code": "billing",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "billing",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "billing_docx",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.billing_extract.1": {
+      "code": "billing_extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "billing_extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "billing_extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.build_doc.1": {
+      "code": "build_doc",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "build_doc",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "build_doc",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.build_units.2": {
+      "code": "build_units",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "build_units",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "build_units",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.classify_nonrecord.1": {
+      "code": "classify_nonrecord",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "classify_nonrecord",
+        "event": "stop",
+        "kind": "check",
+        "stage": "classify_nonrecord",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.classify_scanned.1": {
+      "code": "classify_scanned",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "classify_scanned",
+        "event": "stop",
+        "kind": "check",
+        "stage": "classify_scanned",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.coverage_gate.1": {
+      "code": "coverage",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "coverage",
+        "event": "stop",
+        "kind": "check",
+        "stage": "coverage_gate",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide"]
+    },
+    "running/exit.run.dos_check.1": {
+      "code": "date-of-service",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "date-of-service",
+        "event": "stop",
+        "kind": "check",
+        "stage": "dos_check",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide"]
+    },
+    "running/exit.run.dos_check.2": {
+      "code": "date-of-service",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "date-of-service",
+        "event": "stop",
+        "kind": "check",
+        "stage": "dos_check",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.download.1": {
+      "code": "download",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "download",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "download",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.download.2": {
+      "code": "append",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "append",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "download",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide"]
+    },
+    "running/exit.run.download.3": {
+      "code": "append",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "append",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "download",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide"]
+    },
+    "running/exit.run.download.75": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.run.exhibit_merge.1": {
+      "code": "exhibit_merge",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "exhibit_merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "exhibit_merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.exhibits.1": {
+      "code": "exhibits",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "exhibits",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "exhibits",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.filter.1": {
+      "code": "filter",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "filter",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "filter",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.icd_tables.1": {
+      "code": "uncoded",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "uncoded",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "icd_tables",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.list_matter.3": {
+      "code": "list_matter",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "code",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "code": "list_matter",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "list_matter",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_submit (update)"]
+    },
+    "running/exit.run.manifest.1": {
+      "code": "manifest",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "manifest",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "manifest",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.map.1": {
+      "code": "map",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "map",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.map.75": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.run.merge.1": {
+      "code": "merge",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.merge.3": {
+      "code": "merge",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.merge.4": {
+      "code": "merge",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.merge.5": {
+      "code": "merge",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.render.1": {
+      "code": "render",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "render",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "render",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.repair_truncated.1": {
+      "code": "uncoded",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "uncoded",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "repair_truncated",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.repair_truncated.75": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.run.review.1": {
+      "code": "review",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "review",
+        "event": "stop",
+        "kind": "check",
+        "stage": "review",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.review.2": {
+      "code": "review_held",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["review_held"],
+      "run": {
+        "by": "code",
+        "code": "review_held",
+        "event": "stop",
+        "kind": "check",
+        "stage": "review",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume"]
+    },
+    "running/exit.run.review.3": {
+      "code": "review",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "review",
+        "event": "stop",
+        "kind": "check",
+        "stage": "review",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.review.75": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.run.strip_apply.1": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_apply",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_apply.2": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_apply",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_apply.3": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_apply",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_apply.4": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_apply",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_dry.2": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_dry",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_dry.3": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_dry",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_dry.4": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_dry",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_falsify.1": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_falsify",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_falsify.2": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_falsify",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_falsify.3": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_falsify",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.strip_falsify.4": {
+      "code": "strip",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "strip",
+        "event": "stop",
+        "kind": "check",
+        "stage": "strip_falsify",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.summarize.1": {
+      "code": "summary",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "summary",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "summarize",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.run.upload.1": {
+      "code": "upload",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "upload",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "upload",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.run.upload.2": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.run.upload.3": {
+      "code": "upload",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["upload_held"],
+      "run": {
+        "by": "code",
+        "code": "upload",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "upload",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["deliver_by_smd"]
+    },
+    "running/exit.run.upload.4": {
+      "code": "upload",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["upload_held"],
+      "run": {
+        "by": "code",
+        "code": "upload",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "upload",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["deliver_by_smd"]
+    },
+    "running/exit.run.vision.1": {
+      "code": "vision",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "vision",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "vision",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.assemble.1": {
+      "code": "assemble",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "assemble",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "assemble",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.update.audit.1": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "running/exit.update.audit.2": {
+      "code": "audit",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.audit.3": {
+      "code": "audit",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.download.1": {
+      "code": "download",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "download",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "download",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.download.2": {
+      "code": "append",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "append",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "download",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide"]
+    },
+    "running/exit.update.download.3": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.update.download.75": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.update.icd_tables.1": {
+      "code": "uncoded",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "uncoded",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "icd_tables",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.list_matter.3": {
+      "code": "list_matter",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "code",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "code": "list_matter",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "list_matter",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_submit (update)"]
+    },
+    "running/exit.update.map.1": {
+      "code": "map",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "map",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.map.75": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.update.merge.1": {
+      "code": "merge",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.merge.3": {
+      "code": "merge",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.update.merge.4": {
+      "code": "merge",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.update.merge.5": {
+      "code": "merge",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "merge",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "merge",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.update.repair_truncated.1": {
+      "code": "uncoded",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "uncoded",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "repair_truncated",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.repair_truncated.75": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.update.review.1": {
+      "code": "review",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "review",
+        "event": "stop",
+        "kind": "check",
+        "stage": "review",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.review.2": {
+      "code": "review_held",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["review_held"],
+      "run": {
+        "by": "code",
+        "code": "review_held",
+        "event": "stop",
+        "kind": "check",
+        "stage": "review",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume"]
+    },
+    "running/exit.update.review.3": {
+      "code": "review",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "review",
+        "event": "stop",
+        "kind": "check",
+        "stage": "review",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.review.75": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.update.update_assemble.1": {
+      "code": "update_assemble",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "update_assemble",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_base.1": {
+      "code": "update_base",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "update_base",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_base.2": {
+      "code": "update_held",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["update_held"],
+      "run": {
+        "by": "code",
+        "code": "update_held",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["update_decide"]
+    },
+    "running/exit.update.update_billing_docs.2": {
+      "code": "update_held",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["update_held"],
+      "run": {
+        "by": "code",
+        "code": "update_held",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["update_decide"]
+    },
+    "running/exit.update.update_billing_docx.1": {
+      "code": "billing",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "billing",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.update.update_billing_extract.1": {
+      "code": "billing_extract",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "billing_extract",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_collect.1": {
+      "code": "update_collect",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "update_collect",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_collect.2": {
+      "code": "update_held",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["update_held"],
+      "run": {
+        "by": "code",
+        "code": "update_held",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["update_decide"]
+    },
+    "running/exit.update.update_collect.5": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.update.update_manifest.1": {
+      "code": "manifest",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "manifest",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_pages.1": {
+      "code": "update_pages",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "update_pages",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_proofs.1": {
+      "code": "update",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "update",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_render.1": {
+      "code": "render",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "render",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_review.1": {
+      "code": "update_review",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "update_review",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_review.2": {
+      "code": "update_held",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["update_held"],
+      "run": {
+        "by": "code",
+        "code": "update_held",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "update_decide"]
+    },
+    "running/exit.update.update_review.3": {
+      "code": "audit",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+    },
+    "running/exit.update.update_review.4": {
+      "code": "audit",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.update_select.2": {
+      "code": "update_held",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["update_held"],
+      "run": {
+        "by": "code",
+        "code": "update_held",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["update_decide"]
+    },
+    "running/exit.update.update_select.5": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.update.update_summary.1": {
+      "code": "update_summary",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["stage_refused"],
+      "run": {
+        "by": "code",
+        "code": "update_summary",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["medchron_job_resume", "redo_doc"]
+    },
+    "running/exit.update.upload.1": {
+      "code": "upload",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "upload",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "upload",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/exit.update.upload.2": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/exit.update.upload.3": {
+      "code": "upload",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["upload_held"],
+      "run": {
+        "by": "code",
+        "code": "upload",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "upload",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["deliver_by_smd"]
+    },
+    "running/exit.update.upload.4": {
+      "code": "update_held",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["update_held"],
+      "run": {
+        "by": "code",
+        "code": "update_held",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "upload",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["update_decide"]
+    },
+    "running/exit.update.vision.1": {
+      "code": "vision",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "vision",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "vision",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "running/expiry": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/hand_delivery": {
+      "code": "deliver_by_smd",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/identity_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/machine_stop": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/queue_behind_same_lane": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/redo": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/redo_doc": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/release": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/reply_send_failure": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/resubmit_while_running": {
+      "code": "medchron_job_submit",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/resume": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/update_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "running/upload_readback_mismatch": {
+      "code": "readback_unproven",
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["readback_unproven"],
+      "run": {
+        "by": "code",
+        "code": "readback_unproven",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+    },
+    "submitted/audit_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/broker_down": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/cap_hold": {
+      "code": "per_job_cap_usd",
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "run": {
+        "by": "code",
+        "code": "per_job_cap_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "way_out": ["allowance approve"]
+    },
+    "submitted/claim": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/coverage_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/deploy_stop": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/expiry": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/hand_delivery": {
+      "code": "deliver_by_smd",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/identity_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/machine_stop": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/queue_behind_same_lane": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/redo": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/redo_doc": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/release": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/reply_send_failure": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/resubmit_while_running": {
+      "code": "medchron_job_submit",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/resume": {
+      "code": "medchron_job_resume",
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "smd",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    },
+    "submitted/update_decide": {
+      "code": null,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "way_out": ["done"]
+    }
+  },
+  "count": 228,
+  "not_applicable": {
+    "delivered/cap_hold": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
+    "delivered/deploy_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
+    "delivered/machine_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
+    "delivered/upload_readback_mismatch": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
+    "submitted/upload_readback_mismatch": "a submitted job has run nothing, so nothing of a run can stop, mismatch or be decided (daemon.claim_next moves it to its job dir; only run_job starts a child)"
+  }
+}

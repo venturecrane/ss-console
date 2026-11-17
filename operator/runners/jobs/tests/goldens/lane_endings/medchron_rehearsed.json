@@ -1,14 +1,42 @@
 {
   "records": [
-    ["01A", "running", {}],
+    [
+      "01A",
+      "running",
+      {
+        "run": {
+          "by": "code",
+          "event": "start",
+          "release": "unknown",
+          "v": 1
+        }
+      }
+    ],
     [
       "01A",
       "failed",
       {
-        "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)"
+        "reason": "the runner exited 1 without a verdict: it failed, and its verdict was lost (a defect: verdict.json unwritten, stdout not JSON)",
+        "run": {
+          "by": "code",
+          "code": "no_verdict",
+          "event": "stop",
+          "v": 1
+        }
       }
     ],
-    ["01A", "running", {}],
+    [
+      "01A",
+      "running",
+      {
+        "run": {
+          "by": "smd",
+          "event": "resume",
+          "release": "unknown",
+          "v": 1
+        }
+      }
+    ],
     [
       "01A",
       "delivered",
@@ -26,7 +54,13 @@
         },
         "documents": 40,
         "folder_id": "folder-9",
-        "pages": 300
+        "pages": 300,
+        "run": {
+          "by": "code",
+          "event": "end",
+          "release": "unknown",
+          "v": 1
+        }
       }
     ]
   ],
@@ -46,6 +80,7 @@
     "resume_release_by": "",
     "resume_release_held": false,
     "resumes": 1,
+    "run_pending": null,
     "state": "delivered",
     "wake": {
       "attempts": 0,
