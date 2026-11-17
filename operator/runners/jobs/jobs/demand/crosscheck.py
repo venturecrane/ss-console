@@ -15,6 +15,7 @@ import re
 from datetime import date, datetime
 from typing import Any
 
+from . import firm_text
 from .house import FRONT_KEYS, RenderError, parse
 
 _MARKER = re.compile(r"\{\{|\[(TO BE SUPPLIED|ATTORNEY|CONFIRM|INSERT)")
@@ -80,11 +81,11 @@ def _caption(caption: str, wants: list[str]) -> list[str]:
     court and no case number, so those are never checked here; the caption is
     read only for the client's surname. Each line is for the attorney's eye,
     never a hold: the ``client`` line above is what holds a wrong client."""
-    notes = ["court and case number: the matter record read for this letter carries neither; they come from the file"]
+    notes = [firm_text.NOTE_NO_COURT]
     words = [[t for t in re.findall(r"[a-z]+", w.lower()) if len(t) > 1] for w in wants]
     surnames = {ws[-1] for ws in words if ws}
     if _MARKER.search(caption):
-        notes.append("caption: left as a marker in the letter")
+        notes.append(firm_text.NOTE_CAPTION_MARKER)
     elif surnames and not surnames & _tokens(caption):
-        notes.append(f"caption: {caption!r} does not carry the client's surname as the matter record writes it")
+        notes.append(firm_text.NOTE_CAPTION_SURNAME.format(caption=caption))
     return notes

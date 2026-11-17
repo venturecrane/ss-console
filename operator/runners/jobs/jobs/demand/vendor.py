@@ -6,7 +6,8 @@ capped, and never hold up spending that has not happened yet.
 
 Each provider gets exactly one of: the matched location (its id, name and
 address as the directory states them), "no vendor match", "several matches"
-(with the count; the requester chooses), "not looked up" (over the cap), or
+(with the count; the requester chooses), "not looked up" (past the firm's
+lookup limit; rendered as one sentence for all of them, never a row each), or
 "lookup failed" (with the vendor's status). Nothing is chosen for her: one
 match is reported as the match, several are reported as several.
 
@@ -21,6 +22,8 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Callable
+
+from . import firm_text
 
 _ROW = re.compile(r"^\s*\|(.+)\|\s*$")
 #: The status a provider past the firm's lookup limit gets in vendor.json
@@ -104,12 +107,12 @@ def run(
 
 def section(result: dict[str, Any]) -> str:
     """The table appended to the gap audit."""
-    head = "\n\n## Records vendor locations for the missing providers\n\n"
+    head = f"\n\n{firm_text.VENDOR_HEAD}\n\n"
     if result.get("not_connected"):
-        return head + "The records vendor is not connected on this seat, so no locations were looked up.\n"
+        return head + firm_text.VENDOR_NOT_CONNECTED + "\n"
     if not result["rows"]:
-        return head + "The item table names no provider to look up.\n"
-    lines = ["| Provider | Vendor location | Location id |", "|---|---|---|"]
+        return head + firm_text.VENDOR_NONE + "\n"
+    lines = [firm_text.VENDOR_TABLE_HEAD, "|---|---|---|"]
     # The providers past the firm's lookup limit are one sentence, not a row
     # each: on 2026-11-07 the review held a demand whose table said "not
     # looked up (over the cap)" 91 times, the system's own word for the
@@ -122,16 +125,23 @@ def section(result: dict[str, Any]) -> str:
             lines.append(f"| {r['provider']} | {r.get('name') or ''}, {r.get('address') or ''} | {r['custodian_id']} |")
         elif r["status"] == "several matches":
             opts = "; ".join(f"{c['name']}, {c['address']} ({c['custodian_id']})" for c in r.get("candidates") or [])
-            lines.append(f"| {r['provider']} | several matches ({r.get('count')}): {opts} | choose one |")
+            several = firm_text.VENDOR_SEVERAL.format(count=r.get("count"), options=opts)
+            lines.append(f"| {r['provider']} | {several} | {firm_text.VENDOR_CHOOSE} |")
         else:
             lines.append(f"| {r['provider']} | {r['status']}{(': ' + r['detail']) if r.get('detail') else ''} | none |")
     out = head + ("\n".join(lines) + "\n" if len(lines) > 2 else "")
     if beyond:
         looked = len(result["rows"]) - len(beyond)
+        many = len(beyond) != 1
         out += (
-            f"\nThe firm's directory lookups for one demand stop at {looked}; {len(beyond)} more provider"
-            f"{'s' if len(beyond) != 1 else ''} in the item table {'were' if len(beyond) != 1 else 'was'} not looked up: "
-            + "; ".join(str(r["provider"]) for r in beyond)
-            + ".\n"
+            "\n"
+            + firm_text.VENDOR_BEYOND.format(
+                looked=looked,
+                more=len(beyond),
+                providers="providers" if many else "provider",
+                were="were" if many else "was",
+                names="; ".join(str(r["provider"]) for r in beyond),
+            )
+            + "\n"
         )
     return out

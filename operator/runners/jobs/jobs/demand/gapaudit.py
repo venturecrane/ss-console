@@ -274,7 +274,7 @@ def _scope(batch: list[Doc], first: bool, whole: bool) -> str:
     )
     return (
         "THIS CALL'S SCOPE (one batch of a large file; other calls cover the rest). Write rows ONLY for items whose "
-        "'Where the file points to it' is one of the documents listed here. The whole digest is in the "
+        "'Where the file points to it' is one of the documents listed here. The whole record is in the "
         "instruction for cross-reference: a referral in a listed document to any provider is a row here; an item "
         f"found only in an unlisted document is another call's.{extra}\n\nDOCUMENTS IN SCOPE:\n{names}"
     )

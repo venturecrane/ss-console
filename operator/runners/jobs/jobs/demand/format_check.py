@@ -36,6 +36,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import firm_text
+
 HEADINGS = ("summary of injuries", "liability", "damages", "demand")
 OPEN_ITEM = re.compile(r"\[(TO BE SUPPLIED|ATTORNEY|CONFIRM)[^\]]*\]|\{\{(NOT IN RECORD|FILL|ATTORNEY)\b[^}]*\}\}")
 CURLY_ALLOWED = re.compile(r"\{\{(NOT IN RECORD|FILL|ATTORNEY)\b[^}]*\}\}")
@@ -131,7 +133,7 @@ def _machinery(alltext: str, fails: list[str], notes: list[str]) -> None:
         fails.append("letter contains a curly-brace marker that is not an open-item marker")
     opens = [m.group(1) or m.group(2) for m in OPEN_ITEM.finditer(alltext)]
     if opens:
-        notes.append(f"{len(opens)} open item(s) for the attorney: " + ", ".join(sorted(set(opens))))
+        notes.append(firm_text.NOTE_OPEN_ITEMS.format(count=len(opens), items=", ".join(sorted(set(opens)))))
 
 
 @dataclass(frozen=True)

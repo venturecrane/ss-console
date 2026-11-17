@@ -138,6 +138,25 @@ def test_a_failed_job_wakes_with_the_stage_never_the_free_text_reason(tmp_path):
     assert "Reason: stopped at per_job_cap_usd." in task and "Secret Client" not in task
 
 
+REVIEW_HELD_RUNNER = """
+import json
+findings = [{"code": "1 contradicts the record", "finding": "finding %d" % n, "cite": "p. %d" % n, "by": "model"}
+            for n in range(1, 6)]
+print(json.dumps([{"unit": "demand", "outcome": "failed", "stage": "review", "dollars": 2.0, "findings": findings,
+                   "reason": "review_held: the pre-delivery review found 5 must-fix finding(s); nothing was filed"}]))
+"""
+
+
+def test_a_review_holds_findings_ride_the_record_beside_its_one_line_reason(tmp_path):
+    lane, client = _lane(tmp_path, script=REVIEW_HELD_RUNNER)
+    jid = _submit(lane, client)
+    assert lane.tick() == "failed"
+    fields = client.records[-1][2]
+    assert fields["reason"].startswith("review_held:") and "finding 1" not in fields["reason"]
+    assert [f["finding"] for f in fields["findings"]] == [f"finding {n}" for n in range(1, 6)]
+    assert "finding 1" not in lane._daemon_state(jid)["wake"]["task"]  # the wake carries the stage only
+
+
 def test_a_schema_miss_in_the_demand_inputs_defers_demand_jobs_only(tmp_path):
     lane, client = _lane(tmp_path, inputs=False)
     _submit(lane, client)

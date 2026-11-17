@@ -104,7 +104,55 @@ then a final line exactly `VERDICT: <n> MUST-FIX, <n> SHOULD-FIX, <n> NOTE`. No 
 
 
 class ReviewHeld(RuntimeError):
-    """A MUST-FIX held the job: nothing filed, ``failed`` with ``review_held``."""
+    """A MUST-FIX held the job: nothing filed, ``failed`` with ``review_held``.
+
+    The message is ONE LINE (``held_summary``): the ledger keeps 500
+    characters of a reason, and on 2026-11-06 a hold with five must-fix
+    findings showed work health one and a half of them. Every finding rides
+    ``findings`` instead (``held_findings``), which the broker writes onto the
+    job's ``DEMAND_JOB_FAILED`` audit row in full."""
+
+    def __init__(self, message: str, findings: list[dict[str, str]] | None = None) -> None:
+        super().__init__(message)
+        self.findings = list(findings or [])
+
+
+#: How much of one finding the audit row keeps, and how many findings: far
+#: above any real hold (five was the most seen), so nothing is cut in practice,
+#: and still a bound on one row.
+FINDING_MAX = 2000
+FINDINGS_MAX = 60
+
+
+def held_findings(rec: dict[str, Any]) -> list[dict[str, str]]:
+    """Every MUST-FIX finding of a held review, each with its code (the
+    check's number and name), in the review's order."""
+    out = []
+    for f in rec.get("findings") or []:
+        if f.get("grade") != R.MUST:
+            continue
+        out.append(
+            {
+                "code": str(f.get("check") or ""),
+                "finding": str(f.get("finding") or "")[:FINDING_MAX],
+                "cite": str(f.get("cite") or "")[:FINDING_MAX],
+                "by": str(f.get("by") or ""),
+            }
+        )
+    return out[:FINDINGS_MAX]
+
+
+def held_summary(findings: list[dict[str, str]]) -> str:
+    """The one-line ledger reason for a review hold: the count and each code
+    with how many findings it has, never a finding's text."""
+    counts: dict[str, int] = {}
+    for f in findings:
+        counts[f["code"] or "unnamed"] = counts.get(f["code"] or "unnamed", 0) + 1
+    codes = ", ".join(f"{c} x{n}" for c, n in counts.items())
+    return (
+        f"review_held: the pre-delivery review found {len(findings)} must-fix finding(s) ({codes}); "
+        "nothing was filed; every finding is on the job's DEMAND_JOB_FAILED audit row"
+    )
 
 
 def model_for(firm: Any) -> str:

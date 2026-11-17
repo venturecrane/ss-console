@@ -45,11 +45,16 @@ class Verdict:
     notes: list[str] = field(default_factory=list)
     #: The daemon's proof block (``proof.gate``), on a delivered verdict only.
     proof: dict[str, Any] | None = None
+    #: A review hold's must-fix findings, each with its code (``review.held_findings``):
+    #: the broker writes them onto the job's audit row, so the reason stays one line.
+    findings: list[dict[str, str]] = field(default_factory=list)
 
     def to_list(self) -> list[dict[str, Any]]:
         d = dict(self.__dict__)
         if d.get("proof") is None:
             d.pop("proof", None)
+        if not d.get("findings"):
+            d.pop("findings", None)
         d["unit"] = "demand"
         d["kind"] = "demand"
         return [d]

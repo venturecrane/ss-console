@@ -136,7 +136,8 @@ def test_the_contract_rides_last_in_the_gap_audit_instruction(tmp_path, pricing)
     gap = next(c for c in client.calls if "GAP-PROMPT" in json.dumps(c.get("system")))
     system = gap["system"][0]["text"] if isinstance(gap["system"], list) else gap["system"]
     assert system.rstrip().endswith(gapaudit.CONTRACT.rstrip())
-    assert "THE RECORD DIGEST" in system  # in the cached block, shared by every batch
+    # in the cached block, shared by every batch, headed as the firm names it
+    assert "THE RECORD:\n" in system and "RECORD DIGEST" not in system
 
 
 # ---- batches ----------------------------------------------------------------------------

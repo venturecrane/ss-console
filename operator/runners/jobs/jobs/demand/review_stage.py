@@ -143,7 +143,8 @@ def run_stage(run: Any) -> None:
     status, rec = rv.decide(run.data, run.job.job_dir, lambda: _fresh(run, coverage), lane="demand")
     run.log(f"  review ({'coverage report' if coverage else 'demand package'}): {rv.summary(rec)}: {status}")
     if status == "held":
-        raise rv.ReviewHeld(R.held_reason(rec))
+        found = rv.held_findings(rec)
+        raise rv.ReviewHeld(rv.held_summary(found), findings=found)
     _with_findings(run, rec)
     run._done(
         "review",

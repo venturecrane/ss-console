@@ -38,6 +38,15 @@ import re
 from typing import Any
 
 from .draft import FINDING, audit_sections, firm_reason, sections
+from .firm_text import (  # the attorney-notes lines live with every other code-authored firm sentence
+    NOTE_AUTHORITY,
+    NOTE_CLEARED,
+    NOTE_FLAGGED,
+    NOTE_IN_NOTES,
+    NOTE_KEPT,
+    NOTE_REMOVED,
+    NOTE_REMOVED_WITH,
+)
 from .format_check import CURLY, SQUARE
 
 NOTES_MARK = "=== ATTORNEY NOTES ==="  # house.NOTES_MARK; repeated here, house imports nothing from this module
@@ -240,12 +249,6 @@ def marker_why(detail: str, claim: str = "") -> str:
     return f" ({s})" if s and len(s) <= MARKER_WHY_MAX else ""
 
 
-NOTE_REMOVED = "{head}: taken out, the file does not support it: {claim} ({why})"
-NOTE_FLAGGED = "{head}: figure marked for the attorney to confirm: {claim} ({why})"
-NOTE_REMOVED_WITH = "{head}: taken out with the statement before it, the file does not support it: {claim} ({why})"
-NOTE_AUTHORITY = "{head}: cites legal authority, which the file is not expected to contain; left as written for the attorney to confirm the law: {claim}"
-NOTE_IN_NOTES = "Attorney notes: a note to the attorney names something the file does not state; left as written, it is not in the letter: {claim}"
-
 #: A statute, a jury instruction, a rule or a reported case: law, which no
 #: matter file is expected to contain. On 2026-11-07 the check called the
 #: letter's quotation of a Civil Code section "invented" and the final pass
@@ -289,12 +292,6 @@ def authorities_cited(letter_md: str) -> list[str]:
         if c not in out:
             out.append(c)
     return out
-
-
-NOTE_KEPT = (
-    "{head}: the file may not support this and it is still in the letter, for the attorney to decide: {claim} ({why})"
-)
-NOTE_CLEARED = "{head}: rechecked {claim}; the arithmetic is correct and it is left as written"
 
 
 _QUOTED = re.compile(r"[\"“]([^\"“”]{3,})[\"”]")

@@ -33,6 +33,10 @@ Outcomes, as the daemon records them in the demand ledger:
 Spend: the estimate is checked after the free preflight, BEFORE anything is
 paid (on a resume, against what is left to spend), then every paid call checks
 the cap and the month's budget through the doorway's hook (``limits.py``).
+A job stopped at the cap stays ``failed``, never ``held``: held is final, and
+the free stages are recorded done, so a resume goes straight back to the
+estimate. SMD says yes to one such job with ``cost_approval.py``, which widens
+the cap for that job alone; the month's budget binds as the firm set it.
 """
 
 from __future__ import annotations
@@ -51,12 +55,14 @@ from ..proof import review as proof_review
 from . import (
     asked,
     batching,
+    cost_approval,
     crosscheck,
     deliver,
     draft,
     facts as facts_mod,
     finalpass,
     firm as firm_mod,
+    firm_text,
     format_check,
     gapaudit,
     gate,
@@ -76,6 +82,10 @@ from .outcome import DemandFailed, DemandHold, GateQuotesLeft, Verdict
 
 MAX_REPAIRS = 2
 FINAL = "draft-final.md"  # the letter after the final audit pass; what is gated and rendered
+#: The reason code a final pass that could not place a finding fails with. Work
+#: health lists a failure by its reason's first word, so the code names the
+#: stage ("failed (final_pass_unsettled)"), never an article ("failed (the)").
+FINAL_PASS_UNSETTLED = "final_pass_unsettled"
 
 
 #: The drafting gate's privilege-and-wall gate. A refusal there means text from
@@ -106,7 +116,9 @@ class DemandRun:
         session = paid.open_session(
             self.data,
             paid.Caps(
-                cap_usd=float(b["per_job_cap_usd"]),
+                # The firm's cap, widened for THIS job alone by what SMD approved
+                # after it stopped there (``cost_approval.py``); the month binds as set.
+                cap_usd=float(b["per_job_cap_usd"]) + cost_approval.approved_usd(self.job.job_dir),
                 monthly_budget_usd=float(b["monthly_budget_usd"]),
                 usd_per_scanned_page=float(b["usd_per_scanned_page"]),
                 month_cents_used=self.job.month_cents_used,
@@ -330,15 +342,16 @@ class DemandRun:
         audit_md = (self.data / f"audit-v{version}.md").read_text(encoding="utf-8")
         # Firm-facing words only: the review holds on the system's own
         # vocabulary (a stage, a check's label) in anything the firm reads.
-        notes = [f"The file supports this only in part: {x}" for x in draft.finding_text(audit_md, ("DRIFTS",))]
-        notes += [f"Taken out or flagged before filing: {x}" for x in settled]
+        ft = firm_text
+        notes = [ft.NOTE_PART_SUPPORT.format(item=x) for x in draft.finding_text(audit_md, ("DRIFTS",))]
+        notes += [ft.NOTE_SETTLED.format(item=x) for x in settled]
         cited = finalpass.authorities_cited(md)
         if cited:  # law is the attorney's to confirm; the file is not expected to contain it
-            notes.append("Legal authorities cited in the letter, for the attorney to confirm: " + "; ".join(cited))
-        notes += [f"Not checked against the matter record: {x}" for x in cc["unchecked"]]
-        notes += [f"Held out, never read (privilege wall: {w['reason']}): {w['name']}" for w in self._walled()]
-        notes += [f"Quotation repaired before filing (the letter): {x}" for x in g.get("repairs") or []]
-        return notes + [f"Quotation check: {w}" for w in g["warnings"]]
+            notes.append(ft.NOTE_AUTHORITIES.format(items="; ".join(cited)))
+        notes += [ft.NOTE_UNCHECKED.format(item=x) for x in cc["unchecked"]]
+        notes += [ft.NOTE_WALLED.format(reason=w["reason"], name=w["name"]) for w in self._walled()]
+        notes += [ft.NOTE_QUOTE_LETTER.format(item=x) for x in g.get("repairs") or []]
+        return notes + [ft.NOTE_QUOTE_WARNING.format(item=w) for w in g["warnings"]]
 
     def _final_pass(self, version: int) -> tuple[str, list[str]]:
         """``draft-final.md`` from the last draft and its audit, once: a resume
@@ -355,7 +368,9 @@ class DemandRun:
         try:
             md, notes = finalpass.settle(md, audit_md, format_check.dialect(self.job.request_text))
         except finalpass.Unlocated as exc:
-            raise DemandFailed(f"the final audit pass could not settle a finding: {exc}") from None
+            raise DemandFailed(
+                f"{FINAL_PASS_UNSETTLED}: the final audit pass could not settle a finding: {exc}"
+            ) from None
         tmp = self.data / f".{FINAL}.tmp"
         tmp.write_text(md, encoding="utf-8")
         tmp.replace(out)
@@ -371,17 +386,12 @@ class DemandRun:
         """Code-authored, so over-walling is visible: every document the wall
         held out, by name and reason. The attorney can clear any of them."""
         rows = self._walled()
-        head = f"\n\n## Held out behind the privilege wall: {len(rows)} document(s)\n\n"
+        head = "\n\n" + firm_text.WALL_HEAD.format(count=len(rows)) + "\n\n"
         if not rows:
-            return head + "None.\n"
-        lines = ["| Document | Why it was held out |", "|---|---|"]
+            return head + firm_text.WALL_NONE + "\n"
+        lines = [firm_text.WALL_TABLE_HEAD, "|---|---|"]
         lines += [f"| {str(w['name']).replace('|', '/')} | {w['reason']} |" for w in rows]
-        return (
-            head
-            + "Not read for this demand; clear any of them and ask again to include it.\n\n"
-            + "\n".join(lines)
-            + "\n"
-        )
+        return head + firm_text.WALL_LEAD + "\n\n" + "\n".join(lines) + "\n"
 
     def _gate(self, name: str, md: str, path: Path | None = None) -> tuple[dict[str, Any], str]:
         """Gate ``md``; on a quote finding, repair deterministically and gate
@@ -439,9 +449,7 @@ class DemandRun:
             # cached before the rule (2026-11-06) is scrubbed here, not re-bought.
             gap = gapaudit.firm_words(gap)
             if gg.get("repairs"):  # code-authored, so a changed quotation is visible
-                gap += (
-                    "\n\n## Quotations repaired before filing\n\n" + "\n".join(f"- {x}" for x in gg["repairs"]) + "\n"
-                )
+                gap += f"\n\n{firm_text.QUOTES_REPAIRED_HEAD}\n\n" + "\n".join(f"- {x}" for x in gg["repairs"]) + "\n"
             # Code-authored, after the gate: directory facts and the wall's own
             # list, not record facts.
             if (self.data / "vendor.json").is_file():
@@ -456,13 +464,12 @@ class DemandRun:
                 path, end_lists, fmt_notes = deliver.render_demand(self.firm, md, out, client, self._reference)
             except deliver.FormatRefused as exc:
                 raise DemandFailed("the format check refused the demand file: " + "; ".join(exc.fails)[:400]) from None
-            gap_fixes = [
-                f"Quotation repaired before filing (the gap audit): {x}"
-                for x in self._repairs.get("the gap audit") or []
-            ]
+            gap_fixes = [firm_text.NOTE_QUOTE_GAP.format(item=x) for x in self._repairs.get("the gap audit") or []]
             extra = "\n".join(f"- {n}" for n in [*notes, *gap_fixes, *fmt_notes])
-            notes_md = f"# Attorney notes: {path.stem}\n\n{end_lists}\n" + (
-                f"\n## For review\n\n{extra}\n" if extra else ""
+            notes_md = (
+                firm_text.NOTES_TITLE.format(name=path.stem)
+                + f"\n\n{end_lists}\n"
+                + (f"\n{firm_text.NOTES_FOR_REVIEW}\n\n{extra}\n" if extra else "")
             )
             review_stage.keep_md(self.data, "attorney_notes", notes_md)
             files += [
@@ -610,7 +617,7 @@ class DemandRun:
         except GateQuotesLeft as exc:
             v = Verdict("failed", stage="gate", reason=str(exc))
         except review_mod.ReviewHeld as exc:
-            v = Verdict("failed", stage="review", reason=str(exc))
+            v = Verdict("failed", stage="review", reason=str(exc), findings=exc.findings)
         except proof_review.ReviewIncomplete as exc:
             v = Verdict("failed", stage="review", reason=f"review_unfinished: {exc}; nothing was filed")
         except DemandFailed as exc:

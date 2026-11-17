@@ -183,6 +183,9 @@ class DemandLane(Daemon):
         fields: dict[str, Any] = {"cents": spend.recorded_cents(self.job_dir(job_id), self.LANE, reported)}
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
+        if isinstance(v.get("findings"), list) and v["findings"]:
+            # A review hold's every finding, for the audit row: the reason is one line.
+            fields["findings"] = list(v["findings"])
         if state == "delivered":
             fields["folder_id"] = str(v.get("folder_id") or "")
             fields["delivery"] = {
