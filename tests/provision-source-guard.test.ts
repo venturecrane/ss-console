@@ -88,6 +88,13 @@ function makeCheckout(): { root: string; script: string } {
     join(REPO_ROOT, 'operator', 'bin', 'lib', 'build-source-guard.sh'),
     join(root, 'operator', 'bin', 'lib', 'build-source-guard.sh')
   )
+  // The R2 home (bucket default, r2 wrapper), which provisioning sources
+  // before its credential check.
+  mkdirSync(join(root, 'scripts', 'lib'), { recursive: true })
+  cpSync(
+    join(REPO_ROOT, 'scripts', 'lib', 'r2-creds.sh'),
+    join(root, 'scripts', 'lib', 'r2-creds.sh')
+  )
   // A Dockerfile exists so the fixture has the shape of a seat source tree; the
   // guard reads nothing from it since the fold (ADR 0095: no overlay pin).
   writeFileSync(join(root, 'operator', 'templates', 'Dockerfile'), 'FROM debian:13.4\n')

@@ -28,11 +28,9 @@ log "Compiling the seat spec for ${SLUG} (scripts/compile-seat-spec.ts)"
 ( cd "${REPO_ROOT}" && npx --quiet tsx scripts/compile-seat-spec.ts compile --slug "${SLUG}" \
     --config "${CUSTOMER_YAML}" --out "${_spec_out}" --provisioning --sign ) \
   || die "the seat-spec compiler refused ${CUSTOMER_YAML} (see the line above); not uploading it"
-_r2_put() {
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 cp "$1" "s3://${R2_BUCKET_CONFIG}/$2" --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors
-}
-log "Uploading customer.yaml to R2: s3://${R2_BUCKET_CONFIG}/${R2_CONFIG_KEY}"
+# r2 and r2_uri: scripts/lib/r2-creds.sh, which provision-customer.sh sources.
+_r2_put() { r2 s3 cp "$1" "$(r2_uri "$2")" --only-show-errors; }
+log "Uploading customer.yaml to R2: $(r2_uri "${R2_CONFIG_KEY}")"
 _r2_put "${CUSTOMER_YAML}" "${R2_CONFIG_KEY}" \
   || die "R2 upload failed; bootstrap.sh would not be able to fetch customer.yaml"
 log "R2 upload OK"

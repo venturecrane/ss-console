@@ -164,9 +164,10 @@ describe('the reconciler is read-only against R2', () => {
       const code = readFileSync(path, 'utf8')
         .split('\n')
         .filter((l) => !/^\s*#/.test(l))
-      // Every `s3 cp` must read FROM s3:// into a local file.
+      // Every `s3 cp` must read FROM s3:// into a local file: a literal
+      // s3:// source, or one r2_uri (scripts/lib/r2-creds.sh) builds.
       for (const line of code.filter((l) => /\bs3 cp\b/.test(l))) {
-        expect(line, path).toMatch(/s3 cp "s3:\/\//)
+        expect(line, path).toMatch(/s3 cp "(s3:\/\/|\$\(r2_uri )/)
       }
       expect(code.join('\n'), path).not.toMatch(
         /put-object|delete-object|copy-object|\bs3 rm\b|\bs3 mv\b|\bs3 sync\b/
@@ -177,7 +178,7 @@ describe('the reconciler is read-only against R2', () => {
   it('the static check above can fail: the publisher, which writes, trips it', () => {
     const code = readFileSync(PUBLISHER, 'utf8').split('\n')
     const cps = code.filter((l) => !/^\s*#/.test(l) && /\bs3 cp\b/.test(l))
-    expect(cps.some((l) => !/s3 cp "s3:\/\//.test(l))).toBe(true)
+    expect(cps.some((l) => !/s3 cp "(s3:\/\/|\$\(r2_uri )/.test(l))).toBe(true)
   })
 
   it('reports drift and writes nothing: the object stays as the seat boots it', () => {

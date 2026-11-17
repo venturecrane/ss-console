@@ -108,8 +108,11 @@ def _publish(tmp_path: Path, **env: str) -> tuple[subprocess.CompletedProcess[st
     fakes.mkdir()
     shutil.copy(SCRIPT, repo / "scripts" / SCRIPT.name)
     shutil.copy(SCRIPT.parents[1] / "operator" / "templates" / "jobs-bundle-paths.txt", repo / "operator" / "templates")
+    # The real home (r2, r2_uri), with only the credential derivation stubbed,
+    # so the script's aws calls are the ones a CI run makes, without a network.
     (repo / "scripts" / "lib" / "r2-creds.sh").write_text(
-        "derive_r2_creds() { R2_ACCESS_KEY_ID=k; R2_SECRET_ACCESS_KEY=s; R2_ENDPOINT_URL=http://fake; }\n"
+        (SCRIPT.parent / "lib" / "r2-creds.sh").read_text()
+        + "derive_r2_creds() { R2_ACCESS_KEY_ID=k; R2_SECRET_ACCESS_KEY=s; R2_ENDPOINT_URL=http://fake; }\n"
     )
     for path, body in ((fakes / "docker", _FAKE_DOCKER), (fakes / "aws", _FAKE_AWS),
                        (repo / "operator" / "bin" / "fleet", _FAKE_FLEET)):  # fmt: skip

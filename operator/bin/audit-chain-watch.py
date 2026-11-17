@@ -67,7 +67,6 @@ import json
 import os
 import subprocess
 import tempfile
-import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -95,6 +94,7 @@ from bin.lib.chain_rehearsal import (
     EXIT_REHEARSAL_FAILED,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the codes)
     rehearse_mismatch as _rehearse_mismatch,
 )
+from bin.lib.fleet.r2 import derived_credentials as r2_credentials
 from bin.lib.console_d1 import (
     ALERT_DRIVER_PREFIX,
     DEFAULT_DB,
@@ -287,44 +287,6 @@ def partition_seats(authored: Sequence[str], provisioned: Sequence[str]) -> Seat
 # ---------------------------------------------------------------------------
 # R2 archive
 # ---------------------------------------------------------------------------
-
-
-def r2_credentials() -> tuple[str, str, str]:
-    """Derive the S3 credentials exactly as ci-reconcile-r2-customer-configs.sh does.
-
-    Derive, never mint, and never print: the values reach the aws CLI through
-    its environment, never through a command line or a log line.
-    """
-    key_id = os.environ.get("R2_ACCESS_KEY_ID")
-    secret = os.environ.get("R2_SECRET_ACCESS_KEY")
-    if not key_id or not secret:
-        token = os.environ.get("CLOUDFLARE_API_TOKEN")
-        if not token:
-            raise RuntimeError("no R2 credentials and no CLOUDFLARE_API_TOKEN to derive them from")
-        key_id = cloudflare_token_id(token)
-        secret = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    endpoint = os.environ.get("R2_ENDPOINT_URL")
-    if not endpoint:
-        account = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
-        if not account:
-            raise RuntimeError("R2_ENDPOINT_URL unset and CLOUDFLARE_ACCOUNT_ID not available")
-        endpoint = f"https://{account}.r2.cloudflarestorage.com"
-    return key_id, secret, endpoint
-
-
-def cloudflare_token_id(token: str) -> str:
-    req = urllib.request.Request(
-        "https://api.cloudflare.com/client/v4/user/tokens/verify",
-        headers={"Authorization": f"Bearer {token}"},
-        method="GET",
-    )
-    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected — constant https URL, no interpolation.
-    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 — constant https URL built from the bucket name; no caller supplies a scheme
-        payload = json.loads(resp.read().decode("utf-8"))
-    token_id = (payload.get("result") or {}).get("id")
-    if not payload.get("success") or not token_id:
-        raise RuntimeError("/user/tokens/verify did not return a token id")
-    return str(token_id)
 
 
 @dataclass

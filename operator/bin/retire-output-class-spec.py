@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -70,16 +69,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     key = f"vaults/{args.slug}/{_BASENAME}"
 
-    import boto3  # late import, mirroring publish
+    # The R2 home (boto3 imported there, late, so --dry-run works without it).
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from bin.lib.fleet.r2 import boto3_client, required_config_bucket
 
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=os.environ["R2_ENDPOINT_URL"],
-        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        region_name="auto",
-    )
-    bucket = os.environ["R2_BUCKET_CONFIG"]
+    s3 = boto3_client()
+    bucket = required_config_bucket()
 
     try:
         existing = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read())

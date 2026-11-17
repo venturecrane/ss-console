@@ -30,9 +30,7 @@ if [ -f "${DEMAND_INPUTS_DIR}/demand-firm.yaml" ]; then
      && [ "$(git -C "${_eng}" show "origin/main:${_rel}" 2>/dev/null)" != "$(cat "${DEMAND_INPUTS_DIR}/demand-firm.yaml")" ]; then
     die "the demand firm inputs at ${DEMAND_INPUTS_DIR} are not engagements origin/main; merge them first (an unmerged file is an unreviewed one)"
   fi
-  R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-  R2_ENDPOINT_URL="${R2_ENDPOINT_URL}" R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG}" \
-    bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" demand "${DEMAND_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
+  bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" demand "${DEMAND_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
     || die "the demand firm inputs for ${SLUG} were not published (publish-firm-inputs exit $?: 1 refused by this checkout's runner, 3 R2, 4 the validator could not run; the lines above say which)"
   log "R2 upload OK (demand firm inputs)"
 else

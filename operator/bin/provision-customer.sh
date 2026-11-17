@@ -152,7 +152,13 @@ assert_build_source_is_current
 # credentials (or scoped versions of them) are pushed to Fly secrets so the
 # Machine can fetch from R2 at boot — but those are set via pbpaste below,
 # not echoed here.
-R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG:-smd-customer-config}"
+# The bucket and the r2 wrapper have one home; exported once here, so every
+# step below and every lib/stage-*.sh it sources, and each child script those
+# run (lib/publish-firm-inputs.sh), sees the same bucket. The creds themselves
+# arrive exported, from `infisical run`.
+# shellcheck source=../../scripts/lib/r2-creds.sh
+source "${REPO_ROOT}/scripts/lib/r2-creds.sh"
+r2_export_bucket
 # If these are unset you almost certainly ran this script directly instead of
 # through the wrapper. The creds are in Infisical /ss prod — do NOT re-derive them.
 R2_HINT="R2 creds missing. Run via: operator/bin/reprovision.sh ${SLUG}  (= infisical run --env=prod --path=/ss -- operator/bin/provision-customer.sh ${SLUG}). They live in Infisical /ss prod; see docs/runbooks/operator/first-boot.md."
@@ -252,9 +258,7 @@ if . "${BIN_DIR}/lib/firm-config-currency.sh" && assert_engagements_checkout_pre
   # line blame the config. A stale checkout validates against a stale schema,
   # which is why the rollout note says to reprovision from a SYNCED primary.
   rc=0
-  R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-  R2_ENDPOINT_URL="${R2_ENDPOINT_URL}" R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG}" \
-    bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" medchron "$(dirname "${MEDCHRON_FIRM_YAML}")" \
+  bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" medchron "$(dirname "${MEDCHRON_FIRM_YAML}")" \
       --runner-checkout "${REPO_ROOT}" || rc=$?
   case "${rc}" in
     0) ;;

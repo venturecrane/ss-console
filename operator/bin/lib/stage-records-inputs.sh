@@ -29,9 +29,7 @@ if [ -f "${RECORDS_INPUTS_DIR}/records-firm.yaml" ]; then
     [ "$(git -C "${_eng}" show "origin/main:operator/customers/${SLUG}/records/records-firm.yaml" 2>/dev/null)" = "$(cat "${RECORDS_INPUTS_DIR}/records-firm.yaml")" ] \
       || die "the records firm input records-firm.yaml at ${RECORDS_INPUTS_DIR} is not engagements origin/main; merge it first (an unmerged file is an unreviewed one)"
   fi
-  R2_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-  R2_ENDPOINT_URL="${R2_ENDPOINT_URL}" R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG}" \
-    bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" records "${RECORDS_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
+  bash "${BIN_DIR}/lib/publish-firm-inputs.sh" "${SLUG}" records "${RECORDS_INPUTS_DIR}" --runner-checkout "${REPO_ROOT}" \
     || die "the records firm inputs for ${SLUG} were not published (publish-firm-inputs exit $?: 1 refused by this checkout's runner, 3 R2, 4 the validator could not run; the lines above say which)"
   log "R2 upload OK (records firm inputs)"
 else

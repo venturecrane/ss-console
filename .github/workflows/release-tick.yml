@@ -225,8 +225,7 @@ jobs:
           set -euo pipefail
           # shellcheck source=/dev/null
           source scripts/lib/r2-creds.sh
-          derive_r2_creds
-          export R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL
+          export_r2_creds
           # A cancelled run signals this shell, not its child; a foreground fleet
           # never hears it and is SIGKILLed with its seat lease still in D1 for
           # the 2 h TTL (2026-10-30: A&P, and every seat behind it, stalled).

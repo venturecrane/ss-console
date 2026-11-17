@@ -25,15 +25,26 @@ publisher's assert_config_key.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import tempfile
-from typing import Any
+import urllib.request
+from typing import Any, Callable, Mapping
 
 from ..r2_env import aws_env
 from . import ids
 from .runner import Runner, ToolingError
+
+#: The one Python home of the laptop/CI R2 names (scripts/lib/r2-creds.sh is the
+#: shell twin). The seat reads the same names through its own contract,
+#: operator/hermes-smd-overlay/contracts/consumes.yaml.
+ACCESS_KEY_ENV = "R2_ACCESS_KEY_ID"
+SECRET_KEY_ENV = "R2_SECRET_ACCESS_KEY"
+ENDPOINT_ENV = "R2_ENDPOINT_URL"
+CONFIG_BUCKET_ENV = "R2_BUCKET_CONFIG"
+CONFIG_BUCKET_DEFAULT = "smd-customer-config"
 
 POINTER_KEY_RE = re.compile(
     r"^vaults/[a-z0-9][a-z0-9-]{0,38}[a-z0-9]/(skills-pointer|bundles/[a-z][a-z0-9-]{0,31}-pointer)\.json$"
@@ -65,19 +76,91 @@ def bundle_pointer_key(seat: str, name: str) -> str:
     return f"vaults/{ids.slug(seat)}/bundles/{ids.bundle_name(name)}-pointer.json"
 
 
+def creds_in_env(env: Mapping[str, str]) -> bool:
+    """Whether the operator R2 set is in ``env`` (membership, not a value check)."""
+    return ACCESS_KEY_ENV in env
+
+
+def required_config_bucket(env: Mapping[str, str] | None = None) -> str:
+    """The config bucket for a caller that insists it be named: a KeyError when it is not."""
+    src = os.environ if env is None else env
+    return src[CONFIG_BUCKET_ENV]
+
+
+def boto3_client(env: Mapping[str, str] | None = None) -> Any:
+    """A boto3 S3 client on R2 from the operator R2 set; a KeyError names a missing one.
+
+    boto3 is imported here, late, so a caller's dry run works without it.
+    """
+    import boto3
+
+    src = os.environ if env is None else env
+    return boto3.client(
+        "s3",
+        endpoint_url=src[ENDPOINT_ENV],
+        aws_access_key_id=src[ACCESS_KEY_ENV],
+        aws_secret_access_key=src[SECRET_KEY_ENV],
+        region_name="auto",
+    )
+
+
+def cloudflare_token_id(token: str) -> str:
+    """The id of a Cloudflare API token (/user/tokens/verify): R2's S3 key id for it."""
+    req = urllib.request.Request(
+        "https://api.cloudflare.com/client/v4/user/tokens/verify",
+        headers={"Authorization": f"Bearer {token}"},
+        method="GET",
+    )
+    # A constant https URL with no interpolation; no caller supplies a scheme.
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 - a constant https URL; no caller supplies a scheme
+        payload = json.loads(resp.read().decode("utf-8"))
+    token_id = (payload.get("result") or {}).get("id")
+    if not payload.get("success") or not token_id:
+        raise RuntimeError("/user/tokens/verify did not return a token id")
+    return str(token_id)
+
+
+def derived_credentials(
+    env: Mapping[str, str] | None = None, token_id: Callable[[str], str] = cloudflare_token_id
+) -> tuple[str, str, str]:
+    """(key id, secret, endpoint): the R2 set if present, else derived from Cloudflare.
+
+    The derivation scripts/lib/r2-creds.sh derive_r2_creds makes: the key id is
+    the Cloudflare API token's own id, the secret the sha256 of its value, the
+    endpoint the account's. Derive, never mint, and never print.
+    """
+    src = os.environ if env is None else env
+    key_id = src.get(ACCESS_KEY_ENV)
+    secret = src.get(SECRET_KEY_ENV)
+    if not key_id or not secret:
+        token = src.get("CLOUDFLARE_API_TOKEN")
+        if not token:
+            raise RuntimeError("no R2 credentials and no CLOUDFLARE_API_TOKEN to derive them from")
+        key_id = token_id(token)
+        secret = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    endpoint = src.get(ENDPOINT_ENV)
+    if not endpoint:
+        account = src.get("CLOUDFLARE_ACCOUNT_ID")
+        if not account:
+            raise RuntimeError(f"{ENDPOINT_ENV} unset and CLOUDFLARE_ACCOUNT_ID not available")
+        endpoint = f"https://{account}.r2.cloudflarestorage.com"
+    return key_id, secret, endpoint
+
+
 class R2:
     def __init__(self, runner: Runner, env: dict[str, str] | None = None) -> None:
         self.runner = runner
         src = env if env is not None else dict(os.environ)
-        self.bucket = src.get("R2_BUCKET_CONFIG") or "smd-customer-config"
-        self.endpoint = src.get("R2_ENDPOINT_URL", "")
+        self.bucket = src.get(CONFIG_BUCKET_ENV) or CONFIG_BUCKET_DEFAULT
+        self.endpoint = src.get(ENDPOINT_ENV, "")
         # The region pin lives in bin/lib/r2_env.py (2026-10-31 and 2026-11-16).
-        self._auth = aws_env(src.get("R2_ACCESS_KEY_ID", ""), src.get("R2_SECRET_ACCESS_KEY", ""))
+        self._auth = aws_env(src.get(ACCESS_KEY_ENV, ""), src.get(SECRET_KEY_ENV, ""))
 
     def _require_creds(self) -> None:
         if not (self.endpoint and self._auth["AWS_ACCESS_KEY_ID"] and self._auth["AWS_SECRET_ACCESS_KEY"]):
             raise ToolingError(
-                "R2 credentials missing (R2_ENDPOINT_URL / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY). "
+                f"R2 credentials missing ({ENDPOINT_ENV} / {ACCESS_KEY_ENV} / {SECRET_KEY_ENV}). "
                 "Run under: infisical run --env=prod --path=/ss --silent -- operator/bin/fleet ..."
             )
 

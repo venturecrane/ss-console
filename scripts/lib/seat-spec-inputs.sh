@@ -40,8 +40,8 @@
 #                       schema a staged lane is read by, never the inputs, which
 #                       publish on an engagements merge and adopt live.
 #
-# Contract with the caller: an `r2` function running `aws "$@" --endpoint-url
-# ...` with R2 creds, and R2_BUCKET_CONFIG set.
+# Contract with the caller: scripts/lib/r2-creds.sh sourced (r2, r2_bucket,
+# r2_uri) and the R2 creds in place (derive_r2_creds, or the operator env).
 # bash 3.2 compatible (the callers are exercised on macOS operator boxes).
 # shellcheck shell=bash
 
@@ -66,7 +66,7 @@ _json_field() { # <file> <field> -> the string value, or nothing
 r2_exists() {
   local key="$1" err
   err="$(mktemp)"
-  if r2 s3api head-object --bucket "${R2_BUCKET_CONFIG}" --key "$key" >/dev/null 2>"$err"; then
+  if r2 s3api head-object --bucket "$(r2_bucket)" --key "$key" >/dev/null 2>"$err"; then
     rm -f "$err"
     return 0
   fi
@@ -79,9 +79,9 @@ r2_exists() {
 r2_fetch_optional() {
   local key="$1" dest="$2" err
   err="$(mktemp)"
-  if r2 s3api head-object --bucket "${R2_BUCKET_CONFIG}" --key "$key" >/dev/null 2>"$err"; then
+  if r2 s3api head-object --bucket "$(r2_bucket)" --key "$key" >/dev/null 2>"$err"; then
     rm -f "$err"
-    r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${key}" "$dest" --only-show-errors 2>/dev/null && return 0
+    r2 s3 cp "$(r2_uri "${key}")" "$dest" --only-show-errors 2>/dev/null && return 0
     rm -f "$dest"
     return 2
   fi
@@ -107,7 +107,7 @@ seat_image_digest() {
 
 # Optional objects whose absence and whose failure mean the same thing to the
 # compiler ("not available"), because "cannot determine" never passes there.
-_fetch_soft() { r2 s3 cp "s3://${R2_BUCKET_CONFIG}/$1" "$2" --only-show-errors 2>/dev/null || rm -f "$2"; }
+_fetch_soft() { r2 s3 cp "$(r2_uri "$1")" "$2" --only-show-errors 2>/dev/null || rm -f "$2"; }
 
 _fetch_image_inputs() {
   local slug="$1" dir="$2" hex f

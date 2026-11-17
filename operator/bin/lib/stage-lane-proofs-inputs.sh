@@ -20,15 +20,11 @@ if [ -f "${LANE_PROOFS_FILE}" ]; then
   PYTHONPATH="${REPO_ROOT}/operator/runners/jobs" \
     uv run --quiet --with pyyaml python3 -m jobs.lane_proof "${LANE_PROOFS_FILE}" \
     || die "${LANE_PROOFS_FILE} does not validate (see the line above); not uploading it"
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 cp "${LANE_PROOFS_FILE}" "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/lane-proofs.yaml" \
-      --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors \
+  r2 s3 cp "${LANE_PROOFS_FILE}" "$(r2_uri "vaults/${SLUG}/lane-proofs.yaml")" --only-show-errors \
     || die "R2 upload of lane-proofs.yaml failed"
   log "R2 upload OK (lane-proofs.yaml)"
 else
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws s3 rm "s3://${R2_BUCKET_CONFIG}/vaults/${SLUG}/lane-proofs.yaml" \
-      --endpoint-url "${R2_ENDPOINT_URL}" --only-show-errors 2>/dev/null || true
+  r2 s3 rm "$(r2_uri "vaults/${SLUG}/lane-proofs.yaml")" --only-show-errors 2>/dev/null || true
   log "No lane-proofs.yaml for ${SLUG}: every job on this seat waits for a proof run"
 fi
 # <<< lane-proofs-stage

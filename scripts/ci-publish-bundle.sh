@@ -51,7 +51,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 AFTER="${AFTER_SHA:?AFTER_SHA required}"
-R2_BUCKET_CONFIG="${R2_BUCKET_CONFIG:-smd-customer-config}"
 NAME="jobs"
 LAYOUT=2
 
@@ -153,22 +152,18 @@ fi
 # shellcheck source-path=SCRIPTDIR source=lib/r2-creds.sh
 source "${SCRIPT_DIR}/lib/r2-creds.sh"
 derive_r2_creds
-r2() {
-  AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
-    aws "$@" --endpoint-url "${R2_ENDPOINT_URL}"
-}
 
 assert_bundle_key "$TARBALL_KEY"
-r2 s3 cp "${work}/bundle.tar.zst" "s3://${R2_BUCKET_CONFIG}/${TARBALL_KEY}" --only-show-errors --content-type application/zstd
-r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${TARBALL_KEY}" "${work}/readback.tar.zst" --only-show-errors
+r2 s3 cp "${work}/bundle.tar.zst" "$(r2_uri "${TARBALL_KEY}")" --only-show-errors --content-type application/zstd
+r2 s3 cp "$(r2_uri "${TARBALL_KEY}")" "${work}/readback.tar.zst" --only-show-errors
 [[ "$(sha256sum "${work}/readback.tar.zst" | awk '{print $1}')" = "$SHA256" ]] \
   || { echo "::error::tarball read-back does not match"; exit 1; }
 
 assert_bundle_key "$MANIFEST_KEY"
-r2 s3 cp "${work}/manifest.json" "s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY}" --only-show-errors --content-type application/json
-r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY}" "${work}/readback.json" --only-show-errors
+r2 s3 cp "${work}/manifest.json" "$(r2_uri "${MANIFEST_KEY}")" --only-show-errors --content-type application/json
+r2 s3 cp "$(r2_uri "${MANIFEST_KEY}")" "${work}/readback.json" --only-show-errors
 cmp -s "${work}/manifest.json" "${work}/readback.json" || { echo "::error::manifest read-back does not match"; exit 1; }
-echo "bundle ${NAME} ${VERSION} published: s3://${R2_BUCKET_CONFIG}/${MANIFEST_KEY}"
+echo "bundle ${NAME} ${VERSION} published: $(r2_uri "${MANIFEST_KEY}")"
 
 # ---------- D1 record: the controller rolls only recorded releases ----------
 ( cd "$REPO_ROOT" && operator/bin/fleet bundle-record --version "$VERSION" --sha "$AFTER" --image-ref "$BASE_IMAGE" \
@@ -176,8 +171,8 @@ echo "bundle ${NAME} ${VERSION} published: s3://${R2_BUCKET_CONFIG}/${MANIFEST_K
 
 # ---------- layout-<n>/latest.json: last, so it names only a recorded release ----------
 assert_bundle_key "$LATEST_KEY"
-r2 s3 cp "${work}/latest.json" "s3://${R2_BUCKET_CONFIG}/${LATEST_KEY}" --only-show-errors --content-type application/json
-r2 s3 cp "s3://${R2_BUCKET_CONFIG}/${LATEST_KEY}" "${work}/readback-latest.json" --only-show-errors
+r2 s3 cp "${work}/latest.json" "$(r2_uri "${LATEST_KEY}")" --only-show-errors --content-type application/json
+r2 s3 cp "$(r2_uri "${LATEST_KEY}")" "${work}/readback-latest.json" --only-show-errors
 cmp -s "${work}/latest.json" "${work}/readback-latest.json" || { echo "::error::${LATEST_KEY} read-back does not match"; exit 1; }
 echo "  ${LATEST_KEY} -> ${VERSION}: a seat whose pointer names another layout's bundle boots this one"
 echo "  candidate only. The release controller (release-tick.yml) rolls it to the seats that author a job lane."
