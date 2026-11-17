@@ -207,7 +207,6 @@ class Obligation:
     matter_ref: Optional[str] = None
     row_id: Optional[str] = None
     closed_by: Optional[str] = None  # terminal state name
-    closed_at: Optional[datetime] = None
     shape: Optional[str] = None  # finding shape when unclosed
     pending: bool = False
     rows_in_window: int = 0
@@ -393,7 +392,6 @@ def resolve(
                 continue
             consumed.add(index)
             obligation.closed_by = state
-            obligation.closed_at = ts
             break
 
         if not obligation.closed_by:
@@ -425,7 +423,6 @@ def _close_if_nothing_owed(contract: Contract, obligation: Obligation, in_window
                 and str(row.get("output_digest") or "") in digests
             ):
                 obligation.closed_by = state
-                obligation.closed_at = ts
                 return
 
 
