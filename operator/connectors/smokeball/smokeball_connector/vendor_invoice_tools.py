@@ -164,7 +164,10 @@ def resolve_invoice_matter(
         last_page=_whole(last_page),
     )
     with outcome_ledger.recording(row):
-        out = _resolve_with(facts, birth, unread_birth)
+        # Only the post's own calls (a bundle's pages) may use the birth-date
+        # fallback (birth_date_fallback.py); an invoice forwarded on its own
+        # keeps the name-or-number rule.
+        out = _resolve_with(facts, birth, unread_birth, fallback_ok=True)
         row.status = str(out.get("verdict") or "unknown")
         row.detail = str(out.get("reason") or "")
         if out.get("verdict") == VERDICT_UNIQUE:
@@ -201,7 +204,9 @@ def _birth_date(iso: str | None, printed: str | None) -> tuple[str | None, bool]
     return (read.isoformat(), False) if read else (None, True)
 
 
-def _resolve_with(facts: _Facts, date_of_birth: str | None, unread_birth: bool) -> dict[str, Any]:
+def _resolve_with(
+    facts: _Facts, date_of_birth: str | None, unread_birth: bool, *, fallback_ok: bool = False
+) -> dict[str, Any]:
     out = _resolve(
         _client(),
         client_name=facts.client_name,
@@ -211,6 +216,7 @@ def _resolve_with(facts: _Facts, date_of_birth: str | None, unread_birth: bool) 
         date_of_birth=date_of_birth,
         case_number=facts.case_number,
         date_of_loss_as_printed=facts.date_of_loss_as_printed,
+        fallback_ok=fallback_ok,
     )
     if unread_birth and isinstance(out.get("ignored"), list) and "date_of_birth" not in out["ignored"]:
         out["ignored"].append("date_of_birth")

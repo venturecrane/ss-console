@@ -55,7 +55,14 @@ DEFAULT_JOURNAL_DIR = "/opt/data/post-intake-journal"
 RETAIN_DAYS = 45
 #: The journal's closed vocabulary (connector post_journal.py, pinned equal by a test).
 NOT_PLACED = ("no_match", "one_candidate", "ambiguous", "search_failed", "filing_refused", "not_attempted")
-PLACED_CHECK = ("tab_not_written", "figure_not_saved", "possible_duplicate", "offer_not_written", "expense_not_staged")
+PLACED_CHECK = (
+    "tab_not_written",
+    "figure_not_saved",
+    "possible_duplicate",
+    "offer_not_written",
+    "expense_not_staged",
+    "name_differs",
+)
 BUNDLE_ISSUES = ("unreadable", "partition_failed", "not_processed")
 KIND_WORDS = {
     "letter": "letter",
@@ -228,6 +235,11 @@ def _ask(entry: dict) -> str:
         return f"{filed}; it looks like one already entered{because}, so it was not entered again. Should it be?"
     if issue == "offer_not_written":
         return f"{filed}, but the offer is not on Negotiation Details{because}."
+    if issue == "name_differs":
+        return (
+            f"{filed}. The patient's name on it is printed differently from your record, "
+            "so it was matched on date of birth and date of loss; please check it is the right client."
+        )
     if issue == "expense_not_staged":
         return f"{filed}, but it was not staged as an expense{because}."
     return f"{filed}."

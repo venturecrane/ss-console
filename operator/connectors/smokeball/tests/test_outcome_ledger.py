@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from smokeball_connector import birth_date_fallback as bdf
 from smokeball_connector import letter_pages as lp
 from smokeball_connector import letter_tools as lt
 from smokeball_connector import medicals_tools as mt
@@ -281,3 +282,44 @@ def test_an_unwritable_ledger_never_fails_the_act(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv(ol.JOURNAL_DIR_ENV, str(blocker))
     assert ol.append(ol.Outcome(ol.FILE, SHA, "m", status="filed")) is False
     assert ol.outcomes(SHA, "m") == []
+
+
+# ---- a filing matched under a name the firm records differently ------------------
+
+DIFFERS = _r(ol.RESOLVE, "unique", detail=bdf.NAME_DIFFERS, matter_id="m-1", matter_number="2026-PI-1")
+
+
+@pytest.mark.parametrize(
+    "kind, rows, want",
+    [
+        ("letter", [DIFFERS, FILED], "name_differs"),
+        ("medical_bill", [DIFFERS, FILED, _r(ol.MEDICALS, "written", matter_id="m-1")], "name_differs"),
+        # An ordinary unique verdict (no reason) asks nobody anything.
+        ("letter", [_r(ol.RESOLVE, "unique", matter_id="m-1"), FILED], ""),
+    ],
+)
+def test_a_filing_on_a_birth_date_match_is_listed_for_a_person(
+    kind: str, rows: list[dict[str, Any]], want: str
+) -> None:
+    """FALSIFIER: drop ``_name_differs`` from ``derive`` and the first two rows
+    list nothing, so a bill filed under another surname reaches nobody."""
+    got = po.derive(kind, 1, 2, rows)
+    assert got["placed_on"] == "2026-PI-1" and got["issue"] == want
+
+
+def test_only_the_posts_own_resolve_may_use_the_birth_date_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[bool] = []
+    monkeypatch.setattr(vit, "_resolve", lambda _c, **k: seen.append(k["fallback_ok"]) or {"verdict": "none"})
+    monkeypatch.setattr(vit, "_client", lambda: object())
+    vit.resolve_invoice_matter(client_name="Dana Example")
+    vit.resolve_invoice_matter(client_name="Dana Example", sha256=SHA, first_page=3, last_page=3, message_id="m")
+    assert seen == [False, True]
+
+
+def test_a_birth_date_match_keeps_its_reason_on_the_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    verdict = {"verdict": "unique", "matter_id": "a", "matter_number": "2026-PI-1", "reason": bdf.NAME_DIFFERS}
+    monkeypatch.setattr(vit, "_resolve", lambda _c, **_k: dict(verdict))
+    monkeypatch.setattr(vit, "_client", lambda: object())
+    vit.resolve_invoice_matter(client_name="Dana Exampel", sha256=SHA, first_page=4, last_page=4, message_id="m2")
+    (row,) = ol.outcomes(SHA, "m2")
+    assert row["status"] == "unique" and row["detail"] == bdf.NAME_DIFFERS

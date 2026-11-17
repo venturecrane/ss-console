@@ -258,6 +258,12 @@ date_of_birth, case_number, date_of_loss_as_printed)` with exactly the facts
 The tool is named for the first thing that used it; its arithmetic is not
 specific to invoices, and it is the same resolver here.
 
+On a medical bill or claim form, `client_name` and `date_of_birth` are the
+PATIENT's, never the insured's, and `date_of_loss` is the one injury date the
+form prints for this injury, as a clean ISO date. With those, a bill whose
+printed name the firm records differently can still resolve: the verdict then
+carries `name_on_record_differs` and is listed for a person to check.
+
 - `client_name` is the client or claimant the letter concerns, never the sender
   and never the firm. On a court paper it is the firm's client named in the
   caption, never the opposing party.
@@ -523,6 +529,7 @@ Otherwise exactly one of:
 | `possible_duplicate` | an offer entry or a vendor stage answered `possible_duplicate` or `duplicate`                                          |
 | `offer_not_written`  | a settlement offer filed but not on Negotiation Details (no amount, no date, several plaintiffs, `refused`)            |
 | `expense_not_staged` | a vendor's bill missing a fact, filed as a letter, or a stage `refused`                                                |
+| `name_differs`       | filed on a resolve carrying `name_on_record_differs` (the printed name is not the firm's record)                       |
 
 When nothing in the bundle was filed (an unreadable read, a partition you
 could not make, or a second PDF you did not process), call it with `letters`
@@ -572,6 +579,12 @@ on the Medicals tab`; when the row was not added, the line says why in the
 words of the status table and the count says `1 medical bill filed, not on
 the Medicals tab`. A court paper or a bill that did NOT resolve is held like
 any letter, on its ordinary held line, with the same flag words after it.
+
+A letter filed on a resolve that carries `name_on_record_differs` reads
+`Needs a word from you: pages 15-15, a bill from <provider>, filed on matter
+<matter-number>; the patient's name on it is printed differently from your
+record, so it was matched on date of birth and date of loss; please check it
+is the right client.` and counts among the filings that need a word.
 
 A settlement offer that keyed reads `Filed: pages 1-2, a settlement offer from
 <carrier>, on matter <matter-number>; on Negotiation Details, offer of
