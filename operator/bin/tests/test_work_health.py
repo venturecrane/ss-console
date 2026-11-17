@@ -1184,6 +1184,39 @@ def test_times_read_in_phoenix():
     assert wh.hhmm(datetime(2026, 1, 5, 23, 5, tzinfo=UTC)) == "Jan 5 4:05pm MST"
 
 
+def test_a_reply_a_mail_outage_held_says_so_and_closes_when_it_goes():
+    """2026-11-12: Graph answered 5xx, the broker's fence refused a reply, and
+    work health said only "held and nobody was told". The plugin's REPLY_HELD
+    (reason mail_outage) and the broker's CONFIRM_SEND_FAILED (cause
+    mail_outage) for the same reply are ONE line that names the outage, and it
+    closes once the reply goes out. FALSIFIER: drop the mail-outage group and
+    there are two lines with no cause; drop the broker row's join and the line
+    stays open after the reply went."""
+    at = NOW - timedelta(hours=2)
+    rows = [
+        _row(
+            "CONFIRM_SEND_FAILED",
+            at,
+            outcome="refused",
+            fence="participants_unverifiable",
+            cause="mail_outage",
+            in_reply_to=VID,
+        ),
+        _row("REPLY_HELD", at + timedelta(seconds=1), reason="mail_outage", message_id=VID),
+    ]
+    items, _ = src.silent_run_items(SEAT, rows, CFG, NOW)
+    assert _kinds(items) == ["silent_run"]
+    assert "mail service did not answer" in items[0].what
+    assert "nobody was told" not in items[0].what
+    sent = _row("REPLY_SENT", at + timedelta(minutes=20), in_reply_to=VID)
+    items, _ = src.silent_run_items(SEAT, rows + [sent], CFG, NOW)
+    assert items == []
+    # However late the reply goes, the broker's row joins it by the email.
+    rows[0]["id"] = "FENCE1"
+    assert src._held_then_sent(rows + [sent], "FENCE1")
+    assert not src._held_then_sent(rows, "FENCE1")
+
+
 def test_a_seat_is_hidden_only_when_its_own_yaml_says_it_is_not_a_client():
     assert cli.footnoted_seats(["ashton-price", "brokery", "pilot-smokeball", "ap-staging", "no-such-seat"]) == {
         "pilot-smokeball",

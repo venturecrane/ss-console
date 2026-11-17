@@ -49,7 +49,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from shared import answered_messages, attachment_spool
+from shared import answered_messages, attachment_spool, mail_outage
 from shared.same_origin_redirects import open_same_origin
 from shared.secrets import get_secret
 from shared.send_anchor import envelope_fields
@@ -215,15 +215,21 @@ def send_reply(
         body["text"] = text
     if html:
         body["html"] = html
+    # A reply to an email whose mail outage backoff is running is refused
+    # before the broker is called (``shared.mail_outage``, 2026-11-12).
     return str(
-        _call(
-            "agentmail_reply",
-            body,
-            session_id=session_id,
-            matter_ref=matter_ref,
-            # The email this reply answers (participant fence): the broker
-            # refuses a reply that names none.
-            anchor=anchor,
+        mail_outage.checked(
+            message_id,
+            "AgentMailMailOutage",
+            lambda: _call(
+                "agentmail_reply",
+                body,
+                session_id=session_id,
+                matter_ref=matter_ref,
+                # The email this reply answers (participant fence): the broker
+                # refuses a reply that names none.
+                anchor=anchor,
+            ),
         ).get("message_id")
         or ""
     )

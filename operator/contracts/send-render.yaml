@@ -98,6 +98,11 @@
 #     refused: [sender_key]         # hashed, never an address. The overlay's
 #                                   # heartbeat pages send_refused naming the
 #                                   # fence; there is no second count.
+#     cause: mail_outage, in_reply_to  # only when the fence could not look
+#                                   # because the mail service did not answer
+#                                   # (participant_lookup.vendor_outage); the
+#                                   # reply's source id, for work health's
+#                                   # held-then-sent join (2026-11-12).
 #   console verifier (operator/bin/lib/send_verify.py) compares per entry;
 #     a skeleton match grades `degraded`, never `BODY_DIVERGED`. The two hashes
 #     answer two different questions and neither substitutes for the other:

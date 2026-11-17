@@ -104,7 +104,7 @@ from shared import (
     policy_profile,
     provenance,
     reply_could_not,
-    report_render,
+    report_render,  # noqa: F401 - the decision corpus wraps report_render.html_text_content here
     request_index,
     seat_config,
     seat_layout,
@@ -134,6 +134,7 @@ from . import (
     held_notice,
     held_store,
     job_reply,
+    mail_outage,
     notice,
     relay,  # noqa: F401 - surface for tests
     sweeper,
@@ -252,21 +253,8 @@ _HELD_STORE: held_store.HeldReplyStore | None = None
 _SWEEPER: Any | None = None
 
 
-def _msgraph_reply_html(text: str, html: str) -> str:
-    """The HTML body Graph is handed for a reply: composer-authored wins, else rendered.
-
-    Lifted out of :func:`_send_msgraph_reply` so ONE function decides what
-    reaches the wire and the audit digest is computed over that same value
-    (ss-console#2501). The reasoning for rendering unconditionally here is in
-    that function's docstring; this is only where it happens.
-
-    IDEMPOTENT, which is what lets the caller compose the body once and pass the
-    result through the existing ``html`` parameter: a non-blank ``html`` is
-    returned unchanged, so ``f(text, f(text, html)) == f(text, html)``.
-    """
-    if html.strip():
-        return html
-    return report_render.render_markdown(text) if text.strip() else ""
+#: The HTML body Graph is handed for a reply (``relay.msgraph_reply_html``).
+_msgraph_reply_html = relay.msgraph_reply_html
 
 
 def _transmitted_body(adapter: str, send_text: str, send_html: str) -> tuple[str, str]:
@@ -585,6 +573,8 @@ def _send_failed(
     transform hook appends to the draft's result) and paged through the same
     notifier holds use. Never raises.
     """
+    if mail_outage.held(origin, adapter, sender_class, body_digest, matter_ref):
+        return  # the mail service refused it: one REPLY_HELD row (mail_outage)
     try:
         recipient, device = _reply_recipient(origin)
         _emit_reply_event(

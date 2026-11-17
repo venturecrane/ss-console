@@ -128,6 +128,10 @@ class FenceRefused(Exception):
         super().__init__(f"{REFUSAL_MARKER} {message} {DECISION}")
         self.fence = fence
         self.refused = sorted({k for k in (sender_key(a) for a in refused) if k})
+        #: True when the fence could not look because the mail service did
+        #: not answer (participant_lookup.vendor_outage), not because of who
+        #: the message is for. The transmit records it and refuses as an outage.
+        self.mail_outage = False
 
 
 @dataclass(frozen=True)

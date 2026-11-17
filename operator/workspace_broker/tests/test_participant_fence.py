@@ -420,6 +420,68 @@ def test_a_lookup_failure_is_unverifiable_never_a_transport_error(tmp_path: Path
     assert all(r["outcome"] != "transport_error" for r in _rows(broker, "CONFIRM_SEND_FAILED"))
 
 
+def test_a_mail_outage_during_the_fence_read_is_recorded_and_refused_as_one(tmp_path: Path) -> None:
+    """2026-11-12: Graph answered 5xx while the fence read the email a reply
+    answers. That is not a participant problem, so the row says ``cause:
+    mail_outage`` and names the email, and the refusal's own class (its error
+    code to the overlay) is the outage one. FALSIFIER: drop the classification
+    in participant_lookup and the row has no cause and the refusal is a plain
+    MsGraphRefused, which the overlay redrafts at once."""
+    from workspace_broker.msgraph_ops import MsGraphMailOutage
+
+    box = FakeMailbox()
+    box.fail_reads = True
+    broker = _broker(tmp_path, box)
+    with pytest.raises(MsGraphMailOutage):
+        _reply(broker, "LATER", anchor=_anchor("REQ"))
+    assert not box.posts
+    row = _rows(broker, "CONFIRM_SEND_FAILED")[-1]
+    assert (row["fence"], row["cause"], row["in_reply_to"]) == (pf.FENCE_UNVERIFIABLE, "mail_outage", "LATER")
+
+
+def test_a_missing_email_is_no_outage(tmp_path: Path) -> None:
+    """A 404 is an answer: the email is not there. An ordinary unverifiable
+    refusal, never an outage."""
+    from workspace_broker.msgraph_ops import MsGraphMailOutage
+
+    box = FakeMailbox()
+    broker = _broker(tmp_path, box)
+    with pytest.raises(MsGraphRefused) as caught:
+        _send(broker, [ALICE], anchor=_anchor("MISSING"))
+    assert not isinstance(caught.value, MsGraphMailOutage)
+    assert "cause" not in _rows(broker, "CONFIRM_SEND_FAILED")[-1]
+
+
+def _transport(status=None, cause=None):
+    from workspace_broker.msgraph_ops import MsGraphTransportError
+
+    exc = MsGraphTransportError("x")
+    exc.status = status
+    exc.__cause__ = cause
+    return exc
+
+
+@pytest.mark.parametrize(
+    ("exc", "outage"),
+    [
+        (_transport(503), True),
+        (_transport(429), True),
+        (_transport(None, TimeoutError("timed out")), True),
+        (_transport(None, urllib.error.URLError("refused")), True),
+        (_transport(None, urllib.error.HTTPError("u", 502, "bad", {}, None)), True),  # type: ignore[arg-type]
+        (_transport(401), False),
+        (_transport(404), False),
+        (_transport(None, urllib.error.HTTPError("u", 400, "bad", {}, None)), False),  # type: ignore[arg-type]
+        (_transport(None, None), False),  # a missing credential: configuration
+        (MsGraphRefused("no"), False),
+    ],
+)
+def test_what_counts_as_a_mail_outage(exc, outage) -> None:
+    from workspace_broker.participant_lookup import vendor_outage
+
+    assert vendor_outage(exc) is outage
+
+
 def test_an_unreadable_customer_yaml_refuses(tmp_path: Path) -> None:
     box = FakeMailbox()
     broker = _broker(tmp_path, box)
