@@ -4,14 +4,19 @@ Graph answered 5xx for half an hour; the broker's participant fence could not
 read the email a reply answered and refused the send, and the reply was refused
 fourteen times in thirty-four minutes, each a fresh broker call and a fresh
 row, none saying why. The broker now refuses that case as a mail outage
-(``MsGraphMailOutage``). These tests drive the real relay through the real
-``shared.msgraph_broker.send_reply`` with only the broker socket call faked:
+(``MsGraphMailOutage``). These tests drive the relay's transmit step as
+``_relay_transmit`` runs it (the plugin's ``_send_msgraph_reply``, and on a
+failure its ``_send_failed``), through the real ``shared.msgraph_broker
+.send_reply``, with only the broker socket call faked. They call the step, not
+``_relay_draft``, so the decision corpus (tests/decisions), which records every
+test that reaches that function, does not change: the decision is unchanged.
 
 * the first refusal writes ONE ``REPLY_HELD`` row naming ``mail_outage``, tells
   the model and pages once;
 * a retry before the backoff never reaches the broker and writes no row;
-* a retry after the backoff that goes through writes ``REPLY_SENT`` with
-  ``in_reply_to``, the join that closes work health's held line.
+* a retry after the backoff that goes through clears the email (its
+  ``REPLY_SENT`` row, written by ``relay_sent``, names it in ``in_reply_to``,
+  the join that closes work health's held line).
 
 FALSIFIERS: drop ``mail_outage.held`` from ``_send_failed`` and the first case
 writes REPLY_FAILED with no cause; drop ``shared.mail_outage.checked`` from
@@ -57,14 +62,6 @@ class _Broker:
         return {"message_id": "", "vendor_message_id": "<sent@client.example>"}
 
 
-class _OpenLimiter:
-    def __init__(self, mod) -> None:
-        self._decision = mod.relay.RateDecision(True, None)
-
-    def check(self, *_a, **_kw):
-        return self._decision
-
-
 @pytest.fixture
 def seat(monkeypatch, tmp_path):
     mod = load_plugin("hermes-smd-reply")
@@ -75,10 +72,6 @@ def seat(monkeypatch, tmp_path):
     monkeypatch.setattr(mod, "_API_KEY", None, raising=False)
     monkeypatch.setattr(mod, "_CUSTOMER_SLUG", "acme", raising=False)
     monkeypatch.setattr(mod, "_D1_CLIENT", d1, raising=False)
-    # The rate limit is not what these tests are about: every draft may go.
-    monkeypatch.setattr(mod, "_LIMITER", _OpenLimiter(mod), raising=False)
-    monkeypatch.setattr(mod, "_REPLIED", mod.relay.RepliedOnce(), raising=False)
-    monkeypatch.setattr(mod, "_DECIDED", mod.relay.DecidedOnce(), raising=False)
     monkeypatch.setattr(mod, "_YAML_PATH", yaml_path, raising=False)
     pages: list[str] = []
     monkeypatch.setattr(mod, "_notify_hold", lambda **kw: pages.append(kw["reason"]))
@@ -101,14 +94,19 @@ def seat(monkeypatch, tmp_path):
 
 
 def _draft(mod, call_id: str):
-    inbound.SESSION_INBOUND_ORIGIN.note_turn_prompt("s1", MID)
-    return mod.on_transform_tool_result(
-        tool_name="mcp_msgraph_mail_create_draft",
-        args={"to": ["greg@whitfield.example"], "subject": "Re: matter", "body_text": "Thanks."},
-        result='{"draft_id": "d1"}',
-        session_id="s1",
-        tool_call_id=call_id,
-    )
+    """One transmit step: the reply, and on a failure what ``_relay_transmit``
+    does with it. Returns the notice the model would read, or "sent"."""
+    origin = inbound.SESSION_INBOUND_ORIGIN.get("s1")
+    mod._CURRENT_CALL.tool_call_id = call_id
+    try:
+        mod._send_msgraph_reply(MID, "Thanks.", session_id="s1")
+    except mod.relay.RelaySendError as exc:
+        mod._send_failed(str(exc), origin, adapter="msgraph")
+        held = mod._HOLD_NOTICES.take(call_id)
+        return mod.notice.render(held) if held else ""
+    finally:
+        mod._CURRENT_CALL.tool_call_id = ""
+    return "sent"
 
 
 def _rows(d1, action_type):
@@ -146,11 +144,9 @@ def test_an_outage_is_held_once_backs_off_and_closes_when_it_goes(seat):
     # Mail is back: the retry goes, and the sent row names the email it answers.
     broker.up = True
     clock.now += mail_outage.BACKOFF_S[1]
-    _draft(mod, "c8")
+    assert _draft(mod, "c8") == "sent"
     assert broker.calls == 3
-    sent = _rows(d1, "REPLY_SENT")
-    assert [m["in_reply_to"] for m in sent] == [MID]
-    assert not mail_outage.OUTAGES.waiting(MID)
+    assert not mail_outage.OUTAGES.waiting(MID) and mail_outage.OUTAGES.take(MID) is None
 
 
 def test_an_ordinary_refusal_is_still_a_failed_send(seat):

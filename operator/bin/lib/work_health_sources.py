@@ -106,12 +106,12 @@ def _held_then_sent(rows: list[dict], row_id: Optional[str]) -> bool:
     or the duplicate of a reply already sent): history, not open work. The
     broker's own row for a reply a mail outage refused names the email in
     ``in_reply_to`` and closes the same way once the reply goes."""
-    held = next((r for r in rows if r.get("id") == row_id), None) if row_id else None
-    kind = held.get("action_type") if held is not None else None
-    if kind == "CONFIRM_SEND_FAILED" and _mail_outage(held or {}):
-        message_id = meta(held or {}).get("in_reply_to")
+    held = (next((r for r in rows if r.get("id") == row_id), None) if row_id else None) or {}
+    kind = held.get("action_type")
+    if kind == "CONFIRM_SEND_FAILED" and _mail_outage(held):
+        message_id = meta(held).get("in_reply_to")
     elif kind == "REPLY_HELD":
-        message_id = meta(held or {}).get("message_id")
+        message_id = meta(held).get("message_id")
     else:
         return False
     held_at = parse_ts(held.get("ts"))
