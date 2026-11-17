@@ -190,7 +190,10 @@ def _leave_out_foreign(
     withheld by rule (2026-10-24) and recorded in `skipped` under the rule's
     reason, which the Records Reviewed paragraph names. The findings (a name,
     a date of birth) stay in identity_holds.json for SMD, never in the log."""
+    from . import identity_pages
+
     holds = _identity_holds(sr, rows)
+    identity_pages.record_cleared(sr, ud, {h.split(":", 1)[0] for h in holds})
     if not holds:
         return rows
     (ud / "identity_holds.json").write_text(json.dumps(holds, indent=1), encoding="utf-8")
