@@ -874,13 +874,12 @@ processed is healed by the next one.
 
 A push compiles each spec against the image the seat runs at that moment, which
 for a schema-changing release is still the older image. So after any release
-run that decided a seat, the release tick starts `seat-spec-republish.yml`,
-which runs the same publisher over an empty range at main's head: every seat
-converges against what it now runs, and a spec already current is left alone.
-Before 2026-11-16 a spec stayed pinned to the older lane schemas until some
-later push, and the seat reported "spec unverified" for hours (2026-11-04).
-That job is gated on `SEAT_SPEC_ENABLED` and enters the `seat-spec` environment
-exactly as the deploy job does; no other workflow reads the key
+run that decided a seat, the release tick dispatches Deploy. A dispatched
+Deploy runs only the migrations and this publisher, from main, over an empty
+range at main's head: every seat converges against what it now runs, and a
+spec already current is left alone. Before 2026-11-16 a spec stayed pinned to
+the older lane schemas until some later push, and the seat reported "spec
+unverified" for hours (2026-11-04). The key keeps its one reader
 (`tests/deploy-seat-spec-gate.test.ts`).
 
 The compiler refuses a config the seat's running image cannot run: a skill,

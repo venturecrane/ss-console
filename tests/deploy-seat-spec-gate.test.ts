@@ -17,10 +17,6 @@ import { describe, expect, it } from 'vitest'
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const DEPLOY = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'deploy.yml'), 'utf8')
-const REPUBLISH = readFileSync(
-  join(REPO_ROOT, '.github', 'workflows', 'seat-spec-republish.yml'),
-  'utf8'
-)
 
 /** The publish-customer-configs job's text, up to the next top-level job. */
 function publishJob(source: string): string {
@@ -69,17 +65,13 @@ describe('deploy.yml publish-customer-configs: seat-spec signing is gated', () =
   })
 })
 
-describe('seat-spec-republish.yml: the only other reader of the signing key is gated the same way', () => {
-  it('names the seat-spec environment and reads the key only when SEAT_SPEC_ENABLED is true', () => {
-    expect(violations(REPUBLISH)).toEqual([])
-  })
-
-  it('no workflow but these two reads the signing key', () => {
+describe('the signing key has one reader', () => {
+  it('no workflow but deploy.yml reads the signing key', () => {
     const dir = join(REPO_ROOT, '.github', 'workflows')
     const readers = readdirSync(dir)
       .filter((f) => /\.ya?ml$/.test(f))
       .filter((f) => readFileSync(join(dir, f), 'utf8').includes('secrets.SEAT_SPEC_SIGNING_KEY'))
       .sort()
-    expect(readers).toEqual(['deploy.yml', 'seat-spec-republish.yml'])
+    expect(readers).toEqual(['deploy.yml'])
   })
 })

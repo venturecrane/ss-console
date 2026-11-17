@@ -24,7 +24,7 @@
 #     compiles differs from the published spec in anything but compiled_from.
 #     A range that was never processed is therefore healed by the next push,
 #     which is what the nightly reconciler used to do by writing.
-#   After a release lands on a seat, seat-spec-republish.yml runs this again
+#   After a release lands on a seat, release-tick.yml dispatches Deploy, which runs this again
 #   with an empty range (BEFORE_SHA = AFTER_SHA = main's head), so every seat
 #   converges against the image it NOW runs: a push compiles a schema-changing
 #   release's spec against the image the seat ran before the tick replaced it

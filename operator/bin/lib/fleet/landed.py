@@ -9,9 +9,9 @@ seat reported "spec unverified" until some later push happened to republish it
 
 So every seat a run decided (done, rolled back, failed, or a tooling error) is
 appended, one slug per line, to the file named by ``FLEET_LANDED_FILE``.
-release-tick.yml reads it after the run and, when it names a seat, starts
-seat-spec-republish.yml, the one job besides Deploy's publisher that holds the
-signing key. Over-reporting is harmless: the publisher writes nothing for a
+release-tick.yml reads it after the run and, when it names a seat, dispatches
+Deploy, which then runs only its spec publisher (the one job that holds the
+signing key) over an empty range at main's head. Over-reporting is harmless: the publisher writes nothing for a
 spec that is already current. Unset, this is a no-op (a laptop run, a test).
 """
 

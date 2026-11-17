@@ -929,7 +929,7 @@ describe('ci-publish-customer-configs: the signed seat spec (Wave 2 W4)', () => 
   })
 
   it('an empty range (the post-release republish) converges every seat and publishes its spec', () => {
-    // seat-spec-republish.yml runs the publisher with BEFORE_SHA = AFTER_SHA
+    // A dispatched Deploy (release-tick.yml) runs the publisher with BEFORE_SHA = AFTER_SHA
     // after a release lands, so a spec compiled against the older image is
     // replaced by one compiled against the image the seat now runs.
     const fx = makeFixture([])

@@ -309,10 +309,10 @@ jobs:
 
       # A seat that took a release must have its signed spec compiled against
       # what it now runs, or it reports "spec unverified" until some later push
-      # (2026-11-04). Any run that decided a seat starts seat-spec-republish.yml,
+      # (2026-11-04). Any run that decided a seat dispatches Deploy (deploy.yml),
       # whatever its exit (a halted run may have landed seats before it halted),
-      # an urgent one-seat run included. Skipped when one is already waiting: it
-      # converges every seat at main's head when it starts.
+      # an urgent one-seat run included; on a dispatch only its spec publisher runs.
+      # Skipped when a Deploy is already waiting: it converges every seat when it runs.
       - name: Republish the seat specs
         if: always() && env.DRY_RUN == ''
         env:
@@ -325,13 +325,13 @@ jobs:
           fi
           echo "seats decided: $(sort -u "$FLEET_LANDED_FILE" | tr '\n' ' ')"
           waiting=$(
-            gh run list --repo "$GITHUB_REPOSITORY" --workflow seat-spec-republish.yml --status queued --json databaseId --jq '.[0].databaseId'
-            gh run list --repo "$GITHUB_REPOSITORY" --workflow seat-spec-republish.yml --status pending --json databaseId --jq '.[0].databaseId'
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --status queued --json databaseId --jq '.[0].databaseId'
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --status pending --json databaseId --jq '.[0].databaseId'
           )
           if [ -z "$waiting" ]; then
-            gh workflow run seat-spec-republish.yml --repo "$GITHUB_REPOSITORY" --ref main
+            gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
           else
-            echo "a spec republish is already waiting"
+            echo "a Deploy run is already waiting; it republishes the specs"
           fi
 
   # No environment and no secrets: says why a run did nothing.
