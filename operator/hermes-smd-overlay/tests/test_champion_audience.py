@@ -60,7 +60,7 @@ CAPTURE_REPLY = """## Stored from Sunday's open house
 - **Contact:** priya@example.test, 602 555 0177
 - **Stated intent:** buying in spring, wants a yard
 - **Follow-ups:** Monday, November 17; Monday, November 24; Monday, December 8
-- **Record:** priya-shah-1420-e-4th-2026-11-16
+- **Record:** priya-shah-1420-e-4th-2026-11-09
 
 Brokery Agent
 """
