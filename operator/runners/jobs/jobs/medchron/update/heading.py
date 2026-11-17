@@ -87,9 +87,34 @@ _WORD = re.compile(r"[a-z]{2,}")
 
 
 def _words(text: str) -> list[str]:
-    """Lowercase words, punctuation aside ("O'Roe" and "ORoe" are one word,
-    a hyphen parts two)."""
-    return _WORD.findall((text or "").lower().replace("'", "").replace("\u2019", ""))
+    """Lowercase words, punctuation and accents aside ("O'Roe" and "ORoe"
+    are one word, "Muñoz" is "munoz", a hyphen parts two)."""
+    import unicodedata
+
+    flat = unicodedata.normalize("NFKD", (text or "").lower())
+    flat = "".join(ch for ch in flat if not unicodedata.combining(ch))
+    return _WORD.findall(flat.replace("'", "").replace("\u2019", ""))
+
+
+#: Words after a name that are no part of the surname.
+_SUFFIX = frozenset({"jr", "sr", "ii", "iii", "iv"})
+#: Credentials as written once their dots and hyphens are gone ("Ph.D." is
+#: "phd", "PA-C" is "pac"): never a name word.
+_CREDS = frozenset(
+    "md do dc pt np pa pac lcsw aud rn ma dpm od phd msn bsn lvn lpn cna aprn fnp fnpc crna dnp rd msw lmft otr "
+    "otrl dpt mph lac ot facs faaos".split()
+)
+
+
+def _tokens(part: str) -> list[str]:
+    """A name part's whitespace tokens less credentials and suffixes, each
+    read as written ("M.D.", "Ph.D.", "Jr." are gone, "Roe-Smith" stays)."""
+    out = []
+    for t in part.split():
+        key = "".join(_words(t.replace(".", "").replace("-", "")))
+        if key and key not in _CREDS and key not in _SUFFIX:
+            out.append(t)
+    return out
 
 
 #: Words a facility or laboratory heading shares with every other one (the
@@ -133,24 +158,23 @@ def name_rule(provider: str) -> NameRule:
     all its words."""
     from math import ceil
 
-    from ...stages.group import CRED_SEG, FACILITY_WORD
-    from . import finisher as FN
+    from ...stages.group import FACILITY_WORD
     from .encounter import _SPECIALTY
 
     def plain(part: str) -> list[str]:
-        return [w for w in _words(part) if w not in FN._CRED and not CRED_SEG.match(w)]
+        return [w for t in _tokens(part) for w in _words(t)]
 
     def facility(part: str) -> bool:
         return bool(FACILITY_WORD.search(part)) or any(w in GENERIC or _SPECIALTY.match(w) for w in plain(part))
 
     bare = re.sub(r"\([^)]*\)", " ", provider or "")
-    parts = [p.strip() for p in re.split(r",|;|/|\|| [-\u2013] ", bare) if plain(p)]
+    parts = [p.strip() for p in re.split(r",|;|/|\|| [-\u2013] ", bare) if plain(p)]  # a credential-only part goes
     people = [p for p in parts if not facility(p) and len(plain(p)) <= 4]
     if people:
         if len(people) >= 2 and people[0] == parts[0]:
             surname = people[0]  # "Surname, Given"
         else:
-            surname = people[-1].split()[-1]  # "Given Middle Surname", or the person after a facility
+            surname = _tokens(people[-1])[-1]  # "Given Middle Surname", or the person after a facility
         toks = tuple(plain(surname))
         return NameRule(toks, len(toks))
     every = plain(bare)

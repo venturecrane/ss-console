@@ -141,6 +141,12 @@ MORE = [
         "Sample Ridge Medical Center Imaging Department",
     ),
     ("Example Health - Radiology", "Example Hospital Radiology Report 03/04/2026", "Sample Health - Radiology"),
+    # The third read's shape: the page prints "Last, First Middle (M.D.)", the heading "First Middle Last, M.D.",
+    # as stored: a credential after the surname with no comma, two credentials, a suffix, an accent.
+    ("Jane Ann Roe M.D.", "03/04/2026 Roe, Jane Ann (M.D.)", "Jane Ann Poe M.D."),
+    ("Jane Ann Roe, M.D., Ph.D.", "03/04/2026 Roe, J. A. (M.D.)", "Jane Ann Poe, M.D., Ph.D."),
+    ("Jane Ann Roe Jr., M.D.", "03/04/2026 Roe, Jane Ann (M.D.)", "Jane Ann Poe Jr., M.D."),
+    ("Jane Ann Muñoz, M.D.", "03/04/2026 MUNOZ, JANE ANN (M.D.)", "Jane Ann Núñez, M.D."),
 ]
 
 
