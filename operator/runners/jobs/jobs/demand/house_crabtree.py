@@ -53,7 +53,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from . import terms
+from . import firm_text, terms
 from .house import HouseWriter, RenderError, _keep_next, _qn, _first_rpr, _run, out_name, parse
 from .house_numbered import _flags, _force, roman
 
@@ -228,16 +228,13 @@ def settle_expiry(md: str, days: int = 30) -> tuple[str, list[str]]:
     due = deadline(letter, days)
     notes = []
     if due != letter + timedelta(days=days):
-        notes.append(
-            f"The deadline, {days} days after the letter, fell on a weekend; it is written as {long_date(due)}, "
-            "the next business day. Public holidays are not checked: move it again if that day is one."
-        )
+        notes.append(firm_text.NOTE_DEADLINE_WEEKEND.format(days=days, due=long_date(due)))
     m = re.search(r"(?m)^expires:\s*(.*)$", md)
     said = _parse_date(m.group(1)) if m else None
     if said is not None and said != due:
         for form in (long_date(said), f"{said:%B} {said.day}, {said.year}"):
             md = md.replace(form, long_date(due) if form == long_date(said) else f"{due:%B} {due.day}, {due.year}")
-        notes.append(f"The letter's deadline was written as {long_date(said)}; it is {long_date(due)}.")
+        notes.append(firm_text.NOTE_DEADLINE_WRITTEN.format(said=long_date(said), due=long_date(due)))
     if m:
         md = md[: m.start(1)] + long_date(due) + md[m.end(1) :]
     else:

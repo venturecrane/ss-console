@@ -167,7 +167,7 @@ def test_without_the_rule_the_review_holds_as_it_did_that_night(tmp_path, pricin
     client = ScriptedClient(gap=SAID)
     _r, v = _run(tmp_path, pricing, client)
     assert v.outcome == "failed" and v.reason.startswith("review_held:"), v.reason
-    assert "5 system vocabulary" in v.reason and '"digest shows"' in v.reason
+    assert "5 system vocabulary" in v.reason and '"digest shows"' in str(v.findings)
     rec = json.loads((tmp_path / "job" / "data" / "review.json").read_text())
     assert rec["must_fix"] >= 4 and not rec["released"]
 

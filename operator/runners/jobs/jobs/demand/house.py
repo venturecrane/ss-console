@@ -35,6 +35,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+from . import firm_text
+
 KINDS = (
     "date",
     "blank",
@@ -304,12 +306,9 @@ def business_day_expiry(md: str) -> tuple[str, list[str]]:
     if moved != d:
         # the same date written without its weekday, in the body's closing sentence
         out = re.sub(rf"(?<![A-Za-z], ){re.escape(bare)}", f"{moved:%B} {moved.day}, {moved.year}", out)
-        note = (
-            f"The demand's expiry fell on a {d:%A} ({bare}); it is written as {now}, the next business day. "
-            "Public holidays are not checked: move it again if that Monday is one."
-        )
+        note = firm_text.NOTE_EXPIRY_WEEKEND.format(weekday=f"{d:%A}", bare=bare, now=now)
     else:
-        note = f"The expiry's weekday was corrected to {now} (the letter had {was})."
+        note = firm_text.NOTE_EXPIRY_WEEKDAY.format(now=now, was=was)
     return out, [note]
 
 
