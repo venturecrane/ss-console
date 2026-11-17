@@ -29,6 +29,14 @@ paragraph shorter than the audit's floor (``claims.graded``: 30 characters)
 joins its neighbour (the next one, or the previous when the next opens a
 subsection). A short paragraph that carries a value is graded on its own.
 A heading standing alone carries no assertion and is left as it is.
+
+A line that is ONLY a citation (2026-11-17: 64 such lines in 46 rows of one
+update) joins the text it cites (``join_stray``), before the paragraphs are
+cited and again after, and once more after the update finisher's edits
+(``assemble``). A citation that closes the line above joins it; an exact
+repeat, or one of an exhibit the entry cites elsewhere, goes; the only
+citation of an exhibit is never dropped, so every exhibit stays cited. A
+citation carries no value, so no value can be lost.
 """
 
 from __future__ import annotations
@@ -127,10 +135,99 @@ def _closing_cite(paras: list[str], i: int) -> str | None:
     return None
 
 
+def cite_only(line: str) -> bool:
+    """A line that is nothing but citations (and the punctuation between them)."""
+    return bool(CL.CITE.search(line)) and not _ALNUM.search(CL.CITE.sub("", line))
+
+
+def _ends_cited(line: str) -> bool:
+    ms = list(CL.CITE.finditer(line))
+    return bool(ms) and not _ALNUM.search(line[ms[-1].end() :])
+
+
+def _exhibit(cite: str) -> int:
+    m = re.search(r"\d+", cite)
+    return int(m.group(0)) if m else -1
+
+
+def _target(out: list[str], within: bool, headings: set[str]) -> int | None:
+    """Where a stray citation line joins: the line just above it in its own
+    paragraph (`within`), else the nearest line above that ends with a
+    citation, so a joined citation never makes uncited text a new claim."""
+    for k in range(len(out) - 1, -1, -1):
+        ln = out[k].strip()
+        if not ln:
+            if within:
+                return None
+            continue
+        if within and ln not in headings:
+            return k
+        within = False
+        if ln not in headings and _ends_cited(ln):
+            return k
+    return None
+
+
+def _join_one(target: str, cites: list[str], others: set[int]) -> str:
+    """`target` with the stray line's citations joined: the first one when it
+    closes `target`'s text; then each citation of an exhibit no other line
+    of the entry cites (an exhibit stays cited); every other one dropped (a
+    citation carries no value, so no value is lost)."""
+    add: list[str] = []
+    for c in cites:
+        closes = not add and not _ends_cited(target)
+        if closes or (c not in target and _exhibit(c) not in others):
+            add.append(c)
+            others.add(_exhibit(c))
+    return f"{target.rstrip()} {' '.join(add)}" if add else target
+
+
+def join_stray(entry: str, headings: set[str] | None = None, audited: bool = False) -> str:
+    """The entry with no line that is only a citation (``cite_only``). Each
+    joins the text above it (``_target``, ``_join_one``); a stray line with
+    no line above to join waits for the next line that ends with a citation;
+    one with none is left as it is. The text a claim's citation closes is
+    never changed, with one exception: a stray citation right under a
+    heading, with text below it in the same paragraph, kept that heading out
+    of the claim below; joined before the audit, the heading is part of that
+    claim as it is everywhere else. After the audit (`audited`) such a line
+    is left as it is, so no audited claim changes."""
+    heads = headings or set()
+    lines = entry.split("\n")
+    if len(lines) < 3 or not any(cite_only(ln) for ln in lines[2:]):
+        return entry
+    body_in = lines[2:]
+    others = {_exhibit(m.group(0)) for ln in body_in if not cite_only(ln) for m in CL.CITE.finditer(ln)}
+    out: list[str] = []
+    waiting: list[str] = []
+    for i, ln in enumerate(body_in):
+        if not cite_only(ln):
+            if waiting and _ends_cited(ln):
+                ln, waiting = _join_one(ln, waiting, others), []
+            out.append(ln)
+            continue
+        cites = [m.group(0) for m in CL.CITE.finditer(ln)]
+        within = bool(out) and bool(out[-1].strip()) and i > 0
+        below = i + 1 < len(body_in) and bool(body_in[i + 1].strip())
+        if audited and within and out[-1].strip() in heads and below:
+            out.append(ln)  # it closes the heading's span: removing it would change the claim below
+            continue
+        k = _target(out, within, heads)
+        if k is None:
+            waiting += cites
+            continue
+        out[k] = _join_one(out[k], cites, others)
+    out += waiting  # nowhere to join: left as it was
+    body = re.sub(r"\n{3,}", "\n\n", "\n".join(out))
+    return "\n".join(lines[:2]) + "\n" + body.rstrip("\n") + ("\n" if entry.endswith("\n") else "")
+
+
 def cite_entry(entry: str, headings: set[str]) -> tuple[str, list[dict[str, Any]]]:
     """(the entry with every paragraph closed by a citation, a row per
     paragraph cited here). The date line and provider line are the entry's
-    header, never a claim."""
+    header, never a claim. A line that is only a citation joins the text it
+    cites, before and after (``join_stray``)."""
+    entry = join_stray(entry, headings)
     lines = entry.split("\n", 2)
     if len(lines) < 3:
         return entry, []
@@ -145,7 +242,7 @@ def cite_entry(entry: str, headings: set[str]) -> tuple[str, list[dict[str, Any]
         rows.append({"entry": lines[0], "cite": cite, "chars": len(p.strip())})
         if cite is not None:
             paras[i] = p.rstrip() + " " + cite
-    return head + "\n" + lead + "\n\n".join(paras), rows
+    return join_stray(head + "\n" + lead + "\n\n".join(paras), headings), rows
 
 
 def cite_all(entries: list[str], headings: set[str]) -> tuple[list[str], list[dict[str, Any]]]:

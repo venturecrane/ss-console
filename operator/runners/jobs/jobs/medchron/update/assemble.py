@@ -38,7 +38,7 @@ from collections import Counter, defaultdict
 from typing import Any, Callable
 
 from ..lane_ref import lane_references
-from . import body as B, entry_edits as EE, icd, providers as P
+from . import body as B, entry_edits as EE, icd, providers as P, uncited as U
 
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
 
@@ -387,6 +387,7 @@ def assemble(
     audit_pre, new_ents = B.entries_of(audit_md)
     addition, icd_claims, names = _split_audit_pre(audit_pre)
     new_ents, spelled = P.respell(new_ents, names, provider_names or {})
+    new_ents = [U.join_stray(e, headings, audited=True) for e in new_ents]  # after the finisher: no stray citation
     delivered_rows = B.table_rows(b["## Treatment Timeline"])
     name_of, name_log = lane_namer(headings, delivered_rows[1:], exhibit_providers(b["## Exhibit List"]))
     taken = {r["exhibit"] for r in new_exhibits}
