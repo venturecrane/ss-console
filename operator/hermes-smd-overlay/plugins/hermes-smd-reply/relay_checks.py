@@ -594,6 +594,15 @@ def _checklist(
     # times only, so a client's own words quoted back cannot hold it. HELD,
     # not refused: the draft stands, and the notice tells the model exactly
     # what to correct.
+    #
+    # An SMD note's words were approved as written and the binding refuses any
+    # other wording (fixed_wording), so it meets the outside set, ids and times
+    # only: the style rules judge a model's prose (2026-11-17, an approved note
+    # naming the firm's own capitalised folder names was held at the send). Read
+    # from the binding's request without a call, so the recorded decision keeps
+    # its shape.
+    if bound is not None and ("kind", "note_job") in bound.request:
+        internal = False
     checklist_hold = _plugin._checklist_violations(
         # A file name the facts print is the matter's own, not our prose: the
         # checklist never judges it (2026-11-02 replay: credentials in names).
