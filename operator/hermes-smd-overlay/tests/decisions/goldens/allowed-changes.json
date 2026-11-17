@@ -2,5 +2,9 @@
   "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges.",
   "existing/test_champion_audience": [],
   "existing/test_champion_wall": [],
-  "synthetic/relay.guard": []
+  "synthetic/relay.guard": [],
+  "existing/test_reply_binding": [
+    "tests/test_reply_binding.py::test_a_note_wake_replies_through_a_note_binding.timeline.2.events.31.kwargs.internal",
+    "tests/test_reply_binding.py::test_a_scheduled_note_wake_sends_one_new_message.timeline.2.events.31.kwargs.internal"
+  ]
 }
