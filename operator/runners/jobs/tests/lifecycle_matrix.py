@@ -149,6 +149,8 @@ class Life:
     children: list[Callable[[Path], tuple[int, str]]] = field(default_factory=list)
     during: list[Callable[[], Any]] = field(default_factory=list)
     acts: list[tuple[str, str]] = field(default_factory=list)
+    #: Indexes of the gateway's posts it answered with an error (never delivered).
+    refused_posts: set[int] = field(default_factory=set)
 
     @property
     def lane(self) -> Any:
@@ -365,11 +367,14 @@ def _resubmit(life: Life, jid: str) -> None:
 
 
 def _reply_failure(life: Life) -> None:
+    """The gateway refuses every post for six ticks (past the wake's attempts)."""
+    first = len(life.seat.posts)
     life.seat.gate_status = 500
     for _ in range(6):
         life.seat.now["t"] += 60
         life.tick()
     life.seat.gate_status = 200
+    life.refused_posts.update(range(first, len(life.seat.posts)))
 
 
 def _broker_down(life: Life) -> None:
@@ -549,7 +554,11 @@ def observe(life: Life, jid: str) -> dict[str, Any]:
     st = _state(life, jid)
     audit = _audit(life)
     mine = [a for a in audit if a["metadata"].get("job_id") == jid]
-    posted = {json.dumps(p["body"], sort_keys=True) for p in life.seat.posts if jid in json.dumps(p["body"])}
+    posted = {
+        json.dumps(p["body"], sort_keys=True)
+        for i, p in enumerate(life.seat.posts)
+        if jid in json.dumps(p["body"]) and i not in life.refused_posts
+    }
     messages = sum(1 for p in posted if "Outcome: delivered." in p)
     filed = sum(1 for a in mine if a["action_type"] == "DELIVERY_PROVEN")
     pages = sorted({a["metadata"].get("code") for a in mine if a["action_type"] == "DELIVERY_PROOF_FAILED"})

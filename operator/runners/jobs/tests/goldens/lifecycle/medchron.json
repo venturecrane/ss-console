@@ -3693,8 +3693,8 @@
       "code": null,
       "ending": "delivered",
       "filed_sets": 1,
-      "firm_messages": 1,
-      "owner": "firm",
+      "firm_messages": 0,
+      "owner": "smd",
       "paged": ["wake_lost"],
       "run": {
         "by": "code",
@@ -3704,7 +3704,7 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "way_out": ["jobs rewake"]
     },
     "running/resubmit_while_running": {
       "code": "medchron_job_submit",
@@ -4021,8 +4021,8 @@
       "code": null,
       "ending": "delivered",
       "filed_sets": 1,
-      "firm_messages": 1,
-      "owner": "firm",
+      "firm_messages": 0,
+      "owner": "smd",
       "paged": ["wake_lost"],
       "run": {
         "by": "code",
@@ -4032,7 +4032,7 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "way_out": ["jobs rewake"]
     },
     "submitted/resubmit_while_running": {
       "code": "medchron_job_submit",

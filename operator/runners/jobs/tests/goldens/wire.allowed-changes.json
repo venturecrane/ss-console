@@ -36,9 +36,12 @@
     "by_cell.medchron/wake_lost.medchron_job_record.requests.2.fields.wake",
     "by_cell.medchron/wake_paused.medchron_job_record.requests.0.fields.run",
     "by_cell.medchron/wake_paused.medchron_job_record.requests.1.fields.run",
-    "verbs.casefile_job_status.replies",
-    "verbs.litigation_job_status.replies",
-    "verbs.medchron_job_list.replies",
-    "verbs.records_job_status.replies"
+    "verbs.medchron_job_list.replies.1.jobs.0.reason",
+    "verbs.medchron_job_list.replies.2.jobs.0.folder_id",
+    "verbs.medchron_job_list.replies.2.jobs.0.reason",
+    "verbs.medchron_job_record.requests",
+    "verbs.medchron_job_record.requests.4.fields.wake",
+    "verbs.records_job_status.replies.5.jobs.0.reason",
+    "verbs.records_job_status.replies.6.jobs.0.stage"
   ]
 }
