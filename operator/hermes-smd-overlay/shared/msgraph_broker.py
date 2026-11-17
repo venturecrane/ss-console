@@ -30,7 +30,7 @@ import json
 import os
 from typing import Any
 
-from shared import broker_socket
+from shared import broker_socket, mail_outage
 from shared.send_anchor import envelope_fields
 from shared.workspace_broker import BrokerError, BrokerNotReached, BrokerReplyUnreadable, request
 
@@ -212,15 +212,21 @@ def send_reply(
     extra = (
         {"attachment_sha256": ",".join(a["sha256"] for a in attachments)} if attachments else None
     )
+    # A reply to an email whose mail outage backoff is running is refused
+    # before the broker is called (``shared.mail_outage``, 2026-11-12).
     return _vendor_id(
-        _call(
-            "msgraph_reply",
-            payload,
-            session_id=session_id,
-            matter_ref=matter_ref,
-            anchor=anchor,
-            audit_extra=extra,
-            for_job=for_job,
+        mail_outage.checked(
+            str(payload.get("message_id") or ""),
+            "MsGraphMailOutage",
+            lambda: _call(
+                "msgraph_reply",
+                payload,
+                session_id=session_id,
+                matter_ref=matter_ref,
+                anchor=anchor,
+                audit_extra=extra,
+                for_job=for_job,
+            ),
         )
     )
 

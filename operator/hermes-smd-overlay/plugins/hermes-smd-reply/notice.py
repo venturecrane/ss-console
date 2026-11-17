@@ -125,6 +125,11 @@ _REASON_HINTS: dict[str, str] = {
         "so it was not queued (a queued reply would lose its files). Nothing was sent. "
         "Escalate so a person sends the files."
     ),
+    "mail_outage": (
+        "The mail service did not answer, so nothing was sent and the reply is "
+        "still owed. Do not redraft it now: a try before the service recovers is "
+        "held without sending. SMD has been told it is waiting."
+    ),
     "no_inbox_id": "No inbox was recorded for the original message, so there is nothing to thread into.",
     "fixed_wording": (
         "This reply is its job's fixed wording and nothing else. Nothing was sent "
@@ -136,6 +141,9 @@ _REASON_HINTS: dict[str, str] = {
 #: Holds whose guidance stands on every attempt: the redraft that clears them is
 #: named exactly, so "do not redraft" on a second hold would be the wrong advice.
 _EXACT_REDRAFT_REASONS = frozenset({"fixed_wording"})
+#: Holds whose guidance stands on every attempt because a redraft is not the
+#: remedy: a mail outage clears when the service answers, not when reworded.
+_STANDING_REASONS = _EXACT_REDRAFT_REASONS | {"mail_outage"}
 #: The broker's quoted wording: a held job's two or three sentences, or a
 #: delivered job's whole reply (a drafted document's marker and caption lines).
 _MAX_EXACT_DETAIL_LEN = 6000
@@ -189,7 +197,7 @@ def render(notice: HoldNotice) -> str:
     if reason == SENT_TRACE_INCOMPLETE:
         return _SENT_TRACE_INCOMPLETE_TEXT.format(recipient=recipient)
     exact = reason in _EXACT_REDRAFT_REASONS
-    if exact:
+    if reason in _STANDING_REASONS:
         guidance = _REASON_HINTS[reason]
     elif notice.attempt >= 2:
         guidance = _SECOND_HOLD_GUIDANCE.format(n=notice.attempt)

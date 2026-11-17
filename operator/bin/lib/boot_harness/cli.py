@@ -52,6 +52,11 @@ PLAIN_ENV = {
     # Harness-only: one attempt per aws call against the dead endpoint, so the
     # boot's many fail-soft R2 fetches cost seconds, not minutes, of retries.
     "AWS_MAX_ATTEMPTS": "1",
+    # Harness-only: the entrypoint adopts the planted /opt/data/customer.yaml
+    # only when this is set (a seat's agent can write that path, so a real seat
+    # never boots on it), and waits no time for the dead endpoint before using it.
+    "SMD_BOOT_HARNESS": "1",
+    "SMD_CONFIG_FETCH_WAIT_WITH_COPY_SECONDS": "0",
 }
 DUMMY_SECRETS = ("ANTHROPIC_API_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "WEBHOOK_SECRET_MCP")
 # Each run mode: the guest it boots and the seat whose customer.yaml the fixture

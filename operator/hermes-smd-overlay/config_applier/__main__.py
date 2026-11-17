@@ -344,10 +344,17 @@ def _build_spec_verifier(s3_client: Any, bucket: str, slug: str, volume: Path) -
     """The shadow-mode spec verifier, or None (logged) when it cannot load."""
     try:
         from config_applier.spec_verifier import SpecVerifier
+        from config_applier.volume_copy import COPY_DIR
     except ImportError as exc:
         logger.error("applier: spec verifier unavailable (%s); seat specs go unverified", exc)
         return None
-    return SpecVerifier(s3_client=s3_client, bucket=bucket, slug=slug, running_yaml_path=volume)
+    return SpecVerifier(
+        s3_client=s3_client,
+        bucket=bucket,
+        slug=slug,
+        running_yaml_path=volume,
+        volume_copy_dir=COPY_DIR,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

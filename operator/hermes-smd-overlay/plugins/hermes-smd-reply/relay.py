@@ -24,9 +24,16 @@ from dataclasses import dataclass, field
 from email.utils import parseaddr
 from typing import Any
 
-from shared import agentmail_broker, content_floor, inbound, msgraph_broker, outbound_gate
+from shared import (
+    agentmail_broker,
+    content_floor,
+    inbound,
+    msgraph_broker,
+    outbound_gate,
+    report_render,
+)
 from shared import send_policy as send_policy_mod
-from shared.workspace_broker import BrokerError, send_outcome_unknown
+from shared.workspace_broker import MAIL_OUTAGE_CODES, BrokerError, send_outcome_unknown
 
 logger = logging.getLogger(__name__)
 
@@ -533,6 +540,12 @@ HeldWordingRefused = FixedWordingRefused
 FIXED_WORDING_CODES = frozenset({"FixedWordingRefused", "HeldWordingRefused"})
 
 
+class MailOutage(RelaySendError):
+    """The reply was refused because the mail service did not answer
+    (``MAIL_OUTAGE_CODES``, ``shared.mail_outage``): nothing was sent, and the
+    same reply may go once mail is back. The plugin holds it once."""
+
+
 class RelayOutcomeUnknown(RelaySendError):
     """The reply reached the broker, or may have, and its answer was lost, so it
     may already be in the person's inbox. A caller must treat it as carried for
@@ -556,6 +569,8 @@ def reply_failure(exc: Exception, what: str) -> RelaySendError:
     if isinstance(exc, BrokerError):
         if getattr(exc, "code", "") in FIXED_WORDING_CODES:
             return FixedWordingRefused(str(exc))
+        if getattr(exc, "code", "") in MAIL_OUTAGE_CODES:
+            return MailOutage(f"{what}: the mail service did not answer, nothing was sent")
         if send_outcome_unknown(exc):
             return RelayOutcomeUnknown(f"{what}: outcome unknown, it may have been sent: {exc}")
         return RelaySendError(f"broker refused the {what}: {exc}")
@@ -564,6 +579,24 @@ def reply_failure(exc: Exception, what: str) -> RelaySendError:
     ):
         return RelaySendError(f"{what} unavailable, nothing was sent: {exc}")
     return RelayOutcomeUnknown(f"{what}: outcome unknown, it may have been sent: {exc}")
+
+
+def msgraph_reply_html(text: str, html: str) -> str:
+    """The HTML body Graph is handed for a reply: composer-authored wins, else rendered.
+
+    One function decides what reaches the wire, and the audit digest is
+    computed over that same value (ss-console#2501). The reasoning for
+    rendering unconditionally is in the plugin's ``_send_msgraph_reply``
+    docstring; this is only where it happens. (Moved here from the plugin's
+    ``__init__`` on 2026-11-16, which is at its size ratchet.)
+
+    IDEMPOTENT, which is what lets the caller compose the body once and pass the
+    result through the existing ``html`` parameter: a non-blank ``html`` is
+    returned unchanged, so ``f(text, f(text, html)) == f(text, html)``.
+    """
+    if html.strip():
+        return html
+    return report_render.render_markdown(text) if text.strip() else ""
 
 
 def send_reply(

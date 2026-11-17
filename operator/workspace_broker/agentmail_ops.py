@@ -89,7 +89,17 @@ def _files(payload: dict[str, Any]) -> agentmail_attachments.Attachments | None:
 
 
 class AgentMailTransportError(BrokerRefusal):
-    """The send could not be attempted or its outcome is unknown."""
+    """The send could not be attempted or its outcome is unknown.
+
+    ``status`` is the HTTP status when AgentMail answered with one, else None
+    (as ``MsGraphTransportError.status``)."""
+
+    status: int | None = None
+
+
+class AgentMailMailOutage(AgentMailRefused):
+    """A refusal made because AgentMail did not answer (5xx or no answer at all),
+    not because of who the message is for. See ``MsGraphMailOutage``."""
 
 
 def _message_id(response: dict[str, Any]) -> str:
@@ -210,7 +220,9 @@ class AgentMailOps:
             with opener(request, timeout=TIMEOUT_S) as response:
                 raw = response.read().decode("utf-8") or "{}"
         except urllib.error.HTTPError as exc:  # includes a vendor-side 403
-            raise AgentMailTransportError(f"agentmail {method} {path} failed: HTTP {exc.code}") from exc
+            failure = AgentMailTransportError(f"agentmail {method} {path} failed: HTTP {exc.code}")
+            failure.status = exc.code
+            raise failure from exc
         except Exception as exc:
             # Class name only: the exception's text is vendor/OS text, not ours to forward.
             raise AgentMailTransportError(f"agentmail {method} {path} failed: {type(exc).__name__}") from exc

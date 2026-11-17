@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# entrypoint-fetch-inputs.sh: the one fetch every lane's firm inputs go
-# through, SOURCED by entrypoint.sh before the lane files (same shell, as
-# root). It defines _fetch_lane_inputs and nothing else.
+# entrypoint-fetch-inputs.sh: the boot's vault fetches, SOURCED by
+# entrypoint.sh (same shell, as root) before it reads the seat's config. It
+# defines _fetch_lane_inputs, the one fetch every lane's firm inputs go
+# through, and, at the end, the fetch of the seat's own customer.yaml
+# (smd_boot_customer_yaml). It runs nothing itself.
 #
 # WHY (2026-10-14, A&P v141). The litigation inputs were in the vault
 # (vaults/ashton-price/litigation/, 422 objects, uploaded 13:32Z) and the boot
@@ -237,4 +239,171 @@ _adopt_lane_inputs() {
   _prune_lane_versions "${live}"
   log "${lane} firm inputs refreshed from R2 into ${live} (version ${label})"
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# THE SEAT'S customer.yaml (2026-11-16: moved here from entrypoint.sh, so the
+# vault fetches live in one file). validate_candidate_config and
+# smd_boot_customer_yaml <live path>; entrypoint.sh calls the second once,
+# before anything reads the config.
+#
+# Validate a CANDIDATE customer.yaml before it becomes the live one, using the
+# SAME on-box validator the ADR 0044 live applier uses. Until ss #2082 the boot
+# fetch did a bare `cp` then `mv -f` with no check at all, and only the poller
+# validated. That asymmetry was survivable while the R2 object was written by
+# hand at provision time; auto-publish arms it. An object the poller REJECTS
+# stays in R2, and the next restart (a Fly migration, an OOM, an unrelated
+# redeploy) adopted it unvalidated, hours or days after the merge that put it
+# there and with nothing tying the crash to that merge.
+#
+# Structural validation ONLY. The applier's safety layer (config_applier.safety)
+# is deliberately NOT run here: it enforces live-apply transition rules, and the
+# rebuild-class fields it refuses on the live path (persona tone, vertical,
+# model) are precisely the ones a RESTART exists to deliver. Running it here
+# would refuse the changes this path is for.
+#
+# Exit 2 means the validator itself is unimportable. That is treated exactly
+# like an invalid config: a substrate we cannot check is not a substrate we
+# adopt from (the standing fail-closed posture, same as the invariant_7 gate
+# further down, which refuses boot on a missing module rather than skipping).
+#
+# AN R2 OUTAGE (2026-11-12). The live copy sits in the config directory on the image's
+# root filesystem, which a Machine resets on every start, so after a restart the
+# "keep the existing copy" branch below never had a copy to keep. One failed
+# fetch meant FATAL, Fly's three quick restarts, and a client seat parked at
+# "stopped" until someone started it by hand; during a regional outage that was
+# several seats at once. Two changes:
+#   * A fetch that fails for any reason but "not there" is retried, backing off
+#     to 30s, for up to SMD_CONFIG_FETCH_WAIT_SECONDS (300) inside this one
+#     boot: longer than Fly's whole restart budget (max_retries 3, seconds
+#     apart), so a short outage is waited out instead of exhausting it.
+#   * The seat keeps a SIGNED copy on its volume (overlay
+#     config_applier/volume_copy.py: the root spec verifier writes it once it
+#     proves the running yaml is the one an authentic seat spec names). With
+#     one, the wait is SMD_CONFIG_FETCH_WAIT_WITH_COPY_SECONDS (60), and then
+#     the seat boots on that copy with a loud WARN naming its spec. The copy is
+#     verified again here (signature against the image's key, digest, seat, the
+#     yaml's hash), never trusted for where it sits: the volume is the agent's.
+#     A 404 is not an outage: a seat the vault no longer holds is not booted
+#     from a copy (gone means gone), it stops as before.
+
+validate_candidate_config() {
+  ${SMD_CONFIG_VALIDATOR_PYTHON:-${SMD_LAYOUT_HERMES_PYTHON3}} - "$1" <<'PY'
+import sys
+from pathlib import Path
+
+try:
+    from bootstrap.validate import validate_customer_yaml
+except Exception as exc:  # noqa: BLE001 - any import failure is a refusal
+    print(f"candidate config validator unimportable: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+
+errors = validate_customer_yaml(Path(sys.argv[1]))
+for err in errors:
+    print(f"  {err}", file=sys.stderr)
+raise SystemExit(1 if errors else 0)
+PY
+}
+
+# One fetch into $1. On failure _CY_FETCH is "absent"
+# (the vault answered that the object is not there) or "unreachable".
+_smd_fetch_customer_yaml() { # <into>
+  local err
+  rm -f "$1"
+  if err=$(AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}" \
+             AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}" \
+             aws s3 cp --endpoint-url "${_seed_endpoint}" --only-show-errors \
+               "s3://${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}/customer.yaml" \
+               "$1" 2>&1); then
+    _CY_FETCH="fetched"
+    return 0
+  fi
+  case "${err}" in
+    *"(404)"*|*NoSuchKey*|*"Not Found"*) _CY_FETCH="absent" ;;
+    *) _CY_FETCH="unreachable" ;;
+  esac
+  _CY_FETCH_ERR="$(printf '%s' "${err}" | head -n 2 | tr '\n' ' ' | cut -c1-300)"
+  return 1
+}
+
+# The signed volume copy, verified, into $1. Prints "<spec sha256> <commit>".
+_smd_restore_volume_copy() {
+  ${SMD_CONFIG_COPY_PYTHON:-${SMD_LAYOUT_HERMES_PYTHON3} -I} -m config_applier.volume_copy \
+    restore "${CUSTOMER_SLUG}" "$1"
+}
+
+smd_boot_customer_yaml() { # <live path>
+  local live="$1"
+  local tmp="${live}.r2.tmp" vtmp="${live}.volume.tmp"
+  local waited=0 nap=5 budget copy="" tried_copy=0 r2_usable=0
+  rm -f "${vtmp}"
+  _CY_FETCH="" _CY_FETCH_ERR=""
+  until _smd_fetch_customer_yaml "${tmp}"; do
+    [ "${_CY_FETCH}" = "absent" ] && break
+    if [ "${tried_copy}" -eq 0 ]; then
+      tried_copy=1
+      copy="$(_smd_restore_volume_copy "${vtmp}")" || copy=""
+    fi
+    budget="${SMD_CONFIG_FETCH_WAIT_SECONDS:-300}"
+    if [ -n "${copy}" ] || [ -f "${live}" ]; then
+      budget="${SMD_CONFIG_FETCH_WAIT_WITH_COPY_SECONDS:-60}"
+    fi
+    [ "${waited}" -ge "${budget}" ] && break
+    log "WARN: R2 customer.yaml fetch failed (${_CY_FETCH_ERR}); retrying in ${nap}s (${waited}s of ${budget}s waited)"
+    sleep "${nap}"
+    waited=$((waited + nap))
+    nap=$((nap * 2 > 30 ? 30 : nap * 2))
+  done
+
+  if [ "${_CY_FETCH}" = "fetched" ]; then
+    if validate_candidate_config "${tmp}"; then
+      r2_usable=1
+    elif [ $? -eq 2 ]; then
+      log "WARN: cannot validate the R2 customer.yaml (validator unimportable); refusing to adopt it"
+    else
+      log "WARN: R2 customer.yaml REFUSED by the on-box validator (errors above); refusing to adopt it"
+    fi
+  fi
+
+  if [ "${r2_usable}" -eq 1 ]; then
+    rm -f "${vtmp}"
+    mv -f "${tmp}" "${live}"
+    log "customer.yaml refreshed from R2 (source of truth) into ${live%/*}"
+    return 0
+  fi
+  rm -f "${tmp}" 2>/dev/null || true
+  if [ -f "${live}" ]; then
+    # Fail-static: the Machine comes up on the config it was already serving. A
+    # bad publish costs the seat its update, never its uptime.
+    rm -f "${vtmp}"
+    if [ "${_CY_FETCH}" = "fetched" ]; then
+      log "WARN: keeping the existing root-owned customer.yaml (the R2 object was not adopted)"
+    else
+      log "WARN: R2 fetch failed; using existing root-owned customer.yaml"
+    fi
+    return 0
+  fi
+  if [ "${_CY_FETCH}" != "absent" ]; then
+    if [ "${tried_copy}" -eq 0 ]; then
+      copy="$(_smd_restore_volume_copy "${vtmp}")" || copy=""
+    fi
+    if [ -n "${copy}" ] && validate_candidate_config "${vtmp}"; then
+      mv -f "${vtmp}" "${live}"
+      if [ "${_CY_FETCH}" = "fetched" ]; then
+        log "WARN: BOOTING FROM THE VOLUME COPY of customer.yaml: the R2 object was refused. Signed spec ${copy% *}, compiled from ${copy#* }. The seat runs its last verified config until a valid object is published"
+      else
+        log "WARN: BOOTING FROM THE VOLUME COPY of customer.yaml: R2 did not answer for ${waited}s (${_CY_FETCH_ERR}). Signed spec ${copy% *}, compiled from ${copy#* }. The config applier adopts R2's copy when it answers"
+      fi
+      return 0
+    fi
+    rm -f "${vtmp}"
+  fi
+  if [ "${_CY_FETCH}" = "fetched" ]; then
+    log "FATAL: no local customer.yaml and the R2 object was refused (${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}); nothing valid to boot on"
+  elif [ "${_CY_FETCH}" = "absent" ]; then
+    log "FATAL: customer.yaml is not in R2 (${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG}, 404); a seat the vault does not hold is not booted from a copy"
+  else
+    log "FATAL: customer.yaml not present and R2 fetch failed for ${waited}s with no verified volume copy (${R2_BUCKET_CONFIG}/vaults/${CUSTOMER_SLUG})"
+  fi
+  return 1
 }

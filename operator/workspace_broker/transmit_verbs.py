@@ -21,11 +21,11 @@ import re
 from typing import Any
 
 from .broker_context import BrokerContext
-from .agentmail_ops import AgentMailRefused, AgentMailTransportError, collect_recipients
+from .agentmail_ops import AgentMailMailOutage, AgentMailRefused, AgentMailTransportError, collect_recipients
 from . import bound_replies, participant_lookup
 from .canon import canonical
 from .digest_ref import valid_dispatch_ref
-from .msgraph_ops import MsGraphRefused, MsGraphTransportError
+from .msgraph_ops import MsGraphMailOutage, MsGraphRefused, MsGraphTransportError
 from .msgraph_ops import collect_recipients as collect_msgraph_recipients
 from .participant_fence import FenceRefused
 from .send_intent import CONFIRM_FLAG, record_confirm, record_intent
@@ -265,6 +265,17 @@ def _clean(request: dict[str, Any], key: str) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+#: The refusal a fence raises when the mail service did not answer, per
+#: channel refusal (2026-11-12): a subclass, so every caller that catches the
+#: channel's refusal still does, and its own error code tells the overlay.
+_OUTAGE_REFUSALS: dict[type[Exception], type[Exception]] = {
+    MsGraphRefused: MsGraphMailOutage,
+    AgentMailRefused: AgentMailMailOutage,
+}
+#: The ``cause`` a fence refusal made during a mail outage is recorded with.
+MAIL_OUTAGE = "mail_outage"
+
+
 def _fenced(
     broker: BrokerContext,
     action: str,
@@ -283,6 +294,13 @@ def _fenced(
     as the channel's own refusal: never ``transport_error``, because nothing was
     attempted. The overlay's heartbeat already pages SMD on that row
     (``send_refused``); there is no second alert path.
+
+    A refusal made because the mail service did not answer the fence's read
+    (``FenceRefused.mail_outage``, 2026-11-12) is recorded with ``cause:
+    mail_outage`` and, on a reply, the email it answers (``in_reply_to``), so
+    work health can say a mail outage held it and close the line when that
+    reply goes out; it is raised as the channel's outage refusal, so the
+    overlay holds the reply once and backs off instead of retrying at once.
     """
     try:
         return participant_lookup.enforce(
@@ -295,15 +313,29 @@ def _fenced(
             internal_lane=internal_lane,
         )
     except FenceRefused as exc:
+        outage: dict[str, str] = {}
+        if exc.mail_outage:
+            outage["cause"] = MAIL_OUTAGE
+            target = payload.get("message_id")
+            is_reply = action.endswith("_reply") or action == "msgraph_reply_bound"
+            if is_reply and isinstance(target, str) and target.strip():
+                outage["in_reply_to"] = target.strip()
         append_send_row(
             broker,
             "CONFIRM_SEND_FAILED",
             action,
-            {"outcome": "refused", "fence": exc.fence, "refused": exc.refused, "reason": str(exc), **failed_row},
+            {
+                "outcome": "refused",
+                "fence": exc.fence,
+                "refused": exc.refused,
+                "reason": str(exc),
+                **outage,
+                **failed_row,
+            },
             session_id=_clean(request, "session_id"),
             matter_ref=_clean(request, "matter_ref"),
         )
-        raise refused(str(exc)) from exc
+        raise (_OUTAGE_REFUSALS.get(refused, refused) if outage else refused)(str(exc)) from exc
 
 
 def _failure_outcome(exc: Exception, refused: type[Exception], transport: type[Exception]) -> dict[str, str]:

@@ -392,6 +392,9 @@ class SpecVerifier:
     image: ImageView = field(default_factory=ImageView)
     public_key_loader: Callable[[], Ed25519PublicKey | None] = load_public_key
     clock: Callable[[], float] = time.time
+    #: Where a proven (yaml, pointer, spec) trio is kept for a boot that cannot
+    #: reach R2 (``config_applier.volume_copy``); None keeps nothing.
+    volume_copy_dir: Path | None = None
     _etag: str | None = None
     _judged_at: float = 0.0
     _last: SpecVerdict | None = None
@@ -425,20 +428,59 @@ class SpecVerifier:
         )
 
     def _judge(self, now: float) -> SpecVerdict:
+        fetched: dict[str, bytes | None] = {}
+
+        def fetch_any(key: str) -> bytes | None:
+            fetched[key] = self._fetch_any(key)
+            return fetched[key]
+
         try:
             pointer = self._fetch(pointer_key(self.slug), MAX_POINTER_BYTES)
-            return judge(
+            running = _read_file(str(self.running_yaml_path))
+            verdict = judge(
                 slug=self.slug,
                 pointer_bytes=pointer,
-                fetch_bytes=self._fetch_any,
+                fetch_bytes=fetch_any,
                 public_key=self.public_key_loader(),
                 image=self.image,
-                running_yaml=_read_file(str(self.running_yaml_path)),
+                running_yaml=running,
                 now=now,
             )
         except (SkillsApplyError, ValueError) as exc:
             logger.warning("spec_verifier: R2 read failed (%s); keeping the last spec", exc)
             return self._fetch_error(now)
+        spec = fetched.get(f"fleet/specs/{self.slug}/{verdict.spec_sha256}.json")
+        self._keep_copy(verdict, running, pointer, spec)
+        return verdict
+
+    def _keep_copy(
+        self,
+        verdict: SpecVerdict,
+        running: bytes | None,
+        pointer: bytes | None,
+        spec: bytes | None,
+    ) -> None:
+        """Keep the trio when the running yaml is the one an AUTHENTIC spec names.
+
+        ``unmet_requirement`` is authentic too (it is judged after the
+        signature); what it says about this image does not make the yaml any
+        less SMD's. Never raises: a copy not kept costs only the outage case.
+        """
+        authentic = verdict.verdict in ("verified", "unmet_requirement")
+        if not (self.volume_copy_dir and authentic and verdict.customer_yaml_match):
+            return
+        if running is None or pointer is None or spec is None:
+            return
+        from config_applier import volume_copy
+
+        try:
+            if volume_copy.save(running, pointer, spec, self.volume_copy_dir):
+                logger.info(
+                    "spec_verifier: kept the signed customer.yaml copy for boot (spec=%s)",
+                    verdict.spec_sha256,
+                )
+        except (OSError, volume_copy.CopyRefused) as exc:
+            logger.warning("spec_verifier: could not keep the boot copy (%s)", exc)
 
     def step(self) -> SpecVerdict | None:
         """Judge and record when the pointer moved or the verdict is due; else None."""

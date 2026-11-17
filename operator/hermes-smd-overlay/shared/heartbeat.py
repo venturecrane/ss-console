@@ -637,8 +637,8 @@ class ShortfallFacts(NamedTuple):
 
     ``count`` is every event in the window, uncapped; ``last_ts`` the newest
     one's (the console's paging marker, the same role ``send_refusals_last_ts``
-    plays); ``events`` the OLDEST ``_SHORTFALL_EVENT_CAP`` in wire shape. The
-    per-class integers are for the retro-falsifier, not the wire.
+    plays); ``events`` the NEWEST ``_SHORTFALL_EVENT_CAP`` in wire shape, oldest
+    first. The per-class integers are for the retro-falsifier, not the wire.
     """
 
     count: int
@@ -653,8 +653,13 @@ class ShortfallFacts(NamedTuple):
 #: Trailing window, a day, for the reason ``SEND_REFUSAL_WINDOW_HOURS`` gives.
 SHORTFALL_WINDOW_HOURS = 24
 
-#: How many events ride the beat. The console keys each on ``key`` and upserts,
-#: so an event that misses this beat's cap rides a later one; twenty is enough
+#: How many events ride the beat: the NEWEST twenty of the window. The console
+#: keys each on ``key`` and upserts, so an event left off this beat almost
+#: always rode an earlier one while it was among the newest; only when more
+#: than twenty arrive between two beats are the oldest of them never sent, and
+#: ``count`` still counts them. Nothing left off rides a LATER beat: newer events
+#: only push it further out. Sending the oldest twenty made a new event wait
+#: until an older one aged out of the day (2026-11-06, 1h40m). Twenty is enough
 #: to show a pattern without making the beat heavy.
 _SHORTFALL_EVENT_CAP = 20
 
@@ -1052,7 +1057,8 @@ def count_shortfalls(
     return ShortfallFacts(
         count=len(events),
         last_ts=events[-1]["ts"] if events else None,
-        events=events[:_SHORTFALL_EVENT_CAP],
+        # The NEWEST cap, kept oldest first (see ``_SHORTFALL_EVENT_CAP``).
+        events=events[-_SHORTFALL_EVENT_CAP:],
         not_allowed=tally["not_allowed"],
         limit=tally["limit"],
         failed=tally["failed"],

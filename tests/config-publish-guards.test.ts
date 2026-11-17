@@ -37,7 +37,8 @@ vi.setConfig({ testTimeout: 60_000 })
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PUBLISHER = join(REPO_ROOT, 'scripts', 'ci-publish-customer-configs.sh')
-const ENTRYPOINT = join(REPO_ROOT, 'operator', 'templates', 'entrypoint.sh')
+// The boot fetch moved to its own fragment, sourced by entrypoint.sh (2026-11-16).
+const ENTRYPOINT = join(REPO_ROOT, 'operator', 'templates', 'entrypoint-fetch-inputs.sh')
 
 /** Minimal well-formed config body. The stub validator decides pass/fail. */
 function configBody(slug: string): string {
@@ -985,8 +986,8 @@ describe('entrypoint boot fetch validates before adopting', () => {
   const source = readFileSync(ENTRYPOINT, 'utf8')
 
   it('validates the fetched candidate before it replaces the live config', () => {
-    const validateIdx = source.indexOf('validate_candidate_config "${LIVE_CUSTOMER_YAML}.r2.tmp"')
-    const moveIdx = source.indexOf('mv -f "${LIVE_CUSTOMER_YAML}.r2.tmp" "${LIVE_CUSTOMER_YAML}"')
+    const validateIdx = source.indexOf('validate_candidate_config "${tmp}"')
+    const moveIdx = source.indexOf('mv -f "${tmp}" "${live}"')
     expect(validateIdx).toBeGreaterThan(-1)
     expect(moveIdx).toBeGreaterThan(-1)
     expect(validateIdx).toBeLessThan(moveIdx)

@@ -2226,7 +2226,12 @@ def test_the_mail_routine_as_a_skill_name_also_counts(tmp_path):
     assert [e["code"] for e in _shortfalls(tmp_path, build).events] == ["filed 0 of 4"]
 
 
-def test_events_ride_oldest_first_capped_while_the_count_is_whole(tmp_path):
+def test_the_newest_events_ride_oldest_first_capped_while_the_count_is_whole(tmp_path):
+    """The beat carries the NEWEST twenty of the day (2026-11-06): a new event
+    waited 1h40m behind older ones while the beat carried the oldest twenty.
+    FALSIFIER: slice ``events[:_SHORTFALL_EVENT_CAP]`` and the newest event,
+    ``last_ts``, is not among the events sent."""
+
     def build(led):
         for n in range(25):
             _call(
@@ -2241,8 +2246,9 @@ def test_events_ride_oldest_first_capped_while_the_count_is_whole(tmp_path):
     facts = _shortfalls(tmp_path, build)
     assert facts.count == 25
     assert len(facts.events) == 20
-    assert facts.events[0]["ts"] == _ts(20)
-    assert facts.last_ts == _ts(8)
+    # The five oldest (20h to 18h ago) are left off; the newest rides.
+    assert facts.events[0]["ts"] == _ts(17.5)
+    assert facts.events[-1]["ts"] == facts.last_ts == _ts(8)
     assert [e["ts"] for e in facts.events] == sorted(e["ts"] for e in facts.events)
 
 

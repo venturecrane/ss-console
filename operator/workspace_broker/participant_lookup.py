@@ -27,6 +27,7 @@ it vouches for are the ones the MAILBOX says were on it.
 from __future__ import annotations
 
 import sqlite3
+import urllib.error
 from collections.abc import Callable
 from typing import Any
 
@@ -64,6 +65,23 @@ _LOOKUP_ERRORS = (
     KeyError,
     sqlite3.Error,
 )
+
+
+def vendor_outage(exc: BaseException) -> bool:
+    """True when ``exc`` is the mail service not answering: a 5xx or 429 from
+    Graph or AgentMail (its token endpoint included), or no answer at all (a
+    timeout, a refused or torn connection). A 4xx is an answer (a missing
+    message, a stale credential) and a missing credential is configuration;
+    neither is an outage, and both stay an ordinary unverifiable refusal."""
+    if not isinstance(exc, (MsGraphTransportError, AgentMailTransportError)):
+        return False
+    status = getattr(exc, "status", None)
+    cause = exc.__cause__
+    if status is None and isinstance(cause, urllib.error.HTTPError):
+        status = cause.code
+    if status is not None:
+        return status >= 500 or status == 429
+    return isinstance(cause, OSError)
 
 
 def _unverifiable(why: str) -> FenceRefused:
@@ -176,7 +194,9 @@ def resolver(broker: BrokerContext, channel: str) -> Callable[[Anchor], Particip
         except FenceRefused:
             raise
         except _LOOKUP_ERRORS as exc:
-            raise _unverifiable(str(exc)[:200]) from exc
+            refusal = _unverifiable(str(exc)[:200])
+            refusal.mail_outage = vendor_outage(exc)
+            raise refusal from exc
         cache[anchor] = found
         return found
 
@@ -235,4 +255,4 @@ def enforce(
     }
 
 
-__all__ = ["CHANNEL_KIND", "enforce", "resolver"]
+__all__ = ["CHANNEL_KIND", "enforce", "resolver", "vendor_outage"]

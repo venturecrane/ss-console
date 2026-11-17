@@ -90,13 +90,30 @@ def _words(tool: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+#: What the overlay's reply plugin (REPLY_HELD ``reason``) and the broker's
+#: participant fence (CONFIRM_SEND_FAILED ``cause``) record when a reply was
+#: refused because the mail service did not answer (2026-11-12).
+_MAIL_OUTAGE = "mail_outage"
+
+
+def _mail_outage(row: dict) -> bool:
+    md = meta(row)
+    return _MAIL_OUTAGE in (md.get("reason"), md.get("cause"))
+
+
 def _held_then_sent(rows: list[dict], row_id: Optional[str]) -> bool:
     """A held output whose message later went out anyway (released, rewritten,
-    or the duplicate of a reply already sent): history, not open work."""
+    or the duplicate of a reply already sent): history, not open work. The
+    broker's own row for a reply a mail outage refused names the email in
+    ``in_reply_to`` and closes the same way once the reply goes."""
     held = next((r for r in rows if r.get("id") == row_id), None) if row_id else None
-    if held is None or held.get("action_type") != "REPLY_HELD":
+    kind = held.get("action_type") if held is not None else None
+    if kind == "CONFIRM_SEND_FAILED" and _mail_outage(held or {}):
+        message_id = meta(held or {}).get("in_reply_to")
+    elif kind == "REPLY_HELD":
+        message_id = meta(held or {}).get("message_id")
+    else:
         return False
-    message_id = meta(held).get("message_id")
     held_at = parse_ts(held.get("ts"))
     if not message_id or held_at is None:
         return False
@@ -160,7 +177,10 @@ def silent_run_items(
         if _held_then_sent(usable, ob.row_id):
             resolved += 1
             continue
-        held_by = str((by_id.get(str(ob.row_id)) or {}).get("action_type") or "")
+        held_row = by_id.get(str(ob.row_id)) or {}
+        # A reply a mail outage held is its own problem with its own words, and
+        # the plugin's row and the broker's for it are the same one.
+        held_by = _MAIL_OUTAGE if _mail_outage(held_row) else str(held_row.get("action_type") or "")
         groups.setdefault((ob.shape, ob.skill_name or "", held_by), []).append(ob)
     # ONE ITEM PER PROBLEM, not per occurrence (Captain, 2026-10-16). The
     # reconciler opens a new finding for each half-hour of a repeating hold, so
@@ -174,7 +194,9 @@ def silent_run_items(
         attempts = [
             ts
             for ts, r in stamped(usable)
-            if ts >= first and str(r.get("action_type") or "") == held_by and (r.get("skill_name") or "") == skill
+            if ts >= first
+            and (_mail_outage(r) if held_by == _MAIL_OUTAGE else str(r.get("action_type") or "") == held_by)
+            and (r.get("skill_name") or "") == skill
         ]
         if held_by == "FABRICATION_FILTER_TRIGGERED" and not skill and _refusals_then_closed(usable, attempts):
             resolved += 1
@@ -190,6 +212,15 @@ def silent_run_items(
                 "Whoever it was for has not been told."
             )
             todo = "Find what it was trying to send (the seat's agent.log names it) and tell that person by hand."
+        elif held_by == _MAIL_OUTAGE:
+            what = (
+                f"{routine} could not send its reply because the mail service did not answer "
+                f"({times}). Nothing was sent; this closes when the reply goes out."
+            )
+            todo = (
+                "Once mail is back, check the reply went out; if it did not, send it through the "
+                "normal reply path or tell the person by hand."
+            )
         elif shape == outcomes.SHAPE_HELD_WITHOUT_NOTICE:
             what = f"{routine} had its output held and nobody was told ({times})."
         else:

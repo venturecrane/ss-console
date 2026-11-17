@@ -77,6 +77,13 @@ UNKNOWN_SEND_OUTCOME_CODES = frozenset(
 )
 
 
+#: The broker's refusals of a send the mail service did not let through: the
+#: participant fence could not read the email a reply answers because the
+#: vendor did not answer (ss-console ``participant_lookup.vendor_outage``,
+#: 2026-11-12). Nothing was sent; the same reply may go once mail is back.
+MAIL_OUTAGE_CODES = frozenset({"MsGraphMailOutage", "AgentMailMailOutage"})
+
+
 def send_outcome_unknown(exc: BrokerError) -> bool:
     """True when a send the broker answered with ``exc`` may still have gone out."""
     return getattr(exc, "code", "") in UNKNOWN_SEND_OUTCOME_CODES

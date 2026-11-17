@@ -143,6 +143,15 @@ class MsGraphTransportError(BrokerRefusal):
     status: int | None = None
 
 
+class MsGraphMailOutage(MsGraphRefused):
+    """A refusal made because the mail service did not answer, not because of
+    who the message is for (2026-11-12). The participant fence could not read the
+    email a reply answers while Graph returned 5xx, so nothing was sent and the
+    same reply may go out once Graph answers. Its error code is its class name,
+    which the overlay's reply path reads to hold the reply once, as a mail
+    outage, and back off instead of redrafting it again at once."""
+
+
 def _as_addresses(value: Any) -> list[str]:
     """Normalize a recipient field that may be a bare string, a list, or Graph's
     own ``{"emailAddress": {"address": …}}`` nesting."""
