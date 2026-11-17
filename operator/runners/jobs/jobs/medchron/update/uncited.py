@@ -33,7 +33,8 @@ A heading standing alone carries no assertion and is left as it is.
 A line that is ONLY a citation (2026-11-17: 64 such lines in 46 rows of one
 update) joins the text it cites (``join_stray``), before the paragraphs are
 cited and again after, and once more after the update finisher's edits
-(``assemble``). A citation that closes the line above joins it; an exact
+(``final_set``, which also deletes the one kind the join must leave, with
+its claim's verdict carried). A citation that closes the line above joins it; an exact
 repeat, or one of an exhibit the entry cites elsewhere, goes; the only
 citation of an exhibit is never dropped, so every exhibit stays cited. A
 citation carries no value, so no value can be lost.
@@ -243,6 +244,58 @@ def cite_entry(entry: str, headings: set[str]) -> tuple[str, list[dict[str, Any]
         if cite is not None:
             paras[i] = p.rstrip() + " " + cite
     return join_stray(head + "\n" + lead + "\n\n".join(paras), headings), rows
+
+
+def measure_borrowed(entries: list[str], rows: list[dict[str, Any]], page_text: Any) -> dict[str, int]:
+    """A MEASURE, no behaviour: of the paragraphs ``cite_entry`` gave a
+    neighbour's citation (``rows``, ``compose_report.json`` as
+    ``uncited_paragraphs``), how many are found again in `entries` (collect's
+    output, ``new_entries.md``), and for those, where their values are
+    printed: on the page the borrowed citation names, only on another page the
+    entry cites, or on no page it cites. `page_text(exhibit, page)` -> text or
+    None. Counts only. 2026-11-17: 439 long paragraphs of one update carried
+    no citation of their own; moving one to the page that holds it would sit
+    before the paid audit and cannot be rehearsed, so this only measures."""
+    from .values import numbers
+
+    out = {k: 0 for k in ("borrowed", "found", "no_values", "on_cited_page", "on_other_cited_page", "on_no_cited_page")}
+    by_head = {e.split("\n", 1)[0]: e for e in entries}
+    for r in rows:
+        if not isinstance(r, dict) or not r.get("cite"):
+            continue
+        out["borrowed"] += 1
+        e = by_head.get(str(r.get("entry")))
+        cite = str(r["cite"])
+        para = next(
+            (
+                p
+                for p in (e or "").split("\n\n")
+                if p.rstrip().endswith(cite) and len(p.strip()) - len(cite) - 1 == r.get("chars")
+            ),
+            None,
+        )
+        if para is None:
+            continue
+        out["found"] += 1
+        vals = numbers(CL.CITE.sub(" ", para))
+        if not vals:
+            out["no_values"] += 1
+            continue
+
+        def on(pages: list[tuple[int, int]]) -> bool:
+            text = " ".join(page_text(ex, p) or "" for ex, p in pages)
+            return bool(text) and vals <= numbers(text)
+
+        m = CL.CITE.search(cite)
+        own = [(int(m.group(1)), p) for p in CL.parse_pages(m.group(2)) or [1]] if m else []
+        others = [(int(c.group(1)), p) for c in CL.CITE.finditer(e or "") for p in CL.parse_pages(c.group(2)) or [1]]
+        if on(own):
+            out["on_cited_page"] += 1
+        elif on([q for q in dict.fromkeys(others) if q not in own]):
+            out["on_other_cited_page"] += 1
+        else:
+            out["on_no_cited_page"] += 1
+    return out
 
 
 def cite_all(entries: list[str], headings: set[str]) -> tuple[list[str], list[dict[str, Any]]]:

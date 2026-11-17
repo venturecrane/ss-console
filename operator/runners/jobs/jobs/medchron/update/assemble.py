@@ -38,7 +38,7 @@ from collections import Counter, defaultdict
 from typing import Any, Callable
 
 from ..lane_ref import lane_references
-from . import body as B, entry_edits as EE, icd, providers as P, uncited as U
+from . import body as B, entry_edits as EE, icd, providers as P
 
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
 
@@ -217,10 +217,15 @@ def exhibit_titles_for(
     new_exhibits: list[dict[str, Any]], new_ents: list[str], name_of: Callable[[str], str]
 ) -> tuple[dict[int, str], list[int]]:
     """({number: final title}, [numbers no added entry cites]). A new exhibit
-    is titled the delivered way: the provider most entries citing it name,
-    and the first and last date of SERVICE they carry (a records print date
-    once ended a title four weeks after the last visit); with none, the
-    title carries no dates."""
+    is titled the delivered way: the provider its added entries name on the
+    most of ITS pages they cite (2026-11-17: counted by entries, an exhibit
+    of one clinic's 40 pages took the name of a lab that two one-page rows
+    cited), and the first and last date of SERVICE they carry (a records
+    print date once ended a title four weeks after the last visit); with
+    none, the title carries no dates. These are the final set's rows
+    (``update/final_set``), which proof 14 holds each title to."""
+    from .encounter import cited_pages
+
     retitled: dict[int, str] = {}
     uncited: list[int] = []
     for r in sorted(new_exhibits, key=lambda x: x["exhibit"]):
@@ -230,7 +235,10 @@ def exhibit_titles_for(
             uncited.append(n)
             continue
         visits = [e for e in es if B.is_service(e)]
-        prov = Counter(name_of(e) for e in visits or es).most_common(1)[0][0]
+        weight: Counter[str] = Counter()
+        for e in visits or es:
+            weight[name_of(e)] += sum(1 for ex, _p in cited_pages(e) if ex == n)
+        prov = weight.most_common(1)[0][0]
         ds = sorted(B.iso(e) for e in visits)
         span = (" - " + _mdY(ds[0]) + ("" if ds[-1] == ds[0] else " - " + _mdY(ds[-1]))) if ds else ""
         retitled[n] = re.sub(r"[\\/:*?\"<>|]+", " ", f"{prov}{span} (Medical Records)").strip()
@@ -387,7 +395,6 @@ def assemble(
     audit_pre, new_ents = B.entries_of(audit_md)
     addition, icd_claims, names = _split_audit_pre(audit_pre)
     new_ents, spelled = P.respell(new_ents, names, provider_names or {})
-    new_ents = [U.join_stray(e, headings, audited=True) for e in new_ents]  # after the finisher: no stray citation
     delivered_rows = B.table_rows(b["## Treatment Timeline"])
     name_of, name_log = lane_namer(headings, delivered_rows[1:], exhibit_providers(b["## Exhibit List"]))
     taken = {r["exhibit"] for r in new_exhibits}

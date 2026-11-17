@@ -1,0 +1,200 @@
+"""The final set's files: what it reads of a job, what it writes, and its
+$0 report on a COPY of a job directory (``final_set``). No model call; the
+report writes nothing.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from ..audit import claims as CL
+from . import body as B, encounter as E, entry_edits as EE, heading as HD, uncited as U
+from .final_set import CORRECTIONS, REPORT, ROWS, Inputs, Outcome, run
+
+
+def _json(p: Path, default: Any) -> Any:
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else default
+    except (OSError, ValueError):
+        return default
+
+
+def _partial_pages(p: Path) -> set[int]:
+    """The pages a document's paid transcription holds (``partial/<id>.jsonl``)."""
+    out: set[int] = set()
+    try:
+        lines = p.read_text(encoding="utf-8").splitlines() if p.is_file() else []
+    except OSError:
+        return out
+    for ln in lines:
+        try:
+            row = json.loads(ln)
+        except ValueError:
+            continue
+        n = row.get("page") if isinstance(row, dict) else None
+        if isinstance(n, int) and not isinstance(n, bool):
+            out.add(n)
+    return out
+
+
+def page_inputs(slug_dir: Path, ud: Path) -> tuple[HD.Pages, E.PageId]:
+    """What the heading check and the encounter key read of the new
+    exhibits: each page's text, which pages were composed and which were
+    transcribed, and each page's picture identity (``update/pageid``)."""
+    from . import pageid_io as PG
+    from .select import pages_of_text
+
+    rows = [r for r in _json(ud / "new_exhibits.final.json", []) if isinstance(r, dict)]
+    by_ex: dict[int, dict[str, Any]] = {r["exhibit"]: r for r in rows if isinstance(r.get("exhibit"), int)}
+    doc_ex = {str(r.get("id")): n for n, r in by_ex.items() if r.get("id")}
+    texts: dict[int, dict[int, str]] = {}
+    shown: dict[int, set[int]] = {}
+    for n, r in by_ex.items():
+        tp = slug_dir / "text" / f"{r.get('id')}.txt"
+        texts[n] = pages_of_text(tp.read_text(encoding="utf-8", errors="replace")) if tp.is_file() else {}
+        shown[n] = _partial_pages(slug_dir / "partial" / f"{r.get('id')}.jsonl")
+    read = {n: {p for p in (r.get("read") or []) if isinstance(p, int)} for n, r in by_ex.items()}
+    ident = PG.load(ud)
+
+    def page_id(ex: int, p: int) -> str:
+        r = by_ex.get(ex)
+        got = (ident.pages.get(str(r.get("id"))) or {}).get(p) if r else None
+        if got is None or not got.exact:
+            return f"exhibit:{ex}:{p}"
+        n = PG.delivered_exhibit(got.other)
+        n = doc_ex.get(got.other) if n is None else n
+        return f"exhibit:{n}:{got.page}" if n is not None else f"document:{got.other}:{got.page}"
+
+    pages = HD.Pages(
+        text=lambda ex, p: texts.get(ex, {}).get(p),
+        pages_of=lambda ex: texts.get(ex, {}),
+        read=lambda ex: read.get(ex, set()),
+        transcribed=lambda ex, p: p in shown.get(ex, set()),
+    )
+    return pages, page_id
+
+
+def load_inputs(slug_dir: Path, unit: str, headings: set[str], canon: Callable[[str], str] = str) -> Inputs:
+    """The step's inputs, read from a job's own files (no write, no model)."""
+    rd = slug_dir / "runs" / unit
+    ud = rd / "update"
+    new = ud / "new_entries.md"
+    pages, page_id = page_inputs(slug_dir, ud)
+    return Inputs(
+        md=(rd / "final-chronology.md").read_text(encoding="utf-8"),
+        base_md=(ud / "base.md").read_text(encoding="utf-8"),
+        composed=B.split_body("\n\n" + new.read_text(encoding="utf-8"))[1] if new.is_file() else [],
+        headings=headings,
+        audit_rows=CL.read_rows(slug_dir / "out" / unit / "audit-results.jsonl"),
+        review=_json(ud / "review_repair.json", {}) or {},
+        pages=pages,
+        page_id=page_id,
+        canon=canon,
+    )
+
+
+def write(slug_dir: Path, unit: str, o: Outcome) -> None:
+    """The step's outputs: the document, its rows, its corrections, its
+    counts, and each carried verdict as an audit row."""
+    rd = slug_dir / "runs" / unit
+    ud = rd / "update"
+    (rd / "final-chronology.md").write_text(o.md, encoding="utf-8")
+    (ud / ROWS).write_text("".join(json.dumps(r) + "\n" for r in o.rows), encoding="utf-8")
+    (ud / CORRECTIONS).write_text(json.dumps(o.corrections, indent=1), encoding="utf-8")
+    (ud / REPORT).write_text(json.dumps({"counts": dict(o.counts), "ops": o.ops}, indent=1), encoding="utf-8")
+    sha = CL.doc_sha_of(CL.body_of(o.md))
+    for row in o.carries:
+        CL.append_row(slug_dir / "out" / unit / "audit-results.jsonl", row | {"doc_sha": sha})
+
+
+def read_rows(ud: Path) -> list[dict[str, Any]]:
+    """``final_rows.jsonl``, parsed (a line that does not parse is skipped)."""
+    return [r for r in CL.read_rows(ud / ROWS) if isinstance(r, dict)]
+
+
+# ---- the $0 report ------------------------------------------------------------------------------
+
+
+def _headings_of(*mds: str) -> set[str]:
+    """The subsection headings the entries' provider lines name."""
+    out = {"Discharge / Discontinuation in Care"}
+    for md in mds:
+        for e in B.entries_of(md)[1]:
+            lines = e.split("\n")
+            if len(lines) > 1 and " | " in lines[1]:
+                out.add(lines[1].rpartition(" | ")[2].strip())
+    return out
+
+
+def _unit_of(job: Path, unit: str | None) -> str:
+    if unit:
+        return unit
+    runs = sorted(p.name for p in (job / "runs").glob("*") if (p / "update").is_dir())
+    if len(runs) != 1:
+        raise SystemExit(f"name the unit with --unit (found {len(runs)} units)")
+    return runs[0]
+
+
+class _NoConfig:
+    """A firm config with no provider aliases (``stages.group.Canon``)."""
+
+    def get(self, *_keys: str) -> None:
+        return None
+
+
+def report(job: Path, unit: str | None = None) -> dict[str, Any]:
+    """The answer key's counts for a COPY of a job directory. No write."""
+    from ...stages.group import Canon
+
+    u = _unit_of(job, unit)
+    ud = job / "runs" / u / "update"
+    md = (job / "runs" / u / "final-chronology.md").read_text(encoding="utf-8")
+    base = (ud / "base.md").read_text(encoding="utf-8")
+    x = load_inputs(job, u, _headings_of(md, base), Canon(_NoConfig()))
+    o = run(x)
+    c = o.counts
+    return {
+        "stray_lines": {"before": c["stray lines before"], "after": c["stray lines after"]},
+        "verdicts_carried": c["verdicts carried"],
+        "repeats": {k.split(": ", 1)[1]: v for k, v in sorted(c.items()) if k.startswith("repeats: ")},
+        "distinct_visits_merged": c["distinct visits merged"],
+        "headings": {k[len("headings ") :]: v for k, v in sorted(c.items()) if k.startswith("headings ")},
+        "new_claim_keys_created": c["new claim keys created"],
+        "added_entries": c["added entries"],
+        "corrections_recorded": c["corrections recorded"],
+        "delivered_entries": carried(B.entries_of(base)[1], ud / "updated-chronology.md"),
+        "record_only": _record_only(x, o),
+        "borrowed_citations": U.measure_borrowed(
+            x.composed, (_json(ud / "compose_report.json", {}) or {}).get("uncited_paragraphs") or [], x.pages.text
+        ),
+    }
+
+
+def carried(base_ents: list[str], updated: Path) -> dict[str, Any]:
+    """How many delivered entries a saved updated chronology carries byte for
+    byte and in order (None when the update was not assembled)."""
+    if not updated.is_file():
+        return {"delivered": len(base_ents), "byte_identical_in_order": None}
+    out = [EE.without_fold(e) for e in B.entries_of(updated.read_text(encoding="utf-8"))[1]]
+    j = n = 0
+    for d in base_ents:
+        k = next((i for i in range(j, len(out)) if out[i] == d), None)
+        if k is not None:
+            n, j = n + 1, k + 1
+    return {"delivered": len(base_ents), "byte_identical_in_order": n}
+
+
+def _record_only(x: Inputs, o: Outcome) -> dict[str, int]:
+    """The record-only proofs that read only the final set: 13 over its
+    entries and 15 over the reviewed document as it now stands."""
+    from .. import graded_proof as GP
+    from . import proofs_final as PF
+
+    got = PF.p13(
+        PF.Inputs([], [], [], [], [], 0, [], {}, o.rows, B.entries_of(o.md)[1], canon=x.canon, page_id=x.page_id)
+    )
+    g = GP.check(CL.body_of(o.md), GP.latest_supported(x.audit_rows + o.carries), headings=x.headings)
+    return dict(got) | GP.codes(g)

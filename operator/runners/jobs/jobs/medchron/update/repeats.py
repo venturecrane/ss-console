@@ -183,18 +183,17 @@ def _covered(e: str, by: str) -> bool:
 
 
 def dedupe_new(kept: list[str], canon: Canon) -> tuple[list[str], int]:
-    """New entries less any whose date and provider another new entry shares
+    """New entries less any that is one encounter with another new entry
+    (``encounter.same_encounter``, the key the update's final set uses too)
     and whose values and terms that entry covers (the longer one stays)."""
+    from .encounter import same_encounter
+
     order = sorted(range(len(kept)), key=lambda i: -len(kept[i]))
     out: list[int] = []
     dropped = 0
     for i in order:
         e = kept[i]
-        twin = [
-            kept[j]
-            for j in out
-            if B.iso(kept[j]) == B.iso(e) and canon(B.provider_of(kept[j])) == canon(B.provider_of(e))
-        ]
+        twin = [kept[j] for j in out if same_encounter(kept[j], e, canon)]
         if any(_covered(e, t) for t in twin):
             dropped += 1
             continue

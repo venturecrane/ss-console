@@ -80,19 +80,24 @@ def uncited_name(r: dict[str, Any]) -> str:
 def added_when(ud: Path, incident: str | None) -> str:
     """ ", before the incident", ", after the incident", both, or nothing:
     what the audited added entries (``runs/<unit>/final-chronology.md``)
-    actually are, never a fixed phrase."""
+    actually are, never a fixed phrase. The final set's rows
+    (``update/final_set``) are the added entries when the step ran."""
+    from ..medchron.update import final_set_io as FIO
+
     doc = ud.parent / "final-chronology.md"
-    if not incident or not doc.is_file():
+    if not incident:
         return ""
-    try:
-        _, ents = B.entries_of(doc.read_text(encoding="utf-8"))
-    except ValueError:
-        return ""
+    dates = {str(r.get("date") or "") for r in FIO.read_rows(ud) if r.get("date")}
+    if not dates and doc.is_file():
+        try:
+            dates = {B.iso(e) for e in B.entries_of(doc.read_text(encoding="utf-8"))[1]}
+        except ValueError:
+            return ""
     sides = [
         s
         for s, hit in (
-            ("before", any(B.iso(e) < incident for e in ents)),
-            ("after", any(B.iso(e) >= incident for e in ents)),
+            ("before", any(d < incident for d in dates)),
+            ("after", any(d >= incident for d in dates)),
         )
         if hit
     ]

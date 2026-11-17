@@ -114,6 +114,29 @@ def text_rows(docx_path: Path) -> list[tuple[str, str]]:
     return [(sec, t) for sec, _st, _b, t in structure(docx_path) if t]
 
 
+def section_tables(docx_path: Path, section: str) -> list[list[tuple[str, ...]]]:
+    """Every table under the Heading 1 `section` ("Medical Summary",
+    "Exhibit List"), each row as its cells' whitespace-collapsed text."""
+    import docx
+
+    d = docx.Document(str(docx_path))
+    out: list[list[tuple[str, ...]]] = []
+    sec = None
+    for kind, x in _blocks(d):
+        if kind == "p":
+            head = _section_of(x)
+            sec = head if head is not None else sec
+        elif sec == section:
+            out.append([tuple(_flat(c.text) for c in row.cells) for row in x.rows])
+    return out
+
+
+def entry_rows(docx_path: Path) -> list[str]:
+    """The entry table's rows as a reader sees each entry: its date and
+    provider cell, then its text, whitespace collapsed."""
+    return [_flat(" ".join(r)) for t in section_tables(docx_path, SUMMARY) for r in t]
+
+
 def _runs_md(p: Any, plain: bool = False) -> str:
     """Paragraph text with bold runs as **...**, adjacent same-weight runs
     joined first (the renderer emits one run per span). `plain`: the text
