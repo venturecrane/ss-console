@@ -56,11 +56,14 @@ const TEST_PATH = /(^|\/)tests?\/|(^|\/)test_[^/]*$|\.test\.[a-z]+$|_test\.py$|(
  * must name the slug variable, open sockets and parse the documents it feeds
  * them. The golden broker (operator/bin/lib/golden_broker.py) is the same
  * kind: it starts the real broker from the environment a seat's broker process
- * reads, so it must name every variable Broker.__init__ reads. Like concepts.ts
- * stating its own vocabulary, each is the measure, not an instance, and no
- * census counts it.
+ * reads, so it must name every variable Broker.__init__ reads. The census's
+ * customer.yaml detector (scripts/sprawl/customer-yaml-reads.ts) names the file,
+ * its identifiers and its env variable because those are what it searches for.
+ * Like concepts.ts stating its own vocabulary, each is the measure, not an
+ * instance, and no census counts it.
  */
-export const INSTRUMENT_PATH = /^operator\/bin\/lib\/(seat_callers\/|golden_broker\.py$)/
+export const INSTRUMENT_PATH =
+  /^(operator\/bin\/lib\/(seat_callers\/|golden_broker\.py$)|scripts\/sprawl\/customer-yaml-reads\.ts$)/
 
 export function isTestPath(path: string): boolean {
   return TEST_PATH.test(path)
