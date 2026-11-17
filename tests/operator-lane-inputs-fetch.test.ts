@@ -24,6 +24,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { readSeatScript } from './_support/seat-layout'
+import { FIRM_INPUT_FILE_LANES, FIRM_INPUT_LANES } from '../src/lib/operator/job-lanes.generated'
 
 const code = (s: string) =>
   s
@@ -117,11 +118,14 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
   }
 
   it('the provisioner stages the records inputs right after the case file inputs, the same way', () => {
-    // FALSIFIER: drop records from the stage loop, or let the block upload
-    // unreviewed or unvalidated inputs, and this fails.
+    // FALSIFIER: drop records from the stage loop (now: from the declaration's
+    // directory lanes, which the loop walks in declared order), or let the block
+    // upload unreviewed or unvalidated inputs, and this fails.
     expect(PROVISION).toMatch(
-      /for _stage in demand drafting litigation casefile records [a-z -]*; do source "\$\{BIN_DIR\}\/lib\/stage-\$\{_stage\}-inputs\.sh"; done/
+      /for _stage in \$\{SMD_FIRM_INPUT_DIR_LANES\} [a-z -]*; do source "\$\{BIN_DIR\}\/lib\/stage-\$\{_stage\}-inputs\.sh"; done/
     )
+    const dirLanes = FIRM_INPUT_LANES.filter((l) => !FIRM_INPUT_FILE_LANES.includes(l))
+    expect(dirLanes.slice(-2)).toEqual(['casefile', 'records'])
     for (const [lane, f] of Object.entries(STAGE_FILES)) {
       expect(f).toMatch(new RegExp(`/operator/customers/\\$\\{SLUG\\}/${lane}"`))
       expect(f).toMatch(
@@ -191,7 +195,7 @@ describe('lane firm inputs: one retrying fetch, a loud failure, a smoke check', 
   it('provisioning stages the registers from engagements origin/main, validated by the gate loader', () => {
     const provision = code(readFileSync(resolve('operator/bin/provision-customer.sh'), 'utf8'))
     const stage = code(readFileSync(resolve('operator/bin/lib/stage-marketing-inputs.sh'), 'utf8'))
-    expect(provision).toMatch(/for _stage in [a-z -]*\bmarketing\b[a-z -]*; do source/)
+    expect(provision).toMatch(/for _stage in [${}A-Z_ ]*\bmarketing\b[a-z -]*; do source/)
     expect(stage).toMatch(/show "origin\/main:\$\{_rel\}"/)
     expect(stage).toContain('operator/bin/lib/check-marketing-registers.py')
     expect(stage).toMatch(/vaults\/\$\{SLUG\}\/marketing\/" --delete/)
