@@ -315,7 +315,8 @@ top_level:
       (smokeball_connector/post_intake_config.py load_post_intake_config).
     note: >-
       Where combined post intake files a letter by kind. `medical_folder`: the
-      matter folder a medical record or medical bill files into, resolved by
+      matter folder a medical record or medical bill files into (a name, or an
+      ordered list of names where the first the matter has wins), resolved by
       name in file_attachment_pages_to_matter (document_kind "medical"); the
       model supplies the kind, never a folder id. A matter with no such
       folder gets the letter at its root and the result says so; nothing

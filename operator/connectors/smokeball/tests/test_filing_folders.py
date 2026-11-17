@@ -101,12 +101,17 @@ def test_a_plain_name_still_matches_at_any_depth() -> None:
 
 def test_the_block_parses_and_never_casts(tmp_path: Any) -> None:
     assert pic.parse_post_intake_config(None).folders == {}
-    assert pic.parse_post_intake_config({"medical_folder": " Medical "}).folders == {"medical": "Medical"}
+    assert pic.parse_post_intake_config({"medical_folder": " Medical "}).folders == {"medical": ("Medical",)}
+    assert pic.parse_post_intake_config({"medical_folder": ["MEDICAL", " MEDICAL RECORDS "]}).folders == {
+        "medical": ("MEDICAL", "MEDICAL RECORDS")
+    }
     assert pic.parse_post_intake_config({"medical_folder": 7}).error
+    assert pic.parse_post_intake_config({"medical_folder": []}).error
+    assert pic.parse_post_intake_config({"medical_folder": ["MEDICAL", 7]}).error
     assert pic.parse_post_intake_config(["Medical"]).error
     cfg = tmp_path / "customer.yaml"
     cfg.write_text("combined_post_intake:\n  medical_folder: Medical\n")
-    assert pic.load_post_intake_config(str(cfg)).folders == {"medical": "Medical"}
+    assert pic.load_post_intake_config(str(cfg)).folders == {"medical": ("Medical",)}
     assert pic.load_post_intake_config(str(tmp_path / "absent.yaml")).folders == {}
 
 
@@ -211,3 +216,31 @@ def test_no_argument_takes_a_folder_id() -> None:
     params = set(inspect.signature(lt.file_attachment_pages_to_matter).parameters)
     assert "folder_id" not in params and "folder_name" not in params
     assert "document_kind" in params
+
+
+LIST = "combined_post_intake:\n  medical_folder: [MEDICAL, MEDICAL RECORDS]\n"
+
+
+def test_a_list_files_into_the_first_folder_the_matter_has(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """A&P, 2026-11-17: the rule named "MEDICAL RECORDS", the matters carry
+    "MEDICAL", and every medical bill went to the root. FALSIFIER: try only the
+    first name and the second matter files at the root."""
+    only_records = _Folders({"value": [{"folders": [{"id": "f-rec", "name": "MEDICAL RECORDS"}]}]})
+    out = _file(monkeypatch, only_records, _cfg(tmp_path, LIST), "medical")
+    assert out["folder"] == {"name": "MEDICAL RECORDS", "id": "f-rec"} and only_records.uploads[0][2] == "f-rec"
+    both = _Folders(
+        {"value": [{"folders": [{"id": "f-rec", "name": "MEDICAL RECORDS"}, {"id": "f-med", "name": "MEDICAL"}]}]}
+    )
+    # A second filing of the same pages in one process is otherwise refused as a duplicate.
+    resolution_token._reset_for_tests()
+    lp.FILED_PAGES._filed.clear()
+    lp.FILED_DOCS._docs.clear()
+    out = _file(monkeypatch, both, _cfg(tmp_path, LIST), "medical")
+    assert out["folder"] == {"name": "MEDICAL", "id": "f-med"}, "the first listed name wins"
+
+
+def test_a_list_none_of_which_the_matter_has_names_them_all(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    client = _Folders({"value": [{"folders": [{"id": "x", "name": "Pleadings"}]}]})
+    out = _file(monkeypatch, client, _cfg(tmp_path, LIST), "medical")
+    assert client.uploads[0][2] is None
+    assert "no MEDICAL or MEDICAL RECORDS folder" in out["folderNote"]
