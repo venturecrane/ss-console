@@ -1,24 +1,6 @@
 {
   "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges.",
-  "existing/test_champion_audience": [
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.15.result",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.16.result.0",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.16.result.1",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.23.args.1",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.24.args.1",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.24.result",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.28.kwargs.body",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.30.kwargs.scan_text",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.37.args.1",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.37.result.0",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.38.kwargs.text",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.41.args.1",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.45.kwargs.text",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.events.49.args.1",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.values.0.text",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.values.3.0",
-    "tests/test_champion_audience.py::test_the_seats_own_replies_and_an_open_citation_go_out[text0].timeline.0.values.4.0"
-  ],
+  "existing/test_champion_audience": [],
   "existing/test_champion_wall": [],
   "synthetic/relay.guard": []
 }
