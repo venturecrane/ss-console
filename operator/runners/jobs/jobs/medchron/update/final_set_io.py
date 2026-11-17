@@ -77,6 +77,33 @@ def page_inputs(slug_dir: Path, ud: Path) -> tuple[HD.Pages, E.PageId]:
     return pages, page_id
 
 
+def added_entries(slug_dir: Path, unit: str) -> int:
+    """How many entries the update's reviewed audit document adds: 0 when the
+    update added nothing (2026-11-17: an update that added no entry has no
+    ``final-chronology.md`` at all, and the report crashed on it)."""
+    rd = slug_dir / "runs" / unit
+    doc, base = rd / "final-chronology.md", rd / "update" / "base.md"
+    if not doc.is_file() or not base.is_file():
+        return 0
+    try:
+        return len(B.entries_of(doc.read_text(encoding="utf-8"))[1])
+    except ValueError:
+        return 0
+
+
+def write_nothing_added(slug_dir: Path, unit: str) -> None:
+    """The no-op: an empty rows file, no corrections, the counts saying so;
+    the chronology is not touched."""
+    ud = slug_dir / "runs" / unit / "update"
+    if not ud.is_dir():
+        return
+    (ud / ROWS).write_text("", encoding="utf-8")
+    (ud / CORRECTIONS).write_text("[]", encoding="utf-8")
+    (ud / REPORT).write_text(
+        json.dumps({"counts": {"added entries": 0}, "no_added_entries": True}, indent=1), encoding="utf-8"
+    )
+
+
 def load_inputs(slug_dir: Path, unit: str, headings: set[str], canon: Callable[[str], str] = str) -> Inputs:
     """The step's inputs, read from a job's own files (no write, no model)."""
     rd = slug_dir / "runs" / unit
@@ -101,13 +128,21 @@ def write(slug_dir: Path, unit: str, o: Outcome) -> None:
     counts, and each carried verdict as an audit row."""
     rd = slug_dir / "runs" / unit
     ud = rd / "update"
-    (rd / "final-chronology.md").write_text(o.md, encoding="utf-8")
+    doc = rd / "final-chronology.md"
+    if doc.read_text(encoding="utf-8") != o.md:
+        doc.write_text(o.md, encoding="utf-8")
     (ud / ROWS).write_text("".join(json.dumps(r) + "\n" for r in o.rows), encoding="utf-8")
     (ud / CORRECTIONS).write_text(json.dumps(o.corrections, indent=1), encoding="utf-8")
     (ud / REPORT).write_text(json.dumps({"counts": dict(o.counts), "ops": o.ops}, indent=1), encoding="utf-8")
     sha = CL.doc_sha_of(CL.body_of(o.md))
     for row in o.carries:
         CL.append_row(slug_dir / "out" / unit / "audit-results.jsonl", row | {"doc_sha": sha})
+
+
+def ran(ud: Path) -> bool:
+    """The final set ran for this job: its counts file is its marker (written
+    on every run, ``write``). Assemble keeps its old behaviour without it."""
+    return (ud / REPORT).is_file()
 
 
 def read_rows(ud: Path) -> list[dict[str, Any]]:
@@ -129,13 +164,23 @@ def _headings_of(*mds: str) -> set[str]:
     return out
 
 
-def _unit_of(job: Path, unit: str | None) -> str:
-    if unit:
-        return unit
-    runs = sorted(p.name for p in (job / "runs").glob("*") if (p / "update").is_dir())
-    if len(runs) != 1:
-        raise SystemExit(f"name the unit with --unit (found {len(runs)} units)")
-    return runs[0]
+def locate(root: Path, unit: str | None = None) -> tuple[Path, str]:
+    """(the job's slug directory, its unit) under `root`: the slug directory
+    itself (it holds ``runs/``), or a copy root holding ``data/<slug>/`` (or
+    ``<slug>/``). Exactly one unit with an ``update/`` directory, unless
+    `unit` names it."""
+    found: list[tuple[Path, str]] = []
+    for sd in [root, *sorted(root.glob("data/*")), *sorted(root.glob("*"))]:
+        if not (sd / "runs").is_dir():
+            continue
+        for p in sorted((sd / "runs").glob("*")):
+            if (p / "update").is_dir() and (unit is None or p.name == unit) and (sd, p.name) not in found:
+                found.append((sd, p.name))
+        if found:
+            break
+    if len(found) != 1:
+        raise SystemExit(f"found {len(found)} update units under the copy; name one with --unit")
+    return found[0]
 
 
 class _NoConfig:
@@ -149,19 +194,27 @@ def report(job: Path, unit: str | None = None) -> dict[str, Any]:
     """The answer key's counts for a COPY of a job directory. No write."""
     from ...stages.group import Canon
 
-    u = _unit_of(job, unit)
+    job, u = locate(job, unit)
     ud = job / "runs" / u / "update"
+    if not added_entries(job, u):
+        return {"no_added_entries": True, "added_entries": 0, "distinct_visits_merged": 0, "new_claim_keys_created": 0}
     md = (job / "runs" / u / "final-chronology.md").read_text(encoding="utf-8")
     base = (ud / "base.md").read_text(encoding="utf-8")
     x = load_inputs(job, u, _headings_of(md, base), Canon(_NoConfig()))
     o = run(x)
     c = o.counts
     return {
+        "no_added_entries": False,
         "stray_lines": {"before": c["stray lines before"], "after": c["stray lines after"]},
         "verdicts_carried": c["verdicts carried"],
         "repeats": {k.split(": ", 1)[1]: v for k, v in sorted(c.items()) if k.startswith("repeats: ")},
+        "repeat_pairs_by_condition": {k[len("pair: ") :]: v for k, v in sorted(c.items()) if k.startswith("pair: ")},
         "distinct_visits_merged": c["distinct visits merged"],
-        "headings": {k[len("headings ") :]: v for k, v in sorted(c.items()) if k.startswith("headings ")},
+        "headings": {
+            **{w: c[f"headings {w}"] for w in (HD.CITED, HD.SAME_NOTE, HD.NO_TEXT, HD.FAILED)},
+            "read on a transcript": c["headings read on a transcript"],
+            "reverted to the audited one": c["headings reverted to the audited one"],
+        },
         "new_claim_keys_created": c["new claim keys created"],
         "added_entries": c["added entries"],
         "corrections_recorded": c["corrections recorded"],

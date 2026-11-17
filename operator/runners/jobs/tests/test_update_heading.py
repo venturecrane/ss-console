@@ -60,8 +60,39 @@ def test_a_transcribed_page_is_the_weaker_reading() -> None:
     assert c.where == HD.CITED and c.weaker == HD.WEAKER
 
 
-def test_no_page_text_is_a_failure() -> None:
-    assert HD.check(ENTRY, _pages({}, set())).missing == ["text"]
+def test_no_text_layer_is_never_a_failure() -> None:
+    c = HD.check(ENTRY, _pages({}, set()))
+    assert (c.where, c.weaker, c.missing) == (HD.NO_TEXT, HD.NO_LAYER, ["text"])
+    two = ENTRY.replace("(Exhibit 2 - p. 4)", "(Exhibit 2 - p. 4, 6)")
+    date_only = {4: "Example Clinic\nVisit date 03/04/2026\nNeck pain rated 6 of 10.", 6: ""}
+    c = HD.check(two, _pages(date_only, {4, 6}))  # the name may be on the image page: no failure
+    assert (c.where, c.page) == (HD.NO_TEXT, (2, 6))
+    assert HD.check(two, _pages({4: date_only[4], 6: "Seen by Sam Poe"}, {4, 6})).where == HD.FAILED
+
+
+#: The name as a page prints it, in another order or form (the 12 false failures of a real update).
+SEEN = [
+    ("Roe, Jane (M.D.)", "Visit 03/04/2026. Provider: J. Roe, MD"),
+    ("Roe, Jane (M.D.)", "03/04/2026 ROE JANE"),
+    ("Jane Roe, M.D.", "03/04/2026 Attending: Roe, Jane A., M.D."),
+    ("Jane A. O'Roe, D.O.", "03/04/2026 Signed by Jane ORoe DO"),
+    ("Example Laboratory", "EXAMPLE LABORATORY SERVICES Collected 03/04/2026"),
+    ("Example Imaging", "Report date 03/04/2026 Example Imaging Center"),
+    ("Example Clinic Orthopedics, Jane Roe", "03/04/2026 Dr. Roe"),
+]
+
+
+def test_a_name_printed_in_another_order_or_form_is_found() -> None:
+    for provider, page in SEEN:
+        e = ENTRY.replace("Roe, Jane (M.D.)", provider)
+        assert HD.check(e, _pages({4: page}, {4})).where == HD.CITED, provider
+
+
+def test_falsifier_a_genuinely_wrong_name_still_fails() -> None:
+    for provider, page in SEEN:
+        wrong = ENTRY.replace("Roe, Jane (M.D.)", provider.replace("Roe", "Poe").replace("Example", "Sample"))
+        page = page.replace("Sample", "Example")
+        assert HD.check(wrong, _pages({4: page}, {4})).missing == ["name"], provider
 
 
 def _run(entries: list[str], composed: list[str], texts: dict[int, str]) -> FS.Outcome:

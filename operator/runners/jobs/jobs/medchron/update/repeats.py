@@ -184,8 +184,9 @@ def _covered(e: str, by: str) -> bool:
 
 def dedupe_new(kept: list[str], canon: Canon) -> tuple[list[str], int]:
     """New entries less any that is one encounter with another new entry
-    (``encounter.same_encounter``, the key the update's final set uses too)
-    and whose values and terms that entry covers (the longer one stays)."""
+    (``encounter.same_encounter`` on the canonical provider alone, as collect
+    has always matched; the update's final set uses the whole key) and whose
+    values and terms that entry covers (the longer one stays)."""
     from .encounter import same_encounter
 
     order = sorted(range(len(kept)), key=lambda i: -len(kept[i]))
@@ -193,7 +194,7 @@ def dedupe_new(kept: list[str], canon: Canon) -> tuple[list[str], int]:
     dropped = 0
     for i in order:
         e = kept[i]
-        twin = [kept[j] for j in out if same_encounter(kept[j], e, canon)]
+        twin = [kept[j] for j in out if same_encounter(kept[j], e, canon, by_name=False)]
         if any(_covered(e, t) for t in twin):
             dropped += 1
             continue

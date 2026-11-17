@@ -38,7 +38,7 @@ from collections import Counter, defaultdict
 from typing import Any, Callable
 
 from ..lane_ref import lane_references
-from . import body as B, entry_edits as EE, icd, providers as P
+from . import body as B, entry_edits as EE, icd, providers as P, uncited as U
 
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
 
@@ -214,16 +214,17 @@ def _mdY(isod: str) -> str:
 
 
 def exhibit_titles_for(
-    new_exhibits: list[dict[str, Any]], new_ents: list[str], name_of: Callable[[str], str]
+    new_exhibits: list[dict[str, Any]], new_ents: list[str], name_of: Callable[[str], str], by_pages: bool = False
 ) -> tuple[dict[int, str], list[int]]:
     """({number: final title}, [numbers no added entry cites]). A new exhibit
-    is titled the delivered way: the provider its added entries name on the
-    most of ITS pages they cite (2026-11-17: counted by entries, an exhibit
-    of one clinic's 40 pages took the name of a lab that two one-page rows
-    cited), and the first and last date of SERVICE they carry (a records
-    print date once ended a title four weeks after the last visit); with
-    none, the title carries no dates. These are the final set's rows
-    (``update/final_set``), which proof 14 holds each title to."""
+    is titled the delivered way: the provider most entries citing it name
+    (`by_pages`, once the update's final set ran: the provider its added
+    entries name on the most of ITS pages they cite; 2026-11-17, counted by
+    entries, an exhibit of one clinic's 40 pages took the name of a lab that
+    two one-page rows cited), and the first and last date of SERVICE they
+    carry (a records print date once ended a title four weeks after the last
+    visit); with none, the title carries no dates. With the final set, these
+    are its rows (``update/final_set``), which proof 14 holds each title to."""
     from .encounter import cited_pages
 
     retitled: dict[int, str] = {}
@@ -237,7 +238,7 @@ def exhibit_titles_for(
         visits = [e for e in es if B.is_service(e)]
         weight: Counter[str] = Counter()
         for e in visits or es:
-            weight[name_of(e)] += sum(1 for ex, _p in cited_pages(e) if ex == n)
+            weight[name_of(e)] += sum(1 for ex, _p in cited_pages(e) if ex == n) if by_pages else 1
         prov = weight.most_common(1)[0][0]
         ds = sorted(B.iso(e) for e in visits)
         span = (" - " + _mdY(ds[0]) + ("" if ds[-1] == ds[0] else " - " + _mdY(ds[-1]))) if ds else ""
@@ -382,12 +383,17 @@ def assemble(
     update_note: Callable[[dict[int, str]], str] | None = None,
     folder: list[dict[str, Any]] | None = None,
     provider_names: dict[str, str] | None = None,
+    final_set_ran: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     """(updated markdown, report). Raises ValueError on any refusal.
     `folder`: the chronology folder's numbered files (the update plan's
     exhibits), so a firm-numbered file the delivered list never named gets a
     row and may be cited. `provider_names`: {citation: composed name} of the
-    provider-name claims; the audited spelling replaces the composed one."""
+    provider-name claims; the audited spelling replaces the composed one.
+    `final_set_ran`: the update's final set (``update/final_set``) ran for
+    this job: its stray lines are already joined, and new exhibits are titled
+    by cited pages. Without it, assemble does exactly what it did before the
+    final set existed."""
     from .collect import folder_rows, folder_title, with_rows
 
     b = B.sections(base_md)
@@ -395,6 +401,8 @@ def assemble(
     audit_pre, new_ents = B.entries_of(audit_md)
     addition, icd_claims, names = _split_audit_pre(audit_pre)
     new_ents, spelled = P.respell(new_ents, names, provider_names or {})
+    if not final_set_ran:  # the final set joined them already (``update/final_set``); the join is idempotent
+        new_ents = [U.join_stray(e, headings, audited=True) for e in new_ents]  # after the finisher: no stray citation
     delivered_rows = B.table_rows(b["## Treatment Timeline"])
     name_of, name_log = lane_namer(headings, delivered_rows[1:], exhibit_providers(b["## Exhibit List"]))
     taken = {r["exhibit"] for r in new_exhibits}
@@ -409,7 +417,7 @@ def assemble(
     lane = delivered_lanes(delivered_rows[1:], base_ents, canon, name_of)
     final_rows = provider_rows(entries, str, lane)
     filed = [r for r in new_exhibits if not r.get("reused") and not r.get("refiled")]
-    retitled, uncited = exhibit_titles_for(filed, new_ents, name_of)
+    retitled, uncited = exhibit_titles_for(filed, new_ents, name_of, by_pages=final_set_ran)
     firm = folder_rows(base_md, folder or [], taken)
     firm += [f"| {r['exhibit']} | {folder_title(str(r['reused']))} |" for r in new_exhibits if r.get("reused")]
     firm += [f"| {r['exhibit']} | {refiled_row(r)} |" for r in new_exhibits if r.get("refiled")]

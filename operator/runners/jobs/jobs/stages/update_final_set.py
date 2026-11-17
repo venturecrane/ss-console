@@ -22,7 +22,14 @@ from typing import Any
 
 from ..medchron import graded_proof as GP
 from ..medchron.audit import claims as CL
-from ..medchron.update import body as B, docx_md, final_set as FS, final_set_io as FIO, proofs_final as PF
+from ..medchron.update import (
+    body as B,
+    docx_md,
+    final_set as FS,
+    final_set_io as FIO,
+    heading as HD,
+    proofs_final as PF,
+)
 from .base import StageRun, read_json
 from .group import Canon
 from .render import chronology_name
@@ -32,6 +39,10 @@ EXIT_REFUSED = 1
 
 
 def run(sr: StageRun) -> int:
+    if not FIO.added_entries(sr.slug_dir, sr.unit.unit):
+        FIO.write_nothing_added(sr.slug_dir, sr.unit.unit)
+        sr.log("final set: no added entries; nothing to do")
+        return 0
     try:
         x = FIO.load_inputs(sr.slug_dir, sr.unit.unit, headings(sr.cfg), Canon(sr.cfg))
         o = FS.run(x)
@@ -44,9 +55,9 @@ def run(sr: StageRun) -> int:
         f"final set: {c['added entries']} added entries; stray citation lines {c['stray lines before']} -> "
         f"{c['stray lines after']} ({c['verdicts carried']} verdict(s) carried); repeats dropped "
         f"{sum(v for k, v in c.items() if k.startswith('repeats: safe drops'))}, kept whole "
-        f"{c['repeats: kept whole, not covered'] + c['repeats: kept, the drop would uncite an exhibit']}; "
-        f"headings on a cited page {c['headings ' + 'on a cited page']}, same note "
-        f"{c['headings ' + 'on a page of the same note']}, failed {c['headings failed']} "
+        f"{sum(v for k, v in c.items() if k.startswith('repeats: kept whole'))}; "
+        f"headings on a cited page {c['headings ' + HD.CITED]}, same note {c['headings ' + HD.SAME_NOTE]}, "
+        f"no text layer {c['headings ' + HD.NO_TEXT]}, failed {c['headings ' + HD.FAILED]} "
         f"({c['headings reverted to the audited one']} reverted); new claim keys {c['new claim keys created']}"
     )
     return 0

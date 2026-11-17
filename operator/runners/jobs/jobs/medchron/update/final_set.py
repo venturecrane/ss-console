@@ -293,10 +293,66 @@ def headings_check(ents: list[str], x: Inputs, o: Outcome) -> tuple[list[str], d
 # ---- 3. repeats -------------------------------------------------------------------------------
 
 
+_MONTHS = "jan feb mar apr may jun jul aug sep oct nov dec".split()
+_NUM_DATE = re.compile(r"(?<![\d/.-])(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?!\d|[/.-]\d)")
+_ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
+_WORD_DATE = re.compile(r"(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b")
+_RANGE = re.compile(r"\s*(?:-|–|to|through|thru|until)\s*", re.I)
+
+
+def _dates_at(text: str) -> list[tuple[int, int, str]]:
+    """(start, end, normalised YYYY-MM-DD) of every date written in `text`."""
+    out = []
+    for m in _NUM_DATE.finditer(text):
+        mo, d, y = int(m.group(1)), int(m.group(2)), m.group(3)
+        out.append((m.start(), m.end(), f"{2000 + int(y) if len(y) == 2 else int(y):04d}-{mo:02d}-{d:02d}"))
+    for m in _ISO_DATE.finditer(text):
+        out.append((m.start(), m.end(), m.group(0)))
+    for m in _WORD_DATE.finditer(text):
+        mo = _MONTHS.index(m.group(1).lower()[:3]) + 1
+        out.append((m.start(), m.end(), f"{int(m.group(3)):04d}-{mo:02d}-{int(m.group(2)):02d}"))
+    return sorted(out)
+
+
+def dates_written(e: str) -> tuple[set[str], set[tuple[str, str]]]:
+    """(every date, every date range) written in an entry's BODY (its date
+    line aside), citations aside."""
+    body = B.CITE.sub(" ", "\n".join(e.split("\n")[2:]))
+    at = _dates_at(body)
+    ranges = {(a[2], b[2]) for a, b in zip(at, at[1:]) if _RANGE.fullmatch(body[a[1] : b[0]])}
+    return {d for _s, _e, d in at}, ranges
+
+
+def dates_present(e: str, keeper: str) -> bool:
+    """THE SECOND CONDITION of a safe drop, in its one place: every date and
+    every date range written in `e`'s body is written in `keeper`'s body too.
+    2026-11-17, on a real update: of 9 covered pairs of two exports, 2 held an
+    order date range the kept entry only implied through other dates; this
+    keeps them whole. (A run-of-words or a pixel-identity test dropped none:
+    two exports are different prints, worded differently.)"""
+    mine, my_ranges = dates_written(e)
+    have, have_ranges = dates_written(keeper)
+    return mine <= have and my_ranges <= have_ranges
+
+
 def covers(keeper: str, e: str, page_id: E.PageId | None = None) -> bool:
-    """`keeper` says everything `e` says (values, findings, and its words in
-    order or its very pages): `e` may go whole."""
-    return R._covered(e, keeper) and (E.held(e, keeper) or E.page_identical(e, keeper, page_id))
+    """`keeper` says everything `e` says: every value and finding term
+    (``repeats._covered``) and every date and range (``dates_present``).
+    `e`, an added entry no longer than `keeper`, may then go whole."""
+    return R._covered(e, keeper) and dates_present(e, keeper)
+
+
+def _yn(b: bool) -> str:
+    return "yes" if b else "no"
+
+
+def _kept_why(e: str, cond: list[tuple[str, str, bool, bool]]) -> str:
+    """Why an added entry matched by key stays whole (the first rule it fails)."""
+    if not any(c for _k, _x, c, _d in cond):
+        return "not covered (it states a value or finding the other lacks)"
+    if not any(c and d for _k, _x, c, d in cond):
+        return "a date or date range the other does not write"
+    return "the entry that covers it is the shorter one"
 
 
 def _lost(e: str, keeper: str) -> bool:
@@ -323,19 +379,23 @@ def repeats(ents: list[str], base_ents: list[str], x: Inputs, o: Outcome) -> lis
         ]
         if not keep_by:
             continue
-        for kind, _k in keep_by:
+        cond = [(kind, k, R._covered(e, k), dates_present(e, k)) for kind, k in keep_by]
+        for kind, _k, _c, _d in cond:
             o.counts[f"repeats: key matches ({kind})"] += 1
-        hit = next(((kind, k) for kind, k in keep_by if covers(k, e, x.page_id)), None)
-        if hit is None:
-            o.counts["repeats: kept whole, not covered"] += 1
-            o.ops.append({"op": "repeat", "entry": E.key(e), "applied": False, "why": "the other does not cover it"})
+        hit = next(((kind, k) for kind, k, c, d in cond if c and d and len(k) >= len(e)), None)
+        why = "" if hit else _kept_why(e, cond)
+        if hit is not None:
+            rest = [ents[j] for j in range(len(ents)) if j != i and j not in dropped]
+            still = set().union(*(B.cited(r) for r in rest)) if rest else set()
+            why = "an exhibit would be uncited" if cited_before - still else ""
+        for kind, k, c, d in cond:
+            gone = not why and hit is not None and k is hit[1]
+            o.counts[f"pair: covered {_yn(c)}, dates present {_yn(d)}, dropped {_yn(gone)}"] += 1
+        if why:
+            o.counts[f"repeats: kept whole, {why}"] += 1
+            o.ops.append({"op": "repeat", "entry": E.key(e), "applied": False, "why": why})
             continue
-        rest = [ents[j] for j in range(len(ents)) if j != i and j not in dropped]
-        still = set().union(*(B.cited(r) for r in rest)) if rest else set()
-        if cited_before - still:
-            o.counts["repeats: kept, the drop would uncite an exhibit"] += 1
-            o.ops.append({"op": "repeat", "entry": E.key(e), "applied": False, "why": "an exhibit would be uncited"})
-            continue
+        assert hit is not None
         dropped.add(i)
         o.counts[f"repeats: safe drops ({hit[0]})"] += 1
         o.counts["distinct visits merged"] += int(_lost(e, hit[1]))

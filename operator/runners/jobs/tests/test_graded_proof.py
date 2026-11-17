@@ -159,3 +159,9 @@ def test_no_proof_on_record_compares_nothing(tmp_path: Path) -> None:
     log: list[str] = []
     assert GP.record_upload(tmp_path / "proofs.json", [{"name": "x", "sha256": "y"}], log.append) is None
     assert log == [] and GP.recorded(tmp_path, "alpha") == {}
+    # SAFE ALONE: the update proofs' own file, with no final proof registered, is left byte for byte
+    own = tmp_path / "update-proofs.json"
+    own.write_text(json.dumps({"lines": ["1. ok"], "fails": []}, indent=1))
+    before = own.read_bytes()
+    assert GP.record_upload(own, [{"name": "x", "sha256": "y"}], log.append) is None
+    assert own.read_bytes() == before and log == []

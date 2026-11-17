@@ -9,7 +9,10 @@ that it never saw, and two exports of one clinic head one visit
 
 This module is the one home of WHICH entries are one encounter and WHEN one
 may go in favour of the other; collect (``repeats.dedupe_new``) and the
-update's final set (``final_set``) both call it.
+update's final set (``final_set``) both call it. Collect calls it on the
+canonical provider alone (``by_name=False``), exactly the match it always
+made: collect sits before the paid audit, so widening it there is its own
+rehearsed change.
 
 * ``key``: the entry's date and the words of its provider that can name a
   person (facility, credential, specialty and office words aside,
@@ -87,13 +90,16 @@ def name_score(a: str, b: str) -> float:
     return len(ta & tb) / len(ta | tb) if ta and tb else 0.0
 
 
-def same_encounter(a: str, b: str, canon: Canon = str, page_id: PageId | None = None) -> bool:
-    """One date, and one provider (canonical, or by name words) or one page."""
+def same_encounter(a: str, b: str, canon: Canon = str, page_id: PageId | None = None, *, by_name: bool = True) -> bool:
+    """One date, and one provider (canonical, or by name words) or one page.
+    `by_name=False`: the canonical provider only, the key collect has always
+    used (collect sits before the paid audit, so widening it there is a
+    separate, rehearsed change; the final set uses the whole key)."""
     if B.iso(a) != B.iso(b):
         return False
     if canon(B.provider_of(a)) == canon(B.provider_of(b)):
         return True
-    if not B.iso(a):  # no date: only the provider itself makes two entries one
+    if not by_name or not B.iso(a):  # no date: only the provider itself makes two entries one
         return False
     return name_score(a, b) >= NAME_MIN or bool(page_ids(a, page_id) & page_ids(b, page_id))
 

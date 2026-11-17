@@ -31,7 +31,7 @@ from ..medchron.audit import claims as CL, coverage as audit_coverage, retired
 from ..medchron.audit.page_text import exhibit_paths
 from ..medchron.audit.run import AuditPaths
 from ..medchron.update import assemble as A, body as B, collect as C, docx_md, handwritten as H, proofs as P
-from ..medchron.update import review_repair as RR, reviewed as RV
+from ..medchron.update import final_set_io as FIO, review_repair as RR, reviewed as RV
 from ..medchron.update.billing_page import BILLING
 from ..medchron.update.select import ALREADY, BLANK, OVERLAP
 from .base import StageRefusal, StageRun, read_json, read_jsonl
@@ -82,8 +82,6 @@ def added_when(ud: Path, incident: str | None) -> str:
     what the audited added entries (``runs/<unit>/final-chronology.md``)
     actually are, never a fixed phrase. The final set's rows
     (``update/final_set``) are the added entries when the step ran."""
-    from ..medchron.update import final_set_io as FIO
-
     doc = ud.parent / "final-chronology.md"
     if not incident:
         return ""
@@ -190,6 +188,7 @@ def run_assemble(sr: StageRun) -> int:
             update_note=update_note(sr, ud),
             folder=plan(sr).get("exhibits") or [],
             provider_names=read_json(ud / "provider_claims.json", {}).get("composed") or {},
+            final_set_ran=FIO.ran(ud),
         )
     except ValueError as exc:
         raise StageRefusal(str(exc)) from exc

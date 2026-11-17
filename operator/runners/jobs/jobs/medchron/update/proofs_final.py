@@ -124,9 +124,9 @@ def p13(x: Inputs) -> Counter[str]:
 def _words(name: str) -> set[str]:
     """A provider's words, credentials aside: a title's provider is its
     rows' provider, or that name with words left out (``stages.group.Canon``)."""
-    from .heading import name_words
+    from . import finisher as FN
 
-    return set(name_words(name))
+    return {w for w in re.findall(r"[a-z]{2,}", (name or "").lower()) if w not in FN._CRED}
 
 
 def _title_parts(title: str) -> tuple[str, list[str]]:
