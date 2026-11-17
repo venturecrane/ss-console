@@ -269,7 +269,7 @@ def check(entry: str, pages: Pages) -> Check:
     d, names = _date(entry), name_rules(B.provider_of(entry))
     cited = cited_pages(entry)
     texts = [(ex, p, pages.text(ex, p)) for ex, p in cited]
-    have = [(ex, p, t) for ex, p, t in texts if _layer(t)]
+    have = [(ex, p, t) for ex, p, t in texts if t is not None and _layer(t)]
     blind = [(ex, p) for ex, p, t in texts if not _layer(t)]
     if not have:
         return Check(NO_TEXT, blind[0] if blind else None, NO_LAYER, ["text"])

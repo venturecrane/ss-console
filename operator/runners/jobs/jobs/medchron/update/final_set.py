@@ -293,7 +293,7 @@ def headings_check(ents: list[str], x: Inputs, o: Outcome) -> tuple[list[str], d
 # ---- 3. repeats -------------------------------------------------------------------------------
 
 
-_MONTHS = "jan feb mar apr may jun jul aug sep oct nov dec".split()
+_MONTHS: tuple[str, ...] = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 _NUM_DATE = re.compile(r"(?<![\d/.-])(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?!\d|[/.-]\d)")
 _ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
 _WORD_DATE = re.compile(r"(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b")
@@ -309,7 +309,7 @@ def _dates_at(text: str) -> list[tuple[int, int, str]]:
     for m in _ISO_DATE.finditer(text):
         out.append((m.start(), m.end(), m.group(0)))
     for m in _WORD_DATE.finditer(text):
-        mo = _MONTHS.index(m.group(1).lower()[:3]) + 1
+        mo = _MONTHS.index(str(m.group(1)).lower()[:3]) + 1
         out.append((m.start(), m.end(), f"{int(m.group(3)):04d}-{mo:02d}-{int(m.group(2)):02d}"))
     return sorted(out)
 
