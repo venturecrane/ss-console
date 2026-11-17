@@ -148,7 +148,7 @@ SENTENCES: dict[str, dict[str, str]] = {
 #: An already-current update's counts by kind, in the chronology skill's words.
 CURRENT_KINDS = {
     "billing_only": "billing pages only",
-    "read_no_new_visit": "read in full; no visit or finding the chronology does not already list",
+    "read_no_new_visit": "read; no visit or finding the chronology does not already list",
     "pages_already_delivered": "every page is already in the chronology's exhibits",
     "repeats_another_new_file": "every page repeats another file in this request",
     "duplicate": "exact copies of files already read",
