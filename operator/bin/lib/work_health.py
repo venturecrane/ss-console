@@ -449,9 +449,16 @@ def _queue_clock(job: Job, jobs: list[Job], cfg: Config, now: datetime) -> Optio
     waiting, not stuck: on 2026-11-04 a negotiation job queued behind a running
     demand job was listed as stuck after 15 minutes. A blocker that hangs is
     still caught, by its own run limit. Once the blockers end, the queue limit
-    counts from the last of them, not from the submission."""
+    counts from the last of them, not from the submission.
+
+    A lane also waits for ITSELF: the runner starts one job at a time per lane,
+    oldest first (runners/jobs/jobs/daemon.py), so a job queued behind a running
+    job of its own lane is waiting too. On 2026-11-17 one request queued two
+    chronologies; the second, a few dozen pages, waited behind the first, a
+    few thousand pages, and was listed stuck after 30 minutes while the lane
+    was doing exactly what it should."""
     since = job.last[0]
-    waits = job_lanes.LANE_WAITS_FOR.get(job.lane, ())
+    waits = (job.lane, *job_lanes.LANE_WAITS_FOR.get(job.lane, ()))
     for other in jobs:
         if other is job or other.lane not in waits:
             continue
