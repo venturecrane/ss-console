@@ -35,3 +35,7 @@ entries:
     lines:
       - A new document lists real estate use ideas by role, for the broker, agents, transaction coordinators and office staff, and buyers and sellers, each with where it comes from in the library, to brainstorm with a brokerage. It covers open-house follow-up, contract deadlines, missing documents, listing launches, coaching and recruiting, showing feedback, status updates and a weekly broker summary, and what stays with licensed people.
     library_sha256: b90029a89e878dc2a1289359a77d5e341f8a060c9c4da78260d04b06fd0cadcb
+  - id: 4
+    lines:
+      - The hourly health check now covers all seven kinds of queued job, matter records included. A job waiting in its queue behind another kind of job that must finish first is described as waiting, not stalled.
+    library_sha256: 8c65c385bce65bde001b9a76ac9b8f8428cd697cf5762b162afd5462e4f50939

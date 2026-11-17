@@ -50,7 +50,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import seat_layout, spend, verdict as verdict_mod
+from . import job_lanes, seat_layout, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .firm_inputs import pin_env
 from .daemon import RUNNER_BIN, TERMINAL, Daemon
@@ -78,13 +78,9 @@ CHILD_ENV = (INPUTS_ENV, STATE_ENV, INDEX_ENV, "SMOKEBALL_PAGE_FINDER_MODEL", "S
 #: A job does not START while any of these is live: the case file lane's set
 #: (it shares the demand cgroup, and a chronology or litigation child shares
 #: the Machine), plus the case file child itself, which waits on this lane's.
-BUSY_PIDS = (
-    "demand-child.pid",
-    "drafting-child.pid",
-    "child.pid",
-    "litigation-child.pid",
-    "casefile-child.pid",
-)
+#: Declared once, as ``waits_for`` in operator/contracts/job-lanes.yaml, which
+#: work-health reads too: a job queued behind one of these is not stuck.
+BUSY_PIDS = tuple(job_lanes.LANE_CHILD_PID[lane] for lane in job_lanes.LANE_WAITS_FOR["records"])
 BUSY_RETRY_SECONDS = 30.0
 REVIEW_ALERT_SECONDS = 4 * 3600.0
 GATEWAY_USER = "hermes"

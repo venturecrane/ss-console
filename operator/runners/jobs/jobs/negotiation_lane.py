@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import spend, verdict as verdict_mod
+from . import job_lanes, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .daemon import RUNNER_BIN, Daemon
 from .matter import store as page_store_mod
@@ -53,8 +53,9 @@ STATE_ENV = "JOBS_NEGOTIATION_STATE_DIR"
 MEMORY_ENV = "SMD_NEGOTIATION_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "negotiation-watch"
-#: The demand cgroup's other children (the case file job shares it too).
-BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "casefile-child.pid", "records-child.pid")
+#: The demand cgroup's other children (the case file job shares it too), declared
+#: once as ``waits_for`` in operator/contracts/job-lanes.yaml (work-health reads it).
+BUSY_PIDS = tuple(job_lanes.LANE_CHILD_PID[lane] for lane in job_lanes.LANE_WAITS_FOR["negotiation"])
 BUSY_RETRY_SECONDS = 30.0
 HEARTBEAT_SECONDS = 30.0
 _ULID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")

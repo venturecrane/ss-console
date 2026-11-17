@@ -104,6 +104,15 @@ def _lanes_yaml(body: str) -> str:
         ("    skill: s-b\n    broker_firm_copy: true\n", "needs firm_inputs"),
         ("    skill: s-b\n    scheduled: true\n", "needs a wake_word"),
         ("    queued: true\n", "needs a skill"),
+        ("    skill: s-b\n    waits_for: [a]\n", "only a queued lane waits"),
+        (
+            "    skill: s-b\n    queued: true\n    queue_dir: q\n    jobs_dir: j\n    child_pid: c\n    waits_for: [a]\n",
+            "other queued lanes, once each",
+        ),
+        (
+            "    skill: s-b\n    queued: true\n    queue_dir: q\n    jobs_dir: j\n    child_pid: c\n    waits_for: a\n",
+            "list of lane names",
+        ),
     ],
 )
 def test_a_bad_declaration_is_refused(tmp_path: Path, body: str, why: str) -> None:

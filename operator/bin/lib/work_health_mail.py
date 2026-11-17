@@ -1,7 +1,8 @@
 """The work-health email: which items are new, which are still open, and the text.
 
-DEDUPE IS BY KEY, AGAINST THE PREVIOUS RUN'S STATE. The workflow carries
-``{key: first_seen}`` from one run to the next (a GitHub Actions artifact). An
+DEDUPE IS BY KEY, AGAINST THE PREVIOUS RUN'S STATE. The run carries each
+reported item's first-seen and last-seen times (``Seen``, hashed keys) from one
+run to the next (smd-ops' state file, or a GitHub Actions artifact). An
 item whose key was in the previous run's state is "still open" and gets one
 line with its age; anything else is NEW and gets the full text. Without a
 previous state (the first run, or an expired artifact) an item is new only if
@@ -23,7 +24,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from bin.lib.work_health import Item, hhmm, span
@@ -37,6 +38,108 @@ def state_key(key: str) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:24]
 
 
+#: The state file's shape. Version 1 (before 2026-11-16) was ``{key: first_seen}``
+#: and is still read; version 2 is ``{"version": 2, "items": {key: Seen}}``.
+STATE_VERSION = 2
+#: How long an entry this run did not see is carried, while its seat could not
+#: be read: the longest an item stays listed (ended_job_hours).
+CARRY = timedelta(hours=72)
+
+
+@dataclass(frozen=True)
+class Seen:
+    """One reported item in the state file: hashes and times only (public repo)."""
+
+    first: datetime
+    last_seen: datetime
+    #: state_key(seat): which seat's unreadable run may carry this entry.
+    seat: str = ""
+    #: The newest occurrence already reported (``Item.latest``).
+    latest: Optional[datetime] = None
+
+    def to_json(self) -> dict[str, str]:
+        out = {"first": self.first.isoformat(), "seen": self.last_seen.isoformat(), "seat": self.seat}
+        if self.latest is not None:
+            out["latest"] = self.latest.isoformat()
+        return out
+
+
+def _parse(value: object) -> Optional[datetime]:
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def load_state(previous: Optional[dict], now: datetime) -> Optional[dict[str, Seen]]:
+    """The previous run's entries, from either version. A version 1 entry has
+    no seat and no last-seen time: it was seen by the run that wrote it, so it
+    is dated now and is never carried for an unreadable seat."""
+    if previous is None:
+        return None
+    if previous.get("version") == STATE_VERSION:
+        out: dict[str, Seen] = {}
+        for key, raw in (previous.get("items") or {}).items():
+            if not isinstance(raw, dict):
+                continue
+            first, seen = _parse(raw.get("first")), _parse(raw.get("seen"))
+            if first is None or seen is None:
+                continue
+            latest = _parse(raw["latest"]) if raw.get("latest") else None
+            out[str(key)] = Seen(first, seen, str(raw.get("seat") or ""), latest)
+        return out
+    legacy: dict[str, Seen] = {}
+    for key, raw in previous.items():
+        first = _parse(raw)
+        if first is not None:
+            legacy[str(key)] = Seen(first, now)
+    return legacy
+
+
+def dump_state(state: dict[str, Seen]) -> dict:
+    return {"version": STATE_VERSION, "items": {k: v.to_json() for k, v in sorted(state.items())}}
+
+
+def _is_new(it: Item, prev: Optional[Seen], previous: Optional[dict[str, Seen]], since: Optional[datetime]) -> bool:
+    if previous is None:
+        return since is None or it.onset >= since
+    if prev is None:
+        return True
+    # Reported before, but a repeat newer than the newest reported has landed
+    # (a call-failure line's next hit, triage 2026-11-06).
+    return it.latest is not None and prev.latest is not None and it.latest > prev.latest
+
+
+def split_new(
+    items: list[Item], previous: Optional[dict], since: Optional[datetime], now: datetime
+) -> tuple[list[Item], list[Item], dict[str, Seen]]:
+    """NEW or still open, by key against the previous run's state.
+
+    CARRY-FORWARD (triage, 2026-11-05). The state is written from what this run
+    saw, so one run that could not read a seat erased everything reported on
+    it, and the next readable run sent all of it again as NEW (5 of 8 lines).
+    An entry this run did not see is kept, for up to ``CARRY`` since it was
+    last seen, when its seat could not be read this run. Only then: an entry of
+    a seat that was read and is gone was fixed, and must be NEW if it comes
+    back."""
+    seen = load_state(previous, now)
+    new, still = [], []
+    state: dict[str, Seen] = {}
+    for it in sorted(items, key=lambda i: (i.rank, i.seat, i.onset)):
+        key = state_key(it.key)
+        prev = (seen or {}).get(key)
+        (new if _is_new(it, prev, seen, since) else still).append(it)
+        first = min(prev.first, it.onset) if prev else min(it.onset, now)
+        latest = max(filter(None, (it.latest, prev.latest if prev else None)), default=None)
+        state[key] = Seen(first, now, state_key(it.seat), latest)
+    blind = {state_key(it.seat) for it in items if it.kind == "unreadable"}
+    for key, prev in (seen or {}).items():
+        if key not in state and prev.seat in blind and now - prev.last_seen <= CARRY:
+            state[key] = prev
+    return new, still, state
+
+
 @dataclass
 class Plan:
     send: bool
@@ -44,32 +147,8 @@ class Plan:
     text: str
     new: list[Item]
     still_open: list[Item]
-    state: dict[str, str]
-
-
-def _first_seen(item: Item, previous: Optional[dict[str, str]], now: datetime) -> datetime:
-    if previous and state_key(item.key) in previous:
-        try:
-            seen = datetime.fromisoformat(previous[state_key(item.key)])
-            return min(seen, item.onset)
-        except ValueError:
-            pass
-    return min(item.onset, now)
-
-
-def split_new(
-    items: list[Item], previous: Optional[dict[str, str]], since: Optional[datetime], now: datetime
-) -> tuple[list[Item], list[Item], dict[str, str]]:
-    new, still = [], []
-    state: dict[str, str] = {}
-    for it in sorted(items, key=lambda i: (i.rank, i.seat, i.onset)):
-        if previous is not None:
-            is_new = state_key(it.key) not in previous
-        else:
-            is_new = since is None or it.onset >= since
-        (new if is_new else still).append(it)
-        state[state_key(it.key)] = _first_seen(it, previous, now).isoformat()
-    return new, still, state
+    #: The state file to write: ``dump_state`` of the entries.
+    state: dict
 
 
 def all_clear_due(now: datetime, since: Optional[datetime], hour_utc: int) -> bool:
@@ -113,7 +192,7 @@ def render(
     seats: list[str],
     gaps: dict[str, list[str]],
     now: datetime,
-    state: dict[str, str],
+    state: dict[str, Seen],
     resolved: Optional[dict[str, int]] = None,
     test_seats: frozenset[str] = frozenset(),
 ) -> tuple[str, str]:
@@ -140,7 +219,7 @@ def render(
             lines.append(f"  NEW  {it.what}")
             lines.append(f"       To do: {it.todo}")
         for it in seat_old:
-            seen = datetime.fromisoformat(state[state_key(it.key)])
+            seen = state[state_key(it.key)].first
             lines.append(f"  {it.what} (open {span(now - seen)})")
         lines.append("")
     lines += _footer(seats, gaps, now, resolved, footnoted)
@@ -188,7 +267,7 @@ def decide(
     items: list[Item],
     seats: list[str],
     gaps: dict[str, list[str]],
-    previous: Optional[dict[str, str]],
+    previous: Optional[dict],
     since: Optional[datetime],
     now: datetime,
     all_clear_hour_utc: int,
@@ -211,11 +290,11 @@ def decide(
             resolved=resolved,
             test_seats=test_seats,
         )
-        return Plan(True, subject, text, new, still, state)
+        return Plan(True, subject, text, new, still, dump_state(state))
     if all_clear_due(now, since, all_clear_hour_utc):
         footnoted: dict[str, int] = {}
         for it in items:
             footnoted[it.seat] = footnoted.get(it.seat, 0) + 1
         subject, text = render_all_clear(seats, gaps, now, footnoted)
-        return Plan(True, subject, text, new, still, state)
-    return Plan(False, "", "", new, still, state)
+        return Plan(True, subject, text, new, still, dump_state(state))
+    return Plan(False, "", "", new, still, dump_state(state))

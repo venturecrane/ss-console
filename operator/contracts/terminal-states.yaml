@@ -117,10 +117,29 @@ terminal_states:
     summary: >-
       The cron gate decided not to act and RECORDED the decision with its basis.
       A deliberate, reasoned no-op is an observable ending, which is exactly what
-      SUPPRESSED_WAKE was built to make visible (ADR 0021 Stream B). This is the
-      one terminal state where nobody is told anything, and it is terminal only
-      because the decision itself is on the record with `decision_basis`.
+      SUPPRESSED_WAKE was built to make visible (ADR 0021 Stream B). This and
+      `nothing_owed` are the terminal states where nobody is told anything, and
+      each is terminal only because the decision is on the record.
     events: [SUPPRESSED_WAKE]
+
+  nothing_owed:
+    summary: >-
+      A scheduled run that owed nobody a message, by its own record, and said
+      nothing. Its wake row (EMITTED_WAKE, written by the routine's pre_run)
+      carries every field of `silent_turn.wake_metadata`, and the routine's turn
+      in the run's window ended in Hermes' silence answer: an LLM_TURN_COMPLETED
+      of the same skill whose `output_digest` is the sha256 of one of
+      `silent_turn.responses`. The operator-help daily review is the case: on a
+      day with no weekly note its pre_run records `review_due` with `note: false`,
+      the skill says "in review mode you reply to nobody and send nothing", and
+      the turn answers [SILENT]. Until 2026-11-16 every such day was a silent-run
+      line (triage, 2026-11-12). A run that held anything is not this state: the
+      hold makes it owed to a person (`reply_to_person`).
+    silent_turn:
+      wake_metadata:
+        note: false
+      responses:
+        ['[SILENT]', '[silent]', 'SILENT', 'silent', 'NO_REPLY', 'no_reply', 'NO REPLY', 'no reply']
 
   internal_artifact_landed:
     summary: >-
@@ -237,7 +256,7 @@ routine_classes:
       A scheduled routine whose binding is `outbound: derived`: it may address a
       human outside its own process.
     derived_from: output-classes.yaml skill_bindings.<skill>.outbound == derived
-    accepts: [delivered, escalated, gate_suppressed]
+    accepts: [delivered, escalated, gate_suppressed, nothing_owed]
     window_seconds: 3600
 
   scheduled_internal:
@@ -246,7 +265,7 @@ routine_classes:
       chronology maintainer, a memo writer, a tracker. Its artifact is its
       outcome.
     derived_from: output-classes.yaml skill_bindings.<skill>.outbound == none
-    accepts: [internal_artifact_landed, delivered, escalated, gate_suppressed]
+    accepts: [internal_artifact_landed, delivered, escalated, gate_suppressed, nothing_owed]
     window_seconds: 3600
 
 # ---------------------------------------------------------------------------

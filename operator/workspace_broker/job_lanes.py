@@ -97,6 +97,14 @@ WAKE_WORD_JOB_KIND: dict[str, str] = {
     "note": "note_job",
 }
 
+#: Queued lane -> the lanes whose running child keeps its next job from starting.
+LANE_WAITS_FOR: dict[str, tuple[str, ...]] = {
+    "litigation": ("demand", "drafting", "casefile", "records"),
+    "casefile": ("demand", "drafting", "medchron", "litigation", "records"),
+    "negotiation": ("demand", "drafting", "casefile", "records"),
+    "records": ("demand", "drafting", "medchron", "litigation", "casefile"),
+}
+
 #: Job kinds whose wake may be a scheduled run's (no request email).
 SCHEDULED_JOB_KINDS: tuple[str, ...] = (
     "litigation_job",
@@ -133,6 +141,7 @@ AUDIT_PREFIX_LANE: dict[str, str] = {
     "LITIGATION": "litigation",
     "CASEFILE": "casefile",
     "NEGOTIATION": "negotiation",
+    "RECORDS": "records",
 }
 
 #: Lanes with firm inputs in the vault.

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from bin.lib import work_health as wh
-from bin.lib import work_health_sources as src
+from bin.lib import work_health_proof as proof
 from workspace_broker import delivery_proof
 from workspace_broker.audit_ledger import LedgerWriter
 from workspace_broker.server import Broker
@@ -48,7 +48,7 @@ def test_a_planted_spend_alert_is_listed_as_money_not_delivery(tmp_path):
     broker = _seat(tmp_path)
     _alert(broker, "spend_unrecorded", f"litigation job {JOB}: usage 500 cents, recorded 0 cents")
     now = datetime.now(timezone.utc) + timedelta(minutes=1)
-    items = src.delivery_proof_items(SEAT, _rows(tmp_path), CFG, now)
+    items = proof.delivery_proof_items(SEAT, _rows(tmp_path), CFG, now)
     assert len(items) == 1
     it = items[0]
     assert it.kind == "job_failed" and it.key.endswith(f"proof:{JOB}:spend_unrecorded")
@@ -60,7 +60,7 @@ def test_a_seat_with_no_spend_alert_lists_no_spend_line(tmp_path):
     broker = _seat(tmp_path)
     _alert(broker, "job_stopped", "failed (failed): gate_refused: x; the requester was not told")
     now = datetime.now(timezone.utc) + timedelta(minutes=1)
-    items = src.delivery_proof_items(SEAT, _rows(tmp_path), CFG, now)
+    items = proof.delivery_proof_items(SEAT, _rows(tmp_path), CFG, now)
     assert [i for i in items if "spend_unrecorded" in i.key or "usage shows" in i.what] == []
 
 

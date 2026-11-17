@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import job_notes, spend, verdict as verdict_mod
+from . import job_lanes, job_notes, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .firm_inputs import pin_env
 from .matter import store as page_store_mod
@@ -65,8 +65,9 @@ TEXTCACHE_ENV = "JOBS_LITIGATION_TEXTCACHE_DIR"
 MEMORY_ENV = "SMD_LITIGATION_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "litigation-status"
-#: The demand cgroup's other children (the case file job shares it too).
-BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "casefile-child.pid", "records-child.pid")
+#: The demand cgroup's other children (the case file job shares it too), declared
+#: once as ``waits_for`` in operator/contracts/job-lanes.yaml (work-health reads it).
+BUSY_PIDS = tuple(job_lanes.LANE_CHILD_PID[lane] for lane in job_lanes.LANE_WAITS_FOR["litigation"])
 BUSY_RETRY_SECONDS = 30.0
 HEARTBEAT_SECONDS = 30.0
 #: The deadlines report's file names (``litigation/deadlines/book.py``), the
