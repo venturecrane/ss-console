@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import types
@@ -313,3 +314,44 @@ def test_known_defects_are_visible_in_the_corpus() -> None:
             name, reason = d["register_keeps"]
             kept = json.dumps(drive._deref(record["registers"][name], values))
             assert reason in kept and d["reasons_start"][0] not in kept, f"{d['id']}: {kept[:300]}"
+
+
+_CLOCK_CALL = re.compile(r"\b(?:date|datetime)\.(?:today|now|utcnow)\(|\.today\(\)")
+
+
+def _today_without_a_clock(goldens: Path, tests_dir: Path) -> list[str]:
+    """Goldens that hold ``<today>`` though their test never reads the clock.
+
+    The recorder writes today's date as ``<today>`` so a body built from
+    ``date.today()`` replays tomorrow. A LITERAL date in a test that happens to
+    be the recording day is rewritten too, and that golden then fails from the
+    next day on: test_champion_audience, recorded 2026-11-16, turned every PR
+    red at midnight UTC. A test with no clock call has no business holding
+    ``<today>``.
+    """
+    bad = []
+    for golden in sorted((goldens / "existing").glob("*.json")):
+        if "<today>" not in golden.read_text():
+            continue
+        source = tests_dir / f"{golden.stem}.py"
+        if not source.is_file() or not _CLOCK_CALL.search(source.read_text()):
+            bad.append(golden.stem)
+    return bad
+
+
+def test_a_golden_holds_today_only_when_its_test_reads_the_clock() -> None:
+    bad = _today_without_a_clock(GOLDENS, HERE.parent)
+    assert not bad, (
+        "these goldens hold <today> but their test never reads the clock, so a literal "
+        "date was recorded on the day it was today and the golden fails tomorrow; "
+        "use a date that cannot be today (a past year) and record again: " + ", ".join(bad)
+    )
+
+
+def test_the_today_guard_can_fail(tmp_path: Path) -> None:
+    (tmp_path / "goldens" / "existing").mkdir(parents=True)
+    (tmp_path / "goldens" / "existing" / "test_lit.json").write_text('{"a": "id-<today>"}')
+    (tmp_path / "test_lit.py").write_text('BODY = "id-2026-11-16"\n')
+    (tmp_path / "goldens" / "existing" / "test_clock.json").write_text('{"a": "<today>"}')
+    (tmp_path / "test_clock.py").write_text("x = date.today().isoformat()\n")
+    assert _today_without_a_clock(tmp_path / "goldens", tmp_path) == ["test_lit"]
