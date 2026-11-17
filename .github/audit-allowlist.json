@@ -3,6 +3,6 @@
   "expires": "2026-12-02",
   "tracking": "https://github.com/venturecrane/ss-console/issues/3432",
   "allow": {
-    "GHSA-mrhx-c7xc-m3w5": "zod <4.6.6, only in operator/npm/clio-mcp: @oktopeak/clio-mcp (latest 2.4.0) requires zod ^3 and no 3.x carries the fix (rechecked 2026-11-02: 2.4.0 still requires ^3.25.76, the only patched zod is 4.6.6+); the Clio MCP is enabled on no seat (only _template references clio), so nothing reaches it. Root is fixed (zod 4.6.7)."
+    "GHSA-fc5q-39xc-vjpf": "picomatch <=4.0.7 ReDoS on repeated extglobs: no patched release exists (latest 4.0.7, checked 2026-11-17). Reached only through build and dev tooling (vite, tinyglobby, astro build, knip) matching globs the repo authors; no request path hands picomatch a pattern, so nothing a client or prospect sends reaches it."
   }
 }
