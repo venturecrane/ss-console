@@ -250,7 +250,7 @@ class MedchronLane(Daemon):
 
         # Code-authored: an update INTO the delivered chronology says so, plus
         # an already-current update's counts per reason.
-        upd = update_outcome.wake_block(verdict_mod.read(self.job_dir(job_id), ""), state, env)
+        upd = update_outcome.wake_block(verdict_mod.read(self.job_dir(job_id), ""), state, env, self.job_dir(job_id))
         lines = [
             f"Run the {SKILL} skill's DELIVER mode for chronology job {job_id}.",
             load_line(SKILL),

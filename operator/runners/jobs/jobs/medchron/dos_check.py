@@ -228,6 +228,9 @@ def check(
     counts = dict.fromkeys(CLASSES, 0)
     missed: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
+    #: each billed date no medical record on file carries: it goes on the
+    #: billing worksheet, never into the chronology (map-system.md, house rule)
+    no_record: list[dict[str, Any]] = []
     for iso, prov in sorted(billed):
         if iso in by_date and (
             any(_names_provider(p, prov, match) for p in by_date[iso]) or not _named_in_records(prov, pages)
@@ -243,6 +246,8 @@ def check(
         else:
             hit = _on_record_page(iso, pages)
             cls = "missed_visit" if hit else "billed_no_record"
+            if not hit:
+                no_record.append({"date": iso, "billing_provider": prov})
             if hit:
                 missed.append(
                     {
@@ -259,6 +264,7 @@ def check(
         "quality": quality,
         "missed_visits": missed,
         "provider_unmatched": unmatched,
+        "billed_no_record": no_record,
     }
 
 

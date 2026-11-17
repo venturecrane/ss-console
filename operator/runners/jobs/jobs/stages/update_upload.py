@@ -24,9 +24,17 @@ chronology at all:
    that raised and was then proven leaves the delivered chronology to the
    resume (wave 3): a deletion never rides on an attempt that saw an anomaly.
 
-Nothing else is ever deleted: not the delivered exhibits (the updated document
-still cites them), not a worksheet, not a file the firm authored in that
-folder. A delete that fails, or an id that still reads present, holds (exit 4)
+Nothing else is ever deleted but what step 5 names: not the delivered exhibits
+(the updated document still cites them), not a file the firm authored in that
+folder.
+
+5. (2026-11-17) after the chronology is retired: each delivered Records Review,
+   Chronology Review Notes or Medical Billing Worksheet that this update files
+   a new copy of is retired the same way (by id, read back gone), and only
+   while its bytes still hash to what the delivery recorded
+   (``update_supersede``). One the firm changed is left beside the new one and
+   the reply names it; a failed delete here leaves both on the matter and is
+   recorded, never held (the chronology is already replaced). A delete that fails, or an id that still reads present, holds (exit 4)
 with both documents on the matter: a duplicate the firm can see is the safe
 failure; a matter with no chronology is not. ``delivery.json`` records the
 replacement, so a resume never deletes twice and the ledger names what was
@@ -256,4 +264,71 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
             "chronology is retired by the resume, never in an attempt that saw a send fail"
         )
         return EXIT_HELD
-    return _retire(sr, seat, matter_id, folder_id, old, rec, tries, pause)
+    rc = _retire(sr, seat, matter_id, folder_id, old, rec, tries, pause)
+    if rc == 0:
+        _retire_companions(sr, seat, (matter_id, folder_id), p, manifest, rec, tries, pause)
+    return rc
+
+
+def _gone(seat: Any, where: tuple[str, str], fid: str, tries: int, pause: float) -> bool:
+    for attempt in range(tries):
+        if not any(str(r.get("id")) == fid for r in _folder_rows(seat, *where)):
+            return True
+        if attempt + 1 < tries:
+            time.sleep(pause)
+    return False
+
+
+def _retire_companions(
+    sr: StageRun,
+    seat: Any,
+    where: tuple[str, str],
+    p: dict[str, Any],
+    manifest: list,
+    rec: Any,
+    tries: int,
+    pause: float,
+) -> None:
+    """After the chronology is retired: each delivered records review, review
+    notes or worksheet this update filed a new copy of (``update_supersede``),
+    deleted by id and read back gone, only while it is SMD's unedited copy. One
+    the firm changed, one no delivery record names, or one whose delete does
+    not read back is left beside the new one, never held over: both on the
+    matter is the safe failure. Recorded in ``delivery.json`` and in
+    ``update/superseded.json``, which the reply reads."""
+    from .update_supersede import retirable
+
+    go, stay = retirable(p, manifest, sr.cfg, sr.unit.client_name)
+    done = rec.doc.setdefault("superseded", {})
+    retired: list[dict[str, Any]] = []
+    left = [{**r, "why": "changed since delivery" if r.get("recorded") else "no delivery record of it"} for r in stay]
+    for r in go:
+        row = done.setdefault(r["id"], {"name": r["name"], "kind": r["kind"], "deleted": False})
+        if not row["deleted"]:
+            try:
+                seat.delete_file(where[0], r["id"])
+                row["deleted"] = True
+            except Exception as exc:  # noqa: BLE001 - a failed delete leaves both on the matter; recorded, never held
+                sr.log(f"the delivered {r['kind']} could not be retired ({str(exc)[:120]}); both are on the matter")
+        row["confirmed_gone"] = bool(row["deleted"]) and _gone(seat, where, r["id"], tries, pause)
+        rec.save()
+        (retired if row["confirmed_gone"] else left).append(
+            {"name": r["name"], "kind": r["kind"]}
+            if row["confirmed_gone"]
+            else {**r, "why": "its delete did not read back"}
+        )
+    for x in retired:
+        sr.log(f"retired the delivered {x['kind']} {x['name']}; read back gone")
+    for x in left:
+        sr.log(f"left the delivered {x['kind']} {x['name']} beside the new one: {x['why']}")
+    out = {"retired": retired, "left": [_left_row(x, where[1], sr.job.path.parent) for x in left]}
+    (sr.slug_dir / "runs" / sr.unit.unit / "update" / "superseded.json").write_text(json.dumps(out, indent=1), "utf-8")
+
+
+def _left_row(x: dict[str, Any], folder_id: str, job_dir: Any) -> dict[str, Any]:
+    """A companion left beside the new one, with what SMD needs to remove it
+    in one recorded act (``jobs.medchron.update_retire``): its id, its folder,
+    its size and hash as they were read, and the command."""
+    keep = {k: x.get(k) for k in ("name", "kind", "why", "id", "size", "sha256")}
+    cmd = f"python -m jobs.medchron.update_retire {job_dir} --file-id {x.get('id')} --by <who> --reason <text>"
+    return {**keep, "folder_id": folder_id, "remove_with": cmd}

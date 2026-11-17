@@ -114,6 +114,16 @@ class Job:
     # stamps them on an update's envelope). A delivered job dir is wiped 72
     # hours after delivery; this record is not (``prior_reading.cited_sources``).
     delivered_cited: dict[str, dict[str, str]] = field(default_factory=dict)
+    # 2026-11-17: ``{file id: sha256}``, every file a delivered job on this
+    # matter filed and proved (the broker stamps it on an update's envelope).
+    # An update retires a delivered worksheet, records review or review notes
+    # only while its bytes still hash to this (``stages/update_supersede``).
+    delivered_files: dict[str, str] = field(default_factory=dict)
+    # 2026-11-17: every client a delivered chronology on this matter was for
+    # (``client_name``, ``surname``, ``folder_prefix``), stamped by the broker on
+    # an update: a one-unit update on a joint matter scopes its billing refresh
+    # by them (``stages/billing_update``). Never a date of birth.
+    matter_clients: list[dict[str, str]] = field(default_factory=list)
 
     @property
     def joint(self) -> bool:
@@ -303,6 +313,12 @@ def parse(data: Any, *, path: Path) -> Job:
         update=parse_update(data, units),
         prior_delivered=[str(x) for x in data.get("prior_delivered") or [] if _JOB_ID.match(str(x))],
         delivered_cited=_delivered_cited(data.get("delivered_cited")),
+        delivered_files=_delivered_cited({"_": data.get("delivered_files")}).get("_", {}),
+        matter_clients=[
+            {k: str(c[k]) for k in ("client_name", "surname", "folder_prefix") if c.get(k)}
+            for c in data.get("matter_clients") or []
+            if isinstance(c, dict) and c.get("client_name")
+        ],
     )
 
 

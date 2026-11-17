@@ -197,7 +197,17 @@ def probe_before_spend(drv: Any, stage: dag.Stage, ctx: dag.Ctx, notes: list[str
 #: hold can be rehearsed). The model and the seat stay refused either way
 #: (``Driver._sdk_client`` / ``_open_seat`` raise in rehearse mode), so a stage
 #: that would have called one fails in the copy instead of spending.
-SETTLED_RUNNABLE = frozenset({"update_review"})
+#: ``update_billing_extract`` (2026-11-17): nothing left to pull or read on this
+#: copy, or no billing record named (``billing_update.settled``).
+SETTLED_RUNNABLE = frozenset({"update_review", "update_billing_extract"})
+
+
+def _settled(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> bool:
+    if stage.name == "update_billing_extract":
+        from ..stages import billing_update
+
+        return billing_update.settled(drv._stage_run(ctx.unit, lambda _m: None))
+    return drv._projection(stage, ctx, extracted) == 0.0
 
 
 def runs_in_copy(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[str]) -> bool:
@@ -207,7 +217,7 @@ def runs_in_copy(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, note
         return True
     if stage.external or stage.name not in SETTLED_RUNNABLE:
         return False
-    if drv._projection(stage, ctx, extracted) != 0.0:
+    if not _settled(drv, stage, ctx, extracted):
         return False
     notes.append(f"rehearse {stage.name}: settled on this document (projected 0.00 USD); run in the copy")
     return True

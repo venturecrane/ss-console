@@ -181,12 +181,68 @@ def delivered_cited(ledger: Any, matter_id: str) -> dict[str, dict[str, str]]:
     return {u: f for u, f in out.items() if f}
 
 
+def delivered_files(ledger: Any, matter_id: str) -> dict[str, str]:
+    """``{file id: sha256}``: every file a delivered job on the matter filed and
+    proved by hash (each delivered row's ``delivery.files``), oldest row first
+    so a newer hash for the same id wins. Ids and hashes only.
+
+    WHY (2026-11-17). An update that refreshes the billing worksheet, the
+    records review or the review notes retires the delivered copy only when it
+    is still the file SMD filed: a copy the firm edited since is left in the
+    folder. The delivered job dir that knew those hashes is wiped 72 hours
+    after delivery; the ledger row is not."""
+    conn = ledger._connect()
+    try:
+        rows = conn.execute(
+            "SELECT delivery_json FROM medchron_jobs WHERE matter_id=? AND state='delivered' ORDER BY created_at ASC",
+            (str(matter_id),),
+        ).fetchall()
+    finally:
+        conn.close()
+    out: dict[str, str] = {}
+    for (raw,) in rows:
+        try:
+            delivery = json.loads(raw) if raw else None
+        except ValueError:
+            continue
+        files = delivery.get("files") if isinstance(delivery, dict) else None
+        for f in files if isinstance(files, list) else []:
+            if isinstance(f, dict) and f.get("file_id") and _SHA256_RE.match(str(f.get("sha256") or "")):
+                out[str(f["file_id"])] = str(f["sha256"])
+    return out
+
+
 def cited_block(ledger: Any, env: dict[str, Any]) -> dict[str, Any]:
-    """``{"delivered_cited": ...}`` for an UPDATE envelope whose matter has a
-    delivered row recording its cited sources, ``{}`` otherwise. Outside the
-    work digest (``medchron_ledger._WORK_KEYS``): it is what the broker knew
-    when it queued the work, not the work asked for."""
+    """``{"delivered_cited": ..., "delivered_files": ...}`` for an UPDATE
+    envelope whose matter has delivered rows recording them, ``{}``
+    otherwise. Outside the work digest (``medchron_ledger._WORK_KEYS``): it is
+    what the broker knew when it queued the work, not the work asked for."""
     if "update" not in env:
         return {}
+    out: dict[str, Any] = {}
     cited = delivered_cited(ledger, env["matter"]["id"])
-    return {"delivered_cited": cited} if cited else {}
+    if cited:
+        out["delivered_cited"] = cited
+    files = delivered_files(ledger, env["matter"]["id"])
+    if files:
+        out["delivered_files"] = files
+    clients = matter_clients(ledger, env["matter"]["id"])
+    if clients:
+        out["matter_clients"] = clients
+    return out
+
+
+def matter_clients(ledger: Any, matter_id: str) -> list[dict[str, str]]:
+    """Every client a delivered chronology on the matter was for, by name,
+    surname and folder prefix, never a date of birth (2026-11-17). An update
+    for one client of a joint matter is a one-unit job; without the other
+    clients' folder rules its billing refresh read the other client's ledgers
+    as this client's (``jobs.stages.billing_update``)."""
+    from .medchron_identity import delivered_clients
+
+    out = []
+    for c in delivered_clients(ledger, matter_id):
+        row = {k: str(c[k]) for k in ("client_name", "surname", "folder_prefix") if c.get(k)}
+        if row.get("client_name"):
+            out.append(row)
+    return out

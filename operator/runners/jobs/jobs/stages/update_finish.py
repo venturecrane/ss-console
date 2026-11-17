@@ -323,6 +323,11 @@ def run_manifest(sr: StageRun) -> int:
     # a re-filed copy of a delivered exhibit (the update review) is not filed again.
     filed = [r for r in read_json(ud / "new_exhibits.final.json", []) if not r.get("reused") and not r.get("refiled")]
     names = [chronology_name(sr)] + [f"{r['title']}.pdf" for r in filed] + _records_review(sr, ud)
+    from .billing_update import REFRESH
+
+    refreshed = (read_json(ud / REFRESH, {}) or {}).get("worksheet")
+    if refreshed:  # the refreshed billing worksheet (``billing_update``); it supersedes the delivered one
+        names.append(str(refreshed))
     manifest = []
     for n in names:
         f = out / n
