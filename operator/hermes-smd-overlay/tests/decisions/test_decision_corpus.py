@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import types
@@ -191,6 +192,36 @@ def test_synthetic_corpus_writes_or_matches(
     }
     problems += [f"{n}: a golden no case writes" for n in sorted(on_disk - set(docs))]
     assert not problems, "the synthetic decisions differ from the corpus:\n" + "\n".join(problems)
+
+
+def _dates_not_yet_past(source: str, today: str) -> list[str]:
+    """The literal ISO dates in a test's source that are today or later."""
+    return sorted({d for d in re.findall(r"\b20\d\d-[01]\d-[0-3]\d\b", source) if d >= today})
+
+
+def test_no_replayed_test_writes_a_date_that_is_or_will_be_today() -> None:
+    """The recorder reads today's date as ``<today>`` so a ``date.today()`` body
+    records the same every day. A LITERAL date that is today is caught by the
+    same rule on that one day only: recorded then, the corpus holds ``<today>``
+    and fails from the next day on (2026-11-17: ``test_champion_audience``
+    wrote 2026-11-16, was recorded on the 16th, and every PR went red at UTC
+    midnight). A literal date still to come flips the corpus the day it
+    arrives. Only a date already past is the same on every later day."""
+    import datetime as dt
+
+    today = min(dt.date.today(), dt.datetime.now(dt.UTC).date()).isoformat()
+    assert _dates_not_yet_past("x 2026-11-16 y 2026-11-09", "2026-11-16") == ["2026-11-16"]
+    tests = GOLDENS.parents[1]
+    problems = []
+    for golden in sorted((GOLDENS / "existing").glob("*.json")):
+        source = tests / f"{golden.stem}.py"
+        hits = _dates_not_yet_past(source.read_text(encoding="utf-8"), today)
+        if hits:
+            problems.append(f"{source.name}: {', '.join(hits)}")
+    assert not problems, (
+        "a replayed test writes a literal date that is today or still to come; use a date "
+        "already past, or build it from date.today():\n" + "\n".join(problems)
+    )
 
 
 def test_existing_corpus_writes_or_matches(forward: Path) -> None:
