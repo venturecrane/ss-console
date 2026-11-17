@@ -94,7 +94,7 @@ from bin.lib.chain_rehearsal import (
     EXIT_REHEARSAL_FAILED,  # noqa: F401 — re-export: tests and callers read it from this module (tests pin the codes)
     rehearse_mismatch as _rehearse_mismatch,
 )
-from bin.lib.fleet.r2 import derived_credentials
+from bin.lib.fleet.r2 import derived_credentials as r2_credentials
 from bin.lib.console_d1 import (
     ALERT_DRIVER_PREFIX,
     DEFAULT_DB,
@@ -297,7 +297,7 @@ class ArchiveResult:
 
 
 def _aws_upload(local: Path, destination: str) -> None:
-    key_id, secret, endpoint = derived_credentials()
+    key_id, secret, endpoint = r2_credentials()
     proc = subprocess.run(  # noqa: S603 - literal aws argv, no shell; local is a file this module wrote, endpoint comes from the operator env
         [
             "aws",
