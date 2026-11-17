@@ -50,7 +50,7 @@
       "refused/ascii": "raise ConnectionRefusedError connects=1"
      },
      "calls": [
-      "operator/bin/medchron-backfill-covered.py:462 s.connect(sock_path)"
+      "operator/bin/medchron-backfill-covered.py:463 broker_socket.send_frame(sock_path, raw, timeout=30.0)"
      ],
      "file": "operator/bin/medchron-backfill-covered.py",
      "kind": "function",
@@ -61,7 +61,7 @@
       "raises-JSONDecodeError-on-fault-after-send",
       "raises-JSONDecodeError-on-non-json",
       "raises-RuntimeError-on-not-ok",
-      "wire-ascii-escaped"
+      "wire-utf8"
      ],
      "status": "executable",
      "symbol": "_broker",
@@ -99,8 +99,8 @@
       ],
       "ok/non-ascii": [
        {
-        "bytes": "{\"text\":\"caf\\u00e9 na\\u00efve \\u65e5\\u672c \\u00b1\",\"verb\":\"note\"}\n",
-        "len": 66
+        "bytes": "{\"text\":\"café naïve 日本 ±\",\"verb\":\"note\"}\n",
+        "len": 48
        }
       ]
      }
@@ -2775,7 +2775,7 @@
       "yaml-syntax-error": "return empty:list 681db95bcc3bd2b4 reads=10"
      },
      "calls": [
-      "operator/bin/check-agentmail-lists.py:219 yaml.safe_load(path.read_text(encoding=\"utf-8\"))"
+      "operator/bin/check-agentmail-lists.py:221 seat_config.load(path, encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/bin/check-agentmail-lists.py",
      "kind": "function",
@@ -2821,7 +2821,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/bin/check-agentmail-lists.py:230 yaml.safe_load((_customers_dir() / slug / \"customer.yaml\").read_text(encoding=\"utf-8\"))"
+      "operator/bin/check-agentmail-lists.py:232 seat_config.load(seat_dirs.customer_file(_customers_dir(), slug), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/bin/check-agentmail-lists.py",
      "kind": "function",
@@ -3128,7 +3128,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/bin/lib/seat_inbox.py:28 seat_config.parse(fh)"
+      "operator/bin/lib/seat_inbox.py:27 seat_config.parse(fh)"
      ],
      "file": "operator/bin/lib/seat_inbox.py",
      "kind": "function",
@@ -3344,8 +3344,8 @@
       "yaml-syntax-error": "exit 2"
      },
      "calls": [
-      "operator/bin/rehearse-card.py:122 yaml.safe_load(card_path.read_text())",
-      "operator/bin/rehearse-card.py:123 yaml.safe_load(cfg_path.read_text())"
+      "operator/bin/rehearse-card.py:122 seat_config.load(card_path, encoding=None, on_missing=\"raise\")",
+      "operator/bin/rehearse-card.py:123 seat_config.load(cfg_path, encoding=None, on_missing=\"raise\")"
      ],
      "file": "operator/bin/rehearse-card.py",
      "kind": "function",
@@ -3386,7 +3386,7 @@
       "yaml-syntax-error": "not-applicable: the site takes cfg (this input does not parse)"
      },
      "calls": [
-      "operator/bin/seat-readiness.py:395 yaml.safe_load(path.read_text())"
+      "operator/bin/seat-readiness.py:395 seat_config.load(path, encoding=None, on_missing=\"raise\")"
      ],
      "file": "operator/bin/seat-readiness.py",
      "kind": "function",
@@ -3422,7 +3422,7 @@
       "yaml-syntax-error": "not-applicable: the site takes cfg (this input does not parse)"
      },
      "calls": [
-      "operator/bin/seat-readiness.py:465 yaml.safe_load(grid_path.read_text())"
+      "operator/bin/seat-readiness.py:465 seat_config.load(grid_path, encoding=None, on_missing=\"raise\")"
      ],
      "file": "operator/bin/seat-readiness.py",
      "kind": "function",
@@ -3458,7 +3458,7 @@
       "yaml-syntax-error": "raise ParserError reads=1"
      },
      "calls": [
-      "operator/bin/seat-readiness.py:107 yaml.safe_load(path.read_text())"
+      "operator/bin/seat-readiness.py:107 seat_config.load(path, encoding=None, on_missing=\"raise\")"
      ],
      "file": "operator/bin/seat-readiness.py",
      "kind": "function",
@@ -3598,7 +3598,7 @@
       "yaml-syntax-error": "return empty:dict fd0eecc3dff2f4d8 reads=1"
      },
      "calls": [
-      "operator/bin/work-health.py:95 seat_config.load(CUSTOMERS / slug / \"customer.yaml\", encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/bin/work-health.py:96 seat_config.load(CUSTOMERS / slug / \"customer.yaml\", encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/bin/work-health.py",
      "kind": "function",
@@ -4344,7 +4344,7 @@
       "yaml-syntax-error": "return value:ExpenseConfig 54084627be091913 reads=1"
      },
      "calls": [
-      "operator/connectors/smokeball/smokeball_connector/vendor_invoice.py:237 seat_config.parse(raw)"
+      "operator/connectors/smokeball/smokeball_connector/vendor_invoice.py:241 seat_config.parse(raw)"
      ],
      "file": "operator/connectors/smokeball/smokeball_connector/vendor_invoice.py",
      "kind": "function",
@@ -4658,7 +4658,7 @@
       "yaml-syntax-error": "return value:list de91772994a3d1bd reads=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/bootstrap/validate.py:230 yaml.safe_load(raw_text)"
+      "operator/hermes-smd-overlay/bootstrap/validate.py:231 yaml.safe_load(raw_text)"
      ],
      "file": "operator/hermes-smd-overlay/bootstrap/validate.py",
      "kind": "function",
@@ -5115,7 +5115,7 @@
       "yaml-syntax-error": "return empty:dict fd0eecc3dff2f4d8 reads=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py:991 seat_config.load(_YAML_PATH, encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py:992 seat_config.load(_YAML_PATH, encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py",
      "kind": "function",
@@ -8571,7 +8571,7 @@
       "name": "CUSTOMER_SLUG"
      },
      "calls": [
-      "operator/runners/jobs/jobs/daemon.py:650 _require(\"CUSTOMER_SLUG\")"
+      "operator/runners/jobs/jobs/daemon.py:655 _require(\"CUSTOMER_SLUG\")"
      ],
      "file": "operator/runners/jobs/jobs/daemon.py",
      "kind": "function",

@@ -9,9 +9,8 @@ reconciled at all.
 
 from __future__ import annotations
 
-import os
 from typing import Callable, Optional
-from bin.lib import seat_config
+from bin.lib import seat_config, seat_dirs
 
 
 def authored_inbox(customers_dir: str, slug: str) -> Optional[str]:
@@ -24,7 +23,7 @@ def authored_inbox(customers_dir: str, slug: str) -> Optional[str]:
     is reported as unowned, never silently skipped.
     """
     try:
-        with open(os.path.join(customers_dir, slug, "customer.yaml"), encoding="utf-8") as fh:
+        with open(seat_dirs.customer_file(customers_dir, slug), encoding="utf-8") as fh:
             config = seat_config.parse(fh)
     except Exception:  # noqa: BLE001 - unreadable config falls back to the convention
         return None

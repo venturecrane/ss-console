@@ -50,7 +50,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
+from bin.lib import seat_config, seat_dirs
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CUSTOMERS = REPO_ROOT / "operator" / "customers"
@@ -100,11 +100,11 @@ def _run(cmd: list[str], timeout: int = 60) -> tuple[int, str]:
 
 
 def load_customer(slug: str) -> dict:
-    path = CUSTOMERS / slug / "customer.yaml"
+    path = seat_dirs.customer_file(CUSTOMERS, slug)
     if not path.is_file():
         print(f"FATAL: no customer.yaml at {path}", file=sys.stderr)
         raise SystemExit(2)
-    return yaml.safe_load(path.read_text()) or {}
+    return seat_config.load(path, encoding=None, on_missing="raise") or {}
 
 
 def seat_secret_names(app: str) -> set[str] | None:
@@ -392,7 +392,7 @@ def check_initiation_card(rep: Report, slug: str, cfg: dict) -> None:
             "card", "initiation card present", INFO, "no initiation-card.yaml", "a card appearing later", blocker=False
         )
         return
-    card = yaml.safe_load(path.read_text()) or {}
+    card = seat_config.load(path, encoding=None, on_missing="raise") or {}
     enabled_skills = {
         s["name"]
         for persona in (cfg.get("personas") or [])
@@ -462,7 +462,7 @@ def coverage_rows(slug: str, cfg: dict) -> list[dict]:
     grid_path = CUSTOMERS / slug / "routine-grid.yaml"
     if not grid_path.is_file():
         return []
-    grid = yaml.safe_load(grid_path.read_text()) or {}
+    grid = seat_config.load(grid_path, encoding=None, on_missing="raise") or {}
 
     skills: dict[str, dict] = {}
     for persona in cfg.get("personas") or []:
@@ -548,7 +548,7 @@ def main() -> int:
         return 2
 
     cfg = load_customer(args.slug)
-    raw = (CUSTOMERS / args.slug / "customer.yaml").read_text()
+    raw = seat_dirs.customer_file(CUSTOMERS, args.slug).read_text()
     app = f"hermes-{args.slug}"
     rep = Report(args.slug)
 

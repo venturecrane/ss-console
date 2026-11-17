@@ -1,4 +1,16 @@
 {
   "_why": "Dotted paths (list indexes as numbers) that may differ from contracts/seat-config-callers.json (every seat-config reader, socket client and slug read, run), keyed seat-config-callers. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes how a site reads the seat's config on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared.",
-  "seat-config-callers": []
+  "seat-config-callers": [
+    "concepts.broker-socket.rows.0.calls.0",
+    "concepts.broker-socket.rows.0.modes.6",
+    "concepts.broker-socket.rows.0.wire.ok/non-ascii.0.bytes",
+    "concepts.broker-socket.rows.0.wire.ok/non-ascii.0.len",
+    "concepts.customer-yaml.rows.0.calls.0",
+    "concepts.customer-yaml.rows.1.calls.0",
+    "concepts.customer-yaml.rows.13.calls.0",
+    "concepts.customer-yaml.rows.13.calls.1",
+    "concepts.customer-yaml.rows.14.calls.0",
+    "concepts.customer-yaml.rows.15.calls.0",
+    "concepts.customer-yaml.rows.16.calls.0"
+  ]
 }

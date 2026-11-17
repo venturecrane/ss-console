@@ -26,6 +26,12 @@ import {
   isTestPath,
 } from './analyze'
 import { LANE_SKILL } from '../../src/lib/operator/job-lanes.generated'
+import { parsesCustomerYaml } from './customer-yaml-reads'
+
+/** End-to-end test harnesses (operator/hermes-smd-overlay/tests_e2e/), which isTestPath does not
+ * cover. Scoped to the customer-yaml census, the only one that finds a file there, so no other
+ * count moves. */
+const E2E_HARNESS = /(^|\/)tests_e2e\//
 
 export const CONCEPT_BASELINE = 'scripts/sprawl/concept-baseline.json'
 
@@ -143,14 +149,6 @@ function laneSkillPairs(code: string[]): number {
     for (const lane of laneWords(line)) if (line.includes(LANE_SKILLS[lane])) pairs.add(lane)
   }
   return pairs.size
-}
-
-/** customer.yaml, customer_yaml or its upper-case constant, in any case. */
-const NAMES_CUSTOMER_YAML = /customer[._]ya?ml/i
-
-function parsesCustomerYaml(code: string[]): boolean {
-  const text = code.join('\n')
-  return /\b(yaml\.(safe_)?load|safe_load)\(/.test(text) && NAMES_CUSTOMER_YAML.test(text)
 }
 
 /** A function (declaration or arrow) whose name starts format/fmt and names money. A value such as
@@ -368,11 +366,11 @@ export const CONCEPTS: Concept[] = [
   },
   {
     id: 'customer-yaml-hand-parsers',
-    rule: 'Non-test Python file that calls a yaml load and names customer.yaml.',
+    rule: "Non-test Python file (tests_e2e/ harnesses are tests here) that applies a yaml load to customer.yaml: the load's argument, or a name it is traceably bound from in that file, says customer.yaml (scripts/sprawl/customer-yaml-reads.ts).",
     target: '1 reader per process',
     instances: (files) =>
       matching(
-        programs(files).filter((f) => f.path.endsWith('.py')),
+        programs(files).filter((f) => f.path.endsWith('.py') && !E2E_HARNESS.test(f.path)),
         parsesCustomerYaml
       ),
   },

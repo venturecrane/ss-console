@@ -3,7 +3,11 @@
 The FILE rules are the sprawl census's (scripts/sprawl/concepts.ts), restated
 here so the capture runs in the bare Python CI job; tests/
 seat-config-callers.test.ts holds the two lists in step (a file whose every site
-now calls a shared reader stays here after the census drops it). Within a file, a SITE is
+now calls a shared reader stays here after the census drops it). For customer.yaml
+this restates the census's first, wider rule (a yaml load, and customer.yaml named
+anywhere); the census now counts only a load applied to customer.yaml
+(scripts/sprawl/customer-yaml-reads.ts), and the files it declines are named, with
+what each really loads, in that test's DECLINED. Within a file, a SITE is
 the smallest callable unit around the call: a module-level function, or a
 method of a module-level class (a nested function is reached through the
 function that holds it). Code at module level is an `inline` site, run by
