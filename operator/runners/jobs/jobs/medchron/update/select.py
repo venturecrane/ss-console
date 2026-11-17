@@ -19,9 +19,9 @@ delivered exhibit PDFs are what the firm holds, and they are the page truth.
   differ in a date or a word and are both read; pages within one document are
   never compared.
 * A TEXT page that a run of 1 to 3 consecutive pages of ONE delivered
-  exhibit, or of ONE earlier new document, holds whole (its dates, clinical
-  values, content numbers and words, export stamps aside:
-  ``update/contained``) is EXCLUDED the same way: a second export of one
+  exhibit, or of ONE earlier new document, holds whole (every date, clinical
+  value, number and word token of it, with repeats; export stamps aside and
+  no token missing: ``update/contained``) is EXCLUDED the same way: a second export of one
   clinic's records breaks its pages elsewhere (2026-11-17).
 * Every comparison here reads a page with its fax, print and export stamps
   aside (``strip_stamps``, ``without_furniture``): a stamp line is known only
@@ -225,7 +225,7 @@ class Delivered:
         for f in self.pool.items:
             out.pool.add(f)
         for f in other.pool.items:
-            out.pool.add(CT.Facts(f.doc + top, f.dates, f.values, f.nums, f.terms, f.bag))
+            out.pool.add(CT.Facts(f.doc + top, f.dates, f.values, f.bag))
         return out
 
     def by_shingles(self, text: str) -> bool:
@@ -237,8 +237,8 @@ class Delivered:
             len(me.shingles & e.shingles) >= need and me.words <= e.words and me.values <= e.values for e in self.pages
         )
 
-    def contained(self, text: str, near: int | None = None) -> int | None:
-        """Where a run of delivered pages holds the page (``update/contained``), or None."""
+    def contained(self, text: str, near: int | None = None) -> tuple[int, int] | None:
+        """(start, end) of the run of delivered pages holding the page (``update/contained``), or None."""
         return self.pool.find(CT.facts(0, text), near=near)
 
     def covers(self, text: str) -> bool:
@@ -284,16 +284,17 @@ class Earlier:
                 return True
         return False
 
-    def contained(self, text: str, near: int | None = None) -> int | None:
+    def contained(self, text: str, near: int | None = None) -> tuple[int, int] | None:
         return self.pool.find(CT.facts(self.doc, text), skip=self.doc, near=near)
 
     def copy_of(self, text: str) -> bool:
         return self.by_shingles(text) or self.contained(text) is not None
 
 
-#: {page: ("delivered" | "earlier", window position)}: the pages
-#: ``update/contained`` held, for the undated-neighbour pass.
-_Held = dict[int, tuple[str, int]]
+#: {page: ("delivered" | "earlier", window start, window end, held by
+#: ``update/contained`` alone)}: where each page it held sits in its pool,
+#: for the undated-neighbour pass and the measuring command.
+_Held = dict[int, tuple[str, int, int, bool]]
 DELIVERED_SRC, EARLIER_SRC = "delivered", "earlier"
 
 
@@ -311,7 +312,7 @@ def _decide(
             continue
         old, at = pool.by_shingles(t), pool.contained(t)
         if at is not None:
-            held[page] = (src, at)  # where it sits, for an undated neighbour
+            held[page] = (src, at[0], at[1], not old)  # where it sits, for an undated neighbour
         if old or at is not None:
             if not old:
                 _count(tally, f"held by a run of {src} pages")
@@ -344,12 +345,12 @@ def _undated_neighbours(
             for q in (p - 1, p + 1):
                 if q not in held:
                     continue
-                src, at = held[q]
+                src, at = held[q][:2]
                 got = seen.contained(t, near=at) if src == DELIVERED_SRC else None
                 if src == EARLIER_SRC and earlier is not None:
                     got = earlier.contained(t, near=at)
                 if got is not None:
-                    held[p] = (src, got)
+                    held[p] = (src, got[0], got[1], True)
                     out[p] = (EXCLUDED, ALREADY if src == DELIVERED_SRC else OVERLAP)
                     _count(tally, f"held beside a held page ({src})")
                     changed = True
@@ -363,6 +364,7 @@ def classify_new(
     earlier: Earlier | None = None,
     image: dict[int, str] | None = None,
     tally: Counter[str] | None = None,
+    held_out: _Held | None = None,
 ) -> dict[int, tuple[str, str]]:
     """Per page of one new document: (text | excluded | unread, reason).
     `unread` is a page the transcription could not read: it is never skipped
@@ -370,7 +372,8 @@ def classify_new(
     the new documents before this one; this document's pages join it.
     `image`: {page: ALREADY | OVERLAP} for the pages ``update/pageid`` found
     by their picture; those were never transcribed and are excluded first.
-    `tally`, when given, counts the pages ``update/contained`` held."""
+    `tally`, when given, counts the pages ``update/contained`` held;
+    `held_out`, when given, receives where each of them sits (``_Held``)."""
     if earlier is not None:
         earlier.next_document()
     out: dict[int, tuple[str, str]] = {}
@@ -385,6 +388,8 @@ def classify_new(
             earlier.add(t)
     if held:
         _undated_neighbours(out, pages, seen, earlier, held, tally)
+    if held_out is not None:
+        held_out.update(held)
     return out
 
 

@@ -13,15 +13,15 @@ held when a WINDOW of 1 to WINDOW consecutive pages of ONE other document (a
 delivered exhibit, or a new document read before it, never its own) holds
 what P says, read with print and export stamps aside (``select.strip_stamps``):
 
-* every date P states is in the window;
-* every clinical value P states (``values.clinical_values``) and every
-  content number (``values.content_numbers``: dates, doses, vitals, labs,
-  codes; a time of day and a bare year aside) is in the window;
-* every word P uses is in the window but at most MISSING_MAX (and at most
-  MISSING_FRAC of its distinct words), and none of those is a negation or
-  result word (``GUARD``) or a finding term P states (``values.terms``), so
-  "no fracture" is never held by "fracture";
-* at least WORDS_FRAC of P's words, counted with repeats, are in the window.
+* every date and every clinical value P states (``values.clinical_values``)
+  is in the window;
+* EVERY token of P, each word and each number (``values.norm_number``
+  spelling) counted with its repeats, is in the window's tokens: the page is
+  a multiset of normalised tokens, so a line wrap or a column order is no
+  difference, and nothing else is allowed to be one. No word may be missing
+  (``absent`` is 0): 2026-11-17, an allowance of a few missing words let a
+  page through whose window lacked a whole negative finding ("No gross ...
+  tear is seen").
 
 A page that states no date is held only beside a held neighbour: its page
 before or after was held by a window of that same document within WINDOW
@@ -35,17 +35,9 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
-from .values import clinical_values, content_numbers, terms
+from .values import CITE, NUM, clinical_values, norm_number
 
 WINDOW = 3
-WORDS_FRAC = 0.9
-MISSING_MAX = 5
-MISSING_FRAC = 0.03
-#: Words whose absence from the window changes what a sentence says.
-GUARD = frozenset(
-    "no not non nor denies denied deny negative positive without absent never none normal abnormal "
-    "unremarkable remarkable increased decreased worse worsening improved improving".split()
-)
 _DATE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?![\d/])")
 
 
@@ -57,8 +49,12 @@ def dates_of(text: str) -> frozenset[str]:
 
 
 def bag_of(text: str) -> Counter[str]:
-    """The text's words as a bag (two letters or more, digits stripped)."""
-    return Counter(re.findall(r"[a-z]{2,}", re.sub(r"\d", " ", text.lower())))
+    """The text's tokens as a multiset: every word (lowercase letters) and
+    every number in one spelling (``values.norm_number``)."""
+    t = CITE.sub(" ", text).lower()
+    out = Counter(re.findall(r"[a-z]+", re.sub(r"\d", " ", t)))
+    out.update("#" + norm_number(n) for n in NUM.findall(t))
+    return out
 
 
 @dataclass(frozen=True)
@@ -66,13 +62,7 @@ class Facts:
     doc: int
     dates: frozenset[str]
     values: frozenset[str]
-    nums: frozenset[str]
-    terms: frozenset[str]
     bag: tuple[tuple[str, int], ...]
-
-    @property
-    def words(self) -> frozenset[str]:
-        return frozenset(w for w, _ in self.bag)
 
 
 def facts(doc: int, text: str) -> Facts:
@@ -84,29 +74,24 @@ def facts(doc: int, text: str) -> Facts:
         doc,
         dates_of(body),
         frozenset(clinical_values(body)),
-        frozenset(content_numbers(body)),
-        frozenset(terms(body)),
         tuple(sorted(bag_of(body).items())),
     )
 
 
-def holds(me: Facts, window: list[Facts]) -> bool:
-    """Whether the window of pages holds everything `me` says (the rule above)."""
-    if not window or not me.bag:
-        return False
-    dates = frozenset().union(*(w.dates for w in window))
-    values = frozenset().union(*(w.values for w in window))
-    nums = frozenset().union(*(w.nums for w in window))
-    if not (me.dates <= dates and me.values <= values and me.nums <= nums):
-        return False
+def absent(me: Facts, window: list[Facts]) -> int:
+    """How many of `me`'s dates, clinical values and tokens (with repeats)
+    the window lacks."""
+    dates = frozenset().union(*(w.dates for w in window)) if window else frozenset()
+    values = frozenset().union(*(w.values for w in window)) if window else frozenset()
     have: Counter[str] = Counter()
     for w in window:
         have.update(dict(w.bag))
-    mine = Counter(dict(me.bag))
-    missing = set(mine) - set(have)
-    if len(missing) > min(MISSING_MAX, int(MISSING_FRAC * len(mine))) or missing & (GUARD | me.terms):
-        return False
-    return sum((mine & have).values()) >= WORDS_FRAC * sum(mine.values())
+    return len(me.dates - dates) + len(me.values - values) + sum((Counter(dict(me.bag)) - have).values())
+
+
+def holds(me: Facts, window: list[Facts]) -> bool:
+    """Whether the window of pages holds everything `me` says: nothing absent."""
+    return bool(window and me.bag) and absent(me, window) == 0
 
 
 class Pool:
@@ -134,8 +119,8 @@ class Pool:
                     out.append((s, e))
         return out
 
-    def find(self, me: Facts, skip: int | None = None, near: int | None = None) -> int | None:
-        """The position of the first page of a window holding `me`, or None.
+    def find(self, me: Facts, skip: int | None = None, near: int | None = None) -> tuple[int, int] | None:
+        """(start, end) of the first window holding `me`, or None.
         A dated page is looked for where its rarest date is; an undated one
         only `near` a position (its held neighbour's window), within WINDOW."""
         if me.dates:
@@ -150,5 +135,5 @@ class Pool:
         for at in spots:
             for s, e in self._windows(at, skip):
                 if holds(me, self.items[s:e]):
-                    return s
+                    return s, e
         return None

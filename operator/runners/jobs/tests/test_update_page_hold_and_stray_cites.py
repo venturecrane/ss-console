@@ -155,6 +155,52 @@ def test_pages_of_one_document_are_never_held_by_each_other() -> None:
     assert all(d == S.READ for d, _ in _decide(pages, S.Delivered(), earlier).values())
 
 
+MRI = (
+    "Example Imaging Center\nMRI RIGHT SHOULDER WITHOUT CONTRAST\nDate of exam: 05/12/2026\n"
+    "History: shoulder pain after the collision.\nTechnique: multiplanar multisequence images were obtained.\n"
+    "Findings: There is moderate tendinosis of the supraspinatus tendon. The labrum is intact.\n"
+    "Mild acromioclavicular joint arthrosis with a small subacromial effusion.\n"
+    "No full thickness tear of the infraspinatus is seen; high grade partial thickness wear of its gross\n"
+    "scattered bursal surface.\n"
+    "The subscapularis tendon is intact without tendinosis. The biceps tendon is located in the bicipital groove\n"
+    "and is normal in caliber. The glenohumeral joint cartilage is preserved without a focal chondral defect.\n"
+    "There is no fracture or bone contusion. The deltoid and rotator cuff muscles are normal in bulk and signal\n"
+    "without atrophy or fatty infiltration. The coracoacromial ligament is intact and the acromion is type two.\n"
+    "The axillary pouch and rotator interval are unremarkable. There is no paralabral cyst in the spinoglenoid\n"
+    "notch. The visualized portions of the scapula, clavicle and humeral head marrow are normal in signal.\n"
+    "The subcutaneous soft tissues are unremarkable. No mass or abnormal fluid collection is identified.\n"
+    "Impression: supraspinatus tendinosis and mild acromioclavicular arthrosis."
+)
+NEGATIVE = "No gross full thickness tear is seen. Scattered foci of high grade partial thickness wear."
+
+
+def _mri_window() -> S.Delivered:
+    """The delivered export: the report broken across two pages."""
+    lines = MRI.split("\n")
+    return S.Delivered.of_docs([["\n".join(lines[:5]) + "\nPage 1 of 2", "\n".join(lines[5:]) + "\nPage 2 of 2"]])
+
+
+def test_a_page_identical_but_for_its_print_stamp_is_held() -> None:
+    got = _decide([f"Printed 11/09/2026 4:02 PM by records\n{MRI}\nPage 1 of 1"], _mri_window())
+    assert got == {1: (S.EXCLUDED, S.ALREADY)}
+
+
+def test_a_page_identical_but_for_one_added_negative_finding_is_read() -> None:
+    """The real shape (2026-11-17): every word of the added sentence but one
+    ("foci") is elsewhere in the window, so the old allowance of missing
+    words held the page. Now no token may be missing."""
+    page = MRI.replace("The labrum is intact.", f"The labrum is intact. {NEGATIVE}")
+    assert _decide([f"Printed 11/09/2026 4:02 PM by records\n{page}"], _mri_window())[1][0] == S.READ
+    one_word = MRI.replace("moderate tendinosis", "moderate diffuse tendinosis")  # one plain word more
+    assert _decide([one_word], _mri_window())[1][0] == S.READ
+
+
+def test_two_deliveries_joined_keep_each_exhibit_its_own_document() -> None:
+    both = S.Delivered.of_docs([_export_a()[:1]]) | S.Delivered.of_docs([_export_a()[1:]])
+    assert both.contained(_export_b()[1]) is None  # its window would span two exhibits
+    assert S.Delivered.of_docs([_export_a()]).contained(_export_b()[1]) is not None
+
+
 def test_an_undated_page_is_held_only_beside_a_held_page() -> None:
     """The delivered export broke the visit's body across two pages; the new
     export holds its header on one page and its whole undated body on the
@@ -253,6 +299,7 @@ def test_the_measuring_command_reports_held_pages_and_stray_lines(
     out = json.loads(capsys.readouterr().out)
     assert out["pages"]["decisions"] == {f"{S.EXCLUDED}: {S.ALREADY}": 3}
     assert out["pages"]["held_by_text"] == {"held by a run of delivered pages": 1}  # the page broken mid-visit
+    assert out["pages"]["held_by_text_tokens_absent_from_window"] == {"d2 p.2": 0}
     assert out["stray_citations"] == {
         "entries": 1,
         "citation_only_lines_before": 4,

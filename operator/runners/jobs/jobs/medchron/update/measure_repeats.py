@@ -6,8 +6,10 @@ $0: no model call, no write anywhere but stdout.
 `job_dir` is a COPY of a matter's job directory (the one holding
 ``delivered/``, ``text/`` and ``runs/<unit>/update/``). It reports, as JSON:
 
-* pages: every page decision over the new documents in reading order, and
-  how many pages only the text-window rule (``update/contained``) holds;
+* pages: every page decision over the new documents in reading order, how
+  many pages only the text-window rule (``update/contained``) holds, and for
+  each of those how many of its tokens, dates and clinical values the window
+  lacks (``contained.absent``: 0 by the rule; any other count exits 1);
 * stray citations: over the job's filed new entries (``update/new_entries.md``),
   how many lines are only a citation before and after ``uncited.join_stray``,
   and every entry whose numbers, words or cited exhibits the join would
@@ -24,7 +26,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from . import body as B, pageid as PI, pageid_io as PG, select as S
+from . import body as B, contained as CT, pageid as PI, pageid_io as PG, select as S
 from .uncited import cite_only, join_stray
 from .values import numbers
 
@@ -73,11 +75,24 @@ def pages_report(job: Path, ud: Path) -> dict[str, Any]:
 
     sizes = [(str(r["id"]), int(r.get("pages") or max(texts[str(r["id"])] or {0: ""}))) for r in rows]
     earlier, tally, why = S.Earlier(), Counter[str](), Counter[str]()
+    absent: dict[str, int] = {}
     for rid in PI.reading_order(sizes):
         image = PG.reasons(ident.pages.get(rid) or {}, texts[rid], text_of)
-        for d, reason in S.classify_new(texts[rid], dict(sizes)[rid], seen, earlier, image, tally).values():
+        held: dict[int, tuple[str, int, int, bool]] = {}
+        for d, reason in S.classify_new(texts[rid], dict(sizes)[rid], seen, earlier, image, tally, held).values():
             why[f"{d}: {reason}"] += 1
-    return {"documents": len(rows), "pages": sum(why.values()), "decisions": dict(why), "held_by_text": dict(tally)}
+        for page, (src, s, e, alone) in sorted(held.items()):
+            if alone:
+                pool = seen.pool if src == S.DELIVERED_SRC else earlier.pool
+                me = CT.facts(0, (texts[rid].get(page) or "").strip())
+                absent[f"{rid} p.{page}"] = CT.absent(me, pool.items[s:e])
+    return {
+        "documents": len(rows),
+        "pages": sum(why.values()),
+        "decisions": dict(why),
+        "held_by_text": dict(tally),
+        "held_by_text_tokens_absent_from_window": absent,
+    }
 
 
 def _words(e: str) -> Counter[str]:
@@ -110,7 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     ud = _unit_dir(a.job_dir, a.unit) / "update"
     out = {"pages": pages_report(a.job_dir, ud), "stray_citations": stray_report(ud)}
     print(json.dumps(out, indent=1))
-    return 1 if out["stray_citations"]["entries_whose_content_the_join_changes"] else 0
+    bad = any(out["pages"]["held_by_text_tokens_absent_from_window"].values())
+    return 1 if bad or out["stray_citations"]["entries_whose_content_the_join_changes"] else 0
 
 
 if __name__ == "__main__":
