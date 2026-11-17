@@ -377,6 +377,41 @@ def test_the_second_machines_morning_list_is_dispositioned_and_nothing_else_of_t
     assert [m["message_id"] for m in report.unaccounted] == [planted["message_id"]]
 
 
+#: The release twin took the lab mailbox from a decommissioned seat; its own
+#: audit ledger begins here (seam read, 2026-11-16). Nothing sent after this
+#: moment may be quieted by the inherited-history disposition.
+_TWIN_LEDGER_START = "2026-11-10T19:27:33Z"
+_TWIN_SLUG = "ap-staging"
+
+
+def _inherited_history():
+    with open(rec.DEFAULT_BASELINE_PATH, encoding="utf-8") as handle:
+        entries = json.load(handle)["dispositioned"]
+    return [e for e in entries if e.get("channel") == "msgraph" and e.get("reported_in") == 3990]
+
+
+def test_the_twins_inherited_mailbox_history_is_dispositioned_and_its_own_sends_are_not():
+    """ss#3990. The twin's mailbox carries 31 sends from the seat it replaced,
+    audited on that seat's ledger, which the seam no longer reaches. They are
+    dispositioned by message id; every one predates the twin's own ledger and
+    went to SMD, and a send from the twin's own life still raises a finding."""
+    history = _inherited_history()
+    assert len(history) == 31
+    twin_mailbox = next(s.mailbox for s in rec.msgraph_seats() if s.slug == _TWIN_SLUG)
+    assert {e["inbox"] for e in history} == {twin_mailbox}
+    assert all(rec._parse_ts(e["timestamp"]) < rec._parse_ts(_TWIN_LEDGER_START) for e in history)
+    assert {e["to"] for e in history} <= {"SMD's own (smd.services)", "SMD's own (smdopslab.onmicrosoft.com)"}
+    assert all(e["why"].strip() for e in history)
+
+    inherited = [_msg(e["message_id"], e["timestamp"]) for e in history]
+    fresh, already = rec.split_baselined(twin_mailbox, inherited, _shipped_baseline())
+    assert (fresh, already) == ([], 31)
+    # THE FALSIFIER: an unaudited send from the twin's own life still fires.
+    planted = _msg("<planted-twin-send@lab.example.test>", "2026-11-17T09:00:00Z")
+    fresh, already = rec.split_baselined(twin_mailbox, inherited + [planted], _shipped_baseline())
+    assert [m["message_id"] for m in fresh] == [planted["message_id"]] and already == 31
+
+
 def test_the_baseline_cannot_reach_across_inboxes():
     """An entry naming the pilot inbox says nothing about anyone else's mail."""
     fresh, already = rec.split_baselined("ashton-price@agentmail.to", _captured_sends(), _shipped_baseline())
