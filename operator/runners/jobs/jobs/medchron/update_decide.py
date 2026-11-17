@@ -23,8 +23,8 @@ The corrections file is ``{"corrections": [{"old": "...", "new": "..."}]}``:
 each ``old`` is text of an ADDED entry exactly as the held document has it
 (once in the document, never in the delivered chronology), each ``new`` keeps
 its citations, its paragraphs and the entry's date line. Every open finding
-must sit on an entry a correction touches, or nothing is written. What is
-written, in one act:
+must sit on an entry a correction touches, or be closed (below), or nothing
+is written. What is written, in one act:
 
 * the corrected document (and the same edit in ``entries_scoped_final.md``
   when the text is there verbatim);
@@ -40,8 +40,40 @@ written, in one act:
   paid read of the corrected chronology) and the upload with its read-back
   run as on any job.
 
-The corrections file is deleted once applied: it carries record text, and the
-job's own directory holds the record from then on.
+CLOSURES (2026-11-16). An update can also hold on findings the REVIEWER got
+wrong: class 2 "omitted content" where the content it asks for is already
+composed, in a delivered entry from another exhibit copy of the same visit,
+in another added entry citing a different filed copy, or in a different added
+entry than the one the finding is anchored to. Rewording an unrelated entry
+to satisfy the gate would be wrong, so the same file takes closures beside,
+or instead of, corrections::
+
+    {"corrections": [],
+     "closures": [{"anchor": "N7", "exhibit": 9, "page": 114,
+                   "composed_in": {"added": "N89"}, "why": "..."},
+                  {"anchor": "N12", "exhibit": 9, "page": 120,
+                   "composed_in": {"delivered": "08/27/2026"}, "why": "..."}]}
+
+A closure names ONE open finding by anchor, exhibit and page: ``N7`` matches
+the finding ``N7`` or a claim of it (``N7.c2``), ``N7.c2`` only itself, and
+the three together must match exactly one open finding, never one another
+closure took. ``composed_in`` is where the content already is, one key:
+``{"added": "N<k>"}``, an added entry of the held document anchored as the
+review anchors them (``review_repair.anchor_entries``), or
+``{"delivered": "<text>"}``, text holding an MM/DD/YYYY date that occurs
+verbatim in the delivered chronology (``update/base.md``), such as the
+delivered entry's date line. ``why`` is required. A closure changes no
+document text: with closures only, the document, its sha and the audit rows
+are untouched. Each closed finding is kept in the record's SMD round with
+``outcome`` ``CLOSED`` and a ``closure`` field (where, why, by, source);
+proof 10 reads only ``applied`` findings, so a closure names no value. Each
+closure also gets one plain NOTE line in the attorney's notes file, through
+the record the rule-settled findings use (``settled_by_rule`` and
+``update_review_settle.SETTLED``, read by ``update_review_settle.notes``).
+
+The decisions file is deleted once applied: it carries record text, and the
+job's own directory holds the record from then on. ``--decisions`` is the
+same flag as ``--corrections``.
 """
 
 from __future__ import annotations
@@ -49,6 +81,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -61,6 +94,9 @@ from ..resume import MARKER_PREFIX
 #: prefix (``workspace_broker.medchron_verbs.UPDATE_REVIEW_HOLD_PREFIX``).
 HOLD_PREFIX = "update_held: the independent review of the update"
 RECORD = "review_repair.json"
+#: the outcome of an open finding SMD closed: its content is already composed
+CLOSED = "closed by SMD: already composed"
+_MDY = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
 
 
 class Refused(RuntimeError):
@@ -71,11 +107,9 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def load_corrections(path: Path) -> list[dict[str, str]]:
-    body = json.loads(path.read_text(encoding="utf-8"))
-    rows = body.get("corrections") if isinstance(body, dict) else body
-    if not isinstance(rows, list) or not rows:
-        raise Refused("the corrections file holds no corrections")
+def _corrections(rows: object) -> list[dict[str, str]]:
+    if not isinstance(rows, list):
+        raise Refused("the corrections in the file are not a list")
     out = []
     for i, r in enumerate(rows):
         old, new = (r.get("old"), r.get("new")) if isinstance(r, dict) else (None, None)
@@ -85,6 +119,47 @@ def load_corrections(path: Path) -> list[dict[str, str]]:
             raise Refused(f"correction {i + 1}: new is the same as old")
         out.append({"old": old, "new": new})
     return out
+
+
+def _closure(i: int, r: object) -> dict[str, Any]:
+    from .update import review_repair as RR
+
+    row: dict[str, Any] = r if isinstance(r, dict) else {}
+    anchor, why, where = RR._str(row.get("anchor")), RR._str(row.get("why")), row.get("composed_in")
+    exhibit, page = RR._int(row.get("exhibit")), RR._int(row.get("page"))
+    if not anchor or exhibit is None or page is None:
+        raise Refused(f"closure {i + 1}: anchor, exhibit and page must name the open finding")
+    if not why:
+        raise Refused(f"closure {i + 1}: why is required")
+    kind = next(iter(where), "") if isinstance(where, dict) and len(where) == 1 else ""
+    text = RR._str(where.get(kind)) if isinstance(where, dict) and kind in ("added", "delivered") else ""
+    if not text:
+        raise Refused(f'closure {i + 1}: composed_in must be {{"added": "N<k>"}} or {{"delivered": "<date line>"}}')
+    return {"anchor": anchor, "exhibit": exhibit, "page": page, "composed_in": {kind: text}, "why": why}
+
+
+def load_decisions(path: Path) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    """(corrections, closures) from the decisions file; at least one of either."""
+    body = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(body, list):
+        body = {"corrections": body}
+    if not isinstance(body, dict):
+        raise Refused("the decisions file is not a JSON object")
+    corrections = _corrections(body.get("corrections") or [])
+    rows = body.get("closures") or []
+    if not isinstance(rows, list):
+        raise Refused("the closures in the file are not a list")
+    closures = [_closure(i, r) for i, r in enumerate(rows)]
+    if not corrections and not closures:
+        raise Refused("the decisions file holds no corrections and no closures")
+    return corrections, closures
+
+
+def load_corrections(path: Path) -> list[dict[str, str]]:
+    corrections, _ = load_decisions(path)
+    if not corrections:
+        raise Refused("the corrections file holds no corrections")
+    return corrections
 
 
 def _entry_index(entries: list[str], old: str, n: int) -> int:
@@ -126,12 +201,61 @@ def _edit(md: str, base: str, entries: list[str], corrections: list[dict[str, st
     return md, touched, sorted(set(removed))
 
 
-def plan(
-    d: Any, job_id: str, *, corrections: list[dict[str, str]], by: str, source: str, reason: str
-) -> dict[str, Any]:
-    """Every check, and what would be written. Raises Refused."""
-    if not by.strip() or not source.strip() or not reason.strip():
-        raise Refused("--by (who decided), --source (where it was read) and --reason are all required")
+def _matches(f: dict[str, Any], c: dict[str, Any]) -> bool:
+    from .update import review_repair as RR
+
+    anchor = str(f.get("anchor") or "")
+    same = anchor == c["anchor"] or ("." not in c["anchor"] and anchor.split(".", 1)[0] == c["anchor"])
+    return same and RR._int(f.get("exhibit")) == c["exhibit"] and RR._int(f.get("page")) == c["page"]
+
+
+def _where(c: dict[str, Any], entries: list[str], base: str, n: int) -> str:
+    """Where the closed content is composed, in the attorney's words. Refused
+    when the place named is not there."""
+    kind, text = next(iter(c["composed_in"].items()))
+    if kind == "added":
+        k = _anchor_index(text)
+        if "." in text or k is None or not 0 <= k < len(entries):
+            raise Refused(f"closure {n}: {text} is not an added entry of the held document")
+        lines = [ln.strip() for ln in entries[k].split("\n")[:2] if ln.strip()]
+        return "the entry for " + ", ".join(lines)
+    if not _MDY.search(text) or text not in base:
+        raise Refused(f"closure {n}: the delivered chronology does not hold {text[:80]!r} with its date")
+    return "the delivered entry for " + " ".join(text.split())
+
+
+def _close(
+    rec: dict[str, Any], closures: list[dict[str, Any]], entries: list[str], base: str, touched: set[int]
+) -> list[dict[str, Any]]:
+    """Each closure with its one open finding and where its content is.
+    Refused when a closure matches none or several, two close one finding,
+    or an open finding is neither corrected nor closed."""
+    taken: dict[int, int] = {}
+    out = []
+    for n, c in enumerate(closures, 1):
+        hits = [i for i, f in enumerate(rec["open"]) if isinstance(f, dict) and _matches(f, c)]
+        if len(hits) != 1:
+            raise Refused(
+                f"closure {n}: {c['anchor']} Exhibit {c['exhibit']} p. {c['page']} matches "
+                f"{len(hits)} open findings, not one"
+            )
+        if hits[0] in taken:
+            raise Refused(f"closures {taken[hits[0]]} and {n} close the same open finding")
+        taken[hits[0]] = n
+        out.append({**c, "finding": hits[0], "where": _where(c, entries, base, n)})
+    uncovered = [
+        f"entry {f.get('anchor') if isinstance(f, dict) else '?'}"
+        for i, f in enumerate(rec["open"])
+        if i not in taken and (not isinstance(f, dict) or _anchor_index(str(f.get("anchor") or "")) not in touched)
+    ]
+    if uncovered:
+        raise Refused(
+            f"open findings no correction touches or closure closes: {', '.join(uncovered)}; nothing was written"
+        )
+    return out
+
+
+def _held(d: Any, job_id: str) -> None:
     row = d.broker.status(job_id)
     if row is None:
         raise Refused(f"there is no chronology job {job_id}")
@@ -144,6 +268,24 @@ def plan(
         raise Refused(f"the daemon does not hold job {job_id}; it may be running already. Nothing was written.")
     if (d.queue / f"{job_id}.json").exists() or (d.queue / f"{MARKER_PREFIX}{job_id}.json").exists():
         raise Refused(f"job {job_id} is already queued to run; nothing was written")
+
+
+def plan(
+    d: Any,
+    job_id: str,
+    *,
+    corrections: list[dict[str, str]],
+    by: str,
+    source: str,
+    reason: str,
+    closures: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Every check, and what would be written. Raises Refused."""
+    if not by.strip() or not source.strip() or not reason.strip():
+        raise Refused("--by (who decided), --source (where it was read) and --reason are all required")
+    if not corrections and not closures:
+        raise Refused("nothing to record: no correction and no closure")
+    _held(d, job_id)
     from . import job as job_mod
     from .audit import claims as CL
     from .audit.page_text import exhibit_paths
@@ -164,20 +306,15 @@ def plan(
         raise Refused(f"the update review record of {job_id} is {rec.get('status')!r}, not held with open findings")
     if rec.get("doc_sha_out") != _sha(md):
         raise Refused("the document changed since the review held on it; correct the document the review read")
-    entries = B.entries_of(md)[1]
-    new_md, touched, removed = _edit(md, base_p.read_text(encoding="utf-8"), list(entries), corrections)
+    entries, base = B.entries_of(md)[1], base_p.read_text(encoding="utf-8")
+    new_md, touched, removed = _edit(md, base, list(entries), corrections)
     if len(B.entries_of(new_md)[1]) != len(entries):
         raise Refused("the corrections change how many entries the document holds")
-    uncovered = [
-        f"entry {f.get('anchor')}"
-        for f in rec["open"]
-        if not isinstance(f, dict) or _anchor_index(str(f.get("anchor") or "")) not in touched
-    ]
-    if uncovered:
-        raise Refused(f"open findings no correction touches: {', '.join(uncovered)}; nothing was written")
+    closed = _close(rec, list(closures or []), entries, base, touched)
     keep = set(exhibit_paths(slug_dir / "out" / unit))
     old_keys = {c["key"] for c in CL.extract_claims(CL.body_of(md), keep)}
     attested = [c for c in CL.extract_claims(CL.body_of(new_md), keep) if c["key"] not in old_keys]
+    act = "corrected" if corrections else "closed"
     return {
         "job_id": job_id,
         "unit": unit,
@@ -185,25 +322,23 @@ def plan(
         "doc": new_md,
         "doc_sha": _sha(new_md),
         "corrections": corrections,
+        "closures": closed,
         "attested": attested,
         "removed": removed,
         "decision": {"by": by.strip(), "source": source.strip(), "reason": reason.strip()[:500]},
         "marker": {
             "job_id": job_id,
-            "reason": f"update review finding corrected by SMD ({by.strip()}, {source.strip()})"[:500],
+            "reason": f"update review finding {act} by SMD ({by.strip()}, {source.strip()})"[:500],
             "redo": [],
         },
     }
 
 
-def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> None:
+def _write_corrections(rd: Path, slug_dir: Path, p: dict[str, Any], who: str, at: str) -> list[Path]:
+    """The corrected document, its side copy and the SMD-attested audit rows."""
     from .audit import claims as CL
-    from ..stages import update_review as UR
 
-    slug_dir, unit, dec = Path(p["slug_dir"]), p["unit"], p["decision"]
-    rd = slug_dir / "runs" / unit
-    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    who = f"{dec['by']}, {dec['source']}"
+    unit, dec = p["unit"], p["decision"]
     doc = rd / "final-chronology.md"
     doc.write_text(p["doc"], encoding="utf-8")
     written = [doc]
@@ -235,17 +370,61 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
             },
         )
     written.append(results)
+    return written
+
+
+def _close_record(rec: dict[str, Any], p: dict[str, Any], who: str, at: str) -> list[dict[str, str]]:
+    """The review record settled by SMD's round; the attorney's note rows."""
+    dec = p["decision"]
+    closures = {c["finding"]: c for c in p["closures"]}
+    findings, notes = [], []
+    for i, f in enumerate(rec.get("open") or []):
+        c = closures.get(i)
+        if c is None:
+            f["outcome"] = f"corrected by SMD ({who})"[:400]
+            first = not any(x.get("outcome") == "applied" for x in findings)
+            findings.append({**f, "outcome": "applied", "removed": p["removed"] if first else []})
+            continue
+        f["outcome"] = f"{CLOSED} in {c['where']} ({who})"[:400]
+        closure = {"composed_in": c["composed_in"], "where": c["where"], "why": c["why"][:400], "by": dec["by"]}
+        findings.append({**f, "outcome": CLOSED, "removed": [], "closure": {**closure, "source": dec["source"]}})
+        ask = f"Exhibit {c['exhibit']} p. {c['page']}"
+        notes.append(
+            {"grade": "NOTE", "finding": f"the review asked for content from {ask}; it is already in {c['where']}"}
+        )
+    rec["rounds"] = list(rec.get("rounds") or []) + [
+        {
+            "round": "smd",
+            "kind": "smd_correction",
+            **dec,
+            "at": at,
+            "attested": len(p["attested"]),
+            "closed": len(p["closures"]),
+            "findings": findings,
+        }
+    ]
+    rec["smd_corrected"] = {**dec, "at": at, "corrections": len(p["corrections"]), "closures": len(p["closures"])}
+    rec["status"], rec["open"], rec["doc_sha_out"] = "clean", [], p["doc_sha"]
+    return notes
+
+
+def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> None:
+    from ..stages import update_review as UR, update_review_settle as URS
+
+    slug_dir, unit, dec = Path(p["slug_dir"]), p["unit"], p["decision"]
+    rd = slug_dir / "runs" / unit
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    who = f"{dec['by']}, {dec['source']}"
+    # A closure changes no text: with closures only, the document and the audit rows are untouched.
+    written = _write_corrections(rd, slug_dir, p, who, at) if p["corrections"] else []
     record = rd / "update" / UR.RECORD
     rec = json.loads(record.read_text(encoding="utf-8"))
-    closed = []
-    for f in rec.get("open") or []:
-        f["outcome"] = f"corrected by SMD ({who})"[:400]
-        closed.append({**f, "outcome": "applied", "removed": p["removed"] if not closed else []})
-    rec["rounds"] = list(rec.get("rounds") or []) + [
-        {"round": "smd", "kind": "smd_correction", **dec, "at": at, "attested": len(p["attested"]), "findings": closed}
-    ]
-    rec["smd_corrected"] = {**dec, "at": at, "corrections": len(p["corrections"])}
-    rec["status"], rec["open"], rec["doc_sha_out"] = "clean", [], p["doc_sha"]
+    notes = _close_record(rec, p, who, at)
+    if notes:  # the attorney's notes file reads these as it reads the rule-settled findings
+        rec["settled_by_rule"] = list(rec.get("settled_by_rule") or []) + notes
+        settled = slug_dir / "out" / unit / URS.SETTLED
+        settled.write_text(json.dumps(rec["settled_by_rule"], indent=1), encoding="utf-8")
+        written.append(settled)
     record.write_text(json.dumps(rec, indent=1), encoding="utf-8")
     written.append(record)
     for f in written:
@@ -256,10 +435,16 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
         corrections_file.unlink(missing_ok=True)
 
 
+_SHAPE = (
+    '{"corrections": [{"old": ..., "new": ...}], "closures": [{"anchor": "N7", "exhibit": 9, "page": 114, '
+    '"composed_in": {"added": "N89"} or {"delivered": "<date line>"}, "why": ...}]}; either list may be empty, not both'
+)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="jobs.medchron.update_decide", description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("job_id")
-    ap.add_argument("--corrections", required=True, type=Path, help='{"corrections": [{"old": ..., "new": ...}]}')
+    ap.add_argument("--corrections", "--decisions", dest="corrections", required=True, type=Path, help=_SHAPE)
     ap.add_argument("--by", required=True, help="who decided (an email address)")
     ap.add_argument("--source", required=True, help="where the page was read (a vfy_ id)")
     ap.add_argument("--reason", required=True, help="what the page says that the held text got wrong, in brief")
@@ -269,17 +454,19 @@ def main(argv: list[str] | None = None) -> int:
 
     d = lane_mod.build()
     try:
-        p = plan(d, a.job_id, corrections=load_corrections(a.corrections), by=a.by, source=a.source, reason=a.reason)
+        corrections, closures = load_decisions(a.corrections)
+        p = plan(d, a.job_id, corrections=corrections, closures=closures, by=a.by, source=a.source, reason=a.reason)
     except (Refused, OSError, ValueError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
-    # Counts only: the corrected text stays in the job's files.
-    summary = {"corrections": len(p["corrections"]), "sentences_attested": len(p["attested"])}
-    print(json.dumps({"dry_run": a.dry_run, **summary, "values_named": len(p["removed"])}, indent=1))
+    # Counts only: the corrected text and the closures' words stay in the job's files.
+    summary = {"corrections": len(p["corrections"]), "closures": len(p["closures"])}
+    summary |= {"sentences_attested": len(p["attested"]), "values_named": len(p["removed"])}
+    print(json.dumps({"dry_run": a.dry_run, **summary}, indent=1))
     if a.dry_run:
         return 0
     apply(d, p, a.corrections)
-    print(f"recorded SMD's correction on {a.job_id}; the daemon re-queues it on its next tick")
+    print(f"recorded SMD's decision on {a.job_id}; the daemon re-queues it on its next tick")
     return 0
 
 

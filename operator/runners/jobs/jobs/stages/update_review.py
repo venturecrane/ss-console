@@ -470,8 +470,8 @@ def _reuse(sr: StageRun, rec: dict[str, Any], md: str) -> int | None:
     if rec.get("doc_sha_out") != _sha(md):
         return None
     if rec.get("status") == "clean":
-        if rec.get("smd_corrected"):  # ``jobs.medchron.update_decide``: SMD corrected what the review held on
-            sr.log("update review: SMD corrected the held finding(s) against the pages; not paid again")
+        if rec.get("smd_corrected"):  # ``jobs.medchron.update_decide``: SMD corrected or closed what it held on
+            sr.log("update review: SMD corrected or closed the held finding(s) against the pages; not paid again")
         else:
             sr.log("update review: the audit document is the one already reviewed clean; not paid again")
         return 0
