@@ -119,6 +119,8 @@ class Contract:
     terminal_tool_calls: dict[str, dict]  # state -> {action_class, outcome}
     classes: dict[str, dict]  # routine class -> {accepts, window_seconds}
     skill_outbound: dict[str, str]  # skill -> derived | none
+    #: state -> (wake metadata that must all match, sha256 hex of each silence answer)
+    silent_turns: dict[str, tuple[dict, frozenset[str]]] = field(default_factory=dict)
 
     def window_for(self, routine_class: str) -> int:
         entry = self.classes.get(routine_class) or {}
@@ -143,11 +145,19 @@ def load_contract(
 
     terminal_events: dict[str, str] = {}
     terminal_tool_calls: dict[str, dict] = {}
+    silent_turns: dict[str, tuple[dict, frozenset[str]]] = {}
     for state, entry in (spec.get("terminal_states") or {}).items():
         for event in entry.get("events") or []:
             terminal_events[event] = state
         if entry.get("tool_call"):
             terminal_tool_calls[state] = entry["tool_call"]
+        if entry.get("silent_turn"):
+            matcher = entry["silent_turn"]
+            wake, responses = matcher.get("wake_metadata") or {}, matcher.get("responses") or []
+            if not wake or not responses:
+                raise ReconcileError(f"terminal state {state}: silent_turn needs wake_metadata and responses")
+            digests = frozenset(hashlib.sha256(str(r).encode("utf-8")).hexdigest() for r in responses)
+            silent_turns[state] = (dict(wake), digests)
 
     skill_outbound = {
         skill: str((entry or {}).get("outbound")) for skill, entry in (bindings.get("skill_bindings") or {}).items()
@@ -161,6 +171,7 @@ def load_contract(
         terminal_tool_calls=terminal_tool_calls,
         classes=spec.get("routine_classes") or {},
         skill_outbound=skill_outbound,
+        silent_turns=silent_turns,
     )
 
 
@@ -212,6 +223,9 @@ class Obligation:
     #: One of the SENDER_* classes for inbound runs; None for every other
     #: trigger kind, because a cron wake or a bare hold has no sender.
     sender_class: Optional[str] = None
+    #: A scheduled run's own wake row metadata (what its pre_run recorded), for
+    #: the ``nothing_owed`` matcher; empty for every other trigger kind.
+    wake_metadata: dict = field(default_factory=dict)
 
     @property
     def effective_open(self) -> datetime:
@@ -273,6 +287,7 @@ def _obligation_from_row(contract: Contract, slug: str, row: dict, kind: str) ->
         row_id=row.get("id"),
         sender_key=key if isinstance(key, str) and key else None,
         sender_key_via="row" if isinstance(key, str) and key else None,
+        wake_metadata=metadata_of(row) if kind == "scheduled" else {},
     )
 
 
@@ -381,6 +396,8 @@ def resolve(
             obligation.closed_at = ts
             break
 
+        if not obligation.closed_by:
+            _close_if_nothing_owed(contract, obligation, [(ts, row) for _i, ts, row, _s in in_window])
         if obligation.closed_by:
             continue
         if now < deadline:
@@ -388,6 +405,28 @@ def resolve(
             continue
         obligation.shape = _finding_shape(obligation)
     return obligations
+
+
+def _close_if_nothing_owed(contract: Contract, obligation: Obligation, in_window: list[tuple[datetime, dict]]) -> None:
+    """Close a scheduled run that owed nobody a message by its own wake row
+    and whose turn answered with Hermes' silence (contract ``nothing_owed``).
+    A run with a hold inside it is owed to a person and never closes here."""
+    if obligation.trigger_kind != "scheduled" or obligation.last_hold_at is not None:
+        return
+    for state, (wake, digests) in contract.silent_turns.items():
+        if not contract.accepts(obligation.routine_class, state):
+            continue
+        if any(obligation.wake_metadata.get(k) != v for k, v in wake.items()):
+            continue
+        for ts, row in in_window:
+            if (
+                row.get("action_type") == "LLM_TURN_COMPLETED"
+                and (row.get("skill_name") or None) == (obligation.skill_name or None)
+                and str(row.get("output_digest") or "") in digests
+            ):
+                obligation.closed_by = state
+                obligation.closed_at = ts
+                return
 
 
 def _finding_shape(obligation: Obligation) -> str:

@@ -65,6 +65,7 @@ _FIELDS = {
     "firm_inputs",
     "firm_module",
     "broker_firm_copy",
+    "waits_for",
 }
 _QUEUE_DIRS = ("queue_dir", "jobs_dir", "child_pid")
 _TS_KEY = re.compile(r"\A[A-Za-z_$][A-Za-z0-9_$]*\Z")
@@ -86,6 +87,7 @@ class Lane:
     firm_inputs: str | None = None
     firm_module: str | None = None
     broker_firm_copy: bool = False
+    waits_for: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -134,6 +136,11 @@ def _lane(name: object, spec: object) -> Lane:
         raise ValueError(f"job lanes: {name}: firm_inputs and firm_module come together")
     if spec.get("broker_firm_copy") and firm_inputs is None:
         raise ValueError(f"job lanes: {name}: broker_firm_copy needs firm_inputs")
+    waits_for = spec.get("waits_for") or []
+    if not isinstance(waits_for, list) or not all(isinstance(w, str) and _LANE.match(w) for w in waits_for):
+        raise ValueError(f"job lanes: {name}.waits_for must be a list of lane names")
+    if waits_for and not queued:
+        raise ValueError(f"job lanes: {name}: only a queued lane waits for another lane's child")
     wake_word = _str(name, spec, "wake_word", _WORD)
     if spec.get("scheduled") and wake_word is None:
         raise ValueError(f"job lanes: {name}: a scheduled lane wakes a turn, so it needs a wake_word")
@@ -152,6 +159,7 @@ def _lane(name: object, spec: object) -> Lane:
         firm_inputs=firm_inputs,
         firm_module=firm_module,
         broker_firm_copy=spec.get("broker_firm_copy") is True,
+        waits_for=tuple(waits_for),
     )
 
 
@@ -171,6 +179,11 @@ def load(path: Path) -> Declaration:
         values = [getattr(lane, column) for lane in lanes if getattr(lane, column) is not None]
         if len(values) != len(set(values)) and column != "skill":
             raise ValueError(f"{path}: two lanes share a {column}")
+    queued = {lane.name for lane in lanes if lane.queued}
+    for lane in lanes:
+        wrong = [w for w in lane.waits_for if w not in queued or w == lane.name]
+        if wrong or len(set(lane.waits_for)) != len(lane.waits_for):
+            raise ValueError(f"{path}: {lane.name}.waits_for must name other queued lanes, once each")
     if set(extras) & set(names):
         raise ValueError(f"{path}: a firm_input_extras name is a lane")
     return Declaration(lanes=lanes, firm_input_extras=tuple(extras))
@@ -222,6 +235,11 @@ def _run_constants(lanes: tuple[Lane, ...]) -> list[tuple[str, str, object]]:
             "WAKE_WORD_JOB_KIND",
             "The word a completion wake uses -> the job kind it names.",
             {lane.wake_word: f"{lane.name}_job" for lane in lanes if lane.wake_word},
+        ),
+        (
+            "LANE_WAITS_FOR",
+            "Queued lane -> the lanes whose running child keeps its next job from starting.",
+            {lane.name: lane.waits_for for lane in lanes if lane.waits_for},
         ),
         (
             "SCHEDULED_JOB_KINDS",
@@ -284,11 +302,18 @@ def _header(comment: str) -> str:
     )
 
 
+def _py_item(value: object) -> str:
+    """One dict value: a string, or a tuple of strings (``LANE_WAITS_FOR``)."""
+    if isinstance(value, tuple):
+        return "(" + ", ".join(f'"{v}"' for v in value) + ("," if len(value) == 1 else "") + ")"
+    return f'"{value}"'
+
+
 def _py_value(value: object) -> str:
     if isinstance(value, dict):
         if not value:
             return "{}"
-        body = "".join(f'    "{k}": "{v}",\n' for k, v in value.items())
+        body = "".join(f'    "{k}": {_py_item(v)},\n' for k, v in value.items())
         return "{\n" + body + "}"
     items = list(value)  # type: ignore[arg-type]
     if not items:
@@ -307,7 +332,11 @@ def render_python(decl: Declaration) -> str:
         "",
     ]
     for name, comment, value in constants(decl):
-        kind = "dict[str, str]" if isinstance(value, dict) else "tuple[str, ...]"
+        if isinstance(value, dict):
+            nested = any(isinstance(v, tuple) for v in value.values())
+            kind = "dict[str, tuple[str, ...]]" if nested else "dict[str, str]"
+        else:
+            kind = "tuple[str, ...]"
         lines += [f"#: {comment}", f"{name}: {kind} = {_py_value(value)}", ""]
     return "\n".join(lines)
 
@@ -350,7 +379,7 @@ def render_shell(decl: Declaration) -> str:
         lines.append(f"# {comment}")
         if isinstance(value, dict):
             fn = f"smd_{name.lower()}"
-            arms = " ".join(f"{k}) echo '{v}' ;;" for k, v in value.items())
+            arms = " ".join(f"{k}) echo '{' '.join(v) if isinstance(v, tuple) else v}' ;;" for k, v in value.items())
             lines.append(f'{fn}() {{ case "$1" in {arms} *) return 1 ;; esac; }}')
             lines.append(f"SMD_{name}_KEYS='{' '.join(value)}'")
         else:

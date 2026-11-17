@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from . import spend, verdict as verdict_mod
+from . import job_lanes, spend, verdict as verdict_mod
 from .broker_client import BrokerClient, BrokerError
 from .firm_inputs import pin_env
 from .matter import store as page_store_mod
@@ -57,8 +57,9 @@ YIELD_ENV = "JOBS_CASEFILE_YIELD_PIDS"
 MEMORY_ENV = "SMD_CASEFILE_MEMORY_MAX_BYTES"
 DEFAULT_MEMORY = 1024 * 1024 * 1024
 SKILL = "case-file-manager"
-#: A job does not START while any of these is live.
-BUSY_PIDS = ("demand-child.pid", "drafting-child.pid", "child.pid", "litigation-child.pid", "records-child.pid")
+#: A job does not START while any of these is live: declared once as
+#: ``waits_for`` in operator/contracts/job-lanes.yaml (work-health reads it).
+BUSY_PIDS = tuple(job_lanes.LANE_CHILD_PID[lane] for lane in job_lanes.LANE_WAITS_FOR["casefile"])
 #: A running job waits between matters while any of these is live: a client waiting.
 YIELD_PIDS = ("demand-child.pid", "drafting-child.pid", "child.pid")
 BUSY_RETRY_SECONDS = 30.0

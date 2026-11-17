@@ -69,7 +69,7 @@ The one exception is a held demand: the requester is told it has not been drafte
 
 If a person writes again in the thread of a held job, SMD receives a request notice with their words, because the Operator cannot record a decision on a held job itself.
 
-An hourly health check watches job outcomes and flags runs that failed, were held or stalled. It covers the six kinds of job that serve the law-firm pack.
+An hourly health check watches job outcomes and flags runs that failed, were held or stalled. It covers all seven kinds of queued job. A job waiting in its queue behind another kind of job that must finish first is waiting, not stalled.
 
 ## Rehearsals and proof runs
 

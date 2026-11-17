@@ -47,6 +47,9 @@
 #                    (<lane>-firm.yaml) or a directory (<lane>/<lane>-firm.yaml)
 #   firm_module      the runner module whose validate() judges those inputs
 #   broker_firm_copy the applier also writes <lane>-broker-firm.yaml for the broker
+#   waits_for        queued lanes whose running child keeps this lane's next job
+#                    from starting (the runner's BUSY_PIDS, from their child_pid);
+#                    work-health does not call a job queued behind one stuck
 #
 # firm_input_extras: firm inputs that are not job lanes (the attorney roster).
 # ============================================================================
@@ -105,6 +108,7 @@ lanes:
     firm_inputs: dir
     firm_module: jobs.litigation.firm
     broker_firm_copy: true
+    waits_for: [demand, drafting, casefile, records]
 
   casefile:
     skill: case-file-manager
@@ -120,6 +124,7 @@ lanes:
     firm_inputs: dir
     firm_module: jobs.casefile.firm
     broker_firm_copy: true
+    waits_for: [demand, drafting, medchron, litigation, records]
 
   negotiation:
     skill: negotiation-watch
@@ -131,6 +136,7 @@ lanes:
     scheduled: true
     email_label: negotiation
     audit_prefix: NEGOTIATION
+    waits_for: [demand, drafting, casefile, records]
 
   note:
     skill: smd-note
@@ -144,9 +150,11 @@ lanes:
     jobs_dir: records-jobs
     child_pid: records-child.pid
     request_card: true
+    audit_prefix: RECORDS
     firm_inputs: dir
     firm_module: jobs.records.firm
     broker_firm_copy: true
+    waits_for: [demand, drafting, medchron, litigation, casefile]
 
 firm_input_extras:
   - attorneys

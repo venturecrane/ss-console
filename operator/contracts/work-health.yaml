@@ -101,3 +101,12 @@ lanes:
     label: medical chronology
     queue_minutes: 30
     run_minutes: 720
+  # Matter records reads a matter's files to answer a records request, page by
+  # page like the case file lane, so it starts at the case file lane's limits
+  # and is re-set from its first month of runs. Its REVIEW state (the reply is
+  # waiting on SMD's review) is not graded here: the lane's own four-hour
+  # review alert reports it (runners/jobs/jobs/records_lane.py).
+  records:
+    label: matter records
+    queue_minutes: 15
+    run_minutes: 360

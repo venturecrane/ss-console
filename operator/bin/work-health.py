@@ -44,13 +44,15 @@ from typing import Optional
 
 import yaml
 
-from bin.lib import console_d1, msgraph_channel, seam_pull
+from bin.lib import console_d1, msgraph_channel, seam_pull, transient_http
 from bin.lib import work_health as wh
 from bin.lib import work_health_auth as auth
+from bin.lib import work_health_boot as boot
 from bin.lib import work_health_casefile as casefile_wh
 from bin.lib import work_health_keeper as keeper_wh
 from bin.lib import work_health_mail as mail
 from bin.lib import work_health_page_store as page_store_wh
+from bin.lib import work_health_proof as proof_wh
 from bin.lib import work_health_sources as src
 from bin.lib import seat_config
 
@@ -230,27 +232,75 @@ def graph_check(slug: str) -> tuple[Optional[str], Optional[str], Optional[str]]
     return seat.mailbox, None, None
 
 
-def _seat_ledger(slug: str, cfg: wh.Config, now: datetime) -> tuple[Optional[list[dict]], Optional[wh.Item]]:
-    """The seat's ledger window, or the 'unreadable' item that replaces it."""
+class MachineWatch:
+    """The seat's Machine health while a failed read waits (work_health_boot).
+
+    Fly's machine list where the fly CLI is (smd-ops); elsewhere (the GitHub
+    Actions backstop) the seam answering a first page is the health check."""
+
+    def __init__(self, slug: str, client) -> None:
+        self.slug = slug
+        self.client = client
+        self.state = boot.MachineState(None)
+
+    def passing(self) -> Optional[bool]:
+        machines, _why = keeper_wh.read_machines(self.slug, CUSTOMERS.parents[1])
+        if machines is not None:
+            self.state = boot.machine_state(machines)
+            return self.state.passing
+        try:
+            self.client.read_page("audit_export")
+        except Exception:  # noqa: BLE001 - any failure is "not answering yet"
+            return False
+        return True
+
+
+def _unreadable(slug: str, now: datetime, detail: str) -> wh.Item:
+    return wh.item(
+        slug,
+        "unreadable",
+        "ledger",
+        now,
+        f"Could not read this seat's work ledger ({detail}).",
+        "Nothing about this seat's requests or jobs is known until the read works; check the Machine and the seam.",
+    )
+
+
+def _seat_ledger(
+    slug: str,
+    cfg: wh.Config,
+    now: datetime,
+    *,
+    sleep=time.sleep,
+    clock=time.monotonic,
+    watch: Optional[MachineWatch] = None,
+) -> tuple[Optional[list[dict]], Optional[wh.Item]]:
+    """The seat's ledger window, or the 'unreadable' item that replaces it.
+
+    A timeout or a connection error is a Machine that may be restarting: wait
+    for its health check (up to work_health_boot.BOOT_WAIT), then read once
+    more, and list the seat only if that read fails too."""
     client = seam_pull.seam_client_from_env(slug)
+    since = now - timedelta(hours=cfg.ledger_lookback_hours)
+    if client is None:
+        return None, _unreadable(slug, now, "RuntimeError: no runtime-read credential in this environment")
     try:
-        if client is None:
-            raise RuntimeError("no runtime-read credential in this environment")
-        return read_ledger(client, now - timedelta(hours=cfg.ledger_lookback_hours)), None
+        return read_ledger(client, since), None
     except Exception as exc:  # noqa: BLE001 - an unreadable seat is an item, never all-clear
-        return None, wh.item(
-            slug,
-            "unreadable",
-            "ledger",
-            now,
-            f"Could not read this seat's work ledger ({type(exc).__name__}: {str(exc)[:160]}).",
-            "Nothing about this seat's requests or jobs is known until the read works; check the Machine and the seam.",
-        )
+        if not transient_http.is_transient(exc):
+            return None, _unreadable(slug, now, f"{type(exc).__name__}: {str(exc)[:160]}")
+    watch = watch or MachineWatch(slug, client)
+    waited = boot.wait_for_health(watch.passing, sleep=sleep, clock=clock)
+    try:
+        return read_ledger(client, since), None
+    except Exception as exc:  # noqa: BLE001 - an unreadable seat is an item, never all-clear
+        later = now + timedelta(seconds=waited)
+        return None, _unreadable(slug, now, boot.unreadable_detail(exc, waited, watch.state, later))
 
 
-def _graph_items(slug: str, now: datetime) -> list[wh.Item]:
+def _graph_items(slug: str, now: datetime, status: Optional[dict] = None) -> list[wh.Item]:
     mailbox, error, unchecked = graph_check(slug)
-    items = src.graph_probe_item(slug, mailbox or "", error, now)
+    items = src.graph_probe_item(slug, mailbox or "", error, now, src.seat_mail_connection_ok(status))
     if unchecked:
         items.append(
             wh.item(
@@ -276,7 +326,10 @@ def _operator_items(
     closed = wh.load_closed()
     items = wh.request_items(slug, rows, cfg, now, closed)
     items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
-    items += src.delivery_proof_items(slug, rows, cfg, now)
+    items += proof_wh.delivery_proof_items(slug, rows, cfg, now, closed)
+    # One job, one line: a hold that is about a job already listed is said on
+    # that job's line, not again as a silent run (triage, 2026-11-04).
+    listed_jobs = frozenset(it.job for it in items if it.job)
     items += casefile_wh.casefile_schedule_items(slug, rows, now)
     items += keeper_wh.keeper_items(slug, rows, now, config)
     items += page_store_wh.page_store_items(slug, rows, cfg, now)
@@ -284,14 +337,14 @@ def _operator_items(
         items += auth.smokeball_auth_items(slug, rows, cfg, now, probe_scheduled=why is None)
         items += auth.probe_not_scheduled_items(slug, now, why=why)
     shortfalls, resolved_shortfalls = src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now, rows)
-    silent, resolved_silent = src.silent_run_items(slug, rows, cfg, now)
+    silent, resolved_silent = src.silent_run_items(slug, rows, cfg, now, listed_jobs)
     items += shortfalls + silent
+    status = console.status.get(slug) or {}
     if config:
-        status = console.status.get(slug) or {}
-        boot = {k: status.get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
-        adopted = src.schedule_adopted_at(console.schedule_changed_at.get(slug), boot)
-        items += src.missed_slot_items(slug, rows, cfg, now, boot, config, deployed, adopted)
-    return items + _graph_items(slug, now), resolved_shortfalls + resolved_silent
+        booted = {k: status.get(k) for k in ("last_heartbeat_ts", "process_uptime_seconds")}
+        adopted = src.schedule_adopted_at(console.schedule_changed_at.get(slug), booted)
+        items += src.missed_slot_items(slug, rows, cfg, now, booted, config, deployed, adopted)
+    return items + _graph_items(slug, now, status), resolved_shortfalls + resolved_silent
 
 
 def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, rows: Optional[list[dict]]):
@@ -303,8 +356,9 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
         # reported is being built, not broken. Named, never an item.
         return [], ["not live yet: this seat has never reported a heartbeat, so it was not evaluated."], 0
     items = src.heartbeat_items(slug, status, cfg, now)
-    items += src.connector_items(slug, status, now)
-    items += src.alert_items(slug, console.alerts.get(slug, []), now)
+    items += src.fold_connector_lines(
+        src.connector_items(slug, status, now) + src.alert_items(slug, console.alerts.get(slug, []), now)
+    )
     items += src.sentry_items(slug, console.sentry.get(slug, []), cfg, now)
     # ADR 0100 W6: one product. Every seat gets the same checks; each check
     # grades only what the seat authors (Smokeball sign-in only with that
@@ -325,8 +379,11 @@ def evaluate_seat(slug: str, cfg: wh.Config, console: Console, now: datetime, ro
     if rows is None:
         rows, unreadable = _seat_ledger(slug, cfg, now)
         if rows is None:
-            shortfalls, _ = src.shortfall_items(slug, console.shortfalls.get(slug, []), cfg, now, None)
-            return [*items, *([unreadable] if unreadable else []), *shortfalls], [], 0
+            # The unreadable line already says nothing about the seat is known.
+            # Its refusals are left off: without the ledger they cannot be
+            # checked against later work, and answered ones came back as NEW
+            # (triage, 2026-11-05). The next readable run grades them.
+            return [*items, *([unreadable] if unreadable else [])], [], 0
     operator_items, resolved = _operator_items(slug, cfg, console, now, rows)
     return items + operator_items, [], resolved
 

@@ -25,14 +25,20 @@ from pathlib import Path
 from typing import Optional
 
 from bin.lib import cron_slots
-from bin.lib.work_health import Config, Item, Page, hhmm, item, meta, parse_ts, reason_token, span, stamped
+from bin.lib.work_health import Config, Item, Page, hhmm, item, meta, parse_ts, span, stamped
+from bin.lib.work_health_proof import job_holds
 
 _BIN = Path(__file__).resolve().parents[1]
 
-#: Shortfall codes that only echo a job ending or a held reply; the job and
-#: reply items already name that work, so listing them twice is noise.
+#: Shortfall codes that only echo a job ending, a held reply or a failed
+#: delivery proof; the job, reply and proof items already name that work, so
+#: listing them twice is noise. ``proof:<code>`` is the heartbeat's copy of a
+#: DELIVERY_PROOF_FAILED row (overlay ``shared/heartbeat.py`` count_shortfalls),
+#: which ``delivery_proof_items`` reads from the ledger itself, with its job:
+#: one SMD-rejected reply was a proof line AND a "drafting job call failed"
+#: line (triage, 2026-11-04).
 _ECHO_CODE_SUFFIXES = ("_job_failed", "_job_held")
-_ECHO_CODE_PREFIXES = ("reply_held:",)
+_ECHO_CODE_PREFIXES = ("reply_held:", "proof:")
 
 _CLASS_WORDS = {
     "not_allowed": "was refused by a safety rule",
@@ -124,19 +130,32 @@ def _refusals_then_closed(usable: list[dict], attempts: list[datetime]) -> bool:
     return False
 
 
-def silent_run_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> tuple[list[Item], int]:
+def silent_run_items(
+    seat: str, rows: list[dict], cfg: Config, now: datetime, listed_jobs: frozenset[str] = frozenset()
+) -> tuple[list[Item], int]:
     """Scheduled and held runs that ended with no observable outcome
     (reconcile-outcomes' finding), opened inside the reconcile window. Inbound
-    runs are left to the request items, which name the request."""
+    runs are left to the request items, which name the request.
+
+    ``listed_jobs`` are the jobs another line already names. A hold of a job's
+    reply (its wake turn's, or SMD rejecting it in review) is that job's
+    problem, said on the job's own line with its cause; a second "held and
+    nobody was told" line about it pointed away from the cause (triage,
+    2026-11-04)."""
     outcomes = load_module("reconcile_outcomes", "reconcile-outcomes.py")
     contract = outcomes.load_contract()
     usable = [r for r in rows if r.get("ts")]
     since = now - timedelta(hours=cfg.reconcile_window_hours)
     by_id = {str(r.get("id")): r for r in usable if r.get("id")}
+    folded = [h for h in job_holds(usable) if h.job in listed_jobs]
+    folded_ids = {h.row_id for h in folded}
+    folded_at = {h.at for h in folded}
     groups: dict[tuple[str, str, str], list] = {}
     resolved = 0
     for ob in outcomes.analyze(contract, seat, usable, now=now):
         if not ob.is_finding or ob.trigger_kind == "inbound" or ob.opened_at < since:
+            continue
+        if str(ob.row_id) in folded_ids or ob.last_hold_at in folded_at:
             continue
         if _held_then_sent(usable, ob.row_id):
             resolved += 1
@@ -447,6 +466,59 @@ def alert_items(seat: str, open_alerts: list[dict], now: datetime) -> list[Item]
     return out
 
 
+_CONNECTOR_KEY = "connector:"
+_CONNECTOR_DOWN_KEY = "alert:connector_down:"
+
+
+def _key_tail(it: Item) -> str:
+    """The item's own key, without the ``seat|kind|`` prefix ``item`` adds."""
+    return it.key.split("|", 2)[2]
+
+
+def fold_connector_lines(items: list[Item]) -> list[Item]:
+    """One failing connection, one line (triage, 2026-11-12: one mail blip was
+    three NEW lines). The seat's failure count (``connector_items``) and the
+    pager's ``connector_down`` alert for the same server are one problem: the
+    alert line is folded into the count line, which keeps its page, and names
+    since when the alert has been open. An alert with no count line stands."""
+    counted = {
+        _key_tail(it)[len(_CONNECTOR_KEY) :]: it
+        for it in items
+        if it.kind == "auth_failed" and _key_tail(it).startswith(_CONNECTOR_KEY)
+    }
+    out: list[Item] = []
+    for it in items:
+        tail = _key_tail(it)
+        server = tail[len(_CONNECTOR_DOWN_KEY) :] if tail.startswith(_CONNECTOR_DOWN_KEY) else ""
+        line = counted.get(server) if it.kind == "connector_alert" and server else None
+        if line is None:
+            out.append(it)
+            continue
+        line.what = f"{line.what} Its alert has been open since {hhmm(it.onset)}."
+        line.onset = min(line.onset, it.onset)
+    return out
+
+
+def seat_mail_connection_ok(status: Optional[dict]) -> Optional[bool]:
+    """The seat's own msgraph connections by its connector ledger (heartbeat
+    ``connectors_json``): True when every one reports 0 failures in a row,
+    False when any is failing, None when the seat reports none."""
+    raw = (status or {}).get("connectors_json")
+    try:
+        servers = json.loads(raw) if isinstance(raw, str) and raw else {}
+    except ValueError:
+        return None
+    counts = [
+        entry.get("consecutive_failures")
+        for server, entry in (servers if isinstance(servers, dict) else {}).items()
+        if str(server).startswith("msgraph") and isinstance(entry, dict)
+    ]
+    counts = [c for c in counts if isinstance(c, int)]
+    if not counts:
+        return None
+    return all(c == 0 for c in counts)
+
+
 def _is_echo(code: str) -> bool:
     return code.endswith(_ECHO_CODE_SUFFIXES) or code.startswith(_ECHO_CODE_PREFIXES)
 
@@ -485,15 +557,21 @@ def shortfall_items(
             continue
         codes = ", ".join(sorted({c for _t, c in hits}))
         count = f"{len(hits)} times, " if len(hits) > 1 else ""
+        # Identity is the class and the tool, never a time: with the earliest
+        # hit in the key, a late row 10 ms older than the rest (and every hit
+        # ageing past 24 hours) re-announced the same line as NEW. It is NEW
+        # again only when a hit newer than the newest reported lands (``latest``;
+        # triage, 2026-11-06).
         out.append(
             item(
                 seat,
                 "shortfall",
-                f"shortfall:{klass}:{tool}:{hits[0][0].isoformat()}",
+                f"shortfall:{klass}:{tool}",
                 hits[0][0],
                 f"A {_words(tool)} call {_CLASS_WORDS.get(klass, klass)} ({codes}; {count}last {hhmm(hits[-1][0])}) "
                 "and nothing was delivered after it.",
                 "Check whether the person or routine it served got what it needed; if it repeats, fix the tool or the rule.",
+                latest=hits[-1][0],
             )
         )
     return out, resolved
@@ -521,9 +599,35 @@ def sentry_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> lis
     return out
 
 
-def graph_probe_item(seat: str, mailbox: str, error: Optional[str], now: datetime) -> list[Item]:
+_HTTP_STATUS = re.compile(r"\bHTTP (\d{3})\b")
+
+
+def graph_probe_item(
+    seat: str, mailbox: str, error: Optional[str], now: datetime, seat_connection_ok: Optional[bool] = None
+) -> list[Item]:
+    """SMD's hourly sign-in check of the seat's mailbox, when it failed.
+
+    A server error (5xx, already retried by ``transient_http``) while the
+    seat's own connector ledger shows 0 failures in a row is Microsoft having
+    a bad minute, not a stale SMD secret: one line saying so, never the page
+    (triage, 2026-11-12). A refusal (401, 403) or a failing seat connection is
+    the sign-in problem, and pages."""
     if error is None:
         return []
+    status = _HTTP_STATUS.search(error)
+    if status and status.group(1).startswith("5") and seat_connection_ok is True:
+        return [
+            item(
+                seat,
+                "auth_failed",
+                "graph-probe",
+                now - timedelta(minutes=1),
+                f"Microsoft answered SMD's hourly sign-in check of the {mailbox} mailbox with a server error "
+                f"(HTTP {status.group(1)}) after a retry; the seat's own mailbox connection is healthy (0 failures "
+                "in a row), so this is the vendor, not a stale secret.",
+                "Nothing to do unless the next hour's check fails the same way.",
+            )
+        ]
     return [
         item(
             seat,
@@ -540,126 +644,3 @@ def graph_probe_item(seat: str, mailbox: str, error: Optional[str], now: datetim
             ),
         )
     ]
-
-
-# ---------------------------------------------------------------------------
-# delivery proof (PR #3152)
-# ---------------------------------------------------------------------------
-
-_PROOF_WORDS = {
-    "proof_missing": "no proof of delivery was recorded",
-    "readback_unproven": "the delivered files could not be read back",
-    "readback_mismatch": "the files on the matter differ from what was built",
-    "review_missing": "the pre-delivery review never ran",
-    "review_held": "the pre-delivery review held it",
-    "dry_run_reported": "a dry run was reported as delivered",
-    "wake_lost": "the delivery wake was lost",
-    "reply_unproven": "the requester's reply is not in Sent Items",
-    "reply_not_in_sent_items": "the requester's reply is not in Sent Items",
-    "gate_held": "a gate or our own seed data held it; the firm was told SMD is finishing it",
-    "update_held": "the update into the delivered chronology could not go on",
-    "upload_held": "filing or retiring the document on the matter did not finish",
-    "stage_refused": "a stage refused its own input",
-    "limit_held": "a cost cap, budget or page allowance held it",
-    "identity_held": "a record in the file names another person; the firm was asked",
-    "job_stopped": "it held, failed or is waiting on its lane's proof; the requester was told nothing, by design",
-    "library_edit_refused": "the firm's own save of its library file was not used or not accepted; the firm was told nothing",
-    "layout_rule_unplaced": "a layout rule could not be placed against the firm's own edit of its library file, so it stood; the firm was told nothing",
-    "spend_unrecorded": "its usage shows spend while its record shows $0, so the firm's allowance and SMD's cost read low; the firm was told nothing",
-}
-
-
-def _found_reply_job(row: dict) -> str:
-    """The job a sent reply answered, when the mailbox found it in Sent Items:
-    a CONFIRM_SEND_DISPATCHED row with outcome sent, a lookup that succeeded,
-    and a binding key shaped ``<kind>:<job id>:<attempt>:<state>``. "" otherwise."""
-    if row.get("action_type") != "CONFIRM_SEND_DISPATCHED":
-        return ""
-    md = meta(row)
-    if md.get("outcome") != "sent" or not str(md.get("lookup") or "").startswith("ok"):
-        return ""
-    parts = str(md.get("reply_binding") or "").split(":")
-    return parts[1] if len(parts) == 4 else ""
-
-
-_USAGE_CENTS = re.compile(r"\busage (\d{1,9}) cents\b")
-
-
-def _spend_item(seat: str, job_id: str, lane: str, md: dict, ts: datetime) -> Item:
-    """A ``spend_unrecorded`` row (the seat's hourly sweep, ``jobs/spend.py``):
-    the job ended with usage that prices above $0 and a row that records $0, so
-    the firm's allowance and SMD's cost read low. It is about money, not
-    delivery, so it is worded as such."""
-    m = _USAGE_CENTS.search(str(md.get("detail") or ""))
-    spent = f"${int(m.group(1)) / 100:.2f}" if m else "spend"
-    return item(
-        seat,
-        "job_failed",
-        f"proof:{job_id}:spend_unrecorded",
-        ts,
-        f"The {lane} job's record shows $0 while its usage shows {spent} ({hhmm(ts)}, ref {job_id[-8:]}); "
-        "the firm's allowance and SMD's cost read low.",
-        "Correct the job's recorded spend from its usage ledger before the month's figures are used.",
-    )
-
-
-def delivery_proof_items(seat: str, rows: list[dict], cfg: Config, now: datetime) -> list[Item]:
-    """A DELIVERY_PROOF_FAILED row (the seat refused to call a job delivered,
-    or its requester reply never reached Sent Items) is open work until a
-    DELIVERY_PROVEN row for the same job lands after it. A ``reply_unproven``
-    also closes when the reply went after all: the seat's watch stops looking at
-    its 20 minute deadline, so a reply at minute 21 reached the requester and the
-    alarm stayed listed for 72 hours (triage reported it 10-20 and again 11-02)."""
-    proven: dict[str, datetime] = {}
-    replied: dict[str, datetime] = {}
-    failures: dict[str, tuple[datetime, dict]] = {}
-    ended_bad: dict[str, datetime] = {}
-    for ts, row in stamped(rows):
-        answered = _found_reply_job(row)
-        if answered:
-            replied[answered] = ts
-        md = meta(row)
-        job_id = str(md.get("job_id") or "")
-        if not job_id:
-            continue
-        if row.get("action_type") == "DELIVERY_PROVEN":
-            proven[job_id] = ts
-        elif row.get("action_type") == "DELIVERY_PROOF_FAILED":
-            failures[job_id] = (ts, md)
-        elif str(row.get("action_type") or "").endswith(("_JOB_FAILED", "_JOB_HELD")):
-            ended_bad[job_id] = ts
-    out: list[Item] = []
-    for job_id, (ts, md) in failures.items():
-        if (job_id in proven and proven[job_id] >= ts) or now - ts > timedelta(hours=cfg.ended_job_hours):
-            continue
-        if md.get("code") == "reply_unproven" and job_id in replied and replied[job_id] >= ts:
-            continue
-        if job_id in ended_bad and ended_bad[job_id] >= ts:
-            # The job's own FAILED/HELD line, landing AFTER the proof failure,
-            # already says it did not deliver (job_items); a second line about
-            # the same job is noise. A hold BEFORE it is not: a job held, then
-            # released and delivered, then failing its proof, is reported by
-            # nothing else (job_items sees it delivered; review DB1, 2026-10-17).
-            continue
-        if "delivered, and its lane raised" in str(md.get("detail") or ""):
-            # The job DELIVERED; the lane carried an alert of its own (on
-            # negotiation, a held offer). That alert has its own mail. Saying
-            # "NOT proven delivered" here was false, and it was six of the 33
-            # lines in the 2026-10-16 email.
-            continue
-        code = reason_token(md.get("code")) or "unknown"
-        lane = cfg.lanes[md["lane"]].label if md.get("lane") in cfg.lanes else str(md.get("lane") or "a")
-        if code == "spend_unrecorded":
-            out.append(_spend_item(seat, job_id, lane, md, ts))
-            continue
-        out.append(
-            item(
-                seat,
-                "job_failed",
-                f"proof:{job_id}:{code}",
-                ts,
-                f"The {lane} job is NOT proven delivered: {_PROOF_WORDS.get(code, code)} ({hhmm(ts)}, ref {job_id[-8:]}).",
-                "Check what the requester actually received before anyone says it was delivered.",
-            )
-        )
-    return out

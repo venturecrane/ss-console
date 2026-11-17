@@ -25,6 +25,9 @@ SMD_LANE_CHILD_PID_KEYS='medchron demand drafting litigation casefile negotiatio
 # The word a completion wake uses -> the job kind it names.
 smd_wake_word_job_kind() { case "$1" in chronology) echo 'medchron_job' ;; demand) echo 'demand_job' ;; drafting) echo 'drafting_job' ;; litigation) echo 'litigation_job' ;; casefile) echo 'casefile_job' ;; negotiation) echo 'negotiation_job' ;; note) echo 'note_job' ;; *) return 1 ;; esac; }
 SMD_WAKE_WORD_JOB_KIND_KEYS='chronology demand drafting litigation casefile negotiation note'
+# Queued lane -> the lanes whose running child keeps its next job from starting.
+smd_lane_waits_for() { case "$1" in litigation) echo 'demand drafting casefile records' ;; casefile) echo 'demand drafting medchron litigation records' ;; negotiation) echo 'demand drafting casefile records' ;; records) echo 'demand drafting medchron litigation casefile' ;; *) return 1 ;; esac; }
+SMD_LANE_WAITS_FOR_KEYS='litigation casefile negotiation records'
 # Job kinds whose wake may be a scheduled run's (no request email).
 SMD_SCHEDULED_JOB_KINDS='litigation_job casefile_job negotiation_job note_job'
 # Lanes that write a request card row.
@@ -33,8 +36,8 @@ SMD_REQUEST_CARD_LANES='medchron demand drafting litigation casefile records'
 smd_lane_email_label() { case "$1" in medchron) echo 'chronology' ;; demand) echo 'demand' ;; drafting) echo 'drafting' ;; litigation) echo 'litigation list' ;; casefile) echo 'case file' ;; negotiation) echo 'negotiation' ;; *) return 1 ;; esac; }
 SMD_LANE_EMAIL_LABEL_KEYS='medchron demand drafting litigation casefile negotiation'
 # Audit action_type prefix the broker writes -> its lane.
-smd_audit_prefix_lane() { case "$1" in MEDCHRON) echo 'medchron' ;; DEMAND) echo 'demand' ;; DRAFTING) echo 'drafting' ;; LITIGATION) echo 'litigation' ;; CASEFILE) echo 'casefile' ;; NEGOTIATION) echo 'negotiation' ;; *) return 1 ;; esac; }
-SMD_AUDIT_PREFIX_LANE_KEYS='MEDCHRON DEMAND DRAFTING LITIGATION CASEFILE NEGOTIATION'
+smd_audit_prefix_lane() { case "$1" in MEDCHRON) echo 'medchron' ;; DEMAND) echo 'demand' ;; DRAFTING) echo 'drafting' ;; LITIGATION) echo 'litigation' ;; CASEFILE) echo 'casefile' ;; NEGOTIATION) echo 'negotiation' ;; RECORDS) echo 'records' ;; *) return 1 ;; esac; }
+SMD_AUDIT_PREFIX_LANE_KEYS='MEDCHRON DEMAND DRAFTING LITIGATION CASEFILE NEGOTIATION RECORDS'
 # Lanes with firm inputs in the vault.
 SMD_FIRM_INPUT_LANES='medchron demand drafting litigation casefile records'
 # Firm-input lanes whose inputs are one file, <lane>-firm.yaml.

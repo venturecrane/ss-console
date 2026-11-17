@@ -87,7 +87,7 @@ This document lists what the Operator can do, grouped by where each capability s
 | Registered tool-server connections     | 8                                                                                                                                                        |
 | Ways a connection can be provided      | 4                                                                                                                                                        |
 | Industry packs                         | 13, plus a template                                                                                                                                      |
-| Kinds of queued job                    | 7 (6 covered by the hourly work-health check), plus a note SMD approves into a digest                                                                    |
+| Kinds of queued job                    | 7 (7 covered by the hourly work-health check), plus a note SMD approves into a digest                                                                    |
 | Documented scheduled jobs              | 20                                                                                                                                                       |
 | Background services                    | 3                                                                                                                                                        |
 | Seat configurations                    | 8 authored, plus a template. One paying client is running today; the rest are SMD's own, proving or pre-production seats, or authored but not yet set up |

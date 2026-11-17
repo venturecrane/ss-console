@@ -22,6 +22,7 @@ from bin.lib import seat_purpose
 from bin.lib import work_health as wh
 from bin.lib import work_health_auth as auth
 from bin.lib import work_health_mail as mail
+from bin.lib import work_health_proof as proof
 from bin.lib import work_health_sources as src
 
 _BIN = Path(__file__).resolve().parents[1]
@@ -198,7 +199,7 @@ def test_a_medchron_update_held_for_smd_finishing_is_visible_as_held_and_unprove
     fail = _row(
         "DELIVERY_PROOF_FAILED", NOW - timedelta(hours=1), job_id="J5", lane="medchron", code="update_held", detail="x"
     )
-    items = src.delivery_proof_items(SEAT, [fail], CFG, NOW)
+    items = proof.delivery_proof_items(SEAT, [fail], CFG, NOW)
     assert _kinds(items) == ["job_failed"] and "update into the delivered chronology" in items[0].what
 
 
@@ -923,10 +924,10 @@ def test_a_failed_delivery_proof_is_open_until_proven():
         code="readback_mismatch",
         detail="x",
     )
-    items = src.delivery_proof_items(SEAT, [fail], CFG, NOW)
+    items = proof.delivery_proof_items(SEAT, [fail], CFG, NOW)
     assert _kinds(items) == ["job_failed"] and "the files on the matter differ" in items[0].what
     proven = _row("DELIVERY_PROVEN", NOW - timedelta(minutes=30), job_id="J7", lane="drafting")
-    assert src.delivery_proof_items(SEAT, [fail, proven], CFG, NOW) == []
+    assert proof.delivery_proof_items(SEAT, [fail, proven], CFG, NOW) == []
 
 
 def test_a_reply_found_after_the_deadline_closes_reply_unproven():
@@ -934,14 +935,14 @@ def test_a_reply_found_after_the_deadline_closes_reply_unproven():
     fail = _row(
         "DELIVERY_PROOF_FAILED", NOW - timedelta(hours=1), job_id="J9", lane="negotiation", code="reply_unproven"
     )
-    assert _kinds(src.delivery_proof_items(SEAT, [fail], CFG, NOW)) == ["job_failed"]
+    assert _kinds(proof.delivery_proof_items(SEAT, [fail], CFG, NOW)) == ["job_failed"]
 
     def sent(at, job="J9", **md):
         fields = {"outcome": "sent", "lookup": "ok", "reply_binding": f"negotiation_job:{job}:1:delivered", **md}
         return _row("CONFIRM_SEND_DISPATCHED", at, **fields)
 
     later = NOW - timedelta(minutes=58)
-    assert src.delivery_proof_items(SEAT, [fail, sent(later)], CFG, NOW) == []
+    assert proof.delivery_proof_items(SEAT, [fail, sent(later)], CFG, NOW) == []
     # Each of these leaves the alarm open: the reply is not proven to have gone.
     for row in (
         sent(later, job="OTHER"),
@@ -949,12 +950,12 @@ def test_a_reply_found_after_the_deadline_closes_reply_unproven():
         sent(later, lookup="failed: not found"),
         sent(NOW - timedelta(hours=2)),
     ):
-        assert _kinds(src.delivery_proof_items(SEAT, [fail, row], CFG, NOW)) == ["job_failed"]
+        assert _kinds(proof.delivery_proof_items(SEAT, [fail, row], CFG, NOW)) == ["job_failed"]
     # A different proof failure is not answered by a reply.
     other = _row(
         "DELIVERY_PROOF_FAILED", NOW - timedelta(hours=1), job_id="J9", lane="negotiation", code="readback_mismatch"
     )
-    assert _kinds(src.delivery_proof_items(SEAT, [other, sent(later)], CFG, NOW)) == ["job_failed"]
+    assert _kinds(proof.delivery_proof_items(SEAT, [other, sent(later)], CFG, NOW)) == ["job_failed"]
 
 
 def test_a_proof_failure_after_a_released_hold_is_reported():
@@ -972,10 +973,10 @@ def test_a_proof_failure_after_a_released_hold_is_reported():
     # job_items sees a delivery that needed a hand (the release): that is its own
     # fact, the hand step, and never stands in for the proof failure below.
     assert _kinds(wh.job_items(SEAT, rows, CFG, NOW)) == ["job_hand_step"]
-    assert _kinds(src.delivery_proof_items(SEAT, rows, CFG, NOW)) == ["job_failed"]
+    assert _kinds(proof.delivery_proof_items(SEAT, rows, CFG, NOW)) == ["job_failed"]
     # A hold AFTER the proof failure is the job's own line already: one line, not two.
     later = [*rows, _job("MEDCHRON", "HELD", NOW - timedelta(hours=7), job_id="J9", reason="update_held: x")]
-    assert src.delivery_proof_items(SEAT, later, CFG, NOW) == []
+    assert proof.delivery_proof_items(SEAT, later, CFG, NOW) == []
 
 
 def test_a_missed_hourly_run_is_an_item_and_breaks_the_all_clear():
@@ -1134,9 +1135,9 @@ def test_a_delivered_job_with_a_lane_alert_is_not_called_undelivered():
         code="review_held",
         detail="job: delivered, and its lane raised review_held",
     )
-    assert src.delivery_proof_items(SEAT, [proven, alert], CFG, NOW) == []
+    assert proof.delivery_proof_items(SEAT, [proven, alert], CFG, NOW) == []
     held = _row("DELIVERY_PROOF_FAILED", at, job_id="N2", lane="negotiation", code="review_held", detail="held")
-    assert _kinds(src.delivery_proof_items(SEAT, [held], CFG, NOW)) == ["job_failed"]
+    assert _kinds(proof.delivery_proof_items(SEAT, [held], CFG, NOW)) == ["job_failed"]
 
 
 def test_test_seats_are_a_footnote_but_a_failed_read_is_always_listed():

@@ -43,11 +43,21 @@ CONTRACT_PATH = Path(__file__).resolve().parents[2] / "contracts" / "work-health
 #: ``audit_prefix`` column of operator/contracts/job-lanes.yaml.
 LANE_PREFIXES = dict(job_lanes.AUDIT_PREFIX_LANE)
 #: Leading reason tokens a person writes when ending a job on purpose.
-_CLOSED_REASONS = frozenset({"superseded", "closed", "cancelled", "canceled"})
+#: ``stopped_by_smd`` is written only by SMD's stop command
+#: (``operator/runners/jobs/jobs/smd_stop.py``), which records who stopped the
+#: job and why: decided work, not open work (triage, 2026-11-06).
+_CLOSED_REASONS = frozenset({"superseded", "closed", "cancelled", "canceled", "stopped_by_smd"})
 IN_FLIGHT = {"SUBMITTED": "queued", "QUEUED": "queued", "RUNNING": "running"}
 ENDED_BAD = {"HELD": "held", "FAILED": "failed"}
-_JOB_TYPE = re.compile(r"^(DEMAND|DRAFTING|LITIGATION|NEGOTIATION|CASEFILE|MEDCHRON)_JOB_([A-Z_]+)$")
+#: A state that is neither in flight nor ended: the records lane's reply waiting
+#: on SMD's review (``RECORDS_JOB_REVIEW``). Not graded as stuck; the lane's own
+#: four-hour review alert reports a review left waiting.
+WAITING = frozenset({"REVIEW"})
+#: Every lane's audit rows, from the one declaration (job-lanes.yaml audit_prefix).
+_JOB_TYPE = re.compile(rf"^({'|'.join(sorted(LANE_PREFIXES))})_JOB_([A-Z_]+)$")
 _REASON_HEAD = re.compile(r"^[a-z0-9_.-]+")
+_ULID = re.compile(r"\A[0-9A-HJKMNP-TV-Z]{26}\Z")
+_CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 
 @dataclass(frozen=True)
@@ -136,6 +146,13 @@ class Item:
     #: Set on an item that must PAGE (its own email every run while it stands),
     #: not only sit in the digest: a dead sign-in stops all work.
     page: Optional[Page] = None
+    #: The job this item is about, when it is about one: how "one job, one
+    #: line" finds the other lines about the same job (triage, 2026-11-04).
+    job: Optional[str] = None
+    #: The newest occurrence a repeating item counts (a call-failure line's last
+    #: hit). An item already reported is NEW again only when this moves past
+    #: the newest one reported (``work_health_mail.split_new``).
+    latest: Optional[datetime] = None
 
 
 # Ordering in the email: the work a firm person is waiting on first.
@@ -163,8 +180,19 @@ RANK = {
 }
 
 
-def item(seat: str, kind: str, key: str, onset: datetime, what: str, todo: str, page: Optional[Page] = None) -> Item:
-    return Item(seat, kind, f"{seat}|{kind}|{key}", onset, what, todo, RANK.get(kind, 50), page)
+def item(
+    seat: str,
+    kind: str,
+    key: str,
+    onset: datetime,
+    what: str,
+    todo: str,
+    page: Optional[Page] = None,
+    *,
+    job: Optional[str] = None,
+    latest: Optional[datetime] = None,
+) -> Item:
+    return Item(seat, kind, f"{seat}|{kind}|{key}", onset, what, todo, RANK.get(kind, 50), page, job, latest)
 
 
 # ---------------------------------------------------------------------------
@@ -262,11 +290,35 @@ class Job:
 
     @property
     def submitted_at(self) -> datetime:
+        """The job's first row in the read window (its ordering instant)."""
         return self.events[0][0]
+
+    @property
+    def started_at(self) -> Optional[datetime]:
+        """When the job was really submitted, for a person to read: the instant
+        inside its ULID, else its first row when that row IS the submission.
+        None when neither is known: an old job closed today shows only its
+        close in the window, and calling that its start read "started Nov 6"
+        for a job from August (triage, 2026-11-06)."""
+        minted = ulid_time(self.job_id)
+        if minted is not None:
+            return minted
+        return self.events[0][0] if self.events[0][1] in IN_FLIGHT and self.events[0][1] != "RUNNING" else None
 
     @property
     def last(self) -> tuple[datetime, str, Optional[str]]:
         return self.events[-1]
+
+
+def ulid_time(value: str) -> Optional[datetime]:
+    """The millisecond instant a ULID carries in its first ten characters, or
+    None when ``value`` is not a ULID."""
+    if not isinstance(value, str) or not _ULID.match(value):
+        return None
+    ms = 0
+    for char in value[:10]:
+        ms = ms * 32 + _CROCKFORD.index(char)
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
 
 
 def jobs_from_rows(rows: list[dict]) -> list[Job]:
@@ -279,7 +331,12 @@ def jobs_from_rows(rows: list[dict]) -> list[Job]:
         if not match:
             continue
         state = match.group(2)
-        if state not in IN_FLIGHT and state not in ENDED_BAD and state not in ("DELIVERED", "RESUME_REQUESTED"):
+        if (
+            state not in IN_FLIGHT
+            and state not in ENDED_BAD
+            and state not in WAITING
+            and state not in ("DELIVERED", "RESUME_REQUESTED")
+        ):
             continue
         md = meta(row)
         job_id = md.get("job_id")
@@ -318,7 +375,14 @@ def _job_name(job: Job, cfg: Config) -> str:
     label = cfg.lanes[job.lane].label
     where = f" on matter {job.matter}" if job.matter else ""
     origin = "scheduled " if job.scheduled else ""
-    return f"{origin}{label} job{where} (started {hhmm(job.submitted_at)}, ref {job.job_id[-8:]})"
+    started = job.started_at
+    if started is not None:
+        when = f"started {hhmm(started)}"
+    elif job.last[1] in IN_FLIGHT or job.last[1] in WAITING:
+        when = f"first seen {hhmm(job.submitted_at)}"
+    else:
+        when = f"ended {hhmm(job.last[0])}"
+    return f"{origin}{label} job{where} ({when}, ref {job.job_id[-8:]})"
 
 
 def _superseded(job: Job, jobs: list[Job]) -> bool:
@@ -375,6 +439,32 @@ def _lane_hold(job: Job, holds: Optional[list[dict]]) -> Optional[str]:
     return None
 
 
+def _queue_clock(job: Job, jobs: list[Job], cfg: Config, now: datetime) -> Optional[datetime]:
+    """When a queued job's wait began to count, or None while it is still
+    rightly waiting.
+
+    A lane does not start a job while a child of a lane it waits for is live
+    (job-lanes.yaml ``waits_for``, the runner's ``BUSY_PIDS``). So a queued job
+    behind a RUNNING job of such a lane, inside that job's own run limit, is
+    waiting, not stuck: on 2026-11-04 a negotiation job queued behind a running
+    demand job was listed as stuck after 15 minutes. A blocker that hangs is
+    still caught, by its own run limit. Once the blockers end, the queue limit
+    counts from the last of them, not from the submission."""
+    since = job.last[0]
+    waits = job_lanes.LANE_WAITS_FOR.get(job.lane, ())
+    for other in jobs:
+        if other is job or other.lane not in waits:
+            continue
+        ts, state, _reason = other.last
+        if state == "RUNNING":
+            if now - ts < timedelta(minutes=cfg.lanes[other.lane].run_minutes):
+                return None
+            continue
+        if ts > since and any(s == "RUNNING" for _t, s, _r in other.events):
+            since = ts
+    return since
+
+
 def job_items(
     seat: str,
     rows: list[dict],
@@ -404,22 +494,27 @@ def job_items(
                     f"The {name} is waiting on SMD's proof run: {lane_key} (held {span(now - ts)}); "
                     "nothing runs until the lane is proven.",
                     f"Run the lane's proof: operator/bin/lane-proof.sh {seat} status.",
+                    job=job.job_id,
                 )
             )
+            continue
+        if state in WAITING:
             continue
         if state in IN_FLIGHT:
             phase = IN_FLIGHT[state]
             limit = lane.queue_minutes if phase == "queued" else lane.run_minutes
-            if now - ts < timedelta(minutes=limit):
+            clock = _queue_clock(job, jobs, cfg, now) if phase == "queued" else ts
+            if clock is None or now - clock < timedelta(minutes=limit):
                 continue
             out.append(
                 item(
                     seat,
                     "job_stuck",
                     f"{job.lane}:{job.job_id}:{state}",
-                    ts + timedelta(minutes=limit),
+                    clock + timedelta(minutes=limit),
                     f"The {name} has been {phase} for {span(now - ts)}; it should take under {span(timedelta(minutes=limit))}.",
                     "Check the job on the seat: a hung runner looks like work in progress forever.",
+                    job=job.job_id,
                 )
             )
         elif state in ENDED_BAD:
@@ -439,6 +534,7 @@ def job_items(
                     ts,
                     f"The {name} {ENDED_BAD[state]}{why} at {hhmm(ts)}.",
                     "Decide: rerun, release, or tell the requester why; nothing reaches them until someone does.",
+                    job=job.job_id,
                 )
             )
         elif state == "DELIVERED":
@@ -467,6 +563,7 @@ def _hand_step_item(seat: str, job: Job, name: str, cfg: Config, now: datetime) 
         f"{len(steps)} time{'s' if len(steps) != 1 else ''}: {'; '.join(steps)}.",
         "Find why each step was needed and make it code, proven at $0 on this job's saved inputs; "
         "the next job like it will stop the same way.",
+        job=job.job_id,
     )
 
 
