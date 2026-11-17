@@ -191,7 +191,9 @@ def test_a_value_the_correction_takes_out_is_named_for_proof_10(tmp_path, job_di
 MISSED = RR.Finding("MUST", "2 omitted content", "N1", 3, 1, "the lumbar flexion is omitted", "add", "", "")
 MISSED2 = RR.Finding("MUST", "2 omitted content", "N2.c1", 3, 2, "the plan is omitted", "add", "", "")
 TO_N2 = {"anchor": "N1", "exhibit": 3, "page": 1, "composed_in": {"added": "N2"}, "why": "in the therapy entry"}
-TO_BASE = {"anchor": "N2", "exhibit": "3", "page": "2", "composed_in": {"delivered": "01/20/2026"}, "why": "copy"}
+#: the delivered entry's date line and heading line together: once in the delivered chronology
+POST_HEAD = "01/20/2026\nExample Clinic | Medical Diagnoses"
+TO_BASE = {"anchor": "N2", "exhibit": "3", "page": "2", "composed_in": {"delivered": POST_HEAD}, "why": "copy"}
 
 
 def _closures_seat(tmp_path, job_dir, data_root, findings=(MISSED,)):
@@ -254,7 +256,7 @@ def test_corrections_and_closures_together(tmp_path, job_dir, data_root) -> None
     outcomes = [f["outcome"] for f in rec["rounds"][-1]["findings"]]
     assert outcomes == ["applied", UD.CLOSED] and rec["status"] == "clean"
     assert RR.named_values(rec) == set(V.lost(WRONG, RIGHT))
-    assert "the delivered entry for 01/20/2026" in URS.notes(sd / "out" / "alpha")[3]
+    assert "the delivered entry for 01/20/2026 Example Clinic | Medical Diagnoses" in URS.notes(sd / "out" / "alpha")[3]
 
 
 def test_the_alias_and_the_old_flag_take_the_decisions_file(tmp_path, job_dir, data_root, monkeypatch) -> None:
@@ -279,6 +281,9 @@ def test_the_alias_and_the_old_flag_take_the_decisions_file(tmp_path, job_dir, d
         ([{**TO_N2, "composed_in": {"added": "N2.c1"}}], (MISSED,), "not an added entry"),
         ([{**TO_N2, "composed_in": {"delivered": "03/03/2026"}}], (MISSED,), "delivered chronology does not hold"),
         ([{**TO_N2, "composed_in": {"delivered": "Example Clinic"}}], (MISSED,), "with its date"),
+        # A bare date two delivered entries (or an entry and a table row) share names no ONE entry.
+        ([{**TO_N2, "composed_in": {"delivered": "01/20/2026"}}], (MISSED,), "occurs 3 times in the delivered"),
+        ([{**TO_N2, "composed_in": {"delivered": "12/01/2025"}}], (MISSED,), "give the date line and the heading"),
         ([TO_N2], (MISSED, MISSED2), "no correction touches or closure closes: entry N2.c1"),
     ],
 )

@@ -52,7 +52,8 @@ or instead of, corrections::
      "closures": [{"anchor": "N7", "exhibit": 9, "page": 114,
                    "composed_in": {"added": "N89"}, "why": "..."},
                   {"anchor": "N12", "exhibit": 9, "page": 120,
-                   "composed_in": {"delivered": "08/27/2026"}, "why": "..."}]}
+                   "composed_in": {"delivered": "08/27/2026\\nSample Hospital | All Other Information"},
+                   "why": "..."}]}
 
 A closure names ONE open finding by anchor, exhibit and page: ``N7`` matches
 the finding ``N7`` or a claim of it (``N7.c2``), ``N7.c2`` only itself, and
@@ -61,8 +62,10 @@ closure took. ``composed_in`` is where the content already is, one key:
 ``{"added": "N<k>"}``, an added entry of the held document anchored as the
 review anchors them (``review_repair.anchor_entries``), or
 ``{"delivered": "<text>"}``, text holding an MM/DD/YYYY date that occurs
-verbatim in the delivered chronology (``update/base.md``), such as the
-delivered entry's date line. ``why`` is required. A closure changes no
+verbatim EXACTLY ONCE in the delivered chronology (``update/base.md``), so it
+identifies one delivered entry: the entry's date line and heading line
+together (a bare date two delivered entries share is refused). ``why`` is
+required. A closure changes no
 document text: with closures only, the document, its sha and the audit rows
 are untouched. Each closed finding is kept in the record's SMD round with
 ``outcome`` ``CLOSED`` and a ``closure`` field (where, why, by, source);
@@ -228,6 +231,11 @@ def _where(c: dict[str, Any], entries: list[str], base: str, n: int) -> str:
         return "the entry for " + ", ".join(lines)
     if not _MDY.search(text) or text not in base:
         raise Refused(f"closure {n}: the delivered chronology does not hold {text[:80]!r} with its date")
+    if (times := base.count(text)) != 1:  # it must name ONE delivered entry, never a date two entries share
+        raise Refused(
+            f"closure {n}: {text[:80]!r} occurs {times} times in the delivered chronology; "
+            "give the date line and the heading line together"
+        )
     return "the delivered entry for " + " ".join(text.split())
 
 
@@ -466,7 +474,8 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
 
 _SHAPE = (
     '{"corrections": [{"old": ..., "new": ...}], "closures": [{"anchor": "N7", "exhibit": 9, "page": 114, '
-    '"composed_in": {"added": "N89"} or {"delivered": "<date line>"}, "why": ...}]}; either list may be empty, not both'
+    '"composed_in": {"added": "N89"} or {"delivered": "<date line>\\n<heading line>, verbatim, once in the delivered '
+    'chronology>"}, "why": ...}]}; either list may be empty, not both'
 )
 
 

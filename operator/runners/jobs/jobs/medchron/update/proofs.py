@@ -3,8 +3,9 @@
  1. every Medical Summary line of the delivered document is in the updated
     one at least as often as it was delivered, the Prior Medical History
     included (an update adds a dated paragraph under it and never rewrites
-    it), and no delivered sentence is carried MORE often (a visit already
-    itemized, added again as new);
+    it), and no delivered sentence or summary line is carried MORE often (a
+    visit already itemized, added again as new); an entry's heading lines
+    (its date and provider lines, ``entry_headings``) may repeat;
  2. the delivered note that pre-incident encounters were reviewed and not
     itemized is in the updated document verbatim, as often as delivered;
     absent only when the update's own entries itemize those encounters;
@@ -142,12 +143,34 @@ def dropped_values(
     return out
 
 
+def entry_headings(*mds: str) -> set[str]:
+    """Every entry's heading lines, read by the entry parser: its date line
+    and its provider line, as the markdown carries it ("<provider> |
+    <subsection>") and as the rendered entry table shows it (the provider
+    alone, ``docx_md._entries_md``). A heading repeats by design: every visit
+    to one provider carries it, an added visit included."""
+    out: set[str] = set()
+    for md in mds:
+        for e in B.entries_of(md)[1]:
+            lines = [ln.strip() for ln in e.split("\n")[:2]]
+            out |= set(lines)
+            if len(lines) == 2:
+                out.add(lines[1].rpartition(" | ")[0] or lines[1])
+    out.discard("")
+    return out
+
+
 def _delivered_text(x: Inputs, r: Result) -> None:
     a = x.delivered_lines
     want = Counter(ln for ln in a if not NOTE_LINE.search(ln))
     have = Counter(x.updated_lines)
     missing = [ln for ln, n in want.items() if have[ln] < n]
-    dup = [ln for ln, n in Counter(ln for ln in a if len(ln) > 80).items() if have[ln] > n]
+    # A delivered sentence or summary line carried MORE often is a visit added
+    # again; an entry heading is not (2026-11-16: a re-filed copy of a visit,
+    # under a provider heading over 80 characters that 7 delivered entries
+    # carried, failed the update as "duplicated 1").
+    heads = entry_headings(x.base_md, x.updated_md)
+    dup = [ln for ln, n in Counter(ln for ln in a if len(ln) > 80 and ln not in heads).items() if have[ln] > n]
     r.check("1", not missing and not dup, f"delivered lines {len(a)}; missing {len(missing)}; duplicated {len(dup)}")
     was = Counter(ln for ln in x.delivered_lines if NOTE_LINE.search(ln))
     now = Counter(ln for ln in x.updated_lines if NOTE_LINE.search(ln))
