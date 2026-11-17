@@ -319,6 +319,25 @@ def stamps_plain_at(edge: Optional["datetime"], stamp: "DispatchStamp") -> bool:
     return edge is not None and stamp.ts >= edge
 
 
+def wake_hash_edge(wakes: list, skill: str) -> Optional["datetime"]:
+    """THE WAKE-STAMP EDGE for one skill: the earliest EMITTED_WAKE of that
+    skill that carries its OWN body hashes, or None when none does.
+
+    The same per-row boundary as ``plain_stamp_edge``, for the other half of
+    the join. A templated dispatch with no wake hash in its window HOLDS while
+    the skill has never stamped (the seat may still be on a pre-stamp image, and
+    the release is the act that clears it). Once a later wake of the skill
+    carries hashes, a dispatch BEFORE it is permanently unverifiable: no release
+    can add hashes to a wake row already written, and the scheduled run scans
+    the whole mailbox, so a hold there could never go green (Law 12; the
+    2026-11-16 guide-seat library notice, sent before its wake rows carried
+    hashes). Derived hashes (``failure_note_stamp``) are not the row's own and
+    never set the edge.
+    """
+    stamped = [w.ts for w in wakes if w.skill_name == skill and w.hashes_full and not w.derived_from]
+    return min(stamped) if stamped else None
+
+
 def attribution_counts(verdicts: list) -> dict[str, int]:
     """The two counted metrics: how many graded pairs were attributed by the
     ``skill_name`` column and how many fell through to the hash. Read off the
@@ -348,4 +367,5 @@ __all__ = [
     "plain_stamp_edge",
     "stamps_plain_at",
     "wake_for_hash",
+    "wake_hash_edge",
 ]

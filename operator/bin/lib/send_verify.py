@@ -115,7 +115,10 @@ scheduled runs on the single 09-01 escalator send, seventeen unresolved
 critical notifications, nobody acting). Such a row grades ``pre_stamp_edge``:
 neither hold nor finding, counted and printed indented under the inbox so the
 number stays visible, never a ``HOLD`` line. The no-edge case keeps its hold --
-the stamp may still arrive.
+the stamp may still arrive. The primary check has the same boundary on its own
+half: a templated dispatch with no wake hash, dated before its skill's first
+hash-stamped wake (``send_attribution.wake_hash_edge``), grades
+``pre_stamp_edge`` too.
 
 CROSS-RUN INVARIANTS cover the ``compositional`` skills the hash join cannot:
 the same routine must not flap recipients across runs, and the same item_key
@@ -144,6 +147,7 @@ from .send_attribution import (
     message_attributor,
     plain_stamp_edge,
     stamps_plain_at,
+    wake_hash_edge,
 )
 from .failure_note_stamp import derive_failure_note_hashes
 from .html_channel import HtmlBody, grade_html_body, html_stamp_edge
@@ -182,6 +186,7 @@ VERDICT_NO_DISPATCH_STAMP = "no_dispatch_stamp"  # hold
 VERDICT_BODY_UNAVAILABLE = "body_unavailable"  # hold
 VERDICT_CHANNEL_MISMATCH = "channel_mismatch_hold"  # hold until rehearsal calibrates
 VERDICT_PRE_EDGE = "pre_stamp_edge"  # neither hold nor finding: unverifiable by construction
+_PRE_WAKE_EDGE = "templated send before this skill's first hash-stamped wake (unverifiable by construction)"
 VERDICT_UNSTAMPED_REPR = "channel_unstamped_representation"  # neither: no stamp hashes what the mailbox stores
 
 _HOLD_VERDICTS = (
@@ -510,13 +515,17 @@ def verify_hash_join(
         if wake is None and not attribution:
             continue
         if wake is None:
+            # Before the skill's first hash-stamped wake: unverifiable by
+            # construction, counted, never a hold (send_attribution.wake_hash_edge).
+            edge = wake_hash_edge(wakes, dispatch.skill_name)
+            pre = edge is not None and dispatch.ts < edge
             verdicts.append(
                 BodyVerdict(
                     skill_name=dispatch.skill_name,
-                    verdict=VERDICT_NO_WAKE_HASH,
+                    verdict=VERDICT_PRE_EDGE if pre else VERDICT_NO_WAKE_HASH,
                     dispatch_ts=dispatch.ts.isoformat(),
                     actual_sha256=dispatch.rendered_body_sha256 or None,
-                    detail="templated send with no wake hash in window",
+                    detail=_PRE_WAKE_EDGE if pre else "templated send with no wake hash in window",
                 )
             )
             continue
