@@ -76,6 +76,7 @@ term into the search any more than it can smuggle an instruction into the turn.
 from __future__ import annotations
 
 import re
+import sys
 from typing import Any
 
 from .expense_ledger import contains_run_sequence, invoice_number_key
@@ -83,6 +84,7 @@ from .library import _listing as listing
 from .library import _norm as norm
 from .layout_shape import layout_values
 from .printed_facts import case_number_key, printed_date_candidates
+from . import birth_date_fallback
 from .resolution_token import mint
 
 VERDICT_UNIQUE = "unique"
@@ -661,6 +663,7 @@ def resolve_matter(
     date_of_birth: Any = None,
     case_number: Any = None,
     date_of_loss_as_printed: Any = None,
+    fallback_ok: bool = False,
 ) -> dict[str, Any]:
     """Resolve the matter one invoice belongs to. See the module docstring for
     the four verdicts and the arithmetic; only ``unique`` mints a token.
@@ -722,7 +725,13 @@ def resolve_matter(
         except SearchFailed as exc:
             return {**base, "verdict": VERDICT_SEARCH_FAILED, "reason": str(exc)}
     survivors = _narrow(survivors, narrowing, records, parties, values, layouts)
-    return _verdict(sorted(survivors), base, supplied, generated, records, parties, values, layouts)
+    result = _verdict(sorted(survivors), base, supplied, generated, records, parties, values, layouts)
+    if not (fallback_ok is True and birth_date_fallback.eligible(result, values, parties, sys.modules[__name__])):
+        return result
+    try:
+        return birth_date_fallback.resolve(sys.modules[__name__], client, base, supplied, values)
+    except SearchFailed as exc:
+        return {**base, "verdict": VERDICT_SEARCH_FAILED, "reason": str(exc)}
 
 
 __all__ = [

@@ -20,7 +20,9 @@ vocabulary, never by the model's wording:
   ``search_failed``, ``filing_refused``;
 * placed with low confidence (filed, but a keying step did not land or may
   be wrong): ``tab_not_written``, ``figure_not_saved``,
-  ``possible_duplicate``, ``offer_not_written``, ``expense_not_staged``;
+  ``possible_duplicate``, ``offer_not_written``, ``expense_not_staged``,
+  ``name_differs`` (filed on a birth-date match under a name the firm records
+  differently);
 * a whole bundle nothing was filed from: ``unreadable``,
   ``partition_failed``, ``not_processed``.
 
@@ -89,7 +91,14 @@ SCHEMA_VERSION = 1
 KINDS = frozenset({"letter", "court_paper", "medical_bill", "vendor_bill", "settlement_offer"})
 NOT_PLACED = frozenset({"no_match", "one_candidate", "ambiguous", "search_failed", "filing_refused", "not_attempted"})
 PLACED_CHECK = frozenset(
-    {"tab_not_written", "figure_not_saved", "possible_duplicate", "offer_not_written", "expense_not_staged"}
+    {
+        "tab_not_written",
+        "figure_not_saved",
+        "possible_duplicate",
+        "offer_not_written",
+        "expense_not_staged",
+        "name_differs",
+    }
 )
 BUNDLE_ISSUES = frozenset({"unreadable", "partition_failed", "not_processed"})
 #: What the model gives per letter. The three derived fields are code's.

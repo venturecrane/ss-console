@@ -41,6 +41,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import outcome_ledger as ol
+from .birth_date_fallback import NAME_DIFFERS
 
 #: A letter's kind -> (the tool that keys it, the issue when it did not).
 ACTS: dict[str, tuple[str, str]] = {
@@ -114,6 +115,16 @@ def _held(rows: list[dict[str, Any]]) -> tuple[str, list[str], str]:
     return "search_failed", [], str(verdict.get("detail") or status)
 
 
+#: A filed letter matched under a name the firm records differently.
+NAME_DIFFERS_ISSUE = "name_differs"
+
+
+def _name_differs(rows: list[dict[str, Any]]) -> bool:
+    """The last verdict for these pages was the birth-date fallback's ``unique``."""
+    verdicts = [r for r in rows if r.get("tool") == ol.RESOLVE]
+    return bool(verdicts) and verdicts[-1].get("status") == "unique" and verdicts[-1].get("detail") == NAME_DIFFERS
+
+
 def derive(kind: str, first: int, last: int, rows: list[dict[str, Any]]) -> dict[str, Any]:
     """``placed_on``, ``issue``, ``candidates`` and the code's ``detail`` for
     the letter on pages ``first``..``last``, from the rows recorded for exactly
@@ -123,6 +134,10 @@ def derive(kind: str, first: int, last: int, rows: list[dict[str, Any]]) -> dict
     if filings:
         filing = filings[-1]
         issue, detail = _placed_issue(kind, filing, mine)
+        if _name_differs(mine):
+            # Filed on a match of birth date and date of loss, under a name the
+            # firm records differently: a person checks it, whatever else is true.
+            issue, detail = NAME_DIFFERS_ISSUE, detail
         number = str(filing.get("matter_number") or "") or "(number not on record)"
         return {"placed_on": number, "issue": issue, "candidates": [], "detail": detail}
     issue, candidates, detail = _held(mine)
