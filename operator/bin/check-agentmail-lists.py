@@ -67,6 +67,8 @@ from typing import Optional
 
 import yaml
 
+from bin.lib import seat_config, seat_dirs
+
 AGENTMAIL_API_BASE = "https://api.agentmail.to/v0"
 _HTTP_TIMEOUT_S = 30.0
 _PAGE_LIMIT = 100
@@ -212,11 +214,11 @@ def agentmail_seats() -> list[str]:
     for entry in sorted(root.iterdir()):
         if not entry.is_dir() or entry.name.startswith(("_", ".")):
             continue
-        path = entry / "customer.yaml"
+        path = seat_dirs.customer_file(root, entry.name)
         if not path.exists():
             continue
         try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            data = seat_config.load(path, encoding="utf-8", on_missing="raise") or {}
         except (OSError, yaml.YAMLError):
             continue
         email = ((data.get("connectors") or {}).get("Email")) or {}
@@ -227,7 +229,7 @@ def agentmail_seats() -> list[str]:
 
 def load_config(slug: str) -> Optional[dict]:
     try:
-        parsed = yaml.safe_load((_customers_dir() / slug / "customer.yaml").read_text(encoding="utf-8"))
+        parsed = seat_config.load(seat_dirs.customer_file(_customers_dir(), slug), encoding="utf-8", on_missing="raise")
     except (OSError, yaml.YAMLError):
         return None
     return parsed if isinstance(parsed, dict) else None

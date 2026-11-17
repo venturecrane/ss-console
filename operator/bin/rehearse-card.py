@@ -76,7 +76,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-import yaml
+from bin.lib import seat_config, seat_dirs
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CUSTOMERS = REPO_ROOT / "operator" / "customers"
@@ -113,14 +113,14 @@ def _die(msg: str, code: int = 2) -> None:
 
 def load(slug: str) -> tuple[dict, dict]:
     card_path = CUSTOMERS / slug / "initiation-card.yaml"
-    cfg_path = CUSTOMERS / slug / "customer.yaml"
+    cfg_path = seat_dirs.customer_file(CUSTOMERS, slug)
     if not card_path.is_file():
         _die(f"no initiation-card.yaml at {card_path}")
     if not cfg_path.is_file():
         _die(f"no customer.yaml at {cfg_path}")
     return (
-        yaml.safe_load(card_path.read_text()) or {},
-        yaml.safe_load(cfg_path.read_text()) or {},
+        seat_config.load(card_path, encoding=None, on_missing="raise") or {},
+        seat_config.load(cfg_path, encoding=None, on_missing="raise") or {},
     )
 
 

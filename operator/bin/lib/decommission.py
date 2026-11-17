@@ -127,7 +127,7 @@ from bin.lib.decommission_inventory import (
     seat_fly_apps,
     seat_webhook_host,
 )
-from bin.lib import seat_config
+from bin.lib import seat_config, seat_dirs
 
 log = logging.getLogger("aie.bin.decommission")
 
@@ -520,7 +520,7 @@ def _load_customer_yaml(customers_root: Path, slug: str) -> Optional[dict]:
     YAML at this step; the YAML may already be gone if a previous
     decommission attempt tombstoned the directory.
     """
-    yaml_path = customers_root / slug / "customer.yaml"
+    yaml_path = seat_dirs.customer_file(customers_root, slug)
     if not yaml_path.is_file():
         return None
     try:

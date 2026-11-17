@@ -36,6 +36,21 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$")
 
 TOMBSTONE_MARKER = ".decommissioned."
 
+#: The authored seat file every seat directory holds.
+CUSTOMER_FILE = "customer.yaml"
+
+
+def customer_file(customers_dir: Union[str, Path], slug: str) -> Path:
+    """The authored ``customer.yaml`` of seat ``slug`` under ``customers_dir``.
+
+    The one place the path ``operator/customers/<slug>/customer.yaml`` is put
+    together on the laptop. It names the file and reads nothing: whether a
+    missing file is an error is the caller's, as it always was (decommission
+    reads a tombstoned seat's absent file as None; the readiness tools exit).
+    Parse it with ``bin.lib.seat_config``.
+    """
+    return Path(customers_dir) / slug / CUSTOMER_FILE
+
 
 def skip_reason(name: str) -> Optional[str]:
     """Why a directory NAME is not a seat, or None when the name could be one.
@@ -57,7 +72,7 @@ def is_seat_dir(path: Union[str, Path]) -> bool:
     return (
         p.is_dir()
         and skip_reason(p.name) is None
-        and (p / "customer.yaml").is_file()
+        and (p / CUSTOMER_FILE).is_file()
         and SLUG_RE.match(p.name) is not None
     )
 

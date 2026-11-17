@@ -133,27 +133,265 @@ describe('lane-skill-tables', () => {
 })
 
 describe('customer-yaml-hand-parsers', () => {
-  it('counts a Python file that loads yaml and names customer.yaml', () => {
-    const files = [
-      {
-        path: 'e/a.py',
-        text: 'import yaml\ncfg = yaml.safe_load(open("/opt/data/customer.yaml"))',
-      },
-      {
-        path: 'e/b.py',
-        text: 'from yaml import safe_load\nd = safe_load(CUSTOMER_YAML.read_text())',
-      },
-    ]
-    expect(found('customer-yaml-hand-parsers', files)).toEqual(['e/a.py', 'e/b.py'])
+  const py = (...lines: string[]) => lines.join('\n')
+
+  /** One fixture per idiom a counted file in the tree uses, each named for where it is used. */
+  const MUST_COUNT: File[] = [
+    {
+      // the first rule's own fixture: a literal path inside the load
+      path: 'e/inline-literal.py',
+      text: 'import yaml\ncfg = yaml.safe_load(open("/opt/data/customer.yaml"))',
+    },
+    {
+      // `from yaml import safe_load` and an upper-case constant
+      path: 'e/bare-safe-load.py',
+      text: 'from yaml import safe_load\nd = safe_load(CUSTOMER_YAML.read_text())',
+    },
+    {
+      // a path built from the literal, then read (the laptop tools before this change)
+      path: 'e/path-variable.py',
+      text: py(
+        'def load(slug):',
+        '    path = CUSTOMERS / slug / "customer.yaml"',
+        '    return yaml.safe_load(path.read_text()) or {}'
+      ),
+    },
+    {
+      // the load's argument spread over lines
+      path: 'e/multi-line.py',
+      text: py(
+        'def load(slug):',
+        '    return yaml.safe_load(',
+        '        (CUSTOMERS / slug / "customer.yaml").read_text(encoding="utf-8")',
+        '    )'
+      ),
+    },
+    {
+      // with open(<dir> / "customer.yaml") as fh (templates/lane-memory-caps-probe.py)
+      path: 'e/with-open.py',
+      text: py(
+        'def caps(cfg):',
+        '    with open(cfg / "customer.yaml", encoding="utf-8") as fh:',
+        '        doc = yaml.safe_load(fh) or {}',
+        '    return doc'
+      ),
+    },
+    {
+      // the text read first, then parsed (bootstrap/validate.py)
+      path: 'e/text-variable.py',
+      text: py(
+        'def validate_customer_yaml(customer_yaml):',
+        '    raw_text = customer_yaml.read_text()',
+        '    cfg = yaml.safe_load(raw_text)',
+        '    return cfg'
+      ),
+    },
+    {
+      // only the env variable names it (each skill pre_run.py, pre_run_gate, skill_helpers)
+      path: 'e/env-variable.py',
+      text: py(
+        'def load_chase_config(path=None):',
+        '    path = path or os.environ.get("SMD_CUSTOMER_YAML_PATH")',
+        '    with open(path, encoding="utf-8") as handle:',
+        '        data = yaml.safe_load(handle) or {}',
+        '    return data'
+      ),
+    },
+    {
+      // the function's docstring says what its parameter is (shared/capabilities.py read)
+      path: 'e/docstring-param.py',
+      text: py(
+        'def read(path):',
+        '    """The parsed customer.yaml, or None when it cannot be read as a mapping."""',
+        '    return yaml.safe_load(Path(path).read_text(encoding="utf-8"))'
+      ),
+    },
+    {
+      // the path comes back from a function (shared/logic_in_code.py live_path)
+      path: 'e/returned-path.py',
+      text: py(
+        'PATH_ENVS = ("SMD_CUSTOMER_YAML_PATH", "SMD_CUSTOMER_YAML")',
+        'def live_path():',
+        '    for name in PATH_ENVS:',
+        '        value = os.environ.get(name)',
+        '        if value:',
+        '            return value',
+        '    return "/etc/default"',
+        'def load_switch(key, path=None):',
+        '    target = path or live_path()',
+        '    with open(target, encoding="utf-8") as fh:',
+        '        raw = fh.read()',
+        '    return yaml.safe_load(raw)'
+      ),
+    },
+    {
+      // a helper that loads its parameter, given the customer.yaml path (ensure-disabled-skills.py)
+      path: 'e/helper-param.py',
+      text: py(
+        'def _load_yaml(path: Path) -> dict[str, Any]:',
+        '    with path.open(encoding="utf-8") as f:',
+        '        data = yaml.safe_load(f) or {}',
+        '    return data',
+        'def main(args):',
+        '    return _load_yaml(Path(args.customer_yaml))'
+      ),
+    },
+    {
+      // two hops from a module constant (msgraph-read-app-cannot-send-probe.py)
+      path: 'e/two-hops.py',
+      text: py(
+        '_DEFAULT_YAML = "/var/lib/smd-config/customer.yaml"',
+        'def staff(yaml_text):',
+        '    data = yaml.safe_load(yaml_text) or {}',
+        '    return data',
+        'def run(yaml_path, user):',
+        '    yaml_text = open(yaml_path, encoding="utf-8").read()',
+        '    return staff(yaml_text)',
+        'def main(argv):',
+        '    yaml_path = argv[1] if len(argv) > 1 else _DEFAULT_YAML',
+        '    return run(yaml_path, argv[2])'
+      ),
+    },
+    {
+      // the one reader itself (shared/seat_config.py): load reads, parse parses
+      path: 'e/the-reader.py',
+      text: py(
+        'def parse(source):',
+        '    """A YAML document parsed safely."""',
+        '    return yaml.safe_load(source)',
+        'def load(path, *, encoding, on_missing):',
+        '    """The YAML document at ``path`` (customer.yaml, or a file beside it), parsed.',
+        '    """',
+        '    text = Path(path).read_text(encoding=encoding)',
+        '    return parse(text)'
+      ),
+    },
+  ]
+
+  /** Near misses, each from a file the first rule counted though it parses no customer.yaml. */
+  const MUST_NOT_COUNT: File[] = [
+    {
+      // fleet/seats.yaml, customer.yaml named only in the module docstring (bin/lib/seat_purpose.py)
+      path: 'f/module-docstring.py',
+      text: py(
+        '"""Seat purposes. A twin\'s customer.yaml equals its client\'s."""',
+        'SEATS_FILE = ROOT / "fleet" / "seats.yaml"',
+        'def load(path=SEATS_FILE):',
+        '    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}'
+      ),
+    },
+    {
+      // role.yaml, customer.yaml named lower in the function docstring (bootstrap/role_persona.py)
+      path: 'f/function-docstring.py',
+      text: py(
+        'def load_role_persona(role, roles_dir=None):',
+        '    """The role persona.',
+        '',
+        '    A seat selects a role with seat.role in its customer.yaml.',
+        '    """',
+        '    manifest_path = roles_dir / role / "role.yaml"',
+        '    return yaml.safe_load(manifest_path.read_text()) or {}'
+      ),
+    },
+    {
+      // an error message and a flag name, passed to a function that loads ANOTHER parameter
+      // (shared/policy_profile.py: current(cfg) loads role.yaml from roles_dir_override)
+      path: 'f/message-and-flag.py',
+      text: py(
+        'def current(cfg=None, *, roles_dir_override=None):',
+        '    path = roles_dir(roles_dir_override) / "role.yaml"',
+        '    return yaml.safe_load(path.read_text())',
+        'def main(args):',
+        '    index = args.index("--customer-yaml")',
+        '    cfg = CustomerConfig.from_volume(args[index + 1])',
+        '    note = f"customer.yaml unreadable ({index})"',
+        '    return current(cfg), note'
+      ),
+    },
+    {
+      // profile config.yaml files, customer.yaml named in a docstring (ensure-curator-disabled.py)
+      path: 'f/profile-config.py',
+      text: py(
+        '"""The customer.yaml to config translation lives in the overlay."""',
+        'def _load(path: Path) -> dict:',
+        '    with path.open() as f:',
+        '        cfg = yaml.safe_load(f) or {}',
+        '    return cfg',
+        'for p in sorted(home.glob("profiles/*/config.yaml")):',
+        '    _load(p)'
+      ),
+    },
+    {
+      // a SKILL.md front matter, beside a message naming customer.yaml (initiation/seat_facts.py)
+      path: 'f/front-matter.py',
+      text: py(
+        'UNREADABLE = "customer.yaml unreadable"',
+        'def front(path):',
+        '    text = path.read_text(encoding="utf-8")',
+        '    end = text.find("---", 3)',
+        '    return yaml.safe_load(text[3:end])'
+      ),
+    },
+    {
+      // a load inside a program string run elsewhere (boot_harness/collect.py)
+      path: 'f/program-string.py',
+      text: py(
+        'HARNESS_FIXTURE = "/harness/customer.yaml"',
+        'PROGRAM = """import yaml',
+        'doc = yaml.safe_load(open(sys.argv[1]))',
+        '"""',
+        'def on_harness():',
+        '    with open(HARNESS_FIXTURE) as fh:',
+        '        return any(line.startswith("customer_id:") for line in fh)'
+      ),
+    },
+    {
+      // a name tainted in one function is not the same-named local of another
+      path: 'f/other-scope.py',
+      text: py(
+        'def exists(slug):',
+        '    path = CUSTOMERS / slug / "customer.yaml"',
+        '    return path.is_file()',
+        'def card(slug):',
+        '    path = CUSTOMERS / slug / "initiation-card.yaml"',
+        '    return yaml.safe_load(path.read_text())'
+      ),
+    },
+    {
+      // an end-to-end test harness parsing a template customer.yaml (tests_e2e/_seat.py)
+      path: 'f/tests_e2e/_seat.py',
+      text: 'TEMPLATE = ROOT / "customer.yaml"\ndoc = yaml.safe_load(TEMPLATE.read_text())',
+    },
+    { path: 'f/other.py', text: 'yaml.safe_load(open("seat-layout.yaml"))' },
+    { path: 'f/mention.py', text: 'PATH = "customer.yaml"' },
+    { path: 'f/x.ts', text: 'yaml.load(read("customer.yaml"))' },
+  ]
+
+  it('counts every idiom the tree uses to load customer.yaml', () => {
+    expect(found('customer-yaml-hand-parsers', MUST_COUNT)).toEqual(
+      MUST_COUNT.map((f) => f.path).sort()
+    )
   })
 
-  it('ignores a yaml load of another file, a mention without a load, and TypeScript', () => {
-    const files = [
-      { path: 'f/other.py', text: 'yaml.safe_load(open("seat-layout.yaml"))' },
-      { path: 'f/mention.py', text: 'PATH = "customer.yaml"' },
-      { path: 'f/x.ts', text: 'yaml.load(read("customer.yaml"))' },
-    ]
-    expect(found('customer-yaml-hand-parsers', files)).toEqual([])
+  it('ignores loads of other files, however customer.yaml is mentioned, and tests', () => {
+    expect(found('customer-yaml-hand-parsers', MUST_NOT_COUNT)).toEqual([])
+  })
+
+  it('each near miss that names customer.yaml beside a load is one the first rule counted', () => {
+    // The first rule, as it stood: a yaml load anywhere AND customer.yaml named anywhere. A near
+    // miss it would not have counted proves nothing about the fix.
+    const firstRule = (text: string) => {
+      const code = text
+        .split('\n')
+        .filter((l) => !/^\s*(#|\/\/|\/\*|\*)/.test(l))
+        .join('\n')
+      return /\b(yaml\.(safe_)?load|safe_load)\(/.test(code) && /customer[._]ya?ml/i.test(code)
+    }
+    const nearMisses = MUST_NOT_COUNT.filter(
+      (f) => f.path.endsWith('.py') && /customer[._]ya?ml/i.test(f.text) && /load\(/.test(f.text)
+    )
+    expect(nearMisses.length).toBeGreaterThanOrEqual(7)
+    expect(nearMisses.filter((f) => !firstRule(f.text)).map((f) => f.path)).toEqual([])
   })
 })
 

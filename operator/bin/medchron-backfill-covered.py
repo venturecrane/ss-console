@@ -79,7 +79,6 @@ import argparse
 import json
 import os
 import re
-import socket
 import sys
 from pathlib import Path
 from typing import Any
@@ -455,20 +454,13 @@ def _files_on_matter(matter_id: str, limit: int = 500) -> tuple[dict[str, str], 
 
 
 def _broker(payload: dict[str, Any], sock_path: str) -> dict[str, Any]:
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(30.0)
-    try:
-        s.connect(sock_path)
-        s.sendall(raw)
-        buf = b""
-        while not buf.endswith(b"\n"):
-            chunk = s.recv(65536)
-            if not chunk:
-                break
-            buf += chunk
-    finally:
-        s.close()
+    # The one broker client (the runner's stamped copy, on the path above and in
+    # the seat's runner venv). Imported here, so `compute` on the laptop needs none
+    # of it. The frame is encoded before the connect, as it always was.
+    from jobs import broker_socket
+
+    raw = broker_socket.encode(payload, sort_keys=True, separators=(",", ":"))
+    buf = broker_socket.send_frame(sock_path, raw, timeout=30.0)
     resp = json.loads(buf)
     if resp.get("ok") is not True:
         raise RuntimeError(f"broker refused: {resp.get('error')}: {resp.get('message')}")
