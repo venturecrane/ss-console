@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 from . import billing_match as BM
@@ -418,14 +419,17 @@ def _lien_only(k: str, v: float) -> dict[str, Any]:
     }
 
 
-def run(sr: StageRun) -> int:
+def run(sr: StageRun, chronology: Path | None = None) -> int:
+    """`chronology`: the document whose providers and dates the chart is laid
+    against; a run's ``final-chronology.md`` by default, an update's whole
+    updated chronology (``billing_update``), never its added entries alone."""
     d = sr.slug_dir
     unit = sr.unit.unit
     sfx = f"-{unit}" if sr.job.joint else ""
     patient = sr.unit.client_name.lower() if sr.job.joint else None
     matcher = Matcher(sr.cfg, d)
     records = read_jsonl(d / "billing_extract.jsonl")
-    chrono = (d / "runs" / unit / "final-chronology.md").read_text(encoding="utf-8")
+    chrono = (chronology or d / "runs" / unit / "final-chronology.md").read_text(encoding="utf-8")
     spine = matcher.spine(chrono, _labels(records, patient))
     tally = _Tally(sr, matcher, spine, patient)
     for r in records:

@@ -38,6 +38,7 @@ from typing import Any
 
 from ..matter import pull as matter_pull
 from ..medchron.update import body as B, docx_md, locate as L
+from . import update_supersede
 from .base import StageRun, read_json
 from .render import render_text
 
@@ -176,7 +177,19 @@ def run(sr: StageRun) -> int:
         sr.log(HELD + f"the Exhibit List names exhibit(s) {sorted(listed - have)} that its folder does not hold")
         return 2
     where["renderer"] = renderer
+    where["superseded"] = _companions(sr, where, dd)
     return _stage(sr, ud, dd, where, md, docx)
+
+
+def _companions(sr: StageRun, where: dict[str, Any], dd: Path) -> list[dict[str, Any]]:
+    """The delivered worksheet, records review and review notes this update
+    may supersede (``update_supersede``), pulled to hash: only SMD's own
+    unedited copy is ever retired. A pull that fails leaves it unhashed, so it
+    is left in the folder, never a hold."""
+    rows = update_supersede.find(sr.manifest(), where["folder_id"], sr.cfg, sr.unit.client_name)
+    if rows and _pull(sr, rows, dd / "superseded"):
+        sr.log("a delivered companion file could not be pulled to hash; it will be left in the folder, not retired")
+    return update_supersede.stamp(rows, dd / "superseded", sr.job.delivered_files)
 
 
 def _stage(sr: StageRun, ud: Path, dd: Path, where: dict[str, Any], md: str, docx: Path) -> int:

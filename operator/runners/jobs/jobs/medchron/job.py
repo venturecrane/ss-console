@@ -114,6 +114,11 @@ class Job:
     # stamps them on an update's envelope). A delivered job dir is wiped 72
     # hours after delivery; this record is not (``prior_reading.cited_sources``).
     delivered_cited: dict[str, dict[str, str]] = field(default_factory=dict)
+    # 2026-11-17: ``{file id: sha256}``, every file a delivered job on this
+    # matter filed and proved (the broker stamps it on an update's envelope).
+    # An update retires a delivered worksheet, records review or review notes
+    # only while its bytes still hash to this (``stages/update_supersede``).
+    delivered_files: dict[str, str] = field(default_factory=dict)
 
     @property
     def joint(self) -> bool:
@@ -303,6 +308,7 @@ def parse(data: Any, *, path: Path) -> Job:
         update=parse_update(data, units),
         prior_delivered=[str(x) for x in data.get("prior_delivered") or [] if _JOB_ID.match(str(x))],
         delivered_cited=_delivered_cited(data.get("delivered_cited")),
+        delivered_files=_delivered_cited({"_": data.get("delivered_files")}).get("_", {}),
     )
 
 

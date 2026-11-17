@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ...stages.base import read_json
+from ...stages.base import read_json, read_jsonl
 from . import outcome as O
 
 TEMPLATE = "{CLIENT} - Records Review {MM-DD-YY}.docx"
@@ -138,7 +138,27 @@ def build(sr: Any, files: list[dict[str, Any]], added: dict[str, str]) -> Path:
     path = sr.slug_dir / "out" / sr.unit.unit / name(sr.unit.client_name, stamp)
     inc = read_json(sr.slug_dir / "include.json", {}) or {}
     requested = {str(x) for x in inc.get("include_file_ids") or []} or None
-    return render(path, sr.unit.client_name, str(sr.job.matter_number), rows(files, added, requested))
+    table = rows(files, added, requested)
+    billed = _on_worksheet(sr)
+    for r in table:
+        if r["id"] in billed and r["reason"] != ADDED:
+            r["finding"] = BILLING_ROW
+    return render(path, sr.unit.client_name, str(sr.job.matter_number), table)
 
 
-__all__ = ["ADDED", "TEMPLATE", "build", "name", "plain", "render", "rows"]
+#: A billing record the update read for the refreshed worksheet (``stages/billing_update``).
+BILLING_ROW = (
+    "a billing record, not a medical record: its charges and dates of service are on the billing worksheet "
+    "filed with this update"
+)
+
+
+def _on_worksheet(sr: Any) -> set[str]:
+    """The ids of the billing files the refreshed worksheet was built from."""
+    ud = sr.slug_dir / "runs" / sr.unit.unit / "update"
+    if not (read_json(ud / "billing_refresh.json", {}) or {}).get("worksheet"):
+        return set()
+    return {str(r["id"]) for r in read_jsonl(sr.slug_dir / "billing" / "pulled.jsonl") if r.get("ok")}
+
+
+__all__ = ["ADDED", "BILLING_ROW", "TEMPLATE", "build", "name", "plain", "render", "rows"]

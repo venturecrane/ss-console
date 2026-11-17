@@ -61,3 +61,24 @@ def test_a_run_and_a_matter_with_no_record_carry_none(verbs):
     second = call(v, "medchron_job_submit", envelope=update_envelope())
     assert second["accepted"], second
     assert "delivered_cited" not in json.loads((queue / f"{second['job_id']}.json").read_text())
+
+
+def test_an_update_is_queued_with_every_file_a_delivered_row_filed(verbs):
+    """2026-11-17: the update retires a delivered worksheet or records review
+    only while it is still the file SMD filed; the hashes outlive the job dir."""
+    v, _db, queue = verbs
+    first = call(v, "medchron_job_submit", envelope=run_envelope())
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=first["job_id"], state="running", fields={})
+    files = [
+        {"name": "Alpha - Medical Billing Worksheet 09-01-26.docx", "file_id": "w-1", "size": 10, "sha256": SHA_A},
+        {"name": "Alpha - Records Review 09-01-26.docx", "file_id": "r-1", "size": 9, "sha256": "not a hash"},
+    ]
+    delivery = {"folder_id": "f-1", "files": files}
+    covered = {"covered": [], "uncovered": [], "pulled": 0}
+    rec = {"covered": covered, "delivery": delivery}
+    call(v, "medchron_job_record", peer_uid=ROOT, job_id=first["job_id"], state="delivered", fields=rec)
+    second = call(v, "medchron_job_submit", envelope=update_envelope(ids=("d-3",)))
+    assert second["accepted"], second
+    queued = json.loads((queue / f"{second['job_id']}.json").read_text())
+    assert queued["delivered_files"] == {"w-1": SHA_A}
+    assert work_digest(queued) == work_digest({k: v for k, v in queued.items() if k != "delivered_files"})

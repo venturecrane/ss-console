@@ -393,12 +393,32 @@ def wake_lines(outcomes: list[Any], state: str) -> list[str]:
     return []
 
 
-def wake_block(outcomes: list[Any], state: str, envelope: dict[str, Any]) -> list[str]:
+def billing_lines(job_dir: Path | None, outcomes: list[Any], state: str) -> list[str]:
+    """The billing sentence for each delivered unit whose update refreshed the
+    billing worksheet (``stages/billing_update.reply_line``): code's words,
+    relayed as they stand."""
+    if job_dir is None or state != "delivered":
+        return []
+    from ...stages.billing_update import reply_line
+
+    out = []
+    for o in outcomes:
+        unit = str(o.get("unit") or "") if isinstance(o, dict) else ""
+        for ud in sorted(Path(job_dir).glob(f"data/*/runs/{unit}/update")) if unit else []:
+            line = reply_line(ud)
+            if line and line not in out:
+                out.append(line)
+    return out
+
+
+def wake_block(outcomes: list[Any], state: str, envelope: dict[str, Any], job_dir: Path | None = None) -> list[str]:
     """The update's lines in the DELIVER wake: none for a run; for an update,
-    the request line, then an already-current update's counts."""
+    the request line, then an already-current update's counts, then the
+    refreshed billing worksheet's sentence."""
     if not isinstance(envelope.get("update"), dict):
         return []
-    return ["Request: update into the delivered chronology.", *wake_lines(outcomes, state)]
+    lines = ["Request: update into the delivered chronology.", *wake_lines(outcomes, state)]
+    return lines + billing_lines(job_dir, outcomes, state)
 
 
 __all__ = [

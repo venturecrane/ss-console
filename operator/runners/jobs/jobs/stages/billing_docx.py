@@ -227,7 +227,7 @@ def _excluded(doc: Any, data: dict[str, Any]) -> None:
         )
 
 
-def _not_in_total(doc: Any, data: dict[str, Any], gaps: list[dict[str, Any]]) -> None:
+def _not_in_total(doc: Any, data: dict[str, Any], gaps: list[dict[str, Any]], sr: StageRun | None = None) -> None:
     """What the figures above do not include, each named by document and page:
     amounts left out (row 18), providers with no supportable total, and pages
     no read could transcribe (row 17)."""
@@ -253,6 +253,31 @@ def _not_in_total(doc: Any, data: dict[str, Any], gaps: list[dict[str, Any]]) ->
         )
         frows = _dedup([[str(fl)[:56], f"p. {pg}"] for fl, pg in data["failed_pages"]], lambda r: tuple(r))
         table(doc, ["Source Document", "Page"], frows[:40], [6.2, 1.0])
+    if sr is not None:
+        _billed_no_record(doc, sr)
+
+
+NO_RECORD_HEADING = "Dates billed with no medical record on file"
+
+
+def _billed_no_record(doc: Any, sr: StageRun) -> None:
+    """Each date of service a bill or ledger carries that no medical record
+    on file does (``dos_check``'s ``billed_no_record``). A billing-only source
+    makes no chronology entry (the house rule); its dates are listed here so
+    they reach a filed document (2026-11-17: an update named two ledgers whose
+    dates were in no record, and no filed page carried them)."""
+    rep = read_json(sr.slug_dir / "runs" / sr.unit.unit / "dos_report.json", None)
+    rows = [r for r in (rep or {}).get("billed_no_record") or [] if isinstance(r, dict) and r.get("date")]
+    if not rows:
+        return
+    doc.add_paragraph(NO_RECORD_HEADING, style="Heading 1")
+    para(
+        doc,
+        f"{len(rows)} date(s) of service appear in the billing records on file and in no medical record on file. "
+        "They are not in the medical chronology, which is built from medical records only.",
+    )
+    body = _dedup([[dshow(str(r["date"])), str(r.get("billing_provider") or "-")[:60]] for r in rows], tuple)
+    table(doc, ["Date of Service", "Billed By"], sorted(body, key=lambda r: r[0][6:] + r[0][:5])[:200], [1.4, 5.8])
 
 
 #: What the file holds, said only of the rows it is true of (the independent
@@ -369,7 +394,7 @@ def run(sr: StageRun) -> int:
     _paid(doc, sr, data.get("patient_filter"))
     _disagree(doc, rows)
     _excluded(doc, data)
-    _not_in_total(doc, data, gaps)
+    _not_in_total(doc, data, gaps, sr)
     stamp = sr.date_stamp or date.today().strftime("%m-%d-%y")
     glob = str(sr.cfg.get("delivery", "worksheet_glob") or "* - Medical Billing Worksheet *.docx")
     out = d / "out" / unit / glob.replace("*", who, 1).replace("*", stamp, 1)

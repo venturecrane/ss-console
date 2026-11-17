@@ -19,6 +19,7 @@ from dataclasses import replace
 
 from .dag import BY_NAME, CURRENT, FAILED, HELD, REFUSED, Stage, _slug_unit
 from ..stages import (
+    billing_update as _bupd,
     download as _download,
     update_base as _ubase,
     update_collect as _ucollect,
@@ -164,11 +165,34 @@ UPDATE_STAGES: tuple[Stage, ...] = (
             1: (FAILED, "update proofs: a delivered line was lost, a claim went unaudited, or a value was dropped")
         },
     ),
+    # A request that names a billing record refreshes the billing worksheet
+    # (``stages/billing_update``, 2026-11-17); with none named, each is a no-op.
+    Stage("update_billing_docs", "", _slug_unit, requires=("update_proofs",), runner=_bupd.run_docs),
+    Stage(
+        "update_billing_extract",
+        "",
+        _slug_unit,
+        paid=True,
+        requires=("update_billing_docs",),
+        runner=_bupd.run_extract,
+        rehearse=_bupd.projection_lines,
+        exit_map={1: (FAILED, "billing_extract: a pipeline defect (an unread page is a named gap, never this exit)")},
+    ),
+    Stage("update_dos_check", "", _slug_unit, requires=("update_billing_extract",), runner=_bupd.run_dos),
+    Stage("update_billing_chart", "", _slug_unit, requires=("update_dos_check",), runner=_bupd.run_chart),
+    Stage(
+        "update_billing_docx",
+        "",
+        _slug_unit,
+        requires=("update_billing_chart",),
+        runner=_bupd.run_docx,
+        exit_map={1: (REFUSED, "billing worksheet refused (a suspect amount, or no patient filter on a joint matter)")},
+    ),
     Stage(
         "update_manifest",
         "",
         _slug_unit,
-        requires=("update_proofs",),
+        requires=("update_billing_docx",),
         invalidates=("review",),
         runner=_ufinish.run_manifest,
         exit_map={1: (FAILED, "manifest: a required deliverable is missing")},
