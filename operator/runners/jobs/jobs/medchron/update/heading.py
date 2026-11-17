@@ -141,47 +141,102 @@ class NameRule:
         return "".join(self.tokens) in words or sum(t in words for t in self.tokens) >= self.need
 
 
-def name_rule(provider: str) -> NameRule:
-    """The rule a page meets for the heading's provider.
+def _is_cred(token: str) -> bool:
+    key = "".join(_words(token.replace(".", "").replace("-", "")))
+    return bool(key) and key in _CREDS
 
-    A CLINICIAN (2026-11-17: 10 of 17 false failures on a real update were the
-    name printed in another form, "J. Roe, MD" for "Roe, Jane (M.D.)"): the
-    surname alone, whatever the given name's form, initials, order,
-    credentials or middle name; a hyphenated surname by every part, or the
-    parts as one word. The surname is the part before the comma of
-    "Surname, Given", else the last word of the name.
 
-    A FACILITY or LABORATORY (a heading whose provider has no person, 6 of
-    the 17): its distinctive words, the generic ones (``GENERIC``, facility
-    and specialty words) aside, at least half of them, so a city or a word
-    the page leaves out never fails it; with no distinctive word, half of
-    all its words."""
+def _facility_rule(text: str) -> NameRule:
+    """At least half of `text`'s distinctive words (generic, facility and
+    specialty words aside), or of all its words when it has none."""
     from math import ceil
 
     from ...stages.group import FACILITY_WORD
     from .encounter import _SPECIALTY
 
-    def plain(part: str) -> list[str]:
-        return [w for t in _tokens(part) for w in _words(t)]
-
-    def facility(part: str) -> bool:
-        return bool(FACILITY_WORD.search(part)) or any(w in GENERIC or _SPECIALTY.match(w) for w in plain(part))
-
-    bare = re.sub(r"\([^)]*\)", " ", provider or "")
-    parts = [p.strip() for p in re.split(r",|;|/|\|| [-\u2013] ", bare) if plain(p)]  # a credential-only part goes
-    people = [p for p in parts if not facility(p) and len(plain(p)) <= 4]
-    if people:
-        if len(people) >= 2 and people[0] == parts[0]:
-            surname = people[0]  # "Surname, Given"
-        else:
-            surname = _tokens(people[-1])[-1]  # "Given Middle Surname", or the person after a facility
-        toks = tuple(plain(surname))
-        return NameRule(toks, len(toks))
-    every = plain(bare)
+    every = [w for t in _tokens(text) for w in _words(t)]
     own = tuple(dict.fromkeys(w for w in every if w not in GENERIC and not _SPECIALTY.match(w)))
     own = tuple(w for w in own if not FACILITY_WORD.search(w))
     toks = own or tuple(dict.fromkeys(every))
     return NameRule(toks, max(1, ceil(len(toks) / 2)))
+
+
+def _person(parts: list[tuple[str, bool]], facility: Callable[[str], bool]) -> tuple[NameRule, set[int]] | None:
+    """(the surname rule, the parts that make the person), or None. `parts`:
+    (name part without its parentheses, whether it carries a credential).
+
+    With a credential, the PERSON is the part that carries it, or the part
+    just before a part that is only a credential; its surname is its last
+    word, unless it is a given name alone after a name part ("Roe, Jane
+    (M.D.)"), when the part before it is the surname. With no credential,
+    "Surname, Given" applies only to exactly two parts neither of which is a
+    facility; else the person is the last part that is no facility."""
+
+    def words(part: str) -> list[str]:
+        return [w for t in _tokens(part) for w in _words(t)]
+
+    def surname(i: int) -> NameRule:
+        toks = tuple(_words(_tokens(parts[i][0])[-1]))
+        return NameRule(toks, len(toks))
+
+    named = [i for i, (p, _c) in enumerate(parts) if words(p)]
+    cred = next((i for i, (_p, c) in enumerate(parts) if c), None)
+    if cred is not None:
+        at = cred if words(parts[cred][0]) else max((i for i in named if i < cred), default=None)
+        if at is None:
+            return None
+        before = max((i for i in named if i < at), default=None)
+        if len(words(parts[at][0])) == 1 and before is not None and not facility(parts[before][0]):
+            toks = tuple(words(parts[before][0]))
+            return NameRule(toks, len(toks)), {at, before}
+        return surname(at), {at}
+    if len(named) == 2 and not any(facility(parts[i][0]) for i in named):
+        toks = tuple(words(parts[named[0]][0]))
+        return NameRule(toks, len(toks)), set(named)
+    people = [i for i in named if not facility(parts[i][0]) and len(words(parts[i][0])) <= 4]
+    return (surname(people[-1]), {people[-1]}) if people else None
+
+
+def name_rules(provider: str) -> tuple[NameRule, ...]:
+    """Every rule that ties the heading's provider to a page; ONE met is
+    enough (2026-11-17: a firm's heading names the facility and the person,
+    "Facility Name Specialty, Given Middle Surname, M.D.", and a cited page
+    may print either one).
+
+    The PERSON (``_person``) is matched on the surname alone, whatever the
+    given name's form, initials, order, credentials, hyphenation or middle
+    name; a hyphenated surname by every part or as one word. Every other
+    part is matched as a facility (``_facility_rule``). A heading with no
+    person is one facility or laboratory, matched on at least half of its
+    distinctive words, so a city or a word the page leaves out never fails
+    it. On a real update the earlier tests gave 12, 5 and 1 false failures;
+    each shape is a fixture."""
+    from ...stages.group import FACILITY_WORD
+    from .encounter import _SPECIALTY
+
+    def facility(part: str) -> bool:
+        ws = [w for t in _tokens(part) for w in _words(t)]
+        return bool(FACILITY_WORD.search(part)) or any(w in GENERIC or _SPECIALTY.match(w) for w in ws)
+
+    raw = [p.strip() for p in re.split(r",|;|/|\|| [-\u2013] ", provider or "")]
+    parts = []
+    for p in raw:
+        inner = " ".join(re.findall(r"\(([^)]*)\)", p))
+        bare = re.sub(r"\([^)]*\)", " ", p).strip()
+        cred = any(_is_cred(t) for t in (bare + " " + inner).split())
+        if bare or cred:
+            parts.append((bare, cred))
+    found = _person(parts, facility)
+    if found is None:
+        return (_facility_rule(" ".join(p for p, _c in parts)),)
+    person, used = found
+    others = [_facility_rule(p) for i, (p, _c) in enumerate(parts) if i not in used and _tokens(p)]
+    return (person, *(r for r in others if r.tokens))
+
+
+def name_rule(provider: str) -> NameRule:
+    """The heading's first rule: its person when it has one, else its facility."""
+    return name_rules(provider)[0]
 
 
 def name_words(provider: str) -> list[str]:
@@ -189,7 +244,7 @@ def name_words(provider: str) -> list[str]:
     return list(name_rule(provider).tokens)
 
 
-def _says(text: str, d: date | None, rule: NameRule) -> list[str]:
+def _says(text: str, d: date | None, rules: tuple[NameRule, ...]) -> list[str]:
     """What of the heading `text` does not print: "date", "name"."""
     from ...stages.review import _date_forms
 
@@ -198,7 +253,7 @@ def _says(text: str, d: date | None, rule: NameRule) -> list[str]:
     miss = []
     if d is None or not re.search(_date_forms(d), text):
         miss.append("date")
-    if not rule.met(words):
+    if not any(r.met(words) for r in rules):
         miss.append("name")
     return miss
 
@@ -211,7 +266,7 @@ def _layer(t: str | None) -> bool:
 
 def check(entry: str, pages: Pages) -> Check:
     """Where the entry's date and provider are printed."""
-    d, names = _date(entry), name_rule(B.provider_of(entry))
+    d, names = _date(entry), name_rules(B.provider_of(entry))
     cited = cited_pages(entry)
     texts = [(ex, p, pages.text(ex, p)) for ex, p in cited]
     have = [(ex, p, t) for ex, p, t in texts if _layer(t)]
@@ -251,5 +306,6 @@ __all__ = [
     "Pages",
     "check",
     "name_rule",
+    "name_rules",
     "name_words",
 ]

@@ -147,7 +147,22 @@ MORE = [
     ("Jane Ann Roe, M.D., Ph.D.", "03/04/2026 Roe, J. A. (M.D.)", "Jane Ann Poe, M.D., Ph.D."),
     ("Jane Ann Roe Jr., M.D.", "03/04/2026 Roe, Jane Ann (M.D.)", "Jane Ann Poe Jr., M.D."),
     ("Jane Ann Muñoz, M.D.", "03/04/2026 MUNOZ, JANE ANN (M.D.)", "Jane Ann Núñez, M.D."),
+    # The fourth read's shape: a facility whose specialty word is on no list, the person, the credential;
+    # the page prints only the person, inverted. The wrong one has another surname and a facility the page lacks.
+    (
+        "Example Valley Sportsmed, Jane Ann Roe, M.D.",
+        "03/04/2026 Roe, Jane Ann (M.D.)",
+        "Sample Ridge Sportsmed, Jane Ann Poe, M.D.",
+    ),
 ]
+
+
+def test_either_the_person_or_the_facility_ties_the_heading_to_its_page() -> None:
+    heading = ENTRY.replace("Roe, Jane (M.D.)", "Example Valley Sportsmed, Jane Ann Poe, M.D.")
+    assert HD.check(heading, _pages({4: "03/04/2026 Example Valley Sportsmed"}, {4})).where == HD.CITED
+    assert HD.check(heading, _pages({4: "03/04/2026 Poe, Jane Ann (M.D.)"}, {4})).where == HD.CITED
+    assert HD.check(heading, _pages({4: "03/04/2026 Roe, Jane Ann (M.D.)"}, {4})).missing == ["name"]
+    assert HD.name_rule("Example Valley Sportsmed, Jane Ann Roe, M.D.") == HD.NameRule(("roe",), 1)
 
 
 def test_the_second_reads_shapes_are_found_on_their_cited_page() -> None:
