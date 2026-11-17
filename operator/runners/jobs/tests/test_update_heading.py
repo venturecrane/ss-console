@@ -124,3 +124,39 @@ def test_a_finisher_heading_the_page_states_is_kept() -> None:
     finisher = ENTRY.replace("03/04/2026", "03/05/2026")
     o = _run([finisher], [ENTRY], texts)
     assert B.entries_of(o.md)[1] == [finisher] and o.counts["headings on a cited page"] == 1
+
+
+#: The 5 shapes a second real read found still false (invented names): (heading, page, a genuinely wrong heading).
+MORE = [
+    ("Roe-Smith, Jane A. (M.D.)", "03/04/2026 Jane Roe Smith MD", "Poe-Smith, Jane A. (M.D.)"),
+    ("Jane Ann Roe, PA-C", "03/04/2026 PA-C: ROE, J.", "Jane Ann Poe, PA-C"),
+    (
+        "Example Reference Laboratory of Springfield",
+        "Collected 03/04/2026 EXAMPLE REFERENCE LAB",
+        "Sample Standard Laboratory of Springfield",
+    ),
+    (
+        "Example Valley Medical Center Imaging Department",
+        "Example Valley Imaging, exam date 03/04/2026",
+        "Sample Ridge Medical Center Imaging Department",
+    ),
+    ("Example Health - Radiology", "Example Hospital Radiology Report 03/04/2026", "Sample Health - Radiology"),
+]
+
+
+def test_the_second_reads_shapes_are_found_on_their_cited_page() -> None:
+    for provider, page, _wrong in MORE:
+        e = ENTRY.replace("Roe, Jane (M.D.)", provider)
+        assert HD.check(e, _pages({4: page}, {4})).where == HD.CITED, provider
+
+
+def test_falsifier_a_wrong_name_of_each_shape_still_fails() -> None:
+    for _provider, page, wrong in MORE:
+        e = ENTRY.replace("Roe, Jane (M.D.)", wrong)
+        assert HD.check(e, _pages({4: page}, {4})).missing == ["name"], wrong
+
+
+def test_a_facility_heading_with_no_person_is_a_facility() -> None:
+    assert HD.name_rule("Example Labs Inc") == HD.NameRule(("example",), 1)
+    assert HD.name_rule("Roe-Smith, Jane") == HD.NameRule(("roe", "smith"), 2)
+    assert HD.name_rule("Jane Ann Roe, M.D.").tokens == ("roe",)

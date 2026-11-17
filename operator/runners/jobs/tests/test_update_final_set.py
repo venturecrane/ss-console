@@ -448,6 +448,20 @@ def test_p13_records_a_covered_repeat_left_in_the_added_entries(tmp_path: Path) 
     md = _assembled([NEW_POST])
     assert PF.run(_pf(tmp_path, md, added=[ROE_A, COPY])).recorded["P13_covered_repeat_left"] == 1
     assert PF.run(_pf(tmp_path, md, added=[ROE_A, TIMED])).recorded["P13_covered_repeat_left"] == 0
+    only_three = COPY.replace("(Exhibit 2 - p. 4)", "(Exhibit 3 - p. 1)")
+    kept = PF.run(_pf(tmp_path, md, added=[ROE_A, only_three])).recorded
+    assert kept["P13_kept_for_an_exhibit"] == 1 and kept["P13_covered_repeat_left"] == 0
+    # a pair a date range keeps whole is in no P13 count: covers requires every date and range
+    ranged = PF.run(_pf(tmp_path, md, added=[RANGE_KEEPER, RANGE_COPY])).recorded
+    assert ranged["P13_covered_repeat_left"] == ranged["P13_kept_for_an_exhibit"] == 0
+    # only the shorter covers the longer: the rule keeps the longer, recorded apart
+    short = COPY.replace("(Exhibit 2 - p. 4)", "Pulse 74. (Exhibit 2 - p. 4)")
+    long_ = COPY.replace(
+        "(Exhibit 2 - p. 4)", "It was a long and careful visit in the clinic that day. (Exhibit 2 - p. 4)"
+    )
+    assert len(long_) > len(short)
+    both = PF.run(_pf(tmp_path, md, added=[long_, short])).recorded
+    assert both["P13_shorter_covers_longer"] == 1 and both["P13_covered_repeat_left"] == 0
 
 
 def test_p14_records_a_title_its_rows_do_not_carry(tmp_path: Path) -> None:

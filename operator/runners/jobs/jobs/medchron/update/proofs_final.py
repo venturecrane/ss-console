@@ -14,8 +14,10 @@ proofs read the RENDERED document and the final set's rows
     every new exhibit's number is above the delivered highest, and no
     delivered exhibit is in the upload manifest (it is on the matter already);
 13. no two added entries are one encounter (``encounter.same_encounter``)
-    with one covering the other (``final_set.covers``): a repeat the final set
-    should have dropped;
+    with the longer covering the shorter (``final_set.covers``) and nothing
+    keeping it: a repeat the final set should have dropped (``p13`` also
+    counts, apart, the pairs kept for an exhibit and the pairs only the
+    shorter covers);
 14. each new exhibit's title names a provider and dates that a final row
     citing that exhibit carries;
 15. every paragraph of the filed body is graded, delivered, or a listed label
@@ -37,7 +39,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .. import graded_proof as GP
-from . import encounter as E, entry_edits as EE
+from . import body as B, encounter as E, entry_edits as EE
 
 #: Proofs whose failure fails the run.
 ENFORCE = frozenset({"11"})
@@ -111,14 +113,28 @@ def p12(x: Inputs) -> Counter[str]:
 
 
 def p13(x: Inputs) -> Counter[str]:
+    """Pairs of added entries that are one encounter, by the drop rule's own
+    direction (``final_set.covers``: the LONGER covers the shorter, values,
+    findings, dates and ranges): ``P13_covered_repeat_left`` when nothing kept
+    the shorter (a repeat the final set should have dropped: 0 when it ran),
+    ``P13_kept_for_an_exhibit`` when dropping it would uncite an exhibit.
+    ``P13_shorter_covers_longer`` counts pairs only the shorter covers, which
+    the rule never drops (the longer one stays). A pair a date or range keeps
+    whole is in none of them: ``covers`` requires ``dates_present``."""
     from .final_set import covers
 
     ents = [e for e in x.added if not EE.is_fold(e)]
-    n = 0
+    out = Counter({"P13_covered_repeat_left": 0, "P13_kept_for_an_exhibit": 0, "P13_shorter_covers_longer": 0})
+    every = set().union(*(B.cited(e) for e in x.added)) if x.added else set()
     for i, j in E.pairs(ents, x.canon, x.page_id):
-        a, b = ents[i], ents[j]
-        n += int(covers(a, b, x.page_id) or covers(b, a, x.page_id))
-    return Counter({"P13_covered_repeat_left": n})
+        long_, short = (ents[i], ents[j]) if len(ents[i]) >= len(ents[j]) else (ents[j], ents[i])
+        if covers(long_, short, x.page_id):
+            rest = [e for e in x.added if e is not short]
+            still = set().union(*(B.cited(e) for e in rest)) if rest else set()
+            out["P13_kept_for_an_exhibit" if every - still else "P13_covered_repeat_left"] += 1
+        elif covers(short, long_, x.page_id):
+            out["P13_shorter_covers_longer"] += 1
+    return out
 
 
 def _words(name: str) -> set[str]:
