@@ -74,6 +74,13 @@ the record the rule-settled findings use (``settled_by_rule`` and
 The decisions file is deleted once applied: it carries record text, and the
 job's own directory holds the record from then on. ``--decisions`` is the
 same flag as ``--corrections``.
+
+OFFLINE (2026-11-16). ``--offline <copy>`` decides a rehearsal copy of the
+job (``<job dir>/rehearsal/<stamp>``, made by ``jobs rehearse``) instead: no
+broker, daemon or queue is read, no resume marker is written, the decisions
+file is kept for the live act, and a directory that is not such a copy, or
+whose data root lies outside it, is refused. ``jobs rehearse <copy>`` then
+walks the settled update review and every $0 stage behind it.
 """
 
 from __future__ import annotations
@@ -279,19 +286,23 @@ def plan(
     source: str,
     reason: str,
     closures: list[dict[str, Any]] | None = None,
+    copy: Path | None = None,
 ) -> dict[str, Any]:
-    """Every check, and what would be written. Raises Refused."""
+    """Every check, and what would be written. Raises Refused. `copy`: a
+    rehearsal copy of the job (``copy_dir``), decided offline: no broker,
+    daemon or queue is read, and ``apply`` writes no resume marker."""
     if not by.strip() or not source.strip() or not reason.strip():
         raise Refused("--by (who decided), --source (where it was read) and --reason are all required")
     if not corrections and not closures:
         raise Refused("nothing to record: no correction and no closure")
-    _held(d, job_id)
+    if copy is None:
+        _held(d, job_id)
     from . import job as job_mod
     from .audit import claims as CL
     from .audit.page_text import exhibit_paths
     from .update import body as B
 
-    job = job_mod.load(d.job_dir(job_id))
+    job = job_mod.load(copy_dir(copy) if copy is not None else d.job_dir(job_id))
     if len(job.units) != 1:
         raise Refused(f"job {job_id} has {len(job.units)} units; an update has one")
     unit = job.units[0].unit
@@ -326,12 +337,28 @@ def plan(
         "attested": attested,
         "removed": removed,
         "decision": {"by": by.strip(), "source": source.strip(), "reason": reason.strip()[:500]},
-        "marker": {
+        "marker": None
+        if copy is not None
+        else {
             "job_id": job_id,
             "reason": f"update review finding {act} by SMD ({by.strip()}, {source.strip()})"[:500],
             "redo": [],
         },
     }
+
+
+def copy_dir(path: Path) -> Path:
+    """A rehearsal copy of a job (``<job dir>/rehearsal/<stamp>``, as ``jobs
+    rehearse`` makes it) whose data root is inside the copy. Anything else is
+    Refused: an offline decision never writes the live job's files."""
+    from . import job as job_mod
+
+    jd = path.resolve()
+    if jd.parent.name != "rehearsal" or not (jd / "job.yaml").is_file():
+        raise Refused(f"{path} is not a rehearsal copy (<job dir>/rehearsal/<stamp>/job.yaml); nothing was written")
+    if not job_mod.load(jd).data_root.resolve().is_relative_to(jd):
+        raise Refused(f"the data root of {path} is outside the copy, so it is live data; nothing was written")
+    return jd
 
 
 def _write_corrections(rd: Path, slug_dir: Path, p: dict[str, Any], who: str, at: str) -> list[Path]:
@@ -427,6 +454,8 @@ def apply(d: Any, p: dict[str, Any], corrections_file: Path | None = None) -> No
         written.append(settled)
     record.write_text(json.dumps(rec, indent=1), encoding="utf-8")
     written.append(record)
+    if p["marker"] is None:  # a rehearsal copy: no daemon owns it, nothing is queued, the file is kept for the live act
+        return
     for f in written:
         d._chown_child(f)
     d.queue.mkdir(parents=True, exist_ok=True)
@@ -449,13 +478,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source", required=True, help="where the page was read (a vfy_ id)")
     ap.add_argument("--reason", required=True, help="what the page says that the held text got wrong, in brief")
     ap.add_argument("--dry-run", action="store_true", help="print what would be written; write nothing")
+    ap.add_argument(
+        "--offline", type=Path, metavar="COPY", help="decide a rehearsal copy of the job instead (no daemon)"
+    )
     a = ap.parse_args(argv)
     from . import lane as lane_mod
 
-    d = lane_mod.build()
     try:
+        d = None if a.offline else lane_mod.build()
         corrections, closures = load_decisions(a.corrections)
-        p = plan(d, a.job_id, corrections=corrections, closures=closures, by=a.by, source=a.source, reason=a.reason)
+        p = plan(
+            d,
+            a.job_id,
+            corrections=corrections,
+            closures=closures,
+            by=a.by,
+            source=a.source,
+            reason=a.reason,
+            copy=a.offline,
+        )
     except (Refused, OSError, ValueError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
@@ -466,7 +507,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.dry_run:
         return 0
     apply(d, p, a.corrections)
-    print(f"recorded SMD's decision on {a.job_id}; the daemon re-queues it on its next tick")
+    print(
+        f"recorded SMD's decision in the copy {a.offline}; nothing was queued; rehearse it with: jobs rehearse {a.offline}"
+        if a.offline
+        else f"recorded SMD's decision on {a.job_id}; the daemon re-queues it on its next tick"
+    )
     return 0
 
 

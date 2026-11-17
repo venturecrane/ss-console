@@ -476,7 +476,7 @@ class Driver:
         if stage.once_per_machine and (icd_tables.icd_dir(self.job.install_root) / icd_tables.VERSION_FILE).is_file():
             st.finish(stage.name, status="skipped", exit_code=0, dollars=None, pages=None, note="present")
             return None
-        if self.rehearse and (stage.paid or stage.external):
+        if self.rehearse and not rehearsal.runs_in_copy(self, stage, ctx, extracted, notes):
             return rehearsal.stop(self, stage, ctx, extracted, notes)
         if (stop := proof_mode.upload_stop(stage.name, unit.unit, self.budget, notes, Outcome)) is not None:
             return stop
