@@ -17,8 +17,10 @@
  5. no planted control came back SUPPORTED, and a control was planted when
     the audit had enough claims to plant one;
  6. no ADDED line starts with a bare '.' (what a dropped sentence leaves),
-    and none carries the pipeline's own note about its reading
-    ("(text continues beyond the page)", ``meta_markers``);
+    none carries the pipeline's own note about its reading
+    ("(text continues beyond the page)", ``meta_markers``), and none is
+    only a citation (``uncited.cite_only``: a stray line the firm reads as
+    noise; ``uncited.join_stray`` joins each to the text it cites);
  7. no cited sentence appears more often than in the delivery (or more than
     once, when the delivery never had it);
  8. no ADDED entry cites only delivered exhibits (an update reads new
@@ -42,6 +44,7 @@ from typing import Any
 from .. import meta_markers
 from ..audit import controls
 from . import body as B
+from .uncited import cite_only
 from .values import numbers
 
 NOTE_LINE = re.compile(r"pre-incident encounters?.*not itemized")
@@ -227,10 +230,13 @@ def _added(x: Inputs, r: Result) -> None:
     bare = [ln for ln in added_lines(x.delivered_lines, x.updated_lines) if ln.lstrip().startswith(".")]
     bare += [ln for ln in added_lines(base_lines, md_lines) if ln.lstrip().startswith(".")]
     notes = [ln for ln in added_lines(x.delivered_lines, x.updated_lines) if meta_markers.found(ln)]
+    alone = [ln for ln in added_lines(x.delivered_lines, x.updated_lines) if cite_only(ln)]
+    alone += [ln for ln in added_lines(base_lines, md_lines) if cite_only(ln)]
     r.check(
         "6",
-        not bare and not notes,
-        f"added lines starting with a bare '.': {len(bare)}; carrying the pipeline's own notes: {len(notes)}",
+        not bare and not notes and not alone,
+        f"added lines starting with a bare '.': {len(bare)}; carrying the pipeline's own notes: {len(notes)}; "
+        f"only a citation: {len(alone)}",
     )
     cd, cu = Counter(cited_sentences(x.delivered_lines)), Counter(cited_sentences(x.updated_lines))
     rep = [s for s, n in cu.items() if n > max(cd[s], 1)]

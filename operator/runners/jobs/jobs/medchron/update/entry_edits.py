@@ -175,5 +175,18 @@ def fold_into_delivered(base_ents: list[str], new_ents: list[str]) -> tuple[list
         if k is None:
             rest.append(e)
             continue
-        base[k] = base[k].rstrip("\n") + "\n\n" + e.split("\n", 3)[3]
+        base[k] = _append_fold(base[k], e.split("\n", 3)[3])
     return base, rest
+
+
+def _append_fold(delivered: str, block: str) -> str:
+    """`delivered` with the fold `block` ("<FOLD> date" and its paragraphs)
+    under it. A second block of the same records date joins the first under
+    its one heading, each paragraph once (2026-11-17: one delivered row read
+    the heading four and five times over)."""
+    line, _, paras = block.partition("\n")
+    if f"\n\n{line}\n" not in delivered:
+        return delivered.rstrip("\n") + "\n\n" + block
+    have = set(p.strip() for p in delivered.split("\n\n"))
+    add = [p.strip() for p in paras.strip("\n").split("\n\n") if p.strip() and p.strip() not in have]
+    return delivered.rstrip("\n") + "".join(f"\n\n{p}" for p in add)
