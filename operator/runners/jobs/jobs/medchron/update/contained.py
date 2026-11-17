@@ -21,7 +21,20 @@ what P says, read with print and export stamps aside (``select.strip_stamps``):
   difference, and nothing else is allowed to be one. No word may be missing
   (``absent`` is 0): 2026-11-17, an allowance of a few missing words let a
   page through whose window lacked a whole negative finding ("No gross ...
-  tear is seen").
+  tear is seen");
+* WORD ORDER: every run of RUN consecutive tokens of P (its token stream
+  across line breaks, so a wrap is no difference) is a run of RUN
+  consecutive tokens of the window (its pages' streams in order, so a run
+  may cross a page break inside the window, the page's header and footer
+  stamps being that break). A stripped stamp line inside a page's text
+  breaks the stream on both sides, so removing it never makes two tokens
+  adjacent that the page did not set side by side.
+  A page with no run (fewer than RUN tokens between stamps) is never held.
+  2026-11-17: a page ending "Electronically signed on <date A>" was held
+  by a window that said "signed on <date B>" and had date A in another
+  note: every token was there, the sentence was not. The cost is the
+  conservative side: a page in another export's field order, or with an
+  added "(continued)" heading, is read.
 
 A page that states no date is held only beside a held neighbour: its page
 before or after was held by a window of that same document within WINDOW
@@ -35,9 +48,11 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
-from .values import CITE, NUM, clinical_values, norm_number
+from .values import CITE, clinical_values, norm_number
 
 WINDOW = 3
+RUN = 4
+_TOKEN = re.compile(r"[a-z]+|\d+(?:[.,/:]\d+)*")
 _DATE = re.compile(r"(?<![\d/])(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})(?![\d/])")
 
 
@@ -48,13 +63,36 @@ def dates_of(text: str) -> frozenset[str]:
     return frozenset(out)
 
 
+def _tok(t: str) -> str:
+    return t if t[0].isalpha() else "#" + norm_number(t)
+
+
+def stream_of(text: str) -> tuple[str | None, ...]:
+    """The page's tokens in order (words lowercase, numbers in one
+    spelling), with None where a stripped stamp line was (``select.stamp_lines``)."""
+    from .select import stamp_lines
+
+    out: list[str | None] = []
+    for ln, stamp in stamp_lines(text):
+        if stamp:
+            out.append(None)
+        else:
+            out.extend(_tok(t) for t in _TOKEN.findall(CITE.sub(" ", ln).lower()))
+    while out and out[0] is None:  # a header or footer stamp is the page break itself, not inside the text
+        out.pop(0)
+    while out and out[-1] is None:
+        out.pop()
+    return tuple(out)
+
+
+def runs_of(stream: tuple[str | None, ...]) -> list[tuple[str | None, ...]]:
+    """Every run of RUN consecutive tokens that crosses no stamp."""
+    return [r for i in range(len(stream) - RUN + 1) if None not in (r := stream[i : i + RUN])]
+
+
 def bag_of(text: str) -> Counter[str]:
-    """The text's tokens as a multiset: every word (lowercase letters) and
-    every number in one spelling (``values.norm_number``)."""
-    t = CITE.sub(" ", text).lower()
-    out = Counter(re.findall(r"[a-z]+", re.sub(r"\d", " ", t)))
-    out.update("#" + norm_number(n) for n in NUM.findall(t))
-    return out
+    """The text's tokens as a multiset (``stream_of`` less its stamp marks)."""
+    return Counter(t for t in stream_of(text) if t is not None)
 
 
 @dataclass(frozen=True)
@@ -63,6 +101,7 @@ class Facts:
     dates: frozenset[str]
     values: frozenset[str]
     bag: tuple[tuple[str, int], ...]
+    stream: tuple[str | None, ...] = ()
 
 
 def facts(doc: int, text: str) -> Facts:
@@ -70,12 +109,20 @@ def facts(doc: int, text: str) -> Facts:
     from .select import strip_stamps
 
     body = strip_stamps(text)
+    stream = stream_of(text)
     return Facts(
         doc,
         dates_of(body),
         frozenset(clinical_values(body)),
-        tuple(sorted(bag_of(body).items())),
+        tuple(sorted(Counter(t for t in stream if t is not None).items())),
+        stream,
     )
+
+
+def runs_absent(me: Facts, window: list[Facts]) -> int:
+    """How many of `me`'s runs of RUN tokens the window's stream never says."""
+    have = set(runs_of(tuple(t for w in window for t in w.stream)))
+    return sum(1 for r in runs_of(me.stream) if r not in have)
 
 
 def absent(me: Facts, window: list[Facts]) -> int:
@@ -90,8 +137,11 @@ def absent(me: Facts, window: list[Facts]) -> int:
 
 
 def holds(me: Facts, window: list[Facts]) -> bool:
-    """Whether the window of pages holds everything `me` says: nothing absent."""
-    return bool(window and me.bag) and absent(me, window) == 0
+    """Whether the window of pages holds everything `me` says: nothing
+    absent, and every run of its words in the window's order."""
+    if not (window and me.bag and runs_of(me.stream)):
+        return False
+    return absent(me, window) == 0 and runs_absent(me, window) == 0
 
 
 class Pool:

@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -142,15 +142,18 @@ def strip_stamps(text: str) -> str:
     page-number lines, and a bare date-time line among its first or last
     EDGE inked lines (``BARE_STAMP``). Nothing else is removed: a clinical
     date line is never a stamp."""
+    return "\n".join(ln for ln, stamp in stamp_lines(text) if not stamp)
+
+
+def stamp_lines(text: str) -> list[tuple[str, bool]]:
+    """Every line of `text` with whether ``strip_stamps`` sets it aside."""
     lines = (text or "").split("\n")
     inked = [i for i, ln in enumerate(lines) if ln.strip()]
     edge = set(inked[:EDGE] + inked[-EDGE:])
-    keep = [
-        ln
+    return [
+        (ln, bool(STAMP.match(ln) or PAGE_LINE.match(ln) or (i in edge and BARE_STAMP.match(ln))))
         for i, ln in enumerate(lines)
-        if not (STAMP.match(ln) or PAGE_LINE.match(ln) or (i in edge and BARE_STAMP.match(ln)))
     ]
-    return "\n".join(keep)
 
 
 def without_furniture(text: str) -> str:
@@ -225,7 +228,7 @@ class Delivered:
         for f in self.pool.items:
             out.pool.add(f)
         for f in other.pool.items:
-            out.pool.add(CT.Facts(f.doc + top, f.dates, f.values, f.bag))
+            out.pool.add(replace(f, doc=f.doc + top))
         return out
 
     def by_shingles(self, text: str) -> bool:

@@ -201,6 +201,60 @@ def test_two_deliveries_joined_keep_each_exhibit_its_own_document() -> None:
     assert S.Delivered.of_docs([_export_a()]).contained(_export_b()[1]) is not None
 
 
+SIGNED = (
+    "Example Clinic Orthopedics\nDate of service: 03/04/2026\nFollow up visit for neck pain after the collision.\n"
+    "Examination revealed paraspinal tenderness with improved rotation to the left side of the neck.\n"
+    "Plan: continue physical therapy once weekly and return to the clinic in four weeks.\n"
+    "Electronically signed on 03/04/2026 by Jane Roe, M.D."
+)
+OTHER_NOTE = (
+    "Example Clinic Orthopedics\nTelephone note dated 03/11/2026: the patient called to confirm the therapy schedule.\n"
+    "The schedule was confirmed and the patient was told to call with any questions."
+)
+
+
+def test_a_page_whose_tokens_are_all_in_the_window_but_not_its_sentence_is_read() -> None:
+    """(a) The real shape: the window says "signed on <date B>" on one page
+    and has date A in another note on the next; the page says "signed on
+    <date A>". Every token and the date are in the window; the sentence is not."""
+    seen = S.Delivered.of_docs([[SIGNED, OTHER_NOTE]])
+    page = SIGNED.replace("signed on 03/04/2026", "signed on 03/11/2026")
+    assert seen.contained(page) is None  # the text-window rule; the shingle rule is main's, unchanged
+    assert seen.contained(SIGNED) is not None
+
+
+def test_a_negative_finding_whose_words_are_scattered_in_the_window_is_read() -> None:
+    """(b) "No" and each word of the finding occur somewhere in the window,
+    never together; the page states the finding."""
+    elsewhere = (
+        "Rotator interval reviewed. No swelling of the hand. Cuff and atrophy were both discussed with the patient."
+    )
+    lines = MRI.split("\n")
+    seen = S.Delivered.of_docs([["\n".join(lines[:5]), "\n".join(lines[5:]), elsewhere]])
+    page = MRI.replace("The labrum is intact.", "The labrum is intact. No rotator cuff atrophy.")
+    assert _decide([page], seen)[1][0] == S.READ
+
+
+def test_a_page_differing_only_by_its_print_stamp_and_line_wraps_is_held() -> None:
+    """(c) The same words in the same order, broken into other lines, under another stamp."""
+    words = MRI.split()
+    rewrapped = "\n".join(" ".join(words[i : i + 9]) for i in range(0, len(words), 9))
+    assert rewrapped.split() == MRI.split() and rewrapped != MRI
+    got = _decide([f"Report Date/Time: 11/09/2026 08:01\n{rewrapped}\nPage 1 of 1"], _mri_window())
+    assert got == {1: (S.EXCLUDED, S.ALREADY)}
+
+
+def test_a_stamp_inside_a_page_breaks_its_runs() -> None:
+    """A stamp line inside the text is no page break: the tokens on its two
+    sides were never side by side, so no run joins them."""
+    from jobs.medchron.update import contained as CT
+
+    stream = CT.stream_of("one two three\nPrinted on 11/09/2026\nfour five six")
+    assert stream == ("one", "two", "three", None, "four", "five", "six")
+    assert CT.runs_of(stream) == []
+    assert CT.stream_of("Run Date: 11/02/2026\none two\nPage 1 of 2") == ("one", "two")
+
+
 def test_an_undated_page_is_held_only_beside_a_held_page() -> None:
     """The delivered export broke the visit's body across two pages; the new
     export holds its header on one page and its whole undated body on the
@@ -300,6 +354,7 @@ def test_the_measuring_command_reports_held_pages_and_stray_lines(
     assert out["pages"]["decisions"] == {f"{S.EXCLUDED}: {S.ALREADY}": 3}
     assert out["pages"]["held_by_text"] == {"held by a run of delivered pages": 1}  # the page broken mid-visit
     assert out["pages"]["held_by_text_tokens_absent_from_window"] == {"d2 p.2": 0}
+    assert out["pages"]["held_by_text_runs_absent_from_window"] == {"d2 p.2": 0}
     assert out["stray_citations"] == {
         "entries": 1,
         "citation_only_lines_before": 4,
