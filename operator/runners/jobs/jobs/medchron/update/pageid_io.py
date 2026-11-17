@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import pageid as PI
-from .select import _FURNITURE, ALREADY, FAILED_MARKS, MIN_CHARS, OVERLAP, _dates
+from .select import ALREADY, FAILED_MARKS, MIN_CHARS, OVERLAP, _dates, without_furniture
 from .subsets import Subset
 from .values import clinical_values
 
@@ -123,13 +123,13 @@ def _words(text: str) -> Counter[str]:
 
 def confirmed(mine: str, theirs: str) -> bool:
     """A near picture match is a repeat only when both transcriptions state
-    the same dates and the same clinical values (fax and print lines aside:
-    a re-printed copy carries a new print date) and share most words, in
-    any order."""
+    the same dates and the same clinical values (fax, print and export
+    stamp lines aside, ``select.without_furniture``: a re-printed copy
+    carries a new print date) and share most words, in any order."""
     a, b = (mine or "").strip(), (theirs or "").strip()
     if len(a) < MIN_CHARS or len(b) < MIN_CHARS or a in FAILED_MARKS or b in FAILED_MARKS:
         return False
-    a, b = _FURNITURE.sub("", a), _FURNITURE.sub("", b)
+    a, b = without_furniture(a), without_furniture(b)
     if _dates(a) != _dates(b) or set(clinical_values(a)) != set(clinical_values(b)):
         return False
     wa, wb = _words(a), _words(b)

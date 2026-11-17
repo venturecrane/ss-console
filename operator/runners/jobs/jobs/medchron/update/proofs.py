@@ -17,8 +17,10 @@
  5. no planted control came back SUPPORTED, and a control was planted when
     the audit had enough claims to plant one;
  6. no ADDED line starts with a bare '.' (what a dropped sentence leaves),
-    and none carries the pipeline's own note about its reading
-    ("(text continues beyond the page)", ``meta_markers``);
+    none carries the pipeline's own note about its reading
+    ("(text continues beyond the page)", ``meta_markers``), and none is
+    only a citation (``uncited.cite_only``: a stray line the firm reads as
+    noise; ``uncited.join_stray`` joins each to the text it cites);
  7. no cited sentence appears more often than in the delivery (or more than
     once, when the delivery never had it);
  8. no ADDED entry cites only delivered exhibits (an update reads new
@@ -36,13 +38,15 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from .. import meta_markers
 from ..audit import controls
-from . import body as B
-from .values import numbers
+from . import body as B, repeats as R
+from .uncited import cite_only
+from .values import content_numbers, numbers
 
 NOTE_LINE = re.compile(r"pre-incident encounters?.*not itemized")
 WINDOW = re.compile(r"\b(this|the|a) chunk\b|\bin this excerpt\b|\bnot provided in this\b|\bprovided text\b", re.I)
@@ -75,6 +79,9 @@ class Inputs:
     #: control keys retired as badly chosen (``audit/retired.py``, by SMD or by
     #: rule): proof 5 leaves them out, as the round report and the gate do
     retired_controls: set[str] = field(default_factory=set)
+    #: the lane's canonical provider (``stages.group.Canon``), for proof 10's
+    #: same-visit test; the provider lines' own words decide when not given
+    canon: Callable[[str], str] = str
 
 
 @dataclass
@@ -118,15 +125,25 @@ def dropped_values(
     new_ex: set[int],
     named: set[str],
     moved: list[tuple[str, str, set[int]]] | tuple = (),
+    canon: Callable[[str], str] = str,
 ) -> list[tuple]:
     """[(entry head, [values])] for entries composed from a NEW exhibit whose
     values the updated document does not carry on that date and the audit did
     not name. `moved` is the collect stage's re-dates ([(from, to, exhibits)],
     ``handwritten.moves_of``): an entry a re-date moved is looked for on the
-    date it moved to as well, never excused."""
+    date it moved to as well, never excused.
+
+    A time of day or a bare year is excused only for an entry the updated
+    document carries as the SAME VISIT composed from another exhibit
+    (``repeats.same_visit`` and ``repeats.apart``: collect dropped it as a
+    copy of that visit in other words, every content value and finding
+    carried). An edit of the entry's own text is never excused: its
+    survivor cites the same exhibit. Every other value is still required."""
     by_date: dict[str, set[str]] = {}
+    ents_on: dict[str, list[str]] = {}
     for e in updated_entries:
         by_date.setdefault(B.iso(e), set()).update(numbers(e))
+        ents_on.setdefault(B.iso(e), []).append(e)
     out = []
     for e in composed:
         cites = B.cited(e)
@@ -138,6 +155,9 @@ def dropped_values(
             if frm == day and ex & cites:
                 have |= by_date.get(to, set())
         gone = sorted(numbers(e) - have - named)
+        if gone and not (content_numbers(e) - have - named):
+            if any(R.same_visit(e, u, canon) and R.apart(e, u) for u in ents_on.get(day, [])):
+                continue  # only times of day or bare years, of a visit the update carries
         if gone:
             out.append((e.splitlines()[0], gone))
     return out
@@ -227,10 +247,13 @@ def _added(x: Inputs, r: Result) -> None:
     bare = [ln for ln in added_lines(x.delivered_lines, x.updated_lines) if ln.lstrip().startswith(".")]
     bare += [ln for ln in added_lines(base_lines, md_lines) if ln.lstrip().startswith(".")]
     notes = [ln for ln in added_lines(x.delivered_lines, x.updated_lines) if meta_markers.found(ln)]
+    alone = [ln for ln in added_lines(x.delivered_lines, x.updated_lines) if cite_only(ln)]
+    alone += [ln for ln in added_lines(base_lines, md_lines) if cite_only(ln)]
     r.check(
         "6",
-        not bare and not notes,
-        f"added lines starting with a bare '.': {len(bare)}; carrying the pipeline's own notes: {len(notes)}",
+        not bare and not notes and not alone,
+        f"added lines starting with a bare '.': {len(bare)}; carrying the pipeline's own notes: {len(notes)}; "
+        f"only a citation: {len(alone)}",
     )
     cd, cu = Counter(cited_sentences(x.delivered_lines)), Counter(cited_sentences(x.updated_lines))
     rep = [s for s, n in cu.items() if n > max(cd[s], 1)]
@@ -244,7 +267,7 @@ def _added(x: Inputs, r: Result) -> None:
     named: set[str] = set(x.review_named)
     for row in x.audit_rows:
         named |= numbers(" ".join((row.get("unsupported_assertions") or []) + (row.get("contradictions") or [])))
-    lost = dropped_values(x.composed, ue, x.new_exhibits, named, x.redate_moves)
+    lost = dropped_values(x.composed, ue, x.new_exhibits, named, x.redate_moves, x.canon)
     from_new = sum(1 for e in x.composed if B.cited(e) & x.new_exhibits)
     head = f"entries composed from new exhibits {from_new}; with a value the update does not carry: {len(lost)}"
     r.check("10", not lost, head + "".join(f" | {d}: {v[:12]}" for d, v in lost[:10]))

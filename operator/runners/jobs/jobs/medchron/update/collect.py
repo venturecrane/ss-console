@@ -12,7 +12,11 @@ by name and assemble numbered them by first citation. Here:
    that adds one would lose it, and the audit cannot see a dropped value. A
    kept restatement of a delivered visit is cut to its "Additional findings";
    a new entry another new entry of its date and provider covers is dropped;
-   a sentence a kept entry states twice is said once (``update/within.py``);
+   an entry that is the same visit as another in other words is dropped when
+   what stays carries every content value and finding of it, else folded
+   (``repeats.same_visit``, ``repeats.covered``); the "Additional findings"
+   rows of one visit are one row; a sentence a kept entry states twice is
+   said once (``update/within.py``);
 3. an entry carrying an unresolved "(FILE: ...)" citation refuses: the audit
    extracts only "(Exhibit N ...)" claims, so it would ship unaudited;
 4. a new exhibit no kept entry cites is not an exhibit (every visit it holds
@@ -102,9 +106,11 @@ def collect(
     keep, draws = R.merge_draws(keep)
     if draws:
         rep[R.SAME_DRAW] += draws
-    keep, twins = R.dedupe_new(keep, canon)
-    if twins:
-        rep[R.REPEAT_NEW] += twins
+    keep, twins = R.dedupe_report(keep, canon)
+    rep.update(twins)
+    keep, extra = R.merge_additional(keep)
+    if extra:
+        rep[R.ADDITIONAL_MERGED] += extra
     said = [W.dedupe(e) for e in keep]
     keep = [e for e, _ in said]
     if sum(n for _, n in said):
