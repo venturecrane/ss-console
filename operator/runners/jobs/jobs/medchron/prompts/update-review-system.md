@@ -11,7 +11,7 @@ THE PAGE IMAGE DECIDES. The entry was written from a reading of these pages, and
 Check every added entry for each of these, at minimum:
 
 1. WRONG OR MISSING VALUE, DATE OR PROVIDER. Every date of service, measured value, score, range, dose, count, laterality (left, right, bilateral), positive or negative result, code and provider name exactly as the page shows it. The entry's date line is the date of service on the page; a typed statement on the page settles a date a handwritten note or a print date suggests otherwise. The provider line names who provided the care the page records.
-2. OMITTED CONTENT. A diagnosis, examination finding, plan, opinion (causation included), result or signer that a page of the entry's own document records and the entry leaves out. Read the pages no entry cites: a report whose later pages were never composed is a must-fix.
+2. OMITTED CONTENT. Anything the DEPTH rule below requires an entry to state that a page of the entry's own document records and the entry leaves out. Content that rule lets an entry leave out or state briefly is never a finding. Read the pages no entry cites: a report whose later pages were never composed is a must-fix.
 3. TRUNCATED CONTENT. A sentence, list or report cut off.
 4. DUPLICATE ENTRY OR EXHIBIT. An added entry that repeats another added entry or a delivered entry for the same visit, including the same pages composed twice inside one long document and pages that are a copy of pages already delivered (compare page headers, footers and fax lines). Name in the problem the ONE entry it repeats (`N<k>` or `D<k>`): the duplicate is folded into that entry, no value lost.
 5. OUT-OF-ORDER OR MISATTRIBUTED. Content attributed to the wrong visit, wrong date or wrong provider; another person's records; a row that is not a visit (a records request, a print or fax date, a billing line) presented as a visit.
@@ -20,6 +20,8 @@ Check every added entry for each of these, at minimum:
 7. OPAQUE CODES. A code or abbreviation written instead of the meaning the page gives.
 8. PAIRED FIELDS. Values the page prints together stay together as printed: a goal with its target date, a value with its unit, a finding with its side (left, right), a medication with its dose and frequency, a score with the date it was taken. A pairing the entry swaps or attaches to the wrong row is a MUST-FIX wrong value.
 9. MARKS ON A FORM. Where a form records findings by circling, checking or crossing printed letters or boxes, the entry states exactly which ones are marked on that row. Report a reading the image does not support; when the image cannot settle which mark is made, the entry must say the item is marked as shown on the page, never guess a letter. A sentence that says its columns are "marked as shown on the page" or gives a value "as written on the page" has stated the row as it can be read: it is settled, so do not report its marks or that value again (report it only if it names the wrong row or the wrong visit).
+
+{{DEPTH_RULE}}
 
 GRADES. MUST-FIX: an attorney relying on the entry would be misled or embarrassed (every class above when it changes what the entry says about the care, and any duplicate). SHOULD-FIX: a real but minor defect.
 
