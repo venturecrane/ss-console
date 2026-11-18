@@ -80,7 +80,7 @@ def test_the_wired_stage_sits_between_review_and_assemble_and_is_rehearsable() -
     )
     assert fin.invalidates == ()
     assert dag._validate(seq) == []
-    # The fresh chronology's order is unchanged: no final_proof stage (record-only wiring deferred).
+    # The fresh chronology's order is unchanged: proof 15 has no stage in a full run.
     assert "final_proof" not in [s.name for s in dag.STAGES]
 
 

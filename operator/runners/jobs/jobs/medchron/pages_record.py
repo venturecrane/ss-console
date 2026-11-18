@@ -13,9 +13,11 @@ ONE ROW PER PAGE of every document the update pulled:
     {doc, sha256, page, status, class, evidence: {kind, cover, frac, headings}, by}
 
 * ``status``: ``cited`` | ``cited_via`` (cited, resolved through its cover) |
-  ``excluded`` | ``read_uncited`` | ``unread``; ``read`` is the interim
-  status ``update_select`` writes for a page sent to compose, which
-  ``stages/page_account`` settles to cited or read_uncited.
+  ``excluded`` | ``read_uncited`` | ``unread``; ``read`` is the status
+  ``update_select`` writes for a page sent to compose. No stage settles a
+  ``read`` row further, so a run writes ``read``, ``excluded`` and
+  ``unread``; ``cited``, ``cited_via`` and ``read_uncited`` are known
+  statuses no run writes today.
 * ``class``: why, as a short code (``CLASSES``).
 * ``evidence.kind``: what proves it (``KINDS``). ``cover`` names the page
   that covers an excluded page: ``{exhibit|doc, page, exact}`` (or

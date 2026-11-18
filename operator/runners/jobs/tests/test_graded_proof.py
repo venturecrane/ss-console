@@ -15,7 +15,7 @@ from jobs import wording
 from jobs.medchron import config as config_mod, graded_proof as GP, job as job_mod
 from jobs.medchron.audit import claims as CL
 from jobs.medchron.update import body as B, collect as C
-from jobs.stages import final_proof, upload
+from jobs.stages import upload
 from jobs.stages.base import StageRun
 
 NEW = (
@@ -124,19 +124,14 @@ def _manifest(sr: StageRun, doc: Path) -> list[dict]:
     return m
 
 
-def test_the_final_proof_stage_records_and_never_fails(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
-    log: list[str] = []
-    sr = _sr(job_dir, firm_config_path, data_root, log)
-    doc = _fresh(sr)
-    assert final_proof.run(sr) == 0
-    got = json.loads((sr.slug_dir / "runs" / "alpha" / GP.PROOFS).read_text())
-    assert got["filed"] == {"name": doc.name, "sha256": hashlib.sha256(doc.read_bytes()).hexdigest()}
-    assert GP.recorded(sr.slug_dir, "alpha") == {"P15_unsupported_claim": 0, "P15_ungraded_text": 0}
-    (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").write_text(
-        _md([NEW]).replace("the imaging. (Exhibit 2 - p. 3)", "the imaging. (Exhibit 2 - p. 3) Doing well.")
-    )
-    assert final_proof.run(sr) == 0  # recorded, never a failure
-    assert GP.recorded(sr.slug_dir, "alpha")["P15_ungraded_text"] == 1
+def _prove(sr: StageRun, doc: Path) -> Path:
+    """A full run's proofs file, written with ``graded_proof.write`` as the
+    upload reads it: proof 15's findings on the chronology the review left,
+    and the filed document's sha256."""
+    rd = sr.slug_dir / "runs" / "alpha"
+    md = (rd / "final-chronology.md").read_text()
+    GP.write(rd / GP.PROOFS, GP.codes(_check(md, _rows(md))), {"name": doc.name, "sha256": GP.file_sha(doc)})
+    return rd / GP.PROOFS
 
 
 def test_the_docx_rewritten_after_the_proof_is_recorded_at_upload(
@@ -145,8 +140,7 @@ def test_the_docx_rewritten_after_the_proof_is_recorded_at_upload(
     log: list[str] = []
     sr = _sr(job_dir, firm_config_path, data_root, log)
     doc = _fresh(sr)
-    assert final_proof.run(sr) == 0
-    proofs = sr.slug_dir / "runs" / "alpha" / GP.PROOFS
+    proofs = _prove(sr, doc)
     assert GP.record_upload(proofs, _manifest(sr, doc), log.append) is None  # the bytes proven
     doc.write_bytes(b"the chronology, rewritten after the proof")
     assert GP.record_upload(proofs, _manifest(sr, doc), log.append) == GP.SHA_CHANGED

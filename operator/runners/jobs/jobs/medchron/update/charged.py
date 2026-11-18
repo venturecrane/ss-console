@@ -32,8 +32,8 @@ what the page question before the first paid step is asked with
 match is never transcribed and no later step reads it, so pages read never
 exceed pages asked by construction (``read_exceeds_asked``, 0); the charge is
 still capped at the asked figure as a backstop, and a cap records
-``charged_capped`` with both numbers (``capped``), in ``page_account.json``
-and the run's notes; nothing stops. An asked record that is absent,
+``charged_capped`` with both numbers (``capped``) in the run's notes
+(``cap_notes``); nothing stops. An asked record that is absent,
 truncated or malformed means no cap (the charge is the pages read) and its
 state is recorded (``asked_state``); it never raises. With no page record at
 all (an update stopped before ``update_pages``), the 2026-11-06 rule stands
@@ -195,8 +195,8 @@ def cap_notes(slug_dir: Path, unit: str) -> list[str]:
 
 
 def figures(slug_dir: Path, unit: str) -> dict[str, int | None]:
-    """{pages_read, pages_charged, charged_old_rule, extracted}: what ``page_account.json``
-    and the rehearsal print. ``pages_read`` and ``pages_charged`` are equal by construction."""
+    """{pages_read, pages_charged, charged_old_rule, extracted}: what the rehearsal
+    prints (``charge_line``). ``pages_read`` and ``pages_charged`` are equal by construction."""
     from ...budget import pages_read as extracted_pages
 
     extracted = extracted_pages(slug_dir / "extracted.jsonl")
