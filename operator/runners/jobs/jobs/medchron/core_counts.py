@@ -9,8 +9,9 @@ What they answer (2026-11-18, measured on two real updates): how many of the
 review's must-fix findings were content the writer left out (56 and 80 percent
 before the writer and the reviewer shared one depth rule), how many pages the
 review read as text and how many as pictures, how many citations named a
-copy of the page that was read, and how many findings were one visit written
-twice (the small reading windows can split a visit between two requests).
+copy of the page that was read, how many findings were one visit written
+twice (the small reading windows can split a visit between two requests), and
+what the record-only proofs found.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from . import graded_proof as GP
 from .update import cite_read as CR
 
 #: The reviewer's class numbers (``prompts/update-review-system.md``): check 2 is
@@ -59,8 +61,22 @@ def _review(rec: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def _unit(ud: Path) -> dict[str, int]:
+def _proofs(ud: Path) -> dict[str, int]:
+    """The record-only proof findings of the unit (``graded_proof.recorded``:
+    proofs 12 to 15, a filed document changed after its proof, a crash in the
+    final proofs), named as the run record accepts a count name. Until
+    2026-11-18 nothing read them: they were written beside the proofs and
+    reached neither the run record nor the triage."""
+    slug_dir, unit = ud.parents[2], ud.parent.name
     out: dict[str, int] = {}
+    for code, n in GP.recorded(slug_dir, unit).items():
+        key = "proof_" + "".join(c if c.isalnum() else "_" for c in str(code).lower())
+        out[key[:48]] = out.get(key[:48], 0) + _num(n)
+    return out
+
+
+def _unit(ud: Path) -> dict[str, int]:
+    out: dict[str, int] = _proofs(ud)
     rep = _read(ud / "compose_report.json")
     for key in (CR.MOVED, CR.DELIVERED, CR.MIXED):
         if key in rep:

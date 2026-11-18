@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from jobs import run_record
-from jobs.medchron import core_counts
+from jobs.medchron import core_counts, graded_proof as GP
 from jobs.medchron.update import cite_read as CR
 
 
@@ -88,3 +88,19 @@ def test_every_count_name_is_one_the_run_record_accepts(tmp_path: Path) -> None:
     (ud / "compose_report.json").write_text(json.dumps({CR.MOVED: 1, CR.DELIVERED: 1, CR.MIXED: 1}), encoding="utf-8")
     blk = run_record.block("end", extra=core_counts.with_derived({}, tmp_path))
     assert blk["checks"]["review_must_fix_omitted"] == 2 and blk["checks"][CR.MOVED] == 1
+
+
+def test_the_record_only_proof_findings_reach_the_run_record(tmp_path: Path) -> None:
+    """Fails if the proofs' record-only findings are written and never read:
+    until 2026-11-18 no caller carried them to the run record."""
+    ud = _update_dir(tmp_path)
+    GP.write(ud / GP.PROOFS, {"P15_ungraded_text": 2, "P12_mutated": 0}, {"name": "a.docx", "sha256": "0" * 64})
+    got = core_counts.derived(tmp_path)
+    assert got["proof_p15_ungraded_text"] == 2 and got["proof_p12_mutated"] == 0
+    blk = run_record.block("end", extra=core_counts.with_derived({}, tmp_path))
+    assert blk["checks"]["proof_p15_ungraded_text"] == 2  # a name the run record accepts
+
+
+def test_a_unit_with_no_proofs_file_adds_no_proof_counts(tmp_path: Path) -> None:
+    _review(_update_dir(tmp_path))
+    assert not [k for k in core_counts.derived(tmp_path) if k.startswith("proof_")]
