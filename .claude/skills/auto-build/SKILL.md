@@ -31,7 +31,7 @@ Run `.claude/bin/tier <paths the change will touch>`, adding `--new` when the wo
 | Tier           | What the change goes through                                                                                                             |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `none`         | An ordinary PR. Leave this skill. If the command prints `review:`, the PR still gets the bug review in Step 6.                           |
-| `fix`          | Step 6 only: the replay, the bug review, ship, close. No plan mode.                                                                        |
+| `fix`          | Write the `/wired` sentence in one line and the failing case as the one example. Then Step 6: replay that example, the bug review, ship, close. No plan mode. |
 | `capability`   | Every step below.                                                                                                                        |
 
 ## Step 1: The ask
@@ -48,7 +48,7 @@ Invoke `/wired` on the ask. It returns the act as a sentence, the gate chain and
 
 ## Step 3: The design
 
-Call `EnterPlanMode`. Use Explore agents to locate code.
+Call `EnterPlanMode`. Use Explore agents, on Haiku or Sonnet, to locate code.
 
 **A dedicated design pass, every time.** One Fable Plan agent designs the change. It is never skipped and never done by the lead in passing. Models and effort per role are in the doctrine table "Model per role". Its brief carries the ask from Step 1, the contract from Step 2, and this instruction: "Read the code the change touches and everything it must interact with. Write the approach, the files and functions to change, what the reader will see, and how to verify it. State every risk and edge case as a concrete thing the build must handle (a named input, state, caller or seat), not as a general caution." In a blind test on ten past features, a pass like this caught or nearly caught six misses the real builds caught none of; a longer list of fixed questions did no better.
 
@@ -60,9 +60,9 @@ The plan file has these parts, in this order.
 
 **The design**, from the design pass, with its named risks.
 
-**Examples.** Three to seven sentences of the form "when this arrives, the reader receives that", with invented values and no client text. They cover each ending the change touches, the awkward inputs the design named, and one "what works today still works". For a job lane, an agent that is not the builder turns them into answer-key rows and rows in `operator/runners/jobs/tests/lifecycle_matrix.py` before any code is written. A lane with no answer key gets one first.
+**Examples.** Three to seven sentences of the form "when this arrives, the reader receives that", with invented values and no client text. They cover each ending the change touches, the awkward inputs the design named, and one "what works today still works". For a job lane, an Opus agent that is not the builder turns them into answer-key rows and rows in `operator/runners/jobs/tests/lifecycle_matrix.py` before any code is written. A lane with no answer key gets one first.
 
-**The bill.** PRs times the merge time (about 27 minutes for Operator code, about 17 otherwise; re-measure with `gh run list` when it matters), plus releases, plus the cost of a run measured on real inputs and stated as added cost with its basis. `blocked_by` between builders means the other code exists, never that it merged or reached the seat.
+**The bill.** PRs times the merge time (about 27 minutes for Operator code, about 17 otherwise; re-measure with `gh run list` when it matters), plus releases, plus the cost of a run measured on real inputs and stated as added cost with its basis.
 
 **`## Premises`**, as `.claude/hooks/plan-premise-gate.mjs` requires, and three lines for the build: builders, the files each owns, the bill.
 
@@ -78,13 +78,13 @@ Call `ExitPlanMode`. Approved: go on. Rejected: the skill ends, and the Captain'
 
 ## Step 6: Build, prove, ship, close
 
-**Build.** At most 4 builders, on Opus, in the lead's worktree, with files that do not overlap. Every builder's brief carries the winning line, the risk class, the examples, and this line verbatim: "You never wait on CI, the merge queue or a long command (no `until`/`sleep` loops, no `gh run watch`, no `--watch`). Push, open the PR, and return the handle (PR number, run id); the lead merges and watches." Before pushing Operator code, run the two CI jobs that fail most, the golden comparison and the job-runner tests, as `.github/workflows/operator-substrate.yml` runs them.
+**Build.** First, one real path runs end to end at $0 before any parallel builder starts (doctrine, Pace). Then at most 4 builders, on Opus, in the lead's worktree, each owning files no other builder touches. A builder that needs another's code starts when that code is in the tree, never when it merged or reached a seat. Builders do not commit or push: the lead commits, pushes and opens the PRs. Every builder's brief carries the winning line, the risk class, the examples, and this line verbatim: "You never wait on CI, the merge queue or a long command (no `until`/`sleep` loops, no `gh run watch`, no `--watch`). Return what you changed and the commands you ran; the lead commits, pushes, merges and watches." Before pushing Operator code, the lead runs the two CI jobs that fail most, the golden comparison and the job-runner tests, as `.github/workflows/operator-substrate.yml` runs them.
 
 **Prove, once.**
 
 - One $0 replay on real saved inputs through the code path the seat runs, covering the examples. Client documents are opened only in that client's ops workspace.
 - Endings no saved job shows are proven by their lifecycle-table rows.
-- One Opus bug review of the diff: wrong results, and any risk the design named that the build does not handle. Two reviewers when `.claude/bin/tier` shows a send path or client lane, the second on sending, rollback and money.
+- One Opus bug review of the diff: wrong results, and any risk the design named that the build does not handle (for a `fix`, that the failing case now passes and nothing beside it broke). Two reviewers when `.claude/bin/tier` shows a send path or client lane, the second on sending, rollback and money.
 - Never first on the client's seat. Never a paid proving run. What a $0 replay cannot show is listed as "watched on the first real request".
 
 **Re-run rule.** A fix re-runs the replay. A reviewer reads a fix only when it touches a send path or client lane. If that read finds new faults, stop, re-plan, and bring the Captain a new plan: the design is at fault, and another round will not fix it.
@@ -95,4 +95,4 @@ Call `ExitPlanMode`. Approved: go on. Rejected: the skill ends, and the Captain'
 
 **Ship.** `npm run verify`, then the PR, then merge through the queue. All code reaches the seat in one release, then the config that switches it on. Destructive actions (production data, force-push, secret rotation, dropping schema, auth changes) still need his explicit yes.
 
-**Close.** `npm run deadcode` is clean, so nothing new is uncalled. Every row of the `/wired` contract is closed against the five READY conditions, each with evidence. The closing message says what the reader can now do and what they still cannot. Then the session writes its handoff and ends; it never waits for a real request.
+**Close.** `npm run deadcode` is clean, so nothing new is uncalled. Every row of the `/wired` contract (for a `fix`, its one sentence) is closed against the five READY conditions, each with evidence. The closing message says what the reader can now do and what they still cannot. Then the session writes its handoff and ends; it never waits for a real request.

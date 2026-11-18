@@ -46,6 +46,31 @@ const FLEET_ONLY = pathsOf(3330)
 const CLIENT_LANE = pathsOf(3906)
 const NOT_CLIENT = pathsOf(3910)
 
+describe('paths as an agent actually holds them', () => {
+  it('an absolute path into the repo gets the same tier as its relative form', () => {
+    const absolute = CLIENT_LANE.map((p) => resolve(ROOT, p))
+    expect(tierJson(CLIENT_LANE).tier).toBe('fix')
+    expect(tierJson(absolute).tier).toBe('fix')
+  })
+
+  it('a ./ path gets the same tier too', () => {
+    expect(tierJson(CLIENT_LANE.map((p) => `./${p}`)).tier).toBe('fix')
+  })
+
+  it('release tooling beside a client lane takes the client tier and drops the review line', () => {
+    const r = tierJson([...FLEET_ONLY, ...CLIENT_LANE])
+    expect(r.tier).toBe('fix')
+    expect(r.review).toBeNull()
+    expect(r.releaseTooling.length).toBeGreaterThan(0)
+  })
+
+  it('a seat provisioning script is release tooling', () => {
+    const r = tierJson(['operator/bin/reprovision.sh'])
+    expect(r.tier).toBe('none')
+    expect(r.review).not.toBeNull()
+  })
+})
+
 describe('tier: decided from the paths', () => {
   it('a docs-only change is none, with no review line', () => {
     const r = tier(DOCS_ONLY)

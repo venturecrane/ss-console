@@ -17,18 +17,29 @@
  * `--new` is the one bit the caller states; everything else is computed.
  * Exit 0 for every valid call, 2 when no paths were given.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { classifyPaths } from './lib/touch-map.mjs'
+
+/** The repo this script lives in; an absolute path is read relative to it. */
+const CHECKOUT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
  * Release and fleet tooling. The touch map classes these `none` on purpose (no
- * client request runs through them), yet they drew 59 bug fixes in 30 days, so
- * a change to them still gets a bug review. This is the one place that list
- * lives.
+ * client request runs through them), yet release tooling drew more fixes after
+ * merge than any other kind of work, so a change to them still gets a bug
+ * review. This is the one place that list lives.
  */
 const RELEASE_TOOLING_RE =
-  /^(operator\/bin\/lib\/fleet\/|operator\/bin\/fleet$|\.github\/workflows\/(release-tick|deploy)\.yml$)/
-const REVIEW_LINE = 'bug review required (release and fleet tooling drew 59 fixes in 30 days)'
+  /^(operator\/bin\/lib\/fleet\/|operator\/bin\/(fleet|reprovision\.sh)$|operator\/bin\/lib\/(select-release-image|fly-transport|render-fly-toml|machine-size)\.sh$|\.github\/workflows\/(release-tick|deploy|hermes-release-watch)\.yml$)/
+const REVIEW_LINE = 'bug review required (release and fleet tooling)'
+
+/** A path as the touch map reads it: relative to the repo root, no leading `./`. */
+function repoRelative(p) {
+  const rel = isAbsolute(p) ? relative(CHECKOUT, p) : p
+  return rel.replace(/^\.\//, '')
+}
 
 const USAGE = 'usage: tier <path> [<path> ...] [--new] [--json]   (or paths on stdin, one per line)'
 
@@ -37,10 +48,11 @@ const USAGE = 'usage: tier <path> [<path> ...] [--new] [--json]   (or paths on s
  * @param {string[]} paths
  * @param {{ isNew?: boolean }} [opts]
  */
-export function tierFor(paths, { isNew = false } = {}) {
+export function tierFor(rawPaths, { isNew = false } = {}) {
+  const paths = rawPaths.map(repoRelative)
   const { clientSurface, byClass } = classifyPaths(paths)
   const tier = !clientSurface ? 'none' : isNew ? 'capability' : 'fix'
-  const releaseTooling = paths.filter((p) => RELEASE_TOOLING_RE.test(p.replace(/^\.\//, '')))
+  const releaseTooling = paths.filter((p) => RELEASE_TOOLING_RE.test(p))
   return {
     tier,
     review: tier === 'none' && releaseTooling.length > 0 ? REVIEW_LINE : null,
@@ -58,7 +70,11 @@ function main(argv) {
   }
   let paths = argv.filter((a) => !a.startsWith('--'))
   if (paths.length === 0 && !process.stdin.isTTY) {
-    paths = readFileSync(0, 'utf8').split('\n')
+    try {
+      paths = readFileSync(0, 'utf8').split('\n')
+    } catch {
+      paths = [] // stdin open but with nothing to read: the same as no paths
+    }
   }
   paths = paths.map((p) => p.trim()).filter(Boolean)
   if (paths.length === 0) {
@@ -85,6 +101,6 @@ function main(argv) {
   return 0
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   process.exit(main(process.argv.slice(2)))
 }

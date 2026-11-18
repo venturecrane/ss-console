@@ -10,5 +10,6 @@
 # surface; that is the caller's one bit, the rest is computed by
 # scripts/tier.mjs from scripts/lib/touch-map.mjs. Exit 2 with no paths.
 set -u
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SELF="$(realpath "$0" 2>/dev/null || echo "$0")"
+ROOT="$(cd "$(dirname "$SELF")/../.." && pwd)"
 exec node "$ROOT/scripts/tier.mjs" "$@"
