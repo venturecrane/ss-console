@@ -104,3 +104,53 @@ def test_the_record_only_proof_findings_reach_the_run_record(tmp_path: Path) -> 
 def test_a_unit_with_no_proofs_file_adds_no_proof_counts(tmp_path: Path) -> None:
     _review(_update_dir(tmp_path))
     assert not [k for k in core_counts.derived(tmp_path) if k.startswith("proof_")]
+
+
+def _full_run(job_dir: Path, unit: str = "alpha") -> None:
+    """The files a full chronology saves that an update does not replace: the
+    document review's record and the per-sentence check's verdict rows."""
+    rd = job_dir / "data" / "firm" / "runs" / unit
+    rd.mkdir(parents=True, exist_ok=True)
+    rec = {
+        "must_fix": 0,
+        "should_fix": 2,
+        "notes": 1,
+        "findings": [
+            {"grade": "should-fix", "check": "5 duplicate entry"},
+            {"grade": "should-fix", "check": "5. garbled"},
+            {"grade": "note", "check": "2 records disagree"},
+            {"grade": "note", "check": "no number"},
+        ],
+    }
+    (rd / "review.json").write_text(json.dumps(rec), encoding="utf-8")
+    out = job_dir / "data" / "firm" / "out" / unit
+    out.mkdir(parents=True)
+    rows = [
+        {"kind": "real", "key": "a", "mode": "image"},
+        {"kind": "real", "key": "a", "mode": "text"},  # the later row is the standing one
+        {"kind": "real", "key": "b", "mode": "image"},
+        {"kind": "reverse-control", "key": "a", "mode": "image"},  # a control, never a sentence's verdict
+        {"kind": "real", "key": "c"},  # no mode recorded: counted as neither
+    ]
+    lines = [json.dumps(r) for r in rows] + ["not json"]
+    (out / "audit-results.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_a_full_chronology_records_what_its_review_found_and_how_sentences_were_checked(tmp_path: Path) -> None:
+    _full_run(tmp_path)
+    assert core_counts.derived(tmp_path) == {
+        "doc_review_must_fix": 0,
+        "doc_review_should_fix": 2,
+        "doc_review_notes": 1,
+        "doc_review_check_5": 2,
+        "doc_review_check_2": 1,
+        "audit_text_claims": 1,
+        "audit_image_claims": 1,
+    }
+
+
+def test_an_update_and_a_full_run_keep_separate_review_counts(tmp_path: Path) -> None:
+    _review(_update_dir(tmp_path))
+    _full_run(tmp_path)
+    got = core_counts.derived(tmp_path)
+    assert got["review_must_fix"] == 4 and got["doc_review_should_fix"] == 2

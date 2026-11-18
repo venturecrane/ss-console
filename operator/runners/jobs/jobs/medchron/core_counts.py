@@ -87,11 +87,53 @@ def _unit(ud: Path) -> dict[str, int]:
     return out
 
 
+def _doc_review(rec: dict[str, Any]) -> dict[str, int]:
+    """The document review's findings (``runs/<unit>/review.json``): by grade,
+    and by the check number each finding leads with. A full chronology has no
+    update review, so until 2026-11-18 its run record said nothing about what
+    its review found (the first full run on the small reading windows: 17
+    findings of one visit written twice, seen only by reading the job's files)."""
+    out = {f"doc_review_{g}": _num(rec.get(g)) for g in ("must_fix", "should_fix", "notes")}
+    for f in rec.get("findings") or []:
+        n = _class_number(f.get("check") if isinstance(f, dict) else None)
+        if n.isdigit():
+            out[f"doc_review_check_{n}"] = out.get(f"doc_review_check_{n}", 0) + 1
+    return out
+
+
+def _audit(results: Path) -> dict[str, int]:
+    """How each sentence's standing verdict was reached: against page text or
+    against a page picture (``out/<unit>/audit-results.jsonl``, the last real
+    row per sentence). Text is the cheap path; a run that sends most sentences
+    to pictures is paying the old price."""
+    last: dict[str, str] = {}
+    try:
+        lines = results.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and r.get("kind") == "real" and r.get("mode") in ("text", "image") and "key" in r:
+            last[str(r["key"])] = str(r["mode"])
+    if not last:
+        return {}
+    modes = list(last.values())
+    return {"audit_text_claims": modes.count("text"), "audit_image_claims": modes.count("image")}
+
+
 def derived(job_dir: str | Path) -> dict[str, int]:
-    """The ``checks`` counts for this job, summed over its units; {} for a job with no update files."""
+    """The ``checks`` counts for this job, summed over its units; {} for a job
+    whose stages have saved none of the files these are read from."""
+    root = Path(job_dir)
+    parts = [_unit(ud) for ud in sorted(root.glob("data/*/runs/*/update"))]
+    parts += [_doc_review(_read(p)) for p in sorted(root.glob("data/*/runs/*/review.json"))]
+    parts += [_audit(p) for p in sorted(root.glob("data/*/out/*/audit-results.jsonl"))]
     total: dict[str, int] = {}
-    for ud in sorted(Path(job_dir).glob("data/*/runs/*/update")):
-        for k, n in _unit(ud).items():
+    for part in parts:
+        for k, n in part.items():
             total[k] = total.get(k, 0) + n
     return total
 

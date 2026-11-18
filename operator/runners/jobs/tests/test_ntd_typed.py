@@ -8,10 +8,11 @@ from jobs import wording
 from jobs.medchron.audit import ntd_typed
 
 TYPED = " ".join(["The patient reports lower back pain after lifting boxes at work today."] * 5)
-HANDWRITTEN = "[handwritten]\n" + TYPED
+HANDWRITTEN = "[handwritten]\n" + TYPED + " [illegible signature]"
+UNREAD = "[handwritten]\n" + TYPED + " [illegible] then [illegible] again"
 SCAN = "ll 1l || ,, 7 ."
 NOTE = wording.NTD_ILLEGIBLE
-PAGES = {(1, 4): TYPED, (1, 5): TYPED, (2, 9): HANDWRITTEN, (3, 2): SCAN}
+PAGES = {(1, 4): TYPED, (1, 5): TYPED, (2, 9): UNREAD, (3, 2): SCAN, (5, 1): HANDWRITTEN}
 
 
 def page(ex: int, pg: int) -> str | None:
@@ -30,7 +31,7 @@ def test_a_note_on_typed_pages_is_removed_and_the_rest_kept() -> None:
     assert n == 1 and NOTE[:40] not in body and kept in body
 
 
-def test_a_note_citing_a_handwritten_unreadable_or_unknown_page_stays() -> None:
+def test_a_note_citing_an_unread_or_unknown_page_stays() -> None:
     for cite in ("(Exhibit 2 - p. 9)", "(Exhibit 3 - p. 2)", "(Exhibit 4 - p. 1)", "(Exhibit 1 - p. 4, 9)"):
         src = _body(f"{NOTE} {cite}")
         assert ntd_typed.drop(src, page) == (src, 0), cite
@@ -41,7 +42,15 @@ def test_a_note_with_no_citation_stays() -> None:
     assert ntd_typed.drop(src, page) == (src, 0)
 
 
-def test_typed_counts_real_words_and_honours_the_handwritten_mark() -> None:
-    assert ntd_typed.typed(TYPED) and not ntd_typed.typed(HANDWRITTEN)
+def test_a_handwritten_page_that_was_read_does_not_keep_its_note() -> None:
+    """FALSIFIER (2026-11-18): 13 notes stood in a filed chronology on pages
+    marked handwritten for a signature, each transcribed in full."""
+    body, n = ntd_typed.drop(_body(f"{NOTE} (Exhibit 5 - p. 1)"), page)
+    assert n == 1 and NOTE[:40] not in body
+
+
+def test_a_page_counts_as_read_by_its_words_and_its_unreadable_places() -> None:
+    assert ntd_typed.typed(TYPED) and ntd_typed.typed(HANDWRITTEN)
+    assert ntd_typed.typed(TYPED + " [illegible]") and not ntd_typed.typed(UNREAD)
     assert not ntd_typed.typed(SCAN) and not ntd_typed.typed(None)
     assert ntd_typed.real_words(TYPED) >= ntd_typed.TYPED_WORDS
