@@ -6,9 +6,9 @@ heading looked for on its pages, repeats dropped only when the other entry
 covers them, all delete-only). This stage reads the reviewed audit document
 (``runs/<unit>/final-chronology.md``), writes it back, and writes
 ``update/final_rows.jsonl``, ``update/corrections.json`` and
-``update/final_set.json``; a claim's own words under its heading are linked
-to the key they were graded under (an audit row ``kind: link``, no verdict:
-``claims.resolver``). It refuses, writing nothing, when a rule would have
+``update/final_set.json``. It makes only edits that leave every claim key
+unchanged, and never writes to the audit results. It refuses, writing
+nothing, when a rule would have
 created a claim key (``EXIT_CREATED``) or when a claim key was lost that none
 of its own drops removed (``EXIT_LOST``). Exit 1 keeps the driver's own
 meaning, a crash (``medchron/driver.py``: any exception is exit 1), so a
@@ -72,7 +72,7 @@ def run(sr: StageRun) -> int:
     c = o.counts
     sr.log(
         f"final set: {c['added entries']} added entries; stray citation lines {c['stray lines before']} -> "
-        f"{c['stray lines after']} ({c['verdicts carried']} claim(s) linked to their graded key); repeats dropped "
+        f"{c['stray lines after']} ({c['left_key_changing']} left: removing them would change a claim); repeats dropped "
         f"{sum(v for k, v in c.items() if k.startswith('repeats: safe drops'))}, kept whole "
         f"{sum(v for k, v in c.items() if k.startswith('repeats: kept whole'))}; "
         f"headings on a cited page {c['headings ' + HD.CITED]}, same note {c['headings ' + HD.SAME_NOTE]}, "

@@ -9,8 +9,7 @@ date that reached the firm. This proof reads the filed body and accounts for
 every paragraph of it:
 
 * SUPPORTED: each claim in it has a SUPPORTED latest audit row by its key
-  (the auditor's, a code attestation such as ``mode: grid``, a verdict
-  carried to the same words under a heading, ``mode: carry``, or SMD's);
+  (the auditor's, a code attestation such as ``mode: grid``, or SMD's);
 * DELIVERED: it sits in an entry the delivered chronology carries byte for
   byte (an update never edits it, ``update/proofs`` 1);
 * LABEL: it is ungraded by design, and the kinds are listed (``LABELS``):
@@ -196,17 +195,16 @@ def check(
 
 
 def latest_supported(rows: list[dict[str, Any]]) -> Callable[[dict[str, Any]], tuple[bool, str]]:
-    """supported(claim) by its key's verdict row (``claims.resolver``: its
-    own latest direct grade, else the key it is linked to); mode ``link``
-    when the verdict comes through a link."""
-    resolve = CL.resolver(rows)
-    direct = {str(r["key"]) for r in rows if r.get("kind") == "real" and r.get("key")}
+    """supported(claim) by the latest real audit row of its key, as every
+    reader of the audit results reads it."""
+    latest: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if row.get("kind") == "real" and row.get("key"):
+            latest[str(row["key"])] = row
 
     def get(c: dict[str, Any]) -> tuple[bool, str]:
-        key = str(c.get("key"))
-        row = resolve(key)
-        mode = CL.LINK if row is not None and key not in direct else str((row or {}).get("mode") or "model")
-        return (bool(row) and (row or {}).get("verdict") == "SUPPORTED", mode)
+        row = latest.get(str(c.get("key")))
+        return (bool(row) and (row or {}).get("verdict") == "SUPPORTED", str((row or {}).get("mode") or "model"))
 
     return get
 

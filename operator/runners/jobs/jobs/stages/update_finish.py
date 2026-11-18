@@ -207,8 +207,12 @@ def run_assemble(sr: StageRun) -> int:
     (ud / "updated-chronology.md").write_text(md, encoding="utf-8")
     rep["provider_spelling_flags"] = read_json(ud / "compose_report.json", {}).get("provider_spelling") or []
     (ud / "assemble_report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
+    # An added block folded under a delivered entry is no entry of its own, so the sum is told as it adds up.
+    standalone = rep["output_entries"] - rep["delivered_entries"]
+    folded = rep["new_entries"] - standalone
     sr.log(
-        f"updated chronology: {rep['delivered_entries']} delivered + {rep['new_entries']} new = {rep['output_entries']} entries"
+        f"updated chronology: {rep['delivered_entries']} delivered + {standalone} new entries = {rep['output_entries']}"
+        + (f"; {folded} addition(s) to delivered entries" if folded else "")
     )
     return 0
 

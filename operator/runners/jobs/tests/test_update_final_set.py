@@ -234,27 +234,32 @@ def test_falsifier_the_widened_key_at_collect_would_differ_from_main(monkeypatch
 # ---- rule 1: stray lines --------------------------------------------------------------------
 
 
-def test_stray_lines_go_and_the_heading_case_links_its_claim_to_its_graded_key() -> None:
+def test_stray_lines_go_and_one_whose_removal_would_change_a_claim_is_left_and_counted() -> None:
+    """The line under "All Other Information" closes that heading's span:
+    removing it would make the heading part of the claim below, a new key.
+    The step makes only edits that leave every claim key unchanged, so that
+    line stays and is counted; the repeat citation goes."""
     x = _inputs([STRAY])
     o = FS.run(x)
     (e,) = _added(o)
-    assert not [ln for ln in e.splitlines() if U.cite_only(ln)], e
-    assert o.counts["stray lines before"] == 2 and o.counts["stray lines after"] == 0
-    (link,) = o.carries
-    old = {r["key"] for r in x.audit_rows}
-    assert link["kind"] == CL.LINK and link["link_to"] in old and link["key"] not in old
-    assert "verdict" not in link  # a link copies no verdict
-    assert link["claim"] == "All Other Information\nReturn in four weeks for a recheck of the neck."
-    assert CL.resolver(x.audit_rows + o.carries)(link["key"])["verdict"] == "SUPPORTED"
-    assert FS.keys_of(o.md) - old == {link["key"]}
+    left = [ln for ln in e.splitlines() if U.cite_only(ln)]
+    assert left == ["(Exhibit 2 - p. 9)"]
+    assert o.counts["stray lines before"] == 2 and o.counts["stray lines after"] == 1
+    assert o.counts["left_key_changing"] == 1 and FS.keys_of(o.md) == FS.keys_of(x.md)
+    lines = e.split("\n")
+    k = lines.index("(Exhibit 2 - p. 9)")
+    removed = "\n".join(lines[:k] + lines[k + 1 :])
+    assert FS.keys_of(removed) != FS.keys_of(e)  # falsifier: removing it WOULD change a key
 
 
-def test_falsifier_a_verdict_is_never_carried_to_other_words() -> None:
-    """Without an audit verdict on the claim below, the line stays."""
-    x = _inputs([STRAY])
-    x.audit_rows = []
-    o = FS.run(x)
-    assert o.carries == [] and o.counts["stray lines after"] == 1
+def test_the_step_never_writes_to_the_audit_results(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, firm_config_path, data_root, [])
+    _job(sr.slug_dir, [ROE_A, COPY, STRAY])
+    results = sr.slug_dir / "out" / "alpha" / "audit-results.jsonl"
+    before = results.read_bytes()
+    for _ in range(3):
+        assert update_final_set.run(sr) == 0
+    assert results.read_bytes() == before
 
 
 def test_no_operation_creates_a_claim_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -264,7 +269,7 @@ def test_no_operation_creates_a_claim_key(monkeypatch: pytest.MonkeyPatch) -> No
     x = _inputs([STRAY])
     o = FS.run(x)
     assert any(op["op"] == "stray join" and not op["applied"] for op in o.ops)
-    assert FS.keys_of(o.md) <= {r["key"] for r in x.audit_rows} | {c["key"] for c in o.carries}
+    assert FS.keys_of(o.md) <= {r["key"] for r in x.audit_rows}
     assert "graded" not in o.md
 
 
@@ -273,7 +278,7 @@ def test_every_fixture_keeps_or_removes_claim_keys_never_adds_one() -> None:
         x = _inputs(ents)
         o = FS.run(x)
         assert o.counts["new claim keys created"] == 0
-        assert FS.keys_of(o.md) - FS.keys_of(x.md) == {c["key"] for c in o.carries}
+        assert not FS.keys_of(o.md) - FS.keys_of(x.md)  # a key only goes with an entry the step dropped
 
 
 # ---- rows, corrections, titles ----------------------------------------------------------------
@@ -665,9 +670,12 @@ def test_the_report_prints_counts_and_no_record_text(
     assert first == f"config: {firm_config_path}"  # the copy holds the firm.yaml the stage read
     got = json.loads(rest)
     assert got["no_added_entries"] is False
-    assert got["stray_lines"] == {"before": 2, "after": 0}
+    assert got["stray_lines"] == {"before": 2, "after": 1} and got["left_key_changing"] == 1
     assert got["repeats"]["safe drops (added)"] == 1 and got["distinct_visits_merged"] == 0
-    assert got["repeat_pairs_by_condition"] == {"covered yes, dates present yes, dropped yes": 1}
+    assert got["repeat_pairs_by_condition"] == {
+        "covered yes, dates present yes, dropped yes": 1,  # the clinic's copy of the visit
+        "covered no, dates present yes, dropped no": 1,  # the clinic's other note of that day, kept whole
+    }
     assert got["new_claim_keys_created"] == 0 and got["delivered_entries"]["delivered"] == 2
     assert set(got["headings"]) == {
         HD.CITED,
@@ -815,54 +823,6 @@ def test_the_report_counts_what_the_stage_counts_with_the_firms_aliases(
     assert FS.main(["report", str(sr.slug_dir)]) == 0  # falsifier: with no config the count differs, and says so
     first, _, rest = capsys.readouterr().out.partition("\n")
     assert first.startswith("config: NONE") and "key matches (delivered)" not in json.loads(rest)["repeats"]
-
-
-def _linked_job(job_dir: Path, firm: Path, data_root: Path) -> tuple[StageRun, Path, dict]:
-    sr = _sr(job_dir, firm, data_root, [])
-    _job(sr.slug_dir, [STRAY])
-    results = sr.slug_dir / "out" / "alpha" / "audit-results.jsonl"
-    assert update_final_set.run(sr) == 0
-    (link,) = [r for r in CL.read_rows(results) if r.get("kind") == CL.LINK]
-    return sr, results, link
-
-
-def test_a_regrade_of_the_linked_key_is_read_at_once(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
-    """A link copies no verdict: when the key the claim was graded under is
-    graded again (the review redone), every reader sees the new verdict
-    without the final set running again."""
-    _sr_, results, link = _linked_job(job_dir, firm_config_path, data_root)
-    assert GP.latest_supported(CL.read_rows(results))({"key": link["key"]}) == (True, CL.LINK)
-    CL.append_row(results, {"key": link["link_to"], "kind": "real", "verdict": "UNSUPPORTED"})
-    rows = CL.read_rows(results)
-    assert not GP.latest_supported(rows)({"key": link["key"]})[0]
-    assert CL.latest_real(rows, {link["key"]})[link["key"]]["verdict"] == "UNSUPPORTED"  # the coverage gate's reader
-
-
-def test_a_direct_grade_of_the_new_key_wins_and_a_rerun_does_not_mask_it(
-    job_dir: Path, firm_config_path: Path, data_root: Path
-) -> None:
-    """2026-11-17 review: a copied verdict appended on a rerun masked a later
-    direct grade. A direct grade of the key always wins over its link."""
-    sr, results, link = _linked_job(job_dir, firm_config_path, data_root)
-    CL.append_row(results, {"key": link["key"], "kind": "real", "verdict": "UNSUPPORTED"})  # graded directly
-    assert update_final_set.run(sr) == 0  # the rerun starts from the saved copy and rebuilds the link
-    rows = CL.read_rows(results)
-    assert not GP.latest_supported(rows)({"key": link["key"]})[0]
-    assert GP.latest_supported(rows)({"key": link["key"]})[1] != CL.LINK
-
-
-def test_three_reruns_append_nothing(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
-    sr, results, _link = _linked_job(job_dir, firm_config_path, data_root)
-    once = results.read_bytes()
-    for _ in range(3):
-        assert update_final_set.run(sr) == 0
-    assert results.read_bytes() == once
-
-
-def test_a_link_cycle_is_never_resolved_or_written(tmp_path: Path) -> None:
-    rows = [{"key": "n", "kind": CL.LINK, "link_to": "g"}, {"key": "g", "kind": CL.LINK, "link_to": "n"}]
-    assert CL.resolver(rows)("n") is None and CL.latest_real(rows, {"n", "g"}) == {}
-    assert FIO._cycle({"g": "n"}, "n", "g") and not FIO._cycle({"g": "h"}, "n", "g")
 
 
 def test_a_crash_inside_the_stage_is_never_reported_as_a_refusal(

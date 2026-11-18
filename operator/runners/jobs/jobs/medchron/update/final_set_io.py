@@ -156,7 +156,8 @@ def load_inputs(slug_dir: Path, unit: str, headings: set[str], canon: Callable[[
 def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
     """The step's outputs, each written whole or not at all
     (``matter.store.write_atomic``): its rows, its corrections, the marker
-    naming the input and output shas, then the document, then each carried
+    naming the input and output shas, then the document. It never writes to
+    the audit results.
     verdict as an audit row (once: a rerun appends none it already holds).
     The marker goes before the document, so a crash between them leaves the
     original document and a marker that does not name it: the rerun reads
@@ -172,30 +173,6 @@ def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
     write_atomic(ud / REPORT, json.dumps(mark, indent=1))
     if doc.read_text(encoding="utf-8") != o.md:
         write_atomic(doc, o.md)
-    results = slug_dir / "out" / unit / "audit-results.jsonl"
-    have = CL.read_rows(results)
-    links = {str(r["key"]): str(r["link_to"]) for r in have if r.get("kind") == CL.LINK and r.get("key")}
-    sha = CL.doc_sha_of(CL.body_of(o.md))
-    for row in o.carries:
-        if links.get(row["key"]) == row["link_to"]:
-            continue  # recorded once: a link carries no verdict, so there is nothing to refresh
-        if _cycle(links, row["key"], row["link_to"]):
-            raise ValueError(f"a link from {row['key']} to {row['link_to']} would close a cycle; not recorded")
-        CL.append_row(results, row | {"doc_sha": sha})
-        links[row["key"]] = row["link_to"]
-
-
-def _cycle(links: dict[str, str], key: str, to: str) -> bool:
-    """Whether linking `key` to `to` closes a cycle (`to` leads back to `key`)."""
-    seen: set[str] = set()
-    while to not in seen:
-        if to == key:
-            return True
-        seen.add(to)
-        if to not in links:
-            return False
-        to = links[to]
-    return True
 
 
 def ran(ud: Path) -> bool:
@@ -304,7 +281,7 @@ def report(job: Path, unit: str | None = None, firm_config: Path | None = None) 
         "config": used,
         "no_added_entries": False,
         "stray_lines": {"before": c["stray lines before"], "after": c["stray lines after"]},
-        "verdicts_carried": c["verdicts carried"],
+        "left_key_changing": c["left_key_changing"],
         "repeats": {k.split(": ", 1)[1]: v for k, v in sorted(c.items()) if k.startswith("repeats: ")},
         "repeat_pairs_by_condition": {k[len("pair: ") :]: v for k, v in sorted(c.items()) if k.startswith("pair: ")},
         "distinct_visits_merged": c["distinct visits merged"],
@@ -346,5 +323,5 @@ def _record_only(x: Inputs, o: Outcome) -> dict[str, int]:
     got = PF.p13(
         PF.Inputs([], [], [], [], [], 0, [], {}, o.rows, B.entries_of(o.md)[1], canon=x.canon, page_id=x.page_id)
     )
-    g = GP.check(CL.body_of(o.md), GP.latest_supported(x.audit_rows + o.carries), headings=x.headings)
+    g = GP.check(CL.body_of(o.md), GP.latest_supported(x.audit_rows), headings=x.headings)
     return dict(got) | GP.codes(g)

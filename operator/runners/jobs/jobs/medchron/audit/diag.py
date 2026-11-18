@@ -102,8 +102,7 @@ def rekey_rows(
     """Carry a verdict across a page remap: for every orphan classed remap
     whose current twin has the remapped pages and no verdict of its own,
     append a copy under the new key. Returns the count carried."""
-    resolve = CL.resolver(rows)  # a key whose verdict comes through a link has one
-    have = {r["key"] for r in rows if r.get("key") and resolve(r["key"]) is not None}
+    have = {r["key"] for r in rows if r.get("kind") == "real"}
     carried = 0
     for r, cls, hit in classify_orphans(rows, live, remap):
         if cls != "remap" or hit is None or hit["key"] in have:

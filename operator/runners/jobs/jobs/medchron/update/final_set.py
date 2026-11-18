@@ -12,17 +12,18 @@ the entries already delivered and the exhibits are unchanged, new records
 become exhibits numbered after the delivered ones, and every statement is
 checked against the page it cites.
 
-The rules here are DELETE-ONLY, so no graded claim changes: the audit's claim
-keys are taken before and after (``audit/claims.extract_claims``) and an
-operation that would add a key is not applied, but recorded. In order:
+The rules here make ONLY edits that leave every claim key unchanged: the
+audit's claim keys are taken before and after each edit
+(``audit/claims.extract_claims``), an edit that would change one is not made,
+and the step never writes to the audit results. A claim key can therefore
+only go with an entry the step drops on purpose. In order:
 
 1. STRAY LINES (``uncited.join_stray``, moved here from assemble). A line
-   that is only a citation joins the text it cites. One the join must leave
-   (directly under a subsection heading, closing that heading's span) is
-   deleted only when that turns exactly one claim into the heading and the
-   same claim; that claim's verdict is carried to it (an audit row,
-   ``mode: carry``, as ``proofs._as_audited`` carries a respelling). A line
-   whose deletion would uncite an exhibit stays.
+   that is only a citation joins the text it cites, or goes, when no claim
+   key changes and no exhibit loses its citation. A line whose removal would
+   change a claim's text (one directly under a subsection heading, closing
+   that heading's span) is left as it is and counted, record-only, as
+   ``left_key_changing``; so is one whose exhibit is cited nowhere else.
 2. HEADINGS (``update/heading``). Every added entry's date and provider are
    looked for on its cited pages, else on its note's heading. RECORD-ONLY:
    the check records what it finds and NEVER changes the document. (It once
@@ -67,7 +68,6 @@ from . import body as B, encounter as E, entry_edits as EE, heading as HD, repea
 from .values import content_numbers, terms, words
 
 ROWS, CORRECTIONS, REPORT = "final_rows.jsonl", "corrections.json", "final_set.json"
-CARRY = "carry"
 #: Where an added entry's heading comes from. Nothing on disk tells an entry
 #: the update review's finisher ADDED from one it EDITED (``update_review``
 #: persists its reviewer's findings, never the finisher's edits), so both are
@@ -93,11 +93,9 @@ class Outcome:
     md: str
     rows: list[dict[str, Any]] = field(default_factory=list)
     corrections: list[dict[str, Any]] = field(default_factory=list)
-    carries: list[dict[str, Any]] = field(default_factory=list)
     counts: Counter[str] = field(default_factory=Counter)
     ops: list[dict[str, Any]] = field(default_factory=list)
-    #: claim keys this step removed on purpose: a dropped entry's, a stray
-    #: line's claim whose verdict was carried to its heading and words
+    #: claim keys this step removed on purpose: those of the entries it dropped
     removed: set[str] = field(default_factory=set)
 
 
@@ -136,55 +134,21 @@ def with_entries(md: str, ents: list[str]) -> str:
 # ---- 1. stray lines ---------------------------------------------------------------------------
 
 
-def _link_row(new: dict[str, Any], old_key: str) -> dict[str, Any]:
-    """The LINK from the claim's new key to the key it was graded under
-    (``claims.LINK``): no verdict is copied, so a regrade of the old key is
-    read at once and a direct grade of the new key always wins."""
-    return {
-        "key": new["key"],
-        "kind": CL.LINK,
-        "link_to": old_key,
-        "exhibit": new["exhibit"],
-        "page_spec": new["page_spec"],
-        "claim": new["claim"][:500],
-        "mode": CARRY,
-        "note": "the audited claim under its subsection heading; a stray citation line between them was deleted",
-    }
-
-
-def _flat(s: str) -> str:
-    return " ".join(s.split())
-
-
-def _drop_line(e: str, k: int, resolve: Any) -> tuple[str, dict[str, Any] | None, str]:
-    """(entry without line `k`, the link row or None, why not when
-    the line stays). Applied only when no exhibit loses its citation and the
-    claims are the same, or exactly one became its heading and itself."""
+def _drop_line(e: str, k: int) -> tuple[str, str]:
+    """(entry without line `k`, '') when that changes no claim key and leaves
+    every exhibit cited; else (`e`, why the line stays)."""
     lines = e.split("\n")
     out = "\n".join(lines[:k] + lines[k + 1 :])
     if B.cited(out) != B.cited(e):
-        return e, None, "its exhibit is cited nowhere else in the entry"
-    before = {c["key"]: c for c in _claims(e)}
-    after = {c["key"]: c for c in _claims(out)}
-    gone, new = set(before) - set(after), set(after) - set(before)
-    if not gone and not new:
-        return out, None, ""
-    if len(gone) != 1 or len(new) != 1:
-        return e, None, "it would change more than one claim"
-    (g,), (n,) = gone, new
-    old, now = before[g], after[n]
-    heading = lines[k - 1].strip() if k else ""
-    same_cite = (old["exhibit"], old["page_spec"]) == (now["exhibit"], now["page_spec"])
-    if not same_cite or _flat(now["claim"]) != _flat(f"{heading} {old['claim']}"):
-        return e, None, "the claim it closes would read other than its heading and its audited words"
-    if resolve(g) is None:
-        return e, None, "the claim it would join has no audit verdict to link to"
-    return out, _link_row(now, g), ""
+        return e, "its exhibit is cited nowhere else in the entry"
+    if keys_of(out) != keys_of(e):
+        return e, "removing it would change a claim's text"
+    return out, ""
 
 
-def strays(ents: list[str], headings: set[str], rows: list[dict[str, Any]], o: Outcome) -> list[str]:
-    """Rule 1, over the added entries (a fold's delivered part is not in them)."""
-    resolve = CL.resolver(rows)
+def strays(ents: list[str], headings: set[str], o: Outcome) -> list[str]:
+    """Rule 1, over the added entries (a fold's delivered part is not in
+    them). No edit changes a claim key."""
     out = []
     for e in ents:
         before = sum(U.cite_only(ln) for ln in e.split("\n")[2:])
@@ -198,17 +162,13 @@ def strays(ents: list[str], headings: set[str], rows: list[dict[str, Any]], o: O
             if not U.cite_only(j.split("\n")[k]):
                 k += 1
                 continue
-            got, carry, why = _drop_line(j, k, resolve)
-            if got == j:
+            got, why = _drop_line(j, k)
+            if why:
+                o.counts["left_key_changing"] += 1
                 o.ops.append({"op": "stray line", "entry": B.iso(e), "applied": False, "why": why})
                 k += 1
                 continue
             j = got
-            if carry is not None:
-                o.removed.add(carry["link_to"])
-                o.carries.append(carry)
-                resolve = CL.resolver(rows + o.carries)
-                o.counts["verdicts carried"] += 1
         j = re.sub(r"\n{3,}", "\n\n", j)
         o.counts["stray lines after"] += sum(U.cite_only(ln) for ln in j.split("\n")[2:])
         out.append(j)
@@ -365,11 +325,9 @@ def _source(pages: list[tuple[int, int]], x: Inputs) -> str:
 
 
 def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], rows: list[dict[str, Any]]) -> list[dict]:
-    """One row per added claim, or per added entry with none. A claim's
-    verdict is ``claims.resolver``'s; its mode ``carry`` when it comes
-    through a link."""
-    resolve = CL.resolver(rows)
-    direct = {r.get("key") for r in rows if r.get("kind") == "real"}
+    """One row per added claim, or per added entry with none, its verdict
+    the last real audit row of its key."""
+    latest = {str(r["key"]): r for r in rows if r.get("kind") == "real" and r.get("key")}
     out: list[dict[str, Any]] = []
     for i, e in enumerate(ents):
         prov = B.provider_of(e)
@@ -386,7 +344,7 @@ def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], rows: list[
         cl = _claims(e)
         for c in cl or [None]:
             pages = [(c["exhibit"], p) for p in CL.parse_pages(c["page_spec"]) or [1]] if c else []
-            row = (resolve(c["key"]) or {}) if c else {}
+            row = latest.get(c["key"], {}) if c else {}
             out.append(
                 common
                 | {
@@ -394,7 +352,7 @@ def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], rows: list[
                     "pages": [p for _ex, p in pages],
                     "claim_key": c["key"] if c else None,
                     "verdict": row.get("verdict") if c else None,
-                    "mode": (CARRY if c["key"] not in direct else row.get("mode") or "model") if row and c else None,
+                    "mode": (row.get("mode") or "model") if row else None,
                     "page_ids": sorted(x.page_id(ex, p) for ex, p in pages) if x.page_id else [],
                     "text_source": _source(pages, x),
                 }
@@ -447,13 +405,12 @@ def run(x: Inputs) -> Outcome:
     _, base_ents = B.entries_of(x.base_md)
     o = Outcome(x.md)
     keys0 = keys_of(x.md)
-    ents = strays(ents, x.headings, x.audit_rows, o)
+    ents = strays(ents, x.headings, o)
     checks = headings_check(ents, x, o)
     ents = repeats(ents, base_ents, x, o)
     md = with_entries(x.md, ents) if ents != B.entries_of(x.md)[1] else x.md
-    carried = {c["key"] for c in o.carries}
     after = keys_of(md)
-    created, lost = after - keys0 - carried, keys0 - after - o.removed
+    created, lost = after - keys0, keys0 - after - o.removed
     o.counts["new claim keys created"] = len(created)
     o.counts["claim keys lost unaccounted"] = len(lost)
     if created:
@@ -461,7 +418,7 @@ def run(x: Inputs) -> Outcome:
     if lost:
         raise LostKey(f"final set lost {len(lost)} claim key(s) no drop of its own removed; nothing is written")
     o.md = md
-    o.rows = rows_of(ents, x, checks, x.audit_rows + o.carries)
+    o.rows = rows_of(ents, x, checks, x.audit_rows)
     o.corrections = corrections_of(ents, base_ents)
     o.counts["added entries"] = len(ents)
     o.counts["corrections recorded"] = len(o.corrections)

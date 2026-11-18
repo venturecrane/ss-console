@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .. import meta_markers
-from ..audit import claims as CL, controls
+from ..audit import controls
 from . import body as B
 from .uncited import cite_only
 from .values import numbers
@@ -204,13 +204,12 @@ def _audit(x: Inputs, r: Result) -> None:
     in_audit_doc = {c["key"] for c in x.audit_claims}
     aud = [row for row in x.audit_rows if row.get("key") in base_keys - in_audit_doc]
     r.check("3", not aud, f"delivered claims {len(base_keys)}; audited {len(aud)}")
-    resolve = CL.resolver(x.audit_rows)  # the one verdict rule: a direct grade, else its link
-
-    def verdict(key: str) -> Any:
-        return (resolve(key) or {}).get("verdict")
-
+    latest: dict[str, Any] = {}
+    for row in x.audit_rows:
+        if row.get("kind") == "real" and row.get("key"):
+            latest[row["key"]] = row.get("verdict")
     new = [c for c in x.updated_claims if c["key"] not in base_keys]
-    unsup = [c for c in new if verdict(c["key"]) != "SUPPORTED" and verdict(_as_audited(c, x)) != "SUPPORTED"]
+    unsup = [c for c in new if latest.get(c["key"]) != "SUPPORTED" and latest.get(_as_audited(c, x)) != "SUPPORTED"]
     r.check("4", not unsup and x.gate_passed, f"new claims {len(new)}; not finally SUPPORTED {len(unsup)}")
     # The round's own rule (``audit/controls``, 2026-10-24): a control is bad
     # only when still SUPPORTED after its re-test on another institution, and
