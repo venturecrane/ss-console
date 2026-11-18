@@ -751,9 +751,14 @@ def _wired(seq: tuple, new: dag.Stage, before: str) -> tuple:
 
 
 def test_the_new_stages_are_zero_cost_and_rehearsable_where_the_lead_wires_them() -> None:
-    upd = _wired(dag.stages(update=True), FINAL_SET, "update_assemble")
+    """`update_final_set` is wired into the update DAG as declared here
+    (``test_update_final_set_wired``); `final_proof` is not wired into the
+    full run, and still validates where it would sit."""
+    wired = next(s for s in dag.stages(update=True) if s.name == FINAL_SET.name)
+    assert (wired.requires, wired.runner, wired.exit_map) == (FINAL_SET.requires, FINAL_SET.runner, FINAL_SET.exit_map)
+    assert dag._validate(dag.stages(update=True)) == []
     full = _wired(dag.STAGES, FINAL_PROOF, "upload")
-    assert dag._validate(upd) == [] and dag._validate(full) == []
+    assert dag._validate(full) == []
     for s in (FINAL_SET, FINAL_PROOF):
         assert not s.paid and not s.external  # driver.py refuses only these under --redo in a rehearsal
 

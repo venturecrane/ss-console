@@ -38,6 +38,7 @@ from .base import StageRefusal, StageRun, read_json, read_jsonl
 from .group import Canon
 from .render import chronology_name, render_text
 from .update_base import headings, plan, update_dir
+from .update_final_set import final_proofs, record_final
 
 
 def _pages(n: int) -> str:
@@ -299,9 +300,15 @@ def run_proofs(sr: StageRun) -> int:
         retired_controls=retired.keys(out),
     )
     r = P.run(x)
+    # Proofs 11 to 15 (``update/proofs_final``): only 11 can fail the run;
+    # 12 to 15 are recorded into proofs.json and never fail it.
+    fin = final_proofs(sr)
+    r.lines += fin.lines
+    r.fails += fin.fails
     for ln in r.lines:
         sr.log(ln)
     (ud / "proofs.json").write_text(json.dumps({"lines": r.lines, "fails": r.fails}, indent=1), encoding="utf-8")
+    record_final(sr, fin)
     if r.fails:
         sr.log(f"update_proofs_failed: {', '.join(r.fails)}; nothing is filed")
         return 1

@@ -23,6 +23,7 @@ from ..stages import (
     download as _download,
     update_base as _ubase,
     update_collect as _ucollect,
+    update_final_set as _ufinal,
     update_finish as _ufinish,
     update_pages as _upages,
     update_select as _uselect,
@@ -127,6 +128,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         _slug_unit,
         paid=True,
         requires=("audit",),
+        invalidates=("update_final_set",),
         runner=_ureview.run,
         exit_map={
             1: (FAILED, "update_review: the grader of the finisher's sentences gave no verdict; a rerun grades again"),
@@ -139,11 +141,25 @@ UPDATE_STAGES: tuple[Stage, ...] = (
             4: (FAILED, "audit INVALID after the update finisher's corrections: a control failed or no exhibit bytes"),
         },
     ),
+    # The final set of the added entries (``stages/update_final_set``, $0,
+    # delete-only): stray citation-only lines joined, a repeat the other entry
+    # covers dropped, every heading checked against its pages (recorded only).
+    # It changes the reviewed document, so what reads that document after it
+    # reopens when it re-runs.
+    Stage(
+        "update_final_set",
+        "",
+        _slug_unit,
+        requires=("update_review",),
+        invalidates=("update_assemble", "update_render", "update_proofs", "update_manifest"),
+        runner=_ufinal.run,
+        exit_map=_ufinal.EXITS,
+    ),
     Stage(
         "update_assemble",
         "",
         _slug_unit,
-        requires=("update_review",),
+        requires=("update_final_set",),
         runner=_ufinish.run_assemble,
         exit_map={1: (FAILED, "update_assemble: the ICD tables are missing")},
     ),
