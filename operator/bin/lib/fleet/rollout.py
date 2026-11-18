@@ -95,15 +95,22 @@ class ImagePlan:
     # on the rollback image. The busy gate's exec probe is not the boot smoke and
     # still runs: it is what keeps a running job from being restarted.
     ssh_fallback: bool = True
-    # Lane seats this run deploys with their jobs bundle pointer untouched,
-    # because a hand-run release was told --no-bundle-align (align_switch.py).
-    # Each one's fleet_rollouts detail begins with OFF_MARK (below).
+    # Lane seats this run deploys with their jobs bundle pointer untouched, and
+    # why (align_switch.py: the switch is off, or --no-bundle-align). Each one's
+    # fleet_rollouts detail begins with off_note(unaligned_why).
     unaligned: frozenset[str] = frozenset()
+    unaligned_why: str = ""
 
 
-# The words a lane seat's fleet_rollouts detail begins with when a hand-run
-# release deployed it with its jobs bundle pointer untouched (align_switch.py).
-OFF_MARK = "bundle alignment OFF (--no-bundle-align)"
+# The words a lane seat's fleet_rollouts detail begins with when a release
+# deployed it with its jobs bundle pointer untouched (align_switch.py).
+OFF_MARK = "bundle alignment: OFF"
+
+
+def off_note(why: str) -> str:
+    """The one OFF line, for the run's log and the lane seat's rollout row."""
+    return f"{OFF_MARK} ({why}): image released without moving the jobs bundle"
+
 
 # The words a rolled_back row's detail begins with when no route gave the
 # rolled-back image a verdict: a person must look at the seat.
@@ -318,7 +325,7 @@ class ImageRollout:
     def _finish(self, rid: str, plan: ImagePlan, out: SeatOutcome, **fields: Any) -> SeatOutcome:
         if out.seat in plan.unaligned:
             # First, so no truncation can drop it: fleet status and the pager show the detail.
-            out = SeatOutcome(out.seat, out.state, f"{OFF_MARK}: {out.detail}")
+            out = SeatOutcome(out.seat, out.state, f"{off_note(plan.unaligned_why)}; {out.detail}")
         self.log(f"{out.seat}: {out.state.upper()} {out.detail}")
         if not plan.dry_run:
             detail = out.detail[:1800]
@@ -349,7 +356,7 @@ class ImageRollout:
             return self._finish(rid, plan, SeatOutcome(seat, "failed", f"refused, nothing deployed: {older}"))
         al = self.align.prepare(seat, plan.release) if self.align else None
         if seat in plan.unaligned:
-            self.log(f"{seat}: WARNING {OFF_MARK}: its jobs bundle pointer stays as it is through this deploy")
+            self.log(f"{seat}: WARNING {off_note(plan.unaligned_why)}")
         if al is not None and al.wait:
             return self._finish(rid, plan, SeatOutcome(seat, "tooling_error", f"{al.wait}; nothing was deployed"))
         idle = self._gate(seat, rid, plan)

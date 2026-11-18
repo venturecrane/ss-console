@@ -11,11 +11,14 @@ cli.main and the real ImageRollout on the repo's fakes, each test naming its
 falsifier:
 
   switch absent from the environment, the repository variable true: aligned
-  the variable unreadable or off, a lane seat: refused before any deploy
-  --no-bundle-align: deployed, pointer untouched, the record says so
+  the switch cannot be read, a lane seat: refused before any deploy
+  the switch readably off, on all three paths (laptop, CI's urgent run with the
+    variable unset, the tick): deployed as the tick deploys, pointer untouched,
+    the run and the row say "bundle alignment: OFF (switch off)"
+  --no-bundle-align on an unreadable switch: deployed, marked the same way
   a seat that authors no lane: released whatever the switch says
-  the switch in the environment (CI's urgent path): no GitHub read
-  the tick: unchanged, the environment alone decides
+  the switch in the environment: no GitHub read
+  the tick: the environment alone decides
   a rollback the re-smoke could not verify by any route: UNVERIFIED, exit 1
   a deploy that would not come up: the row names the marker and Fly's lines
     around it, tail-bounded and redacted; which deploys are seat failures is unchanged
@@ -33,10 +36,12 @@ from bin.lib.fleet.artifact_tick import BUNDLE_SWITCH, bundle_align_for
 from bin.lib.fleet.bundle_align import BundleAlign
 from bin.lib.fleet.r2 import bundle_pointer_key
 from bin.lib.fleet.rings import Ring
-from bin.lib.fleet.rollout import OFF_MARK, UNVERIFIED_MARK
+from bin.lib.fleet.align_switch import FORCED_OFF, SWITCH_OFF
+from bin.lib.fleet.r2 import image_key
+from bin.lib.fleet.rollout import OFF_MARK, UNVERIFIED_MARK, off_note
 from bin.lib.fleet.runner import Result, ToolingError
 from bin.lib.fleet.smoke import Check
-from bin.tests.fleet_fakes import FakeFly, FakeR2, FakeStore
+from bin.tests.fleet_fakes import DIGEST, FakeFly, FakeR2, FakeStore
 from bin.tests.test_fleet_bundle_align import FLOOR, OLD, SEAT, VERSIONS, _world
 from bin.tests.test_fleet_bundles import LANE_YAML, NO_LANE_YAML, _repo_with
 
@@ -111,15 +116,11 @@ def test_a_laptop_release_reads_the_repository_variable_and_aligns_the_lane_seat
 
 @pytest.mark.parametrize(
     "gh",
-    [
-        Result(1, "", "HTTP 401: Bad credentials (https://api.github.com/...)"),
-        Result(0, "false\n", ""),
-        ToolingError("gh: command not found"),
-    ],
-    ids=["unreadable", "off", "no-gh"],
+    [Result(1, "", "HTTP 401: Bad credentials (https://api.github.com/...)"), ToolingError("gh: command not found")],
+    ids=["unreadable", "no-gh"],
 )
-def test_alignment_off_or_unreadable_refuses_a_lane_seat_before_any_deploy(tmp_path, monkeypatch, gh) -> None:
-    """FALSIFIER: default to off and deploy (the incident), and the fake records a deploy."""
+def test_a_switch_that_cannot_be_read_refuses_a_lane_seat_before_any_deploy(tmp_path, monkeypatch, gh) -> None:
+    """FALSIFIER: read "could not tell" as "off" and deploy (the incident), and the fake records a deploy."""
     w, ev, _r2, ctx, _runner, asked = _hand_world(tmp_path, monkeypatch, gh)
     assert _release(ctx, w, "--only", SEAT) == 4
     assert ev.log == [] and w.fly.deploys == [], "nothing deployed, no pointer written"
@@ -127,60 +128,107 @@ def test_alignment_off_or_unreadable_refuses_a_lane_seat_before_any_deploy(tmp_p
     assert not w.fly.snapshots
 
 
-def test_the_refusal_says_how_to_run_it_with_alignment_on(tmp_path, monkeypatch, capsys) -> None:
+def test_the_refusal_says_how_to_run_it_with_the_switch_read(tmp_path, monkeypatch, capsys) -> None:
     w, _ev, _r2, ctx, _runner, _asked = _hand_world(tmp_path, monkeypatch, Result(1, "", "HTTP 401"))
     assert _release(ctx, w, "--only", SEAT) == 4
     out = capsys.readouterr().out
-    assert f"{BUNDLE_SWITCH}=true operator/bin/fleet release {w.rel['release_id']} --only <seat>" in out
-    assert "--no-bundle-align" in out and SEAT in out
+    assert f"{BUNDLE_SWITCH}=<true|false> operator/bin/fleet release {w.rel['release_id']} --only <seat>" in out
+    assert "could not be read" in out and "--no-bundle-align" in out and SEAT in out
 
 
-def test_no_bundle_align_deploys_with_the_pointer_untouched_and_says_so(tmp_path, monkeypatch) -> None:
-    """FALSIFIER: drop the OFF_MARK prefix in ImageRollout._finish and the row reads like an aligned one."""
-    w, ev, r2, ctx, _runner, asked = _hand_world(tmp_path, monkeypatch, Result(0, "false\n", ""))
-    before = r2.get_json(bundle_pointer_key(SEAT, "jobs"))
-    assert _release(ctx, w, "--only", SEAT, "--no-bundle-align") == 0
-    assert asked == [False] and ev.log == [DEPLOY]
+def _assert_released_off(w: Any, ev: Any, r2: Any, why: str, before: Any) -> None:
+    """Deployed as the tick deploys with the switch off: the image, the pointer untouched, said loudly."""
+    assert ev.log == [DEPLOY] and w.store.states() == {SEAT: "done"}
     assert r2.get_json(bundle_pointer_key(SEAT, "jobs")) == before
     (row,) = w.store.rollouts.values()
-    assert row["detail"].startswith(OFF_MARK), row["detail"]
-    assert any(m.startswith(f"WARNING {OFF_MARK}") for m in w.logs)
-    assert any(m.startswith(f"{SEAT}: WARNING {OFF_MARK}") for m in w.logs), "per seat, before its deploy"
+    assert row["detail"].startswith(off_note(why)), row["detail"]
+    assert any(off_note(why) in m and m.startswith("WARNING") for m in w.logs), w.logs
+    assert any(m == f"{SEAT}: WARNING {off_note(why)}" for m in w.logs), "per seat, before its deploy"
 
 
-def test_a_seat_that_authors_no_lane_still_releases_with_the_switch_off(tmp_path, monkeypatch) -> None:
-    """FALSIFIER: refuse whenever the switch is off, lane or not, and scott is refused."""
+def test_a_switch_readably_off_on_a_laptop_releases_with_the_pointer_untouched_and_says_so(
+    tmp_path, monkeypatch
+) -> None:
+    """Off is a decision someone made: the run does what the tick does. FALSIFIER:
+    refuse on a readable off, and this exits 4 with nothing deployed."""
+    for gh in (Result(0, "false\n", ""), Result(1, "", "variable BUNDLE_RELEASE_ENABLED was not found")):
+        w, ev, r2, ctx, _runner, asked = _hand_world(tmp_path / str(gh.rc), monkeypatch, gh)
+        before = r2.get_json(bundle_pointer_key(SEAT, "jobs"))
+        assert _release(ctx, w, "--only", SEAT) == 0
+        assert asked == [False]
+        _assert_released_off(w, ev, r2, SWITCH_OFF, before)
+
+
+def test_the_urgent_ci_release_with_the_variable_unset_behaves_as_main_did(tmp_path, monkeypatch) -> None:
+    """release-tick.yml's urgent one-seat image run, args as the workflow passes them,
+    with BUNDLE_RELEASE_ENABLED arriving as "" (the repository variable unset): the image
+    deploys with the pointer untouched, as on main, and GitHub is not asked. FALSIFIER:
+    treat "" as unreadable and the urgent release to a lane seat becomes impossible."""
+    w, ev, r2, ctx, runner, _asked = _hand_world(tmp_path, monkeypatch, Result(1, "", "unused"))
+    r2.put_json(image_key(DIGEST, "image-capabilities.json"), {"schema_version": 1, "selftest": True})
+    monkeypatch.setenv(BUNDLE_SWITCH, "")
+    before = r2.get_json(bundle_pointer_key(SEAT, "jobs"))
+    args = ["release", w.rel["release_id"], "--only", SEAT, "--verify", "selftest", "--no-ssh-fallback"]
+    assert cli.main([*args, "--max-idle-wait", "1800"], ctx=ctx) == 0
+    assert runner.gh_calls() == []
+    _assert_released_off(w, ev, r2, SWITCH_OFF, before)
+
+
+def test_no_bundle_align_deploys_an_unreadable_switch_anyway_and_says_so(tmp_path, monkeypatch) -> None:
+    """FALSIFIER: drop the off_note prefix in ImageRollout._finish and the row reads like an aligned one."""
+    w, ev, r2, ctx, _runner, asked = _hand_world(tmp_path, monkeypatch, Result(1, "", "HTTP 401"))
+    before = r2.get_json(bundle_pointer_key(SEAT, "jobs"))
+    assert _release(ctx, w, "--only", SEAT, "--no-bundle-align") == 0
+    assert asked == [False]
+    _assert_released_off(w, ev, r2, FORCED_OFF, before)
+
+
+def test_a_seat_that_authors_no_lane_still_releases_with_the_switch_unreadable(tmp_path, monkeypatch) -> None:
+    """FALSIFIER: refuse whenever the switch cannot be read, lane or not, and scott is refused."""
     w, ev, _r2, ctx, _runner, _asked = _hand_world(tmp_path, monkeypatch, Result(1, "", "HTTP 401"))
     assert _release(ctx, w, "--only", CORE) == 0
-    assert ev.log == ["deploy rel-11111111-202610190000"] and w.store.states() == {CORE: "done"}
+    assert ev.log == [DEPLOY] and w.store.states() == {CORE: "done"}
     assert not w.store.rollouts[next(iter(w.store.rollouts))]["detail"].startswith(OFF_MARK)
     assert any("no seat in this run authors a job lane" in m for m in w.logs)
 
 
-def test_a_full_hand_release_with_the_switch_off_is_refused_for_its_lane_seat(tmp_path, monkeypatch) -> None:
-    w, ev, _r2, ctx, _runner, _asked = _hand_world(tmp_path, monkeypatch, Result(0, "false\n", ""))
+def test_a_full_hand_release_with_the_switch_unreadable_is_refused_for_its_lane_seat(tmp_path, monkeypatch) -> None:
+    w, ev, _r2, ctx, _runner, _asked = _hand_world(tmp_path, monkeypatch, Result(1, "", "HTTP 401"))
     assert _release(ctx, w) == 4 and ev.log == []
 
 
 def test_the_switch_in_the_environment_is_read_there_and_github_is_not_asked(tmp_path, monkeypatch) -> None:
-    """CI's urgent one-seat path (release-tick.yml) passes the repository variable in the
-    environment: it is read there, as before. FALSIFIER: always ask gh and CI needs a GitHub login."""
+    """CI passes the repository variable in the environment: it is read there, as before.
+    FALSIFIER: always ask gh and CI needs a GitHub login."""
     w, ev, _r2, ctx, runner, asked = _hand_world(tmp_path, monkeypatch, Result(1, "", "unused"))
     monkeypatch.setenv(BUNDLE_SWITCH, "true")
     assert _release(ctx, w, "--only", SEAT) == 0
     assert runner.gh_calls() == [] and asked == [True] and ev.log[0] == f"put {VERSIONS[FLOOR]}"
-    monkeypatch.setenv(BUNDLE_SWITCH, "")  # the variable unset in CI: off, and the lane seat is refused
-    ev.log.clear()
-    assert _release(ctx, w, "--only", SEAT) == 4 and ev.log == []
 
 
-# -- the tick: unchanged ----------------------------------------------------------------------
+# -- the tick ----------------------------------------------------------------------------------
+class _TickCtx:
+    def __init__(self, w: Any, repo: Path | None = None) -> None:
+        self.store, self.r2, self.clock, self.logs, self.repo = w.store, w.r2, w.clock, w.logs, repo
+
+    def log(self, msg: str) -> None:
+        self.logs.append(msg)
+
+    def rings(self) -> list[Ring]:
+        return [Ring(0, [SEAT])]
+
+
+def _tick(ctx: Any, w: Any) -> int:
+    import argparse
+
+    a = argparse.Namespace(release_id=w.rel["release_id"], verify="selftest", max_idle_wait=60.0, dry_run=False)
+    return cli._image_tick(ctx, a)  # type: ignore[arg-type]
+
+
 def test_the_tick_builds_its_rollout_from_the_environment_alone(monkeypatch) -> None:
     """The tick calls cli._image_rollout(ctx, holder), whose aligner bundle_align_for builds
     from the environment, never from GitHub. FALSIFIER: route the tick through
-    align_switch and it needs a GitHub login the runner does not have."""
-    import argparse
-
+    align_switch.decide and it needs a GitHub login the runner does not have."""
     w, _ev, _r2 = _world()
     w.store.releases[w.rel["release_id"]] = w.rel
     calls: list[tuple[Any, ...]] = []
@@ -191,19 +239,25 @@ def test_the_tick_builds_its_rollout_from_the_environment_alone(monkeypatch) -> 
 
     monkeypatch.setattr(cli, "_image_rollout", rollout)
     monkeypatch.setattr(cli, "_image_has_selftest", lambda _ctx, _rel: True)
-
-    class _Ctx:
-        store, r2, clock, logs = w.store, w.r2, w.clock, w.logs
-
-        def log(self, msg: str) -> None:
-            self.logs.append(msg)
-
-        def rings(self) -> list[Ring]:
-            return [Ring(0, [SEAT])]
-
-    a = argparse.Namespace(release_id=w.rel["release_id"], verify="selftest", max_idle_wait=60.0, dry_run=False)
-    cli._image_tick(_Ctx(), a)  # type: ignore[arg-type]
+    _tick(_TickCtx(w), w)
     assert len(calls) == 1 and len(calls[0]) == 2, calls
+
+
+def test_the_tick_with_its_switch_off_releases_a_lane_seat_unaligned_and_says_so(tmp_path, monkeypatch) -> None:
+    """The third path: the tick, its environment saying off. Deployed with the pointer
+    untouched, as always, now logged and recorded. FALSIFIER: drop tick_off from
+    cli._image_tick and neither the log line nor the row's prefix appears."""
+    w, ev, r2 = _world()
+    w.store.releases[w.rel["release_id"]] = w.rel
+    w.roll.align = None  # what bundle_align_for(ctx) builds with the switch off
+    before = r2.get_json(bundle_pointer_key(SEAT, "jobs"))
+    monkeypatch.setattr(cli, "_image_rollout", lambda _ctx, _holder: w.roll)
+    monkeypatch.setattr(cli, "_image_has_selftest", lambda _ctx, _rel: True)
+    _tick(_TickCtx(w, _repo_with(tmp_path, {SEAT: LANE_YAML})), w)
+    assert ev.log == [DEPLOY] and r2.get_json(bundle_pointer_key(SEAT, "jobs")) == before
+    (row,) = w.store.rollouts.values()
+    assert row["detail"].startswith(off_note(SWITCH_OFF)), row["detail"]
+    assert any(m.startswith(f"tick: WARNING {off_note(SWITCH_OFF)}") for m in w.logs), w.logs
 
 
 def test_the_aligner_follows_the_environment_for_the_tick_and_the_decision_for_a_hand_run(

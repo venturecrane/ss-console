@@ -36,8 +36,9 @@ WHO. Only seats that author a job lane (bundles.authoring_seats), and only while
 BUNDLE_RELEASE_ENABLED is 'true' (artifact_tick.BUNDLE_SWITCH): off, the tick
 rolls no bundle, and an image whose floor moved past a seat's bundle is then
 refused by that seat's self-test and rolled back. A release run by hand reads
-the same switch from the same repository variable, and refuses a lane seat
-rather than deploy it unaligned without saying so (align_switch.py, 2026-11-17).
+the same switch from the same repository variable; off, every path says so on
+the run and the seat's row, and a switch that cannot be read refuses a lane
+seat (align_switch.py, 2026-11-17).
 
 NOT SKILLS. A seat applies a skills pointer live, without a restart, so writing
 it ahead of the reboot would run the new skills on the old image. Skills keep

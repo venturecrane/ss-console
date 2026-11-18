@@ -425,12 +425,17 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   the urgent one-seat run) reads the same switch from the same place
   (`operator/bin/lib/fleet/align_switch.py`, 2026-11-17): from its environment
   when that names it, otherwise from the repository variable with the
-  operator's own `gh` login. Before anything is deployed it logs
-  `bundle alignment: on (...)`, or, when the switch is off or cannot be read
-  and a seat in the run authors a job lane, it refuses (exit 4) and names the
-  command to run instead. `--no-bundle-align` deploys anyway with the pointer
-  untouched; the run says `bundle alignment OFF` and so does each such seat's
-  `fleet_rollouts` detail, which `fleet status` and the pager show. Until
+  operator's own `gh` login (an unset variable reads as off, in CI and from a
+  laptop alike). Before anything is deployed it logs one of three things. On:
+  `bundle alignment: on (...)`, and the pointer moves as in the tick. Off: the
+  switch is a decision someone made, so every path (the tick, the urgent run, a
+  laptop) deploys the image with the pointer untouched, logs
+  `bundle alignment: OFF (switch off): image released without moving the jobs bundle`,
+  and each lane seat's `fleet_rollouts` detail begins with the same words,
+  which `fleet status` and the pager show. Cannot be read, with a lane seat in
+  the run: it refuses (exit 4) and names the command to run instead;
+  `--no-bundle-align` deploys anyway, marked `OFF (--no-bundle-align)` the
+  same way. Until
   2026-11-17 a laptop run had no switch in its environment, so it deployed a
   lane seat with its pointer untouched without saying so (see the incident in
   [Incident Response](/admin/playbook/incident-response)).
@@ -543,12 +548,12 @@ Two workflows run the release (ADR 0096).
     `fleet release <id> --only <seat>`, or hold the seat. For a seat that
     authors a job lane, the run reads the jobs bundle switch from the
     repository variable with your `gh` login and logs `bundle alignment: on`
-    before it deploys. If `gh` cannot read it (not logged in, or a stale
-    `GH_TOKEN` in the shell), the run refuses before anything is deployed;
-    check the switch with
+    (or `OFF (switch off)`, when someone turned it off) before it deploys.
+    If `gh` cannot read it (not logged in, or a stale `GH_TOKEN` in the
+    shell), the run refuses before anything is deployed; read the switch with
     `gh variable get BUNDLE_RELEASE_ENABLED --repo venturecrane/ss-console`
-    and, when it is `true`, run
-    `BUNDLE_RELEASE_ENABLED=true operator/bin/fleet release <id> --only <seat>`
+    and run
+    `BUNDLE_RELEASE_ENABLED=<that value> operator/bin/fleet release <id> --only <seat>`
     inside the same `infisical run`. One halt clears
     itself: a `failed` row that was only a lane-input refusal ("the lane's
     firm-input schema changed; re-stage") deployed nothing, so each tick asks

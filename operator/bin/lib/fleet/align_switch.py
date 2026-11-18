@@ -14,28 +14,35 @@ for about an hour and forty minutes.
 THE RULE. A release run by hand (``fleet release <id> [--only SEAT]``, never
 ``--tick``) reads the same switch from the same source:
 
-  * from this run's environment when it names the switch at all (CI's urgent
-    one-seat path passes the repository variable, exactly as the tick does);
+  * from this run's environment when it names the switch at all. That is CI:
+    release-tick.yml passes the repository variable into every run, the urgent
+    one-seat path included, and an unset variable arrives as "", which is off,
+    exactly as the tick reads it;
   * otherwise from the repository variable itself, with ``gh variable get``
-    on the operator's own GitHub login (no new credential).
+    on the operator's own GitHub login (no new credential). "Not found" is a
+    readable answer: the variable is unset, so off.
 
 Then, before anything is deployed, it logs one line or refuses:
 
-  on                         "bundle alignment: on (<where it was read>)", and
-                             every lane seat's pointer is written before its
-                             deploy, exactly as in the tick.
-  off or unreadable, no seat in the run authors a lane
-                             "bundle alignment: off ...; no seat in this run
-                             authors a job lane": nothing a pointer decides.
-  off or unreadable, a lane seat in the run
-                             refused (exit 4) before anything runs, saying how
-                             to run it with alignment on. ``--no-bundle-align``
-                             deploys anyway, loudly: the run logs
-                             "bundle alignment: OFF" and each such seat's
-                             fleet_rollouts detail begins with it.
+  on                    "bundle alignment: on (<where it was read>)", and every
+                        lane seat's pointer is written before its deploy, as in
+                        the tick.
+  readably off          someone turned the switch off, and that is a decision:
+                        the run does what the tick does, deploying the image
+                        with the pointer untouched, and says so. It logs
+                        "bundle alignment: OFF (switch off): image released
+                        without moving the jobs bundle", and each lane seat's
+                        fleet_rollouts detail begins with the same words.
+  cannot be read        refused (exit 4) before anything runs, for a run that
+                        holds a lane seat, saying how to run it with the switch
+                        read. ``--no-bundle-align`` deploys anyway, marked
+                        "OFF (--no-bundle-align)" the same way. This is the
+                        2026-11-17 case: "could not tell" must never read as
+                        "off".
 
-The tick is unchanged: it never calls this module and still reads its
-environment alone (bundle_align_for with no ``enabled``).
+The tick reads its environment alone, as before (bundle_align_for with no
+``enabled``); when that says off it logs and records the same OFF line
+(:func:`tick_off`).
 """
 
 from __future__ import annotations
@@ -46,12 +53,15 @@ from typing import Any, Mapping
 
 from . import bundles
 from .artifact_tick import BUNDLE_SWITCH
-from .rollout import OFF_MARK
+from .rollout import off_note
 from .runner import Refusal, Runner, ToolingError
 
 # Where the switch lives: a repository variable of this repo.
 REPO_SLUG = "venturecrane/ss-console"
 GH_READ_TIMEOUT_S = 30
+# Why a lane seat rolled without alignment, as its rollout row says it.
+SWITCH_OFF = "switch off"
+FORCED_OFF = "--no-bundle-align"
 
 
 @dataclass(frozen=True)
@@ -65,8 +75,13 @@ class Switch:
 @dataclass(frozen=True)
 class Decision:
     on: bool
-    # Lane seats this run deploys with their pointer untouched (only ever by --no-bundle-align).
+    # Lane seats this run deploys with their pointer untouched, and why (SWITCH_OFF or FORCED_OFF).
     unaligned: frozenset[str]
+    why: str = ""
+
+    def plan_kw(self) -> dict[str, Any]:
+        """The rollout.ImagePlan fields this decision sets."""
+        return {"unaligned": self.unaligned, "unaligned_why": self.why}
 
 
 def read_switch(runner: Runner, environ: Mapping[str, str] | None = None) -> Switch:
@@ -81,33 +96,35 @@ def read_switch(runner: Runner, environ: Mapping[str, str] | None = None) -> Swi
     except ToolingError as exc:
         return Switch(False, f"the repository variable could not be read ({exc})", False)
     if not res.ok:
-        said = (res.stderr or res.stdout).strip().splitlines()[-1:] or ["no output"]
-        return Switch(False, f"the repository variable could not be read (gh rc={res.rc}: {said[0][:200]})", False)
+        said = ((res.stderr or res.stdout).strip().splitlines()[-1:] or ["no output"])[0][:200]
+        if "not found" in said.lower():
+            return Switch(False, f"repository variable {BUNDLE_SWITCH} is not set ({said})", True)
+        return Switch(False, f"the repository variable could not be read (gh rc={res.rc}: {said})", False)
     value = res.stdout.strip()
     return Switch(value == "true", f"repository variable {BUNDLE_SWITCH} is {value!r}", True)
 
 
 def _refusal(sw: Switch, lane: set[str], release_id: str) -> str:
-    seats = ", ".join(sorted(lane))
-    why = "is not 'true'" if sw.readable else "could not be read"
     return (
-        f"bundle alignment is off: the switch {why} ({sw.source}), and {seats} authors a job lane. Deployed "
-        "like this, the image boots with the seat's jobs bundle pointer untouched, and a seat whose bundle floor "
-        "moved refuses the image at its self-test and is rolled back (2026-11-17). Nothing was deployed. Check "
-        f"the switch with `gh variable get {BUNDLE_SWITCH} --repo {REPO_SLUG}`; when it is true, run again with "
-        f"`{BUNDLE_SWITCH}=true` in front: `{BUNDLE_SWITCH}=true operator/bin/fleet release {release_id} "
+        f"the jobs bundle switch could not be read ({sw.source}), and {', '.join(sorted(lane))} authors a job "
+        "lane, so this run cannot tell whether to move its jobs bundle with the image (2026-11-17: deployed "
+        "with the pointer untouched, a seat whose bundle floor moved refuses the image at its self-test and is "
+        "rolled back). Nothing was deployed. Read the switch with "
+        f"`gh variable get {BUNDLE_SWITCH} --repo {REPO_SLUG}` (with a stale token cleared from the shell) and run again "
+        f"with its value in front: `{BUNDLE_SWITCH}=<true|false> operator/bin/fleet release {release_id} "
         "--only <seat>` (inside the same `infisical run` as before). To deploy with the pointer untouched "
-        "anyway, add --no-bundle-align"
+        f"anyway, add {FORCED_OFF}"
     )
 
 
 def add_argument(parser: Any) -> None:
     """``fleet release --no-bundle-align``."""
     parser.add_argument(
-        "--no-bundle-align",
+        FORCED_OFF,
         action="store_true",
-        help="deploy an image to a seat that authors a job lane even though bundle alignment is off: its jobs "
-        "bundle pointer is left as it is, and the run and the seat's rollout record say so (align_switch.py)",
+        help="deploy an image to a seat that authors a job lane even though the jobs bundle switch could not be "
+        "read: its jobs bundle pointer is left as it is, and the run and the seat's rollout record say so "
+        "(align_switch.py)",
     )
 
 
@@ -125,10 +142,28 @@ def decide(ctx: Any, release_id: str, only: str | None, allow_off: bool) -> Deci
     if not lane:
         ctx.log(f"bundle alignment: off ({sw.source}); no seat in this run authors a job lane")
         return Decision(False, frozenset())
-    if not allow_off:
+    if sw.readable:
+        why = SWITCH_OFF
+    elif allow_off:
+        why = FORCED_OFF
+    else:
         raise Refusal(_refusal(sw, lane, release_id))
-    ctx.log(
-        f"WARNING {OFF_MARK}; {sw.source}: {', '.join(sorted(lane))} deploy with the jobs bundle pointer "
-        "untouched, and a seat whose bundle floor moved refuses the image at its self-test and is rolled back"
-    )
-    return Decision(False, frozenset(lane))
+    ctx.log(f"WARNING {off_note(why)} ({sw.source}; lane seats: {', '.join(sorted(lane))})")
+    return Decision(False, frozenset(lane), why)
+
+
+def tick_off(ctx: Any, seats: list[str]) -> Decision:
+    """The tick with its switch off: the same OFF line, logged once and recorded on each lane seat's row.
+
+    Which seats author a lane is read from the repo as the bundle step reads it;
+    a seat whose customer.yaml cannot be read is left unmarked rather than
+    stopping the tick (the tick deployed it before this note existed).
+    """
+    try:
+        lane = bundles.authoring_seats(ctx.repo, seats)
+    except ToolingError as exc:
+        ctx.log(f"tick: {off_note(SWITCH_OFF)} (which seats author a lane could not be read: {exc})")
+        return Decision(False, frozenset(), SWITCH_OFF)
+    if lane:
+        ctx.log(f"tick: WARNING {off_note(SWITCH_OFF)} (lane seats: {', '.join(sorted(lane))})")
+    return Decision(False, frozenset(lane), SWITCH_OFF)

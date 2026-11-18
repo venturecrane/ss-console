@@ -5,8 +5,8 @@
                 [--dry-run] [--accept-lane-inputs] [--max-idle-wait SECONDS]
                 [--verify bash|selftest] [--no-ssh-fallback] [--no-bundle-align]
                                                       run by hand: reads the jobs bundle switch the
-                                                      tick reads, and logs "bundle alignment: on"
-                                                      before any deploy or refuses (align_switch.py)
+                                                      tick reads and logs on or OFF before any deploy;
+                                                      refuses when it cannot be read (align_switch.py)
   fleet release <release-id>|latest --tick [--max-idle-wait SECONDS] [--dry-run]
                                                       one scheduler step (release-tick.yml, ADR 0096):
                                                       at most one ring, after the bake; self-test decides.
@@ -40,7 +40,7 @@
 Exit codes: 0 success; 1 a seat failed / was refused / rollout halted, or the
 --only seat did not end done (still busy after the idle wait, or held); 2 usage;
 3 tooling error (nothing decided); 4 refused before anything ran (lease held,
-unknown release, source guard). A tick adds 5 (waiting: bake running, lease
+unknown release, source guard, a jobs bundle switch that could not be read). A tick adds 5 (waiting: bake running, lease
 held by another rollout, nothing to do) and 6 (an earlier halt stands; a person
 must act); its 1 means THIS tick halted the release.
 
@@ -348,7 +348,7 @@ def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
         raise Refusal("--no-ssh-fallback needs --verify selftest on an image that carries the self-test")
     plan = ImagePlan(
         release, meta.get("hermes_sha"), a.force_mid_job, a.accept_lane_inputs, a.max_idle_wait, a.dry_run,
-        verify=a.verify, selftest_capable=capable, ssh_fallback=not a.no_ssh_fallback, unaligned=aligned.unaligned,
+        verify=a.verify, selftest_capable=capable, ssh_fallback=not a.no_ssh_fallback, **aligned.plan_kw(),
     )  # fmt: skip
     return _run_waves(ctx, a, release, lambda seat, ring: roll.run(seat, ring, plan), holder)
 
@@ -382,13 +382,14 @@ def _image_tick(ctx: Ctx, a: argparse.Namespace, hold_ring: int | None = None) -
     roll = _image_rollout(ctx, holder)
     seats = [seat for ring in ctx.rings() for seat in ring.seats]
     align = roll.align
+    off = align_switch.Decision(True, frozenset()) if align else align_switch.tick_off(ctx, seats)
 
     def do_seat_for(rel: dict[str, Any]) -> Callable[[str, int], Any]:
         rel_meta = meta if rel["release_id"] == release["release_id"] else (
             ctx.r2.get_json(image_key(rel["image_digest"], "release.json")) or {}
         )  # fmt: skip
         plan = ImagePlan(rel, rel_meta.get("hermes_sha"), max_idle_wait=a.max_idle_wait, dry_run=a.dry_run,
-                         verify="selftest", selftest_capable=True, ssh_fallback=False)  # fmt: skip
+                         verify="selftest", selftest_capable=True, ssh_fallback=False, **off.plan_kw())  # fmt: skip
         return lambda seat, ring: roll.run(seat, ring, plan)
 
     ticker = Ticker(
