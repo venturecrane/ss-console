@@ -786,7 +786,7 @@ def problems(cell: str, got: dict[str, Any]) -> list[str]:
     if got["filed_sets"] > 1:
         out.append(f"(d) {got['filed_sets']} filed sets for one job")
     # (f) a bound's ending leaves the job dir wiped on schedule
-    if cell.split("/", 1)[1] in WIPE_EVENTS and not got["wiped"]:
+    if cell.rpartition("/")[2] in WIPE_EVENTS and not got["wiped"]:
         out.append("(f) the job dir outlived its wipe window")
     # (g) an outage past its bound never keeps the firm waiting for the broker
     if got.get("ended_while_away") and got["firm_owed"] and not got["told_while_away"]:
