@@ -6,6 +6,9 @@
   done | (fail) restore the pointer, roll back to from-image + from-toml,
   re-smoke, halt | (tooling_error / timeout) halt, touch nothing
 
+A re-smoke that gets no verdict (the boot smoke tries ssh, then `fly machine
+exec`) leaves the row rolled_back with its detail beginning UNVERIFIED_MARK.
+
 A seat is never put on an image of a lower volume epoch (volume_epoch.py,
 ADR 0103): a forward deploy that would be refused before anything is touched,
 and a rollback that would be is not made (the seat halts on the failing image,
@@ -92,7 +95,19 @@ class ImagePlan:
     # on the rollback image. The busy gate's exec probe is not the boot smoke and
     # still runs: it is what keeps a running job from being restarted.
     ssh_fallback: bool = True
+    # Lane seats this run deploys with their jobs bundle pointer untouched,
+    # because a hand-run release was told --no-bundle-align (align_switch.py).
+    # Each one's fleet_rollouts detail begins with OFF_MARK (below).
+    unaligned: frozenset[str] = frozenset()
 
+
+# The words a lane seat's fleet_rollouts detail begins with when a hand-run
+# release deployed it with its jobs bundle pointer untouched (align_switch.py).
+OFF_MARK = "bundle alignment OFF (--no-bundle-align)"
+
+# The words a rolled_back row's detail begins with when no route gave the
+# rolled-back image a verdict: a person must look at the seat.
+UNVERIFIED_MARK = "rollback health UNVERIFIED"
 
 # The terminal states a verify-ledger row is written for: the ones a judge (or a
 # refusal before anything was touched) decided. waiting_idle decided nothing.
@@ -298,6 +313,9 @@ class ImageRollout:
             return self._finish(rid, plan, SeatOutcome(seat, "tooling_error", str(exc)))
 
     def _finish(self, rid: str, plan: ImagePlan, out: SeatOutcome, **fields: Any) -> SeatOutcome:
+        if out.seat in plan.unaligned:
+            # First, so no truncation can drop it: fleet status and the pager show the detail.
+            out = SeatOutcome(out.seat, out.state, f"{OFF_MARK}: {out.detail}")
         self.log(f"{out.seat}: {out.state.upper()} {out.detail}")
         if not plan.dry_run:
             detail = out.detail[:1800]
@@ -327,6 +345,8 @@ class ImageRollout:
         if older:
             return self._finish(rid, plan, SeatOutcome(seat, "failed", f"refused, nothing deployed: {older}"))
         al = self.align.prepare(seat, plan.release) if self.align else None
+        if seat in plan.unaligned:
+            self.log(f"{seat}: WARNING {OFF_MARK}: its jobs bundle pointer stays as it is through this deploy")
         if al is not None and al.wait:
             return self._finish(rid, plan, SeatOutcome(seat, "tooling_error", f"{al.wait}; nothing was deployed"))
         idle = self._gate(seat, rid, plan)
@@ -469,4 +489,11 @@ class ImageRollout:
         detail = (
             f"smoke FAIL: {check.detail}. Rolled back to {from_image} ({undone}); re-smoke {again.cls}: {again.detail}"
         )
+        if again.cls not in ("pass", "fail"):
+            # No verdict on the rollback image by any route (the boot smoke tries
+            # ssh, then `fly machine exec`): the seat's health is not known, and a
+            # rollback must never read as a clean one (2026-11-17). Still
+            # rolled_back, which halts and exits 1; the words lead so they are seen.
+            self.log(f"{seat}: {UNVERIFIED_MARK}: the rolled-back image got no verdict ({again.cls})")
+            detail = f"{UNVERIFIED_MARK}. {detail}"
         return self._finish(rid, plan, SeatOutcome(seat, "rolled_back", detail), smoke_class="fail")

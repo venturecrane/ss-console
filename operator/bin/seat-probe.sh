@@ -179,7 +179,11 @@ exec runuser -u hermes -- env -i \${ENVV} PATH=/opt/hermes/.venv/bin:/usr/local/
 # failed. `fly machine exec` uses the app API, not a tunnel, and runs the same
 # REMOTE string in the container, so on that one refusal the probe takes that
 # path instead. Any other ssh failure is reported as it is. stderr is held
-# until ssh exits so the refusal can be read; stdout still streams.
+# until ssh exits so the refusal can be read; stdout still streams. The refusal
+# and the started-Machine lookup live in lib/fly-transport.sh, which the boot
+# smoke uses for the same fallback (2026-11-17).
+# shellcheck source=lib/fly-transport.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/fly-transport.sh"
 ERR_FILE="$(mktemp)"
 trap 'rm -f "${ERR_FILE}"' EXIT
 set +e
@@ -188,13 +192,11 @@ RC=$?
 set -e
 cat "${ERR_FILE}" >&2
 if [ "${RC}" -eq 0 ]; then exit 0; fi
-if ! grep -qE "can't build tunnel|Not authorized to access this organization|Not authorized to read this organization's WireGuard peers" "${ERR_FILE}"; then
+if ! fly_tunnel_refused "${ERR_FILE}"; then
   exit "${RC}"
 fi
 echo "seat-probe: Fly refused the ssh tunnel; running the probe through fly machine exec" >&2
-MACHINE_ID="$(fly machine list -a "${APP_NAME}" --json | python3 -c 'import json,sys
-ids=[m["id"] for m in json.load(sys.stdin) if m.get("state")=="started"]
-print(ids[0] if ids else "")')"
+MACHINE_ID="$(fly_started_machine "${APP_NAME}")"
 if [ -z "${MACHINE_ID}" ]; then
   echo "seat-probe: no started machine on ${APP_NAME}" >&2
   exit 1

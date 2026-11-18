@@ -3,7 +3,10 @@
   fleet build [--notes TEXT] [--declare-secret NAME ...] [--not-volume-forward-compatible]
   fleet release <release-id> [--only SLUG] [--parallel N] [--force-mid-job]
                 [--dry-run] [--accept-lane-inputs] [--max-idle-wait SECONDS]
-                [--verify bash|selftest] [--no-ssh-fallback]
+                [--verify bash|selftest] [--no-ssh-fallback] [--no-bundle-align]
+                                                      run by hand: reads the jobs bundle switch the
+                                                      tick reads, and logs "bundle alignment: on"
+                                                      before any deploy or refuses (align_switch.py)
   fleet release <release-id>|latest --tick [--max-idle-wait SECONDS] [--dry-run]
                                                       one scheduler step (release-tick.yml, ADR 0096):
                                                       at most one ring, after the bake; self-test decides.
@@ -59,7 +62,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ids, owner, status
+from . import align_switch, ids, owner, status
 from .artifact_tick import (  # noqa: F401 - re-exported: callers and tests use cli.<name>
     IN_FLIGHT_MAX,
     MAIN_REF,
@@ -191,6 +194,7 @@ def _add_release_parser(sub: Any) -> None:
         help="with --verify selftest: a self-test that gives no verdict halts as a tooling error instead of "
         "running the ssh boot smoke, and a rollback is re-verified by the self-test",
     )
+    align_switch.add_argument(r)
     r.add_argument(
         "--tick",
         action="store_true",
@@ -319,11 +323,12 @@ def _image_release(ctx: Ctx, release_id: str) -> dict[str, Any]:
     return release
 
 
-def _image_rollout(ctx: Ctx, holder: str) -> ImageRollout:
+def _image_rollout(ctx: Ctx, holder: str, align_on: bool | None = None) -> ImageRollout:
+    """``align_on`` None (the tick) reads the bundle switch from the environment; a hand run passes its decision."""
     return ImageRollout(
         ctx.store, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), PreflightChecker.for_ctx(ctx),
         SmokeRunner(ctx.runner, str(ctx.repo)), ctx.render, ctx.log, ctx.sleep, ctx.clock,
-        FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock), ctx.ledger, bundle_align_for(ctx),
+        FleetSideChecks(ctx.fly, str(ctx.repo), ctx.sleep, ctx.clock), ctx.ledger, bundle_align_for(ctx, align_on),
     )  # fmt: skip
 
 
@@ -331,9 +336,11 @@ def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
     if a.tick:
         return cmd_release_tick(ctx, a)
     release = _image_release(ctx, a.release_id)
+    # Before anything is deployed: the jobs bundle switch, read as the tick reads it (2026-11-17).
+    aligned = align_switch.decide(ctx, release["release_id"], a.only, a.no_bundle_align)
     meta = ctx.r2.get_json(image_key(release["image_digest"], "release.json")) or {}
     holder = holder_id()
-    roll = _image_rollout(ctx, holder)
+    roll = _image_rollout(ctx, holder, aligned.on)
     capable = _image_has_selftest(ctx, release)
     if a.verify == "selftest" and not capable:
         ctx.log(f"{release['release_id']}: the image carries no self-test; every seat is verified by the boot smoke")
@@ -341,7 +348,7 @@ def cmd_release_image(ctx: Ctx, a: argparse.Namespace) -> int:
         raise Refusal("--no-ssh-fallback needs --verify selftest on an image that carries the self-test")
     plan = ImagePlan(
         release, meta.get("hermes_sha"), a.force_mid_job, a.accept_lane_inputs, a.max_idle_wait, a.dry_run,
-        verify=a.verify, selftest_capable=capable, ssh_fallback=not a.no_ssh_fallback,
+        verify=a.verify, selftest_capable=capable, ssh_fallback=not a.no_ssh_fallback, unaligned=aligned.unaligned,
     )  # fmt: skip
     return _run_waves(ctx, a, release, lambda seat, ring: roll.run(seat, ring, plan), holder)
 
@@ -352,8 +359,10 @@ def cmd_release_tick(ctx: Ctx, a: argparse.Namespace) -> int:
     ``latest`` steps the image, the skills and the jobs bundle, client rings
     before SMD's own last ring (artifact_tick.latest_tick has the order and why).
     """
-    if a.only or a.force_mid_job or a.accept_lane_inputs or a.parallel != 1:
-        raise ValueError("--tick takes none of --only, --force-mid-job, --accept-lane-inputs, --parallel")
+    if a.only or a.force_mid_job or a.accept_lane_inputs or a.parallel != 1 or a.no_bundle_align:
+        raise ValueError(
+            "--tick takes none of --only, --force-mid-job, --accept-lane-inputs, --parallel, --no-bundle-align"
+        )
     if a.release_id != "latest":
         return _image_tick(ctx, a)
     return latest_tick(ctx, a, lambda hold_ring: _image_tick(ctx, a, hold_ring))
