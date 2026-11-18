@@ -2,6 +2,7 @@
 composed entries to the AUDIT document.
 
 `update_collect` keeps what the new documents add (``update/collect.py``),
+names the read page where an entry cited a copy of it (``update/cite_read.py``),
 spells a new entry's provider the delivered way when that is safe
 (``update/providers.py``), settles a date read off a handwritten page against
 the provider's typed statements (``update/handwritten.py``), writes a page
@@ -36,10 +37,11 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from ..medchron import icd_tables, meta_markers, prompts
+from ..medchron import icd_tables, meta_markers, pages_record as PR, prompts
 from .. import llm
 from ..medchron.audit import claims as CL
-from ..medchron.update import body as B, collect as C, handwritten as H, icd, legend as LG, providers as P
+from ..medchron.update import body as B, cite_read as CR, collect as C, handwritten as H, icd, legend as LG
+from ..medchron.update import providers as P
 from ..medchron.update import outcome as UO, records_dates as RD, select as S, uncited as U
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
@@ -261,6 +263,8 @@ def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tup
     # A yearless heading is an entry of its own; it takes its neighbours' year until row order settles it.
     y = re.match(r"\d{4}", str(sr.job.incident_date or ""))
     comp, _ = H.with_years(C.composed(rd), int(y.group()) if y else date.today().year)
+    # A citation of a copy names the read page it copies (``update/cite_read``).
+    comp, cites = CR.to_read_pages(comp, PR.read(rd), {str(r["id"]): int(r["exhibit"]) for r in provisional})
     try:
         entries, rep = C.collect(comp, base_ents, sr.job.incident_date, Canon(sr.cfg))
     except C.CollectRefusal as exc:
@@ -276,6 +280,7 @@ def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tup
     entries, cited = U.cite_all(entries, headings(sr.cfg) if sr.cfg is not None else set())
     return entries, {
         **rep,
+        **cites,
         "provider_spelling": spelled,
         "handwritten_dates": dated,
         "legend_codes": coded,
