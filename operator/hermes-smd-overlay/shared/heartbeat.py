@@ -797,29 +797,12 @@ REPLY_TRACE_INCOMPLETE_CODE = "reply_sent:trace_incomplete"
 #: ``jobs/proof/gate.py``). A CLOSED vocabulary for the reason
 #: ``REPLY_HOLD_REASONS`` is: a code not listed rides as ``proof:other``.
 DELIVERY_PROOF_CODES = frozenset(
-    {
-        "proof_missing",
-        "readback_unproven",
-        "readback_mismatch",
-        "review_missing",
-        "review_held",
-        "dry_run_reported",
-        "wake_lost",
-        "reply_unproven",
-        "reply_not_in_sent_items",
-        "gate_held",
-        "update_held",
-        "upload_held",
-        "stage_refused",
-        "limit_held",
-        "identity_held",
-        "repair_unconverged",
-        "job_stopped",
-        "library_edit_refused",
-        "layout_rule_unplaced",
-        "spend_unrecorded",
-        "ending_unrecorded",
-    }
+    (
+        "proof_missing readback_unproven readback_mismatch review_missing review_held dry_run_reported "
+        "wake_lost reply_unproven reply_not_in_sent_items gate_held update_held upload_held "
+        "stage_refused limit_held identity_held repair_unconverged job_stopped library_edit_refused "
+        "layout_rule_unplaced spend_unrecorded ending_unrecorded"
+    ).split()
 )
 
 #: The job lanes that write a delivery-proof row (``delivery_proof.LANES``):
