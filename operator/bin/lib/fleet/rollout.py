@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from . import ids, smoke, volume_epoch
 from .busy import BusyGate
 from .d1 import FleetStore
-from .fly import Fly, classify_deploy, deploy_excerpt
+from .fly import Fly, classify_deploy, deploy_excerpt, deploy_failure_evidence
 from .ledger import VerifyLedger
 from .preflight import PreflightChecker
 from .runner import ToolingError
@@ -212,12 +212,15 @@ class ImageRollout:
             res = self.fly.deploy(ids.app_name(seat), image, path)
             cls = classify_deploy(res)
             if cls != "tooling_error":
-                return cls, ""
+                # A seat failure keeps its evidence: the marker and the lines around it (2026-11-17).
+                return cls, (deploy_failure_evidence(res) if cls == "fail" else "")
             first = deploy_excerpt(res)
             self.log(f"{seat}: fly deploy decided nothing ({first}); trying once more in {DEPLOY_RETRY_PAUSE_S:.0f}s")
             self.sleep(DEPLOY_RETRY_PAUSE_S)
             res = self.fly.deploy(ids.app_name(seat), image, path)
             cls = classify_deploy(res)
+            if cls == "fail":
+                return cls, deploy_failure_evidence(res)
             return cls, (deploy_excerpt(res) if cls == "tooling_error" else "")
 
     def _verify(self, seat: str, plan: ImagePlan, since_iso: str) -> Check:
@@ -442,7 +445,7 @@ class ImageRollout:
                 )
             self.store.update_rollout(rid, "smoking")
             check = (
-                Check("fail", "fly deploy reported the new release would not come up")
+                Check("fail", f"fly deploy reported the new release would not come up ({said})")
                 if deployed == "fail"
                 else self._verify(seat, plan, since)
             )

@@ -17,6 +17,8 @@ falsifier:
   the switch in the environment (CI's urgent path): no GitHub read
   the tick: unchanged, the environment alone decides
   a rollback the re-smoke could not verify by any route: UNVERIFIED, exit 1
+  a deploy that would not come up: the row names the marker and Fly's lines
+    around it, tail-bounded and redacted; which deploys are seat failures is unchanged
 """
 
 from __future__ import annotations
@@ -265,3 +267,93 @@ def test_old_is_the_seats_bundle_before_the_release() -> None:
     # The fixture these tests stand on: the seat's pointer names OLD before any run.
     w, _ev, r2 = _world()
     assert r2.get_json(bundle_pointer_key(SEAT, "jobs"))["version"] == VERSIONS[OLD]
+
+
+# -- a deploy that would not come up keeps its evidence (2026-11-17) --------------------------
+# A client seat's rollout that day failed with "fly deploy reported the new release
+# would not come up", and the row kept nothing Fly printed: the cause is still
+# unknown. The row now names the marker that classed it a seat failure and the
+# lines around it, redacted and bounded.
+def _deploy_fail_world(stderr: str):
+    from bin.tests.test_fleet_release import World
+
+    w = World(Check("pass", "re-smoke green"))
+    w.fly.deploy_results = [Result(1, "", stderr)]
+    w.release_all(only="ap-staging")
+    (row,) = w.store.rollouts.values()
+    return w, row
+
+
+FLY_SAID = (
+    "==> Building image\n"
+    "--> Pushing image done\n"
+    "Updating existing machines in 'hermes-ap-staging'\n"
+    "Machine 6e8206d0f36d08 [app] update failed: timeout reached waiting for health checks to pass\n"
+    "  check[servicecheck-00-http-8080] failed\n"
+    "Error: failed to update VM 6e8206d0f36d08\n"
+)
+
+
+def test_a_deploy_that_would_not_come_up_records_the_marker_and_what_fly_said() -> None:
+    """FALSIFIER: return "" for a 'fail' in _deploy_saying (the code before) and the row names neither."""
+    w, row = _deploy_fail_world(FLY_SAID)
+    assert row["state"] == "rolled_back", row["detail"]
+    assert 'marker "health checks"' in row["detail"]
+    assert "waiting for health checks to pass" in row["detail"] and "failed to update VM" in row["detail"]
+    # Rollback unchanged: the from-image was redeployed and re-smoked.
+    assert [img for _, img, _ in w.fly.deploys][-1].endswith("deployment-OLD")
+
+
+def test_the_excerpt_is_bounded_to_its_tail() -> None:
+    """FALSIFIER: drop the [-DEPLOY_EXCERPT_CHARS:] bound and the whole 5,000-character line lands in the row."""
+    from bin.lib.fleet.fly import DEPLOY_EXCERPT_CHARS, deploy_failure_evidence
+
+    noise = "x" * 5000
+    res = Result(1, "", f"Machine failed to start: {noise} END-OF-LINE\n")
+    said = deploy_failure_evidence(res)
+    assert said.startswith('marker "failed to start"; rc=1: ')
+    assert len(said) <= len('marker "failed to start"; rc=1: ') + DEPLOY_EXCERPT_CHARS
+    assert said.endswith("END-OF-LINE")
+    _w, row = _deploy_fail_world(f"Machine failed to start: {noise} END-OF-LINE\n")
+    assert noise not in row["detail"] and "END-OF-LINE" in row["detail"]
+
+
+def test_a_line_that_looks_like_a_secret_is_never_stored() -> None:
+    """FALSIFIER: show the window's lines unredacted and the values land in the row."""
+    stderr = (
+        "ANTHROPIC_API_KEY=sk-ant-canary-0001\n"
+        "  SMOKEBALL_REFRESH=canary-0002\n"
+        "Machine 6e8206d0f36d08 has crashed, restarting\n"
+        "authorization: Bearer canary-0003\n"
+    )
+    _w, row = _deploy_fail_world(stderr)
+    assert 'marker "crash"' in row["detail"] and "has crashed" in row["detail"]
+    for canary in ("canary-0001", "canary-0002", "canary-0003"):
+        assert canary not in row["detail"]
+    assert "[line withheld]" in row["detail"]
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        ("timeout waiting for health checks", "fail"),
+        ("process FAILED TO START", "fail"),
+        ("smoke checks for 6e82 failed", "fail"),
+        ("main child exited with non-zero status", "fail"),
+        ("Machine failed", "fail"),
+        ("app crashed", "fail"),
+        ("Error: something else entirely", "tooling_error"),
+        ("connection reset by peer while waiting for health checks", "tooling_error"),
+    ],
+)
+def test_which_deploys_are_seat_failures_is_unchanged(text: str, want: str) -> None:
+    from bin.lib.fleet.fly import DEPLOY_SEAT_FAILURE_MARKERS, classify_deploy
+    from bin.lib.fleet.runner import looks_like_transport_failure
+
+    res = Result(1, "", text)
+    old = (
+        "tooling_error"
+        if looks_like_transport_failure(res)
+        else ("fail" if any(m in res.text.lower() for m in DEPLOY_SEAT_FAILURE_MARKERS) else "tooling_error")
+    )
+    assert classify_deploy(res) == old == want

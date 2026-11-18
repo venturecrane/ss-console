@@ -464,7 +464,11 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   timeout leaves the seat untouched and stalls only that seat: the rollout goes
   on to the next one. A `fly deploy` that fails without saying the release is
   unhealthy is tried once more a minute later, and what Fly printed is kept in
-  the rollout's detail (lines naming a credential are dropped).
+  the rollout's detail (lines naming a credential or assigning a `NAME=value`
+  are dropped). A deploy Fly says would not come up keeps its evidence too:
+  the detail names the failure marker that matched and the lines around it,
+  bounded the same way (2026-11-17; before that the row kept nothing, and one
+  such failure's cause is still unknown).
 - **Complete.** After any real run, a release whose latest rollout on every
   ringed seat is `done` is marked `completed_last_ring_at`. That is read from
   the `fleet_rollouts` records, not from one run: a release repaired seat by
