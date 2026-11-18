@@ -45,6 +45,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -179,6 +180,46 @@ def fetch_hermes_export(sha: str, extras: list[str], work: Path) -> str:
     return proc.stdout
 
 
+# pip-audit asks pypi.org once per pinned package (about 250 requests a run)
+# with a 15 s read timeout and no retry of its own, so one slow answer failed
+# the whole gate: 2026-11-17, the same run timed out twice on a PR that changes
+# no dependency while other PRs' scans passed in the same minutes. A scan that
+# could not run is retried; a scan that ran and found something never is.
+SCAN_ATTEMPTS = 4
+SCAN_BACKOFF_SECONDS = (5, 15, 30)
+SCAN_TIMEOUT_SECONDS = "60"
+
+
+def _scan(argv: list[str], name: str) -> dict:
+    """pip-audit's JSON report, retried only when the scanner itself could not run."""
+    argv = [argv[0], "--timeout", SCAN_TIMEOUT_SECONDS, *argv[1:]]
+    for attempt in range(1, SCAN_ATTEMPTS + 1):
+        proc = subprocess.run(  # noqa: S603 - list argv from shutil.which, no shell; the only variable is the requirements path
+            argv,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        # pip-audit exits 1 when it found vulnerabilities; that is a result, not
+        # a failure to run. Anything else with no JSON is the scanner breaking.
+        try:
+            return json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            detail = proc.stderr.strip() or proc.stdout.strip()
+            if attempt == SCAN_ATTEMPTS:
+                print(f"pip-audit could not scan {name} after {attempt} attempts:", file=sys.stderr)
+                print(detail, file=sys.stderr)
+                raise SystemExit(2) from None
+            wait = SCAN_BACKOFF_SECONDS[attempt - 1]
+            last = detail.splitlines()[-1] if detail else "no output"
+            print(
+                f"pip-audit could not scan {name} (attempt {attempt}/{SCAN_ATTEMPTS}): {last}; retrying in {wait}s",
+                file=sys.stderr,
+            )
+            time.sleep(wait)
+    raise SystemExit(2)  # unreachable; keeps the return type total
+
+
 def audit(requirements: Path, *, label: str | None = None, hashed: bool = True, min_audited: int = 0) -> list[dict]:
     exe = shutil.which("pip-audit")
     if exe is None:
@@ -201,20 +242,7 @@ def audit(requirements: Path, *, label: str | None = None, hashed: bool = True, 
     ]
     if hashed:
         argv.insert(4, "--require-hashes")
-    proc = subprocess.run(  # noqa: S603 - list argv from shutil.which, no shell; the only variable is the requirements path
-        argv,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    # pip-audit exits 1 when it found vulnerabilities; that is a result, not a
-    # failure to run. Anything else with no JSON is the scanner breaking.
-    try:
-        report = json.loads(proc.stdout)
-    except json.JSONDecodeError:
-        print(f"pip-audit could not scan {label or requirements.name}:", file=sys.stderr)
-        print(proc.stderr.strip() or proc.stdout.strip(), file=sys.stderr)
-        raise SystemExit(2) from None
+    report = _scan(argv, label or requirements.name)
     audited = len(report.get("dependencies", []))
     if audited < min_audited:
         print(

@@ -248,3 +248,42 @@ def test_compile_sh_retries_both_hermes_fetches() -> None:
     src = (Path(__file__).resolve().parents[2] / "requirements" / "compile.sh").read_text()
     fetches = [ln for ln in src.splitlines() if ln.startswith("curl ") and "/hermes/" in ln]
     assert len(fetches) == 2 and all("--retry" in ln for ln in fetches), fetches
+
+
+def _scan_calls(monkeypatch: pytest.MonkeyPatch, outcomes: list[tuple[int, str, str]]) -> list[list[str]]:
+    seen: list[list[str]] = []
+
+    def fake_run(argv, *a, **k):
+        seen.append(list(argv))
+        code, out, err = outcomes[min(len(seen), len(outcomes)) - 1]
+        return subprocess.CompletedProcess(argv, code, out, err)
+
+    monkeypatch.setattr(gate.subprocess, "run", fake_run)
+    monkeypatch.setattr(gate.time, "sleep", lambda _s: None)
+    return seen
+
+
+def test_a_scan_that_could_not_reach_the_index_is_retried_and_then_passes(monkeypatch: pytest.MonkeyPatch) -> None:
+    clean = json.dumps({"dependencies": [{"name": "a", "version": "1", "vulns": []}]})
+    timed_out = (2, "", "ReadTimeout: pypi.org")
+    seen = _scan_calls(monkeypatch, [timed_out, timed_out, (0, clean, "")])
+    report = gate._scan(["pip-audit", "-r", "x.txt"], "x.txt")
+    assert len(report["dependencies"]) == 1
+    assert len(seen) == 3
+    assert seen[0][1:3] == ["--timeout", gate.SCAN_TIMEOUT_SECONDS]
+
+
+def test_a_scan_that_never_runs_still_fails_the_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _scan_calls(monkeypatch, [(2, "", "ReadTimeout: pypi.org")])
+    with pytest.raises(SystemExit) as exc:
+        gate._scan(["pip-audit", "-r", "x.txt"], "x.txt")
+    assert exc.value.code == 2
+    assert len(seen) == gate.SCAN_ATTEMPTS
+
+
+def test_a_scan_that_found_an_advisory_is_never_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    found = json.dumps({"dependencies": [{"name": "a", "version": "1", "vulns": [{"id": "GHSA-x"}]}]})
+    seen = _scan_calls(monkeypatch, [(1, found, "")])
+    report = gate._scan(["pip-audit", "-r", "x.txt"], "x.txt")
+    assert report["dependencies"][0]["vulns"][0]["id"] == "GHSA-x"
+    assert len(seen) == 1
