@@ -18,10 +18,10 @@ from dataclasses import replace
 import yaml
 
 from jobs.medchron import config as config_mod, job as job_mod, pages_record as PR
-from jobs.medchron.dag import Stage, _slug, _slug_unit
+from jobs.medchron.dag import Stage, _slug_unit
 from jobs.medchron.gates import foreign_identity as FI
 from jobs.medchron.update import billing_page_dates as BPD, pageid as PI, pageid_io as PG, select as S
-from jobs.stages import name_rule_pages as NRP, page_account as PA, page_rows
+from jobs.stages import page_account as PA, page_rows
 from jobs.stages.base import StageRun
 from jobs_testkit import FakeSeat, make_pdf
 
@@ -385,120 +385,8 @@ def test_a_withhold_with_no_recorded_test_needs_every_test(job_dir, firm_config_
     )
 
 
-# ---- A.4: a file named like a bill ------------------------------------------------
-
-LEDGER = "Statement of charges. 04/01/2025 99213 office visit 150.00 payment 50.00 balance 100.00 total due 100.00"
-REPORT = (
-    "Follow-up examination report. Chief complaint: neck pain. Exam: tenderness at the cervical spine. "
-    "Assessment: cervical strain, improving. Plan: home exercise; signed by the examining physician."
-)
-
-
-def _update_sr(job_dir: Path, firm: Path, data_root: Path, pages: list[str]) -> StageRun:
-    body = yaml.safe_load((job_dir / "job.yaml").read_text())
-    body["selection"] = {"include_file_ids": ["bb"]}
-    body["update"] = {"into": "delivered_chronology", "chronology_file_id": "doc-9"}
-    (job_dir / "job.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
-    job = job_mod.load(job_dir)
-    sd = data_root / "example-matter"
-    aside = sd / NRP.BILLING_RAW
-    aside.mkdir(parents=True)
-    (aside / "bb.pdf").write_bytes(make_pdf(pages))
-    row = {
-        "id": "bb",
-        "name": "Dr Example Bill and Statement",
-        "ext": ".pdf",
-        "ok": True,
-        "path": str(aside / "bb.pdf"),
-    }
-    (sd / NRP.BILLING_MANIFEST).write_text(json.dumps(row) + "\n")
-    (sd / "named_excluded.json").write_text(json.dumps([{"id": "bb", "name": "x", "why": "billing or lien record"}]))
-    return StageRun(
-        job=job,
-        cfg=config_mod.load(str(firm)),
-        unit=job.units[0],
-        slug_dir=sd,
-        decided={},
-        log=lambda _m: None,
-        seat_factory=lambda: FakeSeat([], [], {}),
-    )
-
-
-def test_a_bill_then_report_file_is_promoted_to_be_read(job_dir, firm_config_path, data_root) -> None:
-    sr = _update_sr(job_dir, firm_config_path, data_root, [LEDGER, REPORT, REPORT])
-    assert NRP.run(sr) == 0
-    rec = json.loads((sr.slug_dir / NRP.RECORD).read_text())["files"]["bb"]
-    assert rec["pages"] == [NRP.BILLING, NRP.CLINICAL, NRP.CLINICAL] and rec["promoted"]
-    assert (sr.slug_dir / "raw" / "bb.pdf").is_file()
-    assert [json.loads(x)["id"] for x in (sr.slug_dir / "raw_manifest.jsonl").read_text().splitlines()] == ["bb"]
-    assert json.loads((sr.slug_dir / "named_excluded.json").read_text()) == []
-
-
-def test_a_bill_with_no_clinical_heading_stays_set_aside(job_dir, firm_config_path, data_root) -> None:
-    sr = _update_sr(job_dir, firm_config_path, data_root, [LEDGER, LEDGER])
-    assert NRP.run(sr) == 0
-    assert not json.loads((sr.slug_dir / NRP.RECORD).read_text())["files"]["bb"]["promoted"]
-    assert not (sr.slug_dir / "raw_manifest.jsonl").exists()
-    assert json.loads((sr.slug_dir / "named_excluded.json").read_text())[0]["id"] == "bb"
-
-
-def test_a_textless_page_is_cannot_tell_and_promotes() -> None:
-    assert NRP.page_class("") == NRP.CANNOT_TELL and NRP.promotes([NRP.BILLING, NRP.CANNOT_TELL])
-    assert NRP.page_class(LEDGER) == NRP.BILLING and not NRP.promotes([NRP.BILLING, NRP.OTHER])
-
-
-def test_fresh_runs_only_record(job_dir, firm_config_path, data_root) -> None:
-    assert NRP.FRESH_POLICY == NRP.RECORD_ONLY
+def test_a_fresh_runs_account_only_records() -> None:
     assert PA.FRESH_POLICY == PA.RECORD_ONLY
-    body = yaml.safe_load(firm_config_path.read_text())
-    body["coverage"]["exclusions"].append({"match": r"(?i)\bbill", "reason": "billing or lien record"})
-    firm_config_path.write_text(yaml.safe_dump(body, sort_keys=False))
-    job = job_mod.load(job_dir)
-    assert job.update is None
-    sd = data_root / "example-matter"
-    (sd / "raw").mkdir(parents=True)
-    (sd / "raw" / "bb.pdf").write_bytes(make_pdf([LEDGER, REPORT]))
-    row = {"id": "bb", "name": "Dr Example Bill", "ext": ".pdf", "ok": True, "path": str(sd / "raw" / "bb.pdf")}
-    (sd / "raw_manifest.jsonl").write_text(json.dumps(row) + "\n")
-    sr = StageRun(job, config_mod.load(str(firm_config_path)), job.units[0], sd, {}, lambda _m: None,
-                  lambda: FakeSeat([], [], {}))  # fmt: skip
-    before = (sd / "raw_manifest.jsonl").read_text()
-    assert NRP.run(sr) == 0
-    rec = json.loads((sd / NRP.RECORD).read_text())
-    assert rec["policy"] == NRP.RECORD_ONLY and rec["files"]["bb"] == {
-        "pages": [NRP.BILLING, NRP.CLINICAL],
-        "promotes": True,
-        "promoted": False,
-    }
-    assert (sd / "raw_manifest.jsonl").read_text() == before  # nothing a fresh run reads changed
-
-
-def test_an_update_pulls_a_billing_named_file_aside_and_promotes_its_report(
-    job_dir, firm_config_path, data_root
-) -> None:
-    from jobs.stages import download as download_stage
-    from jobs_testkit import doc_row
-    import test_update_parity_e as PE
-
-    body = yaml.safe_load((job_dir / "job.yaml").read_text())
-    body["update"] = {"into": "delivered_chronology", "chronology_file_id": "doc-9"}
-    (job_dir / "job.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
-    rec, bill = make_pdf([PE.PROSE]), make_pdf([LEDGER, REPORT])
-    docs = [
-        doc_row("kr", "Example Clinic Notes.pdf", PE.MEDICAL, len(rec)),
-        doc_row("bb", "Dr Example Bill.pdf", PE.MEDICAL, len(bill)),
-    ]
-    seat = FakeSeat(docs, list(PE.FOLDERS), {"kr": rec, "bb": bill})
-    sr = PE._sr(job_dir, firm_config_path, data_root, seat, ["kr", "bb"])
-    assert download_stage.run(sr) == 0
-    assert PE._pulled(sr) == {"kr"}
-    assert not (sr.slug_dir / NRP.BILLING_MANIFEST).exists()  # download pulls nothing aside: only this stage does
-    mints = len(seat.mints)
-    assert NRP.run(sr) == 0 and len(seat.mints) == mints + 1  # the pull aside is this stage's own
-    aside = [json.loads(x) for x in (sr.slug_dir / NRP.BILLING_MANIFEST).read_text().splitlines()]
-    assert [r["id"] for r in aside if r.get("ok")] == ["bb"]
-    assert (sr.slug_dir / "raw" / "bb.pdf").is_file()  # its report page promotes it
-    assert PE._pulled(sr) == {"kr", "bb"}
 
 
 # ---- B / D: the account ------------------------------------------------------------
@@ -517,7 +405,7 @@ def _rows() -> list[dict]:
 def _settle(entry: str) -> tuple[list[dict], list[dict]]:
     texts = {"d1": {1: NOTE, 2: NOTE, 3: "", 4: NOTE, 5: "Medication list:\nibuprofen 800 mg\ngabapentin 300 mg\n"
                     "cyclobenzaprine 10 mg\nlisinopril 20 mg\n" + "x" * 60}}  # fmt: skip
-    return PA.settle(_rows(), [entry], "", {"d1": 9}, texts, lambda _t: None, {9: 5})
+    return PA.settle(_rows(), [entry], {"d1": 9}, texts, lambda _t: None, {9: 5})
 
 
 def test_every_read_page_is_cited_or_classed_by_code() -> None:
@@ -525,7 +413,7 @@ def test_every_read_page_is_cited_or_classed_by_code() -> None:
     st = {r["page"]: (r["status"], r["class"]) for r in rows}
     assert st[1] == (PR.CITED, "new")
     assert st[2] == (PR.READ_UNCITED, PA.BLANK)  # no ink before vision
-    assert st[5] == (PR.READ_UNCITED, PA.ABSENT)  # a section of it is carried nowhere
+    assert st[5] == (PR.READ_UNCITED, PA.UNEXPLAINED)  # code names no reason
     assert defects == []
 
 
@@ -572,10 +460,10 @@ def test_an_update_that_added_no_exhibit_classes_its_pages_by_their_own_text(
                   lambda: FakeSeat([], [], {}))  # fmt: skip
     assert PA.update_page_final(sr) == 0
     got = {r["page"]: (r["status"], r["class"]) for r in PR.read(rd)}
-    assert got[1] == (PR.READ_UNCITED, PA.NO_HEADING)  # its own text: an index page, not blank
+    assert got[1] == (PR.READ_UNCITED, PA.UNEXPLAINED)  # its own text: an index page, not blank
     assert got[2] == (PR.READ_UNCITED, PA.BLANK)  # no ink and no text: blank
     final = json.loads((rd / PA.NAME).read_text())["final"]
-    assert final["read_uncited"] == {PA.NO_HEADING: 1, PA.BLANK: 1} and final["uncovered_exclusions"]["count"] == 0
+    assert final["read_uncited"] == {PA.UNEXPLAINED: 1, PA.BLANK: 1} and final["uncovered_exclusions"]["count"] == 0
 
 
 # ---- C: billing dates ---------------------------------------------------------------
@@ -628,8 +516,6 @@ def test_a_date_a_ledger_and_a_billing_page_both_carry_is_one_row_and_counted_on
 # ---- the wiring the lead applies ----------------------------------------------------
 
 #: The Stage declarations of this change, exactly as the PR body gives them.
-#: ``name_rule_pages`` pulls from the seat, so it is external: a rehearsal never runs it.
-PULLS = Stage("name_rule_pages", "", _slug, scope="slug", requires=("download",), runner=NRP.run, external=True)
 WIRING = (
     Stage("update_page_account", "", _slug_unit, requires=("audit",), runner=PA.update_page_account),
     Stage("update_page_final", "", _slug_unit, requires=("update_proofs",), runner=PA.update_page_final),
@@ -641,10 +527,6 @@ WIRING = (
 def test_each_new_stage_is_free_local_and_rehearsable(stage: Stage) -> None:
     # driver.py refuses `--redo` of a paid or external stage in a rehearsal; none of these is either.
     assert not stage.paid and not stage.external and stage.runner is not None and not stage.exit_map
-
-
-def test_the_billing_name_page_read_is_external_and_never_rehearsed() -> None:
-    assert PULLS.external and not PULLS.paid and not PULLS.exit_map
 
 
 # ---- the allowance charge: pages read, and no others ------------------------------
@@ -666,7 +548,7 @@ CHARGED = [
     PR.row("d1", "", 1, PR.READ, "new", PR.NONE, "update_select"),
     PR.row("d1", "", 2, PR.READ, "new", PR.NONE, "update_select"),  # read because no cover was named
     PR.row("d1", "", 9, PR.CITED, "new", PR.NONE, "update_select"),
-    PR.row("d1", "", 10, PR.READ_UNCITED, "no_clinical_heading", PR.NONE, "update_select"),
+    PR.row("d1", "", 10, PR.READ_UNCITED, "unexplained", PR.NONE, "update_select"),
 ]
 
 
