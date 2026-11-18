@@ -57,6 +57,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .. import run_record
+
 #: The lane's own wording (medchron/lane.py `_compose_wake`); the DELIVER skill reads
 #: this line as "the reply says the chronology was updated".
 UPDATE_LINE = "Request: update into the delivered chronology."
@@ -181,7 +183,12 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str,
     return {
         "job_id": job_id,
         "from_state": row.get("state"),
-        "records": [("running", {}), ("delivered", fields)],
+        # The delivered record says SMD delivered it (run_record.py): a run
+        # SMD finished by hand is never counted as one that needed nobody.
+        "records": [
+            ("running", {}),
+            ("delivered", {**fields, "run": run_record.block("hand_delivery", by="smd", with_release=True)}),
+        ],
         "proof": proof,
         "state": {
             "state": "delivered",

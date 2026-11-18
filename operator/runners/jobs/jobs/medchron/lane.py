@@ -41,6 +41,7 @@ from .. import (
     daemon as daemon_mod,
     job_notes,
     requeue,
+    run_record,
     spend,
     verdict as verdict_mod,
 )
@@ -50,7 +51,7 @@ from ..matter import store as page_store_mod
 from ..proof import holds as proof_holds, watch as proof_watch
 from ..skill_load import load_line
 from ..stages import vision_seed
-from . import allowance as allowance_mod, config as config_mod, job as job_mod
+from . import allowance as allowance_mod, config as config_mod, job as job_mod, unrecorded
 from .covered import delivery_fields, wake_folder_lines
 
 logger = logging.getLogger("jobs.daemon")
@@ -79,6 +80,12 @@ class MedchronLane(Daemon):
     #: Explicit firm-config path; None resolves the env/default the seat uses.
     firm_config: str | None = None
     LANE = "medchron"
+    #: Every record carries a run block (``run_record.py``, ``bin/work-health.py --runs``).
+    RUN_RECORD = True
+    #: Whether this attempt's delivery proof landed (``proof/watch._record_proven``).
+    proof_recorded: bool | None = None
+    #: When ``poll_requests`` next tries an ending the broker could not take.
+    record_retry_at: float = 0.0
     HEARTBEAT = "heartbeat"
     TICK = "tick"
     CHILD_ARGS = ("--json",)
@@ -101,6 +108,30 @@ class MedchronLane(Daemon):
             logger.warning("firm config not usable yet, deferring %s: %s", job_id, exc)
             return "deferred"
         return None
+
+    def _running_fields(self, job_id: str) -> dict[str, Any]:
+        """The ``running`` record's run block: a resume's own event when
+        ``resume.take_requests`` left one for this attempt, else ``start``."""
+        pending = self._daemon_state(job_id).get("run_pending")
+        if isinstance(pending, dict) and pending.get("event"):
+            return {"run": {**pending, "release": run_record.release()}}
+        return {"run": run_record.block("start", with_release=True)}
+
+    def _before_child(self, job_id: str) -> None:
+        # The running record landed (``_start``): a resume's event is spent.
+        if self._daemon_state(job_id).get("run_pending") is not None:
+            self._write_state(job_id, run_pending=None)
+        super()._before_child(job_id)
+
+    def run_stages(self, job_id: str) -> dict[str, Any]:
+        """The job's stage table (a run's or an update's), for its run record."""
+        from . import dag
+
+        try:
+            env = json.loads((self.job_dir(job_id) / "envelope.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            env = {}
+        return dag.by_name(isinstance(env, dict) and env.get("update") is not None)
 
     def _lane_env(self, job_id: str) -> dict[str, str]:
         return page_store_mod.child_env()  # the store of paid page text (jobs/matter/store.py)
@@ -208,12 +239,24 @@ class MedchronLane(Daemon):
         # Proven delivery: a dry run is never a delivery, a delivered claim
         # without its proof is a failure, and a hold or read-back failure pages.
         paged_before = dict(self._daemon_state(job_id).get("proof_alerts") or {})
+        self.proof_recorded = None
         fields.update(page_store_mod.job_fields(self.job_dir(job_id)))  # the job's page-store counts, for its audit row
         state, fields = proof_watch.settle(self, job_id, outcomes, state, fields)
+        fields["run"] = run_record.block(
+            "end" if state == "delivered" else "stop",
+            stage=stage,
+            reason=fields.get("reason") if state != "delivered" and outcomes else None,
+            code=None if outcomes or state == "delivered" else "no_verdict",
+            with_release=state == "delivered",
+            stages=self.run_stages(job_id),
+            extra=run_record.counts(self.job_dir(job_id)),
+        )
+        missed = ""
         try:
             self.broker.record(job_id, state, fields)
         except BrokerError as exc:
-            logger.error("could not record %s for %s: %s (the state file keeps it)", state, job_id, exc)
+            missed = str(exc) or type(exc).__name__
+            logger.error("could not record %s for %s: %s (recorded on a later tick)", state, job_id, exc)
         finished = self.clock() if state in TERMINAL or state == "held" else None
         self._write_state(job_id, state=state, finished_at=finished, reason=fields.get("reason"))
         if state == "failed" and (self._daemon_state(job_id).get("proof_alerts") or {}) == paged_before:
@@ -226,7 +269,32 @@ class MedchronLane(Daemon):
                 job_id,
                 wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields, stage=stage)},
             )
+        if missed:
+            # The broker did not take the ending (2026-11-17, the lifecycle
+            # matrix: the row said running for good). It is kept and recorded on
+            # a later tick, with a bound past which SMD is paged; the firm's
+            # message above goes exactly as it did before (``unrecorded.py``).
+            proof = state == "delivered" and self.proof_recorded is False
+            unrecorded.keep(self, job_id, state, fields, proof=proof, why=missed)
         return state
+
+    def poll_requests(self) -> None:
+        """Each tick and while idle: record any ending the broker did not take,
+        at most once a minute while one is still waiting."""
+        super().poll_requests()
+        if self.clock() < self.record_retry_at:
+            return
+        try:
+            if not unrecorded.retry(self):
+                self.record_retry_at = self.clock() + unrecorded.RETRY_SECONDS
+        except Exception:  # a poll hook must not raise (daemon.poll_requests); logged with its trace
+            logger.exception("recording a pending ending failed")
+            self.record_retry_at = self.clock() + unrecorded.RETRY_SECONDS
+
+    def before_wipe(self, job_id: str) -> None:
+        """Retention's last call before a workdir goes (``unrecorded.at_wipe``):
+        an ending still not recorded is tried once more, then paged."""
+        unrecorded.at_wipe(self, job_id)
 
     # -- the deliver wake (ss#2616) --------------------------------------------
     def _compose_wake(self, job_id: str, state: str, fields: dict[str, Any], *, stage: str | None = None) -> str:

@@ -332,6 +332,12 @@
           "job_id": "<ULID1>",
           "pages": 0,
           "reason": null,
+          "run": {
+            "by": "code",
+            "event": "start",
+            "release": "unknown",
+            "v": 1
+          },
           "state": "running"
         },
         "skill": "medical-chronology-maintainer"
@@ -376,6 +382,12 @@
           "job_id": "<ULID1>",
           "pages": 30,
           "reason": null,
+          "run": {
+            "by": "code",
+            "event": "end",
+            "release": "unknown",
+            "v": 1
+          },
           "state": "delivered"
         },
         "skill": "medical-chronology-maintainer"
@@ -621,7 +633,14 @@
         },
         "request": {
           "action": "medchron_job_record",
-          "fields": {},
+          "fields": {
+            "run": {
+              "by": "code",
+              "event": "start",
+              "release": "unknown",
+              "v": 1
+            }
+          },
           "job_id": "<ULID1>",
           "state": "running"
         }
@@ -687,7 +706,13 @@
             },
             "documents": 4,
             "folder_id": "folder-9",
-            "pages": 30
+            "pages": 30,
+            "run": {
+              "by": "code",
+              "event": "end",
+              "release": "unknown",
+              "v": 1
+            }
           },
           "job_id": "<ULID1>",
           "state": "delivered"

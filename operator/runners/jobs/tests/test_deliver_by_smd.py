@@ -91,7 +91,7 @@ def test_a_failed_job_becomes_delivered_with_the_record_the_next_update_reads(tm
     _deliver(d)
     assert [(s, sorted(f)) for _, s, f in broker.records] == [
         ("running", []),
-        ("delivered", ["cents", "covered", "delivery", "documents", "folder_id", "pages"]),
+        ("delivered", ["cents", "covered", "delivery", "documents", "folder_id", "pages", "run"]),
     ]
     fields = broker.records[-1][2]
     assert fields["folder_id"] == "folder-7" and fields["covered"] == RECORD["covered"]

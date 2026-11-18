@@ -113,11 +113,14 @@ def alert(d: Any, job_id: str, code: str, detail: str = "", *, unit: str = "") -
     return True
 
 
-def _record_proven(d: Any, job_id: str, outcomes: list[Any]) -> None:
+def _record_proven(d: Any, job_id: str, outcomes: list[Any]) -> bool:
+    """One ``DELIVERY_PROVEN`` row; whether it landed (also kept on the lane as
+    ``proof_recorded``, so a lane whose state record then failed knows whether
+    its later retry must record the proof too, and never records it twice)."""
     from ..broker_client import BrokerError
 
     if in_proof_run(d):
-        return
+        return False
 
     files: list[dict[str, Any]] = []
     rows = 0
@@ -150,6 +153,14 @@ def _record_proven(d: Any, job_id: str, outcomes: list[Any]) -> None:
         )
     except (BrokerError, OSError, AttributeError, TypeError, ValueError) as exc:
         logger.error("%s job %s: could not record its proof: %s", d.LANE, job_id, exc)
+        d.proof_recorded = False
+        return False
+    d.proof_recorded = True
+    return True
+
+
+#: The delivered proof, recorded again by a lane whose first record failed.
+record_proven = _record_proven
 
 
 def _carried_alerts(d: Any, job_id: str, outcomes: list[Any]) -> None:

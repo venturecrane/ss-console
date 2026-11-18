@@ -76,6 +76,7 @@ ENDINGS = (
     "wake_lost",
     "broker_down_mid_run",
     "orphan_envelope",
+    "queued_behind_same_lane",
 )
 
 #: Cells the host code cannot reach, each with the reason read from the code.
@@ -104,6 +105,9 @@ NOT_APPLICABLE: dict[str, str] = {
     "note/orphan_envelope": "the note lane has no queue to find an envelope in (note_lane.py tick)",
     "library_setup/orphan_envelope": "an orphan envelope is quarantined before its kind is read; the drafting cell holds it (daemon.py claim_next)",
     "note/lane_unproven": "the note lane claims nothing, so the lane-proof gate never runs (note_lane.py tick)",
+    "note/queued_behind_same_lane": "the note lane has no queue for a second job to wait in (note_lane.py tick)",
+    "negotiation/queued_behind_same_lane": "one negotiation job at a time: a second is refused while one is queued or running, never queued behind it (negotiation_ledger.submit)",
+    "library_setup/queued_behind_same_lane": "a second library setup is refused while one is underway, never queued (library_setup_ledger.Underway)",
 }
 
 #: Child-env names each lane passes from the daemon's own environment, given

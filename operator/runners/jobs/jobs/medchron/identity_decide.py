@@ -106,6 +106,7 @@ def plan(d: Any, job_id: str, *, action: str, ids: list[str], by: str, source: s
         "decision": {"action": action, "ids": ids, "by": by.strip(), "source": source.strip()},
         "marker": {
             "job_id": job_id,
+            "intervention": "decide_identity",
             "reason": f"identity decision recorded by SMD: {action} {', '.join(ids)} ({by.strip()}, {source.strip()})"[
                 :500
             ],

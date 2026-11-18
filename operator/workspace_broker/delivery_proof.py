@@ -66,6 +66,7 @@ CODES = frozenset(
         "library_edit_refused",
         "layout_rule_unplaced",
         "spend_unrecorded",
+        "ending_unrecorded",
     }
 )
 REPLY_KINDS = frozenset(

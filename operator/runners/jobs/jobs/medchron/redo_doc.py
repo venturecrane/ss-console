@@ -94,6 +94,7 @@ def plan(d: Any, job_id: str, *, by: str, source: str) -> dict[str, Any]:
         "units": units,
         "marker": {
             "job_id": job_id,
+            "intervention": "redo_doc",
             "reason": f"document rebuilt from build_doc by SMD ({by.strip()}, {source.strip()})"[:500],
             "redo": list(REDO),
         },

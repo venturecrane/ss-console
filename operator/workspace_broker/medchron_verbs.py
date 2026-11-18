@@ -72,7 +72,15 @@ import json
 import re
 from typing import Any
 
-from . import delivery_proof, hold_class, medchron_coverage, medchron_credits, medchron_identity, page_store_meta
+from . import (
+    delivery_proof,
+    hold_class,
+    medchron_coverage,
+    medchron_credits,
+    medchron_identity,
+    page_store_meta,
+    run_meta,
+)
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .medchron_ledger import (
@@ -85,6 +93,7 @@ from .medchron_ledger import (
     allowance_from_customer_yaml,
     cycle_from_customer_yaml,
     validate_envelope,
+    work_digest,
 )
 from .medchron_update import cited_block, delivered_count, delivered_refusal
 
@@ -580,21 +589,10 @@ class MedchronVerbs:
         # An update carries the delivered rows' cited sources: the delivered
         # job dirs it would otherwise read them from are wiped after 72 hours.
         envelope = {**envelope, **cited_block(self._db, envelope)}
+        earlier = self._earlier_attempt(envelope)
         job_id = self._db.submit(envelope, remaining=state["remaining"])
         medchron_identity.remember(self._db, job_id, envelope)
-        self._audit(
-            AUDIT_TYPE["submitted"],
-            {
-                "job_id": job_id,
-                "matter_number": envelope["matter"]["number"],
-                "units": len(envelope["units"]),
-                "allowance_remaining_pages": state["remaining"],
-                "allowance_remaining_documents": state["remaining"],
-                "requested_by": envelope.get("requested_by"),
-                "request_ref": envelope.get("request_ref"),
-            },
-            envelope["matter"]["id"],
-        )
+        self._audit_submitted(job_id, envelope, state["remaining"], earlier)
         return {
             "ok": True,
             "accepted": True,
@@ -606,6 +604,33 @@ class MedchronVerbs:
             # key by name (ADR 0087 amendment).
             "allowance_remaining_documents": state["remaining"],
         }
+
+    def _audit_submitted(self, job_id: str, envelope: dict[str, Any], remaining: int, earlier: str | None) -> None:
+        """The SUBMITTED row. A resubmission of the same work replaces the earlier
+        job: its run record says so, so neither job is counted as needing nobody."""
+        replaces = run_meta.check({"event": "replaces", "by": "firm", "replaces": earlier}) if earlier else None
+        meta = {
+            "job_id": job_id,
+            "matter_number": envelope["matter"]["number"],
+            "units": len(envelope["units"]),
+            "allowance_remaining_pages": remaining,
+            "allowance_remaining_documents": remaining,
+            "requested_by": envelope.get("requested_by"),
+            "request_ref": envelope.get("request_ref"),
+        }
+        self._audit(AUDIT_TYPE["submitted"], run_meta.add(meta, replaces), envelope["matter"]["id"])
+
+    def _earlier_attempt(self, envelope: dict[str, Any]) -> str | None:
+        """The newest earlier job carrying this envelope's work, in any state."""
+        conn = self._db._connect()
+        try:
+            row = conn.execute(
+                "SELECT id FROM medchron_jobs WHERE work_digest = ? ORDER BY created_at DESC LIMIT 1",
+                (work_digest(envelope),),
+            ).fetchone()
+        finally:
+            conn.close()
+        return str(row["id"]) if row is not None else None
 
     def _requester_refusal(self, envelope: dict[str, Any]) -> str | None:
         """None when a Named Administrator asked for this; a prose reason otherwise.
@@ -661,6 +686,7 @@ class MedchronVerbs:
             raise ValueError("medchron_job_record requires job_id, a known state, and a fields object")
         wake = fields.pop("wake", None)  # audit-only metadata (a lost deliver wake), never a column
         store = page_store_meta.take(fields)  # audit-only: the job's page-store counts
+        run = run_meta.take(fields)  # audit-only: the run record (run_meta.py)
         row = self._db.record(job_id, state, fields)
         meta = {
             "job_id": job_id,
@@ -680,7 +706,7 @@ class MedchronVerbs:
                 for f in (d.get("files") or [])
                 if isinstance(f, dict)
             ][:50]
-        self._audit(AUDIT_TYPE[state], page_store_meta.add(meta, store), row["matter_id"])
+        self._audit(AUDIT_TYPE[state], run_meta.add(page_store_meta.add(meta, store), run), row["matter_id"])
         return {"ok": True, "job": self._db.project(row)}
 
     def _backfill(self, request: dict[str, Any]) -> dict[str, Any]:

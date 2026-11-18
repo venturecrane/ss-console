@@ -60,6 +60,12 @@
           "job_id": "<ULID1>",
           "pages": 0,
           "reason": null,
+          "run": {
+            "by": "code",
+            "event": "start",
+            "release": "unknown",
+            "v": 1
+          },
           "state": "running"
         },
         "skill": "medical-chronology-maintainer"
@@ -75,6 +81,12 @@
           "job_id": "<ULID1>",
           "pages": 0,
           "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+          "run": {
+            "by": "smd",
+            "code": "stopped_by_smd",
+            "event": "stop",
+            "v": 1
+          },
           "state": "failed"
         },
         "skill": "medical-chronology-maintainer"
@@ -295,7 +307,14 @@
         },
         "request": {
           "action": "medchron_job_record",
-          "fields": {},
+          "fields": {
+            "run": {
+              "by": "code",
+              "event": "start",
+              "release": "unknown",
+              "v": 1
+            }
+          },
           "job_id": "<ULID1>",
           "state": "running"
         }
@@ -325,7 +344,13 @@
           "action": "medchron_job_record",
           "fields": {
             "cents": 0,
-            "reason": "stopped_by_smd: by smd@example.test: host matrix stop"
+            "reason": "stopped_by_smd: by smd@example.test: host matrix stop",
+            "run": {
+              "by": "smd",
+              "code": "stopped_by_smd",
+              "event": "stop",
+              "v": 1
+            }
           },
           "job_id": "<ULID1>",
           "state": "failed"

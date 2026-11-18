@@ -2067,6 +2067,307 @@
         ]
       }
     },
+    "casefile/queued_behind_same_lane": {
+      "casefile_job_record": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "file": "null",
+              "files": [],
+              "folder_id": "null",
+              "job_id": "str",
+              "lines_proposed": "null",
+              "matters_current": "null",
+              "matters_held": "null",
+              "matters_read": "null",
+              "matters_total": "null",
+              "mode": "str",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "source_job_id": "null",
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "file": "null",
+              "files": [
+                {
+                  "name": "str",
+                  "role": "str",
+                  "size": "int"
+                }
+              ],
+              "folder_id": "str",
+              "job_id": "str",
+              "lines_proposed": "int",
+              "matters_current": "int",
+              "matters_held": "int",
+              "matters_read": "int",
+              "matters_total": "int",
+              "mode": "str",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "source_job_id": "null",
+              "stage": "str",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "fields": {
+              "cents": "int",
+              "files": [
+                {
+                  "name": "str",
+                  "role": "str",
+                  "sha256": "str",
+                  "size": "int"
+                }
+              ],
+              "folder_id": "str",
+              "lines_proposed": "int",
+              "matters_current": "int",
+              "matters_held": "int",
+              "matters_read": "int",
+              "matters_total": "int",
+              "stage": "str"
+            },
+            "job_id": "str",
+            "state": "str"
+          },
+          {
+            "action": "str",
+            "fields": {},
+            "job_id": "str",
+            "state": "str"
+          }
+        ]
+      },
+      "casefile_job_status": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "file": "null",
+              "files": [],
+              "folder_id": "null",
+              "job_id": "str",
+              "lines_proposed": "null",
+              "matters_current": "null",
+              "matters_held": "null",
+              "matters_read": "null",
+              "matters_total": "null",
+              "mode": "str",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "row": {
+                "attempt": "int",
+                "cents": "int",
+                "close_reason": "null",
+                "close_ref": "null",
+                "created_at": "str",
+                "delivery_json": "null",
+                "envelope_digest": "str",
+                "file_to_matter_id": "str",
+                "folder_id": "null",
+                "id": "str",
+                "lines_proposed": "null",
+                "matters_current": "null",
+                "matters_held": "null",
+                "matters_read": "null",
+                "matters_total": "null",
+                "metrics_json": "null",
+                "mode": "str",
+                "outcomes_json": "null",
+                "reason": "null",
+                "reply_key": "null",
+                "reply_sent_at": "null",
+                "request_ref": "str",
+                "requester": "str",
+                "scope_json": "str",
+                "scope_key": "str",
+                "source_job_id": "null",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              },
+              "source_job_id": "null",
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "jobs": [
+              {
+                "cents": "int",
+                "created_at": "str",
+                "file": "null",
+                "files": [],
+                "folder_id": "null",
+                "job_id": "str",
+                "lines_proposed": "null",
+                "matters_current": "null",
+                "matters_held": "null",
+                "matters_read": "null",
+                "matters_total": "null",
+                "mode": "str",
+                "reason": "null",
+                "reply_sent_at": "null",
+                "requester": "str",
+                "source_job_id": "null",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              },
+              {
+                "cents": "int",
+                "created_at": "str",
+                "file": "null",
+                "files": [
+                  {
+                    "name": "str",
+                    "role": "str",
+                    "size": "int"
+                  }
+                ],
+                "folder_id": "str",
+                "job_id": "str",
+                "lines_proposed": "int",
+                "matters_current": "int",
+                "matters_held": "int",
+                "matters_read": "int",
+                "matters_total": "int",
+                "mode": "str",
+                "reason": "null",
+                "reply_sent_at": "null",
+                "requester": "str",
+                "source_job_id": "null",
+                "stage": "str",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              }
+            ],
+            "month": "str",
+            "month_cents": "int",
+            "monthly_budget_cents": "null",
+            "ok": "bool"
+          },
+          {
+            "jobs": [
+              {
+                "cents": "int",
+                "created_at": "str",
+                "file": "null",
+                "files": [],
+                "folder_id": "null",
+                "job_id": "str",
+                "lines_proposed": "null",
+                "matters_current": "null",
+                "matters_held": "null",
+                "matters_read": "null",
+                "matters_total": "null",
+                "mode": "str",
+                "reason": "null",
+                "reply_sent_at": "null",
+                "requester": "str",
+                "source_job_id": "null",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              }
+            ],
+            "month": "str",
+            "month_cents": "int",
+            "monthly_budget_cents": "null",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "exclude_job_id": "str"
+          },
+          {
+            "action": "str",
+            "job_id": "str"
+          }
+        ]
+      },
+      "delivery_proof_record": {
+        "replies": [
+          {
+            "audit_id": "str",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "attempt": "int",
+            "files": [
+              {
+                "file_id": "str",
+                "name": "str",
+                "sha256": "str",
+                "size": "int"
+              }
+            ],
+            "job_id": "str",
+            "lane": "str",
+            "review": "str",
+            "review_cents": "int",
+            "review_model": "str",
+            "rows": "int"
+          }
+        ]
+      },
+      "delivery_reply_status": {
+        "replies": [
+          {
+            "channel": "str",
+            "expected_key": "str",
+            "holds": "int",
+            "ok": "bool",
+            "replies": [],
+            "sends_to_requester": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "job_id": "str",
+            "kind": "str",
+            "requester": "str",
+            "since": "str"
+          }
+        ]
+      }
+    },
     "casefile/resume_failed": {
       "casefile_job_record": {
         "replies": [
@@ -4810,6 +5111,186 @@
         ]
       }
     },
+    "demand/queued_behind_same_lane": {
+      "delivery_proof_record": {
+        "replies": [
+          {
+            "audit_id": "str",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "attempt": "int",
+            "files": [
+              {
+                "file_id": "str",
+                "name": "str",
+                "sha256": "str",
+                "size": "int"
+              }
+            ],
+            "job_id": "str",
+            "lane": "str",
+            "review": "str",
+            "review_cents": "int",
+            "review_model": "str",
+            "rows": "int"
+          }
+        ]
+      },
+      "delivery_reply_status": {
+        "replies": [
+          {
+            "channel": "str",
+            "expected_key": "str",
+            "holds": "int",
+            "ok": "bool",
+            "replies": [],
+            "sends_to_requester": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "job_id": "str",
+            "kind": "str",
+            "requester": "str",
+            "since": "str"
+          }
+        ]
+      },
+      "demand_allowance": {
+        "replies": [
+          {
+            "allowance": "null",
+            "authored": "bool",
+            "cents_month": "str",
+            "cents_used": "int",
+            "cycle": "str",
+            "cycle_start": "str",
+            "ok": "bool",
+            "remaining": "int",
+            "unit": "str",
+            "used": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "exclude_job_id": "str"
+          }
+        ]
+      },
+      "demand_job_record": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "file_to_matter_id": "str",
+              "files": "null",
+              "folder_id": "null",
+              "id": "str",
+              "matter_id": "str",
+              "matter_number": "str",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "state": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "file_to_matter_id": "str",
+              "files": [
+                {
+                  "name": "str",
+                  "role": "str",
+                  "size": "int"
+                }
+              ],
+              "folder_id": "str",
+              "id": "str",
+              "matter_id": "str",
+              "matter_number": "str",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "state": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "fields": {
+              "cents": "int",
+              "delivery": {
+                "cents": "int",
+                "coverage_report": "bool",
+                "files": [
+                  {
+                    "name": "str",
+                    "role": "str",
+                    "size": "int"
+                  }
+                ]
+              },
+              "folder_id": "str"
+            },
+            "job_id": "str",
+            "state": "str"
+          },
+          {
+            "action": "str",
+            "fields": {},
+            "job_id": "str",
+            "state": "str"
+          }
+        ]
+      },
+      "demand_job_status": {
+        "replies": [
+          {
+            "job": {
+              "attempt": "int",
+              "cents": "int",
+              "created_at": "str",
+              "delivery_json": "null",
+              "envelope_digest": "str",
+              "file_to_matter_id": "str",
+              "folder_id": "null",
+              "id": "str",
+              "matter_id": "str",
+              "matter_number": "str",
+              "reason": "null",
+              "reply_key": "null",
+              "reply_sent_at": "null",
+              "request_ref": "str",
+              "requester": "str",
+              "state": "str",
+              "supersedes": "null",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "job_id": "str"
+          }
+        ]
+      }
+    },
     "demand/resume_failed": {
       "delivery_proof_record": {
         "replies": [
@@ -7519,6 +8000,201 @@
         "replies": [
           {
             "job": "null",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "job_id": "str"
+          }
+        ]
+      }
+    },
+    "drafting/queued_behind_same_lane": {
+      "delivery_proof_record": {
+        "replies": [
+          {
+            "audit_id": "str",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "attempt": "int",
+            "files": [
+              {
+                "file_id": "str",
+                "name": "str",
+                "sha256": "str",
+                "size": "int"
+              }
+            ],
+            "job_id": "str",
+            "lane": "str",
+            "review": "str",
+            "review_cents": "int",
+            "review_model": "str",
+            "rows": "int"
+          }
+        ]
+      },
+      "delivery_reply_status": {
+        "replies": [
+          {
+            "channel": "str",
+            "expected_key": "str",
+            "holds": "int",
+            "ok": "bool",
+            "replies": [],
+            "sends_to_requester": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "job_id": "str",
+            "kind": "str",
+            "requester": "str",
+            "since": "str"
+          },
+          {
+            "action": "str",
+            "job_id": "str",
+            "kind": "str",
+            "thread": "bool"
+          }
+        ]
+      },
+      "drafting_allowance": {
+        "replies": [
+          {
+            "allowance": "null",
+            "authored": "bool",
+            "cents_month": "str",
+            "cents_used": "int",
+            "cycle": "str",
+            "cycle_start": "str",
+            "enabled_classes": [],
+            "ok": "bool",
+            "remaining": "int",
+            "unit": "str",
+            "used": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "exclude_job_id": "str"
+          }
+        ]
+      },
+      "drafting_job_record": {
+        "replies": [
+          {
+            "job": {
+              "caption_corrections": [],
+              "caption_discrepancies": [],
+              "cents": "int",
+              "created_at": "str",
+              "document_class": "str",
+              "file_to_matter_id": "str",
+              "files": [
+                {
+                  "name": "str",
+                  "role": "str",
+                  "size": "int"
+                }
+              ],
+              "folder_id": "str",
+              "id": "str",
+              "markers": [],
+              "matter_id": "str",
+              "matter_number": "str",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "state": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "document_class": "str",
+              "file_to_matter_id": "str",
+              "files": "null",
+              "folder_id": "null",
+              "id": "str",
+              "matter_id": "str",
+              "matter_number": "str",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "state": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "fields": {
+              "caption_corrections": [],
+              "caption_discrepancies": [],
+              "cents": "int",
+              "delivery": {
+                "cents": "int",
+                "files": [
+                  {
+                    "name": "str",
+                    "role": "str",
+                    "size": "int"
+                  }
+                ]
+              },
+              "folder_id": "str",
+              "markers": []
+            },
+            "job_id": "str",
+            "state": "str"
+          },
+          {
+            "action": "str",
+            "fields": {},
+            "job_id": "str",
+            "state": "str"
+          }
+        ]
+      },
+      "drafting_job_status": {
+        "replies": [
+          {
+            "job": {
+              "attempt": "int",
+              "cents": "int",
+              "created_at": "str",
+              "delivery_json": "null",
+              "document_class": "str",
+              "envelope_digest": "str",
+              "file_to_matter_id": "str",
+              "folder_id": "null",
+              "id": "str",
+              "matter_id": "str",
+              "matter_number": "str",
+              "reason": "null",
+              "reply_key": "null",
+              "reply_sent_at": "null",
+              "request_ref": "str",
+              "requester": "str",
+              "revise_of": "null",
+              "state": "str",
+              "updated_at": "str"
+            },
             "ok": "bool"
           }
         ],
@@ -13072,6 +13748,298 @@
         ]
       }
     },
+    "litigation/queued_behind_same_lane": {
+      "delivery_proof_record": {
+        "replies": [
+          {
+            "audit_id": "str",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "attempt": "int",
+            "files": [
+              {
+                "file_id": "str",
+                "name": "str",
+                "sha256": "str",
+                "size": "int"
+              }
+            ],
+            "job_id": "str",
+            "lane": "str",
+            "review": "str",
+            "review_cents": "int",
+            "review_model": "str",
+            "rows": "int"
+          }
+        ]
+      },
+      "delivery_reply_status": {
+        "replies": [
+          {
+            "channel": "str",
+            "expected_key": "str",
+            "holds": "int",
+            "ok": "bool",
+            "replies": [],
+            "sends_to_requester": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "job_id": "str",
+            "kind": "str",
+            "requester": "str",
+            "since": "str"
+          }
+        ]
+      },
+      "litigation_job_record": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "counts": {},
+              "created_at": "str",
+              "file": "null",
+              "files": [],
+              "flags_new": "null",
+              "folder_id": "null",
+              "job_id": "str",
+              "matters_reread": "null",
+              "matters_total": "null",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "report": "str",
+              "requester": "str",
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "job": {
+              "cents": "int",
+              "counts": {},
+              "created_at": "str",
+              "file": "null",
+              "files": [
+                {
+                  "name": "str",
+                  "role": "str",
+                  "size": "int"
+                }
+              ],
+              "flags_new": "int",
+              "folder_id": "str",
+              "job_id": "str",
+              "matters_reread": "int",
+              "matters_total": "int",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "report": "str",
+              "requester": "str",
+              "stage": "str",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "fields": {
+              "cents": "int",
+              "files": [
+                {
+                  "name": "str",
+                  "role": "str",
+                  "sha256": "str",
+                  "size": "int"
+                }
+              ],
+              "flags_new": "int",
+              "folder_id": "str",
+              "matters_reread": "int",
+              "matters_total": "int",
+              "stage": "str"
+            },
+            "job_id": "str",
+            "state": "str"
+          },
+          {
+            "action": "str",
+            "fields": {},
+            "job_id": "str",
+            "state": "str"
+          }
+        ]
+      },
+      "litigation_job_status": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "counts": {},
+              "created_at": "str",
+              "file": "null",
+              "files": [],
+              "flags_new": "null",
+              "folder_id": "null",
+              "job_id": "str",
+              "matters_reread": "null",
+              "matters_total": "null",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "report": "str",
+              "requester": "str",
+              "row": {
+                "attempt": "int",
+                "cents": "int",
+                "close_reason": "null",
+                "close_ref": "null",
+                "counts_json": "null",
+                "created_at": "str",
+                "delivery_json": "null",
+                "envelope_digest": "str",
+                "file_to_matter_id": "str",
+                "flags_new": "null",
+                "folder_id": "null",
+                "folder_name": "str",
+                "id": "str",
+                "matters_reread": "null",
+                "matters_total": "null",
+                "over_allowance_ref": "null",
+                "reason": "null",
+                "reassign_json": "null",
+                "reply_key": "null",
+                "reply_sent_at": "null",
+                "report": "str",
+                "request_ref": "str",
+                "requester": "str",
+                "scope_json": "str",
+                "scope_key": "str",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              },
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "jobs": [
+              {
+                "cents": "int",
+                "counts": {},
+                "created_at": "str",
+                "file": "null",
+                "files": [],
+                "flags_new": "null",
+                "folder_id": "null",
+                "job_id": "str",
+                "matters_reread": "null",
+                "matters_total": "null",
+                "reason": "null",
+                "reply_sent_at": "null",
+                "report": "str",
+                "requester": "str",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              },
+              {
+                "cents": "int",
+                "counts": {},
+                "created_at": "str",
+                "file": "null",
+                "files": [
+                  {
+                    "name": "str",
+                    "role": "str",
+                    "size": "int"
+                  }
+                ],
+                "flags_new": "int",
+                "folder_id": "str",
+                "job_id": "str",
+                "matters_reread": "int",
+                "matters_total": "int",
+                "reason": "null",
+                "reply_sent_at": "null",
+                "report": "str",
+                "requester": "str",
+                "stage": "str",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              }
+            ],
+            "list_allowance": {
+              "authored": "bool"
+            },
+            "month": "str",
+            "month_cents": "int",
+            "monthly_budget_cents": "null",
+            "ok": "bool"
+          },
+          {
+            "jobs": [
+              {
+                "cents": "int",
+                "counts": {},
+                "created_at": "str",
+                "file": "null",
+                "files": [],
+                "flags_new": "null",
+                "folder_id": "null",
+                "job_id": "str",
+                "matters_reread": "null",
+                "matters_total": "null",
+                "reason": "null",
+                "reply_sent_at": "null",
+                "report": "str",
+                "requester": "str",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              }
+            ],
+            "list_allowance": {
+              "authored": "bool"
+            },
+            "month": "str",
+            "month_cents": "int",
+            "monthly_budget_cents": "null",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "exclude_job_id": "str"
+          },
+          {
+            "action": "str",
+            "job_id": "str"
+          }
+        ]
+      }
+    },
     "litigation/resume_failed": {
       "delivery_proof_alert": {
         "replies": [
@@ -14652,6 +15620,34 @@
       }
     },
     "medchron/broker_down_mid_run": {
+      "delivery_proof_record": {
+        "replies": [
+          {
+            "audit_id": "str",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "attempt": "int",
+            "files": [
+              {
+                "file_id": "str",
+                "name": "str",
+                "sha256": "str",
+                "size": "int"
+              }
+            ],
+            "job_id": "str",
+            "lane": "str",
+            "review": "str",
+            "review_cents": "int",
+            "review_model": "str",
+            "rows": "int"
+          }
+        ]
+      },
       "delivery_reply_status": {
         "replies": [
           {
@@ -14712,7 +15708,7 @@
                 "covered_count": "null",
                 "created_at": "str",
                 "documents": "int",
-                "folder_id": "null",
+                "folder_id": "str",
                 "id": "str",
                 "matter_number": "str",
                 "pages": "int",
@@ -14753,12 +15749,66 @@
               "work_digest": "str"
             },
             "ok": "bool"
+          },
+          {
+            "job": {
+              "cents": "int",
+              "covered_document_ids": "null",
+              "covered_json": "null",
+              "created_at": "str",
+              "documents": "int",
+              "folder_id": "str",
+              "id": "str",
+              "matter_number": "str",
+              "pages": "int",
+              "reason": "null",
+              "state": "str",
+              "uncovered_document_ids": "null",
+              "uncovered_reasons": "null",
+              "updated_at": "str",
+              "work_digest": "str"
+            },
+            "ok": "bool"
           }
         ],
         "requests": [
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "cents": "int",
+              "delivery": {
+                "files": [
+                  {
+                    "bytes": "int",
+                    "confirmed": "bool",
+                    "name": "str",
+                    "sha256": "str"
+                  }
+                ]
+              },
+              "documents": "int",
+              "folder_id": "str",
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
+            "job_id": "str",
+            "state": "str"
+          },
+          {
+            "action": "str",
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -14965,14 +16015,27 @@
               },
               "documents": "int",
               "folder_id": "str",
-              "pages": "int"
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -15179,14 +16242,27 @@
               },
               "documents": "int",
               "folder_id": "str",
-              "pages": "int"
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -15352,14 +16428,29 @@
               "cents": "int",
               "documents": "int",
               "pages": "int",
-              "reason": "str"
+              "reason": "str",
+              "run": {
+                "by": "str",
+                "code": "str",
+                "event": "str",
+                "kind": "str",
+                "stage": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -15546,14 +16637,27 @@
               "cents": "int",
               "documents": "int",
               "pages": "int",
-              "reason": "str"
+              "reason": "str",
+              "run": {
+                "by": "str",
+                "code": "str",
+                "event": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -15798,7 +16902,13 @@
               },
               "documents": "int",
               "folder_id": "str",
-              "pages": "int"
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
@@ -15813,7 +16923,14 @@
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -16041,14 +17158,27 @@
               },
               "documents": "int",
               "folder_id": "str",
-              "pages": "int"
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -16211,14 +17341,27 @@
           {
             "action": "str",
             "fields": {
-              "reason": "str"
+              "reason": "str",
+              "run": {
+                "by": "str",
+                "code": "str",
+                "event": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -16282,6 +17425,248 @@
         "replies": [
           {
             "job": "null",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "job_id": "str"
+          }
+        ]
+      }
+    },
+    "medchron/queued_behind_same_lane": {
+      "delivery_proof_record": {
+        "replies": [
+          {
+            "audit_id": "str",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "attempt": "int",
+            "files": [
+              {
+                "file_id": "str",
+                "name": "str",
+                "sha256": "str",
+                "size": "int"
+              }
+            ],
+            "job_id": "str",
+            "lane": "str",
+            "review": "str",
+            "review_cents": "int",
+            "review_model": "str",
+            "rows": "int"
+          }
+        ]
+      },
+      "delivery_reply_status": {
+        "replies": [
+          {
+            "channel": "str",
+            "expected_key": "str",
+            "holds": "int",
+            "ok": "bool",
+            "replies": [],
+            "sends_to_requester": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "job_id": "str",
+            "kind": "str",
+            "requester": "str",
+            "since": "str"
+          }
+        ]
+      },
+      "medchron_allowance": {
+        "replies": [
+          {
+            "allowance": "null",
+            "authored": "bool",
+            "cents_used": "int",
+            "cycle_anchored": "bool",
+            "cycle_end": "str",
+            "cycle_start": "str",
+            "documents_used": "int",
+            "job_pages_credited": "int",
+            "month": "str",
+            "ok": "bool",
+            "pages_credited": "int",
+            "pages_debited": "int",
+            "pages_remaining": "int",
+            "pages_used": "int",
+            "remaining": "int",
+            "unit": "str",
+            "used": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "exclude_job_id": "str"
+          }
+        ]
+      },
+      "medchron_job_list": {
+        "replies": [
+          {
+            "credits": [],
+            "jobs": [
+              {
+                "cents": "int",
+                "covered_count": "null",
+                "created_at": "str",
+                "documents": "int",
+                "folder_id": "null",
+                "id": "str",
+                "matter_number": "str",
+                "pages": "int",
+                "reason": "null",
+                "state": "str",
+                "uncovered_count": "null",
+                "updated_at": "str",
+                "work_digest": "str"
+              },
+              {
+                "cents": "int",
+                "covered_count": "null",
+                "created_at": "str",
+                "documents": "int",
+                "folder_id": "str",
+                "id": "str",
+                "matter_number": "str",
+                "pages": "int",
+                "reason": "null",
+                "state": "str",
+                "uncovered_count": "null",
+                "updated_at": "str",
+                "work_digest": "str"
+              }
+            ],
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str"
+          }
+        ]
+      },
+      "medchron_job_record": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "covered_document_ids": "null",
+              "covered_json": "null",
+              "created_at": "str",
+              "documents": "int",
+              "folder_id": "null",
+              "id": "str",
+              "matter_number": "str",
+              "pages": "int",
+              "reason": "null",
+              "state": "str",
+              "uncovered_document_ids": "null",
+              "uncovered_reasons": "null",
+              "updated_at": "str",
+              "work_digest": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "job": {
+              "cents": "int",
+              "covered_document_ids": "null",
+              "covered_json": "null",
+              "created_at": "str",
+              "documents": "int",
+              "folder_id": "str",
+              "id": "str",
+              "matter_number": "str",
+              "pages": "int",
+              "reason": "null",
+              "state": "str",
+              "uncovered_document_ids": "null",
+              "uncovered_reasons": "null",
+              "updated_at": "str",
+              "work_digest": "str"
+            },
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "fields": {
+              "cents": "int",
+              "delivery": {
+                "files": [
+                  {
+                    "bytes": "int",
+                    "confirmed": "bool",
+                    "name": "str",
+                    "sha256": "str"
+                  }
+                ]
+              },
+              "documents": "int",
+              "folder_id": "str",
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
+            "job_id": "str",
+            "state": "str"
+          },
+          {
+            "action": "str",
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
+            "job_id": "str",
+            "state": "str"
+          }
+        ]
+      },
+      "medchron_job_status": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "covered_document_ids": "null",
+              "covered_json": "null",
+              "created_at": "str",
+              "documents": "int",
+              "folder_id": "null",
+              "id": "str",
+              "matter_number": "str",
+              "pages": "int",
+              "reason": "null",
+              "smd_page_credit_pages": "int",
+              "state": "str",
+              "uncovered_document_ids": "null",
+              "uncovered_reasons": "null",
+              "updated_at": "str",
+              "work_digest": "str"
+            },
             "ok": "bool"
           }
         ],
@@ -16500,7 +17885,13 @@
               },
               "documents": "int",
               "folder_id": "str",
-              "pages": "int"
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
@@ -16511,14 +17902,29 @@
               "cents": "int",
               "documents": "int",
               "pages": "int",
-              "reason": "str"
+              "reason": "str",
+              "run": {
+                "by": "str",
+                "code": "str",
+                "event": "str",
+                "kind": "str",
+                "stage": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -16784,7 +18190,13 @@
               },
               "documents": "int",
               "folder_id": "str",
-              "pages": "int"
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
@@ -16792,14 +18204,27 @@
           {
             "action": "str",
             "fields": {
-              "reason": "str"
+              "reason": "str",
+              "run": {
+                "by": "str",
+                "code": "str",
+                "event": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -16959,7 +18384,13 @@
             "action": "str",
             "fields": {
               "cents": "int",
-              "reason": "str"
+              "reason": "str",
+              "run": {
+                "by": "str",
+                "code": "str",
+                "event": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
@@ -17075,14 +18506,27 @@
             "action": "str",
             "fields": {
               "cents": "int",
-              "reason": "str"
+              "reason": "str",
+              "run": {
+                "by": "str",
+                "code": "str",
+                "event": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -17286,7 +18730,26 @@
               },
               "documents": "int",
               "folder_id": "str",
-              "pages": "int"
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
+            "job_id": "str",
+            "state": "str"
+          },
+          {
+            "action": "str",
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
@@ -17299,12 +18762,6 @@
                 "wake_failed": "bool"
               }
             },
-            "job_id": "str",
-            "state": "str"
-          },
-          {
-            "action": "str",
-            "fields": {},
             "job_id": "str",
             "state": "str"
           }
@@ -17532,14 +18989,27 @@
               },
               "documents": "int",
               "folder_id": "str",
-              "pages": "int"
+              "pages": "int",
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
             },
             "job_id": "str",
             "state": "str"
           },
           {
             "action": "str",
-            "fields": {},
+            "fields": {
+              "run": {
+                "by": "str",
+                "event": "str",
+                "release": "str",
+                "v": "int"
+              }
+            },
             "job_id": "str",
             "state": "str"
           }
@@ -21388,6 +22858,199 @@
         ]
       }
     },
+    "records/queued_behind_same_lane": {
+      "attachment_put": {
+        "replies": [
+          {
+            "handle": "str",
+            "ok": "bool",
+            "sha256": "str",
+            "size": "int"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "payload": {
+              "chunk_b64": "str",
+              "final": "bool",
+              "offset": "int",
+              "sha256": "str"
+            }
+          }
+        ]
+      },
+      "records_job_record": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "job_id": "str",
+              "matter_id": "str",
+              "reason": "null",
+              "requester": "str",
+              "review_id": "null",
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "job_id": "str",
+              "matter_id": "str",
+              "reason": "str",
+              "requester": "str",
+              "review_id": "str",
+              "stage": "str",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "cents": "int",
+            "delivery": {
+              "digest": "str",
+              "review_id": "str"
+            },
+            "items": [
+              {
+                "files": "int",
+                "n": "int",
+                "outcome": "str"
+              }
+            ],
+            "job_id": "str",
+            "stage": "str",
+            "verdict": "str"
+          },
+          {
+            "action": "str",
+            "job_id": "str",
+            "state": "str"
+          }
+        ]
+      },
+      "records_job_status": {
+        "replies": [
+          {
+            "job": {
+              "cents": "int",
+              "created_at": "str",
+              "items": [],
+              "job_id": "str",
+              "matter_id": "str",
+              "reason": "null",
+              "requester": "str",
+              "review_id": "null",
+              "row": {
+                "ack": "str",
+                "attempt": "int",
+                "cents": "int",
+                "close_reason": "null",
+                "close_ref": "null",
+                "created_at": "str",
+                "delivery_json": "null",
+                "envelope_digest": "str",
+                "job_id": "str",
+                "matter_id": "str",
+                "message_ref": "str",
+                "reason": "null",
+                "reply_key": "null",
+                "reply_sent_at": "null",
+                "request_ref": "str",
+                "requester": "str",
+                "review_id": "null",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              },
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            "ok": "bool"
+          },
+          {
+            "jobs": [
+              {
+                "cents": "int",
+                "created_at": "str",
+                "job_id": "str",
+                "matter_id": "str",
+                "reason": "null",
+                "requester": "str",
+                "review_id": "null",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              },
+              {
+                "cents": "int",
+                "created_at": "str",
+                "job_id": "str",
+                "matter_id": "str",
+                "reason": "str",
+                "requester": "str",
+                "review_id": "str",
+                "stage": "str",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              }
+            ],
+            "month": "str",
+            "month_cents": "int",
+            "monthly_budget_cents": "null",
+            "ok": "bool"
+          },
+          {
+            "jobs": [
+              {
+                "cents": "int",
+                "created_at": "str",
+                "job_id": "str",
+                "matter_id": "str",
+                "reason": "null",
+                "requester": "str",
+                "review_id": "null",
+                "stage": "null",
+                "state": "str",
+                "trigger": "str",
+                "updated_at": "str"
+              }
+            ],
+            "month": "str",
+            "month_cents": "int",
+            "monthly_budget_cents": "null",
+            "ok": "bool"
+          }
+        ],
+        "requests": [
+          {
+            "action": "str",
+            "exclude_job_id": "str"
+          },
+          {
+            "action": "str",
+            "job_id": "str"
+          }
+        ]
+      }
+    },
     "records/resume_failed": {
       "attachment_put": {
         "replies": [
@@ -22986,6 +24649,64 @@
               "matters_total": "int",
               "mode": "str",
               "reason": "str",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "source_job_id": "null",
+              "stage": "str",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            }
+          ],
+          "month": "str",
+          "month_cents": "int",
+          "monthly_budget_cents": "null",
+          "ok": "bool"
+        },
+        {
+          "jobs": [
+            {
+              "cents": "int",
+              "created_at": "str",
+              "file": "null",
+              "files": [],
+              "folder_id": "null",
+              "job_id": "str",
+              "lines_proposed": "null",
+              "matters_current": "null",
+              "matters_held": "null",
+              "matters_read": "null",
+              "matters_total": "null",
+              "mode": "str",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "requester": "str",
+              "source_job_id": "null",
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            {
+              "cents": "int",
+              "created_at": "str",
+              "file": "null",
+              "files": [
+                {
+                  "name": "str",
+                  "role": "str",
+                  "size": "int"
+                }
+              ],
+              "folder_id": "str",
+              "job_id": "str",
+              "lines_proposed": "int",
+              "matters_current": "int",
+              "matters_held": "int",
+              "matters_read": "int",
+              "matters_total": "int",
+              "mode": "str",
+              "reason": "null",
               "reply_sent_at": "null",
               "requester": "str",
               "source_job_id": "null",
@@ -24823,6 +26544,63 @@
               "state": "str",
               "trigger": "str",
               "updated_at": "str"
+            },
+            {
+              "cents": "int",
+              "counts": {},
+              "created_at": "str",
+              "file": "null",
+              "files": [
+                {
+                  "name": "str",
+                  "role": "str",
+                  "size": "int"
+                }
+              ],
+              "flags_new": "int",
+              "folder_id": "str",
+              "job_id": "str",
+              "matters_reread": "int",
+              "matters_total": "int",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "report": "str",
+              "requester": "str",
+              "stage": "str",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            }
+          ],
+          "list_allowance": {
+            "authored": "bool"
+          },
+          "month": "str",
+          "month_cents": "int",
+          "monthly_budget_cents": "null",
+          "ok": "bool"
+        },
+        {
+          "jobs": [
+            {
+              "cents": "int",
+              "counts": {},
+              "created_at": "str",
+              "file": "null",
+              "files": [],
+              "flags_new": "null",
+              "folder_id": "null",
+              "job_id": "str",
+              "matters_reread": "null",
+              "matters_total": "null",
+              "reason": "null",
+              "reply_sent_at": "null",
+              "report": "str",
+              "requester": "str",
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
             }
           ],
           "list_allowance": {
@@ -24918,6 +26696,42 @@
     },
     "medchron_job_list": {
       "replies": [
+        {
+          "credits": [],
+          "jobs": [
+            {
+              "cents": "int",
+              "covered_count": "null",
+              "created_at": "str",
+              "documents": "int",
+              "folder_id": "null",
+              "id": "str",
+              "matter_number": "str",
+              "pages": "int",
+              "reason": "null",
+              "state": "str",
+              "uncovered_count": "null",
+              "updated_at": "str",
+              "work_digest": "str"
+            },
+            {
+              "cents": "int",
+              "covered_count": "null",
+              "created_at": "str",
+              "documents": "int",
+              "folder_id": "str",
+              "id": "str",
+              "matter_number": "str",
+              "pages": "int",
+              "reason": "null",
+              "state": "str",
+              "uncovered_count": "null",
+              "updated_at": "str",
+              "work_digest": "str"
+            }
+          ],
+          "ok": "bool"
+        },
         {
           "credits": [],
           "jobs": [
@@ -25072,7 +26886,13 @@
             },
             "documents": "int",
             "folder_id": "str",
-            "pages": "int"
+            "pages": "int",
+            "run": {
+              "by": "str",
+              "event": "str",
+              "release": "str",
+              "v": "int"
+            }
           },
           "job_id": "str",
           "state": "str"
@@ -25083,7 +26903,15 @@
             "cents": "int",
             "documents": "int",
             "pages": "int",
-            "reason": "str"
+            "reason": "str",
+            "run": {
+              "by": "str",
+              "code": "str",
+              "event": "str",
+              "kind": "str",
+              "stage": "str",
+              "v": "int"
+            }
           },
           "job_id": "str",
           "state": "str"
@@ -25092,7 +26920,44 @@
           "action": "str",
           "fields": {
             "cents": "int",
-            "reason": "str"
+            "documents": "int",
+            "pages": "int",
+            "reason": "str",
+            "run": {
+              "by": "str",
+              "code": "str",
+              "event": "str",
+              "v": "int"
+            }
+          },
+          "job_id": "str",
+          "state": "str"
+        },
+        {
+          "action": "str",
+          "fields": {
+            "cents": "int",
+            "reason": "str",
+            "run": {
+              "by": "str",
+              "code": "str",
+              "event": "str",
+              "v": "int"
+            }
+          },
+          "job_id": "str",
+          "state": "str"
+        },
+        {
+          "action": "str",
+          "fields": {
+            "reason": "str",
+            "run": {
+              "by": "str",
+              "code": "str",
+              "event": "str",
+              "v": "int"
+            }
           },
           "job_id": "str",
           "state": "str"
@@ -25101,6 +26966,19 @@
           "action": "str",
           "fields": {
             "reason": "str"
+          },
+          "job_id": "str",
+          "state": "str"
+        },
+        {
+          "action": "str",
+          "fields": {
+            "run": {
+              "by": "str",
+              "event": "str",
+              "release": "str",
+              "v": "int"
+            }
           },
           "job_id": "str",
           "state": "str"
@@ -25113,12 +26991,6 @@
               "wake_failed": "bool"
             }
           },
-          "job_id": "str",
-          "state": "str"
-        },
-        {
-          "action": "str",
-          "fields": {},
           "job_id": "str",
           "state": "str"
         }
@@ -25983,6 +27855,40 @@
             "trigger": "str",
             "updated_at": "str"
           },
+          "ok": "bool"
+        },
+        {
+          "jobs": [
+            {
+              "cents": "int",
+              "created_at": "str",
+              "job_id": "str",
+              "matter_id": "str",
+              "reason": "null",
+              "requester": "str",
+              "review_id": "null",
+              "stage": "null",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            },
+            {
+              "cents": "int",
+              "created_at": "str",
+              "job_id": "str",
+              "matter_id": "str",
+              "reason": "str",
+              "requester": "str",
+              "review_id": "str",
+              "stage": "str",
+              "state": "str",
+              "trigger": "str",
+              "updated_at": "str"
+            }
+          ],
+          "month": "str",
+          "month_cents": "int",
+          "monthly_budget_cents": "null",
           "ok": "bool"
         },
         {

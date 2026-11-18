@@ -53,6 +53,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .. import run_record
 from ..limits import ALLOWANCE_SETTING
 from ..resume import MARKER_PREFIX
 
@@ -230,7 +231,14 @@ def plan_decline(d: Any, job_id: str, *, by: str) -> dict[str, Any]:
     return {
         "job_id": job_id,
         "matter": _matter_number(d, job_id),
-        "record": ("failed", {"reason": DECLINED_REASON, "pages": kept if outcomes else int(row.get("pages") or 0)}),
+        "record": (
+            "failed",
+            {
+                "reason": DECLINED_REASON,
+                "pages": kept if outcomes else int(row.get("pages") or 0),
+                **run_record.fields_for(d, "stop", by="smd", code="allowance_declined"),
+            },
+        ),
         "decision": {"decision": "declined", "by": by.strip(), "attempt": attempt},
     }
 

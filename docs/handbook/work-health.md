@@ -4,11 +4,13 @@ section: running
 order: 21
 owner: captain
 review_every: 30
-last_reviewed: "2026-11-16"
+last_reviewed: "2026-11-17"
 summary: The hourly check of the WORK on every live seat (requests with no reply, stuck or held jobs, missed and silent scheduled runs, failing connections, new errors), how it reaches you as the triage report and urgent sign-in emails, and what each line means.
 sources:
   - label: operator/bin/work-health.py - the evaluation
     href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/work-health.py
+  - label: operator/bin/lib/work_health_runs.py - how many chronology runs needed nobody
+    href: https://github.com/venturecrane/ss-console/blob/main/operator/bin/lib/work_health_runs.py
   - label: operator/contracts/work-health.yaml - the rules (lane limits, windows, the all-clear hour)
     href: https://github.com/venturecrane/ss-console/blob/main/operator/contracts/work-health.yaml
   - label: .github/workflows/work-health.yml - the ACTION-page backstop (pages only since 2026-10-16)
@@ -94,6 +96,7 @@ The hourly Smokeball check is the only detector of a dead Smokeball token: the c
 | Job held / failed | A job ended without delivering. The reason's first word is shown (`review_held`, `request_incomplete`); the rest stays on the seat. Drops off after 72 hours, or as soon as a later job in the same lane on the same matter delivers. A job a person ended on purpose (`superseded`, `cancelled`, SMD's stop command's `stopped_by_smd`) is not listed. One job is one line: its proof notice, its held reply and the heartbeat's copy of its failure are not listed again, and when SMD's review rejected the job's reply the line says so. A job whose first row in the window is its ending shows "ended", never a start it did not have. | You decide, on the agent's findings: rerun, release, or tell the requester why. |
 | Job delivered only after a person stepped in | A job delivered, but only after it was held or failed and a person released or resumed it, or after it waited on SMD's lane proof. Each step is listed with its reason's first word and time. Read from any seat's ledger (`*_JOB_RESUME_REQUESTED` rows and the bad endings before the delivery). Drops off 72 hours after the delivery. | Agent: find why each step was needed and make it code, proven at $0 on the job's saved inputs. Close it in `work-health-closed.yaml` when the fix has merged. |
 | A job's record shows $0 while its usage shows spend | A job that ended after the seat's spend check was installed has usage that prices above $0 and a row that records $0, so the firm's allowance and SMD's cost read low. The seat's jobs daemon checks every ended job once an hour and pages once per job and ending (`operator/runners/jobs/jobs/spend.py`); jobs that ended before the check was installed are never flagged. | Agent: correct the row's spend from the job's usage ledger before the month's figures are used. |
+| A chronology's ending is not in its record | The broker did not take a chronology's ending (delivered, held or failed) within the lane's retry bound, 10 tries or 30 minutes, or still had not when its workdir was wiped. The line quotes the seat's page, which says which ending, whether a message was owed to the firm for it and whether that message went. The firm's message is never held for the record. Until the record lands the row says running, and a new request for the same work is refused as already running. The lane keeps trying the record every minute while the workdir lives. At the wipe it tries once more, then pages once with the true ending and wipes the workdir with it; nothing is retried after that, and no row is ever closed with an ending that did not happen (`operator/runners/jobs/jobs/medchron/unrecorded.py`). The line closes when an ending record for the job lands. | Agent: fix what the broker answered (the line names it); the next try then lands the record. After a wipe page (it begins "true ending"), correct the row by hand to the ending it names. |
 | Smokeball refusing sign-in | The hourly sign-in check, the sign-in tool, or a job failed on authorization, and nothing has succeeded since. | You: get the client to re-consent the seat's Smokeball connection. |
 | Connection failing / mailbox not read | The seat's own counters show repeated failures, or the mail poller has not succeeded for 15 minutes. An open alert for the same connection is folded into this line. SMD's mailbox sign-in check failing with a server error while the seat's own connection is healthy is one vendor line, never a page. | Agent: check the credentials and the vendor. |
 | Open alert | A pager condition opened earlier and has not closed. | Agent: work the alert ([When Something Goes Wrong](/admin/playbook/when-something-goes-wrong)). |
@@ -104,6 +107,24 @@ The hourly Smokeball check is the only detector of a dead Smokeball token: the c
 | A message the Operator tried to send on its own was blocked by the safety check | An out-of-turn send (an outcome letter, an alert) was refused by the outbound scan, N times. Nobody it was for has heard. | Agent: find what it was sending (the seat's `agent.log` names it). You: decide how that person is told. |
 | A call was refused / failed / hit a limit | Refused, limit, failed or partial tool results in the last 24 hours, one line per tool and reason with a count. Once reported it is NEW again only when a newer failure lands. | Agent: check whether a person was waiting and got an answer. |
 | New Operator error | A Sentry error reported in the last 24 hours. | Agent: triage it in Sentry. |
+
+## How many chronologies needed nobody
+
+`python3 operator/bin/work-health.py --runs` (with `--slug <seat>` for one seat, `--runs-days N` for the window, 30 by default) prints, per seat and across seats: chronology runs, unaided, aided, held now, failed, unrecorded, and the unaided rate. It sends nothing and nothing reaches a firm. It splits stops by cause: a stop at a check (a gate, a proof, a review: the product doing its job) is counted apart from a stop at plumbing (the pull, the reads, the render, the upload), so a new check that holds runs is never read as a plumbing regression. Infrastructure retries and blocks whose reason had no code (`uncoded`) are counted too. The hourly digest carries one line of the same counts, only when it is already being sent.
+
+Each chronology transition's audit row carries a `run` record (codes and counts, never matter text: `operator/workspace_broker/run_meta.py`), written by the jobs runner at every site that ends, stops, restarts or hands over a job (`operator/runners/jobs/jobs/run_record.py`). A run is **unaided** only when all of these hold (`operator/bin/lib/work_health_runs.py`):
+
+1. it delivered;
+2. every step on its rows was the runner's own (`by: code`);
+3. no later job replaced it and it replaced none;
+4. no running row follows a held or failed row, whatever the records say;
+5. no other chronology on the same matter was submitted within 7 days while either was not delivered.
+
+An infrastructure retry is the runner's own and does not make a run aided, and neither is an ending the lane recorded on a later try inside its bound (the broker away for a minute, or answering an error once). A run whose ending was still not recorded at the bound, so SMD was paged, carries `record_late` when the record lands and is aided.
+
+Only a run whose submission is inside the window is graded. A run that started before it (a hold and a resume older than the window, a delivery inside it) shows only its clean last rows, so it is counted as "started before the window" and in neither the unaided count nor the rate. The read starts 7 days before the window, so the same-matter rule can see the job before. `--runs` therefore reads `--runs-days` plus 7 days of audit rows, 50 rows per seam request (a few hundred requests for 30 days on a busy seat); the hourly line grades the runs submitted in the last day of its usual 8-day read.
+
+There is no backfill. Rows written before the record existed carry none, so those runs show as `unrecorded` and are never counted unaided; history cannot be rebuilt from what the seats kept.
 
 ## What the list never carries
 

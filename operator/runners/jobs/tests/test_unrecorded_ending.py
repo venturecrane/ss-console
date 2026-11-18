@@ -1,0 +1,213 @@
+"""A chronology ending the broker did not take (``jobs/medchron/unrecorded.py``).
+
+One path, whatever the broker answered: the ending is kept and retried from
+``poll_requests``; the firm's message never waits for it; past the bound SMD
+is paged ONCE (across a restart and past the re-alert window) and the record
+is still tried; at the wipe it is tried once more, then paged once with its
+true ending, and the workdir goes with it: nothing is kept outside it, and no
+row is ever closed with an ending that did not happen. Every page says what is
+true of the job: its ending, whether a wake was owed, and whether it went.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from jobs.broker_client import BrokerError
+from jobs.medchron import unrecorded
+from jobs.proof import watch
+from test_upload_daemon import FakeBroker, _daemon, _submit
+
+INTERNAL = "broker refused: internal_error: internal error; see broker log"
+
+
+class ErringBroker(FakeBroker):
+    """Answers a job's ENDING record with the broker's ``internal_error`` (a
+    locked database) ``fail`` times, then takes it; every other call works,
+    the dead-row sweep's close among them."""
+
+    def __init__(self, fail: int) -> None:
+        super().__init__()
+        self.fail = fail
+
+    def record(self, job_id, state, fields):
+        run = fields.get("run") or {}
+        ending = run.get("event") in ("end", "stop") and run.get("code") != "ending_unrecorded"
+        if ending and self.fail > 0:
+            self.fail -= 1
+            raise BrokerError(INTERNAL)
+        return super().record(job_id, state, fields)
+
+
+def _lane(tmp_path: Path, fail: int):
+    d, _ = _daemon(tmp_path, wipe_hours=72)
+    broker = ErringBroker(fail)
+    d.broker = broker
+    _submit(d, broker, "01A")
+    return d, broker
+
+
+def _pages(broker: FakeBroker, unit: str = "") -> list[dict]:
+    return [
+        r
+        for r in broker.proof_requests
+        if r.get("code") == unrecorded.CODE and (not unit or r["job_id"] and unit in json.dumps(r))
+    ]
+
+
+def _polls(d, n: int) -> None:
+    for _ in range(n):
+        d._now["t"] += unrecorded.RETRY_SECONDS + 1
+        d.poll_requests()
+
+
+def test_an_internal_error_once_then_accepted_is_recorded_unaided_with_no_page(tmp_path):
+    d, broker = _lane(tmp_path, fail=1)
+    assert d.tick() == "delivered"
+    st = d._daemon_state("01A")
+    # The firm's message is not held for our bookkeeping: it is pending to go now.
+    assert st["record_pending"]["state"] == "delivered" and st["wake"]["pending"]
+    assert "01A" in d._wakes_pending()
+    _polls(d, 1)
+    assert d._daemon_state("01A").get("record_pending") is None
+    ended = [(s, f.get("run", {}).get("event")) for j, s, f in broker.records if s == "delivered"]
+    assert ended == [("delivered", "end")]  # no record_late note: the run is unaided
+    assert _pages(broker) == []
+
+
+def test_past_the_bound_smd_is_paged_once_across_a_restart_and_the_record_still_lands(tmp_path):
+    d, broker = _lane(tmp_path, fail=10**6)
+    assert d.tick() == "delivered"
+    _polls(d, unrecorded.MAX_ATTEMPTS + 3)
+    pending = d._daemon_state("01A")["record_pending"]
+    assert pending["paged"] and pending["attempts"] >= unrecorded.MAX_ATTEMPTS
+    assert len(_pages(broker)) == 1
+    # A restarted lane on the same seat, a day later (past the re-alert
+    # window): the kept record is still tried, and SMD is not paged again.
+    d2, _ = _daemon(tmp_path, wipe_hours=72)
+    d2.broker = broker
+    d2._now["t"] = d._now["t"] + watch.REALERT_SECONDS + 1
+    _polls(d2, 5)
+    assert len(_pages(broker)) == 1
+    broker.fail = 0
+    _polls(d2, 1)
+    assert d2._daemon_state("01A").get("record_pending") is None
+    events = [f.get("run", {}).get("event") for j, s, f in broker.records if s == "delivered"]
+    assert events == ["end", "record_late"]  # paged for it, so the run is aided
+    assert len(_pages(broker)) == 1
+
+
+def test_inside_the_bound_nothing_is_paged(tmp_path):
+    d, broker = _lane(tmp_path, fail=10**6)
+    d.tick()
+    _polls(d, unrecorded.MAX_ATTEMPTS - 2)
+    assert _pages(broker) == [] and not d._daemon_state("01A")["record_pending"].get("paged")
+
+
+def _said(d, state: str, reason=None, wake=None) -> str:
+    d.job_dir("01X").mkdir(parents=True, exist_ok=True)
+    d._write_state("01X", wake=wake)
+    return unrecorded.wake_said(d, "01X", state, reason)
+
+
+def test_every_endings_page_says_what_is_true_of_it(tmp_path):
+    d, _ = _daemon(tmp_path)
+    assert _said(d, "delivered", wake={"pending": False, "sent_at": 1.0, "outcome": "delivered"}) == (
+        "its wake was owed and went (the firm is told it was delivered)"
+    )
+    assert _said(d, "delivered", wake={"pending": True}) == (
+        "its wake is owed and has not gone yet (the firm is told it was delivered when it does)"
+    )
+    assert _said(d, "delivered", wake={"pending": False, "outcome": "failed: status 503"}) == (
+        "its wake was owed and did not go (failed: status 503)"
+    )
+    held = _said(d, "held", reason="gate_held: an audit check", wake=None)
+    assert held == "no wake is owed for a held chronology and none was sent (the firm hears nothing of it)"
+    failed = _said(d, "failed", reason="no verdict", wake=None)
+    assert failed == "no wake is owed for a failed chronology and none was sent (the firm hears nothing of it)"
+    rerouted = "refused: list_matter: the matter already holds a delivered chronology"
+    assert _said(d, "held", reason=rerouted, wake={"pending": False, "sent_at": 1.0}) == (
+        "its wake was owed and went (the work is rerouted; the firm is sent nothing)"
+    )
+    for text in (held, failed):
+        assert "went anyway" not in text and "message went" not in text
+
+
+def test_the_bound_page_names_the_ending_and_its_wake(tmp_path):
+    d, broker = _lane(tmp_path, fail=10**6)
+    d.tick()
+    _polls(d, unrecorded.MAX_ATTEMPTS)
+    (page,) = _pages(broker)
+    assert page["detail"].startswith("its delivered ending is not recorded after ")
+    assert "internal_error" in page["detail"] and "its wake is owed and has not gone yet" in page["detail"]
+    assert "already running" in page["detail"]
+
+
+def _wiped(tmp_path):
+    d, broker = _lane(tmp_path, fail=10**6)
+    d.tick()
+    d._write_state("01A", wake={**d._daemon_state("01A")["wake"], "pending": False, "sent_at": d.clock()})
+    _polls(d, unrecorded.MAX_ATTEMPTS)
+    return d, broker
+
+
+def test_at_the_wipe_it_is_tried_once_more_paged_once_with_its_true_ending_and_wiped(tmp_path):
+    d, broker = _wiped(tmp_path)
+    before = len(broker.records)
+    d._now["t"] += 73 * 3600
+    assert d.wipe_expired() == ["01A"] and not (d.jobs / "01A").exists()
+    assert len(broker.records) == before  # the one more try did not land; nothing else was written
+    wiped = [p for p in _pages(broker) if p["detail"].startswith("true ending delivered;")]
+    assert len(wiped) == 1 and wiped[0]["job_id"] == "01A"
+    assert "ledger row still says running" in wiped[0]["detail"] and "its wake was owed and went" in wiped[0]["detail"]
+    # The row is never closed with an ending that did not happen, and nothing
+    # of the job is kept outside its workdir or retried after it.
+    assert broker.rows["01A"]["state"] == "running" and not [s for _, s, _ in broker.records if s == "failed"]
+    assert [p for p in d.run_dir.rglob("*") if "01A" in p.name] == []
+    broker.fail = 0
+    _polls(d, 3)
+    assert broker.rows["01A"]["state"] == "running" and len(_pages(broker)) == 2  # the bound's, and the wipe's
+
+
+def test_the_one_more_try_at_the_wipe_lands_the_ending_when_the_broker_takes_it(tmp_path):
+    d, broker = _wiped(tmp_path)
+    broker.fail = 0
+    d._now["t"] += 73 * 3600
+    assert d.wipe_expired() == ["01A"]
+    assert broker.rows["01A"]["state"] == "delivered"
+    assert not [p for p in _pages(broker) if p["detail"].startswith("true ending")]
+
+
+def test_a_wipe_page_that_cannot_be_written_is_logged_and_the_workdir_wiped_anyway(tmp_path, caplog):
+    d, broker = _wiped(tmp_path)
+    real = broker._request
+
+    def down(req):
+        if req["action"] == "delivery_proof_alert":
+            raise BrokerError("broker socket: down")
+        return real(req)
+
+    broker._request = down
+    d._now["t"] += 73 * 3600
+    assert d.wipe_expired() == ["01A"] and not (d.jobs / "01A").exists()
+    assert "SMD could not be paged" in caplog.text
+
+
+def test_a_before_wipe_step_that_raises_stops_neither_this_wipe_nor_the_next(tmp_path, caplog):
+    """MUTATION: call the hook without its guard and the first job's exception
+    leaves both workdirs on the volume past their window."""
+    d, broker = _daemon(tmp_path, wipe_hours=72)
+    for jid in ("01A", "01B"):
+        _submit(d, broker, jid)
+        d.tick()
+        d._write_state(jid, wake={**d._daemon_state(jid)["wake"], "pending": False, "sent_at": d.clock()})
+
+    def boom(job_id):
+        raise RuntimeError("the hook failed")
+
+    d.before_wipe = boom
+    d._now["t"] += 73 * 3600
+    assert sorted(d.wipe_expired()) == ["01A", "01B"]
+    assert not (d.jobs / "01A").exists() and not (d.jobs / "01B").exists()
+    assert "the before-wipe step for 01A failed; wiping it anyway" in caplog.text

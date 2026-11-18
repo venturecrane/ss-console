@@ -118,6 +118,7 @@ def plan(d: Any, job_id: str, *, file_id: str, reason: str, by: str, source: str
                     },
                     "marker": {
                         "job_id": job_id,
+                        "intervention": "decide_coverage",
                         "reason": f"coverage decision recorded by SMD: {file_id} ({by.strip()}, {source.strip()})"[
                             :500
                         ],

@@ -1,5 +1,5 @@
 {
-  "_why": "Dotted paths (list indexes as numbers) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered); <file> allows the file to appear or go. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. #4011 (2026-11-13): the records and medchron ledgers gain reply_sent_at and reply_key (the reply-once mark, a defect Phase A pinned), so a records job row the broker returns carries both, null until replied.",
+  "_why": "Dotted paths (list indexes as numbers) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered); <file> allows the file to appear or go. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. #4011 (2026-11-13): the records and medchron ledgers gain reply_sent_at and reply_key (the reply-once mark, a defect Phase A pinned), so a records job row the broker returns carries both, null until replied. The lifecycle matrix and run record PR (2026-11-17): every chronology record carries a run block (fields.run on the wire, metadata.run on the audit row, run_pending in the state between a resume and its start); an ending the broker did not take is kept as record_pending and recorded on a later tick, while the firm's message goes as before (medchron__broker_down_mid_run); the new host ending queued_behind_same_lane is not applicable to the note, negotiation and library setup lanes.",
   "records__broker_down_mid_run": [],
   "records__broker_unreachable": [],
   "records__busy": [],
@@ -12,5 +12,121 @@
   "records__resume_failed": [],
   "records__seat_paused": [],
   "records__settings_missing": [],
-  "records__stopped_by_smd_running": []
+  "records__stopped_by_smd_running": [],
+  "medchron__broker_down_mid_run": [
+    "1.audit.0.metadata.run",
+    "1.daemon.jobs/<ULID1>.record_pending",
+    "1.log.1",
+    "1.wire.2.request.fields.run",
+    "2.audit",
+    "2.daemon.jobs/<ULID1>.record_pending",
+    "2.wire",
+    "2.wire.0.reply.credits",
+    "2.wire.0.reply.jobs",
+    "2.wire.0.request.action",
+    "2.wire.1.reply.channel",
+    "2.wire.1.reply.expected_key",
+    "2.wire.1.reply.holds",
+    "2.wire.1.reply.replies",
+    "2.wire.1.reply.sends_to_requester",
+    "2.wire.1.request.action",
+    "2.wire.1.request.kind",
+    "2.wire.1.request.requester",
+    "2.wire.1.request.since",
+    "3.daemon.jobs/<ULID1>.record_pending",
+    "3.wire.0.reply.expected_key"
+  ],
+  "medchron__broker_unreachable": [
+    "2.audit.0.metadata.run",
+    "2.audit.2.metadata.run",
+    "2.wire.2.request.fields.run",
+    "2.wire.4.request.fields.run"
+  ],
+  "medchron__delivered": [
+    "1.audit.0.metadata.run",
+    "1.audit.2.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.4.request.fields.run"
+  ],
+  "medchron__failed": [
+    "1.audit.0.metadata.run",
+    "1.audit.1.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.3.request.fields.run"
+  ],
+  "medchron__held": [
+    "1.audit.0.metadata.run",
+    "1.audit.2.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.4.request.fields.run"
+  ],
+  "medchron__lane_unproven": [
+    "3.audit.1.metadata.run",
+    "3.audit.3.metadata.run",
+    "3.wire.3.request.fields.run",
+    "3.wire.5.request.fields.run"
+  ],
+  "medchron__machine_stop": [
+    "1.audit.0.metadata.run",
+    "1.wire.2.request.fields.run",
+    "2.audit.0.metadata.run",
+    "2.audit.2.metadata.run",
+    "2.wire.2.request.fields.run",
+    "2.wire.4.request.fields.run"
+  ],
+  "medchron__no_verdict_usage": [
+    "1.audit.0.metadata.run",
+    "1.audit.1.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.3.request.fields.run"
+  ],
+  "medchron__queued_behind_same_lane": [
+    "2.audit.0.metadata.run",
+    "2.audit.2.metadata.run",
+    "2.wire.2.request.fields.run",
+    "2.wire.4.request.fields.run",
+    "3.audit.0.metadata.run",
+    "3.audit.2.metadata.run",
+    "3.wire.4.request.fields.run",
+    "3.wire.6.request.fields.run"
+  ],
+  "medchron__resume_failed": [
+    "1.audit.0.metadata.run",
+    "1.audit.1.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.3.request.fields.run",
+    "3.audit.0.metadata.run",
+    "3.audit.2.metadata.run",
+    "3.daemon.jobs/<ULID1>.run_pending",
+    "3.wire.3.request.fields.run",
+    "3.wire.5.request.fields.run",
+    "4.daemon.jobs/<ULID1>.run_pending"
+  ],
+  "medchron__seat_paused": [
+    "1.audit.0.metadata.run",
+    "1.wire.1.request.fields.run",
+    "3.audit.0.metadata.run",
+    "3.audit.2.metadata.run",
+    "3.wire.1.request.fields.run",
+    "3.wire.3.request.fields.run"
+  ],
+  "medchron__stopped_by_smd_queued": ["2.audit.0.metadata.run", "2.wire.1.request.fields.run"],
+  "medchron__stopped_by_smd_running": [
+    "1.audit.0.metadata.run",
+    "1.audit.1.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.3.request.fields.run"
+  ],
+  "medchron__wake_lost": [
+    "1.audit.0.metadata.run",
+    "1.audit.2.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.4.request.fields.run"
+  ],
+  "medchron__wake_paused": [
+    "1.audit.0.metadata.run",
+    "1.audit.2.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.4.request.fields.run"
+  ]
 }

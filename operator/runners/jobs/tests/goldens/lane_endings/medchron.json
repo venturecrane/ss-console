@@ -1,6 +1,17 @@
 {
   "records": [
-    ["01A", "running", {}],
+    [
+      "01A",
+      "running",
+      {
+        "run": {
+          "by": "code",
+          "event": "start",
+          "release": "unknown",
+          "v": 1
+        }
+      }
+    ],
     [
       "01A",
       "delivered",
@@ -18,7 +29,13 @@
         },
         "documents": 40,
         "folder_id": "folder-9",
-        "pages": 300
+        "pages": 300,
+        "run": {
+          "by": "code",
+          "event": "end",
+          "release": "unknown",
+          "v": 1
+        }
       }
     ]
   ],

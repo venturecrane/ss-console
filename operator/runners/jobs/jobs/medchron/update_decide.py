@@ -349,6 +349,7 @@ def plan(
         if copy is not None
         else {
             "job_id": job_id,
+            "intervention": "decide_update",
             "reason": f"update review finding {act} by SMD ({by.strip()}, {source.strip()})"[:500],
             "redo": [],
         },
