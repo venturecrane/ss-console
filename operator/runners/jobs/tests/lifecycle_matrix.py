@@ -588,15 +588,12 @@ def _way_out(life: Life, jid: str, row: dict[str, Any], told: str, messages: int
     state = row.get("state")
     out: list[str] = []
     st = _state(life, jid)
-    from jobs.medchron import unrecorded
-
-    kept = isinstance(st.get("record_pending"), dict) or (unrecorded.store(life.lane) / f"{jid}.json").is_file()
-    if state == "running" and kept:
-        # An ending the broker has not taken yet, in the workdir or kept past
-        # its wipe: the way out is the broker accepting the retried TRUE
-        # ending, asked of the real code after SMD's repair (last: it writes the row).
-        # Meanwhile a submission of the same work is refused as already running
-        # as this job, which is true to the ledger (the page says so).
+    if state == "running" and isinstance(st.get("record_pending"), dict):
+        # An ending the broker has not taken yet, its workdir still there: the
+        # way out is the broker accepting the retried TRUE ending, asked of the
+        # real code after SMD's repair (last: it writes the row). Meanwhile a
+        # submission of the same work is refused as already running as this
+        # job, which is true to the ledger (the page says so).
         if life.run.broker.medchron._db.active_duplicate(_envelope("2026-PI-102", "m-1")) != (jid, "running"):
             return []
         if life.heal is not None:
@@ -605,6 +602,21 @@ def _way_out(life: Life, jid: str, row: dict[str, Any], told: str, messages: int
         life.lane.poll_requests()
         moved = (life.client().status(jid) or {}).get("state") != "running"
         return ["the broker accepts the retried true ending"] if moved else []
+    true = _wiped_ending(life, jid)
+    if state == "running" and true and not life.lane.job_dir(jid).exists():
+        # The known limit (``unrecorded.at_wipe``): wiped with its ending still
+        # unrecorded, the row stays running and nothing retries it. The page
+        # names the true ending; SMD corrects the row by hand with the root
+        # record verb (asked here, last, because it writes the row).
+        if life.run.broker.medchron._db.active_duplicate(_envelope("2026-PI-102", "m-1")) != (jid, "running"):
+            return []
+        if life.heal is not None:
+            life.heal()
+        try:
+            life.client().record(jid, true, {})
+        except Exception:  # noqa: BLE001 - a refusal is the answer
+            return []
+        return ["SMD corrects the ledger row by hand from the page"]
     if state == "delivered":
         if messages:
             return ["done"]
@@ -645,6 +657,16 @@ def _way_out(life: Life, jid: str, row: dict[str, Any], told: str, messages: int
     if state == "held":
         out += DECIDE_FOR.get(holds.classify("medchron", reason)[1] or "", ())
     return sorted(set(out))
+
+
+def _wiped_ending(life: Life, jid: str) -> str | None:
+    """The true ending the wipe's ``ending_unrecorded`` page names, if any."""
+    for a in _audit(life):
+        md = a["metadata"]
+        detail = str(md.get("detail") or "")
+        if md.get("job_id") == jid and md.get("code") == "ending_unrecorded" and detail.startswith("true ending "):
+            return detail.removeprefix("true ending ").split(";", 1)[0]
+    return None
 
 
 #: Who performs each act the matrix drives, so a refused act is owned by the

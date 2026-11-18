@@ -35,8 +35,8 @@ happened. Only the working copy goes. A chronology hold's row moves to
 ``failed``, its reason saying it expired unattended (``close_wiped_hold``),
 since a hold with no workdir can never resume and must not read as waiting;
 SMD is paged once and the firm is sent nothing. A chronology ending that never
-reached the ledger outlives its workdir as a pending record outside it
-(``medchron/unrecorded.py``), retried until the broker takes it. A resume
+reached the ledger is tried once more and paged before its workdir goes
+(``medchron/unrecorded.py``); nothing of it is kept outside the workdir. A resume
 request for a wiped job already refuses cleanly and says so (`resume.py`):
 the artifacts are gone and the honest answer is the one the ledger gives.
 """

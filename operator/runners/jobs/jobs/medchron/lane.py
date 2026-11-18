@@ -274,8 +274,7 @@ class MedchronLane(Daemon):
             # matrix: the row said running for good). It is kept and recorded on
             # a later tick, with a bound past which SMD is paged; the firm's
             # message above goes exactly as it did before (``unrecorded.py``).
-            owed = state == "delivered" and self.proof_recorded is False
-            proof = proof_watch.proof_request(self, job_id, outcomes) if owed else None
+            proof = state == "delivered" and self.proof_recorded is False
             unrecorded.keep(self, job_id, state, fields, proof=proof, why=missed)
         return state
 
@@ -293,7 +292,8 @@ class MedchronLane(Daemon):
             self.record_retry_at = self.clock() + unrecorded.RETRY_SECONDS
 
     def before_wipe(self, job_id: str) -> None:
-        """Retention's last call before a workdir goes (``unrecorded.at_wipe``)."""
+        """Retention's last call before a workdir goes (``unrecorded.at_wipe``):
+        an ending still not recorded is tried once more, then paged."""
         unrecorded.at_wipe(self, job_id)
 
     # -- the deliver wake (ss#2616) --------------------------------------------

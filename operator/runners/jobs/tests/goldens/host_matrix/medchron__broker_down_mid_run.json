@@ -152,24 +152,7 @@
             }
           },
           "first_at": "<CLOCK+0.0>",
-          "proof": {
-            "action": "delivery_proof_record",
-            "attempt": 1,
-            "files": [
-              {
-                "file_id": "f1",
-                "name": "x.docx",
-                "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                "size": 10
-              }
-            ],
-            "job_id": "<ULID1>",
-            "lane": "medchron",
-            "review": "passed",
-            "review_cents": 0,
-            "review_model": "",
-            "rows": 0
-          },
+          "proof": true,
           "state": "delivered"
         },
         "resume_redo": [],

@@ -1646,7 +1646,7 @@
       "second": null,
       "state": "running",
       "told_while_away": 0,
-      "way_out": ["the broker accepts the retried true ending"],
+      "way_out": ["SMD corrects the ledger row by hand from the page"],
       "wiped": true
     },
     "parked/broker_errors_once": {
@@ -2179,7 +2179,7 @@
       "second": null,
       "state": "running",
       "told_while_away": 0,
-      "way_out": ["the broker accepts the retried true ending"],
+      "way_out": ["SMD corrects the ledger row by hand from the page"],
       "wiped": true
     },
     "requeued_waiting/broker_errors_once": {
@@ -2712,7 +2712,7 @@
       "second": null,
       "state": "running",
       "told_while_away": 0,
-      "way_out": ["the broker accepts the retried true ending"],
+      "way_out": ["SMD corrects the ledger row by hand from the page"],
       "wiped": true
     },
     "running/broker_errors_once": {
@@ -5583,7 +5583,7 @@
       "second": null,
       "state": "running",
       "told_while_away": 0,
-      "way_out": ["the broker accepts the retried true ending"],
+      "way_out": ["SMD corrects the ledger row by hand from the page"],
       "wiped": true
     },
     "submitted/broker_errors_once": {
