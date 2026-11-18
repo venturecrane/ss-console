@@ -30,15 +30,15 @@ class BrokerClient:
             buf = broker_socket.send_frame(self.socket_path, encoded, timeout=self.timeout)
         except OSError as exc:
             raise BrokerError(f"broker socket: {exc}") from exc
-        if not buf:
-            # A closed connection with no answer: the broker went away, never a refusal.
-            raise BrokerError("broker returned nothing")
         try:
             resp = json.loads(bytes(buf).decode() or "{}")
         except ValueError as exc:
             raise BrokerError("broker returned no JSON") from exc
         if resp.get("ok") is not True:
-            raise BrokerRefused(f"broker refused: {resp.get('error')}: {resp.get('message')}")
+            # A closed connection with no answer is the broker gone (an outage),
+            # never a refusal: only an answer that says not-ok is BrokerRefused.
+            kind = BrokerRefused if buf else BrokerError
+            raise kind(f"broker refused: {resp.get('error')}: {resp.get('message')}")
         return resp
 
     def status(self, job_id: str) -> dict[str, Any] | None:
