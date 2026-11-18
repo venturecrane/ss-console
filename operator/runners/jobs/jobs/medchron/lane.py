@@ -274,7 +274,8 @@ class MedchronLane(Daemon):
             # matrix: the row said running for good). It is kept and recorded on
             # a later tick, with a bound past which SMD is paged; the firm's
             # message above goes exactly as it did before (``unrecorded.py``).
-            proof = state == "delivered" and self.proof_recorded is False
+            owed = state == "delivered" and self.proof_recorded is False
+            proof = proof_watch.proof_request(self, job_id, outcomes) if owed else None
             unrecorded.keep(self, job_id, state, fields, proof=proof, why=missed)
         return state
 
@@ -291,9 +292,9 @@ class MedchronLane(Daemon):
             logger.exception("recording a pending ending failed")
             self.record_retry_at = self.clock() + unrecorded.RETRY_SECONDS
 
-    def keep_at_wipe(self, job_id: str, past: float) -> bool:
-        """Retention's question before a workdir goes (``unrecorded.at_wipe``)."""
-        return unrecorded.at_wipe(self, job_id, past)
+    def before_wipe(self, job_id: str) -> None:
+        """Retention's last call before a workdir goes (``unrecorded.at_wipe``)."""
+        unrecorded.at_wipe(self, job_id)
 
     # -- the deliver wake (ss#2616) --------------------------------------------
     def _compose_wake(self, job_id: str, state: str, fields: dict[str, Any], *, stage: str | None = None) -> str:

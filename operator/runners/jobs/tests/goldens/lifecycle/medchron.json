@@ -1628,9 +1628,9 @@
       "wiped": false
     },
     "parked/broker_errors_ending": {
-      "code": "ending_unrecorded",
+      "code": null,
       "ended_while_away": false,
-      "ending": "failed",
+      "ending": "running",
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
@@ -1639,14 +1639,14 @@
       "record_late": false,
       "run": {
         "by": "code",
-        "code": "ending_unrecorded",
-        "event": "stop",
+        "event": "start",
+        "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "failed",
+      "state": "running",
       "told_while_away": 0,
-      "way_out": ["medchron_job_submit"],
+      "way_out": ["the broker accepts the retried true ending"],
       "wiped": true
     },
     "parked/broker_errors_once": {
@@ -2161,9 +2161,9 @@
       "wiped": false
     },
     "requeued_waiting/broker_errors_ending": {
-      "code": "ending_unrecorded",
+      "code": null,
       "ended_while_away": false,
-      "ending": "failed",
+      "ending": "running",
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
@@ -2172,14 +2172,14 @@
       "record_late": false,
       "run": {
         "by": "code",
-        "code": "ending_unrecorded",
-        "event": "stop",
+        "event": "start",
+        "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "failed",
+      "state": "running",
       "told_while_away": 0,
-      "way_out": ["medchron_job_submit"],
+      "way_out": ["the broker accepts the retried true ending"],
       "wiped": true
     },
     "requeued_waiting/broker_errors_once": {
@@ -2694,9 +2694,9 @@
       "wiped": false
     },
     "running/broker_errors_ending": {
-      "code": "ending_unrecorded",
+      "code": null,
       "ended_while_away": false,
-      "ending": "failed",
+      "ending": "running",
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
@@ -2705,14 +2705,14 @@
       "record_late": false,
       "run": {
         "by": "code",
-        "code": "ending_unrecorded",
-        "event": "stop",
+        "event": "start",
+        "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "failed",
+      "state": "running",
       "told_while_away": 0,
-      "way_out": ["medchron_job_submit"],
+      "way_out": ["the broker accepts the retried true ending"],
       "wiped": true
     },
     "running/broker_errors_once": {
@@ -5565,9 +5565,9 @@
       "wiped": false
     },
     "submitted/broker_errors_ending": {
-      "code": "ending_unrecorded",
+      "code": null,
       "ended_while_away": false,
-      "ending": "failed",
+      "ending": "running",
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
@@ -5576,14 +5576,14 @@
       "record_late": false,
       "run": {
         "by": "code",
-        "code": "ending_unrecorded",
-        "event": "stop",
+        "event": "start",
+        "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "failed",
+      "state": "running",
       "told_while_away": 0,
-      "way_out": ["medchron_job_submit"],
+      "way_out": ["the broker accepts the retried true ending"],
       "wiped": true
     },
     "submitted/broker_errors_once": {

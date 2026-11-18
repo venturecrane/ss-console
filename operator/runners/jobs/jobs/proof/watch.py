@@ -113,15 +113,9 @@ def alert(d: Any, job_id: str, code: str, detail: str = "", *, unit: str = "") -
     return True
 
 
-def _record_proven(d: Any, job_id: str, outcomes: list[Any]) -> bool:
-    """One ``DELIVERY_PROVEN`` row; whether it landed (also kept on the lane as
-    ``proof_recorded``, so a lane whose state record then failed knows whether
-    its later retry must record the proof too, and never records it twice)."""
-    from ..broker_client import BrokerError
-
-    if in_proof_run(d):
-        return False
-
+def proof_request(d: Any, job_id: str, outcomes: list[Any]) -> dict[str, Any]:
+    """The ``delivery_proof_record`` request for a delivered job's outcomes:
+    file ids, sizes and hashes, the review's verdict and model, no text."""
     files: list[dict[str, Any]] = []
     rows = 0
     review = "passed"
@@ -137,30 +131,35 @@ def _record_proven(d: Any, job_id: str, outcomes: list[Any]) -> bool:
         elif proof.get("review") == "code_only" and review == "passed":
             review = "code_only"
         model = model or str(proof.get("review_model") or "")
+    return {
+        "action": "delivery_proof_record",
+        "lane": d.LANE,
+        "job_id": job_id,
+        "attempt": _attempt(d, job_id),
+        "review": review,
+        "review_cents": gate.review_cents(outcomes),
+        "review_model": model,
+        "files": files,
+        "rows": rows,
+    }
+
+
+def _record_proven(d: Any, job_id: str, outcomes: list[Any]) -> bool:
+    """One ``DELIVERY_PROVEN`` row; whether it landed (also kept on the lane as
+    ``proof_recorded``, so a lane whose state record then failed knows whether
+    its later retry must record the proof too, and never records it twice)."""
+    from ..broker_client import BrokerError
+
+    if in_proof_run(d):
+        return False
     try:
-        _client(d)._request(
-            {
-                "action": "delivery_proof_record",
-                "lane": d.LANE,
-                "job_id": job_id,
-                "attempt": _attempt(d, job_id),
-                "review": review,
-                "review_cents": gate.review_cents(outcomes),
-                "review_model": model,
-                "files": files,
-                "rows": rows,
-            }
-        )
+        _client(d)._request(proof_request(d, job_id, outcomes))
     except (BrokerError, OSError, AttributeError, TypeError, ValueError) as exc:
         logger.error("%s job %s: could not record its proof: %s", d.LANE, job_id, exc)
         d.proof_recorded = False
         return False
     d.proof_recorded = True
     return True
-
-
-#: The delivered proof, recorded again by a lane whose first record failed.
-record_proven = _record_proven
 
 
 def _carried_alerts(d: Any, job_id: str, outcomes: list[Any]) -> None:

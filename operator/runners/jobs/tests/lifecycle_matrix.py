@@ -168,6 +168,8 @@ class Life:
     ended_while_away: bool = False
     #: Indexes of the gateway's posts it answered with an error (never delivered).
     refused_posts: set[int] = field(default_factory=set)
+    #: Lifts the broker's injected error (``_error_ending``): SMD's repair.
+    heal: Callable[[], Any] | None = None
 
     @property
     def lane(self) -> Any:
@@ -479,6 +481,7 @@ def _error_ending(life: Life, jid: str, *, times: int) -> None:
         return real(request)
 
     verbs._record = record
+    life.heal = lambda: left.update(n=0)
 
 
 def _told(life: Life, jid: str) -> int:
@@ -585,12 +588,23 @@ def _way_out(life: Life, jid: str, row: dict[str, Any], told: str, messages: int
     state = row.get("state")
     out: list[str] = []
     st = _state(life, jid)
-    if state == "running" and isinstance(st.get("record_pending"), dict):
-        # An ending the broker has not taken yet: the lane's own retry is the
-        # way out, asked of the real code (last, because it writes the row).
+    from jobs.medchron import unrecorded
+
+    kept = isinstance(st.get("record_pending"), dict) or (unrecorded.store(life.lane) / f"{jid}.json").is_file()
+    if state == "running" and kept:
+        # An ending the broker has not taken yet, in the workdir or kept past
+        # its wipe: the way out is the broker accepting the retried TRUE
+        # ending, asked of the real code after SMD's repair (last: it writes the row).
+        # Meanwhile a submission of the same work is refused as already running
+        # as this job, which is true to the ledger (the page says so).
+        if life.run.broker.medchron._db.active_duplicate(_envelope("2026-PI-102", "m-1")) != (jid, "running"):
+            return []
+        if life.heal is not None:
+            life.heal()
         life.lane.record_retry_at = 0.0
         life.lane.poll_requests()
-        return ["lane retry"] if (life.client().status(jid) or {}).get("state") != "running" else []
+        moved = (life.client().status(jid) or {}).get("state") != "running"
+        return ["the broker accepts the retried true ending"] if moved else []
     if state == "delivered":
         if messages:
             return ["done"]

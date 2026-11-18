@@ -4,8 +4,9 @@ One path, whatever the broker answered: the ending is kept and retried from
 ``poll_requests``; the firm's message never waits for it; past the bound SMD
 is paged ONCE (across a restart and past the re-alert window) and the record
 is still tried; at the wipe it is paged once more, naming the job, and the
-running row is closed by the dead-row sweep. Every page says what is true of
-the job: its ending, whether a wake was owed, and whether it went.
+TRUE ending is kept outside the workdir and retried until the broker takes it.
+No row is ever closed with an ending that did not happen. Every page says what
+is true of the job: its ending, whether a wake was owed, and whether it went.
 """
 
 from __future__ import annotations
@@ -143,33 +144,42 @@ def test_the_bound_page_names_the_ending_and_its_wake(tmp_path):
     assert "already running" in page["detail"]
 
 
-def test_at_the_wipe_it_is_paged_once_more_and_the_running_row_is_closed(tmp_path):
-    from jobs import retention
-
+def _wiped(tmp_path):
     d, broker = _lane(tmp_path, fail=10**6)
     d.tick()
     d._write_state("01A", wake={**d._daemon_state("01A")["wake"], "pending": False, "sent_at": d.clock()})
     _polls(d, unrecorded.MAX_ATTEMPTS)
-    assert broker.rows["01A"]["state"] == "running"
-    broker.rows["01A"]["updated_at"] = watch._iso(d.clock())  # when it started running (the fake clock)
     d._now["t"] += 73 * 3600
-    d._dead_holds_swept_at = 0.0
     assert d.wipe_expired() == ["01A"] and not (d.jobs / "01A").exists()
+    return d, broker
+
+
+def test_at_the_wipe_it_is_paged_once_and_the_true_ending_is_kept_and_lands_later(tmp_path):
+    d, broker = _wiped(tmp_path)
     wiped = [p for p in _pages(broker) if p["detail"].startswith("its workdir is wiped on schedule")]
     assert len(wiped) == 1 and "its delivered ending still not recorded" in wiped[0]["detail"]
-    assert "its wake was owed and went" in wiped[0]["detail"]
-    # The dead-row sweep closed the row, so the same work can be submitted again.
-    assert broker.rows["01A"]["state"] == "failed"
-    (closed,) = [f for j, s, f in broker.records if s == "failed"]
-    assert closed["reason"] == retention.DEAD_RUN_REASON and closed["run"]["code"] == "ending_unrecorded"
+    assert "its wake was owed and went" in wiped[0]["detail"] and "already running as job 01A" in wiped[0]["detail"]
+    # The row is never closed with an ending that did not happen.
+    assert broker.rows["01A"]["state"] == "running" and not [s for _, s, _ in broker.records if s == "failed"]
+    kept = json.loads((unrecorded.store(d) / "01A.json").read_text())
+    assert kept["state"] == "delivered" and kept["paged"] and kept["proof"] is None
+    assert not {"envelope", "verdict", "outcomes"} & set(kept)
+    # A restarted lane, a day later: the kept ending is retried, never paged again.
+    d2, _ = _daemon(tmp_path, wipe_hours=72)
+    d2.broker = broker
+    d2._now["t"] = d._now["t"] + watch.REALERT_SECONDS + 1
+    _polls(d2, 3)
+    assert len(_pages(broker)) == 2  # once at the bound, once at the wipe
+    broker.fail = 0
+    _polls(d2, 1)
+    assert broker.rows["01A"]["state"] == "delivered" and not (unrecorded.store(d2) / "01A.json").exists()
+    events = [f.get("run", {}).get("event") for j, s, f in broker.records if s == "delivered"]
+    assert events == ["end", "record_late"]
 
 
-def test_a_wipe_page_that_cannot_be_written_keeps_the_workdir_only_for_the_grace(tmp_path):
-    from jobs import retention
-
+def test_a_wipe_page_that_cannot_be_written_is_retried_from_the_store(tmp_path):
     d, broker = _lane(tmp_path, fail=10**6)
     d.tick()
-    d._write_state("01A", wake={**d._daemon_state("01A")["wake"], "pending": False, "sent_at": d.clock()})
     real = broker._request
 
     def down(req):
@@ -178,7 +188,10 @@ def test_a_wipe_page_that_cannot_be_written_keeps_the_workdir_only_for_the_grace
         return real(req)
 
     broker._request = down
-    d._now["t"] += 73 * 3600
-    assert d.wipe_expired() == [] and (d.jobs / "01A").exists()
-    d._now["t"] += retention.WAKE_WIPE_GRACE_HOURS * 3600
-    assert d.wipe_expired() == ["01A"]
+    _polls(d, unrecorded.MAX_ATTEMPTS)
+    d._now["t"] += 73 * 3600 + 6 * 3600
+    assert d.wipe_expired() == ["01A"]  # the workdir goes on schedule either way
+    assert not json.loads((unrecorded.store(d) / "01A.json").read_text())["paged"]
+    broker._request = real
+    _polls(d, 2)
+    assert len(_pages(broker)) == 1 and json.loads((unrecorded.store(d) / "01A.json").read_text())["paged"]
