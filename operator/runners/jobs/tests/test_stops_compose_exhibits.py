@@ -21,6 +21,7 @@ from jobs.stages import exhibits as exhibits_stage, group as group_stage, limita
 from jobs.stages import repair as repair_stage, summarize as summarize_stage
 from jobs.stages.base import StageRun
 from jobs_testkit import FIRM_CONFIG, FakeSeat, make_pdf
+from test_compose_stages import cut_before_windows
 
 COMPOSITION, JUDGMENT = "claude-sonnet-5", "claude-opus-5-5"
 
@@ -137,6 +138,7 @@ def test_a_chunk_refused_everywhere_is_retried_on_judgment_then_split_and_its_pa
     client = Scripted(_declines_the_exam)
     sr = _sr(job_dir, _firm(tmp_path), data_root, client)
     _unit_files(sr, {"clinic note": CLINIC, "sane exam": SANE})
+    cut_before_windows(sr)  # both files in one chunk (a unit cut before the writer's windows)
     monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
@@ -222,6 +224,7 @@ def test_a_piece_that_errors_every_time_is_never_called_produced_on_a_rerun(
     client = Scripted(reply)
     sr = _sr(job_dir, _firm(tmp_path), data_root, client)
     _unit_files(sr, {"clinic note": clinic, "broken": "[p.1] BROKEN\n" * 30})
+    cut_before_windows(sr)
     monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
     sr.doorway.retry_budget_s, sr.doorway.sleep = 0.0, lambda *_: None  # the doorway's network retries, in no time
     assert compose_stage.run(sr) == compose_stage.INFRA_EXIT == 75  # infrastructure, never a defect's 1
@@ -498,6 +501,7 @@ def test_a_compose_half_that_truncates_is_repaired_and_assembles(
             "beta": "".join(f"[p.{k}] BETA {page}\n" for k in range(1, 9)),
         },
     )
+    cut_before_windows(sr)
     monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"

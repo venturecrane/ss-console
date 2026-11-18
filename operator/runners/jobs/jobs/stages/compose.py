@@ -1,6 +1,11 @@
 """`map`: chunk a unit's extracted text and compose the map prompt per chunk.
 Paid (composition tier).
 
+Since 2026-11-18 a "chunk" is a WINDOW of at most ``windows.WINDOW_PAGES``
+pages of one file, cut where a note starts (``medchron/windows``); a unit
+already holding the 240,000-character chunks it began with keeps them
+(``chunk_set``). Every rule below reads a window as it read a chunk.
+
 A unit is one client's chronology. Resume is by content hash (chunk-XX.sha
 beside chunk-XX.txt): an existing map file is kept only when the chunk it came
 from is byte-identical, so a unit whose files changed recomposes exactly the
@@ -58,7 +63,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import llm
-from ..medchron import prompts
+from ..medchron import prompts, windows as WN
 from ..limits import LimitHold
 from .base import StageRun, append_jsonl, read_json
 from .chunking import build_chunks, chunk_size, pieces_pages, sha, split_chunk, split_files
@@ -543,6 +548,22 @@ class _Composer:
         self.save_queue([])
 
 
+def chunk_set(d: Path, files: list[dict[str, Any]], chunk: int) -> tuple[list[str], str]:
+    """(the unit's requests, which rule cut them). Small windows cut at note
+    starts (``medchron/windows``), unless this unit's run directory already
+    holds every chunk of the 240,000-character set it was cut into before
+    windows existed: that unit keeps its old set, so a held job resuming
+    after the change is neither billed again for chunks it composed nor
+    assembled from maps of two different cuts."""
+    windows = build_chunks(files, chunk, cut=WN.cut)
+    if not (d / "chunk-01.txt").is_file() and not (d / "chunk-01.sha").is_file():
+        return windows, f"windows of at most {WN.WINDOW_PAGES} pages"
+    legacy = build_chunks(files, chunk)
+    if legacy != windows and all(recorded_sha(d, i) == sha(c) for i, c in enumerate(legacy, 1)):
+        return legacy, "the chunk set this unit began with (cut before windows)"
+    return windows, f"windows of at most {WN.WINDOW_PAGES} pages"
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir / "runs" / sr.unit.unit
     d.mkdir(parents=True, exist_ok=True)
@@ -554,8 +575,8 @@ def run(sr: StageRun) -> int:
     max_tokens = int(sr.cfg.get("levers", "compose_max_tokens", 128000))
     chunk = chunk_size(max_tokens)
     system = prompts.load("map-system", sr.cfg)
-    chunks = build_chunks(files, chunk)
-    sr.log(f"compose window: max_tokens={max_tokens}; CHUNK={chunk:,} chars")
+    chunks, rule = chunk_set(d, files, chunk)
+    sr.log(f"compose window: max_tokens={max_tokens}; CHUNK={chunk:,} chars; cut by {rule}")
     sr.log(f"{sr.unit.unit}: {len(files)} files -> {len(chunks)} chunks ({[len(c) for c in chunks]} chars)")
 
     todo: list[Chunk] = []
