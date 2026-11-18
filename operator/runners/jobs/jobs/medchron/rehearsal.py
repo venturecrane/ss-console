@@ -38,7 +38,7 @@ from typing import Any
 
 import yaml
 
-from .. import budget as budget_mod, limits as limits_mod
+from .. import limits as limits_mod
 from . import dag, job as job_mod
 
 
@@ -274,7 +274,7 @@ def stop(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[
     for s in dag.stages_from(stage.name, update=drv.job.update is not None):
         if s.rehearse is not None:
             notes.extend(probe_lines(sr, s))
-    pages = budget_mod.pages_read(extracted)
+    pages = drv._pages(ctx.unit, extracted)  # the figure a real run would charge (``Driver._pages``)
     reason = f"{kind} stage not done; the walk ends here"
     from .driver import Outcome  # lazy: driver imports this module
 
@@ -310,4 +310,8 @@ def summary(drv: Any, ctx: dag.Ctx, out: Any) -> Any:
         "rehearse summary: unprojected (no measured rate): " + (", ".join(unprojected) or "none"),
         "rehearse summary: allowance figures are as stamped in job.yaml when that job was last run",
     ]
+    if drv.job.update is not None:
+        from .update.charged import charge_line
+
+        out.notes.append("rehearse summary: " + charge_line(drv.slug_dir, ctx.unit.unit, out.pages))
     return out

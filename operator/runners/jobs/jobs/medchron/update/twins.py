@@ -85,13 +85,17 @@ def settle(
     mine: tuple[dict[int, str], Decisions],
     theirs: tuple[dict[int, str], Decisions],
     pairs: dict[int, int],
+    mine_out: dict[int, int] | None = None,
+    theirs_out: dict[int, int] | None = None,
 ) -> dict[int, int]:
     """Settles, in place, each pair of twins both still read: the twin that
     adds nothing is excluded, and a larger picture twin that adds nothing is
     read from the smaller one's reading instead (its text in `theirs` is
     replaced). Returns those substitutions, {their page: my page}. `mine` is
     the smaller document (pages, decisions), `theirs` the larger, `pairs` its
-    picture pairs {my page: their page}."""
+    picture pairs {my page: their page}. `mine_out` / `theirs_out`, when
+    given, receive each page excluded here with the twin page it repeats
+    ({page: the other document's page}): no exclusion without its cover."""
     (mp, md), (tp, td) = mine, theirs
     swapped: dict[int, int] = {}
     for q, p in aligned(pairs, len(md), len(td)).items():
@@ -99,10 +103,18 @@ def settle(
             continue
         if _within(mp.get(q, ""), tp.get(p, "")):
             md[q] = (EXCLUDED, OVERLAP)
+            _note(mine_out, q, p)
         elif _within(tp.get(p, ""), mp.get(q, "")) and pairs.get(q) == p:
             tp[p] = mp[q]  # the same scan, read from the reading that caught more
             md[q] = (EXCLUDED, OVERLAP)
             swapped[p] = q
+            _note(mine_out, q, p)
         elif _within(tp.get(p, ""), mp.get(q, "")):
             td[p] = (EXCLUDED, OVERLAP)
+            _note(theirs_out, p, q)
     return swapped
+
+
+def _note(out: dict[int, int] | None, page: int, twin: int) -> None:
+    if out is not None:
+        out[page] = twin

@@ -98,7 +98,9 @@ def run(sr: StageRun) -> int:
         # SMD's detail and stay on the seat; the log names files only.
         (sr.slug_dir / HOLDS_FILE).write_text(json.dumps(foreign, indent=1), encoding="utf-8")
         ids = [h["id"] for h in foreign]
-        FI.withhold_by_rule(sr.slug_dir, ids, ground=FI.RULE_ANOTHER_PERSON)
+        FI.withhold_by_rule(
+            sr.slug_dir, ids, ground=FI.RULE_ANOTHER_PERSON, tests={h["id"]: FI.tests_of(h["found"]) for h in foreign}
+        )
         removed = _leave_out(sr, ids)
         sr.log(
             f"IDENTITY: {len(foreign)} folded email attachment(s) name a different person than the client; "

@@ -303,7 +303,12 @@ def _resolve_orphans(sr: StageRun, units: dict[str, list], unassigned: list[dict
     if not left_out:
         return []
     (sr.slug_dir / ORPHAN_HOLDS_FILE).write_text(json.dumps(left_out, indent=1), encoding="utf-8")
-    FI.withhold_by_rule(sr.slug_dir, [str(h["id"]) for h in left_out], ground=ground)
+    FI.withhold_by_rule(
+        sr.slug_dir,
+        [str(h["id"]) for h in left_out],
+        ground=ground,
+        tests={str(h["id"]): FI.tests_of(h["found"]) for h in left_out if h["found"]},
+    )
     why = (
         "name a different person than the client"
         if ground == FI.RULE_ANOTHER_PERSON
