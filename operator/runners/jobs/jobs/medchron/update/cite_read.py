@@ -50,7 +50,7 @@ from ..audit.repair import compress
 from . import body as B
 
 MOVED, DELIVERED, MIXED = "citations_moved_to_read_page", "citations_to_delivered_pages", "citations_mixed_left"
-_READ = (PR.READ, PR.CITED, PR.READ_UNCITED)
+_READ = tuple(PR.READ_STATUSES)
 #: Covers followed before a page counts as reaching nothing read.
 MAX_HOPS = 4
 

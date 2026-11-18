@@ -51,7 +51,7 @@ from ..matter import store as page_store_mod
 from ..proof import holds as proof_holds, watch as proof_watch
 from ..skill_load import load_line
 from ..stages import vision_seed
-from . import allowance as allowance_mod, config as config_mod, job as job_mod, unrecorded
+from . import allowance as allowance_mod, config as config_mod, core_counts, job as job_mod, unrecorded
 from .covered import delivery_fields, wake_folder_lines
 
 logger = logging.getLogger("jobs.daemon")
@@ -249,7 +249,7 @@ class MedchronLane(Daemon):
             code=None if outcomes or state == "delivered" else "no_verdict",
             with_release=state == "delivered",
             stages=self.run_stages(job_id),
-            extra=run_record.counts(self.job_dir(job_id)),
+            extra=core_counts.with_derived(run_record.counts(self.job_dir(job_id)), self.job_dir(job_id)),
         )
         missed = ""
         try:
