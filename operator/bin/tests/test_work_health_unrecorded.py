@@ -86,3 +86,32 @@ def test_it_never_hides_a_real_proof_failure_of_the_same_job(tmp_path):
     now = datetime.now(timezone.utc) + timedelta(minutes=1)
     keys = sorted(i.key.rsplit(":", 1)[1] for i in proof.delivery_proof_items(SEAT, _rows(tmp_path), CFG, now))
     assert keys == ["ending_unrecorded", "readback_mismatch"]
+
+
+WIPED = (
+    "true ending delivered; its ledger row still says running and is not retried after this wipe "
+    "(internal_error); its wake was owed and went (the firm is told it was delivered); correct the row "
+    "by hand to delivered; until then the same work is refused as already running as job " + JOB
+)
+
+
+def test_the_action_while_the_workdir_lives_says_the_lane_keeps_trying(tmp_path):
+    broker = _seat(tmp_path)
+    _alert(broker, "ending_unrecorded", SAID)
+    now = datetime.now(timezone.utc) + timedelta(minutes=1)
+    (it,) = proof.delivery_proof_items(SEAT, _rows(tmp_path), CFG, now)
+    assert it.todo == "Fix what the broker answered (named above); the lane keeps trying the record."
+
+
+def test_the_action_after_the_wipe_says_nothing_retries_it_and_names_the_true_ending(tmp_path):
+    """MUTATION: give the wiped page the live page's action and it says the
+    lane keeps trying a record nothing will ever try again."""
+    broker = _seat(tmp_path)
+    _alert(broker, "ending_unrecorded", WIPED)
+    now = datetime.now(timezone.utc) + timedelta(minutes=1)
+    (it,) = proof.delivery_proof_items(SEAT, _rows(tmp_path), CFG, now)
+    assert it.todo == (
+        "Nothing retries it: correct the ledger row by hand to delivered; "
+        "a same-work request is refused as already running until then."
+    )
+    assert "keeps trying" not in it.todo

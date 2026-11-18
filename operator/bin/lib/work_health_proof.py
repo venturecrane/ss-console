@@ -196,6 +196,8 @@ class _ProofLedger(NamedTuple):
 
 #: The code of a chronology ending the broker did not take (``jobs/medchron/unrecorded.py``).
 UNRECORDED = "ending_unrecorded"
+#: How the page of a job wiped with its ending unrecorded begins.
+_WIPED = "true ending "
 
 
 def _proof_ledger(rows: list[dict]) -> _ProofLedger:
@@ -227,9 +229,12 @@ def _proof_ledger(rows: list[dict]) -> _ProofLedger:
 
 def _unrecorded_items(seat: str, cfg: Config, now: datetime, led: _ProofLedger, closed: Optional[set]) -> list[Item]:
     """An ending the broker did not take is open until an ending record for the
-    job lands after its page (the lane's retry, or the dead-row close after a
-    wipe). Its sentence is the page's own, which the lane composed from the
-    job's facts: which ending, whether a wake was owed, and whether it went."""
+    job lands after its newest page: the lane's retry while the workdir lives,
+    or SMD's hand correction after the wipe, when nothing retries it. Its
+    sentence is the page's own, which the lane composed from the job's facts:
+    which ending, whether a wake was owed, and whether it went. The action
+    follows the page: a wipe's page begins ``true ending <state>;``
+    (``jobs/medchron/unrecorded.detail``)."""
     out: list[Item] = []
     for job_id, (ts, md) in led.unrecorded.items():
         if now - ts > timedelta(hours=cfg.ended_job_hours) or (closed and (seat, job_id) in closed):
@@ -238,6 +243,14 @@ def _unrecorded_items(seat: str, cfg: Config, now: datetime, led: _ProofLedger, 
             continue
         lane = cfg.lanes[md["lane"]].label if md.get("lane") in cfg.lanes else str(md.get("lane") or "a")
         said = str(md.get("detail") or "the page gave no detail").rstrip(".")
+        if said.startswith(_WIPED):
+            true = said.removeprefix(_WIPED).split(";", 1)[0].strip()
+            todo = (
+                f"Nothing retries it: correct the ledger row by hand to {true}; "
+                "a same-work request is refused as already running until then."
+            )
+        else:
+            todo = "Fix what the broker answered (named above); the lane keeps trying the record."
         out.append(
             item(
                 seat,
@@ -245,8 +258,7 @@ def _unrecorded_items(seat: str, cfg: Config, now: datetime, led: _ProofLedger, 
                 f"proof:{job_id}:{UNRECORDED}",
                 ts,
                 f"The {lane} job's ending is not in its record ({hhmm(ts)}, ref {job_id[-8:]}): {said}.",
-                "Fix what the broker answered (named above); the lane keeps trying the record, "
-                "and closes a wiped job's running row within the hour.",
+                todo,
                 job=job_id,
             )
         )

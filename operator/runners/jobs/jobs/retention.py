@@ -128,7 +128,10 @@ def wipe_expired(d: Any, terminal: frozenset[str]) -> list[str]:
             continue
         last = getattr(d, "before_wipe", None)  # a lane's own last word (medchron: an unrecorded ending)
         if last is not None:
-            last(path.name)
+            try:
+                last(path.name)
+            except Exception:  # the wipe is the promise: a hook's failure never stops it
+                logger.exception("%s lane: the before-wipe step for %s failed; wiping it anyway", d.LANE, path.name)
         if state not in terminal:
             # Worth a line: a job nobody cleared for a week is a fact about us,
             # not about the job, and the workdir going is the only trace left.

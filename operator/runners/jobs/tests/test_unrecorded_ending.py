@@ -192,3 +192,22 @@ def test_a_wipe_page_that_cannot_be_written_is_logged_and_the_workdir_wiped_anyw
     d._now["t"] += 73 * 3600
     assert d.wipe_expired() == ["01A"] and not (d.jobs / "01A").exists()
     assert "SMD could not be paged" in caplog.text
+
+
+def test_a_before_wipe_step_that_raises_stops_neither_this_wipe_nor_the_next(tmp_path, caplog):
+    """MUTATION: call the hook without its guard and the first job's exception
+    leaves both workdirs on the volume past their window."""
+    d, broker = _daemon(tmp_path, wipe_hours=72)
+    for jid in ("01A", "01B"):
+        _submit(d, broker, jid)
+        d.tick()
+        d._write_state(jid, wake={**d._daemon_state(jid)["wake"], "pending": False, "sent_at": d.clock()})
+
+    def boom(job_id):
+        raise RuntimeError("the hook failed")
+
+    d.before_wipe = boom
+    d._now["t"] += 73 * 3600
+    assert sorted(d.wipe_expired()) == ["01A", "01B"]
+    assert not (d.jobs / "01A").exists() and not (d.jobs / "01B").exists()
+    assert "the before-wipe step for 01A failed; wiping it anyway" in caplog.text
