@@ -104,6 +104,21 @@ def _unit_files(sr: StageRun, texts: dict[str, str]) -> None:
     (sr.slug_dir / "units" / "alpha.json").write_text(json.dumps(rows))
 
 
+def cut_before_windows(sr: StageRun) -> None:
+    """Seed the unit's run directory with the 240,000-character chunk set a
+    unit was cut into before the writer's windows (``medchron/windows``), as a
+    held job resuming across that change holds it: ``compose.chunk_set`` keeps
+    it, so the multi-file chunk rules (a whole chunk's FILES-SEEN, sending a
+    declined chunk one file at a time) still run where a real unit has them."""
+    d = sr.slug_dir / "runs" / sr.unit.unit
+    d.mkdir(parents=True, exist_ok=True)
+    files = json.loads((sr.slug_dir / "units" / f"{sr.unit.unit}.json").read_text())
+    chunk = chunking.chunk_size(int(sr.cfg.get("levers", "compose_max_tokens", 128000)))
+    for i, ch in enumerate(chunking.build_chunks(files, chunk), 1):
+        (d / f"chunk-{i:02d}.txt").write_text(ch, encoding="utf-8")
+        (d / f"chunk-{i:02d}.sha").write_text(chunking.sha(ch) + "\n", encoding="utf-8")
+
+
 MAP_OUT = """## ENTRIES
 01/02/2026
 Example Clinic | Patient Complaints & Limitations
@@ -165,9 +180,10 @@ def test_compose_streams_resumes_by_hash_and_records_usage(job_dir: Path, firm_h
     _unit_files(sr, {"clinic note": "[p.1] neck pain\n[p.2] strain", "mri report": "[p.1] MRI\n[p.3] bulge"})
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
-    assert (d / "map-01.md").read_text() == MAP_OUT and (d / "chunk-01.sha").is_file()
+    # one writer window per file (``medchron/windows``): two requests
+    assert len(client.calls) == 2 and (d / "map-01.md").read_text() == MAP_OUT and (d / "chunk-02.sha").is_file()
     rows = compose_stage.read_usage(d)
-    assert rows[-1]["chunk"] == 1 and rows[-1]["stop"] == "end_turn" and rows[-1]["max_tokens"] == 128000
+    assert rows[-1]["chunk"] == 2 and rows[-1]["stop"] == "end_turn" and rows[-1]["max_tokens"] == 128000
     assert "stream" in str(client.messages.stream) and client.calls[0]["max_tokens"] == 128000
     assert "Patient Complaints & Limitations / HPI" in client.calls[0]["system"][0]["text"]
     # the same input is not recomposed; a changed input is
@@ -175,6 +191,46 @@ def test_compose_streams_resumes_by_hash_and_records_usage(job_dir: Path, firm_h
     assert compose_stage.run(sr) == 0 and client.calls == []
     _unit_files(sr, {"clinic note": "[p.1] neck pain CHANGED\n[p.2] strain", "mri report": "[p.1] MRI\n[p.3] bulge"})
     assert compose_stage.run(sr) == 0 and len(client.calls) == 1
+
+
+def test_a_unit_composed_before_windows_keeps_its_chunks_and_is_not_billed_again(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
+    """A held job resuming after the windows change: its run directory holds
+    the 240,000-character chunk set it was cut into and the maps composed
+    from it. Rerun, nothing is sent and no window map joins the old ones."""
+    client = Scripted(lambda p, n: _msg(MAP_OUT))
+    sr = _sr(job_dir, firm_headings, data_root, client)
+    _unit_files(sr, {"clinic note": "[p.1] neck pain\n[p.2] strain", "mri report": "[p.1] MRI\n[p.3] bulge"})
+    cut_before_windows(sr)
+    assert compose_stage.run(sr) == 0 and len(client.calls) == 1  # the old set: one chunk of both files
+    d = sr.slug_dir / "runs" / "alpha"
+    client.calls.clear()
+    assert compose_stage.run(sr) == 0 and client.calls == []
+    assert sorted(p.name for p in d.glob("map-*.md")) == ["map-01.md"]
+    files = json.loads((sr.slug_dir / "units" / "alpha.json").read_text())
+    chunks, rule = compose_stage.chunk_set(d, files, chunking.chunk_size(128000))
+    assert len(chunks) == 1 and "before windows" in rule
+    # the falsifier: the same files in a fresh run directory are cut into windows, one per file
+    for p in d.glob("*"):
+        p.unlink()
+    chunks, rule = compose_stage.chunk_set(d, files, chunking.chunk_size(128000))
+    assert len(chunks) == 2 and "windows of at most 12 pages" in rule
+
+
+def test_a_unit_held_mid_map_before_windows_finishes_on_its_old_chunks(
+    job_dir: Path, firm_headings: Path, data_root: Path
+) -> None:
+    """Held after its chunks were written and before any came back: the rerun
+    composes the old chunk, never a window set beside it."""
+    client = Scripted(lambda p, n: _msg(MAP_OUT))
+    sr = _sr(job_dir, firm_headings, data_root, client)
+    _unit_files(sr, {"clinic note": "[p.1] neck pain\n[p.2] strain", "mri report": "[p.1] MRI\n[p.3] bulge"})
+    cut_before_windows(sr)  # chunk-01.txt and .sha on disk, no map yet
+    d = sr.slug_dir / "runs" / "alpha"
+    assert compose_stage.run(sr) == 0 and len(client.calls) == 1
+    assert client.calls[0]["messages"][0]["content"].count("=== FILE:") == 2
+    assert sorted(p.name for p in d.glob("map-*.md")) == ["map-01.md"]
 
 
 def test_compose_retries_a_refusal_then_names_the_pages_unread_and_exits_0(
@@ -206,8 +262,8 @@ def test_compose_splits_an_emptied_chunk_once(
 
     client = Scripted(reply)
     sr = _sr(job_dir, firm_headings, data_root, client)
-    body = "".join(f"[p.{k}] " + "record text " * 40 + "\n" for k in range(1, 30))
-    _unit_files(sr, {"clinic note": body, "mri report": body})
+    body = "".join(f"[p.{k}] " + "record text " * 40 + "\n" for k in range(1, 13))  # one window
+    _unit_files(sr, {"clinic note": body})
     monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
@@ -236,6 +292,7 @@ def test_compose_keeps_a_short_but_complete_half_after_the_split(
     sr = _sr(job_dir, firm_headings, data_root, client)
     body = "".join(f"[p.{k}] " + "inspection text " * 40 + "\n" for k in range(1, 30))
     _unit_files(sr, {"inspection report": body, "mri report": body})
+    cut_before_windows(sr)  # two files in one whole chunk
     monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
@@ -247,6 +304,7 @@ def test_compose_keeps_a_short_but_complete_half_after_the_split(
     sr2 = _sr(job_dir, firm_headings, data_root, client2)
     for p in d.glob("*"):
         p.unlink()
+    cut_before_windows(sr2)
     assert compose_stage.run(sr2) == 0
     maps = [p.read_text() for p in d.glob("map-01-*.md")]
     assert maps and all("not read" in m for m in maps) and "x" not in maps

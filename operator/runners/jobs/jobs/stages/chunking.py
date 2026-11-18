@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -111,28 +112,53 @@ def sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def build_chunks(files: list[dict[str, Any]], chunk: int) -> list[str]:
+def char_parts(txt: str, chunk: int) -> list[str]:
+    """`txt` in parts of at most ~chunk chars, cut at the last [p.N] marker
+    that fits, else at the character limit."""
+    marks = [m.start() for m in PAGE_MARK.finditer(txt)]
+    parts: list[str] = []
+    start = 0
+    while start < len(txt):
+        end = start + chunk
+        cut = max((m for m in marks if start < m <= end), default=None)
+        if cut is None or cut <= start:
+            cut = min(end, len(txt))
+        parts.append(txt[start:cut])
+        start = cut
+    return parts
+
+
+#: A caller's own cut of one file's text into request-sized parts, each
+#: already carrying whatever page context it needs (``medchron/windows.cut``).
+Cut = Callable[[str, int], list[str]]
+
+
+def _file_pieces(f: dict[str, Any], chunk: int, cut: Cut | None) -> list[tuple[str, str]]:
+    """(FILE header, text) per part of one file: the whole file under its
+    fileId header, or parts labelled [part k/n]."""
+    txt = Path(f["text_path"]).read_text(encoding="utf-8", errors="replace")
+    name = f"{f['name']}{f.get('ext', '')}"
+    if cut is not None:
+        parts = cut(txt, chunk)
+    elif len(txt) <= chunk:
+        parts = [txt]
+    else:
+        parts = _with_part_context(char_parts(txt, chunk))
+    if len(parts) == 1:
+        return [(f"=== FILE: {name} (fileId {f['id']}) ===", parts[0])]
+    return [(f"=== FILE: {name} [part {k}/{len(parts)}] ===", p) for k, p in enumerate(parts, 1)]
+
+
+def build_chunks(files: list[dict[str, Any]], chunk: int, cut: Cut | None = None) -> list[str]:
     """~chunk chars each, split BETWEEN files where possible, else within a
-    large file at [p.N] markers (parts labelled [part k/n])."""
-    pieces: list[tuple[str, str]] = []
-    for f in files:
-        txt = Path(f["text_path"]).read_text(encoding="utf-8", errors="replace")
-        name = f"{f['name']}{f.get('ext', '')}"
-        if len(txt) <= chunk:
-            pieces.append((f"=== FILE: {name} (fileId {f['id']}) ===", txt))
-            continue
-        marks = [m.start() for m in PAGE_MARK.finditer(txt)]
-        parts: list[str] = []
-        start = 0
-        while start < len(txt):
-            end = start + chunk
-            cut = max((m for m in marks if start < m <= end), default=None)
-            if cut is None or cut <= start:
-                cut = min(end, len(txt))
-            parts.append(txt[start:cut])
-            start = cut
-        for k, p in enumerate(_with_part_context(parts), 1):
-            pieces.append((f"=== FILE: {name} [part {k}/{len(parts)}] ===", p))
+    large file at [p.N] markers (parts labelled [part k/n]).
+
+    With `cut` (the medical chronology's writer, ``medchron/windows``), each
+    file is cut by it and every part is a request of its own: no request
+    holds two files."""
+    pieces = [pc for f in files for pc in _file_pieces(f, chunk, cut)]
+    if cut is not None:
+        return [hdr + "\n" + txt + "\n\n" for hdr, txt in pieces]
     chunks: list[str] = []
     cur: list[str] = []
     size = 0

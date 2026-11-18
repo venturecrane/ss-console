@@ -24,7 +24,8 @@ from jobs.stages import compose as compose_stage
 from jobs_testkit import FIRM_CONFIG
 from test_compose_stages import MAP_OUT, Scripted, _msg, _sr, _unit_files
 
-BODY = "".join(f"[p.{k}] " + "record text " * 40 + "\n" for k in range(1, 30))
+#: One file of twelve pages: one writer window (``medchron/windows``), split in two when it empties.
+BODY = "".join(f"[p.{k}] " + "record text " * 40 + "\n" for k in range(1, 13))
 
 
 def _batch_firm(tmp_path: Path) -> Path:
@@ -69,7 +70,7 @@ def test_a_part_whose_batch_is_still_processing_is_resumed_not_skipped(
     sr = _sr(job_dir, _batch_firm(tmp_path), data_root, NS(messages=NS(create=None, batches=b)), log=log)
     sr.doorway.max_wait_s = 0
     sr.doorway.poll_s = 0
-    _unit_files(sr, {"clinic note": BODY, "mri report": BODY})
+    _unit_files(sr, {"clinic note": BODY})
     d = sr.slug_dir / "runs" / "alpha"
 
     assert compose_stage.run(sr) == compose_stage.INFRA_EXIT, "a part still processing is not a chunk composed"
@@ -106,7 +107,7 @@ def test_a_runner_killed_between_parts_composes_the_missing_part_on_rerun(
         raise SystemExit("runner killed")  # before part 2 comes back
 
     sr = _sr(job_dir, firm_config_path, data_root, Scripted(reply))
-    _unit_files(sr, {"clinic note": BODY, "mri report": BODY})
+    _unit_files(sr, {"clinic note": BODY})
     d = sr.slug_dir / "runs" / "alpha"
     with pytest.raises(SystemExit):
         compose_stage.run(sr)
