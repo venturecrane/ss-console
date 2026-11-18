@@ -119,7 +119,9 @@ Each chronology transition's audit row carries a `run` record (codes and counts,
 4. no running row follows a held or failed row, whatever the records say;
 5. no other chronology on the same matter was submitted within 7 days while either was not delivered.
 
-An infrastructure retry is the runner's own and does not make a run aided. The window reads every audit row in it, 50 rows per seam request, so a 30-day window on a busy seat is a few hundred requests; the hourly check reads its usual 8 days.
+An infrastructure retry is the runner's own and does not make a run aided. A run whose ending the broker refused, or could not be reached for past the bound, carries `record_gave_up` and is aided.
+
+Only a run whose submission is inside the window is graded. A run that started before it (a hold and a resume older than the window, a delivery inside it) shows only its clean last rows, so it is counted as "started before the window" and in neither the unaided count nor the rate. The read starts 7 days before the window, so the same-matter rule can see the job before. `--runs` therefore reads `--runs-days` plus 7 days of audit rows, 50 rows per seam request (a few hundred requests for 30 days on a busy seat); the hourly line grades the runs submitted in the last day of its usual 8-day read.
 
 There is no backfill. Rows written before the record existed carry none, so those runs show as `unrecorded` and are never counted unaided; history cannot be rebuilt from what the seats kept.
 

@@ -2819,21 +2819,24 @@ def test_an_unknown_proof_code_rides_as_other_not_as_written(tmp_path):
 
 
 def test_every_proof_code_and_lane_rides_as_itself(tmp_path):
-    codes = sorted(hb.DELIVERY_PROOF_CODES)
+    every = sorted(hb.DELIVERY_PROOF_CODES)
     lanes = sorted(hb.DELIVERY_PROOF_LANES)
+    cap = hb._SHORTFALL_EVENT_CAP  # one beat carries at most this many events
+    for start in range(0, len(every), cap):
+        codes = every[start : start + cap]
 
-    def build(led):
-        for n, code in enumerate(codes):
-            _proof_row(led, _ts(10 - n * 0.5), code=code, lane=lanes[n % len(lanes)])
+        def build(led, codes=codes):
+            for n, code in enumerate(codes):
+                _proof_row(led, _ts(10 - n * 0.5), code=code, lane=lanes[n % len(lanes)])
 
-    facts = _shortfalls(tmp_path, build)
-    assert facts.failed == len(codes)
-    assert [e["code"] for e in facts.events] == [f"proof:{c}" for c in codes]
-    assert [e["tool"] for e in facts.events] == [
-        f"{lanes[n % len(lanes)]}_job" for n in range(len(codes))
-    ]
-    for event in facts.events:
-        assert hb._CODE_TOKEN_RE.match(event["code"]), event["code"]
+        facts = _shortfalls(tmp_path, build)
+        assert facts.failed == len(codes)
+        assert [e["code"] for e in facts.events] == [f"proof:{c}" for c in codes]
+        assert [e["tool"] for e in facts.events] == [
+            f"{lanes[n % len(lanes)]}_job" for n in range(len(codes))
+        ]
+        for event in facts.events:
+            assert hb._CODE_TOKEN_RE.match(event["code"]), event["code"]
 
 
 def test_an_unknown_lane_rides_as_the_proof_tool(tmp_path):
@@ -2866,6 +2869,7 @@ def test_the_proof_vocabulary_matches_the_broker_list():
         "library_edit_refused",
         "layout_rule_unplaced",
         "spend_unrecorded",
+        "ending_unrecorded",
     }
     assert hb.DELIVERY_PROOF_LANES == {
         "medchron",

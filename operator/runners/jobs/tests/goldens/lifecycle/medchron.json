@@ -2,9 +2,11 @@
   "cells": {
     "delivered/audit_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -15,13 +17,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "delivered/broker_away_past_bound": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["reply_unproven"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 1,
+      "way_out": ["done"],
+      "wiped": true
     },
     "delivered/broker_down": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -32,13 +59,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "delivered/broker_refuses_ending": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 1,
+      "way_out": ["done"],
+      "wiped": true
     },
     "delivered/claim": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -49,13 +101,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/coverage_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -66,13 +122,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/expiry": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -83,13 +143,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": true
     },
     "delivered/hand_delivery": {
       "code": "deliver_by_smd",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -100,13 +164,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/identity_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -117,13 +185,59 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
-    "delivered/queue_behind_same_lane": {
+    "delivered/no_wake_secret": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 1,
+      "way_out": ["done"],
+      "wiped": true
+    },
+    "delivered/paused_past_wipe_window": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 1,
+      "way_out": ["done"],
+      "wiped": true
+    },
+    "delivered/queue_behind_same_lane": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["reply_unproven"],
       "run": {
@@ -137,13 +251,17 @@
         "state": "delivered"
       },
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/redo": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -154,13 +272,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/redo_doc": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -171,13 +293,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/release": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -188,13 +314,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/reply_send_failure": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["reply_unproven"],
       "run": {
@@ -205,13 +335,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/resubmit_while_running": {
       "code": "medchron_job_submit",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -222,13 +356,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/resume": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -239,13 +377,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/update_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -256,13 +398,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "failed/audit_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
       "run": {
@@ -273,13 +419,40 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "failed/broker_away_past_bound": {
+      "code": "extract",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
     },
     "failed/broker_down": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -292,13 +465,40 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
+    },
+    "failed/broker_refuses_ending": {
+      "code": "extract",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
     },
     "failed/cap_hold": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -311,13 +511,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "failed/claim": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -330,13 +534,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "failed/coverage_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
       "run": {
@@ -347,13 +555,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "failed/deploy_stop": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -366,13 +578,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "failed/expiry": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -385,13 +601,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
     },
     "failed/hand_delivery": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
       "run": {
@@ -402,13 +622,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "failed/identity_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
       "run": {
@@ -419,13 +643,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "failed/machine_stop": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -438,13 +666,63 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
-    "failed/queue_behind_same_lane": {
+    "failed/no_wake_secret": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "failed/paused_past_wipe_window": {
+      "code": "extract",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "failed/queue_behind_same_lane": {
+      "code": "extract",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -460,13 +738,17 @@
         "state": "delivered"
       },
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "failed/redo": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
       "run": {
@@ -477,13 +759,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "failed/redo_doc": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
       "run": {
@@ -494,13 +780,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "failed/release": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -513,13 +803,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "failed/reply_send_failure": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -532,13 +826,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "failed/resubmit_while_running": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -551,13 +849,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": false
     },
     "failed/resume": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
       "run": {
@@ -568,13 +870,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "failed/update_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
       "run": {
@@ -585,13 +891,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "failed/upload_readback_mismatch": {
       "code": "extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -604,13 +914,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "held/audit_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
       "run": {
@@ -621,106 +935,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
-    "held/broker_down": {
-      "code": "audit",
-      "ending": "held",
-      "filed_sets": 0,
-      "firm_messages": 0,
-      "owner": "smd",
-      "paged": ["gate_held"],
-      "run": {
-        "by": "code",
-        "code": "audit",
-        "event": "stop",
-        "kind": "check",
-        "stage": "audit",
-        "v": 1
-      },
-      "second": null,
-      "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
-    },
-    "held/cap_hold": {
-      "code": "audit",
-      "ending": "held",
-      "filed_sets": 0,
-      "firm_messages": 0,
-      "owner": "smd",
-      "paged": ["gate_held"],
-      "run": {
-        "by": "code",
-        "code": "audit",
-        "event": "stop",
-        "kind": "check",
-        "stage": "audit",
-        "v": 1
-      },
-      "second": null,
-      "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
-    },
-    "held/claim": {
-      "code": "audit",
-      "ending": "held",
-      "filed_sets": 0,
-      "firm_messages": 0,
-      "owner": "smd",
-      "paged": ["gate_held"],
-      "run": {
-        "by": "code",
-        "code": "audit",
-        "event": "stop",
-        "kind": "check",
-        "stage": "audit",
-        "v": 1
-      },
-      "second": null,
-      "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
-    },
-    "held/coverage_decide": {
-      "code": null,
-      "ending": "delivered",
-      "filed_sets": 1,
-      "firm_messages": 1,
-      "owner": "firm",
-      "paged": ["gate_held"],
-      "run": {
-        "by": "code",
-        "event": "end",
-        "release": "unknown",
-        "v": 1
-      },
-      "second": null,
-      "state": "delivered",
-      "way_out": ["done"]
-    },
-    "held/deploy_stop": {
-      "code": "audit",
-      "ending": "held",
-      "filed_sets": 0,
-      "firm_messages": 0,
-      "owner": "smd",
-      "paged": ["gate_held"],
-      "run": {
-        "by": "code",
-        "code": "audit",
-        "event": "stop",
-        "kind": "check",
-        "stage": "audit",
-        "v": 1
-      },
-      "second": null,
-      "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
-    },
-    "held/expiry": {
+    "held/broker_away_past_bound": {
       "code": "expired",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -731,47 +956,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
     },
-    "held/hand_delivery": {
-      "code": null,
-      "ending": "delivered",
-      "filed_sets": 1,
-      "firm_messages": 1,
-      "owner": "firm",
-      "paged": ["gate_held"],
-      "run": {
-        "by": "smd",
-        "event": "hand_delivery",
-        "release": "unknown",
-        "v": 1
-      },
-      "second": null,
-      "state": "delivered",
-      "way_out": ["done"]
-    },
-    "held/identity_decide": {
-      "code": null,
-      "ending": "delivered",
-      "filed_sets": 1,
-      "firm_messages": 1,
-      "owner": "firm",
-      "paged": ["gate_held"],
-      "run": {
-        "by": "code",
-        "event": "end",
-        "release": "unknown",
-        "v": 1
-      },
-      "second": null,
-      "state": "delivered",
-      "way_out": ["done"]
-    },
-    "held/machine_stop": {
+    "held/broker_down": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -784,13 +979,258 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
-    "held/queue_behind_same_lane": {
+    "held/broker_refuses_ending": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_submit"],
+      "wiped": true
+    },
+    "held/cap_hold": {
+      "code": "audit",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
+    "held/claim": {
+      "code": "audit",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
+    "held/coverage_decide": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "held/deploy_stop": {
+      "code": "audit",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
+    "held/expiry": {
+      "code": "expired",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "expired",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "held/hand_delivery": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "smd",
+        "event": "hand_delivery",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "held/identity_decide": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "held/machine_stop": {
+      "code": "audit",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
+    "held/no_wake_secret": {
+      "code": "expired",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "expired",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "held/paused_past_wipe_window": {
+      "code": "expired",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "run": {
+        "by": "code",
+        "code": "expired",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "held/queue_behind_same_lane": {
+      "code": "audit",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -806,13 +1246,17 @@
         "state": "delivered"
       },
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "held/redo": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
       "run": {
@@ -823,13 +1267,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "held/redo_doc": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
       "run": {
@@ -840,13 +1288,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "held/release": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -859,13 +1311,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "held/reply_send_failure": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -878,13 +1334,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "held/resubmit_while_running": {
       "code": "medchron_job_submit",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "firm",
       "paged": ["gate_held"],
       "run": {
@@ -897,13 +1357,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "held/resume": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
       "run": {
@@ -914,13 +1378,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "held/update_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
       "run": {
@@ -931,13 +1399,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "held/upload_readback_mismatch": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -950,13 +1422,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "parked/audit_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -967,13 +1443,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "parked/broker_away_past_bound": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": true
     },
     "parked/broker_down": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -984,13 +1485,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "parked/broker_refuses_ending": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "running",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["ending_unrecorded"],
+      "run": {
+        "by": "code",
+        "event": "start",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "running",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_record (SMD)"],
+      "wiped": true
     },
     "parked/cap_hold": {
       "code": "per_job_cap_usd",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["limit_held"],
       "run": {
@@ -1003,13 +1529,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["allowance approve"]
+      "told_while_away": 0,
+      "way_out": ["allowance approve"],
+      "wiped": false
     },
     "parked/claim": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1020,13 +1550,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/coverage_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1037,13 +1571,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/deploy_stop": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1054,13 +1592,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/expiry": {
       "code": "seat_paused",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -1071,13 +1613,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_submit", "sticky_release"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_submit", "sticky_release"],
+      "wiped": false
     },
     "parked/hand_delivery": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1088,13 +1634,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/identity_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1105,13 +1655,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/machine_stop": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1122,13 +1676,59 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "parked/no_wake_secret": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
+    },
+    "parked/paused_past_wipe_window": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
     },
     "parked/queue_behind_same_lane": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1142,13 +1742,17 @@
         "state": "delivered"
       },
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/redo": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -1159,13 +1763,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/redo_doc": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1176,13 +1784,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/release": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -1193,13 +1805,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/reply_send_failure": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1210,13 +1826,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/resubmit_while_running": {
       "code": "medchron_job_submit",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1227,13 +1847,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/resume": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -1244,13 +1868,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/update_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1261,13 +1889,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/upload_readback_mismatch": {
       "code": "readback_unproven",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["readback_unproven"],
       "run": {
@@ -1278,13 +1910,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "requeued_waiting/audit_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1295,13 +1931,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "requeued_waiting/broker_away_past_bound": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": true
     },
     "requeued_waiting/broker_down": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1312,13 +1973,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "requeued_waiting/broker_refuses_ending": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "running",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["ending_unrecorded"],
+      "run": {
+        "by": "code",
+        "event": "start",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "running",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_record (SMD)"],
+      "wiped": true
     },
     "requeued_waiting/cap_hold": {
       "code": "per_job_cap_usd",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["limit_held"],
       "run": {
@@ -1331,13 +2017,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["allowance approve"]
+      "told_while_away": 0,
+      "way_out": ["allowance approve"],
+      "wiped": false
     },
     "requeued_waiting/claim": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1348,13 +2038,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/coverage_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1365,13 +2059,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/deploy_stop": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1382,13 +2080,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/expiry": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1399,13 +2101,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/hand_delivery": {
       "code": "deliver_by_smd",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -1416,13 +2122,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/identity_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1433,13 +2143,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/machine_stop": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1450,13 +2164,59 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "requeued_waiting/no_wake_secret": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
+    },
+    "requeued_waiting/paused_past_wipe_window": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
     },
     "requeued_waiting/queue_behind_same_lane": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1470,13 +2230,17 @@
         "state": "delivered"
       },
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/redo": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -1487,13 +2251,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/redo_doc": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1504,13 +2272,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/release": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -1521,13 +2293,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/reply_send_failure": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1538,13 +2314,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/resubmit_while_running": {
       "code": "medchron_job_submit",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1555,13 +2335,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/resume": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -1572,13 +2356,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/update_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1589,13 +2377,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/upload_readback_mismatch": {
       "code": "readback_unproven",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["readback_unproven"],
       "run": {
@@ -1606,13 +2398,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/audit_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1623,13 +2419,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "running/broker_away_past_bound": {
+      "code": null,
+      "ended_while_away": true,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["ending_unrecorded"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 1,
+      "way_out": ["done"],
+      "wiped": true
     },
     "running/broker_down": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1640,13 +2461,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "running/broker_refuses_ending": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "running",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["ending_unrecorded"],
+      "run": {
+        "by": "code",
+        "event": "start",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "running",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_record (SMD)"],
+      "wiped": true
     },
     "running/cap_hold": {
       "code": "per_job_cap_usd",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["limit_held"],
       "run": {
@@ -1659,13 +2505,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["allowance approve"]
+      "told_while_away": 0,
+      "way_out": ["allowance approve"],
+      "wiped": false
     },
     "running/claim": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1676,13 +2526,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/coverage_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1693,13 +2547,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/deploy_stop": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -1710,13 +2568,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.run.assemble.1": {
       "code": "assemble",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -1729,13 +2591,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.audit.1": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -1748,13 +2614,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "running/exit.run.audit.2": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -1767,13 +2637,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.audit.3": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -1786,13 +2660,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.billing_docx.1": {
       "code": "billing",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -1805,13 +2683,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.billing_extract.1": {
       "code": "billing_extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -1824,13 +2706,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.build_doc.1": {
       "code": "build_doc",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -1843,13 +2729,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.build_units.2": {
       "code": "build_units",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -1862,13 +2752,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.classify_nonrecord.1": {
       "code": "classify_nonrecord",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -1881,13 +2775,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.classify_scanned.1": {
       "code": "classify_scanned",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -1900,13 +2798,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.coverage_gate.1": {
       "code": "coverage",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -1919,13 +2821,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide"],
+      "wiped": false
     },
     "running/exit.run.dos_check.1": {
       "code": "date-of-service",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -1938,13 +2844,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide"],
+      "wiped": false
     },
     "running/exit.run.dos_check.2": {
       "code": "date-of-service",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -1957,13 +2867,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.download.1": {
       "code": "download",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -1976,13 +2890,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.download.2": {
       "code": "append",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -1995,13 +2913,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide"],
+      "wiped": false
     },
     "running/exit.run.download.3": {
       "code": "append",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -2014,13 +2936,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide"],
+      "wiped": false
     },
     "running/exit.run.download.75": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -2031,13 +2957,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.run.exhibit_merge.1": {
       "code": "exhibit_merge",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2050,13 +2980,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.exhibits.1": {
       "code": "exhibits",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2069,13 +3003,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.filter.1": {
       "code": "filter",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2088,13 +3026,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.icd_tables.1": {
       "code": "uncoded",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2107,13 +3049,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.list_matter.3": {
       "code": "list_matter",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "code",
       "paged": [],
       "run": {
@@ -2126,13 +3072,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_submit (update)"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit (update)"],
+      "wiped": false
     },
     "running/exit.run.manifest.1": {
       "code": "manifest",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2145,13 +3095,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.map.1": {
       "code": "map",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2164,13 +3118,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.map.75": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -2181,13 +3139,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.run.merge.1": {
       "code": "merge",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2200,13 +3162,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.merge.3": {
       "code": "merge",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2219,13 +3185,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.merge.4": {
       "code": "merge",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2238,13 +3208,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.merge.5": {
       "code": "merge",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2257,13 +3231,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.render.1": {
       "code": "render",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2276,13 +3254,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.repair_truncated.1": {
       "code": "uncoded",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2295,13 +3277,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.repair_truncated.75": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -2312,13 +3298,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.run.review.1": {
       "code": "review",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2331,13 +3321,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.review.2": {
       "code": "review_held",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["review_held"],
       "run": {
@@ -2350,13 +3344,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume"],
+      "wiped": false
     },
     "running/exit.run.review.3": {
       "code": "review",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2369,13 +3367,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.review.75": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -2386,13 +3388,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.run.strip_apply.1": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2405,13 +3411,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_apply.2": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2424,13 +3434,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_apply.3": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2443,13 +3457,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_apply.4": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2462,13 +3480,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_dry.2": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2481,13 +3503,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_dry.3": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2500,13 +3526,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_dry.4": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2519,13 +3549,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_falsify.1": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2538,13 +3572,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_falsify.2": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2557,13 +3595,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_falsify.3": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2576,13 +3618,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.strip_falsify.4": {
       "code": "strip",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2595,13 +3641,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.summarize.1": {
       "code": "summary",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2614,13 +3664,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.run.upload.1": {
       "code": "upload",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2633,13 +3687,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.run.upload.2": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -2650,13 +3708,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.run.upload.3": {
       "code": "upload",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["upload_held"],
       "run": {
@@ -2669,13 +3731,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["deliver_by_smd"]
+      "told_while_away": 0,
+      "way_out": ["deliver_by_smd"],
+      "wiped": false
     },
     "running/exit.run.upload.4": {
       "code": "upload",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["upload_held"],
       "run": {
@@ -2688,13 +3754,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["deliver_by_smd"]
+      "told_while_away": 0,
+      "way_out": ["deliver_by_smd"],
+      "wiped": false
     },
     "running/exit.run.vision.1": {
       "code": "vision",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2707,13 +3777,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.assemble.1": {
       "code": "assemble",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2726,13 +3800,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.update.audit.1": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -2745,13 +3823,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "running/exit.update.audit.2": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2764,13 +3846,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.audit.3": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2783,13 +3869,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.download.1": {
       "code": "download",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2802,13 +3892,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.download.2": {
       "code": "append",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -2821,13 +3915,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide"],
+      "wiped": false
     },
     "running/exit.update.download.3": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -2838,13 +3936,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.update.download.75": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -2855,13 +3957,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.update.icd_tables.1": {
       "code": "uncoded",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2874,13 +3980,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.list_matter.3": {
       "code": "list_matter",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "code",
       "paged": [],
       "run": {
@@ -2893,13 +4003,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_submit (update)"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit (update)"],
+      "wiped": false
     },
     "running/exit.update.map.1": {
       "code": "map",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2912,13 +4026,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.map.75": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -2929,13 +4047,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.update.merge.1": {
       "code": "merge",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -2948,13 +4070,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.merge.3": {
       "code": "merge",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2967,13 +4093,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.update.merge.4": {
       "code": "merge",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -2986,13 +4116,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.update.merge.5": {
       "code": "merge",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -3005,13 +4139,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.update.repair_truncated.1": {
       "code": "uncoded",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3024,13 +4162,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.repair_truncated.75": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3041,13 +4183,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.update.review.1": {
       "code": "review",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3060,13 +4206,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.review.2": {
       "code": "review_held",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["review_held"],
       "run": {
@@ -3079,13 +4229,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume"],
+      "wiped": false
     },
     "running/exit.update.review.3": {
       "code": "review",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3098,13 +4252,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.review.75": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3115,13 +4273,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.update.update_assemble.1": {
       "code": "update_assemble",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3132,13 +4294,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_base.1": {
       "code": "update_base",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3149,13 +4315,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_base.2": {
       "code": "update_held",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
       "run": {
@@ -3166,13 +4336,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["update_decide"]
+      "told_while_away": 0,
+      "way_out": ["update_decide"],
+      "wiped": false
     },
     "running/exit.update.update_billing_docs.2": {
       "code": "update_held",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
       "run": {
@@ -3183,13 +4357,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["update_decide"]
+      "told_while_away": 0,
+      "way_out": ["update_decide"],
+      "wiped": false
     },
     "running/exit.update.update_billing_docx.1": {
       "code": "billing",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -3200,13 +4378,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.update.update_billing_extract.1": {
       "code": "billing_extract",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3217,13 +4399,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_collect.1": {
       "code": "update_collect",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3234,13 +4420,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_collect.2": {
       "code": "update_held",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
       "run": {
@@ -3251,13 +4441,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["update_decide"]
+      "told_while_away": 0,
+      "way_out": ["update_decide"],
+      "wiped": false
     },
     "running/exit.update.update_collect.5": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3268,13 +4462,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.update.update_manifest.1": {
       "code": "manifest",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3285,13 +4483,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_pages.1": {
       "code": "update_pages",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3302,13 +4504,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_proofs.1": {
       "code": "update",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3319,13 +4525,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_render.1": {
       "code": "render",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3336,13 +4546,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_review.1": {
       "code": "update_review",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3353,13 +4567,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_review.2": {
       "code": "update_held",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
       "run": {
@@ -3370,13 +4588,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "update_decide"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "update_decide"],
+      "wiped": false
     },
     "running/exit.update.update_review.3": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
       "run": {
@@ -3387,13 +4609,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"]
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "running/exit.update.update_review.4": {
       "code": "audit",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3404,13 +4630,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.update_select.2": {
       "code": "update_held",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
       "run": {
@@ -3421,13 +4651,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["update_decide"]
+      "told_while_away": 0,
+      "way_out": ["update_decide"],
+      "wiped": false
     },
     "running/exit.update.update_select.5": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3438,13 +4672,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.update.update_summary.1": {
       "code": "update_summary",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
       "run": {
@@ -3455,13 +4693,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["medchron_job_resume", "redo_doc"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "redo_doc"],
+      "wiped": false
     },
     "running/exit.update.upload.1": {
       "code": "upload",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3474,13 +4716,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/exit.update.upload.2": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3491,13 +4737,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/exit.update.upload.3": {
       "code": "upload",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["upload_held"],
       "run": {
@@ -3510,13 +4760,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["deliver_by_smd"]
+      "told_while_away": 0,
+      "way_out": ["deliver_by_smd"],
+      "wiped": false
     },
     "running/exit.update.upload.4": {
       "code": "update_held",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
       "run": {
@@ -3529,13 +4783,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["update_decide"]
+      "told_while_away": 0,
+      "way_out": ["update_decide"],
+      "wiped": false
     },
     "running/exit.update.vision.1": {
       "code": "vision",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
       "run": {
@@ -3548,15 +4806,19 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "running/expiry": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
-      "firm_messages": 1,
-      "owner": "firm",
-      "paged": [],
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
       "run": {
         "by": "code",
         "event": "end",
@@ -3565,13 +4827,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
     },
     "running/hand_delivery": {
       "code": "deliver_by_smd",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -3582,13 +4848,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/identity_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3599,13 +4869,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/machine_stop": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3616,13 +4890,59 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "running/no_wake_secret": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
+    },
+    "running/paused_past_wipe_window": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
     },
     "running/queue_behind_same_lane": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3636,13 +4956,17 @@
         "state": "delivered"
       },
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/redo": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -3653,13 +4977,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/redo_doc": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3670,13 +4998,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/release": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -3687,13 +5019,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/reply_send_failure": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 0,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
       "run": {
@@ -3704,13 +5040,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["jobs rewake"]
+      "told_while_away": 0,
+      "way_out": ["jobs rewake"],
+      "wiped": false
     },
     "running/resubmit_while_running": {
       "code": "medchron_job_submit",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3721,13 +5061,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/resume": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -3738,13 +5082,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/update_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3755,13 +5103,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/upload_readback_mismatch": {
       "code": "readback_unproven",
+      "ended_while_away": false,
       "ending": "failed",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["readback_unproven"],
       "run": {
@@ -3772,13 +5124,17 @@
       },
       "second": null,
       "state": "failed",
-      "way_out": ["medchron_job_resume", "medchron_job_submit"]
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "submitted/audit_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3789,13 +5145,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "submitted/broker_away_past_bound": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": true
     },
     "submitted/broker_down": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3806,13 +5187,38 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "submitted/broker_refuses_ending": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "running",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["ending_unrecorded"],
+      "run": {
+        "by": "code",
+        "event": "start",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "running",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_record (SMD)"],
+      "wiped": true
     },
     "submitted/cap_hold": {
       "code": "per_job_cap_usd",
+      "ended_while_away": false,
       "ending": "held",
       "filed_sets": 0,
       "firm_messages": 0,
+      "firm_owed": 0,
       "owner": "smd",
       "paged": ["limit_held"],
       "run": {
@@ -3825,13 +5231,17 @@
       },
       "second": null,
       "state": "held",
-      "way_out": ["allowance approve"]
+      "told_while_away": 0,
+      "way_out": ["allowance approve"],
+      "wiped": false
     },
     "submitted/claim": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3842,13 +5252,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/coverage_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3859,13 +5273,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/deploy_stop": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3876,13 +5294,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/expiry": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3893,13 +5315,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/hand_delivery": {
       "code": "deliver_by_smd",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -3910,13 +5336,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/identity_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3927,13 +5357,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/machine_stop": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3944,13 +5378,59 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "submitted/no_wake_secret": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
+    },
+    "submitted/paused_past_wipe_window": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 0,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["wake_lost"],
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["SMD tells the firm (paged wake_lost)"],
+      "wiped": true
     },
     "submitted/queue_behind_same_lane": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3964,13 +5444,17 @@
         "state": "delivered"
       },
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/redo": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -3981,13 +5465,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/redo_doc": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -3998,13 +5486,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/release": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -4015,13 +5507,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/reply_send_failure": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 0,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
       "run": {
@@ -4032,13 +5528,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["jobs rewake"]
+      "told_while_away": 0,
+      "way_out": ["jobs rewake"],
+      "wiped": false
     },
     "submitted/resubmit_while_running": {
       "code": "medchron_job_submit",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -4049,13 +5549,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/resume": {
       "code": "medchron_job_resume",
+      "ended_while_away": false,
       "ending": "refused",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "smd",
       "paged": [],
       "run": {
@@ -4066,13 +5570,17 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/update_decide": {
       "code": null,
+      "ended_while_away": false,
       "ending": "delivered",
       "filed_sets": 1,
       "firm_messages": 1,
+      "firm_owed": 1,
       "owner": "firm",
       "paged": [],
       "run": {
@@ -4083,10 +5591,12 @@
       },
       "second": null,
       "state": "delivered",
-      "way_out": ["done"]
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     }
   },
-  "count": 228,
+  "count": 256,
   "not_applicable": {
     "delivered/cap_hold": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
     "delivered/deploy_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",

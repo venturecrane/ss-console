@@ -93,7 +93,14 @@ FIXED_EVENTS = (
     "expiry",
     "resubmit_while_running",
     "queue_behind_same_lane",
+    # The bounds (second review, 2026-11-17): each ends with the job dir wiped.
+    "broker_refuses_ending",
+    "broker_away_past_bound",
+    "paused_past_wipe_window",
+    "no_wake_secret",
 )
+#: The events whose ending must also leave the job dir wiped on schedule.
+WIPE_EVENTS = ("broker_refuses_ending", "broker_away_past_bound", "paused_past_wipe_window", "no_wake_secret")
 
 
 def exit_classes(stages: Callable[..., Any] | None = None) -> list[tuple[str, str, int, str, str]]:
@@ -149,6 +156,10 @@ class Life:
     children: list[Callable[[Path], tuple[int, str]]] = field(default_factory=list)
     during: list[Callable[[], Any]] = field(default_factory=list)
     acts: list[tuple[str, str]] = field(default_factory=list)
+    #: Delivered messages the firm had before the broker came back (``broker_away_past_bound``).
+    told_while_away: int = 0
+    #: Whether the job's ending came while the broker was away.
+    ended_while_away: bool = False
     #: Indexes of the gateway's posts it answered with an error (never delivered).
     refused_posts: set[int] = field(default_factory=set)
 
@@ -412,6 +423,9 @@ def apply_event(life: Life, state: str, jid: str, event: str) -> None:
         life.tick()
         life.settle()
         return
+    if event in WIPE_EVENTS:
+        _bound_event(life, state, jid, event)
+        return
     act = _act(life, jid, event)
     child = _child_event(event, life)
     if child is not None:
@@ -436,6 +450,72 @@ def apply_event(life: Life, state: str, jid: str, event: str) -> None:
     if state == "parked" and event != "expiry":
         _sticky(life, "OK")
     life.settle()
+
+
+def _refuse_ending(life: Life, jid: str) -> None:
+    """The broker answers every ending record this lane sends for the job with
+    a refusal (a field it will not take); SMD's own record by hand is taken."""
+    from jobs.broker_client import BrokerRefused
+
+    real = life.lane.broker.record
+
+    def record(job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
+        ending = (fields.get("run") or {}).get("event") in ("end", "stop")
+        if job_id == jid and ending:
+            raise BrokerRefused("broker refused: ValueError: illegal transition (the matrix)")
+        return real(job_id, state, fields)
+
+    life.lane.broker.record = record
+
+
+def _told(life: Life, jid: str) -> int:
+    bodies = {
+        json.dumps(p["body"], sort_keys=True)
+        for i, p in enumerate(life.seat.posts)
+        if jid in json.dumps(p["body"]) and i not in life.refused_posts
+    }
+    return sum("Outcome: delivered." in b for b in bodies)
+
+
+def _bound_event(life: Life, state: str, jid: str, event: str) -> None:
+    """One bound, held through the job's run (or its next run) and past its
+    wipe window: the job must still end owned, its firm told at most once, and
+    its workdir wiped on schedule."""
+    from jobs import retention
+    from jobs.medchron import unrecorded
+
+    hidden: list[Path] = []
+    first = len(life.seat.posts)
+    if event == "broker_refuses_ending":
+        _refuse_ending(life, jid)
+    elif event == "paused_past_wipe_window":
+        life.seat.gate_status = 503
+    elif event == "no_wake_secret":
+        life.lane.wake_secret = None
+    if event == "broker_away_past_bound":
+        if state == "running":
+            life.during.append(lambda: hidden.append(broker_down(life.seat)))
+        else:
+            hidden.append(broker_down(life.seat))
+    life.tick()
+    life.lane.stopping = lambda: False
+    if state == "parked":
+        _sticky(life, "OK")
+    for _ in range(unrecorded.MAX_ATTEMPTS + 1 if hidden else 0):
+        life.seat.now["t"] += unrecorded.RETRY_SECONDS + 1
+        life.tick()
+    life.told_while_away = _told(life, jid)
+    held = _state(life, jid)
+    life.ended_while_away = bool(hidden) and bool(held.get("record_pending") or held.get("ending_unrecorded"))
+    for h in hidden:
+        broker_up(life.seat, h)
+    life.settle()
+    life.seat.now["t"] += (life.lane.held_wipe_hours + retention.WAKE_WIPE_GRACE_HOURS + 1) * 3600
+    life.tick()
+    life.tick()
+    if event == "paused_past_wipe_window":  # every post of the paused window was answered 503
+        life.refused_posts.update(range(first, len(life.seat.posts)))
+    life.seat.gate_status = 200
 
 
 def _act(life: Life, jid: str, event: str) -> Callable[[], Any] | None:
@@ -483,7 +563,7 @@ def _state(life: Life, jid: str) -> dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
 
 
-def _way_out(life: Life, jid: str, row: dict[str, Any], st: dict[str, Any], messages: int) -> list[str]:
+def _way_out(life: Life, jid: str, row: dict[str, Any], told: str, messages: int, pages: list[str]) -> list[str]:
     """Every verb that would accept this row now, asked of the real code
     (a resume is asked and its marker withdrawn; a fresh submission is asked
     of the ledger's own duplicate rule, which writes nothing)."""
@@ -491,9 +571,22 @@ def _way_out(life: Life, jid: str, row: dict[str, Any], st: dict[str, Any], mess
 
     state = row.get("state")
     out: list[str] = []
+    st = _state(life, jid)
+    if state != told and told == "delivered":
+        # The ending the broker would not take: SMD records it by hand with the
+        # root record verb (asked here, last, because it writes the row).
+        try:
+            life.client().record(jid, "delivered", {})
+            return ["medchron_job_record (SMD)"]
+        except Exception:  # noqa: BLE001 - a refusal is the answer
+            return []
     if state == "delivered":
         if messages:
             return ["done"]
+        if "wake_lost" in pages and not life.lane.job_dir(jid).exists():
+            # Wiped on schedule with its message never sent: the page names the
+            # job and says the firm was not told; SMD tells them.
+            return ["SMD tells the firm (paged wake_lost)"]
         from jobs import rewake
 
         return ["jobs rewake"] if rewake.rewake(life.seat.run_dir, "medchron", jid, "smd", "matrix", False) == 0 else []
@@ -576,9 +669,13 @@ def observe(life: Life, jid: str) -> dict[str, Any]:
         ending, code = state, None
         if state != "delivered":
             code = (recorded or {}).get("code") or run_record.code_of(reason)
-    way_out = _way_out(life, jid, row, st, messages)
+    unrecorded = bool(st.get("ending_unrecorded")) or ("ending_unrecorded" in pages and not st)
+    told = (st.get("state") or ("delivered" if messages else state)) if unrecorded else state
+    way_out = _way_out(life, jid, row, told, messages, pages)
     if refused:
         owner = ACTOR[refused[0]]  # the one who asked hears the refusal at once
+    elif unrecorded:
+        owner = "smd"  # the row is wrong until SMD records it; paged ending_unrecorded
     elif state == "delivered":
         owner = "firm" if messages else "smd"
     elif state in ("submitted", "running"):
@@ -601,6 +698,10 @@ def observe(life: Life, jid: str) -> dict[str, Any]:
         "filed_sets": filed,
         "run": (entered or {}).get("run"),
         "second": _second(life),
+        "firm_owed": 1 if told == "delivered" else 0,
+        "wiped": not life.lane.job_dir(jid).exists(),
+        "told_while_away": life.told_while_away,
+        "ended_while_away": life.ended_while_away,
     }
 
 
@@ -663,7 +764,9 @@ def problems(cell: str, got: dict[str, Any]) -> list[str]:
     # (a) an owner, and an SMD-owned stop is told to SMD
     if got["owner"] not in ("firm", "smd", "code"):
         out.append(f"(a) no owner: {got['owner']!r}")
-    smd_stop = got["owner"] == "smd" and got["state"] in ("held", "failed")
+    smd_stop = got["owner"] == "smd" and (
+        got["state"] in ("held", "failed") or got["firm_owed"] != got["firm_messages"]
+    )
     # A seat pause is SMD's own act on the whole seat, paged where it was set.
     if smd_stop and not got["paged"] and got.get("code") != "seat_paused":
         out.append("(a) SMD owns this stop and was never paged")
@@ -671,10 +774,10 @@ def problems(cell: str, got: dict[str, Any]) -> list[str]:
     if not got["way_out"]:
         out.append("(b) no verb accepts this row: the ending has no way out")
     # (c) the firm hears the declared count, never two
-    declared = 1 if got["state"] == "delivered" else 0
+    declared = got["firm_owed"]
     if got["firm_messages"] > 1:
         out.append(f"(c) the firm got {got['firm_messages']} messages for one job")
-    elif got["firm_messages"] != declared and not (got["state"] == "delivered" and got["paged"]):
+    elif got["firm_messages"] != declared and not (declared and got["paged"]):
         out.append(f"(c) the firm got {got['firm_messages']} message(s); the declared count is {declared}")
     second = got.get("second")
     if second is not None and second.get("firm_messages", 0) > 1:
@@ -682,6 +785,12 @@ def problems(cell: str, got: dict[str, Any]) -> list[str]:
     # (d) one filed set at most
     if got["filed_sets"] > 1:
         out.append(f"(d) {got['filed_sets']} filed sets for one job")
+    # (f) a bound's ending leaves the job dir wiped on schedule
+    if cell.split("/", 1)[1] in WIPE_EVENTS and not got["wiped"]:
+        out.append("(f) the job dir outlived its wipe window")
+    # (g) an outage past its bound never keeps the firm waiting for the broker
+    if got.get("ended_while_away") and got["firm_owed"] and not got["told_while_away"]:
+        out.append("(g) the firm was told only after the broker came back, past the bound")
     # (e) the row that put the job in its state carries a run block
     if got["state"] not in ("submitted", "gone") and not isinstance(got["run"], dict):
         out.append("(e) the row that ended the job carries no run block")

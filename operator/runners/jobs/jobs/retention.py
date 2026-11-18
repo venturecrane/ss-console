@@ -121,9 +121,9 @@ def wipe_expired(d: Any, terminal: frozenset[str]) -> list[str]:
         hours = _window_hours(d, state, terminal)
         if not done or hours is None or now - float(done) < hours * 3600:
             continue
-        if (st.get("wake") or {}).get("pending"):
-            # The job's one message has not gone out (a gateway paused for days):
-            # the workdir holds the only copy of it (the lifecycle matrix, 2026-11-17).
+        if (st.get("wake") or {}).get("pending") and not _wake_spent(
+            d, path.name, st, now - float(done) - hours * 3600
+        ):
             continue
         if state not in terminal:
             # Worth a line: a job nobody cleared for a week is a fact about us,
@@ -138,6 +138,33 @@ def wipe_expired(d: Any, terminal: frozenset[str]) -> list[str]:
             close_wiped_hold(d, path.name)
     close_dead_holds(d)
     return wiped
+
+
+#: How long past its window a workdir whose DELIVER wake is still pending is
+#: kept (a gateway restarting, a short seat pause), so that wake can still go.
+#: Hours, not days: the workdir holds a firm's records and paid page text, and
+#: the wipe schedule is the promise; past the grace SMD is paged and the
+#: workdir is wiped as before (2026-11-17, the lifecycle matrix and its review).
+WAKE_WIPE_GRACE_HOURS = 6.0
+
+
+def _wake_spent(d: Any, job_id: str, st: dict[str, Any], past: float) -> bool:
+    """For a job whose wake is still pending at its wipe time: False (keep it,
+    said once) inside the grace; past it, page SMD once and True (wipe it)."""
+    wake = st.get("wake") or {}
+    why = str(wake.get("outcome") or "the gateway has not taken it") if d.wake_secret else "the seat has no wake secret"
+    if past < WAKE_WIPE_GRACE_HOURS * 3600:
+        if not st.get("wipe_kept_at"):
+            logger.warning("keeping %s past its wipe window for up to %.0f h: its wake is still pending (%s)",
+                           job_id, WAKE_WIPE_GRACE_HOURS, why)  # fmt: skip
+            d._write_state(job_id, wipe_kept_at=d.clock())
+        return False
+    from .proof import watch
+
+    logger.error("wiping %s with its wake still pending (%s): the firm was not told", job_id, why)
+    watch.alert(d, job_id, "wake_lost", f"the job's message never went ({why}); its workdir was wiped on schedule",
+                unit=f"wiped:{job_id}")  # fmt: skip
+    return True
 
 
 #: The lanes whose ledger row a wiped hold closes. The chronology's ledger

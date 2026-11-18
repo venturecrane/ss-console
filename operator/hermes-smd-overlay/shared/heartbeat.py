@@ -818,6 +818,7 @@ DELIVERY_PROOF_CODES = frozenset(
         "library_edit_refused",
         "layout_rule_unplaced",
         "spend_unrecorded",
+        "ending_unrecorded",
     }
 )
 

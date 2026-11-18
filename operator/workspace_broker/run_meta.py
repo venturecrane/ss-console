@@ -47,6 +47,7 @@ EVENTS = frozenset(
         "infra_requeue",
         "replaces",
         "resume_refused",
+        "record_gave_up",
     }
 )
 #: Who took the step. ``code`` is the runner itself; anything else makes the run aided.

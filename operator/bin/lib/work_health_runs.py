@@ -91,6 +91,8 @@ def aided_reasons(run: Run, runs: list[Run]) -> list[str]:
             reasons.append(f"by_{by if by in ('firm', 'smd') else 'unknown'}")
         if b.get("replaces"):
             reasons.append("replaces")
+        if b.get("event") == "record_gave_up":
+            reasons.append("record_gave_up")
     if any(b.get("replaces") == run.job_id for other in runs if other is not run for b in other.blocks):
         reasons.append("replaced")
     seen_bad = False
@@ -124,11 +126,34 @@ def grade(run: Run, runs: list[Run]) -> dict[str, Any]:
     }
 
 
-def summarize(rows: list[dict]) -> dict[str, Any]:
-    """The seat's counts. ``rate`` is unaided over recorded runs (None with none)."""
-    runs = runs_from_rows(rows)
+def submitted_at(run: Run) -> Optional[datetime]:
+    """When the run's SUBMITTED row was written, or None when it is not in the rows."""
+    return next((ts for ts, state, _md in run.rows if state == "SUBMITTED"), None)
+
+
+def read_from(since: datetime) -> datetime:
+    """Where a reader must start for a window starting ``since``: early enough
+    for the same-matter clause to see a job up to 7 days before it."""
+    return since - SAME_MATTER_WINDOW
+
+
+def summarize(rows: list[dict], since: Optional[datetime] = None) -> dict[str, Any]:
+    """The seat's counts for the runs SUBMITTED at or after ``since``. ``rate``
+    is unaided over recorded runs (None with none).
+
+    A window cuts history: a run that held and was resumed by SMD before the
+    window starts, and delivered inside it, shows only its clean last rows. So
+    only a run whose SUBMITTED row is inside the window is graded; any other
+    is ``out_of_window``, counted apart and in neither numerator nor
+    denominator. ``rows`` must reach back :func:`read_from` ``since`` so the
+    same-matter clause sees the job before (2026-11-17 review: both cut-window
+    cases graded an aided run unaided). ``since`` None: ``rows`` are a run's
+    whole history (a test, an export)."""
+    every = runs_from_rows(rows)
+    runs = [r for r in every if since is None or ((submitted_at(r) or since - SAME_MATTER_WINDOW) >= since)]
     out: dict[str, Any] = {
         "runs": len(runs),
+        "out_of_window": len(every) - len(runs),
         "unaided": 0,
         "aided": 0,
         "held_now": 0,
@@ -142,7 +167,7 @@ def summarize(rows: list[dict]) -> dict[str, Any]:
         "aided_by": {},
     }
     for run in runs:
-        g = grade(run, runs)
+        g = grade(run, every)
         state = g["state"]
         if not g["recorded"]:
             out["unrecorded"] += 1
@@ -187,7 +212,8 @@ def line(label: str, c: dict[str, Any]) -> str:
         f"{label}: {c.get('runs', 0)} chronology run(s), {c.get('unaided', 0)} unaided, {c.get('aided', 0)} aided, "
         f"{c.get('held_now', 0)} held now, {c.get('failed', 0)} failed, {c.get('unrecorded', 0)} unrecorded "
         f"({rate}); stops at a check {c.get('stops_check', 0)}, at plumbing {c.get('stops_plumbing', 0)}; "
-        f"infrastructure retries {c.get('infra_requeues', 0)}; uncoded {c.get('uncoded', 0)}"
+        f"infrastructure retries {c.get('infra_requeues', 0)}; uncoded {c.get('uncoded', 0)}; "
+        f"started before the window {c.get('out_of_window', 0)}"
     )
 
 

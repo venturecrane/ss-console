@@ -523,11 +523,11 @@ def runs_report(seats: list[str], offline: dict[str, str], now: datetime, days: 
                 print(f"{slug}: not read (no runtime-read credential)")
                 continue
             try:
-                rows = read_ledger(client, now - timedelta(days=days))
+                rows = read_ledger(client, runs_wh.read_from(now - timedelta(days=days)))
             except Exception as exc:  # noqa: BLE001 - one unreadable seat is said, the rest still report
                 print(f"{slug}: not read ({type(exc).__name__})")
                 continue
-        per_seat[slug] = runs_wh.summarize(rows)
+        per_seat[slug] = runs_wh.summarize(rows, since=now - timedelta(days=days))
     print(runs_wh.report(per_seat, days))
     return EXIT_OK
 
@@ -541,13 +541,17 @@ def _machine_check(slug: str, now: datetime, items: list[wh.Item], gaps: dict[st
     items += keeper_wh.machine_items(slug, machines, now)
 
 
-def _runs_footer(seen: dict[str, list[dict]], hours: int) -> str:
-    """The digest's one line about chronology runs, when any seat ran one."""
-    per_seat = {slug: runs_wh.summarize(rows) for slug, rows in seen.items()}
+def _runs_footer(seen: dict[str, list[dict]], hours: int, now: datetime) -> str:
+    """The digest's one line about chronology runs, when any seat ran one: the
+    runs submitted after the read's start plus the same-matter look-back, so
+    every graded run has its whole history in the rows read."""
+    since = now - timedelta(hours=hours) + runs_wh.SAME_MATTER_WINDOW
+    per_seat = {slug: runs_wh.summarize(rows, since=since) for slug, rows in seen.items()}
     total = runs_wh.combine({s: c for s, c in per_seat.items() if c["runs"]})
     if not total.get("runs"):
         return ""
-    return "\n\n" + runs_wh.line(f"Chronology runs read this hour ({hours // 24} days)", total) + "\n"
+    days = (now - since).total_seconds() / 86400
+    return "\n\n" + runs_wh.line(f"Chronology runs submitted in the last {days:g} day(s)", total) + "\n"
 
 
 def _evaluate_all(
@@ -629,7 +633,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"pages: {len(pages)} email(s){' (dry run)' if args.dry_run else ''}")
     if not plan.send or args.pages_only:
         return EXIT_SEND_FAILED if page_error else EXIT_OK
-    plan.text += _runs_footer(seen, cfg.ledger_lookback_hours)
+    plan.text += _runs_footer(seen, cfg.ledger_lookback_hours, now)
     if args.print_body:
         print(f"Subject: {plan.subject}\n\n{plan.text}")
     if args.dry_run:

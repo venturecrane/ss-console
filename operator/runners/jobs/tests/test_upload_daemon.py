@@ -661,19 +661,32 @@ def test_wiping_a_parked_job_takes_its_queue_entry_too(tmp_path):
     assert d._queued() == []
 
 
-def test_a_delivery_whose_wake_is_still_owed_is_never_wiped(tmp_path):
-    """A gateway paused for days kept a delivered job's one message pending,
-    and the 72-hour wipe deleted the only copy of it: the firm never heard and
-    nobody was paged (the lifecycle matrix, 2026-11-17). Falsifier: the same job
-    with its wake sent is wiped at the same instant."""
+def test_a_pending_wake_keeps_its_workdir_for_the_grace_then_pages_and_is_wiped(tmp_path):
+    """A delivered job whose one message is still pending at its 72-hour wipe is
+    kept for ``WAKE_WIPE_GRACE_HOURS`` (a gateway restarting), never longer: past
+    the grace SMD is paged ``wake_lost`` once and the workdir is wiped on
+    schedule, because it holds a firm's records (the lifecycle matrix and its
+    review, 2026-11-17). Falsifiers: inside the grace nothing is paged or wiped;
+    a job with its wake sent is wiped at its window, not at the grace."""
+    from jobs import retention
+
     d, broker = _daemon(tmp_path, wipe_hours=72)
     _submit(d, broker, "01A")
     d.tick()
     assert (d._daemon_state("01A").get("wake") or {}).get("pending")
     d._now["t"] += 73 * 3600
     assert d.wipe_expired() == [] and (d.jobs / "01A").exists()
-    _wake_sent(d, "01A")
-    assert d.wipe_expired() == ["01A"]
+    assert [r for r in broker.proof_requests if r.get("code") == "wake_lost"] == []
+    d._now["t"] += retention.WAKE_WIPE_GRACE_HOURS * 3600
+    assert d.wipe_expired() == ["01A"] and not (d.jobs / "01A").exists()
+    pages = [r for r in broker.proof_requests if r.get("code") == "wake_lost"]
+    assert [(r["job_id"], r["code"]) for r in pages] == [("01A", "wake_lost")]
+    d2, broker2 = _daemon(tmp_path / "two", wipe_hours=72)
+    _submit(d2, broker2, "01B")
+    d2.tick()
+    _wake_sent(d2, "01B")
+    d2._now["t"] += 73 * 3600
+    assert d2.wipe_expired() == ["01B"]
 
 
 def test_a_terminal_job_keeps_the_short_window(tmp_path):

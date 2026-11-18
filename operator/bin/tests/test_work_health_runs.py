@@ -152,6 +152,17 @@ def test_work_health_runs_prints_per_seat_and_sends_nothing(tmp_path, capsys, mo
     monkeypatch.setattr(wh_cli, "send", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sent")))
     rows = tmp_path / "rows.json"
     rows.write_text(json.dumps(_clean()), encoding="utf-8")
-    assert wh_cli.main(["--runs", "--rows", f"seat-a={rows}", "--runs-days", "14"]) == 0
+    assert (
+        wh_cli.main(["--runs", "--rows", f"seat-a={rows}", "--runs-days", "14", "--now", "2026-11-05T00:00:00Z"]) == 0
+    )
     out = capsys.readouterr().out
     assert "Chronology runs, last 14 day(s):" in out and "seat-a: 1 chronology run(s), 1 unaided" in out
+
+
+def test_a_run_submitted_before_the_window_is_out_of_window_never_graded():
+    """The window's own clause: only a run whose SUBMITTED row is inside it is
+    graded (the ledger-driven proof is runners/jobs/tests/test_run_window.py)."""
+    since = T0 + timedelta(minutes=30)
+    got = runs.summarize(_clean(), since=since)
+    assert (got["runs"], got["out_of_window"], got["unaided"], got["rate"]) == (0, 1, 0, None)
+    assert runs.read_from(since) == since - runs.SAME_MATTER_WINDOW

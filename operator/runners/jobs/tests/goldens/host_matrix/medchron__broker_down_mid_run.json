@@ -127,6 +127,7 @@
         "held_paused": false,
         "reason": null,
         "record_pending": {
+          "attempts": 1,
           "fields": {
             "cents": 500,
             "delivery": {
@@ -149,6 +150,7 @@
               "v": 1
             }
           },
+          "first_at": "<CLOCK+0.0>",
           "proof": true,
           "state": "delivered"
         },

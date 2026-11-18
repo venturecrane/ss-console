@@ -622,9 +622,16 @@ class Daemon(BackOff):
             return "paused"
         if self.BACKS_OFF:
             return self._run_backing_off(job_id)
-        if self._daemon_state(job_id).get("held_paused"):
+        was_paused = bool(self._daemon_state(job_id).get("held_paused"))
+        if was_paused:
             self._write_state(job_id, held_paused=False)
-        return self.run_job(job_id)
+        out = self.run_job(job_id)
+        if was_paused and out == "deferred" and self._daemon_state(job_id).get("state") == "held":
+            # A pause lifted, and the broker could not start the run yet: still
+            # a pause hold, which resumes by itself, never a runner hold, which
+            # waits for a person forever (the lifecycle matrix, 2026-11-17).
+            self._write_state(job_id, held_paused=True)
+        return out
 
     def run_forever(self, stop: Callable[[], bool], poll_seconds: float) -> None:
         self.stopping = stop

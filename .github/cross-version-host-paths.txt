@@ -14,6 +14,7 @@ operator/runners/jobs/jobs/*.py
 operator/runners/jobs/jobs/proof/**
 operator/runners/jobs/tests/test_host_cross_version.py
 operator/runners/jobs/tests/host_cross_version_worker.py
+operator/runners/jobs/tests/host_cross_version_allowed.json
 operator/runners/jobs/tests/conftest.py
 operator/runners/jobs/tests/goldens/host_matrix/**
 operator/runners/jobs/pyproject.toml

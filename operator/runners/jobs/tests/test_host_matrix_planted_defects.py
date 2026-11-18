@@ -96,9 +96,9 @@ def test_a_stop_nobody_is_paged_about_fails_a(tmp_path, monkeypatch, real_lane_g
 
 def test_an_ending_no_verb_accepts_fails_b(tmp_path, monkeypatch, real_lane_gate):
     """The defect the matrix found: an ending the broker could not take is never recorded again."""
-    from jobs.medchron.lane import MedchronLane
+    from jobs.medchron import unrecorded
 
-    monkeypatch.setattr(MedchronLane, "_record_pending", lambda self: None)
+    monkeypatch.setattr(unrecorded, "retry", lambda d: True)
     assert any(p.startswith("(b)") for p in _lifecycle(tmp_path, monkeypatch, "running/broker_down"))
 
 

@@ -45,20 +45,18 @@ from .. import (
     spend,
     verdict as verdict_mod,
 )
-from ..broker_client import BrokerError
+from ..broker_client import BrokerError, BrokerRefused
 from ..daemon import RUNNER_BIN, TERMINAL, Daemon
 from ..matter import store as page_store_mod
 from ..proof import holds as proof_holds, watch as proof_watch
 from ..skill_load import load_line
 from ..stages import vision_seed
-from . import allowance as allowance_mod, config as config_mod, job as job_mod
+from . import allowance as allowance_mod, config as config_mod, job as job_mod, unrecorded
 from .covered import delivery_fields, wake_folder_lines
 
 logger = logging.getLogger("jobs.daemon")
 
 MEMORY_MAX_ENV = "SMD_MEDCHRON_MEMORY_MAX_BYTES"
-#: How long the lane waits before trying an unrecorded ending again.
-RECORD_RETRY_SECONDS = 60.0
 SKILL = "medical-chronology-maintainer"
 
 
@@ -253,9 +251,12 @@ class MedchronLane(Daemon):
             stages=self.run_stages(job_id),
             extra=run_record.counts(self.job_dir(job_id)),
         )
-        recorded = True
+        recorded, refused = True, ""
         try:
             self.broker.record(job_id, state, fields)
+        except BrokerRefused as exc:
+            recorded, refused = False, str(exc)
+            logger.error("the broker refused the %s record of %s: %s", state, job_id, exc)
         except BrokerError as exc:
             recorded = False
             logger.error("could not record %s for %s: %s (recorded on a later tick)", state, job_id, exc)
@@ -272,20 +273,23 @@ class MedchronLane(Daemon):
                 wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields, stage=stage)},
             )
         if not recorded:
-            # The broker was away when the job ended (2026-11-17, the lifecycle
-            # matrix): the row said running for good while the firm was told it
-            # was delivered, and no verb accepted the row. The ending is kept and
-            # recorded on a later tick, and its wake waits for that record
-            # (``_wakes_pending``). The wake is still written as before, so a host
-            # rolled back to a version that does not know ``record_pending``
-            # behaves as that version always did.
+            # The broker refused, or was away when the job ended (2026-11-17,
+            # the lifecycle matrix): the row said running for good while the
+            # firm was told it was delivered. An outage is kept and recorded on
+            # a later tick, its wake waiting for the record up to a bound; a
+            # refusal pages SMD and the wake goes at once (``unrecorded.py``).
+            # The wake is written as before either way, so a host rolled back to
+            # a version that does not know ``record_pending`` behaves as it did.
             proof = state == "delivered" and self.proof_recorded is False
-            self._write_state(job_id, record_pending={"state": state, "fields": fields, "proof": proof})
+            if refused:
+                unrecorded.give_up(self, job_id, state, unrecorded.REFUSED, refused)
+            else:
+                unrecorded.hold(self, job_id, state, fields, proof=proof)
         return state
 
     def _wakes_pending(self) -> list[str]:
         """Every pending wake but those whose ending is not recorded yet."""
-        return [j for j in super()._wakes_pending() if not self._daemon_state(j).get("record_pending")]
+        return [j for j in super()._wakes_pending() if not unrecorded.holds_wake(self._daemon_state(j))]
 
     def poll_requests(self) -> None:
         """Each tick (before its wakes) and while idle: record any ending the
@@ -294,32 +298,11 @@ class MedchronLane(Daemon):
         if self.clock() < self.record_retry_at:
             return
         try:
-            if not self._record_pending():
-                self.record_retry_at = self.clock() + RECORD_RETRY_SECONDS
+            if not unrecorded.retry(self):
+                self.record_retry_at = self.clock() + unrecorded.RETRY_SECONDS
         except Exception:  # a poll hook must not raise (daemon.poll_requests); logged with its trace
             logger.exception("recording a pending ending failed")
-            self.record_retry_at = self.clock() + RECORD_RETRY_SECONDS
-
-    def _record_pending(self) -> bool:
-        """Record each ending the broker could not take when it happened, with
-        its delivery proof when that did not land either; its wake then goes."""
-        ok = True
-        if not self.jobs.is_dir():
-            return ok
-        for jd in sorted(self.jobs.iterdir()):
-            pending = self._daemon_state(jd.name).get("record_pending")
-            if not isinstance(pending, dict):
-                continue
-            try:
-                self.broker.record(jd.name, pending["state"], pending["fields"])
-            except BrokerError as exc:
-                logger.warning("still could not record %s for %s: %s", pending["state"], jd.name, exc)
-                ok = False
-                continue
-            if pending.get("proof"):
-                proof_watch.record_proven(self, jd.name, verdict_mod.read(jd, ""))
-            self._write_state(jd.name, record_pending=None)
-        return ok
+            self.record_retry_at = self.clock() + unrecorded.RETRY_SECONDS
 
     # -- the deliver wake (ss#2616) --------------------------------------------
     def _compose_wake(self, job_id: str, state: str, fields: dict[str, Any], *, stage: str | None = None) -> str:

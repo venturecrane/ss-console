@@ -71,6 +71,10 @@ CODES = frozenset(
         # 2026-11-10: an ended job whose usage shows spend while its row records
         # $0 (jobs/spend.py sweep, hourly); SMD only, the firm is told nothing.
         "spend_unrecorded",
+        # 2026-11-17: a chronology ending the broker refused, or could not be
+        # reached for past the retry bound (jobs/medchron/unrecorded.py); the
+        # firm's message went anyway and the job's row is wrong until SMD fixes it.
+        "ending_unrecorded",
     }
 )
 

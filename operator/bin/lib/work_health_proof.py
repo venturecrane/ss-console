@@ -37,6 +37,7 @@ _PROOF_WORDS = {
     "library_edit_refused": "the firm's own save of its library file was not used or not accepted; the firm was told nothing",
     "layout_rule_unplaced": "a layout rule could not be placed against the firm's own edit of its library file, so it stood; the firm was told nothing",
     "spend_unrecorded": "its usage shows spend while its record shows $0, so the firm's allowance and SMD's cost read low; the firm was told nothing",
+    "ending_unrecorded": "its ending could not be recorded (the broker refused it, or stayed away past the retry bound); the firm's message went anyway and the row is wrong until SMD records it",
 }
 
 

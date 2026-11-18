@@ -32,6 +32,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -215,6 +216,65 @@ def _diffs(a: Any, b: Any, path: str = "") -> list[str]:
     return [] if a == b else [path or "<root>"]
 
 
+def _key(path: str) -> str:
+    """A difference's key path: its list indexes blanked, its step (the first
+    segment) kept. ``1.wire.3.request.fields.run`` and ``1.wire.2.request.fields.run``
+    share one; ``1.wire.3.request.fields.text`` and the bare ``1.wire`` do not."""
+    step, _, rest = path.partition(".")
+    return ".".join([step, *("#" if seg.isdigit() else seg for seg in rest.split("."))]) if rest else step
+
+
+def unexcused(found: list[str], allowed: Iterable[str], inherited: Iterable[str] = ()) -> list[str]:
+    """The differences no reviewed entry excuses. An entry excuses a difference
+    with its own key path in its own step and section, wherever a restart moved
+    it in a list, and nothing wider: a whole list (``2.wire``) only when the
+    entry names exactly that list. An entry the merge-base tree already carried
+    (``inherited``: another change's leftover, cleared after its merge) excuses
+    nothing here."""
+    keys = {_key(p) for p in set(allowed) - set(inherited)}
+    return [d for d in found if _key(d) not in keys]
+
+
+#: Exact differences a restart onto the other version shows that no
+#: same-version golden can (a fresh host's first-tick read of a row the other
+#: version recorded), keyed ``<cell file>@<k>@<direction>``. Reviewed with the
+#: PR that adds them and cleared after it merges, like an allowed list; each
+#: entry must explain a difference in its own case or the case fails.
+CROSS_ALLOWED = TESTS / "host_cross_version_allowed.json"
+
+
+def _reviewed(cell: str, k: int, direction: str) -> tuple[list[str], list[str], list[str]]:
+    """(this PR's host-matrix allowed entries for ``cell``, the merge-base
+    tree's, this PR's exact cross-version entries for the case less the base's).
+    With no old tree both sides are one version and nothing is excused."""
+    if not os.environ.get(OLD_ENV):
+        return [], [], []
+    name = cell.replace("/", "__")
+    base = _old() / "runners/jobs/tests/goldens/host_matrix"
+    key = f"{name}@{k}@{direction}"
+    mine = _cross(CROSS_ALLOWED).get(key, [])
+    theirs = _cross(_old() / "runners/jobs/tests" / CROSS_ALLOWED.name).get(key, [])
+    return (
+        load_allowed(GOLDENS).get(name, []),
+        load_allowed(base).get(name, []),
+        sorted(set(mine) - set(theirs)),
+    )
+
+
+def _cross(path: Path) -> dict[str, list[str]]:
+    if not path.is_file():
+        return {}
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    return {k: list(v) for k, v in doc.items() if not k.startswith("_")}
+
+
+def _judge(found: list[str], allowed: list[str], inherited: list[str], exact: list[str]) -> list[str]:
+    """What fails one case: an unexcused difference, or an exact entry that
+    explains none (stale)."""
+    left = [d for d in unexcused(found, allowed, inherited) if d not in set(exact)]
+    return left + [f"stale cross-version entry: {e}" for e in exact if e not in set(found)]
+
+
 def test_every_cell_of_the_checked_lanes_has_its_cases():
     """MUTATION: a cell of a checked lane with no restart point between its ticks is not checked."""
     cells = [c for c in CELLS if c.split("/")[0] in _lanes()]
@@ -240,16 +300,9 @@ def test_a_job_folder_carries_across_versions(tmp_path, monkeypatch, real_lane_g
     for name, plan in plans.items():
         with monkeypatch.context() as mp:  # each run patches the broker's clock and ids afresh
             got[name] = _run(tmp_path, mp, cell, plan)
-    # A behaviour change the PR names for this cell in the host matrix's allowed
-    # list (reviewed with it, cleared after merge) may show across the restart,
-    # in the same step's same section (``<step>.wire``, ``<step>.audit``): a
-    # restart moves where in that section the change lands (an old host reads
-    # the row the new one recorded), not whether it is the reviewed change.
-    # Nothing else may differ, and with both sides one tree nothing is excused.
-    allowed = load_allowed(GOLDENS).get(cell.replace("/", "__"), []) if os.environ.get(OLD_ENV) else []
-    sections = {".".join(p.split(".")[:2]) for p in allowed}
     for name in ("old_new", "new_old"):
-        found = [d for d in _diffs(got["same"], got[name]) if ".".join(d.split(".")[:2]) not in sections]
+        allowed, inherited, exact = _reviewed(cell, k, name)
+        found = _judge(_diffs(got["same"], got[name]), allowed, inherited, exact)
         assert found == [], f"{name}: {cell} restarted after tick {k}"
 
 
@@ -273,3 +326,105 @@ def test_a_host_that_reads_a_folder_differently_fails(tmp_path, monkeypatch, rea
             runs[name] = _run(tmp_path, mp, "demand/delivered", plan)
     found = _diffs(runs["same"], runs["old_new"])
     assert any(".wake_posts." in d for d in found), found
+
+
+# -- the reviewed list excuses a change, never its neighbours (planted) --------------------------
+
+
+def _section_rule(found: list[str], allowed: list[str]) -> list[str]:
+    """The rule this file used before 2026-11-17 review, kept only so each
+    planted test below proves it would have let its defect through."""
+    sections = {".".join(p.split(".")[:2]) for p in allowed}
+    return [d for d in found if ".".join(d.split(".")[:2]) not in sections]
+
+
+def _mutant(tmp_path: Path, edit: tuple[str, str, str]) -> Path:
+    """This tree's runner with one host file edited (``(file, old, new)``)."""
+    import shutil
+
+    tree = tmp_path / "mutant" / "operator"
+    shutil.copytree(NEW / "runners/jobs/jobs", tree / "runners/jobs/jobs", ignore=shutil.ignore_patterns("__pycache__"))
+    host = tree / "runners/jobs/jobs" / edit[0]
+    text = host.read_text(encoding="utf-8")
+    assert text.count(edit[1]) == 1, edit
+    host.write_text(text.replace(edit[1], edit[2]), encoding="utf-8")
+    return tree
+
+
+def _planted(tmp_path: Path, mp: Any, cell: str, k: int, direction: str, edit: tuple[str, str, str]) -> list[str]:
+    """The differences between this tree's own restart and a restart onto (or
+    from) the mutant, at restart point ``k``."""
+    mutant = _mutant(tmp_path, edit)
+    same = [("old", NEW)] * k + [("old again", NEW)]
+    mixed = [("old", NEW)] * k + [("new", mutant)] if direction == "old_new" else [("new", mutant)] * k + [("old", NEW)]
+    runs = {}
+    for name, plan in (("same", same), (direction, mixed)):
+        with mp.context() as m:
+            runs[name] = _run(tmp_path, m, cell, plan)
+    return _diffs(runs["same"], runs[direction])
+
+
+LANE_RECORD = "            self.broker.record(job_id, state, fields)\n"
+
+
+def test_a_reviewed_run_entry_never_excuses_another_field_in_its_section(tmp_path, monkeypatch, real_lane_gate):
+    """(a) ``medchron/delivered``'s reviewed entries name ``...fields.run``; a host
+    that sends a DIFFERENT field of the same request must still fail."""
+    allowed = load_allowed(GOLDENS)["medchron__delivered"]
+    # A field the ledger ignores, so the change shows on this request and nowhere after it.
+    edit = ("medchron/lane.py", LANE_RECORD, LANE_RECORD.replace("fields)", '{**fields, "stray": 1})'))
+    found = _planted(tmp_path, monkeypatch, "medchron/delivered", 1, "new_old", edit)
+    assert any(d.endswith(".fields.stray") for d in found), found
+    assert unexcused(found, allowed) != []
+    assert _section_rule(found, allowed) == [], "the old rule let this through; the test proves nothing"
+
+
+def test_a_host_that_records_its_ending_twice_fails(tmp_path, monkeypatch, real_lane_gate):
+    """(b) The deliver record sent twice: a longer wire and audit in a section
+    the reviewed list names, never excused."""
+    allowed = load_allowed(GOLDENS)["medchron__delivered"]
+    edit = ("medchron/lane.py", LANE_RECORD, LANE_RECORD + LANE_RECORD)
+    found = _planted(tmp_path, monkeypatch, "medchron/delivered", 1, "new_old", edit)
+    assert "1.wire" in found and "1.audit" in found, found
+    assert {"1.wire", "1.audit"} <= set(unexcused(found, allowed))
+    assert _section_rule(found, allowed) == [], "the old rule let this through; the test proves nothing"
+
+
+def test_a_wrong_state_word_after_the_restart_fails(tmp_path, monkeypatch, real_lane_gate):
+    """(c) After the restart the new host writes ``failed`` where the old one's
+    own restart leaves ``delivered``: a state word in a daemon section the
+    reviewed list names (``run_pending``), never excused."""
+    allowed = load_allowed(GOLDENS)["medchron__resume_failed"]
+    # Written as the tick ends (its heartbeat), so nothing the tick does changes:
+    # only the state word the folder is left with.
+    hook = "    def poll_requests(self) -> None:\n"
+    flip = (
+        "    def heartbeat(self, *, running):\n"
+        "        super().heartbeat(running=running)\n"
+        "        for jd in sorted(self.jobs.iterdir()) if self.jobs.is_dir() else []:\n"
+        '            if self._daemon_state(jd.name).get("state") == "delivered":\n'
+        '                self._write_state(jd.name, state="failed")\n\n' + hook
+    )
+    found = _planted(tmp_path, monkeypatch, "medchron/resume_failed", 2, "old_new", ("medchron/lane.py", hook, flip))
+    assert any(d.endswith(".state") and ".daemon." in d for d in found), found
+    assert unexcused(found, allowed) != []
+    assert _section_rule(found, allowed) == [], "the old rule let this through; the test proves nothing"
+
+
+def test_an_entry_the_merge_base_carried_excuses_nothing():
+    """(d) Another change's leftover entry (present in the base tree) excuses
+    nothing here, and an entry only the base carries excuses nothing either."""
+    found = ["1.wire.2.request.fields.run"]
+    assert unexcused(found, ["1.wire.2.request.fields.run"], inherited=["1.wire.2.request.fields.run"]) == found
+    assert unexcused(found, [], inherited=["1.wire.2.request.fields.run"]) == found
+    assert unexcused(found, ["1.wire.4.request.fields.run"]) == []  # a restart moved it two requests on
+    assert unexcused(["1.wire.4.request.fields.text"], ["1.wire.4.request.fields.run"]) != []
+    assert unexcused(["1.wire"], ["1.wire.4.request.fields.run"]) == ["1.wire"]
+    assert unexcused(["2.wire.0.request"], ["1.wire.0.request"]) == ["2.wire.0.request"]
+
+
+def test_a_stale_cross_version_entry_fails_its_case():
+    assert _judge([], [], [], ["3.wire.0.reply.jobs.0.state"]) == [
+        "stale cross-version entry: 3.wire.0.reply.jobs.0.state"
+    ]
+    assert _judge(["3.wire.0.reply.jobs.0.state"], [], [], ["3.wire.0.reply.jobs.0.state"]) == []
