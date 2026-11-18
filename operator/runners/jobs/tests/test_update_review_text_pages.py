@@ -180,6 +180,20 @@ def test_a_repair_request_carries_only_the_pages_its_findings_name_and_one_eithe
     modes.close()
 
 
+def test_a_finding_that_names_no_page_still_shows_the_pages_its_entry_cites(tmp_path: Path) -> None:
+    """Fails if a finding with no page reaches the finisher with nothing to
+    read: it could then only be declined, and would stay open to a hold."""
+    _matter(tmp_path)
+    ents = RR.anchor_entries(_doc([ENTRY.replace("p. 6)", "p. 9)")]), {2}, K.HEADINGS)
+    modes = PM.Modes.open(tmp_path, "alpha")
+    nameless = RR.Finding(RR.MUST, "2 omitted content", "N1", None, None, "the plan is missing", "", "", "")
+    shown = _shown(RP.finish_content(ents, [nameless], "CLIENT", _image, ents, [], modes))
+    assert set(shown) == {p for _x, p in ents[0].cites()} and shown  # every page N1 cites, and not none
+    other = RR.Finding(RR.MUST, "2 omitted content", "N11", None, None, "another entry", "", "", "")
+    assert _shown(RP.finish_content(ents, [other], "CLIENT", _image, ents, [], modes)) == {}  # N11 is not N1
+    modes.close()
+
+
 # A5 -------------------------------------------------------------------------------
 def _run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reviews: list[str]) -> tuple[int, Any]:
     """The stage through the update test kit's scripted doorway: one new

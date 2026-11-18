@@ -349,6 +349,16 @@ def _finding_line(f: RR.Finding) -> str:
     return f"{f.fid} [{f.severity}] [{f.klass}] {f.anchor} ({where}): {f.problem}{says}"
 
 
+def _finish_pages(ents: list[RR.Entry], found: list[RR.Finding]) -> list[tuple[int, int]]:
+    """The pages a finisher request shows: the pages its findings name and one
+    either side, and, for a finding that names NO page, the pages its entry
+    cites. Without the second, such a finding reached the finisher with
+    nothing to read, could only be declined, and stayed open."""
+    unnamed = {f.anchor.split(".")[0] for f in found if not (f.exhibit and f.page)}
+    cited = sorted({p for e in ents if e.anchor in unnamed for p in e.cites()})
+    return list(dict.fromkeys(RV.named_pages(found, FINISH_MAX_IMAGES) + cited))[:FINISH_MAX_IMAGES]
+
+
 def finish_content(
     ents: list[RR.Entry],
     found: list[RR.Finding],
@@ -359,12 +369,12 @@ def finish_content(
     modes: RV.Modes | None = None,
 ) -> list[dict[str, Any]]:
     """The finisher's request: the findings, their entries, the pages the
-    findings name with the page either side (``review_pages.named_pages``),
-    each as text or picture by the one rule, and the nearby entries."""
+    findings name with the page either side (``_finish_pages``), each as text
+    or picture by the one rule, and the nearby entries."""
     out: list[dict[str, Any]] = [head(client)]
     out.append({"type": "text", "text": "FINDINGS TO SETTLE:\n" + "\n".join(_finding_line(f) for f in found)})
     out += [{"type": "text", "text": _entry_block(e)} for e in ents]
-    for ex, pg in RV.named_pages(found, FINISH_MAX_IMAGES):
+    for ex, pg in _finish_pages(ents, found):
         out += RV.page_blocks(ex, pg, "", images, modes)
     ctx = context(ents, all_ents, delivered)
     return out + ([{"type": "text", "text": ctx}] if ctx else [])
