@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+# tier -- how much build process a change gets, from the paths it touches.
+#
+#   .claude/bin/tier <path> [<path> ...] [--new] [--json]
+#   git diff --name-only origin/main | .claude/bin/tier [--new]
+#
+# Prints `tier: none | fix | capability`, then the touch-map classes and the
+# paths behind each. `--new` says the change adds something new on a client
+# surface; that is the caller's one bit, the rest is computed by
+# scripts/tier.mjs from scripts/lib/touch-map.mjs. Exit 2 with no paths.
+set -u
+SELF="$(realpath "$0" 2>/dev/null || echo "$0")"
+ROOT="$(cd "$(dirname "$SELF")/../.." && pwd)"
+exec node "$ROOT/scripts/tier.mjs" "$@"

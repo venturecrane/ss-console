@@ -67,7 +67,7 @@ baseline with `npx tsx scripts/sprawl-audit.ts --write-text-pin-baseline`.
    - **Dead-code candidate:** `git grep` every name. Used only by its own tests means delete both, or say why it stays.
 4. **Fix the top three this session**, each its own PR:
    - Repo-only consolidation: an ordinary PR made by a codemod (ast-grep, LibCST), never by hand-editing hundreds of files.
-   - Anything the seats load at boot (paths, env names, contracts, copied skill files): `/auto-build`, so `/wired`, a Fable plan and `/critique` come first and the release goes staging first. Use Parallel Change: add the new form beside the old, migrate, then remove the old.
+   - Anything the seats load at boot (paths, env names, contracts, copied skill files): `/auto-build` at the `capability` tier (`.claude/bin/tier --new <paths>`), so `/wired`, a dedicated design pass and `/critique` come first, and the release reaches the client's release twin before the client seat. Use Parallel Change: add the new form beside the old, migrate, then remove the old.
 5. **Lock it in.** After a count falls, in the same PR:
    - `npx tsx scripts/sprawl-audit.ts --write-literal-baseline` (the ratchet fails until you do), and
    - `npx tsx scripts/sprawl-audit.ts --out scripts/sprawl/snapshot.json`.
