@@ -50,6 +50,7 @@ KEPT_CANNOT = f"kept: {FI.KEPT_CANNOT_RETEST}"
 PENDING = "cleared: pending selection"
 KEPT_REWITHHELD = "kept: re-withheld this run"
 KEPT_NOT_READ = "kept: not a candidate this run"
+KEPT_BY_DECISION = "kept: withheld by decision"
 
 
 def _exempt(sigs: list[PI.Sig] | None, delivered: list[tuple[int, list[PI.Sig]]]) -> set[int]:
@@ -101,15 +102,23 @@ def redecide(
     return out
 
 
-def pending(path: Path) -> set[str]:
-    """The files whose clear waits on selection (read tolerantly: a missing or
-    damaged record means none, so every withhold stands)."""
+def pending(path: Path, slug_dir: Path) -> set[str]:
+    """The files whose clear waits on selection AND whose latest withhold is
+    still the rule's (``slug_dir``'s identity record): a staff withhold made
+    after the re-decision is never overridden. Read tolerantly: a missing or
+    damaged record means none, so every withhold stands."""
     try:
         raw = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
     except (OSError, ValueError):
         return set()
     return (
-        {str(k) for k, v in raw.items() if isinstance(v, dict) and v.get("outcome") == PENDING}
+        {
+            str(k)
+            for k, v in raw.items()
+            if isinstance(v, dict)
+            and v.get("outcome") == PENDING
+            and FI.by_rule(slug_dir, str(k), FI.RULE_ANOTHER_PERSON)
+        }
         if isinstance(raw, dict)
         else set()
     )
@@ -131,7 +140,9 @@ def finalize(sr: StageRun, path: Path, candidates: set[str], held: dict[str, lis
     for rid, v in raw.items():
         if not isinstance(v, dict) or v.get("outcome") != PENDING:
             continue
-        if rid in held:
+        if not FI.by_rule(sr.slug_dir, rid, FI.RULE_ANOTHER_PERSON):  # a person decided since: theirs stands
+            v["outcome"] = KEPT_BY_DECISION
+        elif rid in held:
             v["outcome"], v["tests"] = KEPT_REWITHHELD, sorted(set(v.get("tests") or []) | set(held[rid]))
         elif rid in candidates:
             FI.clear_by_rule(sr.slug_dir, [rid], ground=FI.RULE_ANOTHER_PERSON, can_run=can_run)

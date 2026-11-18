@@ -139,7 +139,7 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
         FI.WITHHELD_REASON: [],
     }
     withheld = FI.withheld(sr.slug_dir)
-    passed = identity_redecide.pending(update_dir(sr) / REDECIDED_FILE)
+    passed = identity_redecide.pending(update_dir(sr) / REDECIDED_FILE, sr.slug_dir)
     locked = set(unopened.password_protected(sr.slug_dir))
     raw = read_jsonl(sr.slug_dir / "raw_manifest.jsonl")
     prior = prior_reading.decided(sr, {str(r.get("id")) for r in raw})
@@ -206,7 +206,7 @@ def _leave_out_foreign(
     tests = {h.split(":", 1)[0]: FI.tests_of(h.split(":", 1)[1].split("; ")) for h in holds}
     # A file pending its clear (``identity_redecide``) is cleared only now that it
     # survived this; one found again stays withheld with no decision row added.
-    pend = identity_redecide.pending(ud / REDECIDED_FILE)
+    pend = identity_redecide.pending(ud / REDECIDED_FILE, sr.slug_dir)
     identity_redecide.finalize(
         sr, ud / REDECIDED_FILE, {str(r["id"]) for r in rows}, {i: tests[i] for i in tests if i in pend}
     )

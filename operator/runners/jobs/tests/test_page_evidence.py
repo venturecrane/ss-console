@@ -246,6 +246,52 @@ def test_a_rule_withhold_is_redecided_before_any_picture_and_cleared_by_the_deli
     assert FI.matches(T.RID, FI.withheld(sr2.slug_dir))
 
 
+def test_a_staff_withhold_made_after_the_redecision_is_never_overridden(job_dir, firm_config_path, data_root) -> None:
+    """The review of 54675de53: a file pending its clear, then a staff
+    withhold on it (a held run, then a resume that skips update_pages), was a
+    candidate against the firm's own decision and recorded as cleared."""
+    import test_identity_delivered_page as T
+    from jobs.stages import update_select as US
+
+    sr = T._sr(job_dir, firm_config_path, data_root)
+    rows, ud = T._scene(sr, (18, 24), None)
+    assert T._withheld(sr, rows, ud)
+    assert _redecide(sr)[T.RID]["outcome"] == "cleared: pending selection"
+    assert [r["id"] for r in US._candidates(sr, {})[0]] == [T.RID]  # mutation: no staff decision, a candidate
+    FI.record_decision(sr.slug_dir, action="withhold", ids=[T.RID], by="a person", source="email", at="now")
+    cands, skipped = US._candidates(sr, {})
+    assert cands == [] and T.RID in skipped[FI.WITHHELD_REASON]  # not a candidate, so never composed
+    US._leave_out_foreign(sr, ud, cands, skipped)
+    rec = json.loads((ud / "identity_redecided.json").read_text())[T.RID]
+    assert rec["outcome"] == "kept: withheld by decision"
+    assert FI.matches(T.RID, FI.withheld(sr.slug_dir)) and not FI.by_rule(sr.slug_dir, T.RID, FI.RULE_ANOTHER_PERSON)
+
+
+def test_a_failed_redecision_leaves_no_earlier_pending_entry_in_force(
+    job_dir, firm_config_path, data_root, monkeypatch
+) -> None:
+    """The review of 54675de53: when the re-decision raised, an earlier
+    attempt's pending record survived and made the file a candidate."""
+    import test_identity_delivered_page as T
+    from jobs.stages import update_pages as UP, update_select as US
+
+    sr = T._sr(job_dir, firm_config_path, data_root)
+    rows, ud = T._scene(sr, (18, 24), None)
+    assert T._withheld(sr, rows, ud)
+    _redecide(sr)  # an earlier attempt: pending its clear
+    (sr.slug_dir / "f.pdf").write_bytes(make_pdf(["Follow-up examination."] * 3))
+    (ud / "update_plan.json").write_text(json.dumps({"exhibits": [], "top_exhibit": 0}))
+    assert [r["id"] for r in US._candidates(sr, {})[0]] == [T.RID]  # mutation: the earlier record left in force
+
+    def boom(*_a, **_k):
+        raise RuntimeError("re-decision failed")
+
+    monkeypatch.setattr(UP, "redecide", boom)
+    assert UP.run(sr) == 0
+    assert not (ud / "identity_redecided.json").exists()
+    assert US._candidates(sr, {})[0] == [] and FI.matches(T.RID, FI.withheld(sr.slug_dir))
+
+
 def test_a_file_cleared_then_rewithheld_in_the_same_run_records_one_stable_outcome(
     job_dir, firm_config_path, data_root
 ) -> None:

@@ -62,6 +62,7 @@ def run(sr: StageRun) -> int:
     # A file the other-person RULE withheld on an earlier run is decided again
     # BEFORE any candidate's picture is computed: cleared, it is a candidate
     # like any other; kept, it is not one, exactly as on main.
+    (ud / REDECIDED_FILE).unlink(missing_ok=True)  # an earlier attempt's record never outlives a failed one
     try:
         redecide(sr, delivered, lambda path: _sigs(path, sr.log), REDECIDED_FILE)
     except Exception as exc:  # noqa: BLE001 - a re-decision that fails leaves every withhold standing, as on main
