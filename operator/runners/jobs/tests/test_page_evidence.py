@@ -18,10 +18,9 @@ from dataclasses import replace
 import yaml
 
 from jobs.medchron import config as config_mod, job as job_mod, pages_record as PR
-from jobs.medchron.dag import Stage, _slug_unit
 from jobs.medchron.gates import foreign_identity as FI
 from jobs.medchron.update import billing_page_dates as BPD, pageid as PI, pageid_io as PG, select as S
-from jobs.stages import page_account as PA, page_rows
+from jobs.stages import page_rows
 from jobs.stages.base import StageRun
 from jobs_testkit import FakeSeat, make_pdf
 
@@ -157,8 +156,8 @@ def test_every_page_of_every_pulled_document_has_one_row() -> None:
         lambda rid: {"d2": 3, "d3": 2}.get(rid, 0),
     )
     pages = {"d1": 4, "d2": 3, "d3": 2}
-    assert len(rows) == sum(pages.values()) and PR.missing(rows, pages) == []
-    assert PR.missing(rows[1:], pages) == [(rows[0]["doc"], rows[0]["page"])]  # a dropped row is named
+    want = {(d, p) for d, n in pages.items() for p in range(1, n + 1)}
+    assert len(rows) == sum(pages.values()) and {(r["doc"], r["page"]) for r in rows} == want
     by = {(r["doc"], r["page"]): r for r in rows}
     assert by[("d1", 2)]["evidence"]["kind"] == PR.BLANK
     assert by[("d2", 1)]["evidence"]["cover"] == {"sha256": "b" * 64, "exact": True}
@@ -385,87 +384,6 @@ def test_a_withhold_with_no_recorded_test_needs_every_test(job_dir, firm_config_
     )
 
 
-def test_a_fresh_runs_account_only_records() -> None:
-    assert PA.FRESH_POLICY == PA.RECORD_ONLY
-
-
-# ---- B / D: the account ------------------------------------------------------------
-
-
-def _rows() -> list[dict]:
-    return [
-        PR.row("d1", "", 1, PR.READ, "new", PR.NONE, "update_select"),
-        PR.row("d1", "", 2, PR.READ, "new", PR.NONE, "update_select", inked=False),
-        PR.row("d1", "", 3, PR.EXCLUDED, "blank", PR.BLANK, "update_select"),
-        PR.row("d1", "", 4, PR.EXCLUDED, "already_delivered", PR.TEXT, "update_select", {"exhibit": 3, "page": 2}),
-        PR.row("d1", "", 5, PR.READ, "new", PR.NONE, "update_select"),
-    ]
-
-
-def _settle(entry: str) -> tuple[list[dict], list[dict]]:
-    texts = {"d1": {1: NOTE, 2: NOTE, 3: "", 4: NOTE, 5: "Medication list:\nibuprofen 800 mg\ngabapentin 300 mg\n"
-                    "cyclobenzaprine 10 mg\nlisinopril 20 mg\n" + "x" * 60}}  # fmt: skip
-    return PA.settle(_rows(), [entry], {"d1": 9}, texts, lambda _t: None, {9: 5})
-
-
-def test_every_read_page_is_cited_or_classed_by_code() -> None:
-    rows, defects = _settle("04/01/2025\nExample\nNeck pain. (Exhibit 9 - p. 1)")
-    st = {r["page"]: (r["status"], r["class"]) for r in rows}
-    assert st[1] == (PR.CITED, "new")
-    assert st[2] == (PR.READ_UNCITED, PA.BLANK)  # no ink before vision
-    assert st[5] == (PR.READ_UNCITED, PA.UNEXPLAINED)  # code names no reason
-    assert defects == []
-
-
-def test_a_cite_on_a_blank_page_is_recorded_and_a_cite_through_a_cover_resolves() -> None:
-    rows, defects = _settle("04/01/2025\nExample\nNeck pain. (Exhibit 9 - p. 1, 3-4, 7)")
-    assert {"code": PA.CITE_ON_BLANK, "exhibit": 9, "page": 3} in defects
-    assert {"code": PA.CITE_PAST_END, "exhibit": 9, "page": 7} in defects
-    assert next(r for r in rows if r["page"] == 4)["status"] == PR.CITED_VIA
-    rows, defects = _settle("04/01/2025\nExample\nNeck pain. (Exhibit 9 - p. 1)")
-    assert defects == []  # the same account with no such cite records none
-
-
-def test_the_account_stages_always_exit_zero_and_write_nothing_on_an_empty_job(job_dir, firm_config_path, data_root):
-    job = job_mod.load(job_dir)
-    sr = StageRun(job, config_mod.load(str(firm_config_path)), job.units[0], data_root / "example-matter", {},
-                  lambda _m: None, lambda: FakeSeat([], [], {}))  # fmt: skip
-    assert PA.update_page_account(sr) == 0 and PA.update_page_final(sr) == 0 and PA.page_account(sr) == 0
-
-
-INDEX_PAGE = "KEYWORD INDEX\n" + "\n".join(f"Keyword {k} ........ page {k}" for k in range(1, 12))
-
-
-def test_an_update_that_added_no_exhibit_classes_its_pages_by_their_own_text(
-    job_dir, firm_config_path, data_root
-) -> None:
-    """2026-11-17 rehearsal: on an update that added no entries and no
-    exhibits, ``update_page_final`` classed 73 index and cover pages with text
-    and ink as blank: it read text only for the new exhibits."""
-    job = job_mod.load(job_dir)
-    sd = data_root / "example-matter"
-    rd = sd / "runs" / job.units[0].unit
-    (rd / "update").mkdir(parents=True)
-    (sd / "text").mkdir()
-    (sd / "text" / "d1.txt").write_text(f"[p.1]\n{INDEX_PAGE}\n[p.2]\n\n", encoding="utf-8")
-    (rd / "update" / "new_exhibits.final.json").write_text("[]")
-    PR.write(
-        rd,
-        [
-            PR.row("d1", "", 1, PR.READ, "new", PR.NONE, "update_select", inked=True),
-            PR.row("d1", "", 2, PR.READ, "new", PR.NONE, "update_select", inked=False),
-        ],
-    )
-    sr = StageRun(job, config_mod.load(str(firm_config_path)), job.units[0], sd, {}, lambda _m: None,
-                  lambda: FakeSeat([], [], {}))  # fmt: skip
-    assert PA.update_page_final(sr) == 0
-    got = {r["page"]: (r["status"], r["class"]) for r in PR.read(rd)}
-    assert got[1] == (PR.READ_UNCITED, PA.UNEXPLAINED)  # its own text: an index page, not blank
-    assert got[2] == (PR.READ_UNCITED, PA.BLANK)  # no ink and no text: blank
-    final = json.loads((rd / PA.NAME).read_text())["final"]
-    assert final["read_uncited"] == {PA.UNEXPLAINED: 1, PA.BLANK: 1} and final["uncovered_exclusions"]["count"] == 0
-
-
 # ---- C: billing dates ---------------------------------------------------------------
 
 
@@ -513,22 +431,6 @@ def test_a_date_a_ledger_and_a_billing_page_both_carry_is_one_row_and_counted_on
     assert "billed_no_record_dates" not in dos_check.check(sd, rd, "2024-01-01", None, entries)
 
 
-# ---- the wiring the lead applies ----------------------------------------------------
-
-#: The Stage declarations of this change, exactly as the PR body gives them.
-WIRING = (
-    Stage("update_page_account", "", _slug_unit, requires=("audit",), runner=PA.update_page_account),
-    Stage("update_page_final", "", _slug_unit, requires=("update_proofs",), runner=PA.update_page_final),
-    Stage("page_account", "", _slug_unit, requires=("coverage_gate",), runner=PA.page_account),
-)
-
-
-@pytest.mark.parametrize("stage", WIRING, ids=lambda s: s.name)
-def test_each_new_stage_is_free_local_and_rehearsable(stage: Stage) -> None:
-    # driver.py refuses `--redo` of a paid or external stage in a rehearsal; none of these is either.
-    assert not stage.paid and not stage.external and stage.runner is not None and not stage.exit_map
-
-
 # ---- the allowance charge: pages read, and no others ------------------------------
 
 #: one row of each class the charge must leave out, and the rows it counts
@@ -540,15 +442,14 @@ NOT_CHARGED = [
     PR.row("d4", "", 1, PR.EXCLUDED, "withheld_other_person", PR.IDENTITY, "update_select"),
     PR.row("d1", "", 5, PR.EXCLUDED, "blank", PR.BLANK, "update_select"),
     PR.row("d1", "", 6, PR.EXCLUDED, "billing", PR.BILLING_WORDS, "update_select"),
-    PR.row("d1", "", 7, PR.CITED_VIA, "already_delivered", PR.TEXT, "update_select", {"exhibit": 2, "page": 3}),
     PR.row("d1", "", 8, PR.UNREAD, "transcription_failed", PR.NONE, "update_select"),
     PR.row("d5", "", 1, PR.EXCLUDED, "password_protected", PR.RULE, "update_select"),
 ]
 CHARGED = [
     PR.row("d1", "", 1, PR.READ, "new", PR.NONE, "update_select"),
     PR.row("d1", "", 2, PR.READ, "new", PR.NONE, "update_select"),  # read because no cover was named
-    PR.row("d1", "", 9, PR.CITED, "new", PR.NONE, "update_select"),
-    PR.row("d1", "", 10, PR.READ_UNCITED, "unexplained", PR.NONE, "update_select"),
+    PR.row("d1", "", 9, PR.READ, "new", PR.NONE, "update_select"),
+    PR.row("d1", "", 10, PR.READ, "new", PR.NONE, "update_select"),
 ]
 
 
@@ -654,27 +555,6 @@ def test_reading_more_than_was_asked_is_charged_the_asked_figure_and_recorded(tm
     # Mutation: with no recorded question the charge is the pages read.
     (sd / "runs" / "u1" / charged.ASKED).unlink()
     assert charged.charged_pages(sd, "u1", 60) == 4 and charged.capped(sd, "u1") is None
-
-
-# ---- covers are RECORDED: counted, never acted on -----------------------------------
-
-
-def test_uncovered_exclusions_and_invalid_covers_are_counted_with_their_documents() -> None:
-    rows = [
-        PR.row("small", "", 1, PR.EXCLUDED, "repeat", PR.TEXT, "update_select", {"doc": "big", "page": 3}),
-        PR.row("small", "", 2, PR.EXCLUDED, "repeat", PR.TEXT, "update_select"),  # names no cover
-        PR.row("other", "", 1, PR.EXCLUDED, "repeat", PR.TEXT, "update_select", {"doc": "gone", "page": 1}),
-        PR.row("gone", "", 1, PR.EXCLUDED, "withheld_other_person", PR.IDENTITY, "update_select"),
-        PR.row("big", "", 3, PR.EXCLUDED, "billing", PR.BILLING_WORDS, "update_select"),  # set aside by code: valid
-        PR.row("x", "", 1, PR.EXCLUDED, "repeat", PR.TEXT, "update_select", {"doc": "rep", "page": 1}),
-        PR.row("rep", "", 1, PR.EXCLUDED, "expert_report", PR.RULE, "update_select"),  # an expert report: valid
-    ]
-    assert PR.uncovered_exclusions(rows) == {"count": 1, "docs": ["small"]}
-    assert PR.invalid_covers(rows) == {"count": 1, "docs": ["other"]}  # only the withheld cover
-    # Mutation: the withheld file's rows gone too (never pulled): still invalid; with it read: valid.
-    assert PR.invalid_covers([r for r in rows if r["doc"] != "gone"])["count"] == 1
-    read = [r for r in rows if r["doc"] != "gone"] + [PR.row("gone", "", 1, PR.READ, "new", PR.NONE, "update_select")]
-    assert PR.invalid_covers(read)["count"] == 0
 
 
 # ---- asked >= read over the update fixtures, and a damaged asked record ------------

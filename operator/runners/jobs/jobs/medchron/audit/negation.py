@@ -53,6 +53,16 @@ def tested_words(claim: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+def states_positive(text: str | None) -> bool:
+    """True when `text` states an affirmative result ("positive", "reactive",
+    "detected") not denied just before it. The per-PAGE form of ``flag``,
+    which needs a claim: a page that states one is read as a picture by every
+    checker (``medchron/page_mode.py``), so a "No" across a page break is
+    never read off a text layer alone."""
+    t = text or ""
+    return any(not _DENIED.search(t[: m.start()]) for m in POSITIVE.finditer(t))
+
+
 def negated_beside(words: list[str], text: str) -> str | None:
     """The first test word in `text` with a negation within NEAR characters
     of it (whitespace collapsed), or None."""

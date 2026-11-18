@@ -19,7 +19,7 @@ THE HOUSE FORMAT for each dated entry (follow it exactly):
   {{HEADING_MENU}}
 - Headings in Title Case on their own line, no bold, no colons. Prose paragraphs only, no bullets, no numbered lists.
 - EVERY paragraph ends with a citation: `(FILE: <file name>, p. <x>)` or `(FILE: <file name>, p. <x>-<y>)`. For a source without page markers: `(FILE: <file name>)`. One file per citation; separate paragraphs for separate files.
-- Depth mirrors the record: major encounters (ED visits, initial evaluations, specialist consults, imaging) get multi-subsection entries with near-full fidelity, including vitals, exam findings by system, imaging impressions, medication names with dosage/route/frequency, and disposition. Routine repeat visits (serial PT, chiropractic, neurofeedback) get two to three one-sentence subsections. Imaging entries restate the radiology findings and impression at paragraph level.
+{{DEPTH_RULE}}
 - Pre-incident treatment is chronicled in the same stream as post-incident treatment, same format.
 - When records reference the qualifying event, refer to it with the standardized label `{{WORDING:SUBJECT_INCIDENT}}`, capitalized exactly so. Attribute what records attribute; add nothing.
 - NO charge amounts, CPT billing amounts, or dollar figures in entries.

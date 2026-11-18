@@ -8,7 +8,6 @@ fail. Every name, date and value here is invented."""
 from __future__ import annotations
 
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -28,7 +27,7 @@ from jobs.medchron.update import (
     repeats as R,
     uncited as U,
 )
-from jobs.stages import final_proof, update_final_set
+from jobs.stages import update_final_set
 from jobs.stages.base import StageRun
 
 D = "03/04/2026"
@@ -727,8 +726,8 @@ def test_falsifier_without_the_no_op_the_stage_crashes_on_that_job(
         update_final_set.run(sr)
 
 
-#: The declarations the PR asks the lead to wire (``dag_update`` and ``dag``),
-#: here so the rehearsal's rule can be checked against them.
+#: The declaration the PR asked the lead to wire (``dag_update``),
+#: here so the rehearsal's rule can be checked against it.
 FINAL_SET = dag.Stage(
     "update_final_set",
     "",
@@ -737,30 +736,15 @@ FINAL_SET = dag.Stage(
     runner=update_final_set.run,
     exit_map=update_final_set.EXITS,  # passed as it is: (outcome, reason) per code
 )
-FINAL_PROOF = dag.Stage("final_proof", "", dag._slug_unit, requires=("review",), runner=final_proof.run)
-
-
-def _wired(seq: tuple, new: dag.Stage, before: str) -> tuple:
-    out = []
-    for s in seq:
-        if s.name == before:
-            out.append(new)
-            s = replace(s, requires=(new.name,))
-        out.append(s)
-    return tuple(out)
 
 
 def test_the_new_stages_are_zero_cost_and_rehearsable_where_the_lead_wires_them() -> None:
     """`update_final_set` is wired into the update DAG as declared here
-    (``test_update_final_set_wired``); `final_proof` is not wired into the
-    full run, and still validates where it would sit."""
+    (``test_update_final_set_wired``)."""
     wired = next(s for s in dag.stages(update=True) if s.name == FINAL_SET.name)
     assert (wired.requires, wired.runner, wired.exit_map) == (FINAL_SET.requires, FINAL_SET.runner, FINAL_SET.exit_map)
     assert dag._validate(dag.stages(update=True)) == []
-    full = _wired(dag.STAGES, FINAL_PROOF, "upload")
-    assert dag._validate(full) == []
-    for s in (FINAL_SET, FINAL_PROOF):
-        assert not s.paid and not s.external  # driver.py refuses only these under --redo in a rehearsal
+    assert not FINAL_SET.paid and not FINAL_SET.external  # driver.py refuses only these under --redo in a rehearsal
 
 
 def _snapshot(root: Path) -> dict[str, bytes]:

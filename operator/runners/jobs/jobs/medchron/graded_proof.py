@@ -22,10 +22,10 @@ Anything else is a finding: a claim with no SUPPORTED row
 (``unsupported_claim``) or text no citation closes (``ungraded_text``).
 
 RECORD-ONLY: it never fails a run (``update/proofs_final.ENFORCE``). It
-writes the filed document's sha256 beside its findings, and the upload
-stages record a filing whose chronology bytes differ from the ones proven
-(``sha_changed_after_proof``). ``recorded`` is the one function the run
-record reads them through.
+runs on an update only and writes the filed document's sha256 beside its
+findings in ``runs/<unit>/update/proofs.json``; the update's upload stage
+records a filing whose chronology bytes differ from the ones proven
+(``sha_changed_after_proof``). ``recorded`` sums the findings.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ LABELS = (
     "prior history heading",
     "fragment too short to grade",
 )
-#: The upload stages' record when the filed chronology is not the proven one.
+#: The update upload's record when the filed chronology is not the proven one.
 SHA_CHANGED = "sha_changed_after_proof"
 PROOFS = "proofs.json"
 _ADDED_HISTORY = re.compile(
@@ -239,9 +239,8 @@ def write(path: Path, recorded: dict[str, int], filed: dict[str, Any] | None) ->
 
 
 def proofs_paths(slug_dir: Path, unit: str) -> list[Path]:
-    """Where a run's proofs are recorded: an update's, then a full run's."""
-    rd = slug_dir / "runs" / unit
-    return [rd / "update" / PROOFS, rd / PROOFS]
+    """Where a run's proofs are recorded: an update's (a full run writes none)."""
+    return [slug_dir / "runs" / unit / "update" / PROOFS]
 
 
 def record_upload(path: Path, manifest: list[dict[str, Any]], log: Callable[[str], None]) -> str | None:

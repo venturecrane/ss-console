@@ -70,17 +70,26 @@ def _heading(text: str) -> str:
     return "\n".join(lines[start : end + 2])
 
 
-def _has_own(text: str) -> bool:
+def top_lines(text: str) -> list[str]:
+    """The inked lines in the top OWN_SHARE of a page: where its own note's heading sits."""
     lines = _lines(text)
-    top = lines[: max(1, int(len(lines) * OWN_SHARE))]
-    return any(HEAD_LINE.match(ln) for ln in top)
+    return lines[: max(1, int(len(lines) * OWN_SHARE))]
+
+
+def opens_note(text: str) -> bool:
+    """The page states its own note heading in its top share."""
+    return any(HEAD_LINE.match(ln) for ln in top_lines(text))
+
+
+#: A block ``heading_block`` writes, either shape: never a page's own text.
+BLOCK = re.compile(r"(?s)\[note heading, p\.\d+: [^\n]*\n.*?\[end note heading\]\n?|\[note heading: [^\n]*\n?")
 
 
 def heading_block(pages: dict[int, str], pg: int, composed: Callable[[int], bool]) -> str:
     """The note-heading block for read page `pg`, or '' when it needs none
     (its page before is composed, it is the document's first page, or it
     states its own note heading)."""
-    if pg <= 1 or composed(pg - 1) or _has_own(pages.get(pg) or ""):
+    if pg <= 1 or composed(pg - 1) or opens_note(pages.get(pg) or ""):
         return ""
     for back in range(pg - 1, max(0, pg - 1 - MAX_BACK), -1):
         if composed(back):
