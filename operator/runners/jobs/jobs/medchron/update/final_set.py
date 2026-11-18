@@ -133,28 +133,21 @@ def with_entries(md: str, ents: list[str]) -> str:
     return md[:at] + out + md[at + len(body) :]
 
 
-def _latest(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    latest: dict[str, dict[str, Any]] = {}
-    for r in rows:
-        if r.get("kind") == "real" and r.get("key"):
-            latest[str(r["key"])] = r
-    return latest
-
-
 # ---- 1. stray lines ---------------------------------------------------------------------------
 
 
-def _carry_row(new: dict[str, Any], old_row: dict[str, Any], old_key: str) -> dict[str, Any]:
+def _link_row(new: dict[str, Any], old_key: str) -> dict[str, Any]:
+    """The LINK from the claim's new key to the key it was graded under
+    (``claims.LINK``): no verdict is copied, so a regrade of the old key is
+    read at once and a direct grade of the new key always wins."""
     return {
         "key": new["key"],
-        "kind": "real",
+        "kind": CL.LINK,
+        "link_to": old_key,
         "exhibit": new["exhibit"],
         "page_spec": new["page_spec"],
-        "pages": CL.parse_pages(new["page_spec"]) or [1],
         "claim": new["claim"][:500],
-        "verdict": old_row.get("verdict"),
         "mode": CARRY,
-        "carried_from": old_key,
         "note": "the audited claim under its subsection heading; a stray citation line between them was deleted",
     }
 
@@ -163,8 +156,8 @@ def _flat(s: str) -> str:
     return " ".join(s.split())
 
 
-def _drop_line(e: str, k: int, latest: dict[str, dict[str, Any]]) -> tuple[str, dict[str, Any] | None, str]:
-    """(entry without line `k`, the verdict-carry row or None, why not when
+def _drop_line(e: str, k: int, resolve: Any) -> tuple[str, dict[str, Any] | None, str]:
+    """(entry without line `k`, the link row or None, why not when
     the line stays). Applied only when no exhibit loses its citation and the
     claims are the same, or exactly one became its heading and itself."""
     lines = e.split("\n")
@@ -184,15 +177,14 @@ def _drop_line(e: str, k: int, latest: dict[str, dict[str, Any]]) -> tuple[str, 
     same_cite = (old["exhibit"], old["page_spec"]) == (now["exhibit"], now["page_spec"])
     if not same_cite or _flat(now["claim"]) != _flat(f"{heading} {old['claim']}"):
         return e, None, "the claim it closes would read other than its heading and its audited words"
-    row = latest.get(g)
-    if row is None:
-        return e, None, "the claim it would join has no audit verdict to carry"
-    return out, _carry_row(now, row, g), ""
+    if resolve(g) is None:
+        return e, None, "the claim it would join has no audit verdict to link to"
+    return out, _link_row(now, g), ""
 
 
 def strays(ents: list[str], headings: set[str], rows: list[dict[str, Any]], o: Outcome) -> list[str]:
     """Rule 1, over the added entries (a fold's delivered part is not in them)."""
-    latest = _latest(rows)
+    resolve = CL.resolver(rows)
     out = []
     for e in ents:
         before = sum(U.cite_only(ln) for ln in e.split("\n")[2:])
@@ -206,16 +198,16 @@ def strays(ents: list[str], headings: set[str], rows: list[dict[str, Any]], o: O
             if not U.cite_only(j.split("\n")[k]):
                 k += 1
                 continue
-            got, carry, why = _drop_line(j, k, latest)
+            got, carry, why = _drop_line(j, k, resolve)
             if got == j:
                 o.ops.append({"op": "stray line", "entry": B.iso(e), "applied": False, "why": why})
                 k += 1
                 continue
             j = got
             if carry is not None:
-                o.removed.add(carry["carried_from"])
+                o.removed.add(carry["link_to"])
                 o.carries.append(carry)
-                latest[carry["key"]] = carry
+                resolve = CL.resolver(rows + o.carries)
                 o.counts["verdicts carried"] += 1
         j = re.sub(r"\n{3,}", "\n\n", j)
         o.counts["stray lines after"] += sum(U.cite_only(ln) for ln in j.split("\n")[2:])
@@ -372,8 +364,12 @@ def _source(pages: list[tuple[int, int]], x: Inputs) -> str:
     return TRANSCRIPT if any(x.pages.transcribed(ex, p) for ex, p in pages) else BORN_DIGITAL
 
 
-def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], latest: dict[str, dict[str, Any]]) -> list[dict]:
-    """One row per added claim, or per added entry with none."""
+def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], rows: list[dict[str, Any]]) -> list[dict]:
+    """One row per added claim, or per added entry with none. A claim's
+    verdict is ``claims.resolver``'s; its mode ``carry`` when it comes
+    through a link."""
+    resolve = CL.resolver(rows)
+    direct = {r.get("key") for r in rows if r.get("kind") == "real"}
     out: list[dict[str, Any]] = []
     for i, e in enumerate(ents):
         prov = B.provider_of(e)
@@ -390,7 +386,7 @@ def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], latest: dic
         cl = _claims(e)
         for c in cl or [None]:
             pages = [(c["exhibit"], p) for p in CL.parse_pages(c["page_spec"]) or [1]] if c else []
-            row = latest.get(c["key"], {}) if c else {}
+            row = (resolve(c["key"]) or {}) if c else {}
             out.append(
                 common
                 | {
@@ -398,7 +394,7 @@ def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], latest: dic
                     "pages": [p for _ex, p in pages],
                     "claim_key": c["key"] if c else None,
                     "verdict": row.get("verdict") if c else None,
-                    "mode": (row.get("mode") or "model") if row else None,
+                    "mode": (CARRY if c["key"] not in direct else row.get("mode") or "model") if row and c else None,
                     "page_ids": sorted(x.page_id(ex, p) for ex, p in pages) if x.page_id else [],
                     "text_source": _source(pages, x),
                 }
@@ -465,8 +461,7 @@ def run(x: Inputs) -> Outcome:
     if lost:
         raise LostKey(f"final set lost {len(lost)} claim key(s) no drop of its own removed; nothing is written")
     o.md = md
-    latest = _latest(x.audit_rows + o.carries)
-    o.rows = rows_of(ents, x, checks, latest)
+    o.rows = rows_of(ents, x, checks, x.audit_rows + o.carries)
     o.corrections = corrections_of(ents, base_ents)
     o.counts["added entries"] = len(ents)
     o.counts["corrections recorded"] = len(o.corrections)

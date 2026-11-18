@@ -234,18 +234,19 @@ def test_falsifier_the_widened_key_at_collect_would_differ_from_main(monkeypatch
 # ---- rule 1: stray lines --------------------------------------------------------------------
 
 
-def test_stray_lines_go_and_the_heading_case_carries_its_verdict() -> None:
+def test_stray_lines_go_and_the_heading_case_links_its_claim_to_its_graded_key() -> None:
     x = _inputs([STRAY])
     o = FS.run(x)
     (e,) = _added(o)
     assert not [ln for ln in e.splitlines() if U.cite_only(ln)], e
     assert o.counts["stray lines before"] == 2 and o.counts["stray lines after"] == 0
-    (carry,) = o.carries
+    (link,) = o.carries
     old = {r["key"] for r in x.audit_rows}
-    assert carry["carried_from"] in old and carry["key"] not in old and carry["mode"] == FS.CARRY
-    assert carry["claim"] == "All Other Information\nReturn in four weeks for a recheck of the neck."
-    assert carry["verdict"] == "SUPPORTED"
-    assert FS.keys_of(o.md) - old == {carry["key"]}
+    assert link["kind"] == CL.LINK and link["link_to"] in old and link["key"] not in old
+    assert "verdict" not in link  # a link copies no verdict
+    assert link["claim"] == "All Other Information\nReturn in four weeks for a recheck of the neck."
+    assert CL.resolver(x.audit_rows + o.carries)(link["key"])["verdict"] == "SUPPORTED"
+    assert FS.keys_of(o.md) - old == {link["key"]}
 
 
 def test_falsifier_a_verdict_is_never_carried_to_other_words() -> None:
@@ -368,8 +369,12 @@ def test_the_final_set_marker_is_the_stage_s_own_file(tmp_path: Path) -> None:
     assert FIO.ran(ud)
     doc.write_text("a document the set did not write")  # a run interrupted before the replace
     assert not FIO.ran(ud)
-    (ud / FS.REPORT).write_text(json.dumps({"no_added_entries": True}))
+    (ud / FS.REPORT).write_text(json.dumps({"no_added_entries": True}))  # names no document
+    assert not FIO.ran(ud)
+    (ud / FS.REPORT).write_text(json.dumps({"no_added_entries": True, "out_sha": FIO._sha(doc.read_text())}))
     assert FIO.ran(ud)
+    doc.write_text("rewritten after the no-op")
+    assert not FIO.ran(ud)
 
 
 # ---- the proofs of what the firm was told ---------------------------------------------------
@@ -722,7 +727,7 @@ FINAL_SET = dag.Stage(
     dag._slug_unit,
     requires=("update_review",),
     runner=update_final_set.run,
-    exit_map={code: (dag.FAILED, why) for code, why in update_final_set.EXITS.items()},
+    exit_map=update_final_set.EXITS,  # passed as it is: (outcome, reason) per code
 )
 FINAL_PROOF = dag.Stage("final_proof", "", dag._slug_unit, requires=("review",), runner=final_proof.run)
 
@@ -812,23 +817,67 @@ def test_the_report_counts_what_the_stage_counts_with_the_firms_aliases(
     assert first.startswith("config: NONE") and "key matches (delivered)" not in json.loads(rest)["repeats"]
 
 
-def test_a_carried_verdict_that_changed_is_appended_and_the_proof_reads_it(
+def _linked_job(job_dir: Path, firm: Path, data_root: Path) -> tuple[StageRun, Path, dict]:
+    sr = _sr(job_dir, firm, data_root, [])
+    _job(sr.slug_dir, [STRAY])
+    results = sr.slug_dir / "out" / "alpha" / "audit-results.jsonl"
+    assert update_final_set.run(sr) == 0
+    (link,) = [r for r in CL.read_rows(results) if r.get("kind") == CL.LINK]
+    return sr, results, link
+
+
+def test_a_regrade_of_the_linked_key_is_read_at_once(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    """A link copies no verdict: when the key the claim was graded under is
+    graded again (the review redone), every reader sees the new verdict
+    without the final set running again."""
+    _sr_, results, link = _linked_job(job_dir, firm_config_path, data_root)
+    assert GP.latest_supported(CL.read_rows(results))({"key": link["key"]}) == (True, CL.LINK)
+    CL.append_row(results, {"key": link["link_to"], "kind": "real", "verdict": "UNSUPPORTED"})
+    rows = CL.read_rows(results)
+    assert not GP.latest_supported(rows)({"key": link["key"]})[0]
+    assert CL.latest_real(rows, {link["key"]})[link["key"]]["verdict"] == "UNSUPPORTED"  # the coverage gate's reader
+
+
+def test_a_direct_grade_of_the_new_key_wins_and_a_rerun_does_not_mask_it(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
-    """The update review is redone and the claim a carry came from is now
-    UNSUPPORTED: the step's next run appends the new carry, so the newest
-    row, the one the proofs read, says UNSUPPORTED."""
+    """2026-11-17 review: a copied verdict appended on a rerun masked a later
+    direct grade. A direct grade of the key always wins over its link."""
+    sr, results, link = _linked_job(job_dir, firm_config_path, data_root)
+    CL.append_row(results, {"key": link["key"], "kind": "real", "verdict": "UNSUPPORTED"})  # graded directly
+    assert update_final_set.run(sr) == 0  # the rerun starts from the saved copy and rebuilds the link
+    rows = CL.read_rows(results)
+    assert not GP.latest_supported(rows)({"key": link["key"]})[0]
+    assert GP.latest_supported(rows)({"key": link["key"]})[1] != CL.LINK
+
+
+def test_three_reruns_append_nothing(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    sr, results, _link = _linked_job(job_dir, firm_config_path, data_root)
+    once = results.read_bytes()
+    for _ in range(3):
+        assert update_final_set.run(sr) == 0
+    assert results.read_bytes() == once
+
+
+def test_a_link_cycle_is_never_resolved_or_written(tmp_path: Path) -> None:
+    rows = [{"key": "n", "kind": CL.LINK, "link_to": "g"}, {"key": "g", "kind": CL.LINK, "link_to": "n"}]
+    assert CL.resolver(rows)("n") is None and CL.latest_real(rows, {"n", "g"}) == {}
+    assert FIO._cycle({"g": "n"}, "n", "g") and not FIO._cycle({"g": "h"}, "n", "g")
+
+
+def test_a_crash_inside_the_stage_is_never_reported_as_a_refusal(
+    job_dir: Path, firm_config_path: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The driver makes any exception exit 1; the refusals are 21 and 22, so
+    a crash is never paged with a refusal's reason."""
     sr = _sr(job_dir, firm_config_path, data_root, [])
     _job(sr.slug_dir, [STRAY])
-    rd, results = sr.slug_dir / "runs" / "alpha", sr.slug_dir / "out" / "alpha" / "audit-results.jsonl"
-    original = (rd / "final-chronology.md").read_text()
-    assert update_final_set.run(sr) == 0
-    (carry,) = [r for r in CL.read_rows(results) if r.get("mode") == FS.CARRY]
-    assert GP.latest_supported(CL.read_rows(results))({"key": carry["key"]})[0]
-    (rd / "final-chronology.md").write_text(original)  # the review rewrote the document
-    old = carry["carried_from"]
-    CL.append_row(results, {"key": old, "kind": "real", "verdict": "UNSUPPORTED"})  # and graded it again
-    assert update_final_set.run(sr) == 0
-    rows = CL.read_rows(results)
-    assert not GP.latest_supported(rows)({"key": carry["key"]})[0]
-    assert update_final_set.run(sr) == 0 and CL.read_rows(results) == rows  # the same verdict is not appended again
+
+    def boom(*_a: object) -> None:
+        raise KeyError("a field the step expected")
+
+    monkeypatch.setattr(FIO, "page_inputs", boom)
+    with pytest.raises(KeyError):
+        update_final_set.run(sr)
+    assert 1 not in update_final_set.EXITS and {update_final_set.EXIT_CREATED, update_final_set.EXIT_LOST} == {21, 22}
+    assert all(isinstance(v, tuple) and len(v) == 2 for v in update_final_set.EXITS.values())

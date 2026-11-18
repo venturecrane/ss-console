@@ -17,6 +17,7 @@ import json
 import re
 import threading
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from ...text_rules import EXHIBIT_CITE_LENIENT as CITE
@@ -182,10 +183,51 @@ def lineage_orphans(rows: list[dict[str, Any]], current_keys: set[str], sha: str
     )
 
 
-def latest_real(rows: list[dict[str, Any]], live_keys: set[str]) -> dict[str, dict[str, Any]]:
-    """The last real row per live key."""
-    latest: dict[str, dict[str, Any]] = {}
+#: A row that LINKS a claim key to the key whose verdict it takes (``link_to``),
+#: written when a claim's text became another key without a word of what it
+#: asserts changing (``update/final_set``: a stray citation line under a
+#: heading deleted). It carries no verdict: one is never copied, so none can
+#: go stale.
+LINK = "link"
+
+
+def resolver(rows: list[dict[str, Any]]) -> Callable[[str], dict[str, Any] | None]:
+    """THE ONE RULE for a key's verdict row: its own latest DIRECT grade
+    (``kind: real``) when it has one, else the resolution of the key its
+    latest link names, followed until a direct grade; None when there is
+    none or the links run in a cycle. A regrade of the linked key is seen at
+    once, and a direct grade of the key itself always wins."""
+    direct: dict[str, dict[str, Any]] = {}
+    links: dict[str, str] = {}
     for r in rows:
-        if r.get("kind") == "real" and r.get("key") in live_keys:
-            latest[r["key"]] = r
-    return latest
+        k = r.get("key")
+        if not k:
+            continue
+        if r.get("kind") == "real":
+            direct[str(k)] = r
+        elif r.get("kind") == LINK and r.get("link_to"):
+            links[str(k)] = str(r["link_to"])
+
+    def get(key: str) -> dict[str, Any] | None:
+        seen: set[str] = set()
+        while key not in direct:
+            if key in seen or key not in links:
+                return None
+            seen.add(key)
+            key = links[key]
+        return direct[key]
+
+    return get
+
+
+def linked(rows: list[dict[str, Any]], key: str) -> bool:
+    """Whether `key`'s verdict comes through a link (it has no direct grade)."""
+    direct = {r.get("key") for r in rows if r.get("kind") == "real"}
+    return key not in direct and any(r.get("kind") == LINK and r.get("key") == key for r in rows)
+
+
+def latest_real(rows: list[dict[str, Any]], live_keys: set[str]) -> dict[str, dict[str, Any]]:
+    """The verdict row per live key, by ``resolver``: its last real row, or
+    the one its link resolves to."""
+    get = resolver(rows)
+    return {k: r for k in live_keys if (r := get(k)) is not None}

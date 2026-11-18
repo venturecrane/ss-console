@@ -100,7 +100,10 @@ def write_nothing_added(slug_dir: Path, unit: str) -> None:
         return
     write_atomic(ud / ROWS, "")
     write_atomic(ud / CORRECTIONS, "[]")
-    write_atomic(ud / REPORT, json.dumps({"counts": {"added entries": 0}, "no_added_entries": True}, indent=1))
+    doc = ud.parent / "final-chronology.md"
+    sha = _sha(doc.read_text(encoding="utf-8")) if doc.is_file() else None
+    mark = {"counts": {"added entries": 0}, "no_added_entries": True, "out_sha": sha}
+    write_atomic(ud / REPORT, json.dumps(mark, indent=1))
 
 
 #: The reviewed audit document as this step first read it: a rerun starts
@@ -170,15 +173,29 @@ def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
     if doc.read_text(encoding="utf-8") != o.md:
         write_atomic(doc, o.md)
     results = slug_dir / "out" / unit / "audit-results.jsonl"
-    latest = {str(r["key"]): r for r in CL.read_rows(results) if r.get("kind") == "real" and r.get("key")}
+    have = CL.read_rows(results)
+    links = {str(r["key"]): str(r["link_to"]) for r in have if r.get("kind") == CL.LINK and r.get("key")}
     sha = CL.doc_sha_of(CL.body_of(o.md))
     for row in o.carries:
-        last = latest.get(row["key"])
-        # The LATEST row decides (the proofs read the last row per key): a
-        # carry is appended unless that row already is this carry with this
-        # verdict, so a verdict that changed since is never left stale.
-        if not (last and last.get("carried_from") == row["carried_from"] and last.get("verdict") == row["verdict"]):
-            CL.append_row(results, row | {"doc_sha": sha})
+        if links.get(row["key"]) == row["link_to"]:
+            continue  # recorded once: a link carries no verdict, so there is nothing to refresh
+        if _cycle(links, row["key"], row["link_to"]):
+            raise ValueError(f"a link from {row['key']} to {row['link_to']} would close a cycle; not recorded")
+        CL.append_row(results, row | {"doc_sha": sha})
+        links[row["key"]] = row["link_to"]
+
+
+def _cycle(links: dict[str, str], key: str, to: str) -> bool:
+    """Whether linking `key` to `to` closes a cycle (`to` leads back to `key`)."""
+    seen: set[str] = set()
+    while to not in seen:
+        if to == key:
+            return True
+        seen.add(to)
+        if to not in links:
+            return False
+        to = links[to]
+    return True
 
 
 def ran(ud: Path) -> bool:
@@ -190,10 +207,11 @@ def ran(ud: Path) -> bool:
     mark = _json(ud / REPORT, None)
     if not isinstance(mark, dict):
         return False
-    if mark.get("no_added_entries") is True:
-        return True
     doc = ud.parent / "final-chronology.md"
-    return doc.is_file() and mark.get("out_sha") == _sha(doc.read_text(encoding="utf-8"))
+    now = _sha(doc.read_text(encoding="utf-8")) if doc.is_file() else None
+    if mark.get("no_added_entries") is True:  # the document it saw, or none, must still be the one there
+        return "out_sha" in mark and mark.get("out_sha") == now
+    return now is not None and mark.get("out_sha") == now
 
 
 def read_rows(ud: Path) -> list[dict[str, Any]]:

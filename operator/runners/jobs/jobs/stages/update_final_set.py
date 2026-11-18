@@ -6,10 +6,13 @@ heading looked for on its pages, repeats dropped only when the other entry
 covers them, all delete-only). This stage reads the reviewed audit document
 (``runs/<unit>/final-chronology.md``), writes it back, and writes
 ``update/final_rows.jsonl``, ``update/corrections.json`` and
-``update/final_set.json``; a verdict it carries to a claim's own words under
-its heading is an audit row (``mode: carry``). It refuses, writing nothing,
-when a rule would have created a claim key (``EXIT_CREATED``) or when a claim
-key was lost that none of its own drops removed (``EXIT_LOST``).
+``update/final_set.json``; a claim's own words under its heading are linked
+to the key they were graded under (an audit row ``kind: link``, no verdict:
+``claims.resolver``). It refuses, writing nothing, when a rule would have
+created a claim key (``EXIT_CREATED``) or when a claim key was lost that none
+of its own drops removed (``EXIT_LOST``). Exit 1 keeps the driver's own
+meaning, a crash (``medchron/driver.py``: any exception is exit 1), so a
+crash is never paged as either refusal.
 
 `final_proofs` is the update proofs' second half (``update/proofs_final``,
 proofs 11 to 15), read off the rendered document, and `record_final` merges
@@ -36,11 +39,17 @@ from .group import Canon
 from .render import chronology_name
 from .update_base import headings, plan, update_dir
 
-EXIT_CREATED, EXIT_LOST = 1, 2
-#: The reasons a person paged on each refusal reads (``dag_update``'s exit_map).
+#: The two refusals' codes: no exit map of the update's stages uses 21 or 22
+#: (theirs are 1, 2, 3, 4, 5 and 75), and 1 stays the driver's crash.
+EXIT_CREATED, EXIT_LOST = 21, 22
+#: (outcome, reason) per refusal, the shape every stage's exit map takes
+#: (``dag.Stage.exit_map``): ``dag_update`` passes it as it is.
 EXITS = {
-    EXIT_CREATED: "update_final_set: a rule would have created a claim key; nothing was written",
-    EXIT_LOST: "update_final_set: a claim key was lost that the final set did not drop; nothing was written",
+    EXIT_CREATED: ("refused", "update_final_set: a rule would have created a claim key; nothing was written"),
+    EXIT_LOST: (
+        "refused",
+        "update_final_set: a claim key was lost that the final set did not drop; nothing was written",
+    ),
 }
 
 
@@ -63,7 +72,7 @@ def run(sr: StageRun) -> int:
     c = o.counts
     sr.log(
         f"final set: {c['added entries']} added entries; stray citation lines {c['stray lines before']} -> "
-        f"{c['stray lines after']} ({c['verdicts carried']} verdict(s) carried); repeats dropped "
+        f"{c['stray lines after']} ({c['verdicts carried']} claim(s) linked to their graded key); repeats dropped "
         f"{sum(v for k, v in c.items() if k.startswith('repeats: safe drops'))}, kept whole "
         f"{sum(v for k, v in c.items() if k.startswith('repeats: kept whole'))}; "
         f"headings on a cited page {c['headings ' + HD.CITED]}, same note {c['headings ' + HD.SAME_NOTE]}, "
