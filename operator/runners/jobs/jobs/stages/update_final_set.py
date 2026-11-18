@@ -17,8 +17,9 @@ crash is never paged as either refusal.
 `final_proofs` is the update proofs' second half (``update/proofs_final``,
 proofs 11 to 15), read off the rendered document, and `record_final` merges
 its record-only findings and the proven chronology's sha into
-``update/proofs.json``. Nothing calls them yet: the lead wires the call from
-``update_proofs`` in the integration commit.
+``update/proofs.json``; ``update_finish.run_proofs`` calls both. An update
+whose send record already names its files (``already_sent``) is left as
+filed: the step changes nothing and writes no marker.
 """
 
 from __future__ import annotations
@@ -54,7 +55,27 @@ EXITS = {
 }
 
 
+def already_sent(sr: StageRun) -> bool:
+    """The update's send record (``runs/<unit>/delivery.json``, read as the
+    filing reads it, ``filing.SendRecord.recorded``) names a file of this
+    update's manifest as sent or started. Its files were built before this
+    step existed or ran: rebuilding them now would give a name the record
+    holds other bytes, and the filing would hold for a person."""
+    from ..filing import SendRecord
+
+    manifest = read_json(sr.slug_dir / "out" / sr.unit.unit / "upload_manifest.json", None)
+    if not isinstance(manifest, list):
+        return False
+    names = {str(m.get(k)) for m in manifest if isinstance(m, dict) for k in ("name", "intended_name") if m.get(k)}
+    rec = SendRecord.load(sr.slug_dir / "runs" / sr.unit.unit / "delivery.json")
+    return bool(names & set(rec.recorded()))
+
+
 def run(sr: StageRun) -> int:
+    if already_sent(sr):
+        # No marker: assemble then reads the document as it did when the sent files were made.
+        sr.log("final set: already sent: left as filed")
+        return 0
     if not FIO.added_entries(sr.slug_dir, sr.unit.unit):
         FIO.write_nothing_added(sr.slug_dir, sr.unit.unit)
         sr.log("final set: no added entries; nothing to do")
@@ -154,4 +175,4 @@ def record_final(sr: StageRun, r: PF.Result) -> None:
     GP.write(update_dir(sr) / GP.PROOFS, r.recorded, r.filed)
 
 
-__all__ = ["EXITS", "EXIT_CREATED", "EXIT_LOST", "final_proofs", "record_final", "run"]
+__all__ = ["EXITS", "EXIT_CREATED", "EXIT_LOST", "already_sent", "final_proofs", "record_final", "run"]

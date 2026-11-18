@@ -13,6 +13,14 @@ is transcribed and confirmed by its words in ``update_select``). A re-filed scan
 transcribed, composed and filed as five new exhibits (2026-10-14).
 
 A file this cannot open settles nothing: its pages go to vision as before.
+
+It writes the page record's first rows (``runs/<unit>/pages.jsonl``,
+``medchron/pages_record``): each candidate page's picture finding and
+whether it carries ink. First, a file the other-person RULE withheld on an
+earlier run is decided again (``identity_redecide``), before any candidate
+picture is computed, so a file is either a candidate or not one, exactly as
+on main (2026-11-17: 24 of a withheld file's 34 pages were the client's
+delivered exhibit).
 """
 
 from __future__ import annotations
@@ -20,11 +28,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ..medchron import pages_record as PR
 from ..medchron.update import pageid as PI, pageid_io as PG
-from . import identity_pages
-from .base import StageRun
+from . import identity_pages, page_rows
+from .identity_redecide import redecide
+from .base import StageRun, read_jsonl
 from .update_base import plan, update_dir
-from .update_select import _candidates, delivered_read
+from .update_select import REDECIDED_FILE, _candidates, delivered_read
 
 
 def _sigs(path: Path, log) -> list[PI.Sig] | None:
@@ -44,12 +54,20 @@ def run(sr: StageRun) -> int:
     read = delivered_read(sr, p)
     listed = {e["exhibit"] for e in read}
     firm_sha = {e["sha256"] for e in p["exhibits"] if e["exhibit"] not in listed}
-    rows, _ = _candidates(sr, {e["sha256"]: e["name"] for e in read})
     delivered = []
     for e in read:
         s = _sigs(sr.slug_dir / "delivered" / e["name"], sr.log)
         if s is not None:
             delivered.append((int(e["exhibit"]), s))
+    # A file the other-person RULE withheld on an earlier run is decided again
+    # BEFORE any candidate's picture is computed: cleared, it is a candidate
+    # like any other; kept, it is not one, exactly as on main.
+    (ud / REDECIDED_FILE).unlink(missing_ok=True)  # an earlier attempt's record never outlives a failed one
+    try:
+        redecide(sr, delivered, lambda path: _sigs(path, sr.log), REDECIDED_FILE)
+    except Exception as exc:  # noqa: BLE001 - a re-decision that fails leaves every withhold standing, as on main
+        sr.log(f"update_pages: withholds not re-decided ({type(exc).__name__}: {str(exc)[:160]}); they stand")
+    rows, _ = _candidates(sr, {e["sha256"]: e["name"] for e in read})
     new = []
     for r in rows:
         s = _sigs(Path(r["path"]), sr.log)
@@ -60,6 +78,19 @@ def run(sr: StageRun) -> int:
     (ud / PG.NAME).write_text(json.dumps(PI.to_json(ident), indent=1), encoding="utf-8")
     skip = ident.skipped({d: len(s) for d, s in new})
     (sr.slug_dir / "vision_skip.json").write_text(json.dumps(skip, indent=1), encoding="utf-8")
+    # The page record's first rows: each candidate page's picture finding and ink (``medchron/pages_record``);
+    # a file that could not be rendered is counted whole as to be read.
+    sha = {str(r["id"]): str(r.get("sha256") or "") for r in rows}
+    rendered = {d for d, _ in new}
+    pages = {str(x.get("id")): int(x.get("pages") or 0) for x in read_jsonl(sr.slug_dir / "extracted.jsonl")}
+    unrendered = {str(r["id"]): pages.get(str(r["id"]), 0) for r in rows if str(r["id"]) not in rendered}
+    try:  # a record: it never decides or stops anything
+        PR.write(
+            sr.slug_dir / "runs" / sr.unit.unit,
+            page_rows.candidate_rows([(d, len(s), [x.inked for x in s]) for d, s in new], PG.load(ud), sha, unrendered),
+        )
+    except Exception as exc:  # noqa: BLE001 - the page record is evidence; its failure is logged, never the run's
+        sr.log(f"update_pages: page record not written ({type(exc).__name__}: {str(exc)[:160]})")
     # An other-person finding on a scan's OCR layer is read on the page before it withholds.
     identity_pages.queue(sr, rows, ud)
     total = sum(len(v) for v in skip.values())

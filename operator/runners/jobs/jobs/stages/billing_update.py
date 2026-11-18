@@ -261,7 +261,12 @@ def run_extract(sr: StageRun) -> int:
 def run_dos(sr: StageRun) -> int:
     from ..medchron import dos_check
     from .billing_chart import Matcher
+    from ..medchron.update import billing_page_dates
 
+    # Recorded on every update; with no billing record named (no plan), nothing else happens.
+    got = billing_page_dates.write(sr.slug_dir, update_dir(sr), [sr.unit])
+    if got:
+        sr.log(f"dos_check (update): {len(got)} date(s) of service on set-aside billing pages recorded")
     if not read_json(_dir(sr) / "plan.json", []):
         return 0
     rd = sr.slug_dir / "runs" / sr.unit.unit
@@ -271,6 +276,8 @@ def run_dos(sr: StageRun) -> int:
     sr.log(
         f"dos_check (update): {rep['billed_dates']} billed date(s); with no medical record on file {len(rep['billed_no_record'])}"
     )
+    if rep.get("billed_no_record_dates"):  # what the set-aside billing pages WOULD add (record only)
+        sr.log(f"dos_check (update): no-record table dates, record only: {rep['billed_no_record_dates']}")
     return 0
 
 
