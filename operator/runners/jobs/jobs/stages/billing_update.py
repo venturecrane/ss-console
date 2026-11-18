@@ -107,22 +107,6 @@ def asked(sr: StageRun) -> list[str]:
     ]
 
 
-def scope(sr: StageRun, listing: list[dict[str, Any]], patterns: list[str]) -> tuple[list[dict], list[dict]]:
-    """(read, set aside) of the `listing` files `patterns` name, scoped to this
-    client (``medchron.billing_plan.decide``, with the firm's folder classes);
-    raises ``billing_plan.Unknown`` when another client's folder cannot be named."""
-    from ..medchron import billing_plan as BP
-
-    template = str(
-        sr.cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
-    )
-    classes = (
-        sr.cfg.get("selection", "shared_folder_classes") or [],
-        sr.cfg.get("selection", "exclude_folder_classes") or [],
-    )
-    return BP.decide(listing, sr.folder_paths(), patterns, sr.unit, sr.job.matter_clients, template, *classes)
-
-
 def run_docs(sr: StageRun) -> int:
     """``billing/plan.json``: what the worksheet is refreshed from, scoped to
     this client (``medchron.billing_plan``), or [] when the request names no
@@ -136,8 +120,18 @@ def run_docs(sr: StageRun) -> int:
     read: list[dict[str, Any]] = []
     aside: list[dict[str, Any]] = []
     if named:
+        template = str(
+            sr.cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
+        )
+        pats = sr.cfg.get("billing", "name_patterns") or []
+        classes = (
+            sr.cfg.get("selection", "shared_folder_classes") or [],
+            sr.cfg.get("selection", "exclude_folder_classes") or [],
+        )
         try:
-            read, aside = scope(sr, sr.manifest(), sr.cfg.get("billing", "name_patterns") or [])
+            read, aside = BP.decide(
+                sr.manifest(), sr.folder_paths(), pats, sr.unit, sr.job.matter_clients, template, *classes
+            )
         except BP.Unknown as exc:
             sr.log(str(exc))
             return EXIT_UNKNOWN

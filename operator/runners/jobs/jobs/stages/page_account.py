@@ -14,10 +14,8 @@ Three stage functions, none of which ever stops, queues or edits anything:
   ``read_uncited``; a read uncited page is classed by code, in order:
   ``blank`` (no ink by ``pageid.MIN_INK``, or under ``select.MIN_CHARS``
   of text), ``nonrecord`` (the firm's ``nonrecord.page_classes``,
-  ``classify.classify_text``), ``billing``, then by the within-page measure
-  (``update/page_content``) against the whole chronology:
-  ``content_elsewhere`` (its sections' items are carried somewhere),
-  ``content_absent`` (a section of it is not), ``no_clinical_heading``.
+  ``classify.classify_text``), ``billing``, else ``unexplained`` (no code
+  names a reason: the class a person reads).
   An excluded page that an entry cites resolves through its row's cover to
   ``cited_via`` (D). A cite on a blank, billing, non-record or other-person
   page, or past the exhibit's last page, is recorded as a DEFECT CODE; it
@@ -28,11 +26,6 @@ Three stage functions, none of which ever stops, queues or edits anything:
 * ``page_account`` (a fresh run, after the coverage gate): the same account
   over the exhibit PDFs and the final chronology. ``FRESH_POLICY`` is
   RECORD_ONLY and a test pins it: no real fresh job has been rehearsed on it.
-
-The within-page measure's counts ride under ``within_page``. That measure
-was run at $0 on three real job copies (2026-11-17): it pointed at the one
-known lost visit, with about 18 false signals per 100 cited pages, so it
-records and never acts.
 """
 
 from __future__ import annotations
@@ -44,8 +37,9 @@ from pathlib import Path
 from typing import Any
 
 from ..medchron import pages_record as PR
+from ..medchron.audit import claims as CL
 from ..medchron.audit.page_text import exhibit_paths
-from ..medchron.update import body as B, page_content as PC, select as S
+from ..medchron.update import body as B, select as S
 from ..medchron.update.billing_page import is_billing
 from .base import StageRun, read_json
 
@@ -69,8 +63,7 @@ _CITE_DEFECT = {
     "withheld_other_person": CITE_ON_OTHER_PERSON,
 }
 #: read-uncited classes by code
-BLANK, NONRECORD, BILLING = "blank", "nonrecord", "billing"
-ELSEWHERE, ABSENT, NO_HEADING = "content_elsewhere", "content_absent", "no_clinical_heading"
+BLANK, NONRECORD, BILLING, UNEXPLAINED = "blank", "nonrecord", "billing", "unexplained"
 
 
 def _nonrecord(cfg: Any) -> Callable[[str], str | None]:
@@ -83,19 +76,14 @@ def _nonrecord(cfg: Any) -> Callable[[str], str | None]:
     return lambda t: classify_text(t, classes)
 
 
-def classify_uncited(text: str, inked: bool | None, nonrecord: Callable[[str], str | None], hay: PC.Hay) -> str:
+def classify_uncited(text: str, inked: bool | None, nonrecord: Callable[[str], str | None]) -> str:
     """Why a read page no entry cites is uncited, by code."""
     t = (text or "").strip()
     if inked is False or len(t) < S.MIN_CHARS or t in S.FAILED_MARKS:
         return BLANK
     if nonrecord(t):
         return NONRECORD
-    if is_billing(t):
-        return BILLING
-    res = PC.measure_text(t, hay)
-    if not res:
-        return NO_HEADING
-    return ABSENT if any(b.dropped for b in res) else ELSEWHERE
+    return BILLING if is_billing(t) else UNEXPLAINED
 
 
 def _entries(md: str) -> list[str]:
@@ -106,13 +94,13 @@ def _entries(md: str) -> list[str]:
 
 
 def _cited(entries: list[str]) -> set[tuple[int, int]]:
-    return {c for e in entries for c in PC.cites(e)}
+    """(exhibit, page) of every citation in the entries."""
+    return {(int(m.group(1)), p) for e in entries for m in B.CITE.finditer(e) for p in CL.parse_pages(m.group(2))}
 
 
 def settle(
     rows: list[dict[str, Any]],
     entries: list[str],
-    context: str,
     exhibit_of: dict[str, int],
     texts: dict[str, dict[int, str]],
     nonrecord: Callable[[str], str | None],
@@ -122,7 +110,6 @@ def settle(
     id: its new exhibit number}; `texts`: {document id: {page: text}};
     `npages`: {exhibit: its page count}."""
     cited = _cited(entries)
-    wide = PC.Hay.of(context + "\n\n" + "\n\n".join(entries))
     defects: list[dict[str, Any]] = []
     seen: set[tuple[int, int]] = set()
     out = []
@@ -140,7 +127,7 @@ def settle(
             else:
                 ev = r.get("evidence") or {}
                 text = (texts.get(str(r["doc"])) or {}).get(int(r.get("page") or 0), "")
-                r["status"], r["class"] = PR.READ_UNCITED, classify_uncited(text, ev.get("inked"), nonrecord, wide)
+                r["status"], r["class"] = PR.READ_UNCITED, classify_uncited(text, ev.get("inked"), nonrecord)
         elif is_cited and key is not None:
             code = _CITE_DEFECT.get(str(r.get("class")))
             if code is None and st == PR.EXCLUDED and not (r.get("evidence") or {}).get("cover"):
@@ -156,7 +143,7 @@ def settle(
     return out, defects
 
 
-def summary(rows: list[dict[str, Any]], defects: list[dict[str, Any]], within: dict[str, int]) -> dict[str, Any]:
+def summary(rows: list[dict[str, Any]], defects: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "total": len(rows),
         "status": dict(Counter(str(r.get("status")) for r in rows)),
@@ -168,14 +155,13 @@ def summary(rows: list[dict[str, Any]], defects: list[dict[str, Any]], within: d
         # document this run withheld or could not read, each {count, docs}.
         "invalid_covers": PR.invalid_covers(rows),
         "uncovered_exclusions": PR.uncovered_exclusions(rows),
-        "within_page": within,
     }
 
 
 def _update_inputs(
     sr: StageRun, md_path: Path, docs: set[str]
-) -> tuple[list[str], str, dict[str, int], dict[str, dict[int, str]]]:
-    """(entries, delivered text, {document: its new exhibit}, {document: {page: text}}).
+) -> tuple[list[str], dict[str, int], dict[str, dict[int, str]]]:
+    """(entries, {document: its new exhibit}, {document: {page: text}}).
 
     Every recorded document's text is read from ``text/<id>.txt`` whether or
     not the update made it an exhibit: a page's class comes from its own text
@@ -184,8 +170,6 @@ def _update_inputs(
     only the new exhibits' text was read."""
     ud = sr.slug_dir / "runs" / sr.unit.unit / "update"
     entries = _entries(md_path.read_text(encoding="utf-8")) if md_path.is_file() else []
-    base = ud / "base.md"
-    context = base.read_text(encoding="utf-8") if base.is_file() else ""
     exhibit_of: dict[str, int] = {}
     for r in read_json(ud / "new_exhibits.final.json", []) or []:
         if isinstance(r, dict) and isinstance(r.get("exhibit"), int) and r.get("id"):
@@ -194,13 +178,7 @@ def _update_inputs(
     for rid in sorted(docs | set(exhibit_of)):
         tp = sr.slug_dir / "text" / f"{rid}.txt"
         texts[rid] = S.pages_of_text(tp.read_text(encoding="utf-8", errors="replace")) if tp.is_file() else {}
-    return entries, context, exhibit_of, texts
-
-
-def _within(sr: StageRun, md_path: Path) -> dict[str, int]:
-    v = PC.job_view(sr.slug_dir, sr.slug_dir / "runs" / sr.unit.unit)
-    entries = _entries(md_path.read_text(encoding="utf-8")) if md_path.is_file() else v.entries
-    return PC.totals(PC.measure(entries, v.page_text, v.docs, v.context, v.index_rows, v.read, _nonrecord(sr.cfg)))
+    return entries, exhibit_of, texts
 
 
 def _account(sr: StageRun, md_path: Path, key: str) -> dict[str, Any] | None:
@@ -209,11 +187,11 @@ def _account(sr: StageRun, md_path: Path, key: str) -> dict[str, Any] | None:
     if not rows:
         sr.log(f"{key}: no page record (runs/<unit>/pages.jsonl); nothing to account")
         return None
-    entries, context, exhibit_of, texts = _update_inputs(sr, md_path, {str(r["doc"]) for r in rows})
+    entries, exhibit_of, texts = _update_inputs(sr, md_path, {str(r["doc"]) for r in rows})
     npages = {ex: len(texts.get(rid) or {}) for rid, ex in exhibit_of.items()}
-    settled, defects = settle(rows, entries, context, exhibit_of, texts, _nonrecord(sr.cfg), npages)
+    settled, defects = settle(rows, entries, exhibit_of, texts, _nonrecord(sr.cfg), npages)
     PR.write(rd, settled)
-    s = summary(settled, defects, _within(sr, md_path))
+    s = summary(settled, defects)
     # The record's own completeness: a page of a new exhibit with no row is named, never assumed.
     s["unrecorded"] = len(PR.missing(settled, {rid: len(t) for rid, t in texts.items()}))
     # The allowance charge is the pages sent to be read, read off this same record (``update/charged``).
@@ -239,9 +217,7 @@ def _log(sr: StageRun, key: str, s: dict[str, Any]) -> None:
     sr.log(
         f"{key}: {s['total']} page(s): {st.get(PR.CITED, 0)} cited, {st.get(PR.CITED_VIA, 0)} cited through a cover, "
         f"{st.get(PR.EXCLUDED, 0)} excluded with evidence, {st.get(PR.READ_UNCITED, 0)} read and uncited "
-        f"{s['read_uncited']}, {st.get(PR.UNREAD, 0)} unread; {len(s['defects'])} cite defect(s) recorded; "
-        f"within-page: {s['within_page'].get('flagged_pages', 0)} flagged, "
-        f"{s['within_page'].get('uncited_siblings', 0)} uncited sibling(s) (record only)"
+        f"{s['read_uncited']}, {st.get(PR.UNREAD, 0)} unread; {len(s['defects'])} cite defect(s) recorded"
         + (
             f"; charge: asked {s['charge']['pages_asked']}, {s['charge']['pages_read']} read, "
             f"{s['charge']['pages_charged']} charged, charged_capped {s['charge']['charged_capped']} "
@@ -275,7 +251,6 @@ def update_page_final(sr: StageRun) -> int:
         if s is not None:
             now = {(r["doc"], r["page"]) for r in PR.read(rd) if r.get("status") == PR.CITED}
             s["resolved"] = len(first & now)
-            s["flagged"] = s["within_page"].get("flagged_pages", 0)
             _save(rd, "final", s)
             _log(sr, "update_page_final", s)
     except Exception as exc:  # noqa: BLE001 - a record-only account never stops a run; its failure is logged
@@ -305,17 +280,14 @@ def page_account(sr: StageRun) -> int:
         md = rd / "final-chronology.md"
         entries = _entries(md.read_text(encoding="utf-8")) if md.is_file() else []
         npages = {ex: len(texts.get(d) or {}) for d, ex in exhibit_of.items()}
-        settled, defects = settle(rows, entries, "", exhibit_of, texts, _nonrecord(sr.cfg), npages)
+        settled, defects = settle(rows, entries, exhibit_of, texts, _nonrecord(sr.cfg), npages)
         PR.replace_by(rd, "page_account", settled)
-        docs = {ex: "" for ex in exhibit_of.values()}
-        tx = {exhibit_of[d]: t for d, t in texts.items()}
-        within = PC.totals(PC.measure(entries, lambda e, p: tx.get(e, {}).get(p), docs))
-        s = summary(settled, defects, within)
+        s = summary(settled, defects)
         s["policy"] = FRESH_POLICY
         _save(rd, "account", s)
         _log(sr, "page_account", s)
     except Exception as exc:  # noqa: BLE001 - a record-only account never stops a run; its failure is logged
         sr.log(f"page_account: not recorded ({type(exc).__name__}: {str(exc)[:160]})")
         return 0
-    unexplained = s["read_uncited"].get(ABSENT, 0)
+    unexplained = s["read_uncited"].get(UNEXPLAINED, 0)
     return 1 if FRESH_POLICY == HOLD and unexplained else 0

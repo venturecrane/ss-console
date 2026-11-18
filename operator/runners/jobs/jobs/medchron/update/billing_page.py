@@ -28,32 +28,10 @@ _LEDGER_WORDS = re.compile(
     r"insurance paid|patient responsibility|write[- ]?off|total due)\b"
 )
 _AMOUNT = re.compile(r"\$?\b\d{1,3}(?:,\d{3})*\.\d{2}\b")
-#: The section headings a clinical note opens its parts with, as regex
-#: alternatives. One home: ``update/page_content`` splits a page at these
-#: (and the further headings it names) to find a visit's sections.
-NARRATIVE_HEADS = (
-    "assessment",
-    "plan",
-    "subjective",
-    "objective",
-    "exam(?:ination)?",
-    "physical exam(?:ination)?",
-    "chief complaint",
-    "cc",
-    "hpi",
-    "history of present illness",
-    "impression",
-    "review of systems",
-    "ros",
-    "progress note",
-    "treatment notes?",
-    "s",
-    "o",
-    "a",
-    "p",
-)
 _NARRATIVE = re.compile(
-    rf"(?im)^\s*(?:{'|'.join(NARRATIVE_HEADS)})\s*[:\-]|"
+    r"(?im)^\s*(?:assessment|plan|subjective|objective|exam(?:ination)?|physical exam(?:ination)?|"
+    r"chief complaint|cc|hpi|history of present illness|impression|review of systems|ros|"
+    r"progress note|treatment notes?|s|o|a|p)\s*[:\-]|"
     r"\b(?:assessment and plan|chief complaint|history of present illness|review of systems|"
     r"physical examination|plan of care)\b"
 )
