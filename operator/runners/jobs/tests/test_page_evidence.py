@@ -213,7 +213,7 @@ def _redecide(sr: StageRun, client_pages: range = range(2, 26)) -> dict:
     import test_identity_delivered_page as T
 
     (sr.slug_dir / "raw_manifest.jsonl").write_text(
-        json.dumps({"id": T.RID, "ok": True, "path": str(sr.slug_dir / "f.pdf")}) + "\n"
+        json.dumps({"id": T.RID, "ok": True, "ext": ".pdf", "path": str(sr.slug_dir / "f.pdf")}) + "\n"
     )
     return redecide(sr, [(4, _theirs())], lambda _p: _mine(client_pages), "identity_redecided.json")
 
@@ -229,14 +229,47 @@ def test_a_rule_withhold_is_redecided_before_any_picture_and_cleared_by_the_deli
     sr = T._sr(job_dir, firm_config_path, data_root)
     rows, ud = T._scene(sr, (18, 24), None)
     assert T._withheld(sr, rows, ud) and FI.rule_tests(sr.slug_dir, T.RID) == {FI.TEST_DOB}
-    assert _redecide(sr) == {T.RID: {"outcome": "cleared", "tests": [FI.TEST_DOB]}}
-    assert not FI.matches(T.RID, FI.withheld(sr.slug_dir))  # a candidate like any other now
+    assert _redecide(sr) == {T.RID: {"outcome": "cleared: pending selection", "tests": [FI.TEST_DOB]}}
+    assert FI.matches(T.RID, FI.withheld(sr.slug_dir))  # nothing written yet: the clear waits on selection
+    from jobs.stages import update_select as US
+
+    assert [r["id"] for r in US._candidates(sr, {})[0]] == [T.RID]  # but it is a candidate like any other
+    rows, ud = T._scene(sr, (18, 24), T._delivered())  # this run's picture record: its pages are delivered
+    assert not T._withheld(sr, rows, ud)
+    assert not FI.matches(T.RID, FI.withheld(sr.slug_dir))  # the clear is written once it survived selection
+    assert json.loads((ud / "identity_redecided.json").read_text())[T.RID]["outcome"] == "cleared"
     # Mutation: the misread pages are NOT delivered pages: the finding stands and it stays withheld.
     sr2 = T._sr(job_dir, firm_config_path, data_root / "m2")
     rows, ud = T._scene(sr2, (18, 24), None)
     assert T._withheld(sr2, rows, ud)
     assert _redecide(sr2, range(26, 30))[T.RID]["outcome"] == "kept"
     assert FI.matches(T.RID, FI.withheld(sr2.slug_dir))
+
+
+def test_a_file_cleared_then_rewithheld_in_the_same_run_records_one_stable_outcome(
+    job_dir, firm_config_path, data_root
+) -> None:
+    """The review of 9b039830e: the re-decision exempted pages through its own
+    picture pairing and cleared the file; selection, reading the run's picture
+    record (where an exact extract of a delivered exhibit has no page rows),
+    withheld it again. The record said "cleared" every run and the decision
+    rows grew by a pair each time. Now the outcome is the final one."""
+    import test_identity_delivered_page as T
+
+    sr = T._sr(job_dir, firm_config_path, data_root)
+    rows, ud = T._scene(sr, (18, 24), None)
+    assert T._withheld(sr, rows, ud)
+    release = sr.slug_dir / FI.RELEASE_FILE
+    before = len(json.loads(release.read_text())["decisions"])
+    outcomes = []
+    for _ in range(3):
+        assert _redecide(sr)[T.RID]["outcome"] == "cleared: pending selection"
+        rows, ud = T._scene(sr, (18, 24), None)  # this run's picture record holds no exemption
+        assert T._withheld(sr, rows, ud)
+        outcomes.append(json.loads((ud / "identity_redecided.json").read_text())[T.RID])
+    assert outcomes == [{"outcome": "kept: re-withheld this run", "tests": [FI.TEST_DOB]}] * 3
+    assert len(json.loads(release.read_text())["decisions"]) == before  # no cleared/withheld pair each run
+    assert FI.matches(T.RID, FI.withheld(sr.slug_dir)) and FI.by_rule(sr.slug_dir, T.RID, FI.RULE_ANOTHER_PERSON)
 
 
 def test_a_rule_withhold_that_cannot_be_retested_stays_withheld(job_dir, firm_config_path, data_root) -> None:

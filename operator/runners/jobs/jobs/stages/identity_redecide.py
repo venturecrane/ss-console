@@ -18,14 +18,20 @@ ground) is re-decided; a person's decision never is. For each such file:
   test before the vision pass; otherwise it is KEPT, ``kept: cannot re-test``;
 * the other-person test is run on its pages with the delivered-page
   exemption of #4105 (a page whose picture is EXACTLY a page of a delivered
-  exhibit is the client's own): a finding keeps it (``kept``); none clears it
-  (``cleared``: ``foreign_identity.clear_by_rule``).
+  exhibit is the client's own): a finding keeps it (``kept``); none makes it
+  ``cleared: pending selection``.
 
-A cleared file is no longer withheld, so ``update_select._candidates`` makes
-it a candidate like any other, and every later step treats it exactly as it
-treats any file on main; a kept file is not a candidate, exactly as on main.
-No file is ever half a candidate. Each outcome is recorded with its test
-codes in ``update/identity_redecided.json``.
+A file pending its clear is a candidate (``update_select._candidates`` reads
+this record), and every later step treats it exactly as it treats any file
+on main; a kept file is not a candidate, exactly as on main. The clear is
+written to ``identity_release.json`` only once the file survives
+``update_select._leave_out_foreign`` (``finalize``): a file that step
+withholds again in the same run (it reads the run's own picture record,
+where an exact extract of a delivered exhibit has no page rows, so the
+exemption above may not reach it there) is recorded as ``kept: re-withheld
+this run``, with both tests, and no decision row is added, so the outcome is
+the FINAL one and the decisions never grow run after run. Each outcome is
+recorded with its test codes in ``update/identity_redecided.json``.
 """
 
 from __future__ import annotations
@@ -40,6 +46,10 @@ from .base import StageRun, read_jsonl
 
 CLEARED, KEPT = "cleared", "kept"
 KEPT_CANNOT = f"kept: {FI.KEPT_CANNOT_RETEST}"
+#: Passed its test in ``update_pages``; cleared only if it survives selection (``finalize``).
+PENDING = "cleared: pending selection"
+KEPT_REWITHHELD = "kept: re-withheld this run"
+KEPT_NOT_READ = "kept: not a candidate this run"
 
 
 def _exempt(sigs: list[PI.Sig] | None, delivered: list[tuple[int, list[PI.Sig]]]) -> set[int]:
@@ -79,12 +89,53 @@ def redecide(
         if found:
             out[rid] = {"outcome": KEPT, "tests": tests}
             continue
-        FI.clear_by_rule(sr.slug_dir, [rid], ground=FI.RULE_ANOTHER_PERSON, can_run=can_run)
-        out[rid] = {"outcome": CLEARED, "tests": tests}
+        out[rid] = {"outcome": PENDING, "tests": tests}  # written to identity_release.json by ``finalize``
     ud = update_dir(sr)
     ud.mkdir(parents=True, exist_ok=True)
     (ud / name).write_text(json.dumps(out, indent=1, sort_keys=True), encoding="utf-8")
     if out:
-        n = sum(v["outcome"] == CLEARED for v in out.values())
-        sr.log(f"update_pages: {len(out)} file(s) the other-person rule withheld before re-decided: {n} cleared")
+        n = sum(v["outcome"] == PENDING for v in out.values())
+        sr.log(
+            f"update_pages: {len(out)} file(s) the other-person rule withheld before re-decided: {n} pass their test"
+        )
     return out
+
+
+def pending(path: Path) -> set[str]:
+    """The files whose clear waits on selection (read tolerantly: a missing or
+    damaged record means none, so every withhold stands)."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, ValueError):
+        return set()
+    return (
+        {str(k) for k, v in raw.items() if isinstance(v, dict) and v.get("outcome") == PENDING}
+        if isinstance(raw, dict)
+        else set()
+    )
+
+
+def finalize(sr: StageRun, path: Path, candidates: set[str], held: dict[str, list[str]]) -> None:
+    """After ``_leave_out_foreign``: each file pending its clear is cleared
+    (written once, now) when it was a candidate and selection did not withhold
+    it; otherwise it stays withheld (``held``: {id: this run's test codes}),
+    no decision row added, and the record says so. The record then holds the
+    FINAL outcome."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, ValueError):
+        return
+    if not isinstance(raw, dict):
+        return
+    can_run = FI.runnable(*FI.identities(sr.job.units))
+    for rid, v in raw.items():
+        if not isinstance(v, dict) or v.get("outcome") != PENDING:
+            continue
+        if rid in held:
+            v["outcome"], v["tests"] = KEPT_REWITHHELD, sorted(set(v.get("tests") or []) | set(held[rid]))
+        elif rid in candidates:
+            FI.clear_by_rule(sr.slug_dir, [rid], ground=FI.RULE_ANOTHER_PERSON, can_run=can_run)
+            v["outcome"] = CLEARED
+        else:
+            v["outcome"] = KEPT_NOT_READ
+    path.write_text(json.dumps(raw, indent=1, sort_keys=True), encoding="utf-8")

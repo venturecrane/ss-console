@@ -86,7 +86,7 @@ from ..medchron.update import (
 from ..medchron.update import outcome as UO
 from ..medchron.audit.page_text import duplicate_exhibits
 from ..medchron.update.locate import vendor_name
-from . import prior_reading
+from . import identity_redecide, prior_reading
 from .base import StageRun, read_json, read_jsonl
 from .transcript import split_pages
 from .update_base import HELD, plan, update_dir
@@ -139,6 +139,7 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
         FI.WITHHELD_REASON: [],
     }
     withheld = FI.withheld(sr.slug_dir)
+    passed = identity_redecide.pending(update_dir(sr) / REDECIDED_FILE)
     locked = set(unopened.password_protected(sr.slug_dir))
     raw = read_jsonl(sr.slug_dir / "raw_manifest.jsonl")
     prior = prior_reading.decided(sr, {str(r.get("id")) for r in raw})
@@ -150,10 +151,10 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
     for r in raw:
         if not r.get("ok") or r.get("duplicate_of") or not r.get("path"):
             continue
-        if FI.matches(str(r["id"]), withheld):
+        if FI.matches(str(r["id"]), withheld) and str(r["id"]) not in passed:
             # Keyed by how it is disclosed: the firm's direction, or the rule's.
-            # (A file the rule withheld on an earlier run is re-decided BEFORE
-            # this, by ``update_pages``; cleared, it is no longer withheld.)
+            # (A file the rule withheld on an earlier run that passed its test
+            # again in ``update_pages`` is a candidate: ``identity_redecide``.)
             skipped.setdefault(FI.withheld_reason(sr.slug_dir, str(r["id"])), []).append(str(r["id"]))
             continue
         if r.get("sha256") in delivered_sha or (r.get("sha256") and r["sha256"] in delivered_src):
@@ -202,16 +203,20 @@ def _leave_out_foreign(
 
     holds = _identity_holds(sr, rows, ud)
     identity_pages.record_cleared(sr, ud, {h.split(":", 1)[0] for h in holds})
+    tests = {h.split(":", 1)[0]: FI.tests_of(h.split(":", 1)[1].split("; ")) for h in holds}
+    # A file pending its clear (``identity_redecide``) is cleared only now that it
+    # survived this; one found again stays withheld with no decision row added.
+    pend = identity_redecide.pending(ud / REDECIDED_FILE)
+    identity_redecide.finalize(
+        sr, ud / REDECIDED_FILE, {str(r["id"]) for r in rows}, {i: tests[i] for i in tests if i in pend}
+    )
     if not holds:
         return rows
     (ud / "identity_holds.json").write_text(json.dumps(holds, indent=1), encoding="utf-8")
     ids = [h.split(":", 1)[0] for h in holds]
-    FI.withhold_by_rule(
-        sr.slug_dir,
-        ids,
-        ground=FI.RULE_ANOTHER_PERSON,
-        tests={h.split(":", 1)[0]: FI.tests_of(h.split(":", 1)[1].split("; ")) for h in holds},
-    )
+    new = [i for i in ids if i not in pend]  # already withheld by rule: never a second row
+    if new:
+        FI.withhold_by_rule(sr.slug_dir, new, ground=FI.RULE_ANOTHER_PERSON, tests={i: tests[i] for i in new})
     skipped.setdefault(FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON], []).extend(ids)
     sr.log(
         f"{len(ids)} document(s) name a different person than the client; left out by rule and disclosed "
