@@ -44,6 +44,7 @@ def test_the_counts_come_from_the_saved_review_and_collect_records(tmp_path: Pat
     assert core_counts.derived(tmp_path) == {
         "review_must_fix": 4,
         "review_must_fix_omitted": 2,  # "12 ..." is class 12, not class 2
+        "review_must_fix_duplicate": 1,
         "review_calls": 3,
         "review_text_pages": 24,
         "review_image_pages": 5,

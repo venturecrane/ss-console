@@ -8,8 +8,9 @@ hourly triage as facts about one run.
 What they answer (2026-11-18, measured on two real updates): how many of the
 review's must-fix findings were content the writer left out (56 and 80 percent
 before the writer and the reviewer shared one depth rule), how many pages the
-review read as text and how many as pictures, and how many citations named a
-copy of the page that was read.
+review read as text and how many as pictures, how many citations named a
+copy of the page that was read, and how many findings were one visit written
+twice (the small reading windows can split a visit between two requests).
 """
 
 from __future__ import annotations
@@ -20,8 +21,9 @@ from typing import Any
 
 from .update import cite_read as CR
 
-#: The reviewer's class number for omitted content (``prompts/update-review-system.md``, check 2).
-OMITTED = "2"
+#: The reviewer's class numbers (``prompts/update-review-system.md``): check 2 is
+#: omitted content, check 4 a duplicate entry or exhibit.
+OMITTED, DUPLICATE = "2", "4"
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -50,6 +52,7 @@ def _review(rec: dict[str, Any]) -> dict[str, int]:
     return {
         "review_must_fix": len(frozen),
         "review_must_fix_omitted": sum(1 for k in klasses if k == OMITTED),
+        "review_must_fix_duplicate": sum(1 for k in klasses if k == DUPLICATE),
         "review_calls": len(usage),
         "review_text_pages": sum(_num(u.get("text_pages")) for u in usage),
         "review_image_pages": sum(_num(u.get("image_pages")) for u in usage),
@@ -85,4 +88,4 @@ def with_derived(counts: dict[str, dict[str, int]], job_dir: str | Path) -> dict
     return {**counts, "checks": {**(counts.get("checks") or {}), **mine}}
 
 
-__all__ = ["OMITTED", "derived", "with_derived"]
+__all__ = ["DUPLICATE", "OMITTED", "derived", "with_derived"]

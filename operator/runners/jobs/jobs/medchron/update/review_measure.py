@@ -177,7 +177,7 @@ def measure(slug_dir: Path, unit: str, cfg: Any, pricing: Any) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="python -m jobs.medchron.update.review_measure", description=__doc__.split("\n")[0]
+        prog="python -m jobs.medchron.update.review_measure", description=(__doc__ or "").split("\n")[0]
     )
     ap.add_argument("slug_dir", type=Path, help="the matter's data directory (<data_root>/<slug>)")
     ap.add_argument("--unit", required=True)
