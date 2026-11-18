@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from jobs.medchron import dag, driver as driver_mod
+from jobs.medchron import dag, dag_update, driver as driver_mod
+from jobs.medchron.state import RunState, state_path
 from jobs.medchron.update import docx_md, final_set as FS, final_set_io as FIO, proofs_final as PF, uncited as U
 from jobs.stages import update_final_set, update_finish, update_review
 from test_update_e2e import _driver, _Model, _upload_pause, scene  # noqa: F401 - `scene` is a fixture
@@ -71,9 +73,12 @@ def test_the_wired_stage_sits_between_review_and_assemble_and_is_rehearsable() -
     assert fin.requires == ("update_review",) and by["update_assemble"].requires == ("update_final_set",)
     assert fin.runner is update_final_set.run and fin.exit_map == update_final_set.EXITS
     assert not fin.paid and not fin.external  # `jobs rehearse --redo update_final_set` is permitted
-    # A redo of the review reopens the final set; a re-run final set reopens what reads its document.
-    assert "update_final_set" in by["update_review"].invalidates
-    assert {"update_assemble", "update_render", "update_proofs", "update_manifest"} <= set(fin.invalidates)
+    # A redo of the review reopens the final set and what reads its document; the final set
+    # reopens nothing, so its no-op on an update that already sent rebuilds nothing.
+    assert {"update_final_set", "update_assemble", "update_render", "update_proofs", "update_manifest"} <= set(
+        by["update_review"].invalidates
+    )
+    assert fin.invalidates == ()
     assert dag._validate(seq) == []
     # The fresh chronology's order is unchanged: no final_proof stage (record-only wiring deferred).
     assert "final_proof" not in [s.name for s in dag.STAGES]
@@ -228,3 +233,113 @@ def test_redo_update_review_reruns_the_final_set_and_what_reads_its_document(
     }
     d.run()
     assert order == ["update_review", "update_final_set", "update_assemble", "update_render"]
+
+
+def test_a_crash_in_the_final_proofs_is_recorded_and_the_update_still_delivers(
+    scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mutation: proofs 11 to 15 raise. Proofs 1 to 10 decide the run as on
+    main; the crash is recorded, never a stopped update."""
+    job_dir, seat = scene
+    _upload_pause(monkeypatch)
+
+    def crash(_sr):
+        raise ValueError("proof code crashed")
+
+    monkeypatch.setattr(update_finish, "final_proofs", crash)
+    o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
+    assert o.outcome == "delivered", o
+    proofs = json.loads((data_root / "example-matter" / "runs" / "alpha" / "update" / "proofs.json").read_text())
+    assert proofs["fails"] == [] and proofs["recorded"] == {update_finish.FINAL_PROOFS_ERROR: 1}
+    assert not any(ln.startswith("11.") for ln in proofs["lines"])
+    assert seat.sent
+
+
+def _old_dag() -> tuple[dag.Stage, ...]:
+    """The update's order before this change: no final set, assemble after the review."""
+    out = []
+    for s in dag_update.UPDATE_STAGES:
+        if s.name == "update_final_set":
+            continue
+        if s.name == "update_review":
+            s = replace(s, invalidates=())
+        if s.name == "update_assemble":
+            s = replace(s, requires=("update_review",))
+        out.append(s)
+    return tuple(out)
+
+
+def _sent_then_resumed(job_dir: Path, data_root: Path, firm: Path, pricing: Path, seat, monkeypatch) -> list[str]:
+    """An update run to its send on the old order, then its upload reopened (a
+    requeue after a short read-back, or a hold at upload resumed)."""
+    with monkeypatch.context() as m:
+        m.setattr(dag_update, "UPDATE_STAGES", _old_dag())
+        first = _driver(job_dir, firm, pricing, seat, _Model()).run()[0]
+    assert first.outcome == "delivered" and seat.sent, first
+    st = RunState.load_or_new(state_path(data_root, "example-matter", "alpha"), slug="example-matter", unit="alpha")
+    assert "update_final_set" not in st.stages
+    st.invalidate(["upload"])
+    return [s["name"] for s in seat.sent]
+
+
+def test_an_update_that_already_sent_its_files_resumes_with_nothing_rebuilt(
+    scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job_dir, seat = scene
+    _upload_pause(monkeypatch)
+    sent = _sent_then_resumed(job_dir, data_root, firm_config_path, pricing_path, seat, monkeypatch)
+    sd = data_root / "example-matter"
+    before = _doc(sd).read_bytes()
+    order: list[str] = []
+    d = _driver(job_dir, firm_config_path, pricing_path, seat, _Model())
+    d._runner_override = {
+        n: _traced(n, r, order)
+        for n, r in (
+            ("update_final_set", update_final_set.run),
+            ("update_assemble", update_finish.run_assemble),
+            ("update_render", update_finish.run_render),
+        )
+    }
+    o = d.run()[0]
+    assert o.outcome == "delivered", o
+    assert order == ["update_final_set"]  # nothing rebuilt
+    assert [s["name"] for s in seat.sent] == sent  # no second send
+    assert _doc(sd).read_bytes() == before and not (sd / "runs" / "alpha" / "update" / FS.REPORT).exists()
+    log = (sd / "runs" / "alpha" / "log-update_final_set.txt").read_text()
+    assert "already sent: left as filed" in log
+
+
+def test_falsifier_a_final_set_that_rebuilds_after_the_send_holds_the_update(
+    scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mutation: no guard, and the final set reopening assembly onward (this
+    PR's first version). The resumed update rebuilds what it sent; on a real
+    update the rebuilt chronology differs (exhibit titles weighted by cited
+    pages, the final set's drops), modelled here by one changed title word at
+    assembly. The filing then holds it for a person: the case the guard and
+    the order close."""
+    job_dir, seat = scene
+    _upload_pause(monkeypatch)
+    sent = _sent_then_resumed(job_dir, data_root, firm_config_path, pricing_path, seat, monkeypatch)
+    reopen = ("update_assemble", "update_render", "update_proofs", "update_manifest")
+    monkeypatch.setattr(
+        dag_update,
+        "UPDATE_STAGES",
+        tuple(replace(s, invalidates=reopen) if s.name == "update_final_set" else s for s in dag_update.UPDATE_STAGES),
+    )
+    monkeypatch.setattr(update_final_set, "already_sent", lambda _sr: False)
+    order: list[str] = []
+
+    def assemble(sr):
+        order.append("update_assemble")
+        rc = update_finish.run_assemble(sr)
+        p = sr.slug_dir / "runs" / sr.unit.unit / "update" / "updated-chronology.md"
+        p.write_text(p.read_text().replace("Example Imaging", "Example Imaging Center", 1))
+        return rc
+
+    d = _driver(job_dir, firm_config_path, pricing_path, seat, _Model())
+    d._runner_override = {"update_assemble": assemble}
+    o = d.run()[0]
+    assert order == ["update_assemble"]  # the send's files were rebuilt
+    assert o.outcome == "held" and o.stage == "upload", o
+    assert [s["name"] for s in seat.sent] == sent  # never a second copy

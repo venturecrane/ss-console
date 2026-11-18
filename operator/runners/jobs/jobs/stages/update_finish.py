@@ -302,18 +302,46 @@ def run_proofs(sr: StageRun) -> int:
     r = P.run(x)
     # Proofs 11 to 15 (``update/proofs_final``): only 11 can fail the run;
     # 12 to 15 are recorded into proofs.json and never fail it.
-    fin = final_proofs(sr)
-    r.lines += fin.lines
-    r.fails += fin.fails
+    fin = _final_proofs(sr)
+    if fin is not None:
+        r.lines += fin.lines
+        r.fails += fin.fails
     for ln in r.lines:
         sr.log(ln)
     (ud / "proofs.json").write_text(json.dumps({"lines": r.lines, "fails": r.fails}, indent=1), encoding="utf-8")
-    record_final(sr, fin)
+    _record_final(sr, ud, fin)
     if r.fails:
         sr.log(f"update_proofs_failed: {', '.join(r.fails)}; nothing is filed")
         return 1
     sr.log("PROOFS PASS")
     return 0
+
+
+#: Recorded in ``update/proofs.json`` when proofs 11 to 15 could not run.
+FINAL_PROOFS_ERROR = "final_proofs_error"
+
+
+def _final_proofs(sr: StageRun) -> Any:
+    """Proofs 11 to 15, or None when their code raised: new proofs never add
+    a way to stop an update, so a crash is logged and recorded
+    (``FINAL_PROOFS_ERROR``), and proofs 1 to 10 decide the run as on main."""
+    try:
+        return final_proofs(sr)
+    except Exception as exc:  # noqa: BLE001 - a crash in the new proofs is recorded, never a stopped update
+        sr.log(f"{FINAL_PROOFS_ERROR}: proofs 11 to 15 did not run ({type(exc).__name__}); recorded, not failed")
+        return None
+
+
+def _record_final(sr: StageRun, ud: Path, fin: Any) -> None:
+    from ..medchron import graded_proof as GP
+
+    try:
+        if fin is None:
+            GP.write(ud / GP.PROOFS, {FINAL_PROOFS_ERROR: 1}, None)
+        else:
+            record_final(sr, fin)
+    except Exception as exc:  # noqa: BLE001 - the record is best effort; it never stops an update
+        sr.log(f"{FINAL_PROOFS_ERROR}: the final proofs' record was not written ({type(exc).__name__})")
 
 
 def _records_review(sr: StageRun, ud: Path) -> list[str]:

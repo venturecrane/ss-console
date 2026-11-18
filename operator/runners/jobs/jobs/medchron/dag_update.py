@@ -128,7 +128,11 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         _slug_unit,
         paid=True,
         requires=("audit",),
-        invalidates=("update_final_set",),
+        # What reads the reviewed document is reopened HERE, not by the final
+        # set: an update that already sent its files runs the final set as a
+        # no-op on resume (``stages/update_final_set``), and its success must
+        # never rebuild what was sent (the send record would hold other bytes).
+        invalidates=("update_final_set", "update_assemble", "update_render", "update_proofs", "update_manifest"),
         runner=_ureview.run,
         exit_map={
             1: (FAILED, "update_review: the grader of the finisher's sentences gave no verdict; a rerun grades again"),
@@ -144,14 +148,12 @@ UPDATE_STAGES: tuple[Stage, ...] = (
     # The final set of the added entries (``stages/update_final_set``, $0,
     # delete-only): stray citation-only lines joined, a repeat the other entry
     # covers dropped, every heading checked against its pages (recorded only).
-    # It changes the reviewed document, so what reads that document after it
-    # reopens when it re-runs.
+    # It reopens nothing: a redo of the review reopens it and what follows it.
     Stage(
         "update_final_set",
         "",
         _slug_unit,
         requires=("update_review",),
-        invalidates=("update_assemble", "update_render", "update_proofs", "update_manifest"),
         runner=_ufinal.run,
         exit_map=_ufinal.EXITS,
     ),
