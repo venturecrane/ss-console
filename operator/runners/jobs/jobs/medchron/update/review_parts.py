@@ -14,11 +14,21 @@ from distant pages of one long file (the same visit printed twice inside it)
 are compared there, since no window holds both.
 
 Every part also carries, read only, the delivered entries and the other added
-entries on the same dates: a copy of a delivered visit is found against them.
+entries on the same dates: a copy of a delivered visit is found against them,
+and content they already record is not reported missing. They come first in
+the request, after the client line, so parts with the same entries (the
+windows of one long document an entry continues through) read them from the
+prompt cache rather than paying for them again (``cache_blocks``,
+2026-11-18).
+
+A page is shown as its own text or as its picture by the one rule both
+checkers share (``medchron/page_mode.py``); a text page carries the same
+label a picture does (``review_pages.page_blocks``).
 
 THE FINISHER is shown the findings it settles, the entries they are on (with
 their claim anchors), the same-date entries a duplicate may survive in, and
-the page images the findings rely on, then the pages the entries cite.
+the pages the findings name with the page either side (2026-11-18: no longer
+every page the entries cite).
 """
 
 from __future__ import annotations
@@ -29,7 +39,7 @@ from datetime import date
 from typing import Any, Callable
 
 from ..audit import claims as CL
-from . import body as B, review_repair as RR
+from . import body as B, frozen as FZ, review_pages as RV, review_repair as RR
 
 WINDOW_PAGES = 20
 #: Delivered entries within this many days of a part's entries are shown with
@@ -47,7 +57,7 @@ Images = Callable[[int, int], dict[str, Any] | None]
 
 @dataclass
 class Part:
-    kind: str  # "pages" | "duplicates" | "text"
+    kind: str  # "pages" | "duplicates" | "text" | "recheck"
     entries: list[RR.Entry]
     exhibit: int = 0
     pages: list[int] = field(default_factory=list)
@@ -131,6 +141,40 @@ def plan(
     if plain:
         out.append(Part("text", plain))
     return [p for p in out if p.entries]
+
+
+def focus(rows: list[dict[str, Any]]) -> dict[int, set[int]] | None:
+    """The pages the re-check reads: each page an open frozen finding names,
+    with the page either side ({exhibit: pages}). None (read every page, as
+    round 1 does) when a part round 1 could not review is among them: its
+    entries were never reviewed, so no page of theirs is named yet."""
+    out: dict[int, set[int]] = {}
+    for r in rows:
+        f = r.get("finding") or {}
+        if f.get("klass") == FZ.NOT_REVIEWED:
+            return None
+        ex, pg = f.get("exhibit"), f.get("page")
+        if isinstance(ex, int) and isinstance(pg, int) and ex and pg:
+            out.setdefault(ex, set()).update(p for p in (pg - 1, pg, pg + 1) if p >= 1)
+    return out
+
+
+def plan_focus(
+    ents: list[RR.Entry], keep: set[int], npages: Callable[[int], int], pages: dict[int, set[int]]
+) -> list[Part]:
+    """The re-check's parts: per exhibit, only `pages` (``focus``), in
+    windows of WINDOW_PAGES, each with the targeted entries citing that
+    exhibit; a targeted entry citing no focused exhibit is checked as text."""
+    out: list[Part] = []
+    for ex in sorted(x for x in pages if x in keep):
+        n = max(npages(ex), 1)
+        show = sorted(p for p in pages[ex] if p <= n)
+        es = [e for e in ents if any(x == ex for x, _ in e.cites())]
+        for i in range(0, len(show), WINDOW_PAGES) if es else ():
+            out.append(Part("recheck", es, ex, show[i : i + WINDOW_PAGES]))
+    seen = {e.anchor for p in out for e in p.entries}
+    rest = [e for e in ents if e.anchor not in seen]
+    return out + ([Part("text", rest)] if rest else [])
 
 
 def _entry_block(e: RR.Entry, tag: str = "ADDED") -> str:
@@ -217,13 +261,21 @@ def review_content(
     all_ents: list[RR.Entry],
     delivered: list[str],
     already: Already | None = None,
+    modes: RV.Modes | None = None,
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = [head(client)]
+    ctx = context(part.entries, all_ents, delivered, already)
+    out += [{"type": "text", "text": ctx}] if ctx else []  # first: the prefix parts with the same entries share
     names = ", ".join(e.anchor for e in part.entries)
     if part.kind == "pages":
         ask = (
             f"PART: Exhibit {part.exhibit} pages {part.pages[0]} to {part.pages[-1]}, every page of this window. "
             f"Check the added entries {names} against these pages."
+        )
+    elif part.kind == "recheck":
+        ask = (
+            f"PART: RE-CHECK, Exhibit {part.exhibit} pp. {_ranges(part.pages)}: the pages earlier findings name, "
+            f"with the page either side. Check the added entries {names} against these pages."
         )
     elif part.kind == "duplicates":
         ask = (
@@ -238,14 +290,36 @@ def review_content(
     out.append({"type": "text", "text": f"{ask}\n\nADDED ENTRIES IN THIS PART: {names}"})
     out += [{"type": "text", "text": _entry_block(e)} for e in part.entries]
     for pg in part.pages:
-        img = images(part.exhibit, pg)
-        if img is None:
-            continue
         by = [e.anchor for e in part.entries if (part.exhibit, pg) in e.cites()]
         label = f"cited by {', '.join(by)}" if by else "cited by no added entry"
-        out += [{"type": "text", "text": f"Exhibit {part.exhibit} p. {pg} ({label}):"}, img]
-    ctx = context(part.entries, all_ents, delivered, already)
-    return out + ([{"type": "text", "text": ctx}] if ctx else [])
+        out += RV.page_blocks(part.exhibit, pg, f" ({label})", images, modes)
+    return out
+
+
+def repeated_contexts(
+    parts: list[Part], all_ents: list[RR.Entry], delivered: list[str], already: Already | None = None
+) -> set[str]:
+    """The nearby-entries blocks more than one of a round's parts carries
+    (the windows of one long document an entry continues through): the only
+    ones worth a cache write (``llm``: a block unique to one call is never
+    marked)."""
+    seen: set[str] = set()
+    out: set[str] = set()
+    for p in parts:
+        ctx = context(p.entries, all_ents, delivered, already)
+        if ctx and ctx in seen:
+            out.add(ctx)
+        seen.add(ctx)
+    return out
+
+
+def cache_blocks(content: list[dict[str, Any]], repeats: set[str]) -> tuple[str, ...]:
+    """A review request's cache markers: the system prompt, and its nearby
+    entries (block 1, right after the client line) when another part of the
+    round carries the very same block, so every later part reads them from
+    the cache."""
+    ctx = content[1].get("text") if len(content) > 1 else None
+    return ("system", "user:1") if ctx and ctx in repeats else ("system",)
 
 
 def entry_index(anchor: str) -> int | None:
@@ -282,17 +356,15 @@ def finish_content(
     images: Images,
     all_ents: list[RR.Entry],
     delivered: list[str],
+    modes: RV.Modes | None = None,
 ) -> list[dict[str, Any]]:
+    """The finisher's request: the findings, their entries, the pages the
+    findings name with the page either side (``review_pages.named_pages``),
+    each as text or picture by the one rule, and the nearby entries."""
     out: list[dict[str, Any]] = [head(client)]
     out.append({"type": "text", "text": "FINDINGS TO SETTLE:\n" + "\n".join(_finding_line(f) for f in found)})
     out += [{"type": "text", "text": _entry_block(e)} for e in ents]
-    pages = [(f.exhibit, f.page) for f in found if f.exhibit and f.page]
-    pages += sorted({p for e in ents for p in e.cites()})
-    shown = 0
-    for ex, pg in dict.fromkeys(pages):
-        img = images(ex, pg) if shown < FINISH_MAX_IMAGES else None
-        if img is not None:
-            out += [{"type": "text", "text": f"Exhibit {ex} p. {pg}:"}, img]
-            shown += 1
+    for ex, pg in RV.named_pages(found, FINISH_MAX_IMAGES):
+        out += RV.page_blocks(ex, pg, "", images, modes)
     ctx = context(ents, all_ents, delivered)
     return out + ([{"type": "text", "text": ctx}] if ctx else [])

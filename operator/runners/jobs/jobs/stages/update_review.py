@@ -14,7 +14,9 @@ a new case. This stage is the laptop's step, in the lane, as one loop:
 1. REVIEW (``update/review_parts.py``). A fresh pass with no access to
    compose's reasoning reads every added entry against EVERY page of the new
    documents it cites, in windows sized to finish, plus a text-only duplicate
-   part per long document. It returns findings only: severity, class, where
+   part per long document. A page is shown as its own text or as its
+   picture by the one rule the claim audit shares (``medchron/page_mode.py``,
+   2026-11-18). It returns findings only: severity, class, where
    (anchor), the page it relies on and what that page says. A part whose
    reply runs out is split in half; a single page that still cannot finish
    is held "not reviewed" (nothing unreviewed goes on).
@@ -36,7 +38,8 @@ a new case. This stage is the laptop's step, in the lane, as one loop:
    frozen key matches is recorded as advisory and never blocks or reaches
    the finisher. Duplicates are decided in code before the finisher
    (``update/duplicates.py``), never a hold. After the one finish, ONE narrow
-   re-check reviews only the entries still-open frozen findings sit on: a
+   re-check reviews only the entries still-open frozen findings sit on, on
+   only the pages those findings name and the page either side: a
    frozen finding it raises again (same key) is CONFIRMED and gets one more
    finisher attempt; one it does not raise is settled ("not raised again on
    re-check"). No further review. No confirmed finding left open -> clean:
@@ -60,7 +63,7 @@ from __future__ import annotations
 import json
 import os
 import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -73,13 +76,16 @@ from ..proof import review as PR
 from ..medchron.audit import handwritten_evidence as HE
 from ..medchron.update import body as B, duplicates as DU, entry_edits as EE, finisher as FN, handwritten as H
 from ..medchron.update import frozen as FZ, illegible as IL
-from ..medchron.update import review_parts as RP, review_repair as RR
+from ..medchron.update import review_pages as RV, review_parts as RP, review_repair as RR
+from ..medchron.page_mode import Modes
 from . import audit_loop, update_review_settle as URS
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
 from .update_review_io import At, Images, _checkpoint, _resume, _sha, already_pages, page_counts
 from .update_review_io import _end, _image_source, page_text
 from .update_review_io import CHECKPOINT as CHECKPOINT  # the stage's checkpoint file name, read by tests
+from .update_review_cost import LATER_SHARE as LATER_SHARE, PAGE_TOKENS as PAGE_TOKENS  # the projection's figures
+from .update_review_cost import projected_usd as projected_usd  # read by ``medchron/projection.py``
 
 #: Rounds of the loop: 1 is the full review and its finish; 2 is the narrow
 #: re-check of the frozen findings still open and the one more finish of the
@@ -89,12 +95,6 @@ SPLIT_DEPTH = 5
 MAX_TOKENS = 32_000
 RECORD = "review_repair.json"
 STAGE = "update_review"
-#: The projection's input per page shown (an image plus its label) and the
-#: share of round one the rest adds: the finish, the narrow re-check (a subset
-#: of round one's pages) and its one finish; kept at a full round, an upper
-#: bound now that there is no third review.
-PAGE_TOKENS = 1_800
-LATER_SHARE = 1.0
 
 #: (document before, document after) -> the new claims the audit did not support
 Verify = Callable[[str, str], list[dict[str, Any]]]
@@ -111,6 +111,9 @@ class Ctx:
     npages: Callable[[int], int]
     verify: Verify
     already: RP.Already = field(default_factory=dict)
+    modes: Any = None  # page -> text or picture (``medchron/page_mode.py``); None: every page a picture
+    focus: dict[int, set[int]] | None = None  # the re-check's pages (``review_parts.focus``)
+    repeats: set[str] = field(default_factory=set)  # nearby-entries blocks two parts share (cache-marked)
     rnd: int = 0
     calls: int = 0
     usage: list[dict[str, Any]] = field(default_factory=list)
@@ -182,7 +185,7 @@ def _client(sr: StageRun) -> str:
 
 
 # ---- the paid calls ---------------------------------------------------------------
-def _call(c: Ctx, system: str, content: list[dict[str, Any]], key: str) -> Any:
+def _call(c: Ctx, system: str, content: list[dict[str, Any]], key: str, cache: tuple[str, ...] = ("system",)) -> Any:
     r = c.sr.doorway.call(
         STAGE,
         model=c.model,
@@ -191,10 +194,11 @@ def _call(c: Ctx, system: str, content: list[dict[str, Any]], key: str) -> Any:
         max_tokens=MAX_TOKENS,
         stream=True,
         effort="high",
+        cache_blocks=cache,
         custom_id=f"{STAGE}-r{c.rnd}-{key}",
     )
     c.calls += 1
-    c.usage.append({"model": c.model, **_usage(r.usage)})
+    c.usage.append({"model": c.model, **_usage(r.usage), **RV.page_reads(content)})  # pages as text and as pictures
     return r
 
 
@@ -210,10 +214,10 @@ def _usage(usage: Any) -> dict[str, int]:
 def _halves(p: RP.Part) -> list[RP.Part] | None:
     if len(p.pages) > 1:
         h = len(p.pages) // 2
-        return [RP.Part(p.kind, p.entries, p.exhibit, p.pages[:h]), RP.Part(p.kind, p.entries, p.exhibit, p.pages[h:])]
+        return [replace(p, pages=p.pages[:h], note=""), replace(p, pages=p.pages[h:], note="")]
     if len(p.entries) > 1:
         h = len(p.entries) // 2
-        return [RP.Part(p.kind, p.entries[:h], p.exhibit, p.pages), RP.Part(p.kind, p.entries[h:], p.exhibit, p.pages)]
+        return [replace(p, entries=p.entries[:h], note=""), replace(p, entries=p.entries[h:], note="")]
     return None
 
 
@@ -248,9 +252,9 @@ def _review_part(c: Ctx, p: RP.Part, ents: list[RR.Entry], base: list[str], key:
     reply with findings but no completeness line is read as reviewed with
     them; one that still does not parse is a NOT_REVIEWED finding."""
     leaf = depth >= SPLIT_DEPTH or _halves(p) is None
-    content = RP.review_content(p, _client(c.sr), c.images, ents, base, c.already)
+    content = RP.review_content(p, _client(c.sr), c.images, ents, base, c.already, c.modes)
     for attempt in (1, 2):
-        r = _call(c, c.system, content, f"{key}-{attempt}")
+        r = _call(c, c.system, content, f"{key}-{attempt}", RP.cache_blocks(content, c.repeats))
         if r.stop_reason != "max_tokens":
             try:
                 return RR.parse_reply(r.text, lenient=leaf)
@@ -272,7 +276,12 @@ def review_round(c: Ctx, md: str, base: list[str], targets: set[int] | None) -> 
     pick = [e for i, e in enumerate(ents) if targets is None or i in targets]
     found: list[RR.Finding] = []
     seen: set[tuple] = set()
-    for i, part in enumerate(RP.plan(pick, _keep(c.sr), c.npages, c.already), 1):
+    keep = _keep(c.sr)
+    parts = (
+        RP.plan(pick, keep, c.npages, c.already) if c.focus is None else RP.plan_focus(pick, keep, c.npages, c.focus)
+    )
+    c.repeats = RP.repeated_contexts(parts, ents, base, c.already)
+    for i, part in enumerate(parts, 1):
         for f in _review_part(c, part, ents, base, f"p{i}"):
             k = (f.anchor, f.klass, f.exhibit, f.page, f.problem[:80])
             if k not in seen:
@@ -300,7 +309,7 @@ def _finish_calls(c: Ctx, todo: list[RR.Finding], ents: list[RR.Entry], base: li
     queue = [(es, fs, f"f{i}") for i, (es, fs) in enumerate(RP.finish_parts(todo, ents), 1)]
     while queue:
         es, fs, key = queue.pop(0)
-        content = RP.finish_content(es, fs, _client(c.sr), c.images, ents, base)
+        content = RP.finish_content(es, fs, _client(c.sr), c.images, ents, base, c.modes)
         r = _call(c, c.fsystem, content, key)
         try:
             if r.stop_reason == "max_tokens":
@@ -520,6 +529,7 @@ def run(
     evidence: RR.Evidence | None = None,
     verify: Verify | None = None,
     npages: Callable[[int], int] | None = None,
+    modes: Any = None,
 ) -> int:
     ud, doc = update_dir(sr), sr.slug_dir / "runs" / sr.unit.unit / "final-chronology.md"
     md = doc.read_text(encoding="utf-8")
@@ -528,7 +538,7 @@ def run(
         return again
     base = FN.delivered_of((ud / "base.md").read_text(encoding="utf-8"))
     c = _ctx(sr, images, evidence, verify)
-    c.npages, c.already = npages or c.npages, already_pages(sr)
+    c.npages, c.already, c.modes = npages or c.npages, already_pages(sr), modes or Modes.open(sr.slug_dir, sr.unit.unit)
     at = _resume(sr, ud)
     if at is not None:
         doc.write_text(at.md, encoding="utf-8")
@@ -628,6 +638,7 @@ def _recheck(c: Ctx, rec: dict[str, Any], md: str, base: list[str], doc: Path, u
     c.rnd, c.calls, c.usage = RECHECK, 0, []
     ents = RR.anchor_entries(md, _keep(c.sr), headings(c.sr.cfg))
     targets = FZ.locate([rows[i] for i in open_], ents)
+    c.focus = RP.focus([rows[i] for i in open_])  # only the pages the open findings name, and either side
     found, n = _review_once(c, rec, ud, md, base, targets, REVIEW)
     todo, unreviewed, confirms = FZ.triage(rows, open_, found, ents)
     keys = [FZ.key(f, ents) for f in found]  # before the finish moves any anchor
@@ -693,28 +704,3 @@ def _save(path: Path, rec: dict[str, Any], status: str, doc: Path, open_: list[R
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1), encoding="utf-8")
     _end(path.parent)  # a settled loop is never resumed
-
-
-def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:
-    """What this stage is projected to cost, from this matter's own pages:
-    every page of the new exhibits shown once to the review, the same again
-    for the rest (two finishes and the narrow re-check, at most), priced at the review model's input
-    rate (output is bounded by the parts and small beside the pages)."""
-    out = slug_dir / "out" / unit
-    doc = slug_dir / "runs" / unit / "final-chronology.md"
-    rec = read_json(slug_dir / "runs" / unit / "update" / RECORD, {})
-    if rec.get("status") == "clean" and doc.is_file() and rec.get("doc_sha_out") == _sha(doc.read_text("utf-8")):
-        # ``_reuse`` returns at once on this document (a resume after SMD's
-        # correction, ``jobs.medchron.update_decide``): projecting a full review
-        # here would hold a resumed job on the cap for money it never spends.
-        return 0.0
-    new = [r.get("exhibit") for r in read_json(slug_dir / "runs" / unit / "update" / "new_exhibits.final.json", [])]
-    exs = [x for x in new if isinstance(x, int)]
-    if not exs:
-        return None
-    n = page_counts(out)
-    pages = sum(n(x) for x in exs)
-    rate = pricing.rate_for(_model(cfg))
-    tokens_in = pages * PAGE_TOKENS * (1 + LATER_SHARE)
-    parts = max(1, pages // RP.WINDOW_PAGES + 1)
-    return (tokens_in * rate.input_per_million_cents + parts * 4_000 * rate.output_per_million_cents) / 1e8

@@ -8,7 +8,9 @@ control makes the round INVALID (2) and nothing repairs on an invalid audit.
 (2026-10-23: one whose page text carries the claim is retired, ``retired.py``.)
 
 TEXT MODE (`levers.audit_mode: text`): a claim whose cited pages all carry a
-native text layer is audited against a cached window of page text; the
+native text layer, and all read as text by the one page rule the update review
+shares (``medchron/page_mode.py``: no form, no flowsheet grid, no stated
+result, 200 characters at least), is audited against a cached window of page text; the
 window is one cluster, one worker task, so the cache reads land inside the
 block's life. The text verdict is only ever trusted to SAY yes: anything else
 is re-decided on the image path, and one in eight text-SUPPORTED verdicts is
@@ -40,6 +42,7 @@ from . import control_runs as CR
 from .handwritten_evidence import statements_for
 from .page_text import PageIndex, exhibit_paths
 from .render import img_block, render
+from .. import page_mode as PM
 
 SEED = 20260820
 REVERSE_EVERY = 8
@@ -338,21 +341,19 @@ class Round:
         per_ex: dict[int, list[dict]] = {}
         image: list[dict] = []
         elig: dict[str, int] = {}
+        modes = PM.Modes(index)
         for c in live:
             c["anchors"] = AN.find_anchors(c["claim"])
             np_ = index.npages(c["exhibit"]) or c["npages"]
-            # A positive result with a negation beside it, on its page or the
-            # next one, is read on the images (``negation.py``).
-            win = NG.window(c, index, np_, AN.choose_window, WINDOW_CAP)
+            # A cited page the one page rule shows as a picture (a form, a
+            # flowsheet grid, a short or transcribed page, a stated result:
+            # ``medchron/page_mode.py``) sends the claim to the images, as does
+            # a positive result with a negation beside it, on its page or the
+            # next one (``negation.py``).
+            pic = next((m.reason for p in c["pages"] if (m := modes(c["exhibit"], p)).kind == PM.IMAGE), None)
+            win = None if pic else NG.window(c, index, np_, AN.choose_window, WINDOW_CAP)
             if win is None:
-                cls = next(
-                    (
-                        index.classify(c["exhibit"], p)[0]
-                        for p in c["pages"]
-                        if index.classify(c["exhibit"], p)[0] != "native"
-                    ),
-                    "span>cap",
-                )
+                cls = pic or "span>cap"
                 elig[cls] = elig.get(cls, 0) + 1
                 c["window"] = None
                 image.append(c)
