@@ -430,10 +430,7 @@ def run(sr: StageRun) -> int:
     rows = _leave_out_foreign(sr, ud, rows, skipped)
     # Only what the delivery READ is "already read": a firm-numbered file the
     # delivered list never named was never read, so its words exclude nothing.
-    seen = S.seen_shingles(
-        [sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery],
-        [int(e["exhibit"]) for e in read_by_delivery],
-    )
+    seen = _seen(sr, read_by_delivery)
     ident = PG.load(ud)
     extracts = PG.merge_extracts(
         SUB.refiled_subsets(
@@ -470,10 +467,7 @@ def run(sr: StageRun) -> int:
         recs.append(rec)
         units.append(urow)
     extracts = {**extracts, **PG.merge_extracts(whole, {})}
-    try:  # a record: it never decides or stops anything
-        _record_pages(sr, ordered, read, extracts, skipped, ident)
-    except Exception as exc:  # noqa: BLE001 - the page record is evidence; its failure is logged, never the run's
-        sr.log(f"update_select: page record not written ({type(exc).__name__}: {str(exc)[:160]})")
+    _record_pages(sr, ordered, read, extracts, skipped, ident)
     unread = [f"Exhibit {r['exhibit']} p. {r['unread'][:6]}" for r in recs if r["unread"]]
     if unread:
         sr.log(HELD + f"page(s) the transcription could not read: {unread[:5]}")
@@ -504,7 +498,28 @@ def _record_pages(
     skipped: dict[str, list[str]],
     ident: PG.Loaded,
 ) -> None:
-    """Every pulled page's row in ``runs/<unit>/pages.jsonl`` (``stages/page_rows``)."""
+    """Every pulled page's row in ``runs/<unit>/pages.jsonl`` (``stages/page_rows``).
+    A record: it never decides or stops anything, so its failure is logged."""
+    try:
+        _write_page_rows(sr, ordered, read, extracts, skipped, ident)
+    except Exception as exc:  # noqa: BLE001 - the page record is evidence; its failure is logged, never the run's
+        sr.log(f"update_select: page record not written ({type(exc).__name__}: {str(exc)[:160]})")
+
+
+def _seen(sr: StageRun, read_by_delivery: list[dict[str, Any]]) -> S.Delivered:
+    """What the delivery read, each page named by its delivered exhibit (``select.seen_shingles``)."""
+    paths = [sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery]
+    return S.seen_shingles(paths, [int(e["exhibit"]) for e in read_by_delivery])
+
+
+def _write_page_rows(
+    sr: StageRun,
+    ordered: list[dict[str, Any]],
+    read: dict[str, _Read],
+    extracts: dict[str, SUB.Subset],
+    skipped: dict[str, list[str]],
+    ident: PG.Loaded,
+) -> None:
     from . import page_rows
 
     raw = read_jsonl(sr.slug_dir / "raw_manifest.jsonl")

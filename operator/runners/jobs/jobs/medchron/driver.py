@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .. import __version__, budget as budget_mod, limits as limits_mod, paid, proof_mode, seat as seat_mod, stop_request
+from .. import __version__, limits as limits_mod, paid, proof_mode, seat as seat_mod, stop_request
 from . import (
     allowance as allowance_mod,
     config as config_mod,
@@ -338,7 +338,7 @@ class Driver:
             self._page_checked.add(ctx.unit.unit)
             try:
                 self.limits.check_before_first_paid(
-                    pages=self._asked(ctx.unit, extracted),
+                    pages=update_charged.question_pages(self.slug_dir, ctx.unit.unit, extracted, self.job.update),
                     projected_usd=projected,
                     spent_usd=spent,
                     stage=stage.name,
@@ -408,11 +408,7 @@ class Driver:
             if self.rehearse:
                 notes.append(f"rehearse {stage.name}: ok")
         pages = self._pages(unit, extracted)
-        cap = update_charged.capped(self.slug_dir, unit.unit) if update else None
-        if cap is not None:  # charged the figure asked about; triage reads the code (``update/charged``)
-            notes.append(
-                f"{cap['code']}: read {cap['read']} page(s), asked about {cap['asked']}; charged {cap['asked']}"
-            )
+        notes += update_charged.cap_notes(self.slug_dir, unit.unit) if update else []
         if self.dry_run or self.rehearse:
             st_outcome = "dry_run" if self.dry_run else "rehearsed"
         else:
@@ -422,23 +418,8 @@ class Driver:
         return rehearsal.summary(self, ctx, out) if self.rehearse else out
 
     def _pages(self, unit: job_mod.Unit, extracted: Path) -> int:
-        """The pages this unit counts against the allowance: every page a run
-        read; on an update, only the pages it sent to be read
-        (``update/charged``, read off the per-page record). The ONE figure
-        every outcome, hold, stage row and page question carries."""
-        pages = budget_mod.pages_read(extracted)
-        if self.job.update is None:
-            return pages
-        return update_charged.charged_pages(self.slug_dir, unit.unit, pages)
-
-    def _asked(self, unit: job_mod.Unit, extracted: Path) -> int:
-        """The figure the page question before the first paid step is asked
-        with: on an update, an upper bound on the pages it will read, recorded
-        so the charge can never exceed it (``update/charged.asked_pages``)."""
-        pages = budget_mod.pages_read(extracted)
-        if self.job.update is None:
-            return pages
-        return update_charged.asked_pages(self.slug_dir, unit.unit, pages)
+        """The ONE page figure every outcome, hold and stage row carries (``update/charged.unit_pages``)."""
+        return update_charged.unit_pages(self.slug_dir, unit.unit, extracted, self.job.update)
 
     def _note_skip(self, stage: dag.Stage, slug_done: set[str], notes: list[str]) -> None:
         """A done stage is skipped. A done SLUG-scope stage is done for every
@@ -653,8 +634,7 @@ class Driver:
         else:
             outcome, reason = stage.exit_map.get(code, ("failed", f"exit {code}"))
             if outcome == dag.CURRENT:
-                charged = pages
-                done = Outcome(unit.unit, "delivered", None, stage.name, dollars, charged, notes)
+                done = Outcome(unit.unit, "delivered", None, stage.name, dollars, pages, notes)
                 return update_outcome.end(sr, st, stage.name, code, done)
             reason = unit_proof.paged_line(lines) or f"{reason}; last output: {' | '.join(lines)[-400:]}"
         st.finish(stage.name, status=outcome, exit_code=code, dollars=dollars, pages=pages, note=reason)

@@ -166,6 +166,34 @@ def capped(slug_dir: Path, unit: str) -> dict[str, Any] | None:
     return {"code": CHARGED_CAPPED, "read": n, "asked": asked}
 
 
+def unit_pages(slug_dir: Path, unit: str, extracted: Path, update: object) -> int:
+    """The pages a unit counts against the allowance: every page a run
+    extracted; on an update (`update` set), the pages it sent to be read
+    (``charged_pages``). The one figure every outcome, hold and stage row of
+    ``Driver`` carries."""
+    from ...budget import pages_read as extracted_pages
+
+    pages = extracted_pages(extracted)
+    return pages if update is None else charged_pages(slug_dir, unit, pages)
+
+
+def question_pages(slug_dir: Path, unit: str, extracted: Path, update: object) -> int:
+    """The figure the page question before the first paid step is asked with:
+    every page on a run; on an update, the recorded upper bound (``asked_pages``)."""
+    from ...budget import pages_read as extracted_pages
+
+    pages = extracted_pages(extracted)
+    return pages if update is None else asked_pages(slug_dir, unit, pages)
+
+
+def cap_notes(slug_dir: Path, unit: str) -> list[str]:
+    """The outcome note when this update read more than it was asked about (triage reads the code)."""
+    cap = capped(slug_dir, unit)
+    if cap is None:
+        return []
+    return [f"{cap['code']}: read {cap['read']} page(s), asked about {cap['asked']}; charged {cap['asked']}"]
+
+
 def figures(slug_dir: Path, unit: str) -> dict[str, int | None]:
     """{pages_read, pages_charged, charged_old_rule, extracted}: what ``page_account.json``
     and the rehearsal print. ``pages_read`` and ``pages_charged`` are equal by construction."""
