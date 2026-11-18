@@ -158,7 +158,6 @@ def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
     (``matter.store.write_atomic``): its rows, its corrections, the marker
     naming the input and output shas, then the document. It never writes to
     the audit results.
-    verdict as an audit row (once: a rerun appends none it already holds).
     The marker goes before the document, so a crash between them leaves the
     original document and a marker that does not name it: the rerun reads
     the document afresh. `src`: the document the step read (``source``)."""

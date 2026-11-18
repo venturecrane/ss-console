@@ -17,7 +17,8 @@ crash is never paged as either refusal.
 `final_proofs` is the update proofs' second half (``update/proofs_final``,
 proofs 11 to 15), read off the rendered document, and `record_final` merges
 its record-only findings and the proven chronology's sha into
-``update/proofs.json``; ``update_proofs`` calls both.
+``update/proofs.json``. Nothing calls them yet: the lead wires the call from
+``update_proofs`` in the integration commit.
 """
 
 from __future__ import annotations

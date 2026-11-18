@@ -33,8 +33,9 @@ A heading standing alone carries no assertion and is left as it is.
 A line that is ONLY a citation (2026-11-17: 64 such lines in 46 rows of one
 update) joins the text it cites (``join_stray``), before the paragraphs are
 cited and again after, and once more after the update finisher's edits
-(``final_set``, which also deletes the one kind the join must leave, with
-its claim's verdict carried). A citation that closes the line above joins it; an exact
+(``final_set``, which leaves the one kind the join must leave, a line whose
+removal would change a claim, and counts it as ``left_key_changing``). A
+citation that closes the line above joins it; an exact
 repeat, or one of an exhibit the entry cites elsewhere, goes; the only
 citation of an exhibit is never dropped, so every exhibit stays cited. A
 citation carries no value, so no value can be lost.
