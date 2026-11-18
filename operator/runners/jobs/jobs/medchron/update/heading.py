@@ -62,8 +62,6 @@ class Check:
     page: tuple[int, int] | None = None
     weaker: str = ""
     missing: list[str] = field(default_factory=list)  # "date", "name", "text"
-    #: a finisher-written heading that failed and went back to the audited one
-    reverted: bool = False
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -71,7 +69,6 @@ class Check:
             "page": list(self.page) if self.page else None,
             "weaker": self.weaker,
             "missing": self.missing,
-            "reverted": self.reverted,
         }
 
 

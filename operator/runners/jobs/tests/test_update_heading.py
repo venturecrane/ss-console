@@ -103,20 +103,23 @@ def _run(entries: list[str], composed: list[str], texts: dict[int, str]) -> FS.O
     return FS.run(FS.Inputs(md, K.base_md(), composed, K.HEADINGS, rows, pages=_pages(texts, {4})))
 
 
-def test_a_finisher_written_heading_that_fails_goes_back_to_the_audited_one() -> None:
-    finisher = ENTRY.replace("03/04/2026", "03/04/2025")
-    o = _run([finisher], [ENTRY], {4: ON_4})
-    assert B.entries_of(o.md)[1] == [ENTRY]
-    assert o.counts["headings reverted to the audited one"] == 1 and o.counts["headings failed"] == 1
-    (row,) = o.rows
-    assert row["heading"]["reverted"] and row["origin"] == FS.COMPOSED
+def test_a_heading_written_after_compose_that_fails_is_recorded_and_never_changed() -> None:
+    """The check is record-only. It once reverted such a heading to the
+    composed entry sharing its page, and that entry can be another encounter:
+    here the finisher's own visit of 03/05 cites the page of the composed
+    visit of 03/04; the old revert grafted 03/04 onto it."""
+    other_visit = ENTRY.replace("03/04/2026", "03/05/2026").replace("Neck pain rated", "Recheck: neck pain rated")
+    o = _run([ENTRY, other_visit], [ENTRY], {4: ON_4})
+    assert B.entries_of(o.md)[1] == [ENTRY, other_visit]
+    assert o.counts["headings failed"] == 1 and o.counts["headings on a cited page"] == 1
+    assert {r["date"]: r["origin"] for r in o.rows} == {"2026-03-04": FS.COMPOSED, "2026-03-05": FS.AFTER_COMPOSE}
+    assert all("reverted" not in r["heading"] for r in o.rows)
 
 
 def test_a_composed_heading_that_fails_is_recorded_and_kept() -> None:
     wrong = ENTRY.replace("03/04/2026", "03/04/2025")
     o = _run([wrong], [wrong], {4: ON_4})
-    assert B.entries_of(o.md)[1] == [wrong] and o.counts["headings reverted to the audited one"] == 0
-    assert o.counts["headings failed"] == 1
+    assert B.entries_of(o.md)[1] == [wrong] and o.counts["headings failed"] == 1
 
 
 def test_a_finisher_heading_the_page_states_is_kept() -> None:

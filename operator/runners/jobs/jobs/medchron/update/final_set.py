@@ -24,9 +24,12 @@ operation that would add a key is not applied, but recorded. In order:
    ``mode: carry``, as ``proofs._as_audited`` carries a respelling). A line
    whose deletion would uncite an exhibit stays.
 2. HEADINGS (``update/heading``). Every added entry's date and provider are
-   looked for on its cited pages, else on its note's heading. RECORD-ONLY,
-   with one action: a heading the FINISHER wrote that fails goes back to the
-   heading the audit document carried.
+   looked for on its cited pages, else on its note's heading. RECORD-ONLY:
+   the check records what it finds and NEVER changes the document. (It once
+   reverted a heading it judged unprinted; the entry it took for the
+   heading's "audited predecessor" could be a different encounter sharing a
+   page, and five successive real runs found false failures, so it acts on
+   nothing.)
 3. REPEATS (``update/encounter``). An added entry that is one encounter with
    a delivered entry or another added entry is DROPPED WHOLE only when the
    other covers it: every value and finding term (``repeats._covered``) and
@@ -65,7 +68,11 @@ from .values import content_numbers, terms, words
 
 ROWS, CORRECTIONS, REPORT = "final_rows.jsonl", "corrections.json", "final_set.json"
 CARRY = "carry"
-COMPOSED, REVIEW_ADDED, FOLD, FINISHER = "composed", "review-added", "fold", "finisher-edited"
+#: Where an added entry's heading comes from. Nothing on disk tells an entry
+#: the update review's finisher ADDED from one it EDITED (``update_review``
+#: persists its reviewer's findings, never the finisher's edits), so both are
+#: one honest label.
+COMPOSED, FOLD, AFTER_COMPOSE = "composed", "fold", "added after compose"
 BORN_DIGITAL, TRANSCRIPT = "born-digital", "transcript"
 
 
@@ -76,7 +83,6 @@ class Inputs:
     composed: list[str]  # ``update/new_entries.md``: the audit document's entries as collect wrote them
     headings: set[str]
     audit_rows: list[dict[str, Any]] = field(default_factory=list)
-    review: dict[str, Any] = field(default_factory=dict)  # ``update/review_repair.json``
     pages: HD.Pages = field(default_factory=lambda: HD.Pages(lambda _e, _p: None))
     page_id: E.PageId | None = None
     canon: Callable[[str], str] = str
@@ -90,6 +96,9 @@ class Outcome:
     carries: list[dict[str, Any]] = field(default_factory=list)
     counts: Counter[str] = field(default_factory=Counter)
     ops: list[dict[str, Any]] = field(default_factory=list)
+    #: claim keys this step removed on purpose: a dropped entry's, a stray
+    #: line's claim whose verdict was carried to its heading and words
+    removed: set[str] = field(default_factory=set)
 
 
 def _sha(text: str) -> str:
@@ -204,6 +213,7 @@ def strays(ents: list[str], headings: set[str], rows: list[dict[str, Any]], o: O
                 continue
             j = got
             if carry is not None:
+                o.removed.add(carry["carried_from"])
                 o.carries.append(carry)
                 latest[carry["key"]] = carry
                 o.counts["verdicts carried"] += 1
@@ -216,78 +226,29 @@ def strays(ents: list[str], headings: set[str], rows: list[dict[str, Any]], o: O
 # ---- 2. headings ------------------------------------------------------------------------------
 
 
-def _added_heads(review: dict[str, Any]) -> set[str]:
-    out = set()
-    for row in review.get("rounds") or []:
-        for f in (row or {}).get("findings") or []:
-            if isinstance(f, dict) and f.get("action") == "new_entry" and f.get("outcome") == "applied":
-                out.add(_head(str(f.get("corrected") or "").strip()))
-    return out
-
-
-def origin(e: str, composed: list[str], added_heads: set[str]) -> str:
+def origin(e: str, composed: list[str]) -> str:
     """Where an added entry's HEADING comes from: a fold under a delivered
-    entry, collect (the audit document's own), the review's new entry, or
-    the finisher (a redate or a provider it wrote)."""
+    entry, collect (a heading of ``new_entries.md``, the audit document's
+    own), or written after compose (the update review's finisher)."""
     if EE.is_fold(e):
         return FOLD
     if e in composed or _head(e) in {_head(c) for c in composed}:
         return COMPOSED
-    return REVIEW_ADDED if _head(e) in added_heads else FINISHER
+    return AFTER_COMPOSE
 
 
-def _body(e: str) -> str:
-    return "\n".join(e.split("\n")[2:]).strip()
-
-
-def predecessor(e: str, composed: list[str]) -> str | None:
-    """The composed entry a finisher-edited one came from: the one that cites
-    a page it cites and states its body, or else its date or its provider;
-    None unless exactly one does."""
-    mine = set(E.cited_pages(e))
-    share = [c for c in composed if mine & set(E.cited_pages(c))]
-    for test in (
-        lambda c: _body(c) == _body(e),
-        lambda c: B.iso(c) == B.iso(e) or B.provider_of(c) == B.provider_of(e),
-    ):
-        hit = [c for c in share if test(c)]
-        if len(hit) == 1:
-            return hit[0]
-        if hit:
-            return None
-    return None
-
-
-def headings_check(ents: list[str], x: Inputs, o: Outcome) -> tuple[list[str], dict[str, HD.Check]]:
-    """Rule 2: every added entry's heading checked; a finisher's failing one
-    reverted. The checks are keyed by the entry as it leaves this rule."""
-    added = _added_heads(x.review)
-    out: list[str] = list(ents)
+def headings_check(ents: list[str], x: Inputs, o: Outcome) -> dict[str, HD.Check]:
+    """Rule 2, RECORD-ONLY: every added entry's heading checked, keyed by the
+    entry. The entries are never touched."""
     checks: dict[str, HD.Check] = {}
-    for i, e in enumerate(ents):
+    for e in ents:
         if EE.is_fold(e):
             continue
         c = HD.check(e, x.pages)
         checks[e] = c
         o.counts[f"headings {c.where}"] += 1
-        if c.weaker:
-            o.counts["headings read on a transcript"] += 1
-        if c.where != HD.FAILED or origin(e, x.composed, added) != FINISHER:
-            continue
-        prior = predecessor(e, x.composed)
-        if prior is None:
-            o.ops.append({"op": "heading revert", "entry": B.iso(e), "applied": False, "why": "no one audited heading"})
-            continue
-        back = _head(prior) + e[len(_head(e)) :]
-        if keys_of(back) - keys_of(e):
-            o.ops.append({"op": "heading revert", "entry": B.iso(e), "applied": False, "why": "a claim would change"})
-            continue
-        out[i] = back
-        checks[back] = HD.Check(c.where, c.page, c.weaker, c.missing, reverted=True)
-        checks.pop(e, None)
-        o.counts["headings reverted to the audited one"] += 1
-        o.ops.append({"op": "heading revert", "entry": B.iso(e), "to": B.iso(back), "applied": True})
-    return out, checks
+        o.counts["headings read on a transcript"] += int(c.weaker == HD.WEAKER)
+    return checks
 
 
 # ---- 3. repeats -------------------------------------------------------------------------------
@@ -397,6 +358,7 @@ def repeats(ents: list[str], base_ents: list[str], x: Inputs, o: Outcome) -> lis
             continue
         assert hit is not None
         dropped.add(i)
+        o.removed |= keys_of(e)
         o.counts[f"repeats: safe drops ({hit[0]})"] += 1
         o.counts["distinct visits merged"] += int(_lost(e, hit[1]))
         o.ops.append({"op": "repeat", "entry": E.key(e), "applied": True, "by": hit[0]})
@@ -412,7 +374,6 @@ def _source(pages: list[tuple[int, int]], x: Inputs) -> str:
 
 def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], latest: dict[str, dict[str, Any]]) -> list[dict]:
     """One row per added claim, or per added entry with none."""
-    added = _added_heads(x.review)
     out: list[dict[str, Any]] = []
     for i, e in enumerate(ents):
         prov = B.provider_of(e)
@@ -423,7 +384,7 @@ def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], latest: dic
             "provider": prov,
             "provider_norm": "+".join(sorted(E.name_tokens(prov))),
             "encounter": E.key(e),
-            "origin": origin(e, x.composed, added),
+            "origin": origin(e, x.composed),
             "heading": (checks.get(e) or HD.Check("not checked")).as_dict(),
         }
         cl = _claims(e)
@@ -445,15 +406,11 @@ def rows_of(ents: list[str], x: Inputs, checks: dict[str, HD.Check], latest: dic
     return out
 
 
-def corrections_of(ents: list[str], base_ents: list[str], review: dict[str, Any]) -> list[dict[str, Any]]:
+def corrections_of(ents: list[str], base_ents: list[str]) -> list[dict[str, Any]]:
     """Every fold under a DELIVERED entry: which, its bytes before, what is
-    added, why, and the review finding it settles. A record only."""
-    found = [
-        f
-        for row in review.get("rounds") or []
-        for f in (row or {}).get("findings") or []
-        if isinstance(f, dict) and f.get("action") == "append_to_delivered" and f.get("outcome") == "applied"
-    ]
+    added and why. A record only. The review finding a fold settles is not
+    named: the update review persists its reviewer's findings, never the
+    finisher's edits, so no record on disk says which finding a fold came from."""
     out = []
     for e in ents:
         if not EE.is_fold(e):
@@ -462,15 +419,13 @@ def corrections_of(ents: list[str], base_ents: list[str], review: dict[str, Any]
         if k is None:
             continue
         block = e.split("\n", 3)[3] if e.count("\n") >= 3 else ""  # the fold's heading line and its paragraphs
-        f = next((f for f in found if f.get("survivor") == f"D{k + 1}"), {})
         out.append(
             {
                 "entry": f"D{k + 1}",
                 "before_sha": _sha(base_ents[k]),
                 "added_sha": _sha(block),
                 "added_paragraphs": len([p for p in block.split("\n\n")[1:] if p.strip()]),
-                "why": str(f.get("reason") or "an added visit's content the delivered entry lacks, under it"),
-                "finding": str(f.get("fid") or f.get("anchor") or ""),
+                "why": "an added visit's content the delivered entry lacks, under it (``entry_edits``)",
             }
         )
     return out
@@ -480,27 +435,31 @@ def corrections_of(ents: list[str], base_ents: list[str], review: dict[str, Any]
 
 
 def run(x: Inputs) -> Outcome:
-    """The final set of the added entries. Raises AssertionError if any rule
-    created a claim key, which no rule here can (each checks it)."""
+    """The final set of the added entries. Raises AssertionError, and nothing
+    is written, if any rule created a claim key (each checks it cannot) or if
+    a claim key is LOST that no drop of this step accounts for: a document
+    that lost an entry this step did not drop is refused, never filed."""
     _, ents = B.entries_of(x.md)
     _, base_ents = B.entries_of(x.base_md)
     o = Outcome(x.md)
     keys0 = keys_of(x.md)
     ents = strays(ents, x.headings, x.audit_rows, o)
-    ents, checks = headings_check(ents, x, o)
+    checks = headings_check(ents, x, o)
     ents = repeats(ents, base_ents, x, o)
-    if o.counts["headings reverted to the audited one"]:
-        ents = sorted(ents, key=B.iso)  # a reverted date takes its place in date order
     md = with_entries(x.md, ents) if ents != B.entries_of(x.md)[1] else x.md
     carried = {c["key"] for c in o.carries}
-    created = keys_of(md) - keys0 - carried
+    after = keys_of(md)
+    created, lost = after - keys0 - carried, keys0 - after - o.removed
     o.counts["new claim keys created"] = len(created)
+    o.counts["claim keys lost unaccounted"] = len(lost)
     if created:
         raise AssertionError(f"final set created {len(created)} claim key(s); nothing is written")
+    if lost:
+        raise AssertionError(f"final set lost {len(lost)} claim key(s) no drop of its own removed; nothing is written")
     o.md = md
     latest = _latest(x.audit_rows + o.carries)
     o.rows = rows_of(ents, x, checks, latest)
-    o.corrections = corrections_of(ents, base_ents, x.review)
+    o.corrections = corrections_of(ents, base_ents)
     o.counts["added entries"] = len(ents)
     o.counts["corrections recorded"] = len(o.corrections)
     return o

@@ -12,6 +12,7 @@ from typing import Any
 
 from ..audit import claims as CL
 from . import body as B, encounter as E, entry_edits as EE, heading as HD, uncited as U
+from ...matter.store import write_atomic
 from .final_set import CORRECTIONS, REPORT, ROWS, Inputs, Outcome, run
 
 
@@ -97,11 +98,38 @@ def write_nothing_added(slug_dir: Path, unit: str) -> None:
     ud = slug_dir / "runs" / unit / "update"
     if not ud.is_dir():
         return
-    (ud / ROWS).write_text("", encoding="utf-8")
-    (ud / CORRECTIONS).write_text("[]", encoding="utf-8")
-    (ud / REPORT).write_text(
-        json.dumps({"counts": {"added entries": 0}, "no_added_entries": True}, indent=1), encoding="utf-8"
-    )
+    write_atomic(ud / ROWS, "")
+    write_atomic(ud / CORRECTIONS, "[]")
+    write_atomic(ud / REPORT, json.dumps({"counts": {"added entries": 0}, "no_added_entries": True}, indent=1))
+
+
+#: The reviewed audit document as this step first read it: a rerun starts
+#: from it, never from the step's own output.
+PRE = "final-chronology.pre-final-set.md"
+
+
+def _sha(text: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def source(slug_dir: Path, unit: str) -> str:
+    """The document this step reads. The chronology as it stands, kept as
+    ``PRE``; or, when it is this step's own output (its sha is the one the
+    marker recorded, and ``PRE`` is the input the marker names), ``PRE``: so
+    a rerun is the same run, and a document a later stage or a rerun of the
+    update review rewrote is read afresh."""
+    rd = slug_dir / "runs" / unit
+    doc, pre = rd / "final-chronology.md", rd / PRE
+    current = doc.read_text(encoding="utf-8")
+    mark = _json(rd / "update" / REPORT, {}) or {}
+    if pre.is_file() and mark.get("out_sha") == _sha(current):
+        kept = pre.read_text(encoding="utf-8")
+        if mark.get("in_sha") == _sha(kept):
+            return kept
+    write_atomic(pre, current)
+    return current
 
 
 def load_inputs(slug_dir: Path, unit: str, headings: set[str], canon: Callable[[str], str] = str) -> Inputs:
@@ -111,32 +139,40 @@ def load_inputs(slug_dir: Path, unit: str, headings: set[str], canon: Callable[[
     new = ud / "new_entries.md"
     pages, page_id = page_inputs(slug_dir, ud)
     return Inputs(
-        md=(rd / "final-chronology.md").read_text(encoding="utf-8"),
+        md=source(slug_dir, unit),
         base_md=(ud / "base.md").read_text(encoding="utf-8"),
         composed=B.split_body("\n\n" + new.read_text(encoding="utf-8"))[1] if new.is_file() else [],
         headings=headings,
         audit_rows=CL.read_rows(slug_dir / "out" / unit / "audit-results.jsonl"),
-        review=_json(ud / "review_repair.json", {}) or {},
         pages=pages,
         page_id=page_id,
         canon=canon,
     )
 
 
-def write(slug_dir: Path, unit: str, o: Outcome) -> None:
-    """The step's outputs: the document, its rows, its corrections, its
-    counts, and each carried verdict as an audit row."""
+def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
+    """The step's outputs, each written whole or not at all
+    (``matter.store.write_atomic``): its rows, its corrections, the marker
+    naming the input and output shas, then the document, then each carried
+    verdict as an audit row (once: a rerun appends none it already holds).
+    The marker goes before the document, so a crash between them leaves the
+    original document and a marker that does not name it: the rerun reads
+    the document afresh. `src`: the document the step read (``source``)."""
     rd = slug_dir / "runs" / unit
     ud = rd / "update"
     doc = rd / "final-chronology.md"
+    write_atomic(ud / ROWS, "".join(json.dumps(r) + "\n" for r in o.rows))
+    write_atomic(ud / CORRECTIONS, json.dumps(o.corrections, indent=1))
+    mark = {"counts": dict(o.counts), "ops": o.ops, "in_sha": _sha(src), "out_sha": _sha(o.md)}
+    write_atomic(ud / REPORT, json.dumps(mark, indent=1))
     if doc.read_text(encoding="utf-8") != o.md:
-        doc.write_text(o.md, encoding="utf-8")
-    (ud / ROWS).write_text("".join(json.dumps(r) + "\n" for r in o.rows), encoding="utf-8")
-    (ud / CORRECTIONS).write_text(json.dumps(o.corrections, indent=1), encoding="utf-8")
-    (ud / REPORT).write_text(json.dumps({"counts": dict(o.counts), "ops": o.ops}, indent=1), encoding="utf-8")
+        write_atomic(doc, o.md)
+    results = slug_dir / "out" / unit / "audit-results.jsonl"
+    have = {(r.get("key"), r.get("carried_from")) for r in CL.read_rows(results)}
     sha = CL.doc_sha_of(CL.body_of(o.md))
     for row in o.carries:
-        CL.append_row(slug_dir / "out" / unit / "audit-results.jsonl", row | {"doc_sha": sha})
+        if (row["key"], row["carried_from"]) not in have:
+            CL.append_row(results, row | {"doc_sha": sha})
 
 
 def ran(ud: Path) -> bool:
@@ -213,7 +249,6 @@ def report(job: Path, unit: str | None = None) -> dict[str, Any]:
         "headings": {
             **{w: c[f"headings {w}"] for w in (HD.CITED, HD.SAME_NOTE, HD.NO_TEXT, HD.FAILED)},
             "read on a transcript": c["headings read on a transcript"],
-            "reverted to the audited one": c["headings reverted to the audited one"],
         },
         "new_claim_keys_created": c["new claim keys created"],
         "added_entries": c["added entries"],

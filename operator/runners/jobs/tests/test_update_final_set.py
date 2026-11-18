@@ -284,7 +284,7 @@ def test_rows_name_origin_claim_verdict_and_source() -> None:
     pages = HD.Pages(text=lambda ex, p: page, transcribed=lambda ex, p: p == 4)
     o = FS.run(_inputs([finisher, NEW_POST], composed=[ROE_A, NEW_POST], pages=pages))
     by = {(r["date"], r["origin"]) for r in o.rows}
-    assert by == {("2026-03-04", FS.FINISHER), ("2026-02-10", FS.COMPOSED)}
+    assert by == {("2026-03-04", FS.AFTER_COMPOSE), ("2026-02-10", FS.COMPOSED)}
     assert all(r["verdict"] == "SUPPORTED" and r["mode"] == "model" for r in o.rows)
     assert {r["text_source"] for r in o.rows if r["date"] == "2026-03-04"} == {FS.TRANSCRIPT}
     assert {r["provider_norm"] for r in o.rows if r["date"] == "2026-02-10"} == {"example"}
@@ -524,6 +524,79 @@ def test_the_stage_writes_the_set_its_rows_and_carried_verdicts(
     assert update_final_set.run(sr) == 0 and (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text() == md
 
 
+def _files(sd: Path) -> dict[str, bytes]:
+    rd = sd / "runs" / "alpha"
+    names = [rd / "final-chronology.md", rd / FIO.PRE, rd / "update" / FS.ROWS, rd / "update" / FS.CORRECTIONS]
+    names.append(sd / "out" / "alpha" / "audit-results.jsonl")
+    return {p.name: p.read_bytes() for p in names if p.is_file()}
+
+
+def test_a_rerun_after_a_completed_run_changes_nothing(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, firm_config_path, data_root, [])
+    _job(sr.slug_dir, [ROE_A, COPY, STRAY])
+    original = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
+    assert update_final_set.run(sr) == 0
+    once = _files(sr.slug_dir)
+    assert once[FIO.PRE].decode() == original  # the input is kept: a rerun starts from it
+    assert update_final_set.run(sr) == 0
+    assert _files(sr.slug_dir) == once  # the document, its rows, and no second carried verdict
+
+
+def test_a_crash_between_the_temp_write_and_the_replace_leaves_the_original(
+    job_dir: Path, firm_config_path: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobs.matter import store
+
+    sr = _sr(job_dir, firm_config_path, data_root, [])
+    _job(sr.slug_dir, [ROE_A, COPY, STRAY])
+    doc = sr.slug_dir / "runs" / "alpha" / "final-chronology.md"
+    original = doc.read_text()
+    real = store.os.replace
+
+    def crash(src, dst):
+        if str(dst).endswith("final-chronology.md"):
+            raise OSError("the machine stopped")
+        return real(src, dst)
+
+    monkeypatch.setattr(store.os, "replace", crash)
+    with pytest.raises(OSError):
+        update_final_set.run(sr)
+    assert doc.read_text() == original  # whole, never half
+    monkeypatch.setattr(store.os, "replace", real)
+    assert update_final_set.run(sr) == 0  # the rerun reads the original and finishes
+    done = doc.read_text()
+    assert done != original and len(B.entries_of(done)[1]) == 2
+
+
+def test_a_document_rewritten_upstream_is_read_afresh(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, firm_config_path, data_root, [])
+    _job(sr.slug_dir, [ROE_A, COPY, STRAY])
+    assert update_final_set.run(sr) == 0
+    doc = sr.slug_dir / "runs" / "alpha" / "final-chronology.md"
+    newer = _doc([ROE_A, NEW_POST])  # a rerun of the update review wrote another document
+    doc.write_text(newer)
+    rows = sr.slug_dir / "out" / "alpha" / "audit-results.jsonl"
+    rows.write_text(rows.read_text() + "".join(json.dumps(r) + "\n" for r in _supported(newer)))
+    assert update_final_set.run(sr) == 0
+    assert doc.read_text() == newer and (sr.slug_dir / "runs" / "alpha" / FIO.PRE).read_text() == newer
+
+
+def test_a_document_that_lost_an_entry_the_step_did_not_drop_is_refused(
+    job_dir: Path, firm_config_path: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log: list[str] = []
+    sr = _sr(job_dir, firm_config_path, data_root, log)
+    _job(sr.slug_dir, [STRAY, NEW_POST])  # the stray line changes the set, so the document is rewritten
+    doc = sr.slug_dir / "runs" / "alpha" / "final-chronology.md"
+    original = doc.read_text()
+    real = FS.with_entries
+    monkeypatch.setattr(FS, "with_entries", lambda md, ents: real(md, ents[:-1]))  # an entry silently lost
+    assert update_final_set.run(sr) == update_final_set.EXIT_REFUSED
+    assert doc.read_text() == original and any("lost" in ln for ln in log)
+    monkeypatch.setattr(FS, "with_entries", real)
+    assert update_final_set.run(sr) == 0
+
+
 def test_the_proofs_read_the_rendered_update_and_one_changed_delivered_character_fails_it(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
@@ -589,9 +662,8 @@ def test_the_report_prints_counts_and_no_record_text(
         HD.NO_TEXT,
         HD.FAILED,
         "read on a transcript",
-        "reverted to the audited one",
     }  # every count prints, 0 included
-    assert got["headings"]["reverted to the audited one"] == 0 and got["record_only"]["P13_covered_repeat_left"] == 0
+    assert got["record_only"]["P13_covered_repeat_left"] == 0
     for words in ("paraspinal", "Roe", "Neck pain", "recheck"):
         assert words not in printed
 

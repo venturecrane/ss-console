@@ -104,11 +104,15 @@ def _ids(doc: Any) -> list[str]:
 
 
 def write_atomic(path: Path, text: str) -> None:
-    """Atomic, 0600: a reader sees the old file or the new one, never half."""
+    """Atomic, 0600: a reader sees the old file or the new one, never half.
+    The bytes reach the disk (fsync) before the name points at them, so a
+    crash cannot leave the new name on a truncated file."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write(text)
+        fh.flush()
+        os.fsync(fh.fileno())
     os.replace(tmp, path)
 
 

@@ -45,11 +45,12 @@ def run(sr: StageRun) -> int:
         return 0
     try:
         x = FIO.load_inputs(sr.slug_dir, sr.unit.unit, headings(sr.cfg), Canon(sr.cfg))
+        src = x.md
         o = FS.run(x)
     except AssertionError as exc:
         sr.log(f"update_final_set: {exc}")
         return EXIT_REFUSED
-    FIO.write(sr.slug_dir, sr.unit.unit, o)
+    FIO.write(sr.slug_dir, sr.unit.unit, o, src)
     c = o.counts
     sr.log(
         f"final set: {c['added entries']} added entries; stray citation lines {c['stray lines before']} -> "
@@ -58,7 +59,7 @@ def run(sr: StageRun) -> int:
         f"{sum(v for k, v in c.items() if k.startswith('repeats: kept whole'))}; "
         f"headings on a cited page {c['headings ' + HD.CITED]}, same note {c['headings ' + HD.SAME_NOTE]}, "
         f"no text layer {c['headings ' + HD.NO_TEXT]}, failed {c['headings ' + HD.FAILED]} "
-        f"({c['headings reverted to the audited one']} reverted); new claim keys {c['new claim keys created']}"
+        f"(recorded only); new claim keys {c['new claim keys created']}, keys lost {c['claim keys lost unaccounted']}"
     )
     return 0
 
