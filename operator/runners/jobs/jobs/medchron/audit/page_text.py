@@ -191,7 +191,9 @@ class PageIndex:
                     continue
                 s, n = f["start_page"], f["pages"]
                 if s <= orig < s + n:
-                    rec = self.by_id.get(f.get("id")) or self.by_name.get(f["file"]) or self.by_name.get(_stem(f["file"]))
+                    rec = (
+                        self.by_id.get(f.get("id")) or self.by_name.get(f["file"]) or self.by_name.get(_stem(f["file"]))
+                    )
                     return (rec["id"], orig - s + 1) if rec else None
         return None
 

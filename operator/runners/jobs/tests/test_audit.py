@@ -152,9 +152,7 @@ def _exhibit_set(sr: StageRun, pages: list[str], name: str = "clinic note", row_
     data = make_pdf(pages)
     (out / "Exhibit 1 - Example Clinic - 01-02-2026 (Medical Records).pdf").write_bytes(data)
     (d / "units" / "alpha.json").write_text(json.dumps([{"id": "f1", "name": name, "ext": ".pdf"}]))
-    (d / "extracted.jsonl").write_text(
-        json.dumps({"id": "f1", "name": name, "pages": len(pages), "chars": 100}) + "\n"
-    )
+    (d / "extracted.jsonl").write_text(json.dumps({"id": "f1", "name": name, "pages": len(pages), "chars": 100}) + "\n")
     (d / "text" / "f1.txt").write_text("".join(f"[p.{i}]\n{t}\n" for i, t in enumerate(pages, 1)))
     (out / "page_map.json").write_text(
         json.dumps(

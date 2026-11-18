@@ -209,7 +209,13 @@ def _add_files(
         remap[old] = (n, cursor)
         # ``id`` names the source file outright: a reader of this map never
         # has to match the file by its title (``audit/page_text.resolve``).
-        row: dict[str, Any] = {"file": name, "id": f["id"], "old_exhibit": old, "start_page": cursor, "pages": len(pages)}
+        row: dict[str, Any] = {
+            "file": name,
+            "id": f["id"],
+            "old_exhibit": old,
+            "start_page": cursor,
+            "pages": len(pages),
+        }
         if rendered:
             row["rendered_from_text"] = True
             sr.log(f"  {name}: exhibit pages rendered from its extracted text ({len(pages)} pp.)")
