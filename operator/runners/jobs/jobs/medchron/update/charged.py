@@ -110,10 +110,13 @@ def asked_pages(slug_dir: Path, unit: str, pages_read: int) -> int:
     asked = n if n is not None else old_rule_pages(slug_dir, unit, pages_read)
     p = slug_dir / "runs" / unit / ASKED
     before = _asked(slug_dir, unit)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(p.name + ".tmp")  # whole or not at all: a kill mid-write never leaves half a file
-    tmp.write_text(json.dumps({"pages": max(asked, before or 0)}), encoding="utf-8")
-    os.replace(tmp, p)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(p.name + ".tmp")  # whole or not at all: a kill mid-write never leaves half a file
+        tmp.write_text(json.dumps({"pages": max(asked, before or 0)}), encoding="utf-8")
+        os.replace(tmp, p)
+    except OSError:
+        pass  # unrecorded means no cap later (``asked_state``): never a reason to stop
     return asked
 
 

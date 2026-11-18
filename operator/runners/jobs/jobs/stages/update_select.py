@@ -465,7 +465,10 @@ def run(sr: StageRun) -> int:
         recs.append(rec)
         units.append(urow)
     extracts = {**extracts, **PG.merge_extracts(whole, {})}
-    _record_pages(sr, ordered, read, extracts, skipped, ident)
+    try:  # a record: it never decides or stops anything
+        _record_pages(sr, ordered, read, extracts, skipped, ident)
+    except Exception as exc:  # noqa: BLE001 - the page record is evidence; its failure is logged, never the run's
+        sr.log(f"update_select: page record not written ({type(exc).__name__}: {str(exc)[:160]})")
     unread = [f"Exhibit {r['exhibit']} p. {r['unread'][:6]}" for r in recs if r["unread"]]
     if unread:
         sr.log(HELD + f"page(s) the transcription could not read: {unread[:5]}")
