@@ -922,7 +922,7 @@
       "refused/ascii": "raise ConnectionRefusedError connects=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/prerendered_dispatch.py:284 broker_socket.request(socket_path, payload, timeout=_APPEND_TIMEOUT_SECONDS)"
+      "operator/hermes-smd-overlay/shared/prerendered_dispatch.py:306 broker_socket.request(socket_path, payload, timeout=_APPEND_TIMEOUT_SECONDS)"
      ],
      "file": "operator/hermes-smd-overlay/shared/prerendered_dispatch.py",
      "kind": "function",
@@ -1051,13 +1051,13 @@
       "fault-after-send/ascii": "raise BrokerError connects=1",
       "no-socket/ascii": "raise BrokerError connects=1",
       "non-json/ascii": "raise BrokerError connects=1",
-      "not-ok/ascii": "raise BrokerError connects=1",
+      "not-ok/ascii": "raise BrokerRefused connects=1",
       "ok/ascii": "return value:dict 5fba6d5555d91301 connects=1",
       "ok/non-ascii": "return value:dict 5fba6d5555d91301 connects=1",
       "refused/ascii": "raise BrokerError connects=1"
      },
      "calls": [
-      "operator/runners/jobs/jobs/broker_client.py:25 broker_socket.send_frame(self.socket_path, encoded, timeout=self.timeout)"
+      "operator/runners/jobs/jobs/broker_client.py:30 broker_socket.send_frame(self.socket_path, encoded, timeout=self.timeout)"
      ],
      "file": "operator/runners/jobs/jobs/broker_client.py",
      "kind": "function",
@@ -1066,8 +1066,8 @@
       "raises-BrokerError-on-fault-after-send",
       "raises-BrokerError-on-no-socket",
       "raises-BrokerError-on-non-json",
-      "raises-BrokerError-on-not-ok",
       "raises-BrokerError-on-refused",
+      "raises-BrokerRefused-on-not-ok",
       "wire-utf8"
      ],
      "status": "executable",
@@ -1758,7 +1758,7 @@
       "refused/ascii": "return false fcbcf165908dd18a connects=1"
      },
      "calls": [
-      "operator/skills/post-intake-daily-list/pre_run.py:434 sock.connect(socket_path)"
+      "operator/skills/post-intake-daily-list/pre_run.py:446 sock.connect(socket_path)"
      ],
      "file": "operator/skills/post-intake-daily-list/pre_run.py",
      "kind": "function",
@@ -3598,7 +3598,7 @@
       "yaml-syntax-error": "return empty:dict fd0eecc3dff2f4d8 reads=1"
      },
      "calls": [
-      "operator/bin/work-health.py:96 seat_config.load(CUSTOMERS / slug / \"customer.yaml\", encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/bin/work-health.py:99 seat_config.load(CUSTOMERS / slug / \"customer.yaml\", encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/bin/work-health.py",
      "kind": "function",
@@ -4030,7 +4030,7 @@
       "yaml-syntax-error": "return value:PostIntakeConfig 5b24ddc87574c78f reads=1"
      },
      "calls": [
-      "operator/connectors/smokeball/smokeball_connector/post_intake_config.py:59 seat_config.parse(raw)"
+      "operator/connectors/smokeball/smokeball_connector/post_intake_config.py:81 seat_config.parse(raw)"
      ],
      "file": "operator/connectors/smokeball/smokeball_connector/post_intake_config.py",
      "kind": "function",
@@ -4080,7 +4080,7 @@
       "yaml-syntax-error": "return false fcbcf165908dd18a reads=1"
      },
      "calls": [
-      "operator/connectors/smokeball/smokeball_connector/post_journal.py:132 seat_config.parse(fh)"
+      "operator/connectors/smokeball/smokeball_connector/post_journal.py:141 seat_config.parse(fh)"
      ],
      "file": "operator/connectors/smokeball/smokeball_connector/post_journal.py",
      "kind": "function",
@@ -5848,7 +5848,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/runners/jobs/jobs/records_lane.py:169 seat_config.parse(fh)"
+      "operator/runners/jobs/jobs/records_lane.py:165 seat_config.parse(fh)"
      ],
      "file": "operator/runners/jobs/jobs/records_lane.py",
      "kind": "function",
@@ -8231,7 +8231,7 @@
       "whitespace": "return value:HeartbeatEmitter 0737ea95319900a2"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/heartbeat.py:2729 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
+      "operator/hermes-smd-overlay/shared/heartbeat.py:2713 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
      ],
      "file": "operator/hermes-smd-overlay/shared/heartbeat.py",
      "kind": "function",
@@ -8571,7 +8571,7 @@
       "name": "CUSTOMER_SLUG"
      },
      "calls": [
-      "operator/runners/jobs/jobs/daemon.py:655 _require(\"CUSTOMER_SLUG\")"
+      "operator/runners/jobs/jobs/daemon.py:667 _require(\"CUSTOMER_SLUG\")"
      ],
      "file": "operator/runners/jobs/jobs/daemon.py",
      "kind": "function",
@@ -8970,7 +8970,7 @@
       "whitespace": "return false fcbcf165908dd18a connects=1"
      },
      "calls": [
-      "operator/skills/post-intake-daily-list/pre_run.py:427 os.environ.get(\"CUSTOMER_SLUG\", \"\")"
+      "operator/skills/post-intake-daily-list/pre_run.py:439 os.environ.get(\"CUSTOMER_SLUG\", \"\")"
      ],
      "file": "operator/skills/post-intake-daily-list/pre_run.py",
      "kind": "function",

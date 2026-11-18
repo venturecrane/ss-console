@@ -30,6 +30,9 @@ class BrokerClient:
             buf = broker_socket.send_frame(self.socket_path, encoded, timeout=self.timeout)
         except OSError as exc:
             raise BrokerError(f"broker socket: {exc}") from exc
+        if not buf:
+            # A closed connection with no answer: the broker went away, never a refusal.
+            raise BrokerError("broker returned nothing")
         try:
             resp = json.loads(bytes(buf).decode() or "{}")
         except ValueError as exc:
