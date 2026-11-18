@@ -51,7 +51,8 @@ from typing import Any
 from ...stages.chunking import context_block
 from . import contained as CT, noteheading as NH
 from .billing_page import BILLING, is_billing
-from .pageid import SKIPPED
+from .pageid import DELIVERED, SKIPPED
+from .records_dates import SERVICE_LINE
 from .values import clinical_values
 
 MIN_CHARS = 80
@@ -90,10 +91,13 @@ def pdf_pages(path: Path) -> list[str]:
     return matter_pdf.page_texts(path)
 
 
-def seen_shingles(delivered_pdfs: list[Path]) -> Delivered:
+def seen_shingles(delivered_pdfs: list[Path], numbers: list[int] | None = None) -> Delivered:
     """Every delivered exhibit page, one record per page, each exhibit its
-    own document: what the delivery read (``Delivered``)."""
-    return Delivered.of_docs([pdf_pages(p) for p in delivered_pdfs])
+    own document: what the delivery read (``Delivered``). `numbers`: each
+    PDF's delivered exhibit number, so an exclusion names the page that
+    covers it ("exhibit:N", the picture record's spelling)."""
+    labels = [f"{DELIVERED}{n}" for n in numbers] if numbers is not None else None
+    return Delivered.of_docs([pdf_pages(p) for p in delivered_pdfs], labels)
 
 
 def shingles_by_exhibit(delivered_pdfs: dict[int, Path]) -> dict[int, set[str]]:
@@ -176,9 +180,12 @@ class _Page:
     dates: frozenset[str]
     words: frozenset[str]
     values: frozenset[str]
+    #: (document label, page) of this page: a delivered exhibit ("exhibit:N")
+    #: or a new document's id. ("", 0) when nobody named it.
+    home: tuple[str, int] = ("", 0)
 
 
-def _page(doc: int, text: str) -> _Page:
+def _page(doc: int, text: str, home: tuple[str, int] = ("", 0)) -> _Page:
     body = without_furniture(text)
     return _Page(
         doc,
@@ -186,7 +193,59 @@ def _page(doc: int, text: str) -> _Page:
         frozenset(_dates(body)),
         frozenset(re.findall(r"[a-z]{4,}", body.lower())),
         frozenset(clinical_values(body)),
+        home,
     )
+
+
+#: How a page was found covered: by its 8-word shingles on one page, held by
+#: a run of pages (``update/contained``), or as the twin reading of one page
+#: in another new document that adds nothing (``update/twins``).
+BY_TEXT, BY_RUN, BY_TWIN, BY_PICTURE = "text", "contained", "twin", "picture"
+
+
+@dataclass(frozen=True)
+class Cover:
+    """The page that covers an excluded page: recorded as evidence, never a condition."""
+
+    src: str  # DELIVERED_SRC | EARLIER_SRC
+    doc: str  # "exhibit:N" or a new document's id
+    page: int
+    kind: str  # BY_TEXT | BY_RUN
+    last: int = 0  # the run's last page (BY_RUN), when it is not `page`
+
+    def as_dict(self) -> dict[str, Any]:
+        n = self.doc[len(DELIVERED) :] if self.doc.startswith(DELIVERED) else ""
+        where: dict[str, Any] = {"exhibit": int(n)} if n.isdigit() else {"doc": self.doc}
+        return {**where, "page": self.page, **({"last": self.last} if self.last else {}), "exact": False}
+
+
+def service_dates(text: str) -> set[str]:
+    """The dates `text` states on a line that dates care (``records_dates.SERVICE_LINE``)."""
+    return {d for ln in (text or "").splitlines() if SERVICE_LINE.search(ln) for d in _dates(ln)}
+
+
+class _Homes:
+    """Where each page of a pool came from, and each document's dates."""
+
+    def __init__(self) -> None:
+        self.homes: list[tuple[str, int]] = []
+        self.doc_dates: dict[str, set[str]] = {}
+
+    def note(self, home: tuple[str, int], text: str) -> None:
+        self.homes.append(home)
+        self.doc_dates.setdefault(home[0], set()).update(_dates(text or ""))
+
+    def cover(self, src: str, old: _Page | None, at: tuple[int, int] | None) -> Cover | None:
+        if old is not None and old.home[0]:
+            return Cover(src, old.home[0], old.home[1], BY_TEXT)
+        if at is not None and 0 <= at[0] < at[1] <= len(self.homes) and self.homes[at[0]][0]:
+            (d, p), last = self.homes[at[0]], self.homes[at[1] - 1][1]
+            return Cover(src, d, p, BY_RUN, last if last != p else 0)
+        return None
+
+    def lacks_service_date(self, text: str, c: Cover) -> bool:
+        """The page dates care on a day its cover's document never states."""
+        return bool(service_dates(text) - self.doc_dates.get(c.doc, set()))
 
 
 @dataclass
@@ -207,19 +266,23 @@ class Delivered:
 
     pages: list[_Page] = field(default_factory=list)
     pool: CT.Pool = field(default_factory=CT.Pool)
+    at: _Homes = field(default_factory=_Homes)
 
     @classmethod
     def of(cls, texts: Iterable[str]) -> Delivered:
         return cls.of_docs([list(texts)])
 
     @classmethod
-    def of_docs(cls, docs: list[list[str]]) -> Delivered:
-        """One document per list (a delivered exhibit), its pages in order."""
+    def of_docs(cls, docs: list[list[str]], labels: list[str] | None = None) -> Delivered:
+        """One document per list (a delivered exhibit), its pages in order;
+        `labels` names each ("exhibit:N"), else its position."""
         out = cls()
         for k, texts in enumerate(docs):
-            for t in texts:
-                out.pages.append(_page(-1, t))
+            label = labels[k] if labels is not None and k < len(labels) else f"{DELIVERED}{k + 1}"
+            for i, t in enumerate(texts, 1):
+                out.pages.append(_page(-1, t, (label, i)))
                 out.pool.add(CT.facts(-1 - k, t))
+                out.at.note((label, i), t)
         return out
 
     def __or__(self, other: Delivered) -> Delivered:
@@ -229,15 +292,25 @@ class Delivered:
             out.pool.add(f)
         for f in other.pool.items:
             out.pool.add(replace(f, doc=f.doc + top))
+        for side in (self.at, other.at):
+            out.at.homes += side.homes
+            for d, ds in side.doc_dates.items():
+                out.at.doc_dates.setdefault(d, set()).update(ds)
         return out
 
-    def by_shingles(self, text: str) -> bool:
+    def by_shingles(self, text: str) -> _Page | None:
+        """The ONE delivered page that covers `text`, or None."""
         me = _page(-1, text)
         if not me.shingles:
-            return False
+            return None
         need = COVERED_FRAC * len(me.shingles)
-        return any(
-            len(me.shingles & e.shingles) >= need and me.words <= e.words and me.values <= e.values for e in self.pages
+        return next(
+            (
+                e
+                for e in self.pages
+                if len(me.shingles & e.shingles) >= need and me.words <= e.words and me.values <= e.values
+            ),
+            None,
         )
 
     def contained(self, text: str, near: int | None = None) -> tuple[int, int] | None:
@@ -245,7 +318,7 @@ class Delivered:
         return self.pool.find(CT.facts(0, text), near=near)
 
     def covers(self, text: str) -> bool:
-        return self.by_shingles(text) or self.contained(text) is not None
+        return self.by_shingles(text) is not None or self.contained(text) is not None
 
 
 @dataclass
@@ -268,30 +341,36 @@ class Earlier:
     pages: list[_Page] = field(default_factory=list)
     doc: int = 0
     pool: CT.Pool = field(default_factory=CT.Pool)
+    at: _Homes = field(default_factory=_Homes)
+    name: str = ""  # the current document's id, when the caller names it
 
-    def next_document(self) -> None:
+    def next_document(self, name: str | None = None) -> None:
         self.doc += 1
+        self.name = name or f"new:{self.doc}"
 
-    def add(self, text: str) -> None:
-        self.pages.append(_page(self.doc, text))
+    def add(self, text: str, page: int = 0) -> None:
+        home = (self.name or f"new:{self.doc}", page)
+        self.pages.append(_page(self.doc, text, home))
         self.pool.add(CT.facts(self.doc, text))
+        self.at.note(home, text)
 
-    def by_shingles(self, text: str) -> bool:
+    def by_shingles(self, text: str) -> _Page | None:
+        """The ONE page of an earlier document `text` is a refiled copy of, or None."""
         me = _page(self.doc, text)
         if not me.shingles:
-            return False
+            return None
         for e in self.pages:
             if e.doc == self.doc or len(me.shingles & e.shingles) < COVERED_FRAC * len(me.shingles):
                 continue
             if me.dates <= e.dates and me.words <= e.words and me.values <= e.values:
-                return True
-        return False
+                return e
+        return None
 
     def contained(self, text: str, near: int | None = None) -> tuple[int, int] | None:
         return self.pool.find(CT.facts(self.doc, text), skip=self.doc, near=near)
 
     def copy_of(self, text: str) -> bool:
-        return self.by_shingles(text) or self.contained(text) is not None
+        return self.by_shingles(text) is not None or self.contained(text) is not None
 
 
 #: {page: ("delivered" | "earlier", window start, window end, held by
@@ -301,8 +380,18 @@ _Held = dict[int, tuple[str, int, int, bool]]
 DELIVERED_SRC, EARLIER_SRC = "delivered", "earlier"
 
 
+#: Why a page a text rule matched is read after all (``_decide``).
+SERVICE_DATE_UNCOVERED = "read: it dates care on a day the covering document never states"
+
+
 def _decide(
-    t: str, seen: Delivered, earlier: Earlier | None, held: _Held, page: int, tally: Counter[str] | None
+    t: str,
+    seen: Delivered,
+    earlier: Earlier | None,
+    held: _Held,
+    page: int,
+    tally: Counter[str] | None,
+    covers: dict[int, Cover] | None = None,
 ) -> tuple[str, str]:
     if t in FAILED_MARKS:
         return UNREAD, "the page could not be transcribed"
@@ -314,12 +403,22 @@ def _decide(
         if pool is None:
             continue
         old, at = pool.by_shingles(t), pool.contained(t)
+        if old is None and at is None:
+            continue
+        # The page that covers it is RECORDED (``covers``); a page that dates
+        # care on a day the covering document never states is read (a later
+        # visit on the same template, 2026-11-17).
+        cov = pool.at.cover(src, old, at)
+        if cov is not None and pool.at.lacks_service_date(t, cov):
+            _count(tally, SERVICE_DATE_UNCOVERED)
+            continue
         if at is not None:
-            held[page] = (src, at[0], at[1], not old)  # where it sits, for an undated neighbour
-        if old or at is not None:
-            if not old:
-                _count(tally, f"held by a run of {src} pages")
-            return EXCLUDED, why
+            held[page] = (src, at[0], at[1], old is None)  # where it sits, for an undated neighbour
+        if old is None:
+            _count(tally, f"held by a run of {src} pages")
+        if covers is not None and cov is not None:
+            covers[page] = cov
+        return EXCLUDED, why
     return READ, "new document"
 
 
@@ -335,6 +434,7 @@ def _undated_neighbours(
     earlier: Earlier | None,
     held: _Held,
     tally: Counter[str] | None,
+    covers: dict[int, Cover] | None = None,
 ) -> None:
     """A read page that states no date, beside a page ``update/contained``
     held, is held when the same document's pages near that window hold it."""
@@ -352,7 +452,11 @@ def _undated_neighbours(
                 got = seen.contained(t, near=at) if src == DELIVERED_SRC else None
                 if src == EARLIER_SRC and earlier is not None:
                     got = earlier.contained(t, near=at)
+                pool: Delivered | Earlier | None = seen if src == DELIVERED_SRC else earlier
+                cov = pool.at.cover(src, None, got) if pool is not None and got is not None else None
                 if got is not None:
+                    if covers is not None and cov is not None:  # recorded, never a condition
+                        covers[p] = cov
                     held[p] = (src, got[0], got[1], True)
                     out[p] = (EXCLUDED, ALREADY if src == DELIVERED_SRC else OVERLAP)
                     _count(tally, f"held beside a held page ({src})")
@@ -368,6 +472,8 @@ def classify_new(
     image: dict[int, str] | None = None,
     tally: Counter[str] | None = None,
     held_out: _Held | None = None,
+    covers_out: dict[int, Cover] | None = None,
+    doc_id: str | None = None,
 ) -> dict[int, tuple[str, str]]:
     """Per page of one new document: (text | excluded | unread, reason).
     `unread` is a page the transcription could not read: it is never skipped
@@ -376,9 +482,11 @@ def classify_new(
     `image`: {page: ALREADY | OVERLAP} for the pages ``update/pageid`` found
     by their picture; those were never transcribed and are excluded first.
     `tally`, when given, counts the pages ``update/contained`` held;
-    `held_out`, when given, receives where each of them sits (``_Held``)."""
+    `held_out`, when given, receives where each of them sits (``_Held``);
+    `covers_out`, when given, receives the page that covers each page a text
+    rule excluded (``Cover``); `doc_id` names this document in that record."""
     if earlier is not None:
-        earlier.next_document()
+        earlier.next_document(doc_id)
     out: dict[int, tuple[str, str]] = {}
     held: _Held = {}
     for i in range(1, npages + 1):
@@ -386,11 +494,11 @@ def classify_new(
         if image and i in image:
             out[i] = (EXCLUDED, image[i])
             continue
-        out[i] = _decide(t, seen, earlier, held, i, tally)
+        out[i] = _decide(t, seen, earlier, held, i, tally, covers_out)
         if earlier is not None and out[i][0] != UNREAD and len(t) >= MIN_CHARS:
-            earlier.add(t)
+            earlier.add(t, i)
     if held:
-        _undated_neighbours(out, pages, seen, earlier, held, tally)
+        _undated_neighbours(out, pages, seen, earlier, held, tally, covers_out)
     if held_out is not None:
         held_out.update(held)
     return out

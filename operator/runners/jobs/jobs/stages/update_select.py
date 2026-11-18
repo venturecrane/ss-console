@@ -72,6 +72,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import unopened
+from ..medchron import pages_record as PR
 from ..medchron.gates import foreign_identity as FI
 from ..medchron.update import (
     body as B,
@@ -91,6 +92,9 @@ from .transcript import split_pages
 from .update_base import HELD, plan, update_dir
 from .vision import load_partial
 
+#: What ``update_pages`` decided for each file the other-person rule withheld
+#: on an earlier run: {id: {"outcome": cleared | kept | kept: cannot re-test, "tests": [...]}}.
+REDECIDED_FILE = "identity_redecided.json"
 PAGE_SOURCES = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 
 
@@ -148,6 +152,8 @@ def _candidates(sr: StageRun, delivered_sha: dict[str, str]) -> tuple[list[dict[
             continue
         if FI.matches(str(r["id"]), withheld):
             # Keyed by how it is disclosed: the firm's direction, or the rule's.
+            # (A file the rule withheld on an earlier run is re-decided BEFORE
+            # this, by ``update_pages``; cleared, it is no longer withheld.)
             skipped.setdefault(FI.withheld_reason(sr.slug_dir, str(r["id"])), []).append(str(r["id"]))
             continue
         if r.get("sha256") in delivered_sha or (r.get("sha256") and r["sha256"] in delivered_src):
@@ -200,7 +206,12 @@ def _leave_out_foreign(
         return rows
     (ud / "identity_holds.json").write_text(json.dumps(holds, indent=1), encoding="utf-8")
     ids = [h.split(":", 1)[0] for h in holds]
-    FI.withhold_by_rule(sr.slug_dir, ids, ground=FI.RULE_ANOTHER_PERSON)
+    FI.withhold_by_rule(
+        sr.slug_dir,
+        ids,
+        ground=FI.RULE_ANOTHER_PERSON,
+        tests={h.split(":", 1)[0]: FI.tests_of(h.split(":", 1)[1].split("; ")) for h in holds},
+    )
     skipped.setdefault(FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON], []).extend(ids)
     sr.log(
         f"{len(ids)} document(s) name a different person than the client; left out by rule and disclosed "
@@ -213,8 +224,7 @@ def _delivered_pages(ident: PG.Loaded, rid: str) -> set[int]:
     """The pages of `rid` whose picture is EXACTLY a page of a delivered
     exhibit. Only those: a near match, or a match to another new document's
     page, proves nothing about whose record it is."""
-    found = ident.pages.get(rid) or {}
-    return {n for n, h in found.items() if h.exact and PG.delivered_exhibit(h.other) is not None}
+    return {n for n in ident.pages.get(rid) or {} if PR.own_delivered(ident, rid, n)}
 
 
 def _page_findings(
@@ -261,6 +271,8 @@ class _Read:
     #: {page: (document, page)}: a page read from a smaller copy's richer
     #: reading of the same scan (``update/twins``).
     readings: dict[int, tuple[str, int]] = field(default_factory=dict)
+    #: {page: the page that covers it}, for each page a text rule excluded (``select.Cover``)
+    covers: dict[int, S.Cover] = field(default_factory=dict)
 
 
 def _classify(
@@ -287,6 +299,10 @@ def _classify(
     for rid in order:
         image = PG.reasons(ident.pages.get(rid) or {}, _texts(sr, rid), text_of)
         got[rid] = _read_one(sr, by_id[rid], pdfs[rid], npages[rid], seen, earlier, firm.get(rid), image)
+        for pg in image if not got[rid].medlegal else ():  # a page excluded by its picture: that page covers it
+            h = ident.pages[rid][pg]
+            src = S.DELIVERED_SRC if PG.delivered_exhibit(h.other) is not None else S.EARLIER_SRC
+            got[rid].covers[pg] = S.Cover(src, h.other, h.page, S.BY_PICTURE)
     _settle_twins(got, ident)
     by_doc: dict[str, set[str]] = {}
     for rid in (d for d in order if not got[d].medlegal):
@@ -309,8 +325,11 @@ def _settle_twins(got: dict[str, _Read], ident: PG.Loaded) -> None:
                 by_other.setdefault(h.other, {})[pg] = h.page
         for other, pairs in by_other.items():
             o = got[other]
-            for p, q in TW.settle((c.pages, c.decisions), (o.pages, o.decisions), pairs).items():
+            mine, theirs = {}, {}  # each page a twin excluded, and the page it repeats
+            for p, q in TW.settle((c.pages, c.decisions), (o.pages, o.decisions), pairs, mine, theirs).items():
                 o.readings[p] = (rid, q)
+            c.covers.update({q: S.Cover(S.EARLIER_SRC, other, p, S.BY_TWIN) for q, p in mine.items()})
+            o.covers.update({p: S.Cover(S.EARLIER_SRC, rid, q, S.BY_TWIN) for p, q in theirs.items()})
 
 
 def _read_one(
@@ -328,7 +347,9 @@ def _read_one(
     pages = _texts(sr, str(r["id"]))
     if ML.is_medlegal([vendor_name(r), firm or ""], pages.get(1) or ""):
         return _Read(pdf, pages, {i: (S.EXCLUDED, ML.REASON) for i in range(1, npages + 1)}, True, None)
-    return _Read(pdf, pages, S.classify_new(pages, npages, seen, earlier, image), False, None)
+    covers: dict[int, S.Cover] = {}
+    decided = S.classify_new(pages, npages, seen, earlier, image, covers_out=covers, doc_id=str(r["id"]))
+    return _Read(pdf, pages, decided, False, None, covers=covers)
 
 
 def _exhibit(
@@ -404,7 +425,10 @@ def run(sr: StageRun) -> int:
     rows = _leave_out_foreign(sr, ud, rows, skipped)
     # Only what the delivery READ is "already read": a firm-numbered file the
     # delivered list never named was never read, so its words exclude nothing.
-    seen = S.seen_shingles([sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery])
+    seen = S.seen_shingles(
+        [sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery],
+        [int(e["exhibit"]) for e in read_by_delivery],
+    )
     ident = PG.load(ud)
     extracts = PG.merge_extracts(
         SUB.refiled_subsets(
@@ -441,6 +465,7 @@ def run(sr: StageRun) -> int:
         recs.append(rec)
         units.append(urow)
     extracts = {**extracts, **PG.merge_extracts(whole, {})}
+    _record_pages(sr, ordered, read, extracts, skipped, ident)
     unread = [f"Exhibit {r['exhibit']} p. {r['unread'][:6]}" for r in recs if r["unread"]]
     if unread:
         sr.log(HELD + f"page(s) the transcription could not read: {unread[:5]}")
@@ -461,6 +486,28 @@ def run(sr: StageRun) -> int:
         f"{len(subs)} re-filed extract(s) cited in the whole document; skipped {skipped}"
     )
     return 0
+
+
+def _record_pages(
+    sr: StageRun,
+    ordered: list[dict[str, Any]],
+    read: dict[str, _Read],
+    extracts: dict[str, SUB.Subset],
+    skipped: dict[str, list[str]],
+    ident: PG.Loaded,
+) -> None:
+    """Every pulled page's row in ``runs/<unit>/pages.jsonl`` (``stages/page_rows``)."""
+    from . import page_rows
+
+    raw = read_jsonl(sr.slug_dir / "raw_manifest.jsonl")
+    sha = {str(r.get("id")): str(r.get("sha256") or "") for r in raw if r.get("ok")}
+    raw_redecided = read_json(update_dir(sr) / REDECIDED_FILE, {}) or {}
+    redecided = {str(k): str(v.get("outcome")) for k, v in raw_redecided.items() if isinstance(v, dict)}
+    rows = page_rows.selection_rows(
+        ordered, read, extracts, skipped, ident, sha, lambda rid: len(_texts(sr, rid)), redecided
+    )
+    rd = sr.slug_dir / "runs" / sr.unit.unit
+    PR.write(rd, page_rows.carry_ink(rd, rows))
 
 
 _NEW_EXHIBIT = re.compile(r"^Exhibit (\d+) - .*\.pdf$")

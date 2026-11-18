@@ -107,6 +107,22 @@ def asked(sr: StageRun) -> list[str]:
     ]
 
 
+def scope(sr: StageRun, listing: list[dict[str, Any]], patterns: list[str]) -> tuple[list[dict], list[dict]]:
+    """(read, set aside) of the `listing` files `patterns` name, scoped to this
+    client (``medchron.billing_plan.decide``, with the firm's folder classes);
+    raises ``billing_plan.Unknown`` when another client's folder cannot be named."""
+    from ..medchron import billing_plan as BP
+
+    template = str(
+        sr.cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
+    )
+    classes = (
+        sr.cfg.get("selection", "shared_folder_classes") or [],
+        sr.cfg.get("selection", "exclude_folder_classes") or [],
+    )
+    return BP.decide(listing, sr.folder_paths(), patterns, sr.unit, sr.job.matter_clients, template, *classes)
+
+
 def run_docs(sr: StageRun) -> int:
     """``billing/plan.json``: what the worksheet is refreshed from, scoped to
     this client (``medchron.billing_plan``), or [] when the request names no
@@ -120,18 +136,8 @@ def run_docs(sr: StageRun) -> int:
     read: list[dict[str, Any]] = []
     aside: list[dict[str, Any]] = []
     if named:
-        template = str(
-            sr.cfg.get("delivery", "chronology_name_template") or "{CLIENT} - Medical Chronology {MM-DD-YY}.docx"
-        )
-        pats = sr.cfg.get("billing", "name_patterns") or []
-        classes = (
-            sr.cfg.get("selection", "shared_folder_classes") or [],
-            sr.cfg.get("selection", "exclude_folder_classes") or [],
-        )
         try:
-            read, aside = BP.decide(
-                sr.manifest(), sr.folder_paths(), pats, sr.unit, sr.job.matter_clients, template, *classes
-            )
+            read, aside = scope(sr, sr.manifest(), sr.cfg.get("billing", "name_patterns") or [])
         except BP.Unknown as exc:
             sr.log(str(exc))
             return EXIT_UNKNOWN
@@ -261,7 +267,12 @@ def run_extract(sr: StageRun) -> int:
 def run_dos(sr: StageRun) -> int:
     from ..medchron import dos_check
     from .billing_chart import Matcher
+    from ..medchron.update import billing_page_dates
 
+    # Recorded on every update; with no billing record named (no plan), nothing else happens.
+    got = billing_page_dates.write(sr.slug_dir, update_dir(sr), [sr.unit])
+    if got:
+        sr.log(f"dos_check (update): {len(got)} date(s) of service on set-aside billing pages recorded")
     if not read_json(_dir(sr) / "plan.json", []):
         return 0
     rd = sr.slug_dir / "runs" / sr.unit.unit
@@ -271,6 +282,8 @@ def run_dos(sr: StageRun) -> int:
     sr.log(
         f"dos_check (update): {rep['billed_dates']} billed date(s); with no medical record on file {len(rep['billed_no_record'])}"
     )
+    if rep.get("billed_no_record_dates"):  # what the set-aside billing pages WOULD add (record only)
+        sr.log(f"dos_check (update): no-record table dates, record only: {rep['billed_no_record_dates']}")
     return 0
 
 

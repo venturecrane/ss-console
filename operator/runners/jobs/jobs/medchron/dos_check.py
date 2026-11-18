@@ -258,7 +258,7 @@ def check(
                     }
                 )
         counts[cls] += 1
-    return {
+    out = {
         "billed_dates": sum(counts.values()),
         "classes": counts,
         "quality": quality,
@@ -266,6 +266,41 @@ def check(
         "provider_unmatched": unmatched,
         "billed_no_record": no_record,
     }
+    as_filed = {str(r["date"]) for r in no_record}
+    would = _with_billing_pages(slug_dir, as_filed, {iso for iso, _ in billed}, by_date, incident_iso, explained, pages)
+    if would is not None:
+        out["billed_no_record_dates"] = {"as_filed": len(as_filed), "with_billing_pages": would}
+    return out
+
+
+def _with_billing_pages(
+    slug_dir: Path,
+    as_filed: set[str],
+    have: set[str],
+    by_date: dict[str, list[str]],
+    incident_iso: str,
+    explained: set[str],
+    pages: dict[str, list[tuple[int, str]]],
+) -> int | None:
+    """RECORD ONLY (2026-11-17): how many distinct dates the worksheet's
+    no-record table WOULD hold if the dates of service on the billing pages
+    an update set aside (``update/billing_page_dates``) were billed dates, a
+    date some billing record already carries counting once. Nothing here is
+    added to the billed dates, the table, its sentence or the reply; the
+    first real job that names a billing record says what it would change.
+    None when no such page date was recorded."""
+    from .update import billing_page_dates
+
+    got = billing_page_dates.load(slug_dir)
+    if not got:
+        return None
+    bills = {(str(r.get("file") or ""), int(r["page"])) for r in got}
+    record = {n: [(p, t) for p, t in pl if (n, p) not in bills] for n, pl in pages.items()}  # a bill is no record page
+    gaps = set(as_filed)
+    for d in {str(r["date"]) for r in got} - have:  # a date a billing record carries counts once, as filed
+        if d not in by_date and d >= incident_iso and d not in explained and not _on_record_page(d, record):
+            gaps.add(d)
+    return len(gaps)
 
 
 def write(run_dir: Path, report: dict[str, Any]) -> Path:

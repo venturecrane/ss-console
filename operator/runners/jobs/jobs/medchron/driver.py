@@ -338,7 +338,7 @@ class Driver:
             self._page_checked.add(ctx.unit.unit)
             try:
                 self.limits.check_before_first_paid(
-                    pages=budget_mod.pages_read(extracted),
+                    pages=self._asked(ctx.unit, extracted),
                     projected_usd=projected,
                     spent_usd=spent,
                     stage=stage.name,
@@ -407,10 +407,12 @@ class Driver:
                 return rehearsal.summary(self, ctx, out) if self.rehearse else out
             if self.rehearse:
                 notes.append(f"rehearse {stage.name}: ok")
-        pages = budget_mod.pages_read(extracted)
-        if update:
-            # Pages the delivered chronology already read are not charged again (``update/charged``).
-            pages = update_charged.charged_pages(self.slug_dir, unit.unit, pages)
+        pages = self._pages(unit, extracted)
+        cap = update_charged.capped(self.slug_dir, unit.unit) if update else None
+        if cap is not None:  # charged the figure asked about; triage reads the code (``update/charged``)
+            notes.append(
+                f"{cap['code']}: read {cap['read']} page(s), asked about {cap['asked']}; charged {cap['asked']}"
+            )
         if self.dry_run or self.rehearse:
             st_outcome = "dry_run" if self.dry_run else "rehearsed"
         else:
@@ -418,6 +420,25 @@ class Driver:
             st_outcome = "delivered"
         out = Outcome(unit.unit, st_outcome, None, None, self.budget.refresh(), pages, notes)
         return rehearsal.summary(self, ctx, out) if self.rehearse else out
+
+    def _pages(self, unit: job_mod.Unit, extracted: Path) -> int:
+        """The pages this unit counts against the allowance: every page a run
+        read; on an update, only the pages it sent to be read
+        (``update/charged``, read off the per-page record). The ONE figure
+        every outcome, hold, stage row and page question carries."""
+        pages = budget_mod.pages_read(extracted)
+        if self.job.update is None:
+            return pages
+        return update_charged.charged_pages(self.slug_dir, unit.unit, pages)
+
+    def _asked(self, unit: job_mod.Unit, extracted: Path) -> int:
+        """The figure the page question before the first paid step is asked
+        with: on an update, an upper bound on the pages it will read, recorded
+        so the charge can never exceed it (``update/charged.asked_pages``)."""
+        pages = budget_mod.pages_read(extracted)
+        if self.job.update is None:
+            return pages
+        return update_charged.asked_pages(self.slug_dir, unit.unit, pages)
 
     def _note_skip(self, stage: dag.Stage, slug_done: set[str], notes: list[str]) -> None:
         """A done stage is skipped. A done SLUG-scope stage is done for every
@@ -451,7 +472,7 @@ class Driver:
                 return None
             st.finish(stage.name, status="held", exit_code=None, dollars=self.budget.refresh(), pages=None, note=reason)
             st.end("held", reason)
-            pages = budget_mod.pages_read(self.slug_dir / "extracted.jsonl")
+            pages = self._pages(unit, self.slug_dir / "extracted.jsonl")
             return Outcome(unit.unit, "held", reason, stage.name, self.budget.refresh(), pages, notes)
         if not self.dry_run:
             st.finish(stage.name, status="done", exit_code=0, dollars=self.budget.refresh(), pages=None)
@@ -494,7 +515,7 @@ class Driver:
                 stage.name, status="failed", exit_code=None, dollars=None, pages=None, note=f"script missing: {script}"
             )
             st.end("failed", f"pipeline script missing: {stage.script}")
-            why, pages = f"pipeline script missing: {stage.script}", budget_mod.pages_read(extracted)
+            why, pages = f"pipeline script missing: {stage.script}", self._pages(unit, extracted)
             return Outcome(unit.unit, "failed", why, stage.name, self.budget.spent(), pages, notes)
         argv = _resolve_argv(stage, ctx, self.slug_dir, self.decided)
         cmd = (
@@ -518,7 +539,7 @@ class Driver:
             proc.stdout + proc.stderr, encoding="utf-8"
         )
         dollars = self.budget.refresh()
-        pages = budget_mod.pages_read(extracted)
+        pages = self._pages(unit, extracted)
         if proc.returncode == 0:
             st.finish(stage.name, status="done", exit_code=0, dollars=dollars, pages=pages)
             if stage.invalidates:
@@ -543,7 +564,7 @@ class Driver:
         posture stopped the package, nothing went wrong, and the daemon relays
         it unprefixed so the seat's reply names the setting rather than an
         error."""
-        pages = budget_mod.pages_read(extracted)
+        pages = self._pages(unit, extracted)
         st.finish(stage.name, status="held", exit_code=None, dollars=self.budget.spent(), pages=pages, note=hold.reason)
         st.end("held", hold.reason)
         out = Outcome(unit.unit, "held", hold.reason, stage.name, self.budget.spent(), pages, notes)
@@ -621,7 +642,7 @@ class Driver:
             "\n".join(lines) + "\n", encoding="utf-8"
         )
         dollars = self.budget.refresh()
-        pages = budget_mod.pages_read(extracted)
+        pages = self._pages(unit, extracted)
         if code == 0:
             st.finish(stage.name, status="done", exit_code=0, dollars=dollars, pages=pages)
             if stage.invalidates:
@@ -632,7 +653,7 @@ class Driver:
         else:
             outcome, reason = stage.exit_map.get(code, ("failed", f"exit {code}"))
             if outcome == dag.CURRENT:
-                charged = update_charged.charged_pages(self.slug_dir, unit.unit, pages)
+                charged = pages
                 done = Outcome(unit.unit, "delivered", None, stage.name, dollars, charged, notes)
                 return update_outcome.end(sr, st, stage.name, code, done)
             reason = unit_proof.paged_line(lines) or f"{reason}; last output: {' | '.join(lines)[-400:]}"

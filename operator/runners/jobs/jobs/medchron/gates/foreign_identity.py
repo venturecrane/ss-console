@@ -202,15 +202,103 @@ def record_decision(slug_dir: Path, *, action: str, ids: list[str], by: str, sou
     return body
 
 
-def withhold_by_rule(slug_dir: Path, ids: list[str], *, ground: str, at: str | None = None) -> dict[str, Any]:
+#: The tests a finding comes from, as the codes a withhold records (codes
+#: only, never the value found): a labelled date of birth that is not the
+#: client's, and a labelled patient name without the client's surname.
+TEST_DOB, TEST_NAME = "dob", "name"
+ALL_TESTS = frozenset({TEST_DOB, TEST_NAME})
+#: Why a by-rule withhold stood on a run that could not run its test again.
+KEPT_CANNOT_RETEST = "cannot re-test"
+
+
+def tests_of(found: list[str]) -> list[str]:
+    """The test codes behind `found` (``findings``' own strings)."""
+    out = set()
+    for f in found:
+        if "date of birth" in f:
+            out.add(TEST_DOB)
+        if "patient name" in f:
+            out.add(TEST_NAME)
+    return sorted(out)
+
+
+def runnable(surnames: set[str], dobs: set[str]) -> set[str]:
+    """The tests this job can run: the date-of-birth test needs a date of
+    birth (``findings`` makes no such finding without one), the name test a
+    surname (``_conflicts`` finds none without one)."""
+    return ({TEST_DOB} if any(dobs) else set()) | ({TEST_NAME} if any(surnames) else set())
+
+
+def withhold_by_rule(
+    slug_dir: Path, ids: list[str], *, ground: str, at: str | None = None, tests: dict[str, list[str]] | None = None
+) -> dict[str, Any]:
     """Withhold `ids` by rule (2026-10-24): the decision
     ``identity_decide --withhold`` records, made by the rule instead of a
     person. ``ground`` is a key of ``RULE_REASONS``; it rides as the decision's
-    ``source`` so the disclosure can say why."""
+    ``source`` so the disclosure can say why. `tests`: {id: the test codes
+    that withheld it} (``tests_of``), recorded on the decision so a later run
+    clears it only by running the same test (``clear_by_rule``)."""
     if ground not in RULE_REASONS:
         raise ValueError(f"ground must be one of {sorted(RULE_REASONS)}, not {ground!r}")
     stamp = at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    return record_decision(slug_dir, action="withhold", ids=list(ids), by=RULE_BY, source=f"rule:{ground}", at=stamp)
+    body = record_decision(slug_dir, action="withhold", ids=list(ids), by=RULE_BY, source=f"rule:{ground}", at=stamp)
+    if tests:
+        body["decisions"][-1]["tests"] = {str(i): sorted(set(t)) for i, t in tests.items() if str(i) in set(ids)}
+        (slug_dir / RELEASE_FILE).write_text(json.dumps(body, indent=1, sort_keys=True), encoding="utf-8")
+    return body
+
+
+def rule_tests(slug_dir: Path, rid: str) -> set[str] | None:
+    """The tests the rule's latest withhold of `rid` recorded, or None when
+    that decision recorded none (a withhold made before 2026-11-17)."""
+    p = slug_dir / RELEASE_FILE
+    try:
+        decisions = (json.loads(p.read_text(encoding="utf-8")) or {}).get("decisions") or [] if p.is_file() else []
+    except (OSError, ValueError, AttributeError):
+        return None
+    for dec in reversed(decisions):
+        if isinstance(dec, dict) and dec.get("action") == "withhold" and dec.get("by") == RULE_BY:
+            if any(matches(str(rid), {str(i)}) for i in dec.get("ids") or []):
+                got = (dec.get("tests") or {}).get(str(rid)) if isinstance(dec.get("tests"), dict) else None
+                return {str(t) for t in got} if isinstance(got, list) and got else None
+    return None
+
+
+def by_rule(slug_dir: Path, rid: str, ground: str) -> bool:
+    """Whether `rid` is withheld and the latest decision naming it was the
+    rule's on `ground` (never a person's: the firm's direction is sticky)."""
+    return matches(str(rid), withheld(slug_dir)) and withheld_reason(slug_dir, rid) == RULE_REASONS[ground]
+
+
+def clear_by_rule(
+    slug_dir: Path, ids: list[str], *, ground: str, can_run: set[str], at: str | None = None
+) -> tuple[list[str], list[str]]:
+    """Take back the rule's withhold of `ids`, which this run's tests no
+    longer find (2026-11-17): (cleared, kept). A WITHHOLD FAILS TOWARD
+    WITHHOLDING: it is cleared only when this run could run every test that
+    withheld it (`can_run`, ``runnable``) and so its finding nothing means
+    something. A job with no date of birth makes no date-of-birth finding at
+    all, so a withhold that rested on one (a same-surname relative's record)
+    is KEPT, ``KEPT_CANNOT_RETEST``. A withhold that recorded no test is kept
+    unless every test can run. Only ids the rule itself withheld on `ground`
+    are touched; a person's decision is never undone here. A clear is
+    recorded as a decision row (``action: "cleared"``)."""
+    mine = [i for i in ids if by_rule(slug_dir, i, ground)]
+    kept = [i for i in mine if not (rule_tests(slug_dir, i) or ALL_TESTS) <= can_run]
+    gone = [i for i in mine if i not in kept]
+    if not gone:
+        return [], kept
+    p = slug_dir / RELEASE_FILE
+    body = json.loads(p.read_text(encoding="utf-8")) or {}
+    body["withhold"] = [
+        x for x in body.get("withhold") or [] if not any(matches(str(x), {i}) or matches(i, {str(x)}) for i in gone)
+    ]
+    stamp = at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    body.setdefault("decisions", []).append(
+        {"action": "cleared", "ids": gone, "by": RULE_BY, "source": f"rule:{ground}", "at": stamp}
+    )
+    p.write_text(json.dumps(body, indent=1, sort_keys=True), encoding="utf-8")
+    return gone, kept
 
 
 def withheld_reason(slug_dir: Path, rid: str) -> str:

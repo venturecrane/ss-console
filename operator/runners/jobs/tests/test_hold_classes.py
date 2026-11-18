@@ -459,6 +459,7 @@ def test_an_update_leaves_a_record_naming_another_person_out_by_rule(tmp_path, m
     class SR:
         slug_dir = tmp_path
         unit = type("U", (), {"unit": "u1"})()
+        job = type("J", (), {"units": []})()  # the clear_by_rule test reads which tests the job can run
 
         @staticmethod
         def log(m: str) -> None:

@@ -221,7 +221,12 @@ def fold(job: Job, cfg: FirmConfig, slug_dir: Path, *, dry_run: bool) -> Decisio
         ids = [str(h["id"]) for h in foreign]
         _write(slug_dir / IDENTITY_HOLDS_FILE, foreign, dry_run=dry_run)
         if not dry_run:
-            FI.withhold_by_rule(slug_dir, ids, ground=FI.RULE_ANOTHER_PERSON)
+            FI.withhold_by_rule(
+                slug_dir,
+                ids,
+                ground=FI.RULE_ANOTHER_PERSON,
+                tests={str(h["id"]): FI.tests_of(h["found"]) for h in foreign},
+            )
         payload["fold"] = [sha for sha in keep if sha not in ids]
         d.notes.append(
             f"{len(foreign)} emailed attachment(s) name a different person than the client; left out by rule "
