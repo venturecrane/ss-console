@@ -37,7 +37,6 @@ _PROOF_WORDS = {
     "library_edit_refused": "the firm's own save of its library file was not used or not accepted; the firm was told nothing",
     "layout_rule_unplaced": "a layout rule could not be placed against the firm's own edit of its library file, so it stood; the firm was told nothing",
     "spend_unrecorded": "its usage shows spend while its record shows $0, so the firm's allowance and SMD's cost read low; the firm was told nothing",
-    "ending_unrecorded": "its ending could not be recorded (the broker refused it, or stayed away past the retry bound); the firm's message went anyway and the row is wrong until SMD records it",
 }
 
 
@@ -189,13 +188,23 @@ class _ProofLedger(NamedTuple):
     failures: dict[str, tuple[datetime, dict]]
     ended_bad: dict[str, datetime]
     rejected: dict[str, datetime]
+    #: ``ending_unrecorded`` pages, kept apart: it is not a proof failure.
+    unrecorded: dict[str, tuple[datetime, dict]]
+    #: The newest ending record (delivered, held or failed) per job.
+    ended: dict[str, datetime]
+
+
+#: The code of a chronology ending the broker did not take (``jobs/medchron/unrecorded.py``).
+UNRECORDED = "ending_unrecorded"
 
 
 def _proof_ledger(rows: list[dict]) -> _ProofLedger:
     proven: dict[str, datetime] = {}
     replied: dict[str, datetime] = dict(released_reply_jobs(rows))
     failures: dict[str, tuple[datetime, dict]] = {}
+    unrecorded: dict[str, tuple[datetime, dict]] = {}
     ended_bad: dict[str, datetime] = {}
+    ended: dict[str, datetime] = {}
     for ts, row in stamped(rows):
         answered = _found_reply_job(row)
         if answered:
@@ -207,11 +216,41 @@ def _proof_ledger(rows: list[dict]) -> _ProofLedger:
         if row.get("action_type") == "DELIVERY_PROVEN":
             proven[job_id] = ts
         elif row.get("action_type") == "DELIVERY_PROOF_FAILED":
-            failures[job_id] = (ts, md)
-        elif str(row.get("action_type") or "").endswith(("_JOB_FAILED", "_JOB_HELD")):
-            ended_bad[job_id] = ts
+            (unrecorded if reason_token(md.get("code")) == UNRECORDED else failures)[job_id] = (ts, md)
+        elif str(row.get("action_type") or "").endswith(("_JOB_FAILED", "_JOB_HELD", "_JOB_DELIVERED")):
+            ended[job_id] = ts
+            if not str(row["action_type"]).endswith("_JOB_DELIVERED"):
+                ended_bad[job_id] = ts
     rejected = {r.job: r.at for r in review_rejections(rows)}
-    return _ProofLedger(proven, replied, failures, ended_bad, rejected)
+    return _ProofLedger(proven, replied, failures, ended_bad, rejected, unrecorded, ended)
+
+
+def _unrecorded_items(seat: str, cfg: Config, now: datetime, led: _ProofLedger, closed: Optional[set]) -> list[Item]:
+    """An ending the broker did not take is open until an ending record for the
+    job lands after its page (the lane's retry, or the dead-row close after a
+    wipe). Its sentence is the page's own, which the lane composed from the
+    job's facts: which ending, whether a wake was owed, and whether it went."""
+    out: list[Item] = []
+    for job_id, (ts, md) in led.unrecorded.items():
+        if now - ts > timedelta(hours=cfg.ended_job_hours) or (closed and (seat, job_id) in closed):
+            continue
+        if job_id in led.ended and led.ended[job_id] >= ts:
+            continue
+        lane = cfg.lanes[md["lane"]].label if md.get("lane") in cfg.lanes else str(md.get("lane") or "a")
+        said = str(md.get("detail") or "the page gave no detail").rstrip(".")
+        out.append(
+            item(
+                seat,
+                "job_failed",
+                f"proof:{job_id}:{UNRECORDED}",
+                ts,
+                f"The {lane} job's ending is not in its record ({hhmm(ts)}, ref {job_id[-8:]}): {said}.",
+                "Fix what the broker answered (named above); the lane keeps trying the record, "
+                "and closes a wiped job's running row within the hour.",
+                job=job_id,
+            )
+        )
+    return out
 
 
 def _proof_closed(job_id: str, ts: datetime, md: dict, led: _ProofLedger) -> bool:
@@ -246,7 +285,7 @@ def delivery_proof_items(
     reported it 10-20 and again 11-02). A job SMD closed
     (``work-health-closed.yaml``) is not listed here either (triage, 2026-11-06)."""
     led = _proof_ledger(rows)
-    out: list[Item] = []
+    out: list[Item] = _unrecorded_items(seat, cfg, now, led, closed)
     for job_id, (ts, md) in led.failures.items():
         if now - ts > timedelta(hours=cfg.ended_job_hours) or (closed and (seat, job_id) in closed):
             continue

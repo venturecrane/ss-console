@@ -1,8 +1,4 @@
 {
-  "_why": "Dotted paths (list indexes as numbers) that may differ from contracts/seat-config-callers.json (every seat-config reader, socket client and slug read, run), keyed seat-config-callers. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes how a site reads the seat's config on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. 2026-11-17 (the lifecycle matrix PR): the jobs runner's broker client raises BrokerRefused, a BrokerError, when the broker answers not-ok, so a refusal is told apart from an outage (jobs/medchron/unrecorded.py).",
-  "seat-config-callers": [
-    "concepts.broker-socket.rows.15.behaviour.not-ok/ascii",
-    "concepts.broker-socket.rows.15.modes.4",
-    "concepts.broker-socket.rows.15.modes.5"
-  ]
+  "_why": "Dotted paths (list indexes as numbers) that may differ from contracts/seat-config-callers.json (every seat-config reader, socket client and slug read, run), keyed seat-config-callers. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes how a site reads the seat's config on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared.",
+  "seat-config-callers": []
 }

@@ -9,6 +9,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -30,6 +31,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["reply_unproven"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -51,6 +53,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -63,7 +66,7 @@
       "way_out": ["done"],
       "wiped": false
     },
-    "delivered/broker_refuses_ending": {
+    "delivered/broker_errors_ending": {
       "code": null,
       "ended_while_away": false,
       "ending": "delivered",
@@ -72,6 +75,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -84,6 +88,28 @@
       "way_out": ["done"],
       "wiped": true
     },
+    "delivered/broker_errors_once": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
     "delivered/claim": {
       "code": null,
       "ended_while_away": false,
@@ -93,6 +119,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -114,6 +141,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -135,6 +163,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -156,6 +185,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -177,6 +207,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -198,6 +229,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -219,6 +251,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -240,6 +273,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["reply_unproven"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -264,6 +298,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -285,6 +320,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -306,6 +342,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -327,6 +364,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["reply_unproven"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -348,6 +386,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -369,6 +408,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -390,6 +430,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -411,6 +452,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -432,6 +474,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -455,6 +498,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -469,7 +513,7 @@
       "way_out": ["medchron_job_resume", "medchron_job_submit"],
       "wiped": false
     },
-    "failed/broker_refuses_ending": {
+    "failed/broker_errors_ending": {
       "code": "extract",
       "ended_while_away": false,
       "ending": "failed",
@@ -478,6 +522,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -492,6 +537,30 @@
       "way_out": ["medchron_job_submit"],
       "wiped": true
     },
+    "failed/broker_errors_once": {
+      "code": "extract",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
+    },
     "failed/cap_hold": {
       "code": "extract",
       "ended_while_away": false,
@@ -501,6 +570,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -524,6 +594,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -547,6 +618,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -568,6 +640,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -591,6 +664,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -614,6 +688,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "smd",
         "event": "hand_delivery",
@@ -635,6 +710,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -656,6 +732,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -679,6 +756,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -702,6 +780,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -725,6 +804,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -751,6 +831,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -772,6 +853,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -793,6 +875,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -816,6 +899,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -839,6 +923,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -862,6 +947,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -883,6 +969,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -904,6 +991,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "extract",
@@ -927,6 +1015,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -948,6 +1037,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "expired",
@@ -969,6 +1059,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -983,7 +1074,7 @@
       "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
       "wiped": false
     },
-    "held/broker_refuses_ending": {
+    "held/broker_errors_ending": {
       "code": "audit",
       "ended_while_away": false,
       "ending": "held",
@@ -992,6 +1083,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1006,6 +1098,30 @@
       "way_out": ["audit_decide", "coverage_decide", "medchron_job_submit"],
       "wiped": true
     },
+    "held/broker_errors_once": {
+      "code": "audit",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
     "held/cap_hold": {
       "code": "audit",
       "ended_while_away": false,
@@ -1015,6 +1131,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1038,6 +1155,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1061,6 +1179,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1082,6 +1201,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1105,6 +1225,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "expired",
@@ -1126,6 +1247,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "smd",
         "event": "hand_delivery",
@@ -1147,6 +1269,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1168,6 +1291,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1191,6 +1315,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "expired",
@@ -1212,6 +1337,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "expired",
@@ -1233,6 +1359,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1259,6 +1386,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1280,6 +1408,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1301,6 +1430,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1324,6 +1454,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1347,6 +1478,7 @@
       "firm_owed": 0,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1370,6 +1502,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1391,6 +1524,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1412,6 +1546,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -1435,6 +1570,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1456,6 +1592,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1477,6 +1614,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1489,26 +1627,49 @@
       "way_out": ["done"],
       "wiped": false
     },
-    "parked/broker_refuses_ending": {
-      "code": null,
+    "parked/broker_errors_ending": {
+      "code": "ending_unrecorded",
       "ended_while_away": false,
-      "ending": "running",
+      "ending": "failed",
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["ending_unrecorded"],
+      "record_late": false,
       "run": {
         "by": "code",
-        "event": "start",
+        "code": "ending_unrecorded",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "parked/broker_errors_once": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
         "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "running",
+      "state": "delivered",
       "told_while_away": 0,
-      "way_out": ["medchron_job_record (SMD)"],
-      "wiped": true
+      "way_out": ["done"],
+      "wiped": false
     },
     "parked/cap_hold": {
       "code": "per_job_cap_usd",
@@ -1519,6 +1680,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["limit_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "per_job_cap_usd",
@@ -1542,6 +1704,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1563,6 +1726,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1584,6 +1748,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1605,6 +1770,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "seat_paused",
@@ -1626,6 +1792,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "smd",
         "event": "hand_delivery",
@@ -1647,6 +1814,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1668,6 +1836,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1689,6 +1858,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1710,6 +1880,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1731,6 +1902,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1755,6 +1927,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1776,6 +1949,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1797,6 +1971,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1818,6 +1993,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1839,6 +2015,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1860,6 +2037,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1881,6 +2059,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1902,6 +2081,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["readback_unproven"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "readback_unproven",
@@ -1923,6 +2103,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1944,6 +2125,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1965,6 +2147,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -1977,26 +2160,49 @@
       "way_out": ["done"],
       "wiped": false
     },
-    "requeued_waiting/broker_refuses_ending": {
-      "code": null,
+    "requeued_waiting/broker_errors_ending": {
+      "code": "ending_unrecorded",
       "ended_while_away": false,
-      "ending": "running",
+      "ending": "failed",
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["ending_unrecorded"],
+      "record_late": false,
       "run": {
         "by": "code",
-        "event": "start",
+        "code": "ending_unrecorded",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "requeued_waiting/broker_errors_once": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
         "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "running",
+      "state": "delivered",
       "told_while_away": 0,
-      "way_out": ["medchron_job_record (SMD)"],
-      "wiped": true
+      "way_out": ["done"],
+      "wiped": false
     },
     "requeued_waiting/cap_hold": {
       "code": "per_job_cap_usd",
@@ -2007,6 +2213,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["limit_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "per_job_cap_usd",
@@ -2030,6 +2237,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2051,6 +2259,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2072,6 +2281,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2093,6 +2303,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2114,6 +2325,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2135,6 +2347,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2156,6 +2369,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2177,6 +2391,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2198,6 +2413,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2219,6 +2435,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2243,6 +2460,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2264,6 +2482,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2285,6 +2504,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2306,6 +2526,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2327,6 +2548,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2348,6 +2570,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2369,6 +2592,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2390,6 +2614,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["readback_unproven"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "readback_unproven",
@@ -2411,6 +2636,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2430,8 +2656,9 @@
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
-      "owner": "smd",
-      "paged": ["ending_unrecorded"],
+      "owner": "firm",
+      "paged": ["reply_unproven"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2453,6 +2680,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2465,26 +2693,49 @@
       "way_out": ["done"],
       "wiped": false
     },
-    "running/broker_refuses_ending": {
-      "code": null,
+    "running/broker_errors_ending": {
+      "code": "ending_unrecorded",
       "ended_while_away": false,
-      "ending": "running",
+      "ending": "failed",
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["ending_unrecorded"],
+      "record_late": false,
       "run": {
         "by": "code",
-        "event": "start",
+        "code": "ending_unrecorded",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "running/broker_errors_once": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
         "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "running",
+      "state": "delivered",
       "told_while_away": 0,
-      "way_out": ["medchron_job_record (SMD)"],
-      "wiped": true
+      "way_out": ["done"],
+      "wiped": false
     },
     "running/cap_hold": {
       "code": "per_job_cap_usd",
@@ -2495,6 +2746,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["limit_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "per_job_cap_usd",
@@ -2518,6 +2770,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2539,6 +2792,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2560,6 +2814,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2581,6 +2836,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "assemble",
@@ -2604,6 +2860,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -2627,6 +2884,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -2650,6 +2908,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -2673,6 +2932,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "billing",
@@ -2696,6 +2956,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "billing_extract",
@@ -2719,6 +2980,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "build_doc",
@@ -2742,6 +3004,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "build_units",
@@ -2765,6 +3028,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "classify_nonrecord",
@@ -2788,6 +3052,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "classify_scanned",
@@ -2811,6 +3076,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "coverage",
@@ -2834,6 +3100,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "date-of-service",
@@ -2857,6 +3124,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "date-of-service",
@@ -2880,6 +3148,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "download",
@@ -2903,6 +3172,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "append",
@@ -2926,6 +3196,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "append",
@@ -2949,6 +3220,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -2970,6 +3242,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "exhibit_merge",
@@ -2993,6 +3266,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "exhibits",
@@ -3016,6 +3290,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "filter",
@@ -3039,6 +3314,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "uncoded",
@@ -3062,6 +3338,7 @@
       "firm_owed": 0,
       "owner": "code",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "list_matter",
@@ -3085,6 +3362,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "manifest",
@@ -3108,6 +3386,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "map",
@@ -3131,6 +3410,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -3152,6 +3432,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "merge",
@@ -3175,6 +3456,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "merge",
@@ -3198,6 +3480,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "merge",
@@ -3221,6 +3504,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "merge",
@@ -3244,6 +3528,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "render",
@@ -3267,6 +3552,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "uncoded",
@@ -3290,6 +3576,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -3311,6 +3598,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "review",
@@ -3334,6 +3622,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["review_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "review_held",
@@ -3357,6 +3646,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "review",
@@ -3380,6 +3670,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -3401,6 +3692,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3424,6 +3716,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3447,6 +3740,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3470,6 +3764,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3493,6 +3788,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3516,6 +3812,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3539,6 +3836,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3562,6 +3860,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3585,6 +3884,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3608,6 +3908,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3631,6 +3932,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "strip",
@@ -3654,6 +3956,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "summary",
@@ -3677,6 +3980,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "upload",
@@ -3700,6 +4004,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -3721,6 +4026,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["upload_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "upload",
@@ -3744,6 +4050,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["upload_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "upload",
@@ -3767,6 +4074,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "vision",
@@ -3790,6 +4098,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "assemble",
@@ -3813,6 +4122,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -3836,6 +4146,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -3859,6 +4170,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -3882,6 +4194,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "download",
@@ -3905,6 +4218,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "append",
@@ -3928,6 +4242,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -3949,6 +4264,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -3970,6 +4286,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "uncoded",
@@ -3993,6 +4310,7 @@
       "firm_owed": 0,
       "owner": "code",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "list_matter",
@@ -4016,6 +4334,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "map",
@@ -4039,6 +4358,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4060,6 +4380,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "merge",
@@ -4083,6 +4404,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "merge",
@@ -4106,6 +4428,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "merge",
@@ -4129,6 +4452,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "merge",
@@ -4152,6 +4476,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "uncoded",
@@ -4175,6 +4500,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4196,6 +4522,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "review",
@@ -4219,6 +4546,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["review_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "review_held",
@@ -4242,6 +4570,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "review",
@@ -4265,6 +4594,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4286,6 +4616,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_assemble",
@@ -4307,6 +4638,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_base",
@@ -4328,6 +4660,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_held",
@@ -4349,6 +4682,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_held",
@@ -4370,6 +4704,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "billing",
@@ -4391,6 +4726,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "billing_extract",
@@ -4412,6 +4748,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_collect",
@@ -4433,6 +4770,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_held",
@@ -4454,6 +4792,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4475,6 +4814,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "manifest",
@@ -4496,6 +4836,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_pages",
@@ -4517,6 +4858,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update",
@@ -4538,6 +4880,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "render",
@@ -4559,6 +4902,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_review",
@@ -4580,6 +4924,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_held",
@@ -4601,6 +4946,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["gate_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -4622,6 +4968,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "audit",
@@ -4643,6 +4990,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_held",
@@ -4664,6 +5012,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4685,6 +5034,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["stage_refused"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_summary",
@@ -4706,6 +5056,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "upload",
@@ -4729,6 +5080,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4750,6 +5102,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["upload_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "upload",
@@ -4773,6 +5126,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["update_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "update_held",
@@ -4796,6 +5150,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["job_stopped"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "vision",
@@ -4819,6 +5174,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4840,6 +5196,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4861,6 +5218,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4882,6 +5240,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4903,6 +5262,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4924,6 +5284,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4945,6 +5306,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4969,6 +5331,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -4990,6 +5353,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5011,6 +5375,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5032,6 +5397,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5053,6 +5419,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5074,6 +5441,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5095,6 +5463,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5116,6 +5485,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["readback_unproven"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "readback_unproven",
@@ -5137,6 +5507,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5158,6 +5529,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5179,6 +5551,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5191,26 +5564,49 @@
       "way_out": ["done"],
       "wiped": false
     },
-    "submitted/broker_refuses_ending": {
-      "code": null,
+    "submitted/broker_errors_ending": {
+      "code": "ending_unrecorded",
       "ended_while_away": false,
-      "ending": "running",
+      "ending": "failed",
       "filed_sets": 1,
       "firm_messages": 1,
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["ending_unrecorded"],
+      "record_late": false,
       "run": {
         "by": "code",
-        "event": "start",
+        "code": "ending_unrecorded",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_submit"],
+      "wiped": true
+    },
+    "submitted/broker_errors_once": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
         "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "running",
+      "state": "delivered",
       "told_while_away": 0,
-      "way_out": ["medchron_job_record (SMD)"],
-      "wiped": true
+      "way_out": ["done"],
+      "wiped": false
     },
     "submitted/cap_hold": {
       "code": "per_job_cap_usd",
@@ -5221,6 +5617,7 @@
       "firm_owed": 0,
       "owner": "smd",
       "paged": ["limit_held"],
+      "record_late": false,
       "run": {
         "by": "code",
         "code": "per_job_cap_usd",
@@ -5244,6 +5641,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5265,6 +5663,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5286,6 +5685,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5307,6 +5707,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5328,6 +5729,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5349,6 +5751,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5370,6 +5773,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5391,6 +5795,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5412,6 +5817,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5433,6 +5839,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5457,6 +5864,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5478,6 +5886,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5499,6 +5908,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5520,6 +5930,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": ["wake_lost"],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5541,6 +5952,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5562,6 +5974,7 @@
       "firm_owed": 1,
       "owner": "smd",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5583,6 +5996,7 @@
       "firm_owed": 1,
       "owner": "firm",
       "paged": [],
+      "record_late": false,
       "run": {
         "by": "code",
         "event": "end",
@@ -5596,7 +6010,7 @@
       "wiped": false
     }
   },
-  "count": 256,
+  "count": 263,
   "not_applicable": {
     "delivered/cap_hold": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
     "delivered/deploy_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",

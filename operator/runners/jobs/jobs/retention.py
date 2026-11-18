@@ -34,7 +34,9 @@ WHAT SURVIVES. The ledger row -- the record of what was asked for and what
 happened. Only the working copy goes. A chronology hold's row moves to
 ``failed``, its reason saying it expired unattended (``close_wiped_hold``),
 since a hold with no workdir can never resume and must not read as waiting;
-SMD is paged once and the firm is sent nothing. A resume
+SMD is paged once and the firm is sent nothing. A RUNNING row whose ending
+never reached the ledger is closed ``failed`` the same way once its workdir is
+gone (``_close_dead_run``); SMD was paged with that ending first. A resume
 request for a wiped job already refuses cleanly and says so (`resume.py`):
 the artifacts are gone and the honest answer is the one the ledger gives.
 """
@@ -121,9 +123,11 @@ def wipe_expired(d: Any, terminal: frozenset[str]) -> list[str]:
         hours = _window_hours(d, state, terminal)
         if not done or hours is None or now - float(done) < hours * 3600:
             continue
-        if (st.get("wake") or {}).get("pending") and not _wake_spent(
-            d, path.name, st, now - float(done) - hours * 3600
-        ):
+        past = now - float(done) - hours * 3600
+        if (st.get("wake") or {}).get("pending") and not _wake_spent(d, path.name, st, past):
+            continue
+        keep = getattr(d, "keep_at_wipe", None)  # a lane's own last word (medchron: an unrecorded ending)
+        if keep is not None and keep(path.name, past):
             continue
         if state not in terminal:
             # Worth a line: a job nobody cleared for a week is a fact about us,
@@ -173,6 +177,9 @@ def _wake_spent(d: Any, job_id: str, st: dict[str, Any], past: float) -> bool:
 CLOSES_WIPED_HOLDS = frozenset({"medchron"})
 #: The reason a closed dead hold carries, followed by the hold's own reason.
 WIPED_HOLD_REASON = "expired: held past the retention window with nobody clearing it; workdir wiped"
+#: The reason a dead RUNNING row carries: its ending never reached the ledger
+#: and its workdir is gone (``medchron/unrecorded.py``, which paged SMD first).
+DEAD_RUN_REASON = "ending_unrecorded: the job ended but its ending never reached the ledger; workdir wiped"
 #: How often the lane looks for holds wiped before their rows could close.
 DEAD_HOLD_SWEEP_SECONDS = 3600
 
@@ -235,15 +242,37 @@ def close_dead_holds(d: Any) -> list[str]:
     except Exception as exc:  # noqa: BLE001 - a broker error must not stop the tick
         logger.warning("could not list chronology jobs for dead holds: %s", exc)
         return []
-    cutoff = now - float(getattr(d, "held_wipe_hours", DEFAULT_HELD_WIPE_HOURS)) * 3600
+    cutoff = {
+        "held": now - float(getattr(d, "held_wipe_hours", DEFAULT_HELD_WIPE_HOURS)) * 3600,
+        # A RUNNING row with no workdir and no queue file is a job whose ending
+        # never reached the ledger before its workdir was wiped: a running job
+        # always has its workdir, and it started before it ended.
+        "running": now - float(d.wipe_hours) * 3600,
+    }
     closed: list[str] = []
     for row in rows:
         job_id = str(row.get("id") or "")
         held_at = _iso_epoch(row.get("updated_at"))
-        if not job_id or row.get("state") != "held" or held_at is None or held_at >= cutoff:
+        state = str(row.get("state") or "")
+        if not job_id or state not in cutoff or held_at is None or held_at >= cutoff[state]:
             continue
         if (d.jobs / job_id).exists() or (d.queue / f"{job_id}.json").exists():
             continue
-        if close_wiped_hold(d, job_id, row):
+        if close_wiped_hold(d, job_id, row) if state == "held" else _close_dead_run(d, job_id):
             closed.append(job_id)
     return closed
+
+
+def _close_dead_run(d: Any, job_id: str) -> bool:
+    """Record a dead running row ``failed`` (``DEAD_RUN_REASON``), so the same
+    work can be submitted again; SMD was paged with its ending at the wipe."""
+    from . import run_record
+
+    try:
+        run = run_record.fields_for(d, "stop", code="ending_unrecorded")
+        d.broker.record(job_id, "failed", {"reason": DEAD_RUN_REASON, **run})
+    except Exception as exc:  # noqa: BLE001 - a broker error must not stop the sweep
+        logger.warning("could not close the dead running row %s: %s", job_id, exc)
+        return False
+    logger.warning("closed the dead running row %s failed: its ending never reached the ledger", job_id)
+    return True

@@ -91,8 +91,8 @@ def aided_reasons(run: Run, runs: list[Run]) -> list[str]:
             reasons.append(f"by_{by if by in ('firm', 'smd') else 'unknown'}")
         if b.get("replaces"):
             reasons.append("replaces")
-        if b.get("event") == "record_gave_up":
-            reasons.append("record_gave_up")
+        if b.get("event") == "record_late":
+            reasons.append("record_late")
     if any(b.get("replaces") == run.job_id for other in runs if other is not run for b in other.blocks):
         reasons.append("replaced")
     seen_bad = False

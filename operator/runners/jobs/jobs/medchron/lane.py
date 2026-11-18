@@ -45,7 +45,7 @@ from .. import (
     spend,
     verdict as verdict_mod,
 )
-from ..broker_client import BrokerError, BrokerRefused
+from ..broker_client import BrokerError
 from ..daemon import RUNNER_BIN, TERMINAL, Daemon
 from ..matter import store as page_store_mod
 from ..proof import holds as proof_holds, watch as proof_watch
@@ -251,14 +251,11 @@ class MedchronLane(Daemon):
             stages=self.run_stages(job_id),
             extra=run_record.counts(self.job_dir(job_id)),
         )
-        recorded, refused = True, ""
+        missed = ""
         try:
             self.broker.record(job_id, state, fields)
-        except BrokerRefused as exc:
-            recorded, refused = False, str(exc)
-            logger.error("the broker refused the %s record of %s: %s", state, job_id, exc)
         except BrokerError as exc:
-            recorded = False
+            missed = str(exc) or type(exc).__name__
             logger.error("could not record %s for %s: %s (recorded on a later tick)", state, job_id, exc)
         finished = self.clock() if state in TERMINAL or state == "held" else None
         self._write_state(job_id, state=state, finished_at=finished, reason=fields.get("reason"))
@@ -272,28 +269,18 @@ class MedchronLane(Daemon):
                 job_id,
                 wake={"pending": True, "attempts": 0, "task": self._compose_wake(job_id, state, fields, stage=stage)},
             )
-        if not recorded:
-            # The broker refused, or was away when the job ended (2026-11-17,
-            # the lifecycle matrix): the row said running for good while the
-            # firm was told it was delivered. An outage is kept and recorded on
-            # a later tick, its wake waiting for the record up to a bound; a
-            # refusal pages SMD and the wake goes at once (``unrecorded.py``).
-            # The wake is written as before either way, so a host rolled back to
-            # a version that does not know ``record_pending`` behaves as it did.
+        if missed:
+            # The broker did not take the ending (2026-11-17, the lifecycle
+            # matrix: the row said running for good). It is kept and recorded on
+            # a later tick, with a bound past which SMD is paged; the firm's
+            # message above goes exactly as it did before (``unrecorded.py``).
             proof = state == "delivered" and self.proof_recorded is False
-            if refused:
-                unrecorded.give_up(self, job_id, state, unrecorded.REFUSED, refused)
-            else:
-                unrecorded.hold(self, job_id, state, fields, proof=proof)
+            unrecorded.keep(self, job_id, state, fields, proof=proof, why=missed)
         return state
 
-    def _wakes_pending(self) -> list[str]:
-        """Every pending wake but those whose ending is not recorded yet."""
-        return [j for j in super()._wakes_pending() if not unrecorded.holds_wake(self._daemon_state(j))]
-
     def poll_requests(self) -> None:
-        """Each tick (before its wakes) and while idle: record any ending the
-        broker could not take, at most once a minute while it stays away."""
+        """Each tick and while idle: record any ending the broker did not take,
+        at most once a minute while one is still waiting."""
         super().poll_requests()
         if self.clock() < self.record_retry_at:
             return
@@ -303,6 +290,10 @@ class MedchronLane(Daemon):
         except Exception:  # a poll hook must not raise (daemon.poll_requests); logged with its trace
             logger.exception("recording a pending ending failed")
             self.record_retry_at = self.clock() + unrecorded.RETRY_SECONDS
+
+    def keep_at_wipe(self, job_id: str, past: float) -> bool:
+        """Retention's question before a workdir goes (``unrecorded.at_wipe``)."""
+        return unrecorded.at_wipe(self, job_id, past)
 
     # -- the deliver wake (ss#2616) --------------------------------------------
     def _compose_wake(self, job_id: str, state: str, fields: dict[str, Any], *, stage: str | None = None) -> str:

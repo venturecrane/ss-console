@@ -13,11 +13,6 @@ class BrokerError(RuntimeError):
     pass
 
 
-class BrokerRefused(BrokerError):
-    """The broker answered and refused (``ok`` not true): an outage it is not,
-    so trying the same request again changes nothing."""
-
-
 class BrokerClient:
     """The two verbs the daemon speaks: status (does the row exist) and record."""
 
@@ -35,10 +30,7 @@ class BrokerClient:
         except ValueError as exc:
             raise BrokerError("broker returned no JSON") from exc
         if resp.get("ok") is not True:
-            # A closed connection with no answer is the broker gone (an outage),
-            # never a refusal: only an answer that says not-ok is BrokerRefused.
-            kind = BrokerRefused if buf else BrokerError
-            raise kind(f"broker refused: {resp.get('error')}: {resp.get('message')}")
+            raise BrokerError(f"broker refused: {resp.get('error')}: {resp.get('message')}")
         return resp
 
     def status(self, job_id: str) -> dict[str, Any] | None:

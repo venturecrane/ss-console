@@ -17,6 +17,10 @@ job can end, four questions a client would otherwise answer for us:
 (d) how many filed sets: at most one;
 (e) whether the row that put the job in its state carries a run record.
 
+And three asked of particular events: (f) a bound's ending leaves the job dir
+wiped on schedule; (g) the firm's message never waits for the broker; (h) one
+broker error the lane's retry rides out is no page and leaves the run unaided.
+
 THE CELLS ARE GENERATED FROM CODE. ``STATES`` is the ledger's own
 ``medchron_ledger.STATES`` plus the two resting states it does not name
 (``parked``: held by a seat pause; ``requeued_waiting``: an infrastructure
@@ -93,14 +97,16 @@ FIXED_EVENTS = (
     "expiry",
     "resubmit_while_running",
     "queue_behind_same_lane",
-    # The bounds (second review, 2026-11-17): each ends with the job dir wiped.
-    "broker_refuses_ending",
+    # The broker answers the ending's record internal_error once, then takes it.
+    "broker_errors_once",
+    # The bounds (2026-11-17, the reviews of #4110): each ends with the job dir wiped.
+    "broker_errors_ending",
     "broker_away_past_bound",
     "paused_past_wipe_window",
     "no_wake_secret",
 )
 #: The events whose ending must also leave the job dir wiped on schedule.
-WIPE_EVENTS = ("broker_refuses_ending", "broker_away_past_bound", "paused_past_wipe_window", "no_wake_secret")
+WIPE_EVENTS = ("broker_errors_ending", "broker_away_past_bound", "paused_past_wipe_window", "no_wake_secret")
 
 
 def exit_classes(stages: Callable[..., Any] | None = None) -> list[tuple[str, str, int, str, str]]:
@@ -426,6 +432,8 @@ def apply_event(life: Life, state: str, jid: str, event: str) -> None:
     if event in WIPE_EVENTS:
         _bound_event(life, state, jid, event)
         return
+    if event == "broker_errors_once":
+        _error_ending(life, jid, times=1)
     act = _act(life, jid, event)
     child = _child_event(event, life)
     if child is not None:
@@ -452,20 +460,25 @@ def apply_event(life: Life, state: str, jid: str, event: str) -> None:
     life.settle()
 
 
-def _refuse_ending(life: Life, jid: str) -> None:
-    """The broker answers every ending record this lane sends for the job with
-    a refusal (a field it will not take); SMD's own record by hand is taken."""
-    from jobs.broker_client import BrokerRefused
+def _error_ending(life: Life, jid: str, *, times: int) -> None:
+    """The broker answers the job's ENDING record ``internal_error`` (its
+    ledger raised, as a locked database does) ``times`` times, then takes it.
+    Every other record is taken, the dead-row sweep's close among them."""
+    import sqlite3 as _sqlite
 
-    real = life.lane.broker.record
+    verbs = life.run.broker.medchron
+    real = verbs._record
+    left = {"n": times}
 
-    def record(job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any]:
-        ending = (fields.get("run") or {}).get("event") in ("end", "stop")
-        if job_id == jid and ending:
-            raise BrokerRefused("broker refused: ValueError: illegal transition (the matrix)")
-        return real(job_id, state, fields)
+    def record(request: dict[str, Any]) -> dict[str, Any]:
+        run = (request.get("fields") or {}).get("run") or {}
+        ending = run.get("event") in ("end", "stop") and run.get("code") != "ending_unrecorded"
+        if request.get("job_id") == jid and ending and left["n"] > 0:
+            left["n"] -= 1
+            raise _sqlite.OperationalError("database is locked")
+        return real(request)
 
-    life.lane.broker.record = record
+    verbs._record = record
 
 
 def _told(life: Life, jid: str) -> int:
@@ -486,8 +499,8 @@ def _bound_event(life: Life, state: str, jid: str, event: str) -> None:
 
     hidden: list[Path] = []
     first = len(life.seat.posts)
-    if event == "broker_refuses_ending":
-        _refuse_ending(life, jid)
+    if event == "broker_errors_ending":
+        _error_ending(life, jid, times=10**6)
     elif event == "paused_past_wipe_window":
         life.seat.gate_status = 503
     elif event == "no_wake_secret":
@@ -506,7 +519,7 @@ def _bound_event(life: Life, state: str, jid: str, event: str) -> None:
         life.tick()
     life.told_while_away = _told(life, jid)
     held = _state(life, jid)
-    life.ended_while_away = bool(hidden) and bool(held.get("record_pending") or held.get("ending_unrecorded"))
+    life.ended_while_away = bool(hidden) and bool(held.get("record_pending"))
     for h in hidden:
         broker_up(life.seat, h)
     life.settle()
@@ -572,14 +585,12 @@ def _way_out(life: Life, jid: str, row: dict[str, Any], told: str, messages: int
     state = row.get("state")
     out: list[str] = []
     st = _state(life, jid)
-    if state != told and told == "delivered":
-        # The ending the broker would not take: SMD records it by hand with the
-        # root record verb (asked here, last, because it writes the row).
-        try:
-            life.client().record(jid, "delivered", {})
-            return ["medchron_job_record (SMD)"]
-        except Exception:  # noqa: BLE001 - a refusal is the answer
-            return []
+    if state == "running" and isinstance(st.get("record_pending"), dict):
+        # An ending the broker has not taken yet: the lane's own retry is the
+        # way out, asked of the real code (last, because it writes the row).
+        life.lane.record_retry_at = 0.0
+        life.lane.poll_requests()
+        return ["lane retry"] if (life.client().status(jid) or {}).get("state") != "running" else []
     if state == "delivered":
         if messages:
             return ["done"]
@@ -669,13 +680,13 @@ def observe(life: Life, jid: str) -> dict[str, Any]:
         ending, code = state, None
         if state != "delivered":
             code = (recorded or {}).get("code") or run_record.code_of(reason)
-    unrecorded = bool(st.get("ending_unrecorded")) or ("ending_unrecorded" in pages and not st)
+    unrecorded = "ending_unrecorded" in pages
     told = (st.get("state") or ("delivered" if messages else state)) if unrecorded else state
     way_out = _way_out(life, jid, row, told, messages, pages)
     if refused:
         owner = ACTOR[refused[0]]  # the one who asked hears the refusal at once
     elif unrecorded:
-        owner = "smd"  # the row is wrong until SMD records it; paged ending_unrecorded
+        owner = "smd"  # paged ending_unrecorded: the broker did not take the ending in its bound
     elif state == "delivered":
         owner = "firm" if messages else "smd"
     elif state in ("submitted", "running"):
@@ -702,6 +713,7 @@ def observe(life: Life, jid: str) -> dict[str, Any]:
         "wiped": not life.lane.job_dir(jid).exists(),
         "told_while_away": life.told_while_away,
         "ended_while_away": life.ended_while_away,
+        "record_late": any((a["metadata"].get("run") or {}).get("event") == "record_late" for a in mine),
     }
 
 
@@ -791,6 +803,10 @@ def problems(cell: str, got: dict[str, Any]) -> list[str]:
     # (g) an outage past its bound never keeps the firm waiting for the broker
     if got.get("ended_while_away") and got["firm_owed"] and not got["told_while_away"]:
         out.append("(g) the firm was told only after the broker came back, past the bound")
+    # (h) a broker error the lane's retry rides out inside its bound is no page
+    # and leaves the run unaided (``jobs/medchron/unrecorded.py``)
+    if cell.rpartition("/")[2] == "broker_errors_once" and ("ending_unrecorded" in got["paged"] or got["record_late"]):
+        out.append("(h) one broker error inside the bound paged SMD or graded the run aided")
     # (e) the row that put the job in its state carries a run block
     if got["state"] not in ("submitted", "gone") and not isinstance(got["run"], dict):
         out.append("(e) the row that ended the job carries no run block")
