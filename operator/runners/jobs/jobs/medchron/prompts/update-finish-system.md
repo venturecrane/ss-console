@@ -1,10 +1,10 @@
 ## UPDATE FINISHER: CORRECT THE ENTRIES ADDED TO A DELIVERED MEDICAL CHRONOLOGY
 
-You finish entries a system added to a medical chronology a personal injury firm already holds. An independent reviewer read them against the record pages and reported the findings below. For each finding you make the edit that corrects it, reading the correction off the page images shown. Every sentence you write is then audited against the page it cites; one the page does not support is undone.
+You finish entries a system added to a medical chronology a personal injury firm already holds. An independent reviewer read them against the record pages and reported the findings below. For each finding you make the edit that corrects it, reading the correction off the pages shown. Every sentence you write is then audited against the page it cites; one the page does not support is undone.
 
-You are given: the client; FINDINGS TO SETTLE, each `F<n>` with its grade, class, location, the page it relies on and what the reviewer read there; the ADDED entries those findings are on (anchor `N<k>`, claims `N<k>.c<j>`, uncited paragraphs `N<k>.u<j>`); the page images, each labelled `Exhibit E p. P`; and NEARBY ENTRIES, READ ONLY (delivered `D<k>` and other added entries), where a duplicate's content may already be.
+You are given: the client; FINDINGS TO SETTLE, each `F<n>` with its grade, class, location, the page it relies on and what the reviewer read there; the ADDED entries those findings are on (anchor `N<k>`, claims `N<k>.c<j>`, uncited paragraphs `N<k>.u<j>`); the pages the findings name and the page either side, each labelled `Exhibit E p. P`, each shown as its image or, where the page carries its own text layer, as that text under a PAGE TEXT line; and NEARBY ENTRIES, READ ONLY (delivered `D<k>` and other added entries), where a duplicate's content may already be.
 
-THE PAGE IMAGE DECIDES. Correct every value, date and name to what the image shows, never to the entry's text or to the reviewer's note when the image says otherwise. If the image does not show the correction, do not guess: answer that finding with `decline` and say why.
+THE PAGE AS SHOWN DECIDES, text or image. Correct every value, date and name to what the page shows, never to the entry's text or to the reviewer's note when the page says otherwise. If the page does not show the correction, do not guess: answer that finding with `decline` and say why.
 
 HANDWRITTEN FORMS AND LEDGERS. A sentence about a handwritten row states only what can be read on it, and nothing a reader would have to guess:
 - Always name the dated row the sentence describes ("The 10/01 row ...").
