@@ -1,7 +1,7 @@
 ---
 name: auto-build
-description: Captain-invoked rigor pass for an implementation task. Establish a reachability contract with /wired when the effect reaches outside the repo, enter plan mode, build the plan, run /critique to revise, gate on user approval via ExitPlanMode, then execute autonomously under Auto Mode. Captain types `/auto-build [agents]` when they want the full plan-and-vet cycle before going autonomous; harness should not auto-suggest this skill (the trigger is a Captain judgment, not a pattern).
-version: 2.0.0
+description: The build process for any change a client, a seat or the Captain on a live surface will notice. Decides how much process the change needs from the files it touches, asks whether a build is needed at all, runs a dedicated design pass, critiques, gates on the Captain's approval, then builds, proves the real path once and carries the work to READY. Run it for client-surface work whether or not the Captain typed it.
+version: 3.0.0
 scope: venture:ss
 owner: captain
 status: stable
@@ -10,219 +10,89 @@ depends_on:
     - crane_skill_invoked
 ---
 
-# /auto-build - Vetted plan-and-execute workflow (SMD Services)
+# /auto-build - From an ask to READY (SMD Services)
 
-> **Forked from crane-console on 2026-11-09.** This is SMD's own copy and no
-> longer receives enterprise updates; improvements originate here.
-> The fork point is commit `9d4f3b8c`
-> (crane `.agents/skills/auto-build/SKILL.md`, the
-> last commit to touch it; unchanged at crane `origin/main` `55c766a6`).
-> `~/.agents/skills/auto-build/SKILL.md` is a plain file, not a symlink into
-> crane-console, and it is byte-identical to that crane commit; Claude Code
-> does not read `~/.agents/skills/` at all. Everything after the fork point is
-> ours. It lives in `.claude/skills/` for the reason `/sos` does, and the load
-> order is the one recorded in `.claude/skills/wired/SKILL.md`: this project
-> skill wins over crane's synced `.claude/commands/auto-build.md`. If
-> `/auto-build` runs crane's copy instead, follow the fallback ladder in
-> `.claude/skills/sos/SKILL.md`.
->
-> **Changes since the fork:**
->
-> 1. **A model per role.** Plan and design agents, and every critic, run on
->    Fable; builders run on Opus; Explore/search agents and agents that only
->    re-run a named probe run on Sonnet or Haiku. A figure a conclusion rests on
->    is never mined on the cheap tier. The team YAML carries a `model` field
->    per workstream (VERDICT section 5, PREV-16, 2026-11-09).
-> 2. **Step 2 calls SMD's `/wired`** and **Step 5 calls SMD's `/critique`**
->    (`.claude/skills/wired/`, `.claude/skills/critique/`), which carry READY,
->    the client-promise lookup, and Fable critics.
-> 3. **The finish line is READY,** not "PR open, CI green" (doctrine #3900,
->    2026-11-09). The session closes at READY and does not wait for a real
->    request.
+> **Forked from crane-console on 2026-11-09.** The fork point is commit `9d4f3b8c`.
+> Version 3 is a redesign, not a patch. Its evidence lives in
+> `docs/doctrine/agent-operating-doctrine.md`, "Where designs miss".
 
-> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "auto-build")`. This is non-blocking — if the call fails, log the warning and continue. Usage data drives `/skill-audit`.
+> **Invocation:** As your first action, call `crane_skill_invoked(skill_name: "auto-build")`. Non-blocking; if it fails, continue.
 
-This skill orchestrates a fixed seven-step workflow the Captain runs by hand for non-trivial implementation tasks: establish a reachability contract with `/wired` → enter plan mode → build a plan → run `/critique` → exit plan mode for approval → execute autonomously under Auto Mode. It is a thin coordination layer over harness primitives and SMD's own `/wired` and `/critique` skills (`.claude/skills/wired/`, `.claude/skills/critique/`). It does not reinvent any of those pieces.
-
-The skill is single-shot. There is no internal "revise loop." Re-run `/auto-build` if the approval gate is rejected.
-
-## Arguments
+Thirty days of fixes say where features go wrong: 13 of 192 fixes repaired wrong logic, 157 repaired something the design never considered. So this skill spends its effort on the design and on one real proof, and little anywhere else.
 
 ```
-/auto-build [agents]
+/auto-build [critics]     critics defaults to 2
 ```
 
-- `agents` — number of critic agents `/critique` will spawn in Step 5. Default: **1** (Devil's Advocate). Pass through verbatim to `/critique`. The Captain knows the stakes at invocation; do not infer the count from plan content.
+## Step 0: How much process
 
-Parse the argument: if `$ARGUMENTS` is empty or not a number, default to 1. Store as `AGENT_COUNT`.
+Run `.claude/bin/tier <paths the change will touch>`, adding `--new` when the work adds something that does not exist yet. The command decides; you do not, and the Captain does not.
 
-## Execution
+| Tier           | What the change goes through                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`         | An ordinary PR. Leave this skill. If the command prints `review:`, the PR still gets the bug review in Step 6.                           |
+| `fix`          | Step 6 only: the replay, the bug review, ship, close. No plan mode.                                                                        |
+| `capability`   | Every step below.                                                                                                                        |
 
-### Step 1: Verify Auto Mode is active (fail-closed)
+## Step 1: The ask
 
-Scan the current system-reminder context for any of these known signals:
+Before any design, write three things.
 
-- `Auto Mode Active` — current canonical string
-- `Auto-Accept Mode` — alternate string seen in some harness builds
-- `auto_mode: true` or similar structured field if/when one ships
+1. **Build or answer.** If the client or the Captain can have what they need today from what already exists, say so, with its time and cost, and stop until he chooses. A day spent building what an email would have answered is the costliest miss on record.
+2. **The words.** Quote what was asked. For a client, quote what they were told: the letter, the site, the welcome message, `.claude/bin/register list --client <slug>`. Cite the path and line; never paste client text into this repo.
+3. **Corrections on file.** Search memory for the topic (`crane_memory` recall, and the memory index) and list the standing corrections that apply. A correction already given is a requirement, not a suggestion.
 
-**If a match is found**, proceed to Step 3 silently.
+## Step 2: The contract
 
-**If NO match is found**, do NOT assume Auto Mode is off — assume the detection is unreliable. Halt with:
+Invoke `/wired` on the ask. It returns the act as a sentence, the gate chain and the feasibility probe. If a gate cannot be closed, stop and tell the Captain before planning.
 
-> `/auto-build` couldn't confirm Auto Mode is active. The skill needs autonomous execution after plan approval; without it, you'll be prompted on every tool call.
->
-> Either: toggle Auto Mode on (Shift+Tab cycles modes) and re-run, OR reply `yes auto` to override and proceed anyway.
+## Step 3: The design
 
-Wait for the Captain's response. Only proceed to Step 3 if they re-invoke after toggling, or reply with the literal `yes auto` override.
+Call `EnterPlanMode`. Use Explore agents to locate code.
 
-**Known fragility:** This is string-matching against harness output and will break if the harness changes its signal. Replace this step with a programmatic mode signal (env var, dedicated tool, structured field) when one ships. Until then, the synonym set + override is the best available.
+**A dedicated design pass, every time.** One Fable Plan agent designs the change. It is never skipped and never done by the lead in passing. Models and effort per role are in the doctrine table "Model per role". Its brief carries the ask from Step 1, the contract from Step 2, and this instruction: "Read the code the change touches and everything it must interact with. Write the approach, the files and functions to change, what the reader will see, and how to verify it. State every risk and edge case as a concrete thing the build must handle (a named input, state, caller or seat), not as a general caution." In a blind test on ten past features, a pass like this caught or nearly caught six misses the real builds caught none of; a longer list of fixed questions did no better.
 
-### Step 2: Establish the reachability contract
+**Where designs have missed.** The designer reads the table under "Where designs miss" in `docs/doctrine/agent-operating-doctrine.md` as reference, not as a form. Its heaviest rows: real inputs nobody pictured, where and how the code runs, everything else that reads or lists the thing, how a job ends, something that already existed, over-building, and the cost of a run.
 
-Decide whether the ask's effect is observable outside this repo — a client, the Captain on a live surface, an Operator seat, a prospect on a marketing page.
+The plan file has these parts, in this order.
 
-**If yes**, invoke SMD's `/wired` (`.claude/skills/wired/SKILL.md`) via the Skill tool, passing the ask. It returns the contract, starting from what the client was told when the act serves a client: the act as a sentence, the terminal seam the change must land on, the gate chain enumerated backwards from that seam, and a feasibility probe. Steps 4 and 5 consume it — the plan is written against the contract, and the critics inherit it from conversation context.
+**First screen, for the Captain.** What the reader will be able to do. What is left out, and its share of the whole job. The examples. The bill. Nothing technical.
 
-**If no** — internal refactor, test-only change, or documentation — skip it and say so in one line. Do not grow a gate table on a typo fix; per `/wired`'s own scoping rule, an obstacle course that fires on everything gets routed around, and then it protects nothing.
+**The design**, from the design pass, with its named risks.
 
-**If the feasibility probe finds a gate that cannot be closed**, halt and surface it before entering plan mode. Planning around an unclosable gate is the entitlement-control failure the contract exists to prevent.
+**Examples.** Three to seven sentences of the form "when this arrives, the reader receives that", with invented values and no client text. They cover each ending the change touches, the awkward inputs the design named, and one "what works today still works". For a job lane, an agent that is not the builder turns them into answer-key rows and rows in `operator/runners/jobs/tests/lifecycle_matrix.py` before any code is written. A lane with no answer key gets one first.
 
-Order is not negotiable: a plan written against a component-shaped ask gets critiqued as a good component build, and the critique never notices the feature is unreachable.
+**The bill.** PRs times the merge time (about 27 minutes for Operator code, about 17 otherwise; re-measure with `gh run list` when it matters), plus releases, plus the cost of a run measured on real inputs and stated as added cost with its basis. `blocked_by` between builders means the other code exists, never that it merged or reached the seat.
 
-### Step 3: Enter plan mode
+**`## Premises`**, as `.claude/hooks/plan-premise-gate.mjs` requires, and three lines for the build: builders, the files each owns, the bill.
 
-Call `EnterPlanMode`. The harness requests Captain approval and provides a plan file path on entry. If the Captain rejects entry, the skill ends.
+Do not call `ExitPlanMode` yet.
 
-### Step 4: Build the plan
+## Step 4: Critique
 
-Follow the plan-mode discipline already documented in the system prompt:
+Invoke `/critique` with the critic count (default 2: one hunts faults, one argues for less). Revise the plan file. Fix what the critics raise in the plan; do not file it for later and do not leave it for the build.
 
-- **Phase 1 (Initial Understanding):** launch up to 3 Explore subagents in parallel to map the affected code, each with `model: "sonnet"` (or `"haiku"` for a plain file or string search). Use the minimum number needed (often 1).
-- **Phase 2 (Design):** launch up to 3 Plan subagents to design the approach, each with `model: "fable"`.
-- **Phase 3 (Review):** read critical files identified by the agents; resolve any open questions with `AskUserQuestion`.
-- **Phase 4 (Final Plan):** write the plan to the plan file. Include Context, recommended approach (only the chosen one), critical file paths, reused functions/utilities, an `## Execution Mode` block (see below), and a Verification section. When Step 2 produced a contract, the plan must close every gate it enumerated or name the gate and who owns it — a plan that leaves a gate unassigned is not approvable.
+## Step 5: Approval
 
-The `## Execution Mode` section is a fenced YAML block with a fixed schema. Step 7 parses this verbatim — no prose lists, no free-form bullets:
+Call `ExitPlanMode`. Approved: go on. Rejected: the skill ends, and the Captain's next message leads.
 
-```yaml
-mode: solo # or: team
-# the rest is required only when mode: team
-team:
-  pr_strategy: one-per-workstream # or: bundled
-  workstreams:
-    - name: <slug> # required, unique within the plan
-      subagent_type: <agent-type> # required (e.g., general-purpose, Explore)
-      scope: <one-line scope> # required; if pr_strategy=one-per-workstream, must assert disjoint files
-      blocked_by: [<name>, ...] # optional; every entry must resolve to a declared name
-      blocks: [<name>, ...] # optional; symmetric with blocked_by
-      isolation: in-process # default; or: worktree (must justify in scope line)
-      model: opus # required; see the model-per-role table below
-```
+## Step 6: Build, prove, ship, close
 
-**A model per role.** Name it on every Agent call this skill makes, because an agent spawned without one inherits the session's model:
+**Build.** At most 4 builders, on Opus, in the lead's worktree, with files that do not overlap. Every builder's brief carries the winning line, the risk class, the examples, and this line verbatim: "You never wait on CI, the merge queue or a long command (no `until`/`sleep` loops, no `gh run watch`, no `--watch`). Push, open the PR, and return the handle (PR number, run id); the lead merges and watches." Before pushing Operator code, run the two CI jobs that fail most, the golden comparison and the job-runner tests, as `.github/workflows/operator-substrate.yml` runs them.
 
-| Role                                                     | `model`             | `effort`                                  |
-| -------------------------------------------------------- | ------------------- | ----------------------------------------- |
-| Plan and design agents (Step 4 Phase 2), every critic    | `fable`             | `high`; `xhigh` only for a multi-wave design |
-| Builders (a workstream that writes code or docs)         | `opus`              | `high`                                    |
-| Explore/search, and agents that only re-run a named probe | `sonnet` or `haiku` | omit (the model's default)                |
+**Prove, once.**
 
-**Effort per role.** Pass `effort` on each Agent call as the table says; this skill is the instruction that permits it. Never `max`: it spends more tokens and exists for testing a model's limits (Fable 5.2 release notes, 2026-11-10: High is the default, Xhigh is for the hardest long-running tasks). Fable 5.2 is also cheaper per token than 5.1 ($8 / $40 per million, from $10 / $50) and draws on its own weekly limit, which is why every critic can stay on it.
+- One $0 replay on real saved inputs through the code path the seat runs, covering the examples. Client documents are opened only in that client's ops workspace.
+- Endings no saved job shows are proven by their lifecycle-table rows.
+- One Opus bug review of the diff: wrong results, and any risk the design named that the build does not handle. Two reviewers when `.claude/bin/tier` shows a send path or client lane, the second on sending, rollback and money.
+- Never first on the client's seat. Never a paid proving run. What a $0 replay cannot show is listed as "watched on the first real request".
 
-A number a conclusion rests on (a count, a cost, a rate) is evidence-mining, not search: it stays on `opus` or `fable`. Seven of the nine figures corrected in the 2026-11-09 process review came from Sonnet-authored files (PREV-16).
+**Re-run rule.** A fix re-runs the replay. A reviewer reads a fix only when it touches a send path or client lane. If that read finds new faults, stop, re-plan, and bring the Captain a new plan: the design is at fault, and another round will not fix it.
 
-Heuristic for choosing — encode it explicitly so it isn't vibes-based:
+**Two rules against drift.** A review finding is answered by removing code before adding a rule, and no guard is added without an example that fails without it. No new measuring tool is built inside a feature build and no check waits on a clock; adding a row to an existing answer key or table is the work.
 
-> Default `solo`. Choose `team` only when **(a)** ≥2 genuinely independent workstreams (different packages, surfaces, or layers with disjoint files), or **(b)** identical pattern applied across N targets (e.g., parallel mirror updates across `.claude` + `.gemini` + global). **Cap N at 4 per wave.** For N>4, declare batched waves: define ≤4 workstreams in the first wave and chain a second wave via `blocks`/`blocked_by`, or run sequential `/auto-build` invocations per issue if the work is already issue-cut. Coordination tax usually exceeds parallelism gain on single-package work — when in doubt, `solo`.
+**Report.** One line to the Captain at each stage: what finished, what is next, and when the next line comes. No term he has not been given. Technical and quality calls are made, not asked; he is asked only about spend, client wording and scope. Past the promised PR count, he gets one line with the new bill.
 
-**Pay each fixed wait once (Captain, 2026-11-10).** A merge is about 20 minutes in the queue and a seat rollout takes hours; a plan that chains slices behind them spends the day waiting. The guide-seat training plan did, and the Captain had to ask how long before the lead started the other builders: "I shouldn't have to ask these kinds of questions." So, in every multi-slice plan:
+**Ship.** `npm run verify`, then the PR, then merge through the queue. All code reaches the seat in one release, then the config that switches it on. Destructive actions (production data, force-push, secret rotation, dropping schema, auth changes) still need his explicit yes.
 
-- `blocked_by` means "needs that workstream's code to exist". A branch stacked on the first workstream's branch satisfies it. It never means "needs it merged" or "needs it on the seat". Later workstreams start as soon as the first one has pushed, and rebase when it lands.
-- The seat takes all the code in ONE release at the end, then ONE config change switches it on. The only true serial step is code on the seat before the config that names it (a `customer.yaml` reaches the seat ahead of the image).
-- The plan's Execution Mode section carries a `waits:` line under the YAML block, in prose: each fixed wait (merge queue, CI, seat rollout) and how many times the plan pays it in series. More than once for any of them needs a stated reason. The Captain reads this line at approval; he should never have to ask for it.
-- Reviews of a pushed slice and the next slice's build run at the same time.
-
-Do not call `ExitPlanMode` yet. Step 6 owns the exit.
-
-### Step 5: Invoke `/critique`
-
-Call SMD's `/critique` skill (`.claude/skills/critique/SKILL.md`) via the Skill tool, passing `AGENT_COUNT`. It spawns every critic on Fable:
-
-```
-/auto-build           → /critique 1   (default Devil's Advocate)
-/auto-build 3         → /critique 3   (Devil's Advocate + Simplifier + Pragmatist)
-/auto-build 6         → /critique 6   (full panel)
-```
-
-**When the plan declares `mode: team`**, before invoking `/critique` append a one-line focus note to the conversation context: "this plan declares team-mode; critics must challenge the Solo/Team call against the heuristic and verify workstream files are disjoint per `pr_strategy`." This nudges the critic without requiring a `/critique` edit. Critics may downgrade `team`→`solo`, upgrade `solo`→`team`, change the workstream count, or flip `pr_strategy`; reflect any such change in the YAML block like any other revision.
-
-`/critique` reads the conversation, spawns critics in parallel, and returns a revised plan with `### Changes Made` and `### Critiques Acknowledged but Not Adopted` sections.
-
-**Apply the revised plan to the plan file.** Editing the plan file is allowed under plan-mode rules (it is the only writable file). The plan file is the source of truth the Captain will see at the approval gate, so it must reflect the post-critique state.
-
-If `/critique` reports "no plan identifiable," something went wrong in Step 4. Re-enter Step 4 — do not attempt to exit plan mode with an unwritten plan.
-
-### Step 6: Gate on Captain approval
-
-Call `ExitPlanMode`. The harness presents the revised plan to the Captain.
-
-- **Approved** → proceed to Step 7.
-- **Rejected** → the skill ends. The Captain re-runs `/auto-build` (or any other command) to start a fresh flow.
-
-We do not model a revise loop. ExitPlanMode rejection delivers Captain feedback as a new user turn, at which point the Captain's next message supersedes the in-progress skill — there is no reliable contract that `/auto-build` regains control with prior context intact. Re-running is cheap; pretending the loop works is dishonest.
-
-### Step 7: Execute
-
-#### Step 7.0: Parse and validate the Execution Mode block
-
-First action after approval: read the `## Execution Mode` YAML block from the plan file.
-
-1. Parse the fenced YAML. On parse failure, halt with a single message naming the malformed line. **Never spawn a partial team.**
-2. Validate when `mode: team`: every workstream has all required fields (`name`, `subagent_type`, `scope`, `model`), and `model` is one of `fable`, `opus`, `sonnet`, `haiku`; every `blocked_by`/`blocks` entry resolves to a declared `name`; `len(workstreams) ≤ 4`; if `pr_strategy: one-per-workstream`, the workstream `scope` lines collectively assert disjoint files (the parser does not enforce file-glob non-overlap programmatically — it asserts the plan declared disjointness). On validation failure, halt with the failed check named.
-3. Log telemetry: `crane_skill_invoked(skill_name: "auto-build", status: "started")` with metadata noting `mode`, `N`, `pr_strategy` if applicable. Best-effort; never blocks.
-4. On success, fork to 6a (solo) or 6b (team).
-
-#### Step 7a: Solo execution
-
-Implement per the approved plan. Auto Mode is active (verified in Step 1), so:
-
-- No confirmation prompts on routine tool calls.
-- File edits, test runs, commits proceed without per-action approval.
-- **Destructive actions still require explicit confirmation.** Per CLAUDE.md and the Auto Mode reminder: production systems, data deletion, force-push, secret rotation, account creation, dropping schema, modifying auth, removing access controls. Auto Mode is not a license to destroy.
-- If the plan touches code in this repo, end with `npm run verify`.
-- Then commit, push, and open a PR per `pr-workflow.md`.
-- **Then run `/code-review:code-review {number}` against it.** That is the official plugin (reviews the diff), not our `/code-review` (standing-state audit). It scores 0-100 and posts nothing below 80, so silence is the expected result. Fix what it posts before merging.
-- **Then carry the work to READY.** Merge through the queue, then close every row of the `/wired` contract against the five READY conditions (CLAUDE.md, "Done means the client can do it"): built and merged; rehearsed at $0 on real saved inputs; running on the seat; every gate to the job probed open on the seat; watched by the hourly triage code. Work with no outside effect (Step 2 skipped it) is done when merged with CI green.
-
-#### Step 7b: Team execution
-
-1. `TeamCreate` with `team_name = auto-build-{slug}` and a description summarizing the plan goal.
-2. For each workstream, `TaskCreate` with `subject` and `description` (lifted from the YAML `scope` plus any plan-section detail), and `addBlockedBy`/`addBlocks` per declared dependencies.
-3. **Default isolation is in-process.** Only spawn with `isolation: "worktree"` when the workstream YAML declared it explicitly. If any teammate uses worktree isolation, run the **isolation probe** (step 5 below) before issuing real task content.
-4. Spawn one Agent per workstream with `team_name`, `name = {workstream-name}`, `subagent_type` and `model` (per plan), and **`mode: "acceptEdits"`** so teammates execute autonomously instead of pausing on every tool call. Captain's session continues as team lead. Auto Mode covers the Captain's session only — `mode: "acceptEdits"` on each Agent call is what gives teammates autonomous behavior. Don't drop the parameter assuming inheritance.
-   - **Every builder's brief carries this line verbatim:** "You never wait on CI, the merge queue or a long command (no `until`/`sleep` loops, no `gh run watch`, no `--watch`). Push, open the PR, and return the handle (PR number, run id); the lead merges and watches." A waiting subagent holds a long context idle, and the lead already owns the queue (wave 2, Q8; `.claude/hooks/bash-log.mjs` logs every call over 240s).
-5. **Worktree isolation probe (only if any workstream uses `isolation: worktree`):** for each such teammate, send via `SendMessage` a one-line probe asking the agent to reply with the output of `pwd && git rev-parse --show-toplevel`. Require the response to match the expected `.claude/worktrees/<name>` path. On mismatch: shut down all teammates via `SendMessage({type: "shutdown_request"})`, call `TeamDelete`, halt with a message naming the failed teammate. This guards the P0 anti-pattern `verify-worktree-cwd-isolation-does-not-silently-fail` — silent cwd-resolves-to-parent-repo with `acceptEdits` enabled is the worst-case combination.
-6. Captain's session monitors teammate messages, reassigns or unblocks tasks, gathers PR URLs.
-7. On completion, gather PRs per `pr_strategy`. For `one-per-workstream`: collect each teammate's PR URL. For `bundled`: the plan must name the integrating actor (specific teammate or Captain's session); follow that. Then shut teammates via `SendMessage({type: "shutdown_request"})` and `TeamDelete`.
-8. Final `npm run verify` from Captain's session if the plan touched code in this repo, then carry the merged work to READY exactly as Step 7a's last bullet says.
-9. Telemetry: `crane_skill_invoked(skill_name: "auto-build", status: "completed")` with `duration_ms`. On any abort path above, use `status: "failed"` with `error_message`. Best-effort.
-
-End-of-session summary: one or two sentences (per `/own-it` rule 5).
-
-## Anti-patterns
-
-The skill must explicitly forbid these. The Captain has flagged each one in feedback memory; do not regress:
-
-1. **No deferral revisions.** When `/critique` raises an issue, fix it in the plan — do not file a follow-up ticket and call the plan done. (Per `feedback_critique_deferrals.md`, `feedback_kill_dont_file.md`.)
-2. **No "I'll figure it out during execution."** If a step is unclear after critique, revise the plan in Step 5; do not punt to runtime.
-3. **No degradation to ask-mode in Step 7.** Routine questions are yours to decide (per `/own-it` rule 1). Only stop for guardrails-gated actions (`crane_doc('global', 'guardrails.md')`).
-4. **No theater.** Plan is one scrollable screen. End-of-session summary is two sentences. No ceremonial status updates mid-step.
-5. **No team-for-team's-sake.** Coordination tax > parallelism gain on most single-package work. Per the heuristic in Step 4, default `solo` and only escalate when the work is genuinely independent or pattern-replicated across N targets.
-6. **No unbounded fan-out.** Cap parallelism at 4 per wave. For larger N, declare batched waves via `blocks`/`blocked_by`, or run sequential `/auto-build` invocations per issue if the work is already GitHub-issue-cut. Six concurrent Agents in `acceptEdits` mode saturate the harness and the Captain's review queue.
-
-## Notes
-
-- **Finish line:** `/auto-build` ends at READY, not at "PR open, CI green." When all five READY conditions hold, the session writes its handoff and closes, however long it is until the first real request; the first real run is watched by the hourly triage code, not by a session.
-- **Critique depth:** Single round per `/critique`'s own design. The Captain can re-invoke `/critique` manually if they want another round before approval.
-- **Trigger ownership:** Captain-invoked, not harness-suggested. The description field reflects this. Do not lower the bar by self-suggesting `/auto-build` in conversational responses; let the Captain decide.
+**Close.** `npm run deadcode` is clean, so nothing new is uncalled. Every row of the `/wired` contract is closed against the five READY conditions, each with evidence. The closing message says what the reader can now do and what they still cannot. Then the session writes its handoff and ends; it never waits for a real request.
