@@ -239,6 +239,11 @@ def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = REA
     if not manifest or not p:
         sr.log("update upload: no manifest or no update plan")
         return EXIT_REFUSED
+    from ..medchron import graded_proof as GP
+
+    GP.record_upload(
+        sr.slug_dir / "runs" / sr.unit.unit / "update" / GP.PROOFS, manifest, sr.log
+    )  # records, never refuses
     matter_id, folder_id, old = sr.job.matter_id, str(p["folder_id"]), p["chronology"]
     seat = sr.seat
     rows = _folder_rows(seat, matter_id, folder_id)

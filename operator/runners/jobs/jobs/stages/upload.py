@@ -45,9 +45,25 @@ EXITS = {
 
 
 def run(sr: StageRun, *, pause: float = READBACK_PAUSE_SECONDS, tries: int = READBACK_TRIES) -> int:
+    _record_proven(sr)
     return filing.file_into_new_folder(
         lambda: sr.seat, sr.job.matter_id, sr.slug_dir, sr.unit.unit, sr.log, pause=pause, tries=tries
     )
+
+
+def _record_proven(sr: StageRun) -> None:
+    """The final proof's sha of the chronology against the manifest's
+    (``graded_proof.record_upload``): a difference is recorded, never refused."""
+    import json
+
+    from ..medchron import graded_proof as GP
+
+    try:
+        manifest = json.loads((sr.slug_dir / "out" / sr.unit.unit / "upload_manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if isinstance(manifest, list):
+        GP.record_upload(sr.slug_dir / "runs" / sr.unit.unit / GP.PROOFS, manifest, sr.log)
 
 
 __all__ = [

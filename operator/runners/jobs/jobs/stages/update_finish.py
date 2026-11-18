@@ -31,7 +31,7 @@ from ..medchron.audit import claims as CL, coverage as audit_coverage, retired
 from ..medchron.audit.page_text import exhibit_paths
 from ..medchron.audit.run import AuditPaths
 from ..medchron.update import assemble as A, body as B, collect as C, docx_md, handwritten as H, proofs as P
-from ..medchron.update import review_repair as RR, reviewed as RV
+from ..medchron.update import final_set_io as FIO, review_repair as RR, reviewed as RV
 from ..medchron.update.billing_page import BILLING
 from ..medchron.update.select import ALREADY, BLANK, OVERLAP
 from .base import StageRefusal, StageRun, read_json, read_jsonl
@@ -80,19 +80,22 @@ def uncited_name(r: dict[str, Any]) -> str:
 def added_when(ud: Path, incident: str | None) -> str:
     """ ", before the incident", ", after the incident", both, or nothing:
     what the audited added entries (``runs/<unit>/final-chronology.md``)
-    actually are, never a fixed phrase."""
+    actually are, never a fixed phrase. The final set's rows
+    (``update/final_set``) are the added entries when the step ran."""
     doc = ud.parent / "final-chronology.md"
-    if not incident or not doc.is_file():
+    if not incident:
         return ""
-    try:
-        _, ents = B.entries_of(doc.read_text(encoding="utf-8"))
-    except ValueError:
-        return ""
+    dates = {str(r.get("date") or "") for r in FIO.read_rows(ud) if r.get("date")}
+    if not dates and doc.is_file():
+        try:
+            dates = {B.iso(e) for e in B.entries_of(doc.read_text(encoding="utf-8"))[1]}
+        except ValueError:
+            return ""
     sides = [
         s
         for s, hit in (
-            ("before", any(B.iso(e) < incident for e in ents)),
-            ("after", any(B.iso(e) >= incident for e in ents)),
+            ("before", any(d < incident for d in dates)),
+            ("after", any(d >= incident for d in dates)),
         )
         if hit
     ]
@@ -185,6 +188,7 @@ def run_assemble(sr: StageRun) -> int:
             update_note=update_note(sr, ud),
             folder=plan(sr).get("exhibits") or [],
             provider_names=read_json(ud / "provider_claims.json", {}).get("composed") or {},
+            final_set_ran=FIO.ran(ud),
         )
     except ValueError as exc:
         raise StageRefusal(str(exc)) from exc
@@ -203,8 +207,12 @@ def run_assemble(sr: StageRun) -> int:
     (ud / "updated-chronology.md").write_text(md, encoding="utf-8")
     rep["provider_spelling_flags"] = read_json(ud / "compose_report.json", {}).get("provider_spelling") or []
     (ud / "assemble_report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
+    # An added block folded under a delivered entry is no entry of its own, so the sum is told as it adds up.
+    standalone = rep["output_entries"] - rep["delivered_entries"]
+    folded = rep["new_entries"] - standalone
     sr.log(
-        f"updated chronology: {rep['delivered_entries']} delivered + {rep['new_entries']} new = {rep['output_entries']} entries"
+        f"updated chronology: {rep['delivered_entries']} delivered + {standalone} new entries = {rep['output_entries']}"
+        + (f"; {folded} addition(s) to delivered entries" if folded else "")
     )
     return 0
 
