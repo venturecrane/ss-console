@@ -151,6 +151,20 @@ def test_smoke_fails_an_authored_cap_that_does_not_fit(tmp_path: Path) -> None:
     assert done.returncode == 1 and "gateway reserve" in done.stderr
 
 
+def test_smoke_counts_the_shared_cgroup_when_only_records_is_staged(tmp_path: Path) -> None:
+    # FALSIFIER: the records lane writes the demand cgroup (records_lane.MEMORY_ENV
+    # is in LANE_ENVS["demand"]), so a seat staging only records-firm.yaml must
+    # count the 1024 MiB default; 1024 - 512 leaves 512, so this exits non-zero.
+    cfg = tmp_path / "var/lib/smd-config"
+    (cfg / "records").mkdir(parents=True)
+    (tmp_path / "sys/fs/cgroup").mkdir(parents=True)
+    (cfg / "customer.yaml").write_text("machine:\n  memory_mb: 1024\n")
+    (cfg / "records" / "records-firm.yaml").write_text("{}\n")
+    env = {**os.environ, "SMD_SEAT_ROOT": str(tmp_path)}
+    done = subprocess.run([sys.executable, str(_PROBE)], capture_output=True, text=True, env=env)  # noqa: S603 - repo-authored program
+    assert done.returncode == 1 and "gateway reserve" in done.stderr
+
+
 def test_smoke_live_cgroup_still_wins_over_the_authored_cap(tmp_path: Path) -> None:
     done = _run_smoke(tmp_path, _PILOT, live={"medchron": 2560 * MIB})
     assert done.returncode == 1 and "gateway reserve" in done.stderr

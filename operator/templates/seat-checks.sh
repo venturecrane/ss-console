@@ -753,7 +753,8 @@ unset _ps_lane
 # read from the runner itself, so a bigger default fails here before the first
 # job. An image without jobs.lane_memory exports nothing, so its lanes
 # count at their defaults, which is what that daemon would write. The
-# litigation, casefile and drafting lanes share the demand cgroup, so it counts once.
+# drafting, litigation, casefile and records lanes share the demand cgroup, so it
+# counts once.
 # A lane that CANNOT run a job on this seat counts zero: with no firm inputs
 # staged it refuses or defers every job (provision-customer.sh steps 2b-2f), so
 # its cgroup is never filled. Counting it anyway demanded a 4 GB guest of every

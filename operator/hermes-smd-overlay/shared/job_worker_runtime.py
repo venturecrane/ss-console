@@ -355,10 +355,11 @@ def _r2_results_config_from_env() -> tuple[str, str, str, str, str] | None:
 
     Reuses the SAME env contract the ADR-0044 config applier reads
     (``config_applier/__main__.py``): ``R2_ENDPOINT_URL`` / ``R2_ACCESS_KEY_ID``
-    / ``R2_SECRET_ACCESS_KEY`` / ``R2_BUCKET_CONFIG`` / ``CUSTOMER_SLUG``. Per
-    ADR 0007/0022 each customer has its own R2 bucket; ``R2_BUCKET_CONFIG`` IS
-    that per-customer bucket (the voice vault already shares it under a prefix),
-    so job results land under a ``jobs/<slug>/`` prefix beside ``vaults/<slug>/``.
+    / ``R2_SECRET_ACCESS_KEY`` / ``R2_BUCKET_CONFIG`` / ``CUSTOMER_SLUG``.
+    ``R2_BUCKET_CONFIG`` is ONE bucket shared by every seat (default
+    ``smd-customer-config``, ``operator/bin/lib/render-fly-toml.sh``); customers
+    are separated by key prefix (invariant 7), so job results land under
+    ``jobs/<slug>/`` beside the seat's ``vaults/<slug>/``.
 
     Returns ``(endpoint_url, access_key_id, secret_access_key, bucket, slug)``.
     """
