@@ -115,11 +115,12 @@ def _sha(text: str) -> str:
 
 
 def source(slug_dir: Path, unit: str) -> str:
-    """The document this step reads. The chronology as it stands, kept as
-    ``PRE``; or, when it is this step's own output (its sha is the one the
-    marker recorded, and ``PRE`` is the input the marker names), ``PRE``: so
-    a rerun is the same run, and a document a later stage or a rerun of the
-    update review rewrote is read afresh."""
+    """The document this step reads, WITHOUT WRITING ANYTHING (the report
+    reads saved evidence through it). The chronology as it stands; or, when
+    it is this step's own output (its sha is the one the marker recorded, and
+    ``PRE`` is the input the marker names), ``PRE``: so a rerun is the same
+    run, and a document a later stage or a rerun of the update review rewrote
+    is read afresh. Only the stage's own ``write`` saves ``PRE``."""
     rd = slug_dir / "runs" / unit
     doc, pre = rd / "final-chronology.md", rd / PRE
     current = doc.read_text(encoding="utf-8")
@@ -128,7 +129,6 @@ def source(slug_dir: Path, unit: str) -> str:
         kept = pre.read_text(encoding="utf-8")
         if mark.get("in_sha") == _sha(kept):
             return kept
-    write_atomic(pre, current)
     return current
 
 
@@ -160,7 +160,9 @@ def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
     the document afresh. `src`: the document the step read (``source``)."""
     rd = slug_dir / "runs" / unit
     ud = rd / "update"
-    doc = rd / "final-chronology.md"
+    doc, pre = rd / "final-chronology.md", rd / PRE
+    if not pre.is_file() or pre.read_text(encoding="utf-8") != src:
+        write_atomic(pre, src)  # the input, kept before anything else is written
     write_atomic(ud / ROWS, "".join(json.dumps(r) + "\n" for r in o.rows))
     write_atomic(ud / CORRECTIONS, json.dumps(o.corrections, indent=1))
     mark = {"counts": dict(o.counts), "ops": o.ops, "in_sha": _sha(src), "out_sha": _sha(o.md)}
@@ -168,17 +170,30 @@ def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
     if doc.read_text(encoding="utf-8") != o.md:
         write_atomic(doc, o.md)
     results = slug_dir / "out" / unit / "audit-results.jsonl"
-    have = {(r.get("key"), r.get("carried_from")) for r in CL.read_rows(results)}
+    latest = {str(r["key"]): r for r in CL.read_rows(results) if r.get("kind") == "real" and r.get("key")}
     sha = CL.doc_sha_of(CL.body_of(o.md))
     for row in o.carries:
-        if (row["key"], row["carried_from"]) not in have:
+        last = latest.get(row["key"])
+        # The LATEST row decides (the proofs read the last row per key): a
+        # carry is appended unless that row already is this carry with this
+        # verdict, so a verdict that changed since is never left stale.
+        if not (last and last.get("carried_from") == row["carried_from"] and last.get("verdict") == row["verdict"]):
             CL.append_row(results, row | {"doc_sha": sha})
 
 
 def ran(ud: Path) -> bool:
-    """The final set ran for this job: its counts file is its marker (written
-    on every run, ``write``). Assemble keeps its old behaviour without it."""
-    return (ud / REPORT).is_file()
+    """The final set ran for this job AND the document is its output: the
+    marker (written on every run, ``write``) names the document's sha, or
+    says the update added nothing. A marker left by a run interrupted before
+    the document was replaced names another sha, so assemble then keeps its
+    old behaviour (joins stray lines itself); so it does with no marker."""
+    mark = _json(ud / REPORT, None)
+    if not isinstance(mark, dict):
+        return False
+    if mark.get("no_added_entries") is True:
+        return True
+    doc = ud.parent / "final-chronology.md"
+    return doc.is_file() and mark.get("out_sha") == _sha(doc.read_text(encoding="utf-8"))
 
 
 def read_rows(ud: Path) -> list[dict[str, Any]]:
@@ -226,20 +241,49 @@ class _NoConfig:
         return None
 
 
-def report(job: Path, unit: str | None = None) -> dict[str, Any]:
-    """The answer key's counts for a COPY of a job directory. No write."""
-    from ...stages.group import Canon
+def firm_config_of(root: Path, explicit: Path | None = None) -> Path | None:
+    """The firm config the stage read: `explicit`, else a ``firm.yaml`` the
+    copy holds (its root, ``config/``, or one level below), else None."""
+    if explicit is not None:
+        return explicit
+    for p in [root / "firm.yaml", root / "config" / "firm.yaml", *sorted(root.glob("*/firm.yaml"))]:
+        if p.is_file():
+            return p
+    return None
 
+
+def report(job: Path, unit: str | None = None, firm_config: Path | None = None) -> dict[str, Any]:
+    """The answer key's counts for a COPY of a job directory. Writes nothing.
+    It computes with the firm config the stage used (``firm_config_of``):
+    its provider aliases decide which entries are one encounter, so with no
+    config the counts can differ from the stage's, and ``config`` says so."""
+    from ...stages.group import Canon
+    from ...stages.update_base import headings
+    from .. import config as config_mod
+
+    cfg_path = firm_config_of(job, firm_config)
     job, u = locate(job, unit)
     ud = job / "runs" / u / "update"
+    used = str(cfg_path) if cfg_path else None
     if not added_entries(job, u):
-        return {"no_added_entries": True, "added_entries": 0, "distinct_visits_merged": 0, "new_claim_keys_created": 0}
+        return {
+            "config": used,
+            "no_added_entries": True,
+            "added_entries": 0,
+            "distinct_visits_merged": 0,
+            "new_claim_keys_created": 0,
+        }
     md = (job / "runs" / u / "final-chronology.md").read_text(encoding="utf-8")
     base = (ud / "base.md").read_text(encoding="utf-8")
-    x = load_inputs(job, u, _headings_of(md, base), Canon(_NoConfig()))
+    if cfg_path is not None:
+        cfg = config_mod.load(str(cfg_path))
+        x = load_inputs(job, u, headings(cfg), Canon(cfg))
+    else:
+        x = load_inputs(job, u, _headings_of(md, base), Canon(_NoConfig()))
     o = run(x)
     c = o.counts
     return {
+        "config": used,
         "no_added_entries": False,
         "stray_lines": {"before": c["stray lines before"], "after": c["stray lines after"]},
         "verdicts_carried": c["verdicts carried"],

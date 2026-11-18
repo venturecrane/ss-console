@@ -7,8 +7,9 @@ covers them, all delete-only). This stage reads the reviewed audit document
 (``runs/<unit>/final-chronology.md``), writes it back, and writes
 ``update/final_rows.jsonl``, ``update/corrections.json`` and
 ``update/final_set.json``; a verdict it carries to a claim's own words under
-its heading is an audit row (``mode: carry``). It refuses (exit 1) only if a
-rule would have created a claim key, which each rule checks it cannot do.
+its heading is an audit row (``mode: carry``). It refuses, writing nothing,
+when a rule would have created a claim key (``EXIT_CREATED``) or when a claim
+key was lost that none of its own drops removed (``EXIT_LOST``).
 
 `final_proofs` is the update proofs' second half (``update/proofs_final``,
 proofs 11 to 15), read off the rendered document, and `record_final` merges
@@ -35,7 +36,12 @@ from .group import Canon
 from .render import chronology_name
 from .update_base import headings, plan, update_dir
 
-EXIT_REFUSED = 1
+EXIT_CREATED, EXIT_LOST = 1, 2
+#: The reasons a person paged on each refusal reads (``dag_update``'s exit_map).
+EXITS = {
+    EXIT_CREATED: "update_final_set: a rule would have created a claim key; nothing was written",
+    EXIT_LOST: "update_final_set: a claim key was lost that the final set did not drop; nothing was written",
+}
 
 
 def run(sr: StageRun) -> int:
@@ -47,9 +53,12 @@ def run(sr: StageRun) -> int:
         x = FIO.load_inputs(sr.slug_dir, sr.unit.unit, headings(sr.cfg), Canon(sr.cfg))
         src = x.md
         o = FS.run(x)
-    except AssertionError as exc:
+    except FS.LostKey as exc:
         sr.log(f"update_final_set: {exc}")
-        return EXIT_REFUSED
+        return EXIT_LOST
+    except FS.CreatedKey as exc:
+        sr.log(f"update_final_set: {exc}")
+        return EXIT_CREATED
     FIO.write(sr.slug_dir, sr.unit.unit, o, src)
     c = o.counts
     sr.log(
@@ -135,4 +144,4 @@ def record_final(sr: StageRun, r: PF.Result) -> None:
     GP.write(update_dir(sr) / GP.PROOFS, r.recorded, r.filed)
 
 
-__all__ = ["EXIT_REFUSED", "final_proofs", "record_final", "run"]
+__all__ = ["EXITS", "EXIT_CREATED", "EXIT_LOST", "final_proofs", "record_final", "run"]

@@ -362,7 +362,13 @@ def test_the_final_set_marker_is_the_stage_s_own_file(tmp_path: Path) -> None:
     assert not FIO.ran(ud)
     (ud / FS.ROWS).write_text("")  # rows alone are not the marker
     assert not FIO.ran(ud)
-    (ud / FS.REPORT).write_text("{}")
+    doc = ud.parent / "final-chronology.md"
+    doc.write_text("the set's output")
+    (ud / FS.REPORT).write_text(json.dumps({"out_sha": FIO._sha("the set's output")}))
+    assert FIO.ran(ud)
+    doc.write_text("a document the set did not write")  # a run interrupted before the replace
+    assert not FIO.ran(ud)
+    (ud / FS.REPORT).write_text(json.dumps({"no_added_entries": True}))
     assert FIO.ran(ud)
 
 
@@ -591,7 +597,7 @@ def test_a_document_that_lost_an_entry_the_step_did_not_drop_is_refused(
     original = doc.read_text()
     real = FS.with_entries
     monkeypatch.setattr(FS, "with_entries", lambda md, ents: real(md, ents[:-1]))  # an entry silently lost
-    assert update_final_set.run(sr) == update_final_set.EXIT_REFUSED
+    assert update_final_set.run(sr) == update_final_set.EXIT_LOST
     assert doc.read_text() == original and any("lost" in ln for ln in log)
     monkeypatch.setattr(FS, "with_entries", real)
     assert update_final_set.run(sr) == 0
@@ -650,7 +656,9 @@ def test_the_report_prints_counts_and_no_record_text(
     _job(sd, [ROE_A, COPY, STRAY])
     assert FS.main(["report", str(data_root.parent)]) == 0  # the copy root: it finds data/<slug>/runs/<unit>
     printed = capsys.readouterr().out
-    got = json.loads(printed)
+    first, _, rest = printed.partition("\n")
+    assert first == f"config: {firm_config_path}"  # the copy holds the firm.yaml the stage read
+    got = json.loads(rest)
     assert got["no_added_entries"] is False
     assert got["stray_lines"] == {"before": 2, "after": 0}
     assert got["repeats"]["safe drops (added)"] == 1 and got["distinct_visits_merged"] == 0
@@ -689,7 +697,8 @@ def test_an_update_that_added_nothing_is_a_clean_no_op(
     assert (rd / "update" / FS.ROWS).read_text() == "" and not (rd / "final-chronology.md").exists()
     assert json.loads((rd / "update" / FS.REPORT).read_text())["no_added_entries"] is True
     assert FS.main(["report", str(sr.slug_dir)]) == 0
-    assert json.loads(capsys.readouterr().out)["no_added_entries"] is True
+    first, _, rest = capsys.readouterr().out.partition("\n")
+    assert first.startswith("config: NONE") and json.loads(rest)["no_added_entries"] is True
     empty = _doc([])  # an audit document with no entry: read, never rewritten
     (rd / "final-chronology.md").write_text(empty)
     assert update_final_set.run(sr) == 0 and (rd / "final-chronology.md").read_text() == empty
@@ -713,7 +722,7 @@ FINAL_SET = dag.Stage(
     dag._slug_unit,
     requires=("update_review",),
     runner=update_final_set.run,
-    exit_map={update_final_set.EXIT_REFUSED: (dag.FAILED, "update_final_set: a rule would have created a claim key")},
+    exit_map={code: (dag.FAILED, why) for code, why in update_final_set.EXITS.items()},
 )
 FINAL_PROOF = dag.Stage("final_proof", "", dag._slug_unit, requires=("review",), runner=final_proof.run)
 
@@ -734,3 +743,92 @@ def test_the_new_stages_are_zero_cost_and_rehearsable_where_the_lead_wires_them(
     assert dag._validate(upd) == [] and dag._validate(full) == []
     for s in (FINAL_SET, FINAL_PROOF):
         assert not s.paid and not s.external  # driver.py refuses only these under --redo in a rehearsal
+
+
+def _snapshot(root: Path) -> dict[str, bytes]:
+    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def test_the_report_writes_nothing_even_on_a_read_only_copy(
+    job_dir: Path, firm_config_path: Path, data_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """2026-11-17: the report created the saved input copy in two of three
+    real job copies. It reads saved evidence: it must never write."""
+    import os
+    import stat
+
+    sd = data_root / "example-matter"
+    _job(sd, [ROE_A, COPY, STRAY])
+    before = _snapshot(data_root)
+    assert FS.main(["report", str(sd)]) == 0
+    assert _snapshot(data_root) == before
+    dirs = [d for d in [data_root, *data_root.rglob("*")] if d.is_dir()]
+    for d in dirs:
+        os.chmod(d, stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        assert FS.main(["report", str(sd)]) == 0  # a read-only copy: no OSError
+    finally:
+        for d in dirs:
+            os.chmod(d, stat.S_IRWXU)
+    capsys.readouterr()
+    sr = _sr(job_dir, firm_config_path, data_root, [])
+    assert update_final_set.run(sr) == 0
+    assert _snapshot(data_root) != before  # falsifier: the snapshot sees a write, the stage's own
+
+
+def test_the_report_counts_what_the_stage_counts_with_the_firms_aliases(
+    job_dir: Path, tmp_path: Path, data_root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The stage canonicalises providers with the firm's aliases; a report
+    without them counted 12 delivered key matches where the stage counted 16."""
+    import yaml
+
+    from jobs_testkit import FIRM_CONFIG
+
+    firm = tmp_path / "aliases" / "firm.yaml"
+    firm.parent.mkdir()
+    data = json.loads(json.dumps(FIRM_CONFIG))
+    data.setdefault("providers", {})["aliases"] = [{"match": "Acme Spine", "label": "Example Clinic"}]
+    firm.write_text(yaml.safe_dump(data, sort_keys=False))
+    aliased = (
+        "01/20/2026\nAcme Spine Partners | Medical Diagnoses\n\nMedical Diagnoses\n"
+        "Cyclobenzaprine 7.5 mg was prescribed for the spasm at the visit. (Exhibit 2 - p. 3)"
+    )
+    sr = _sr(job_dir, firm, data_root, [])
+    _job(sr.slug_dir, [aliased, NEW_POST])
+    assert FS.main(["report", str(sr.slug_dir), "--firm-config", str(firm)]) == 0
+    first, _, rest = capsys.readouterr().out.partition("\n")
+    got = json.loads(rest)
+    assert first == f"config: {firm}" and got["config"] == str(firm)
+    assert update_final_set.run(sr) == 0
+    stage = json.loads((sr.slug_dir / "runs" / "alpha" / "update" / FS.REPORT).read_text())["counts"]
+    for k, v in got["repeats"].items():
+        assert stage[f"repeats: {k}"] == v, k
+    assert got["repeats"]["key matches (delivered)"] == 1
+    assert got["stray_lines"] == {"before": stage["stray lines before"], "after": stage["stray lines after"]}
+    assert got["headings"][HD.CITED] == stage.get(f"headings {HD.CITED}", 0)
+    assert FS.main(["report", str(sr.slug_dir)]) == 0  # falsifier: with no config the count differs, and says so
+    first, _, rest = capsys.readouterr().out.partition("\n")
+    assert first.startswith("config: NONE") and "key matches (delivered)" not in json.loads(rest)["repeats"]
+
+
+def test_a_carried_verdict_that_changed_is_appended_and_the_proof_reads_it(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """The update review is redone and the claim a carry came from is now
+    UNSUPPORTED: the step's next run appends the new carry, so the newest
+    row, the one the proofs read, says UNSUPPORTED."""
+    sr = _sr(job_dir, firm_config_path, data_root, [])
+    _job(sr.slug_dir, [STRAY])
+    rd, results = sr.slug_dir / "runs" / "alpha", sr.slug_dir / "out" / "alpha" / "audit-results.jsonl"
+    original = (rd / "final-chronology.md").read_text()
+    assert update_final_set.run(sr) == 0
+    (carry,) = [r for r in CL.read_rows(results) if r.get("mode") == FS.CARRY]
+    assert GP.latest_supported(CL.read_rows(results))({"key": carry["key"]})[0]
+    (rd / "final-chronology.md").write_text(original)  # the review rewrote the document
+    old = carry["carried_from"]
+    CL.append_row(results, {"key": old, "kind": "real", "verdict": "UNSUPPORTED"})  # and graded it again
+    assert update_final_set.run(sr) == 0
+    rows = CL.read_rows(results)
+    assert not GP.latest_supported(rows)({"key": carry["key"]})[0]
+    assert update_final_set.run(sr) == 0 and CL.read_rows(results) == rows  # the same verdict is not appended again

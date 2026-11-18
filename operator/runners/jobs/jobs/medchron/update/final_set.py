@@ -434,6 +434,14 @@ def corrections_of(ents: list[str], base_ents: list[str]) -> list[dict[str, Any]
 # ---- the step ---------------------------------------------------------------------------------
 
 
+class CreatedKey(AssertionError):
+    """A rule would have created a claim key: nothing is written."""
+
+
+class LostKey(AssertionError):
+    """A claim key was lost that no drop of this step removed: nothing is written."""
+
+
 def run(x: Inputs) -> Outcome:
     """The final set of the added entries. Raises AssertionError, and nothing
     is written, if any rule created a claim key (each checks it cannot) or if
@@ -453,9 +461,9 @@ def run(x: Inputs) -> Outcome:
     o.counts["new claim keys created"] = len(created)
     o.counts["claim keys lost unaccounted"] = len(lost)
     if created:
-        raise AssertionError(f"final set created {len(created)} claim key(s); nothing is written")
+        raise CreatedKey(f"final set created {len(created)} claim key(s); nothing is written")
     if lost:
-        raise AssertionError(f"final set lost {len(lost)} claim key(s) no drop of its own removed; nothing is written")
+        raise LostKey(f"final set lost {len(lost)} claim key(s) no drop of its own removed; nothing is written")
     o.md = md
     latest = _latest(x.audit_rows + o.carries)
     o.rows = rows_of(ents, x, checks, latest)
@@ -473,14 +481,21 @@ def main(argv: list[str] | None = None) -> int:
     rp = sub.add_parser("report", help="the final set's counts on a COPY of a job directory; no model, no write")
     rp.add_argument("job_dir", type=Path)
     rp.add_argument("--unit")
+    rp.add_argument(
+        "--firm-config", type=Path, help="the firm config the stage used (default: a firm.yaml the copy holds)"
+    )
     a = ap.parse_args(argv)
     try:
         from .final_set_io import report
 
-        out = report(a.job_dir, a.unit)
+        out = report(a.job_dir, a.unit, a.firm_config)
     except AssertionError as exc:
         print(json.dumps({"refused": str(exc)}))
         return 1
+    if out["config"]:
+        print(f"config: {out['config']}")
+    else:
+        print("config: NONE: the firm's provider aliases are not applied, so repeat counts can differ from the stage's")
     print(json.dumps(out, indent=1))
     return 1 if out["distinct_visits_merged"] or out["new_claim_keys_created"] else 0
 
