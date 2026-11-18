@@ -33,6 +33,7 @@ import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
 const SCRIPT = resolve('operator/bin/boot-smoke-test.sh')
+const TRANSPORT_LIB = resolve('operator/bin/lib/fly-transport.sh')
 
 let dir: string
 
@@ -80,6 +81,8 @@ function runWithHelpers(body: string): string {
     `APP_NAME=stub-app
 FAILED_CHECKS=()
 summarize() { :; }
+# What the script sources just below the helper region (the ssh-refused fallback).
+source "${TRANSPORT_LIB}"
 ${helpers}
 trap - EXIT
 ${body}
@@ -430,5 +433,103 @@ echo "ATTEMPTS=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
     expect(out).toContain('PASS_COUNT=1')
     expect(out).toContain('FAILED_COUNT=0')
     expect(out).toContain('WARNED_COUNT=0')
+  })
+})
+
+/**
+ * 2026-11-17: Fly refused the ssh tunnel from the laptop that ran a release
+ * ("can't build tunnel for personal: Not authorized to access this
+ * organization"), so the boot smoke that re-verifies a rolled-back seat got no
+ * verdict from any check, and a client seat's rollback image went unverified.
+ * The boot smoke now takes the fallback seat-probe.sh takes
+ * (operator/bin/lib/fly-transport.sh): on that one refusal, this check and the
+ * rest of the run go through `fly machine exec`. The exit status is read from a
+ * line the Machine prints, never from flyctl's own exit code, so the stub below
+ * exits 0 whatever the command did, and a failing check must still fail.
+ */
+function writeRefusingFly(execBody: string): void {
+  writeFileSync(join(dir, 'ssh-attempts'), '')
+  writeFileSync(join(dir, 'exec-attempts'), '')
+  writeFileSync(
+    join(dir, 'fly'),
+    `#!/bin/bash
+if [ "$1" = "status" ]; then echo '{"Machines":[{"state":"started"}]}'; exit 0; fi
+if [ "$1" = "ssh" ]; then
+  echo x >> "${dir}/ssh-attempts"
+  echo "Error: can't build tunnel for personal: Not authorized to access this organization" >&2
+  exit 1
+fi
+if [ "$1 $2" = "machine list" ]; then
+  echo '[{"id":"m-stopped","state":"stopped"},{"id":"m-live","state":"started"}]'
+  exit 0
+fi
+if [ "$1 $2" = "machine exec" ]; then
+  echo x >> "${dir}/exec-attempts"
+  [ "$3" = "m-live" ] || { echo "wrong machine $3" >&2; exit 9; }
+  for C in "$@"; do :; done
+  ${execBody}
+fi
+exit 0
+`,
+    { mode: 0o755 }
+  )
+  chmodSync(join(dir, 'fly'), 0o755)
+}
+
+function counts(): string {
+  return `
+echo "FAILED_COUNT=\${#FAILED_CHECKS[@]}"
+for c in "\${FAILED_CHECKS[@]}"; do echo "FAILED: $c"; done
+echo "PASS_COUNT=\${PASS_COUNT}"
+echo "SSH=$(wc -l < "${dir}/ssh-attempts" | tr -d ' ')"
+echo "EXEC=$(wc -l < "${dir}/exec-attempts" | tr -d ' ')"
+`
+}
+
+describe('boot smoke: Fly refuses the ssh tunnel (2026-11-17)', () => {
+  it('runs the checks through fly machine exec, and a failing check still fails', () => {
+    // The Machine runs the command; flyctl itself exits 0 whatever it did.
+    writeRefusingFly('sh -c "$C"; exit 0')
+    const out = runWithHelpers(`
+PASS_COUNT=0
+ssh_exec "a-passing-check" "true"
+ssh_exec "a-failing-check" "false"
+ssh_exec_script "a-quoted-check" "test 'a b' = 'a b'"
+${counts()}`)
+    // FALSIFIER: drop the refusal branch from remote_run and every check is
+    // "no verdict" (FAILED_COUNT=3); read flyctl's exit code instead of the
+    // Machine's line and the failing check passes (FAILED_COUNT=0).
+    expect(out).toContain('FAILED_COUNT=1')
+    expect(out).toMatch(/FAILED: a-failing-check .* command failed: false/)
+    expect(out).toContain('PASS_COUNT=2')
+    // The refusal is seen once; the later checks go straight to exec.
+    expect(out).toContain('SSH=1')
+    expect(out).toContain('EXEC=3')
+  })
+
+  it('with exec refused as well, records no verdict, never a pass', () => {
+    // What the fleet reads as a tooling_error re-smoke, which makes a rollback
+    // row say "rollback health UNVERIFIED" (operator/bin/tests/test_fleet_align_switch.py).
+    writeRefusingFly('echo "Error: failed to exec: unauthorized" >&2; exit 1')
+    const out = runWithHelpers(`
+PASS_COUNT=0
+ssh_exec "a-check-nothing-can-reach" "true"
+${counts()}`)
+    expect(out).toContain('FAILED_COUNT=1')
+    expect(out).toContain('no verdict from the Machine on two attempts')
+    expect(out).toContain('PASS_COUNT=0')
+    expect(out).toContain('EXEC=2')
+  })
+
+  it('an ssh failure that is not the refusal never takes exec', () => {
+    writeFlyStub('started', 1, false)
+    writeFileSync(join(dir, 'ssh-attempts'), '')
+    writeFileSync(join(dir, 'exec-attempts'), '')
+    const out = runWithHelpers(`
+PASS_COUNT=0
+ssh_exec "a-check-whose-session-dropped" "true"
+${counts()}`)
+    expect(out).toContain('EXEC=0')
+    expect(out).toContain('SSH=2')
   })
 })

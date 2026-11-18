@@ -638,7 +638,9 @@ def test_cli_second_release_while_lease_held_exits_4() -> None:
     rel = release()
     store.insert_release(rel)
     store.lease_row = {"lease_name": "rollout", "holder": "other", "release_id": "img-zzzzzzzz", "expires_at": "2099"}
-    assert cli.main(["release", rel["release_id"]], ctx=_ctx(store)) == 4
+    # The jobs bundle switch reads true (align_switch.py), so the 4 is the lease's refusal, not that one's.
+    ctx = cli.Ctx(REPO, ScriptRunner(Result(0, "true\n", "")), store, FakeR2(), FakeFly(), log=lambda m: None)  # type: ignore[arg-type]
+    assert cli.main(["release", rel["release_id"]], ctx=ctx) == 4
     assert store.rollouts == {}
 
 

@@ -311,9 +311,13 @@ def bundle_releases_enabled(environ: Mapping[str, str] | None = None) -> bool:
     return (os.environ if environ is None else environ).get(BUNDLE_SWITCH) == "true"
 
 
-def bundle_align_for(ctx: Any) -> BundleAlign | None:
-    """The image step's bundle pointer writer (bundle_align.py); None while bundle releases are off."""
-    if not bundle_releases_enabled():
+def bundle_align_for(ctx: Any, enabled: bool | None = None) -> BundleAlign | None:
+    """The image step's bundle pointer writer (bundle_align.py); None while bundle releases are off.
+
+    ``enabled`` None (the tick) reads the switch from this run's environment; a
+    release run by hand passes what align_switch.decide read (2026-11-17).
+    """
+    if not (bundle_releases_enabled() if enabled is None else enabled):
         return None
     every = [seat for ring in ctx.rings() for seat in ring.seats]
     reads = _Reads(ctx)

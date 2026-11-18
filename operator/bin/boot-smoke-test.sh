@@ -154,6 +154,7 @@ fail() { log "FATAL: $*"; exit 1; }
 # trap so a precondition abort still gets a summary of what had run.
 summarize() {
   local code=$?
+  rm -f "${EXEC_FLAG:-}"
   local n=${#FAILED_CHECKS[@]}
   log "----- boot smoke summary for ${APP_NAME} -----"
   log "checks passed: ${PASS_COUNT}"
@@ -228,6 +229,30 @@ with_timeout() { # <seconds> <command...> -- exit 124 and print the timeout mark
   return "${rc}"
 }
 
+# remote_run <command string>: run it on the Machine; its output (stdout and
+# stderr) and its exit status. Over `fly ssh console` by default. When Fly
+# refuses the org-level tunnel (2026-11-17: the re-smoke of a rolled-back client
+# seat got no verdict from any check, so its health went unverified), this check
+# and every later one in the run go through `fly machine exec` instead
+# (lib/fly-transport.sh, the fallback seat-probe.sh takes). The switch is a file
+# because each check runs in a $(...) subshell; its name is unique to this run
+# and the file does not exist until the refusal is seen. Any other ssh failure
+# is left as it is, for the no-verdict retry below.
+EXEC_FLAG="$(mktemp -u "${TMPDIR:-/tmp}/smd-boot-smoke-exec.XXXXXX")"
+remote_run() {
+  local out rc=0
+  if [ ! -e "${EXEC_FLAG}" ]; then
+    out="$(with_timeout "${SSH_TIMEOUT_S}" fly ssh console -a "${APP_NAME}" --command "$1" 2>&1)" || rc=$?
+    if [ "${rc}" -eq 0 ] || ! fly_tunnel_refused <<<"${out}"; then
+      printf '%s\n' "${out}"
+      return "${rc}"
+    fi
+    : >"${EXEC_FLAG}"
+    log "Fly refused the ssh tunnel; this check and the rest run through fly machine exec" >&2
+  fi
+  with_timeout "${SSH_TIMEOUT_S}" fly_exec_sh "${APP_NAME}" "${SSH_TIMEOUT_S}" "$1"
+}
+
 ssh_run() {
   # `fly ssh console --command` execs the string directly (no shell), so compound
   # commands (&&, |, $(...), [ ]) fail unless wrapped in an explicit shell. Wrap
@@ -235,7 +260,7 @@ ssh_run() {
   # commands contain no single quotes, so the single-quoted wrapper is safe.) The
   # subshell keeps a check's own `exit` from skipping the marker.
   # A timeout prints no CHECK_FAILED mark, so it takes the no-verdict retry path.
-  with_timeout "${SSH_TIMEOUT_S}" fly ssh console -a "${APP_NAME}" --command "sh -c '( ${1} ) || { echo ${CHECK_FAILED_MARK}; exit 1; }'" 2>&1
+  remote_run "sh -c '( ${1} ) || { echo ${CHECK_FAILED_MARK}; exit 1; }'"
 }
 
 ssh_exec() {
@@ -331,6 +356,10 @@ ssh_exec_script() {
 }
 
 # ---------- Step 1: wait for Machine state=started ----------
+# The ssh-refused fallback remote_run takes. Sourced here, below the helper
+# region, because the unit tests copy that region to another directory.
+# shellcheck source=lib/fly-transport.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/fly-transport.sh"
 log "Waiting for Machine state=started (up to 60s)..."
 ATTEMPT=0
 while [ "${ATTEMPT}" -lt 60 ]; do
@@ -427,7 +456,7 @@ check_file() {
 # failure names what it found (the staged-scripts step names every stale path).
 # Sets REPORT_OUT and returns the remote exit status.
 report_run() {
-  REPORT_OUT="$(with_timeout "${SSH_TIMEOUT_S}" fly ssh console -a "${APP_NAME}" --command "sh -c 'echo ${1} | base64 -d | sh'" 2>&1)"
+  REPORT_OUT="$(remote_run "sh -c 'echo ${1} | base64 -d | sh'")"
 }
 check_report() {
   local encoded

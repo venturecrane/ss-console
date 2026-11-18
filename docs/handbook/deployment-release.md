@@ -421,6 +421,24 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
   already on the version and writes its pointer with no restart, so a release
   restarts a lane seat once. Skills are not pointed ahead: a seat applies them
   live, so they would run on the old image.
+  A release run by hand (`fleet release <id> [--only <seat>]`, from a laptop or
+  the urgent one-seat run) reads the same switch from the same place
+  (`operator/bin/lib/fleet/align_switch.py`, 2026-11-17): from its environment
+  when that names it, otherwise from the repository variable with the
+  operator's own `gh` login (an unset variable reads as off, in CI and from a
+  laptop alike). Before anything is deployed it logs one of three things. On:
+  `bundle alignment: on (...)`, and the pointer moves as in the tick. Off: the
+  switch is a decision someone made, so every path (the tick, the urgent run, a
+  laptop) deploys the image with the pointer untouched, logs
+  `bundle alignment: OFF (switch off): image released without moving the jobs bundle`,
+  and each lane seat's `fleet_rollouts` detail begins with the same words,
+  which `fleet status` and the pager show. Cannot be read, with a lane seat in
+  the run: it refuses (exit 4) and names the command to run instead;
+  `--no-bundle-align` deploys anyway, marked `OFF (--no-bundle-align)` the
+  same way. Until
+  2026-11-17 a laptop run had no switch in its environment, so it deployed a
+  lane seat with its pointer untouched without saying so (see the incident in
+  [Incident Response](/admin/playbook/incident-response)).
 - **Deploy** `fly deploy --image <release> --config <rendered>`. The rendered
   toml (`operator/bin/lib/render-fly-toml.sh`, the renderer provisioning uses)
   sets `kill_signal = "SIGTERM"` and `kill_timeout = 300`, so the entrypoint
@@ -440,12 +458,22 @@ For each seat, in order, every step recorded in D1 `fleet_rollouts`:
 - **Classify.** Only a real seat failure (a smoke check that ran and said no, a
   Machine that never started, a heartbeat naming another image) rolls the seat
   back to its recorded image and toml, re-smokes it, and HALTS the rollout.
+  The boot smoke (the re-smoke from a laptop) runs its checks over `fly ssh`,
+  and when Fly refuses the ssh tunnel it runs them through `fly machine exec`
+  instead (`operator/bin/lib/fly-transport.sh`, the fallback `seat-probe.sh`
+  takes). A re-smoke that gets no verdict by either route makes the row's
+  detail begin `rollback health UNVERIFIED`: the seat is rolled back and its
+  health is not known, so a person looks at it (2026-11-17).
   Seats not reached are recorded `halted`. A tooling error (Fly or the self-test
   decided nothing: ssh with no verdict, Fly agent or wrangler errors) or a
   timeout leaves the seat untouched and stalls only that seat: the rollout goes
   on to the next one. A `fly deploy` that fails without saying the release is
   unhealthy is tried once more a minute later, and what Fly printed is kept in
-  the rollout's detail (lines naming a credential are dropped).
+  the rollout's detail (lines naming a credential or assigning a `NAME=value`
+  are dropped). A deploy Fly says would not come up keeps its evidence too:
+  the detail names the failure marker that matched and the lines around it,
+  bounded the same way (2026-11-17; before that the row kept nothing, and one
+  such failure's cause is still unknown).
 - **Complete.** After any real run, a release whose latest rollout on every
   ringed seat is `done` is marked `completed_last_ring_at`. That is read from
   the `fleet_rollouts` records, not from one run: a release repaired seat by
@@ -517,7 +545,16 @@ Two workflows run the release (ADR 0096).
   - a seat whose latest rollout is `rolled_back` or `failed` is a **standing
     halt**: nothing moves until a person acts, and the `rollout_failed` pager
     has already mailed. Finish it from a laptop with
-    `fleet release <id> --only <seat>`, or hold the seat. One halt clears
+    `fleet release <id> --only <seat>`, or hold the seat. For a seat that
+    authors a job lane, the run reads the jobs bundle switch from the
+    repository variable with your `gh` login and logs `bundle alignment: on`
+    (or `OFF (switch off)`, when someone turned it off) before it deploys.
+    If `gh` cannot read it (not logged in, or a stale `GH_TOKEN` in the
+    shell), the run refuses before anything is deployed; read the switch with
+    `gh variable get BUNDLE_RELEASE_ENABLED --repo venturecrane/ss-console`
+    and run
+    `BUNDLE_RELEASE_ENABLED=<that value> operator/bin/fleet release <id> --only <seat>`
+    inside the same `infisical run`. One halt clears
     itself: a `failed` row that was only a lane-input refusal ("the lane's
     firm-input schema changed; re-stage") deployed nothing, so each tick asks
     whether `operator/fleet/lane-inputs-accepted.yaml` on main now declares

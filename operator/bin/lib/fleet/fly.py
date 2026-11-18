@@ -352,33 +352,69 @@ class Fly:
         )  # fmt: skip
 
 
+def seat_failure_marker(res: Result) -> str | None:
+    """The first DEPLOY_SEAT_FAILURE_MARKERS entry a failed deploy's output carries, or None."""
+    low = res.text.lower()
+    return next((m for m in DEPLOY_SEAT_FAILURE_MARKERS if m in low), None)
+
+
 def classify_deploy(res: Result) -> str:
     """'ok', 'fail' (the new release would not come up) or 'tooling_error'."""
     if res.ok:
         return "ok"
     if looks_like_transport_failure(res):
         return "tooling_error"
-    low = res.text.lower()
-    return "fail" if any(m in low for m in DEPLOY_SEAT_FAILURE_MARKERS) else "tooling_error"
+    return "fail" if seat_failure_marker(res) else "tooling_error"
 
 
 DEPLOY_EXCERPT_LINES = 6
 DEPLOY_EXCERPT_CHARS = 600
 # A line naming a credential is never copied into a record, a log or a page.
-_CREDENTIAL_LINE_RE = re.compile(r"token|secret|password|authorization|bearer|macaroon", re.IGNORECASE)
+_CREDENTIAL_LINE_RE = re.compile(r"token|secret|password|authorization|bearer|macaroon|api[_-]?key", re.IGNORECASE)
+# Nor is a line that assigns an environment-style name (NAME=value), whatever the name:
+# a printed environment is a list of them, and any one may hold a value (2026-11-17).
+_ASSIGNMENT_LINE_RE = re.compile(r"\b[A-Z][A-Z0-9_]{2,}=\S")
+WITHHELD_LINE = "[line withheld]"
+# The lines kept on each side of the line a seat-failure marker was found on.
+MARKER_CONTEXT_BEFORE, MARKER_CONTEXT_AFTER = 2, 3
+
+
+def _withheld(line: str) -> bool:
+    return bool(_CREDENTIAL_LINE_RE.search(line) or _ASSIGNMENT_LINE_RE.search(line))
 
 
 def deploy_excerpt(res: Result) -> str:
     """The last lines a failed ``fly deploy`` printed, for the rollout record and the page.
 
     stderr first (where flyctl puts its error), else stdout. Lines naming a
-    credential are dropped. Never empty: an exit code is always something to go on.
+    credential or assigning a NAME=value are dropped. Never empty: an exit code
+    is always something to go on.
     """
     for text in (res.stderr, res.stdout):
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip() and not _CREDENTIAL_LINE_RE.search(ln)]
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip() and not _withheld(ln)]
         if lines:
             return f"rc={res.rc}: " + " / ".join(lines[-DEPLOY_EXCERPT_LINES:])[-DEPLOY_EXCERPT_CHARS:]
     return f"rc={res.rc}, no output"
+
+
+def deploy_failure_evidence(res: Result) -> str:
+    """Why a deploy was classed a seat failure: the marker that matched, and the lines around it.
+
+    Until 2026-11-17 the 'fail' path kept nothing of what Fly printed, and a
+    client seat's "would not come up" could not be explained afterwards. The
+    window is the marker's line with MARKER_CONTEXT_BEFORE / _AFTER lines either
+    side, stderr then stdout, each line redacted as deploy_excerpt redacts
+    (a withheld line is shown as WITHHELD_LINE, so the window keeps its place),
+    and tail-limited to DEPLOY_EXCERPT_CHARS.
+    """
+    marker = seat_failure_marker(res)
+    if marker is None:
+        return deploy_excerpt(res)
+    lines = [ln.strip() for text in (res.stderr, res.stdout) for ln in text.splitlines() if ln.strip()]
+    at = next((i for i, ln in enumerate(lines) if marker in ln.lower()), len(lines) - 1)
+    window = lines[max(0, at - MARKER_CONTEXT_BEFORE) : at + MARKER_CONTEXT_AFTER + 1]
+    shown = " / ".join(WITHHELD_LINE if _withheld(ln) else ln for ln in window)[-DEPLOY_EXCERPT_CHARS:]
+    return f'marker "{marker}"; rc={res.rc}: {shown}'
 
 
 def digest_from_build_output(text: str) -> str | None:

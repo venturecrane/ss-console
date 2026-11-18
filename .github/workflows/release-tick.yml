@@ -264,7 +264,7 @@ jobs:
                 else
                   echo "::notice::urgent release: $SEAT is on $RELEASE and passed its self-test"
                 fi ;;
-              4) echo "::error::urgent release: refused before anything ran (another rollout holds $SEAT, or the release is unknown); see the log" ;;
+              4) echo "::error::urgent release: refused before anything ran: another rollout holds $SEAT, the release is unknown, $SEAT is in no ring or its twin is not done on this release, the image carries no self-test, or the jobs bundle switch could not be read; the REFUSED line in the log says which" ;;
               *) echo "::error::urgent release: exit $rc; $SEAT is not on $RELEASE (1 = the seat failed, was refused or rolled back, is still busy after the idle wait, or is held; 3 = a tooling error decided nothing); see the log" ;;
             esac
             exit "$rc"
