@@ -13,120 +13,19 @@
   "records__seat_paused": [],
   "records__settings_missing": [],
   "records__stopped_by_smd_running": [],
-  "medchron__broker_down_mid_run": [
-    "1.audit.0.metadata.run",
-    "1.daemon.jobs/<ULID1>.record_pending",
-    "1.log.1",
-    "1.wire.2.request.fields.run",
-    "2.audit",
-    "2.daemon.jobs/<ULID1>.record_pending",
-    "2.wire",
-    "2.wire.0.reply.credits",
-    "2.wire.0.reply.jobs",
-    "2.wire.0.request.action",
-    "2.wire.1.reply.channel",
-    "2.wire.1.reply.expected_key",
-    "2.wire.1.reply.holds",
-    "2.wire.1.reply.replies",
-    "2.wire.1.reply.sends_to_requester",
-    "2.wire.1.request.action",
-    "2.wire.1.request.kind",
-    "2.wire.1.request.requester",
-    "2.wire.1.request.since",
-    "3.daemon.jobs/<ULID1>.record_pending",
-    "3.wire.0.reply.expected_key"
-  ],
-  "medchron__broker_unreachable": [
-    "2.audit.0.metadata.run",
-    "2.audit.2.metadata.run",
-    "2.wire.2.request.fields.run",
-    "2.wire.4.request.fields.run"
-  ],
-  "medchron__delivered": [
-    "1.audit.0.metadata.run",
-    "1.audit.2.metadata.run",
-    "1.wire.2.request.fields.run",
-    "1.wire.4.request.fields.run"
-  ],
-  "medchron__failed": [
-    "1.audit.0.metadata.run",
-    "1.audit.1.metadata.run",
-    "1.wire.2.request.fields.run",
-    "1.wire.3.request.fields.run"
-  ],
-  "medchron__held": [
-    "1.audit.0.metadata.run",
-    "1.audit.2.metadata.run",
-    "1.wire.2.request.fields.run",
-    "1.wire.4.request.fields.run"
-  ],
-  "medchron__lane_unproven": [
-    "3.audit.1.metadata.run",
-    "3.audit.3.metadata.run",
-    "3.wire.3.request.fields.run",
-    "3.wire.5.request.fields.run"
-  ],
-  "medchron__machine_stop": [
-    "1.audit.0.metadata.run",
-    "1.wire.2.request.fields.run",
-    "2.audit.0.metadata.run",
-    "2.audit.2.metadata.run",
-    "2.wire.2.request.fields.run",
-    "2.wire.4.request.fields.run"
-  ],
-  "medchron__no_verdict_usage": [
-    "1.audit.0.metadata.run",
-    "1.audit.1.metadata.run",
-    "1.wire.2.request.fields.run",
-    "1.wire.3.request.fields.run"
-  ],
-  "medchron__queued_behind_same_lane": [
-    "2.audit.0.metadata.run",
-    "2.audit.2.metadata.run",
-    "2.wire.2.request.fields.run",
-    "2.wire.4.request.fields.run",
-    "3.audit.0.metadata.run",
-    "3.audit.2.metadata.run",
-    "3.wire.4.request.fields.run",
-    "3.wire.6.request.fields.run"
-  ],
-  "medchron__resume_failed": [
-    "1.audit.0.metadata.run",
-    "1.audit.1.metadata.run",
-    "1.wire.2.request.fields.run",
-    "1.wire.3.request.fields.run",
-    "3.audit.0.metadata.run",
-    "3.audit.2.metadata.run",
-    "3.daemon.jobs/<ULID1>.run_pending",
-    "3.wire.3.request.fields.run",
-    "3.wire.5.request.fields.run",
-    "4.daemon.jobs/<ULID1>.run_pending"
-  ],
-  "medchron__seat_paused": [
-    "1.audit.0.metadata.run",
-    "1.wire.1.request.fields.run",
-    "3.audit.0.metadata.run",
-    "3.audit.2.metadata.run",
-    "3.wire.1.request.fields.run",
-    "3.wire.3.request.fields.run"
-  ],
-  "medchron__stopped_by_smd_queued": ["2.audit.0.metadata.run", "2.wire.1.request.fields.run"],
-  "medchron__stopped_by_smd_running": [
-    "1.audit.0.metadata.run",
-    "1.audit.1.metadata.run",
-    "1.wire.2.request.fields.run",
-    "1.wire.3.request.fields.run"
-  ],
-  "medchron__wake_lost": [
-    "1.audit.0.metadata.run",
-    "1.audit.2.metadata.run",
-    "1.wire.2.request.fields.run",
-    "1.wire.4.request.fields.run"
-  ],
-  "medchron__wake_paused": [
-    "1.audit.0.metadata.run",
-    "1.audit.2.metadata.run",
-    "1.wire.2.request.fields.run",
-    "1.wire.4.request.fields.run"
-  ]
+  "medchron__broker_down_mid_run": [],
+  "medchron__broker_unreachable": [],
+  "medchron__delivered": [],
+  "medchron__failed": [],
+  "medchron__held": [],
+  "medchron__lane_unproven": [],
+  "medchron__machine_stop": [],
+  "medchron__no_verdict_usage": [],
+  "medchron__queued_behind_same_lane": [],
+  "medchron__resume_failed": [],
+  "medchron__seat_paused": [],
+  "medchron__stopped_by_smd_queued": [],
+  "medchron__stopped_by_smd_running": [],
+  "medchron__wake_lost": [],
+  "medchron__wake_paused": []
 }

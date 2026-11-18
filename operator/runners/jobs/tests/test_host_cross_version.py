@@ -364,13 +364,36 @@ def _planted(tmp_path: Path, mp: Any, cell: str, k: int, direction: str, edit: t
     return _diffs(runs["same"], runs[direction])
 
 
+#: The entries #4110 reviewed for these two cells, kept here as the planted
+#: tests' own input. They read the live allowed list until it was cleared after
+#: the merge, and an empty list gives the old section rule nothing to excuse, so
+#: the tests could no longer show the difference between the two rules.
+REVIEWED_DELIVERED = [
+    "1.audit.0.metadata.run",
+    "1.audit.2.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.4.request.fields.run",
+]
+REVIEWED_RESUME_FAILED = [
+    "1.audit.0.metadata.run",
+    "1.audit.1.metadata.run",
+    "1.wire.2.request.fields.run",
+    "1.wire.3.request.fields.run",
+    "3.audit.0.metadata.run",
+    "3.audit.2.metadata.run",
+    "3.daemon.jobs/<ULID1>.run_pending",
+    "3.wire.3.request.fields.run",
+    "3.wire.5.request.fields.run",
+    "4.daemon.jobs/<ULID1>.run_pending",
+]
+
 LANE_RECORD = "            self.broker.record(job_id, state, fields)\n"
 
 
 def test_a_reviewed_run_entry_never_excuses_another_field_in_its_section(tmp_path, monkeypatch, real_lane_gate):
     """(a) ``medchron/delivered``'s reviewed entries name ``...fields.run``; a host
     that sends a DIFFERENT field of the same request must still fail."""
-    allowed = load_allowed(GOLDENS)["medchron__delivered"]
+    allowed = REVIEWED_DELIVERED
     # A field the ledger ignores, so the change shows on this request and nowhere after it.
     edit = ("medchron/lane.py", LANE_RECORD, LANE_RECORD.replace("fields)", '{**fields, "stray": 1})'))
     found = _planted(tmp_path, monkeypatch, "medchron/delivered", 1, "new_old", edit)
@@ -382,7 +405,7 @@ def test_a_reviewed_run_entry_never_excuses_another_field_in_its_section(tmp_pat
 def test_a_host_that_records_its_ending_twice_fails(tmp_path, monkeypatch, real_lane_gate):
     """(b) The deliver record sent twice: a longer wire and audit in a section
     the reviewed list names, never excused."""
-    allowed = load_allowed(GOLDENS)["medchron__delivered"]
+    allowed = REVIEWED_DELIVERED
     edit = ("medchron/lane.py", LANE_RECORD, LANE_RECORD + LANE_RECORD)
     found = _planted(tmp_path, monkeypatch, "medchron/delivered", 1, "new_old", edit)
     assert "1.wire" in found and "1.audit" in found, found
@@ -394,7 +417,7 @@ def test_a_wrong_state_word_after_the_restart_fails(tmp_path, monkeypatch, real_
     """(c) After the restart the new host writes ``failed`` where the old one's
     own restart leaves ``delivered``: a state word in a daemon section the
     reviewed list names (``run_pending``), never excused."""
-    allowed = load_allowed(GOLDENS)["medchron__resume_failed"]
+    allowed = REVIEWED_RESUME_FAILED
     # Written as the tick ends (its heartbeat), so nothing the tick does changes:
     # only the state word the folder is left with.
     hook = "    def poll_requests(self) -> None:\n"
