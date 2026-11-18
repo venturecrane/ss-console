@@ -12,13 +12,11 @@ ONE ROW PER PAGE of every document the update pulled:
 
     {doc, sha256, page, status, class, evidence: {kind, cover, frac, headings}, by}
 
-* ``status``: ``cited`` | ``cited_via`` (cited, resolved through its cover) |
-  ``excluded`` | ``read_uncited`` | ``unread``; ``read`` is the status
-  ``update_select`` writes for a page sent to compose. No stage settles a
-  ``read`` row further, so a run writes ``read``, ``excluded`` and
-  ``unread``; ``cited``, ``cited_via`` and ``read_uncited`` are known
-  statuses no run writes today.
-* ``class``: why, as a short code (``CLASSES``).
+* ``status``: ``read`` (sent to a model to be read) | ``excluded`` |
+  ``unread`` (not read: not a page source, or its text could not be had). ``update_pages`` writes the first rows
+  and ``update_select`` replaces them; ``update/charged`` charges the
+  ``read`` rows.
+* ``class``: why, as a short code (``stages/page_rows.CLASS``).
 * ``evidence.kind``: what proves it (``KINDS``). ``cover`` names the page
   that covers an excluded page: ``{exhibit|doc, page, exact}`` (or
   ``{sha256}`` for a byte-identical file). An identity finding stays in
@@ -32,7 +30,6 @@ here outlives the job.
 from __future__ import annotations
 
 import json
-from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -40,15 +37,8 @@ from typing import Any
 from .update import pageid_io as PG
 
 NAME = "pages.jsonl"
-CITED, CITED_VIA, EXCLUDED, READ_UNCITED, UNREAD, READ = (
-    "cited",
-    "cited_via",
-    "excluded",
-    "read_uncited",
-    "unread",
-    "read",
-)
-STATUSES = (CITED, CITED_VIA, EXCLUDED, READ_UNCITED, UNREAD, READ)
+EXCLUDED, UNREAD, READ = "excluded", "unread", "read"
+STATUSES = (EXCLUDED, UNREAD, READ)
 #: What proves a row. ``file``: a byte-identical or re-filed document;
 #: ``rule``: a document-level rule (not a page source, password-protected,
 #: an expert report, read by an earlier delivery, the firm's direction).
@@ -123,72 +113,8 @@ def write(run_dir: Path, rows: Iterable[dict[str, Any]]) -> int:
     return len(rows)
 
 
-def replace_by(run_dir: Path, by: str, rows: Iterable[dict[str, Any]]) -> int:
-    """Replace the rows `by` wrote earlier with `rows`, keeping every other stage's."""
-    keep = [r for r in read(run_dir) if r.get("by") != by]
-    return write(run_dir, [*keep, *rows])
-
-
-def counts(run_dir: Path) -> dict[str, dict[str, int]]:
-    """{"status": {...}, "class": {...}, "kind": {...}}: what the run-record
-    builder attaches to its audit block."""
-    rows = read(run_dir)
-    return {
-        "status": dict(Counter(str(r.get("status")) for r in rows)),
-        "class": dict(Counter(str(r.get("class")) for r in rows)),
-        "kind": dict(Counter(str((r.get("evidence") or {}).get("kind")) for r in rows)),
-    }
-
-
-def missing(rows: Iterable[dict[str, Any]], pages: dict[str, int]) -> list[tuple[str, int]]:
-    """(document, page) of every page of `pages` ({document: page count})
-    that has no row: the record's own completeness check."""
-    have = {(str(r.get("doc")), int(r.get("page") or 0)) for r in rows}
-    return [(d, p) for d, n in sorted(pages.items()) for p in range(1, n + 1) if (d, p) not in have]
-
-
 #: The statuses of a page sent to be read (``update/charged`` charges exactly these).
-READ_STATUSES = frozenset({READ, CITED, READ_UNCITED})
-
-
-#: The exclusions that name the page covering them (``stages/page_rows.CLASS``).
-COVERED_CLASSES = frozenset({"already_delivered", "repeat", "refiled_extract"})
-#: A withheld document's row class starts with this (``page_rows.CLASS``).
-WITHHELD_PREFIX = "withheld"
-
-
-def _excluded_covered(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [r for r in rows if r.get("status") in (EXCLUDED, CITED_VIA) and r.get("class") in COVERED_CLASSES]
-
-
-def uncovered_exclusions(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    """RECORD ONLY: pages excluded as a copy that name no covering page:
-    {count, docs}. Nothing in the run reads this."""
-    bad = [r for r in _excluded_covered(list(rows)) if not (r.get("evidence") or {}).get("cover")]
-    return {"count": len(bad), "docs": sorted({str(r["doc"]) for r in bad})}
-
-
-def invalid_covers(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    """RECORD ONLY: pages excluded as a copy whose cover is a document this run
-    withheld, could not read, or never pulled: {count, docs}. A cover page code
-    itself set aside (billing, blank, an expert report, a re-filed extract, a
-    copy of another page) is a VALID cover: the copy is rightly excluded for the
-    same reason. Nothing in the run reads this."""
-    rows = list(rows)
-    by_key = {(str(r.get("doc")), int(r.get("page") or 0)): r for r in rows}
-    first: dict[str, dict[str, Any]] = {}
-    for r in rows:
-        first.setdefault(str(r.get("doc")), r)
-    bad: list[dict[str, Any]] = []
-    for r in _excluded_covered(rows):
-        cov = (r.get("evidence") or {}).get("cover")
-        if not isinstance(cov, dict) or not cov.get("doc"):
-            continue  # a delivered exhibit or a byte-identical file covers it
-        doc = str(cov["doc"])
-        hit = by_key.get((doc, int(cov.get("page") or 0))) or first.get(doc)
-        if hit is None or str(hit.get("class") or "").startswith(WITHHELD_PREFIX) or hit.get("status") == UNREAD:
-            bad.append(r)
-    return {"count": len(bad), "docs": sorted({str(r["doc"]) for r in bad})}
+READ_STATUSES = frozenset({READ})
 
 
 def own_delivered(ident: PG.Loaded, rid: str, page: int) -> bool:

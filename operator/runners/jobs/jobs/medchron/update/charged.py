@@ -12,14 +12,13 @@ against the firm's allowance.
 
 THE RULE. A page is charged if and only if the update sent it to be read:
 its row in the per-page record (``runs/<unit>/pages.jsonl``,
-``medchron/pages_record``) has status ``read``, ``cited`` or
-``read_uncited``. So the charge and the page record cannot disagree. Not
-charged: a copy of a delivered page, a copy of another new document's page
-(the first occurrence is read and charged once; its copies are not), a
-re-filed extract, a byte-identical or skipped file, a withheld file, a blank
-or billing page set aside by code, a page excluded with its cover cited
-through it (``cited_via``), and a page that could not be read. A page read
-because no covering page was named IS charged: it was read.
+``medchron/pages_record``) has status ``read``. So the charge and the page
+record cannot disagree. Not charged: a copy of a delivered page, a copy of
+another new document's page (the first occurrence is read and charged once;
+its copies are not), a re-filed extract, a byte-identical or skipped file, a
+withheld file, a blank or billing page set aside by code, and a page that
+could not be read. A page read because no covering page was named IS
+charged: it was read.
 
 ASKED AND CHARGED. Before ``update_select`` writes the full record,
 ``update_pages`` has written every candidate page as ``read`` unless it is

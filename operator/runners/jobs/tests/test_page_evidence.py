@@ -156,8 +156,8 @@ def test_every_page_of_every_pulled_document_has_one_row() -> None:
         lambda rid: {"d2": 3, "d3": 2}.get(rid, 0),
     )
     pages = {"d1": 4, "d2": 3, "d3": 2}
-    assert len(rows) == sum(pages.values()) and PR.missing(rows, pages) == []
-    assert PR.missing(rows[1:], pages) == [(rows[0]["doc"], rows[0]["page"])]  # a dropped row is named
+    want = {(d, p) for d, n in pages.items() for p in range(1, n + 1)}
+    assert len(rows) == sum(pages.values()) and {(r["doc"], r["page"]) for r in rows} == want
     by = {(r["doc"], r["page"]): r for r in rows}
     assert by[("d1", 2)]["evidence"]["kind"] == PR.BLANK
     assert by[("d2", 1)]["evidence"]["cover"] == {"sha256": "b" * 64, "exact": True}
@@ -442,15 +442,14 @@ NOT_CHARGED = [
     PR.row("d4", "", 1, PR.EXCLUDED, "withheld_other_person", PR.IDENTITY, "update_select"),
     PR.row("d1", "", 5, PR.EXCLUDED, "blank", PR.BLANK, "update_select"),
     PR.row("d1", "", 6, PR.EXCLUDED, "billing", PR.BILLING_WORDS, "update_select"),
-    PR.row("d1", "", 7, PR.CITED_VIA, "already_delivered", PR.TEXT, "update_select", {"exhibit": 2, "page": 3}),
     PR.row("d1", "", 8, PR.UNREAD, "transcription_failed", PR.NONE, "update_select"),
     PR.row("d5", "", 1, PR.EXCLUDED, "password_protected", PR.RULE, "update_select"),
 ]
 CHARGED = [
     PR.row("d1", "", 1, PR.READ, "new", PR.NONE, "update_select"),
     PR.row("d1", "", 2, PR.READ, "new", PR.NONE, "update_select"),  # read because no cover was named
-    PR.row("d1", "", 9, PR.CITED, "new", PR.NONE, "update_select"),
-    PR.row("d1", "", 10, PR.READ_UNCITED, "unexplained", PR.NONE, "update_select"),
+    PR.row("d1", "", 9, PR.READ, "new", PR.NONE, "update_select"),
+    PR.row("d1", "", 10, PR.READ, "new", PR.NONE, "update_select"),
 ]
 
 
@@ -556,27 +555,6 @@ def test_reading_more_than_was_asked_is_charged_the_asked_figure_and_recorded(tm
     # Mutation: with no recorded question the charge is the pages read.
     (sd / "runs" / "u1" / charged.ASKED).unlink()
     assert charged.charged_pages(sd, "u1", 60) == 4 and charged.capped(sd, "u1") is None
-
-
-# ---- covers are RECORDED: counted, never acted on -----------------------------------
-
-
-def test_uncovered_exclusions_and_invalid_covers_are_counted_with_their_documents() -> None:
-    rows = [
-        PR.row("small", "", 1, PR.EXCLUDED, "repeat", PR.TEXT, "update_select", {"doc": "big", "page": 3}),
-        PR.row("small", "", 2, PR.EXCLUDED, "repeat", PR.TEXT, "update_select"),  # names no cover
-        PR.row("other", "", 1, PR.EXCLUDED, "repeat", PR.TEXT, "update_select", {"doc": "gone", "page": 1}),
-        PR.row("gone", "", 1, PR.EXCLUDED, "withheld_other_person", PR.IDENTITY, "update_select"),
-        PR.row("big", "", 3, PR.EXCLUDED, "billing", PR.BILLING_WORDS, "update_select"),  # set aside by code: valid
-        PR.row("x", "", 1, PR.EXCLUDED, "repeat", PR.TEXT, "update_select", {"doc": "rep", "page": 1}),
-        PR.row("rep", "", 1, PR.EXCLUDED, "expert_report", PR.RULE, "update_select"),  # an expert report: valid
-    ]
-    assert PR.uncovered_exclusions(rows) == {"count": 1, "docs": ["small"]}
-    assert PR.invalid_covers(rows) == {"count": 1, "docs": ["other"]}  # only the withheld cover
-    # Mutation: the withheld file's rows gone too (never pulled): still invalid; with it read: valid.
-    assert PR.invalid_covers([r for r in rows if r["doc"] != "gone"])["count"] == 1
-    read = [r for r in rows if r["doc"] != "gone"] + [PR.row("gone", "", 1, PR.READ, "new", PR.NONE, "update_select")]
-    assert PR.invalid_covers(read)["count"] == 0
 
 
 # ---- asked >= read over the update fixtures, and a damaged asked record ------------

@@ -15,7 +15,6 @@ from jobs import wording
 from jobs.medchron import config as config_mod, graded_proof as GP, job as job_mod
 from jobs.medchron.audit import claims as CL
 from jobs.medchron.update import body as B, collect as C
-from jobs.stages import upload
 from jobs.stages.base import StageRun
 
 NEW = (
@@ -125,13 +124,15 @@ def _manifest(sr: StageRun, doc: Path) -> list[dict]:
 
 
 def _prove(sr: StageRun, doc: Path) -> Path:
-    """A full run's proofs file, written with ``graded_proof.write`` as the
-    upload reads it: proof 15's findings on the chronology the review left,
-    and the filed document's sha256."""
+    """An update's proofs file where ``update_final_set.record_final`` writes
+    it and ``update_upload`` reads it (``runs/<unit>/update/proofs.json``):
+    proof 15's findings and the filed document's sha256."""
     rd = sr.slug_dir / "runs" / "alpha"
     md = (rd / "final-chronology.md").read_text()
-    GP.write(rd / GP.PROOFS, GP.codes(_check(md, _rows(md))), {"name": doc.name, "sha256": GP.file_sha(doc)})
-    return rd / GP.PROOFS
+    (rd / "update").mkdir(exist_ok=True)
+    proofs = rd / "update" / GP.PROOFS
+    GP.write(proofs, GP.codes(_check(md, _rows(md))), {"name": doc.name, "sha256": GP.file_sha(doc)})
+    return proofs
 
 
 def test_the_docx_rewritten_after_the_proof_is_recorded_at_upload(
@@ -145,7 +146,8 @@ def test_the_docx_rewritten_after_the_proof_is_recorded_at_upload(
     doc.write_bytes(b"the chronology, rewritten after the proof")
     assert GP.record_upload(proofs, _manifest(sr, doc), log.append) == GP.SHA_CHANGED
     assert GP.recorded(sr.slug_dir, "alpha")[GP.SHA_CHANGED] == 1
-    upload._record_proven(sr)  # the upload stage's own call: still recorded once, never refused
+    # A resumed upload makes the same call again: still recorded once, never refused.
+    assert GP.record_upload(proofs, _manifest(sr, doc), log.append) == GP.SHA_CHANGED
     assert GP.recorded(sr.slug_dir, "alpha")[GP.SHA_CHANGED] == 1
 
 
