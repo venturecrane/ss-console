@@ -632,6 +632,15 @@ mechanisms:
     replay: "1,120 PRs merged 2026-09-01..11-09, fetched in five half-month windows (each under the 1000-result cap): 69.7% client-surface (send-path 85, client-lane 509, seat 187, none 339). Last 50 merged: 27 client-surface, 12 with no runtime row (warning), 0 bare n/a (would block). Derived fixture, paths and booleans only: tests/fixtures/touch-map/replay.json. The no-runtime-row half stays a warning because at 81% of last week's client-surface PRs a block would produce boilerplate, not proof."
     false_alarm_owner: 'The lead of the session that owns the merge gate (wave 2 PR 1 lead); a misclassified path is fixed in touch-map.mjs with a replay fixture row in the same PR.'
     escape: 'A bare n/a is fixed by writing `n/a: <why>` in the row and editing the PR body (the check re-runs on `edited`). No label or bypass exists; a wrong classification is fixed in scripts/lib/touch-map.mjs.'
+  - id: pre-push-limits
+    file: .husky/pre-push
+    hypothesis: 'Of 24 failed CI rounds read over 2026-10-19..11-18, 10 were a size or sprawl limit (tests/operator-module-size.test.ts, tests/sprawl-ratchet.test.ts, tests/text-pin-ratchet.test.ts), each found about ten minutes into CI. Running those three in the pre-push hook (about four seconds) and first in Verify tells the author before the push, so fewer PRs fail a round.'
+    success_criterion: 'At the 2026-12-18 review, re-reading the failing step of 24 failed PR rounds from the 30 days before it: at most 3 of 24 are one of the three limit tests, against 10 of 24 read on 2026-11-18.'
+    review: 2026-12-18
+    on_failure: 'If limit failures stay above 3 of 24, the hook is not running where pushes start (a worktree with no .husky/_ runs no hook at all, as of 2026-11-18): move the three tests into the session tooling that pushes, rather than add more to the hook.'
+    replay: 'The hook, copied into the trees of three past CI failures (git archive into a scratch dir, node_modules linked), refused two at the branch tip: 9b039830 (run 44226138653, module size) and bb4fca00 (run 44190959622, sprawl concept count). The third, run 42901945452 (text pin, 68ee36fa), passes at its tip and fails only on its merge with main (merge-tree of 732c08a1 and 68ee36fa): the hook refuses that tree, so it catches a text-pin break only on a branch current with main. The clean tree of this change passes in 3.7 s.'
+    false_alarm_owner: 'The session whose push the hook refused; a limit test that is wrong is fixed in that test with a test row, never by raising a baseline.'
+    escape: 'SMD_SKIP_LIMITS=1 git push skips only the three limit tests, says so in one line, and leaves the two secret gates running; CI still runs the limits first in Verify, so nothing reaches main past them. A push that only deletes remote refs runs nothing.'
 ```
 
 ## Process decisions (2026-11-10)
@@ -686,6 +695,7 @@ Settled at the approval of the wave-2 process plan, from the open questions of t
 
 - **Client lanes on Fable.** No client lane routes to a Fable model without the Captain's decision. Fable 5.2 requires 30-day data retention for safety monitoring unless the account is zero-data-retention eligible (release notes, 2026-11-10), so a lane on it keeps a firm's matter content for 30 days. Development work in Claude Code is unaffected. A lane model table that names Fable matches the family from 5.1 on (`claude-fable-5-`), not one version, so a new version does not get a forced tool call it rejects (fixed in `operator/runners/jobs/jobs/medchron/config.py` and `demand/gapaudit.py` on 2026-11-10, after both named 5.1 only).
 - **Transcript retention.** 120 days (`cleanupPeriodDays`, user settings), so a retrospective can see a full quarter.
+- **Pipeline targets (measured 2026-10-19 to 2026-11-18).** A clean Operator PR goes from push to merged in 21 minutes at the median (28 measured). Under 20% of merged PRs have a failed CI round (27% measured). Merge to client seat, with the seat neither held nor busy, takes 40 minutes in the slow case (50 worst measured, about 16 typical). Reviewed 2026-12-18 by re-running the same 30-day measurement, when the merge queue's duplicate run and the release-lane slow cases are decided from the lead-time page. The first lever is `pre-push-limits` above.
 
 ## Closure loop
 

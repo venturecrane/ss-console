@@ -30,7 +30,7 @@ Run `.claude/bin/tier <paths the change will touch>`, adding `--new` when the wo
 
 | Tier           | What the change goes through                                                                                                             |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `none`         | An ordinary PR. Leave this skill. If the command prints `review:`, the PR still gets the bug review in Step 6.                           |
+| `none`         | An ordinary PR. Leave this skill. If the command prints `review: bug review required`, the PR still gets the bug review in Step 6. If it prints `review: this changes a check`, the PR replays a past failure the check caught and shows it still fails. |
 | `fix`          | Write the `/wired` sentence in one line and the failing case as the one example. Then Step 6: replay that example, the bug review, ship, close. No plan mode. |
 | `capability`   | Every step below.                                                                                                                        |
 
@@ -84,6 +84,7 @@ Call `ExitPlanMode`. Approved: go on. Rejected: the skill ends, and the Captain'
 
 - One $0 replay on real saved inputs through the code path the seat runs, covering the examples. Client documents are opened only in that client's ops workspace.
 - Endings no saved job shows are proven by their lifecycle-table rows.
+- A change to a check (the `review: this changes a check` line from Step 0, at any tier) replays a past failure that check caught and shows it still fails, so a protection is never lost quietly.
 - One Opus bug review of the diff: wrong results, and any risk the design named that the build does not handle (for a `fix`, that the failing case now passes and nothing beside it broke). Two reviewers when `.claude/bin/tier` shows a send path or client lane, the second on sending, rollback and money.
 - Never first on the client's seat. Never a paid proving run. What a $0 replay cannot show is listed as "watched on the first real request".
 
@@ -93,6 +94,6 @@ Call `ExitPlanMode`. Approved: go on. Rejected: the skill ends, and the Captain'
 
 **Report.** One line to the Captain at each stage: what finished, what is next, and when the next line comes. No term he has not been given. Technical and quality calls are made, not asked; he is asked only about spend, client wording and scope. Past the promised PR count, he gets one line with the new bill.
 
-**Ship.** `npm run verify`, then the PR, then merge through the queue. All code reaches the seat in one release, then the config that switches it on. Destructive actions (production data, force-push, secret rotation, dropping schema, auth changes) still need his explicit yes.
+**Ship.** `npm run verify`, then the PR, then merge through the queue: after the final push, run `gh pr merge <n> --auto`, so the PR enters the queue the moment its checks pass. Never queue in the same breath as a push that is not the last one (a push drops a queued PR), and never queue a draft. All code reaches the seat in one release, then the config that switches it on. Destructive actions (production data, force-push, secret rotation, dropping schema, auth changes) still need his explicit yes.
 
 **Close.** `npm run deadcode` is clean, so nothing new is uncalled. Every row of the `/wired` contract (for a `fix`, its one sentence) is closed against the five READY conditions, each with evidence. The closing message says what the reader can now do and what they still cannot. Then the session writes its handoff and ends; it never waits for a real request.

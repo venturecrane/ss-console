@@ -205,9 +205,11 @@ and one that broke staging; both captures are its test fixtures
 (`operator/bin/tests/test_boot_harness.py`). Candidate images for it are pushed
 to the harness app's own registry, never to `hermes-fleet`.
 
-Main merges through a **merge queue** (since 2026-10-21). A PR whose checks are
-green enters the queue (`gh pr merge <n>`, which `/ship` runs; the queue sets
-the squash itself and refuses `--squash` and `--delete-branch`); the
+Main merges through a **merge queue** (since 2026-10-21). After a PR's final
+push, `gh pr merge <n> --auto` (the queue sets the squash itself and refuses
+`--squash` and `--delete-branch`) puts it in line, and it enters the queue the
+moment its checks pass; nobody waits for green to queue it. A push drops a
+queued PR, so queue only after the last push, and never a draft. The
 queue tests it on top of main plus every PR ahead of it, with the same seven
 checks run on the `merge_group` event, running only the suites the group's
 changed paths touch (`merge_group.base_sha`), and merges it when they pass.
@@ -1320,6 +1322,6 @@ The npm scripts that bear on a deploy (full list in `package.json`):
 
 - `npm run build` - the production Astro build (`dist/client` + `dist/server`).
 - `npm run preview` - a local Worker preview via `wrangler dev`.
-- `npm run verify` - the full pre-merge gate, run by CI (the pre-push hook runs only the scrub and secret-detector tests); see
+- `npm run verify` - the full pre-merge gate, run by CI (the pre-push hook runs only the scrub and secret-detector tests and the three size and sprawl limits); see
   `/admin/playbook/building-the-platform` for exactly what it runs.
 - `npm run db:migrate:local` - apply D1 migrations against the local database.

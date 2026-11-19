@@ -1,13 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import {
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-  statSync,
-} from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, join, relative } from 'node:path'
 
@@ -71,12 +64,17 @@ const BASELINE_FILE = join(OPERATOR_DIR, 'contracts', 'operator-module-size.json
 const CEILING = 500
 
 /**
- * Directories never walked: vendored venvs, caches and build output. The seat
- * runtime (operator/hermes-smd-overlay, in-tree since the 2026-10-22 fold, ADR
- * 0095) was skipped here until 2026-11-10; it is walked like the rest, its
- * over-ceiling files recorded at that day's sizes, so none can grow.
+ * What is measured: the files git tracks, the way the sprawl ratchets read the
+ * tree (scripts/sprawl/sources.ts), never a directory walk. Until 2026-11-18
+ * this walked the working tree with a skip list, so the untracked
+ * `operator/hermes-smd-overlay/build/` a pip install leaves behind (54 of 154
+ * hook-running worktrees had one, files of thousands of lines) failed a check
+ * that the commit being tested did not contain, which mattered once the
+ * pre-push hook ran this test. Venvs, caches and build output are untracked,
+ * so no skip list is needed. The seat runtime (operator/hermes-smd-overlay,
+ * in-tree since the 2026-10-22 fold, ADR 0095) is measured like the rest, its
+ * over-ceiling files recorded at the 2026-11-10 sizes, so none can grow.
  */
-const SKIP_DIRS = new Set(['.venv', '__pycache__', 'node_modules', '.pytest_cache', '.ruff_cache'])
 
 interface Baseline {
   _comment: string
@@ -97,22 +95,18 @@ function isTestFile(relPath: string): boolean {
   return parts.includes('tests') || parts.includes('tests_e2e')
 }
 
-function walkFiles(dir: string, suffix: string, acc: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    if (SKIP_DIRS.has(entry)) continue
-    const full = join(dir, entry)
-    const st = statSync(full)
-    if (st.isDirectory()) {
-      walkFiles(full, suffix, acc)
-    } else if (entry.endsWith(suffix)) {
-      acc.push(full)
-    }
-  }
-  return acc
-}
-
-function walkPythonFiles(dir: string): string[] {
-  return walkFiles(dir, '.py')
+/** Absolute paths of the tracked files under `dir` ending in `suffix` that exist on disk. */
+function trackedFiles(dir: string, suffix: string, repoRoot = REPO_ROOT): string[] {
+  const raw = execFileSync('git', ['ls-files', '-z', '--', relative(repoRoot, dir)], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 1 << 28,
+  })
+  return raw
+    .split('\0')
+    .filter((p) => p.endsWith(suffix))
+    .map((p) => join(repoRoot, p))
+    .filter((abs) => existsSync(abs)) // tracked but deleted in this tree
 }
 
 /**
@@ -184,7 +178,7 @@ function loadBaseline(): Baseline {
 
 function measureTree(operatorDir = OPERATOR_DIR, repoRoot = REPO_ROOT): Record<string, number> {
   const measured: Record<string, number> = {}
-  for (const abs of walkPythonFiles(operatorDir)) {
+  for (const abs of trackedFiles(operatorDir, '.py', repoRoot)) {
     const rel = relative(repoRoot, abs)
     if (isTestFile(rel)) continue
     const lines = countLogicalLines(readFileSync(abs, 'utf8'))
@@ -210,7 +204,8 @@ function pythonRatchetProblems(
     if (was === undefined) {
       problems.push(
         `${path}: ${lines} logical lines, over the ${CEILING} ceiling and not in the baseline. ` +
-          `Split it, or if this is a deliberate carry-over, regenerate the baseline and say why in the PR.`
+          `Split it below the ceiling. The baseline is not a remedy: it records only files that ` +
+          `were already over, and is regenerated only after one shrinks.`
       )
     } else if (lines > was) {
       problems.push(growthProblem(path, was, lines, repoRoot))
@@ -267,6 +262,12 @@ function growthProblem(path: string, was: number, lines: number, repoRoot: strin
 
 const REGENERATE = process.env.UPDATE_OPERATOR_MODULE_SIZE_BASELINE === '1'
 
+/** Make a scratch tree a git repo with every file in it tracked. */
+function track(root: string): void {
+  execFileSync('git', ['init', '-q'], { cwd: root })
+  execFileSync('git', ['add', '-A'], { cwd: root })
+}
+
 // ---------------------------------------------------------------------------
 // Shell scripts: the same ratchet, its own counter and its own baseline.
 //
@@ -313,7 +314,7 @@ function measureShellTree(
   repoRoot = REPO_ROOT
 ): Record<string, number> {
   const measured: Record<string, number> = {}
-  for (const abs of walkFiles(operatorDir, '.sh')) {
+  for (const abs of trackedFiles(operatorDir, '.sh', repoRoot)) {
     const rel = relative(repoRoot, abs)
     if (isTestFile(rel)) continue
     const lines = countShellLogicalLines(readFileSync(abs, 'utf8'))
@@ -338,7 +339,8 @@ function ratchetProblems(
     if (was === undefined) {
       problems.push(
         `${path}: ${lines} logical lines, over the ${CEILING} ceiling and not in the baseline. ` +
-          `Split it, or if this is a deliberate carry-over, regenerate the baseline and say why in the PR.`
+          `Split it below the ceiling. The baseline is not a remedy: it records only files that ` +
+          `were already over, and is regenerated only after one shrinks.`
       )
     } else if (lines > was) {
       problems.push(
@@ -435,6 +437,7 @@ describe('operator module-size ratchet', () => {
       writeFileSync(join(shared, 'fresh.py'), body(CEILING + 1))
       mkdirSync(join(root, 'operator', 'hermes-smd-overlay', 'tests_e2e'))
       writeFileSync(join(root, 'operator', 'hermes-smd-overlay', 'tests_e2e', 'big.py'), body(900))
+      track(root)
 
       const measured = measureTree(join(root, 'operator'), root)
       expect(measured).toEqual({
@@ -448,10 +451,39 @@ describe('operator module-size ratchet', () => {
       )
       expect([...problems].sort()).toEqual([
         'operator/hermes-smd-overlay/shared/fresh.py: 501 logical lines, over the 500 ceiling and not in the baseline. ' +
-          'Split it, or if this is a deliberate carry-over, regenerate the baseline and say why in the PR.',
+          'Split it below the ceiling. The baseline is not a remedy: it records only files that ' +
+          'were already over, and is regenerated only after one shrinks.',
         'operator/hermes-smd-overlay/shared/grown.py: grew 510 -> 520 logical lines. The ratchet only tightens — ' +
           'split the module rather than raising its baseline.',
       ])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('only tracked files are measured', () => {
+  it('an untracked oversized file under the overlay build output is ignored; a tracked one fails', () => {
+    // 2026-11-18: the walk counted pip's untracked build/ copy, so a push was
+    // refused for files the commit did not hold. Prove the census skips it, and
+    // that tracking the same kind of file still fails it.
+    const root = mkdtempSync(join(tmpdir(), 'module-size-tracked-'))
+    try {
+      const body = (n: number) => Array.from({ length: n }, (_, i) => `x${i} = ${i}`).join('\n')
+      const build = join(root, 'operator', 'hermes-smd-overlay', 'build', 'lib', 'shared')
+      mkdirSync(build, { recursive: true })
+      const shared = join(root, 'operator', 'hermes-smd-overlay', 'shared')
+      mkdirSync(shared, { recursive: true })
+      writeFileSync(join(shared, 'small.py'), body(10))
+      track(root)
+      writeFileSync(join(build, 'huge.py'), body(4000)) // untracked, as pip leaves it
+      expect(measureTree(join(root, 'operator'), root)).toEqual({})
+
+      writeFileSync(join(shared, 'new_big.py'), body(CEILING + 1))
+      execFileSync('git', ['add', 'operator/hermes-smd-overlay/shared/new_big.py'], { cwd: root })
+      const measured = measureTree(join(root, 'operator'), root)
+      expect(measured).toEqual({ 'operator/hermes-smd-overlay/shared/new_big.py': CEILING + 1 })
+      expect(pythonRatchetProblems(measured, {}, root)).toHaveLength(1)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -522,6 +554,7 @@ describe('operator shell-script size ratchet', () => {
         join(dir, 'long.sh'),
         Array.from({ length: CEILING + 3 }, () => 'true').join('\n')
       )
+      track(root)
       const measured = measureShellTree(join(root, 'operator'), root)
       expect(measured).toEqual({ 'operator/hermes-smd-overlay/bootstrap/long.sh': CEILING + 3 })
       expect(ratchetProblems(measured, {}, 'regenerate')).toHaveLength(1)

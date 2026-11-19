@@ -61,10 +61,16 @@ the change deployed to production - not merely merged.
 ## What `npm run verify` actually runs
 
 `npm run verify` is the full local gate. CI runs it as the required Verify
-check on every PR and in the merge queue. The pre-push hook does not run it:
-since 2026-11-04 the hook runs only the two tests that keep a client token or a
-seat secret off the public remote (`tests/medchron-scrub.test.ts` and
-`tests/customer-yaml-secret-detector.test.ts`), in seconds. From `package.json`,
+check on every PR and in the merge queue. The pre-push hook (`.husky/pre-push`)
+does not run it. Since 2026-11-04 it runs the two tests that keep a client token
+or a seat secret off the public remote (`tests/medchron-scrub.test.ts` and
+`tests/customer-yaml-secret-detector.test.ts`), and since 2026-11-18 the three
+size and sprawl limits (`tests/operator-module-size.test.ts`,
+`tests/sprawl-ratchet.test.ts`, `tests/text-pin-ratchet.test.ts`, about four
+seconds), which were the commonest reason a PR failed a CI round. A tree with
+no `node_modules` is refused with one line saying so. `SMD_SKIP_LIMITS=1 git push`
+skips only the limits (the secret gates still run), and a push that only
+deletes remote branches runs nothing. From `package.json`,
 `verify` chains, in order, and stops on the first failure:
 
 1. `npm run typecheck` - TypeScript validation via `astro check`.
@@ -78,7 +84,9 @@ seat secret off the public remote (`tests/medchron-scrub.test.ts` and
 7. `npm run test` - the Vitest suite (`vitest run`).
 8. `npm run test:workers` - each sub-worker's own Vitest suite.
 
-CI mirrors this. `verify.yml` runs Typecheck, Typecheck Workers, Format check,
+CI mirrors this. `verify.yml` installs dependencies (retried once, for a registry
+fetch that fails), runs the same three size and sprawl limits first so a broken
+limit fails in about a minute, then Typecheck, Typecheck Workers, Format check,
 Lint, Dead code, Build, a check that the bundle carries no inlined secret, Test,
 then Test Workers, then a dry-run wrangler build of each
 sub-worker. Two steps in that file carry scars worth knowing: the workflow runs
