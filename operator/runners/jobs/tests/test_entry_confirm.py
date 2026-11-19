@@ -42,20 +42,34 @@ def test_a_value_finding_proposes_the_whole_line_with_its_citation_byte_for_byte
 
 def test_a_quote_not_once_in_its_line_is_recorded() -> None:
     n1 = units()[1]
-    f = found(n1, quote="a")  # "a" occurs more than once in S1
+    f = found(n1, line="S1", quote="a")  # "a" occurs more than once in S1
     assert EC.propose(f, n1) == EC.QUOTE_NOT_ONCE
     f2 = found(n1, quote="pulse was 72", replacement="pulse was 78 (Exhibit 1 - p. 3)")  # carries a citation
     assert EC.propose(f2, n1) == EC.QUOTE_NOT_ONCE
 
 
-def test_a_pointer_swaps_the_lines_one_citation_and_a_multi_page_one_is_recorded() -> None:
+def test_a_pointer_is_always_recorded_without_a_verify() -> None:
+    """Round 5: moving the one trailing citation of a paragraph moves it for
+    every sentence it covers, so a pointer finding is never applied."""
     n1 = units()[1]
     f = found(n1, **{"class": "pointer", "page": 3, "quote": "pulse was 72", "replacement": "(Exhibit 1 - p. 3)"})
-    assert EC.propose(f, n1).edit.new.endswith("at triage. (Exhibit 1 - p. 3)")
-    multi = E1.replace("(Exhibit 1 - p. 4)", "(Exhibit 1 - p. 3-4)")
-    m1 = units(doc([multi, E2]))[1]
-    fm = found(m1, **{"class": "pointer", "page": 5, "quote": "pulse was 72"})
-    assert EC.propose(fm, m1) == EC.POINTER_MULTI
+    assert EC.propose(f, n1) == EC.POINTER_RECORDED and not hasattr(EC, "POINTER_MULTI")
+
+
+def test_a_header_line_is_never_edited() -> None:
+    n1 = units()[1]
+    for klass in ("value", "wrong_field", "unsupported"):
+        f = found(n1, **{"class": klass, "line": "D", "quote": "01/05/2025", "replacement": "1/5/2025"})
+        assert EC.propose(f, n1) == EC.HEADER_LINE
+    p = found(n1, **{"class": "value", "line": "P", "quote": "Example Clinic", "replacement": "Sample Clinic"})
+    assert EC.propose(p, n1) == EC.HEADER_LINE
+
+
+def test_a_splice_that_drops_the_closing_period_keeps_it() -> None:
+    n1 = units()[1]
+    p = proposal(n1, quote="pulse was 72 at triage.", replacement="pulse was 78 at triage")
+    assert p.edit.new == "Blood pressure was 128/84 and pulse was 78 at triage. (Exhibit 1 - p. 4)"
+    assert ER.EL.line_sentences(p.edit.new) == [p.edit.new]
 
 
 def test_record_classes_and_the_prior_history_are_recorded_without_a_verify() -> None:
@@ -127,7 +141,10 @@ def test_only_a_wrong_line_with_a_supported_sentence_on_a_shown_page_applies() -
     assert EC.decide(p, YES) == ("apply", p.edit)
     assert EC.decide(p, EC.Verify(False, True, 1, 4)) == ("record", EC.NOT_WRONG)
     assert EC.decide(p, EC.Verify(True, False, 1, 4)) == ("record", EC.NOT_SUPPORTED)
-    assert EC.decide(p, EC.Verify(True, True, 2, 1)) == ("record", EC.NOT_SUPPORTED)  # a page it was not shown
+    assert EC.decide(p, EC.Verify(True, True, 2, 1)) == ("record", EC.PAGE_NOT_CITED)
+    assert EC.decide(p, EC.Verify(True, True, 1, 5)) == ("record", EC.PAGE_NOT_CITED)  # a neighbour page, shown
+    p.shown = [(1, 3), (1, 5)]  # the line's own page had no picture
+    assert EC.decide(p, YES) == ("record", EC.NOT_SUPPORTED)
     assert EC.decide(p, None) == ("record", EC.VERIFY_UNPARSED)
 
 

@@ -155,7 +155,7 @@ def test_a_wrong_value_is_corrected_on_a_yes_yes_verify_with_one_write(scene, mo
     [
         ({**YES, "original_wrong": False}, EC.NOT_WRONG),
         ({**YES, "corrected_supported": False}, EC.NOT_SUPPORTED),
-        ({**YES, "page": {"exhibit": 1, "page": 6}}, EC.NOT_SUPPORTED),  # a page it was not shown
+        ({**YES, "page": {"exhibit": 1, "page": 1}}, EC.PAGE_NOT_CITED),  # a neighbour page the line does not cite
         ({"verdict": "yes"}, EC.VERIFY_UNPARSED),
     ],
 )
@@ -481,3 +481,131 @@ def test_a_redone_audit_reopens_render_manifest_and_review(tmp_path: Path) -> No
         st.finish(name, status="done", exit_code=0, dollars=0.0, pages=0)
     st.invalidate(list(row.invalidates))
     assert {st.stage(n).status for n in ("render", "manifest", "review")} == {"pending"}
+
+
+# ---- round 5 (2026-11-18) -------------------------------------------------------------
+#: The read and verify requests of the scene, hashed before round 5: a proof
+#: run's saved replies are keyed by these, so round 5 must not move them.
+PINNED = {
+    "N1": "dbc7672478f25ace447433ed8fb723c0d1fc5670092575cd4a669f41b2dca584",
+    "N2": "807304ee0d81545a497cc9a6d0a17bf190293cc41a6719340debe90ac7b4fec2",
+    "verify-value": "a1d9cf58c0ca8304b36bc1c43c0dcc6eed981b784872538ec555cd927fcf7345",
+    "verify-omitted": "bfa77562dfd6bbc6de9290ff958f9cccdda03862140d64b1541096931fe8b132",
+}
+
+
+def test_read_and_verify_requests_are_unchanged_by_round_5(scene) -> None:
+    from jobs.medchron.page_mode import Modes
+    from jobs.stages import update_review as UR
+    from jobs.stages.update_review_io import _image_source
+
+    sr, _d, _l = scene(None)
+    pl = IO.plan(sr.slug_dir, "alpha", sr.cfg, DOC)
+    modes = Modes.open(sr.slug_dir, "alpha")
+    got = {}
+    for u in pl.units:
+        s, c = ER.request(u, sr.cfg, UR._client(sr), _image_source(sr), modes)
+        got[u.key] = IO.request_hash(IO.model(sr.cfg), s, c)
+    modes.close()
+    n1 = next(u for u in pl.units if u.anchor == "N1")
+    for f in ER.parse(_reply(VALUE, OMITTED), n1).findings:
+        s, c = EC.verify_request(EC.propose(f, n1), sr.cfg, UR._client(sr), _image_source(sr))
+        got[f"verify-{f.klass}"] = IO.request_hash(IO.model(sr.cfg), s, c)
+    assert got == PINNED
+
+
+def _page_of_proposal(text: str) -> dict[str, Any]:
+    """A verify that says yes on the page the proposed sentence (or the line) cites."""
+    tail = text.split("PROPOSED", 1)[-1]
+    m = re.findall(r"\(Exhibit (\d+) - p\. (\d+)", tail) or re.findall(r"\(Exhibit (\d+) - p\. (\d+)", text)
+    return {**YES, "page": {"exhibit": int(m[-1][0]), "page": int(m[-1][1])}}
+
+
+def test_a_pointer_is_recorded_and_never_verified(scene) -> None:
+    ptr = {**VALUE, "class": "pointer", "page": 3, "replacement": "(Exhibit 1 - p. 3)"}
+    client = Client(lambda t: _reply(ptr) if "ENTRY N1" in t else _reply())
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == 0, log
+    assert "verify" not in client.calls and doc.read_text(encoding="utf-8") == DOC
+    assert _record(sr)["recorded_by_reason"] == {EC.POINTER_RECORDED: 1}
+
+
+def test_a_date_line_swap_is_recorded_and_the_entries_stay(scene) -> None:
+    redate = {**VALUE, "line": "D", "quote": "01/05/2025", "replacement": "1/5/2025"}
+    client = Client(lambda t: _reply(redate) if "ENTRY N1" in t else _reply())
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == 0, log
+    out = doc.read_text(encoding="utf-8")
+    assert out == DOC and len(ER.B.entries_of(out)[1]) == 2
+    assert _record(sr)["recorded_by_reason"] == {EC.HEADER_LINE: 1}
+
+
+def test_a_swap_that_drops_the_period_is_applied_with_the_period(scene) -> None:
+    drop = {**VALUE, "quote": "pulse was 72 at triage during the visit.", "replacement": "pulse was 78 at triage"}
+    sr, doc, log = scene(Client(lambda t: _reply(drop) if "ENTRY N1" in t else _reply()))
+    assert EA.run(sr) == 0, log
+    out = doc.read_text(encoding="utf-8")
+    assert "The pulse was 78 at triage. (Exhibit 1 - p. 2)" in out and _sentences(out) == _sentences(DOC)
+
+
+def test_one_bad_edit_among_three_is_reverted_and_the_other_two_apply(scene, monkeypatch) -> None:
+    monkeypatch.setattr(ER, "EDIT_SHARE", 0.5)
+    bad = {"line": "S3", "class": "omitted", "exhibit": 1, "page": 5, "quote": "number c was",
+           "action": "add", "replacement": "6/10 (morning) gait was steady and even. (Exhibit 1 - p. 5)"}  # fmt: skip
+
+    def read(t: str) -> str:
+        return _reply(VALUE, OMITTED) if "ENTRY N1" in t else _reply(bad)
+
+    sr, doc, log = scene(Client(read, _page_of_proposal))
+    assert EA.run(sr) == 0, log
+    out = doc.read_text(encoding="utf-8")
+    assert "pulse was 78" in out and f"\n\n{ADD}" in out and "6/10 (morning)" not in out
+    rec = _record(sr)
+    assert rec["applied"] == 2 and rec["recorded_by_reason"] == {AP.BREAKS_STRUCTURE: 1}
+    assert rec["breaks_structure_by_invariant"] in ({"a": 1}, {"b": 1})
+    assert len(ER.B.entries_of(out)[1]) == 2 and ER.B.entries_of(out)[1][1] == E2
+
+
+def test_each_invariant_can_fail() -> None:
+    e = EC.Edit("swap", "N1", "x", "Gait was steady. (Exhibit 1 - p. 2)")
+    swapped = DOC.replace("The pulse was 72 at triage during the visit. (Exhibit 1 - p. 2)", e.new)
+    assert AP.broken(DOC, swapped, e) == ""
+    assert AP.broken(DOC, DOC.replace("01/05/2025\n", "01/06/2025\n"), e) == "a"
+    two = EC.Edit("swap", "N1", "x", "One. Two. (Exhibit 1 - p. 2)")
+    assert AP.broken(DOC, DOC.replace("The pulse was 72 at triage during the visit. ", ""), two) == "b"
+    both = DOC.replace("Therapy twice", "Therapy thrice").replace("Home exercise number a", "Home exercise number z")
+    assert AP.broken(DOC, both, e) == "c"
+    moved = DOC.replace("during the visit. (Exhibit 1 - p. 2)", "during the visit. (Exhibit 1 - p. 3)")
+    assert AP.broken(DOC, moved, e) == "d"
+    prov = EC.Edit("swap", "N1", "x", "Seen at | Other Clinic now. (Exhibit 1 - p. 2)")
+    assert (
+        AP.broken(DOC, DOC.replace("The pulse was 72 at triage during the visit.", "Seen at | Other Clinic now."), prov)
+        == "e"
+    )
+
+
+def test_two_adds_after_one_paragraph_keep_document_order() -> None:
+    line = "The pulse was 72 at triage during the visit. (Exhibit 1 - p. 2)"
+    first = EC.Edit("add", "N1", line, "First added sentence about the visit. (Exhibit 1 - p. 2)")
+    second = EC.Edit("add", "N1", line, "Second added sentence about the visit. (Exhibit 1 - p. 2)")
+    out, broke = AP.edit_document(DOC, [first, second])
+    assert (
+        not broke and out.index(first.new) < out.index(second.new) and f"{line}\n\n{first.new}\n\n{second.new}" in out
+    )
+
+
+def test_a_verify_with_no_picture_is_never_sent(scene, monkeypatch) -> None:
+    monkeypatch.setattr(EA, "_image_source", lambda _sr: lambda _x, _p: None)
+    client = Client()
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == 0, log
+    assert "verify" not in client.calls and _record(sr)["recorded_by_reason"].get(EC.NO_PICTURE) == 1
+
+
+def test_a_unit_whose_every_sentence_is_unreadable_is_counted(scene) -> None:
+    dark = {"D": "ok", "P": "ok", **{f"S{i}": "unreadable" for i in range(1, 15)}}
+    client = Client(lambda t: json.dumps({"lines": dark, "findings": [], "complete": True}) if "ENTRY N2" in t
+                    else _reply())  # fmt: skip
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == 0, log
+    assert _record(sr)["units_all_unreadable"] == 1

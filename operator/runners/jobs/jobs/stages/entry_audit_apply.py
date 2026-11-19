@@ -12,8 +12,12 @@ hand (``drops.json`` citation_edits) is ``smd_authored``.
 APPLY. A swap replaces the whole labelled line in its entry. An add is its
 own paragraph (a blank line before and after) right after the paragraph
 holding its line, so no paragraph already in the entry changes by a byte.
-Nothing is removed; the document is written once, only when it has no fewer
-sentences.
+Edits are made one at a time on a copy, in document order; each is checked
+against the text before it (``broken``: the same entries and header lines,
+no fewer sentences, no other paragraph changed, the same closing citation,
+no new date or provider line) and an edit that fails is reverted alone and
+recorded ``breaks_structure`` (round 5, 2026-11-18). Nothing is removed; the
+document is written once.
 
 THE TRIPWIRE AND ITS RELEASE. More applied edits than ``entry_read.EDIT_SHARE``
 of the document's sentences holds the job with the document untouched. SMD
@@ -30,16 +34,18 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from ..medchron.audit import authored, claims as CL
-from ..medchron.update import body as B, entry_confirm as EC, entry_read as ER
+from ..medchron.update import body as B, entry_confirm as EC, entry_lines as EL, entry_read as ER
 from . import entry_audit_io as IO
 from .base import StageRun, read_json
 
 SMD_AUTHORED = "smd_authored"
 FAILED = object()  # the verify was refused twice
+NO_PICTURE = object()  # no page of the verify had a picture: never sent
 Item = tuple[str, ER.Unit, ER.ReadFinding]
 
 
@@ -89,6 +95,8 @@ def decide(proposals: list[EC.Proposal | str], verifies: list[Any]) -> list[EC.D
             out.append(("record", p))
         elif v is FAILED:
             out.append(("record", EC.VERIFY_FAILED))
+        elif v is NO_PICTURE:
+            out.append(("record", EC.NO_PICTURE))
         else:
             out.append(EC.decide(p, v))
     return out
@@ -115,8 +123,10 @@ def release(sr: StageRun, sha: str) -> dict[str, str] | None:
     return rel
 
 
-def _edit_entry(text: str, e: EC.Edit) -> str | None:
-    """The entry with one edit made, or None when its line is not there once."""
+def _edit_entry(text: str, e: EC.Edit, added: list[str]) -> str | None:
+    """The entry with one edit made, or None when its line is not there
+    once. An add goes after its line's paragraph and after any sentence
+    already added there, so adds keep document order."""
     if text.count(e.line) != 1:
         return None
     if e.kind == "swap":
@@ -125,50 +135,113 @@ def _edit_entry(text: str, e: EC.Edit) -> str | None:
     at = [i for i, p in enumerate(paras) if e.line in p]
     if len(at) != 1:
         return None
-    return "\n\n".join(paras[: at[0] + 1] + [e.new] + paras[at[0] + 1 :])
+    k = at[0] + 1
+    while k < len(paras) and paras[k] in added:
+        k += 1
+    return "\n\n".join(paras[:k] + [e.new] + paras[k:])
 
 
-def edit_document(md: str, edits: list[EC.Edit]) -> str:
-    """Every edit made in its entry; each edit's ``outcome`` says how."""
-    for e in edits:
+#: A line the entry parser reads as an entry's date line, or as a provider line.
+_PROVIDER = re.compile(r"\S\s+\|\s+\S")
+
+
+def _heads(md: str) -> list[tuple[str, ...]]:
+    return [tuple(e.split("\n")[:2]) for e in B.entries_of(md)[1]]
+
+
+def _sentences(text: str) -> int:
+    return sum(len(EL.line_sentences(ln)) for ln in text.split("\n"))
+
+
+def _last_cite(text: str) -> str:
+    got = [m.group() for m in CL.CITE.finditer(text)]
+    return got[-1] if got else ""
+
+
+def broken(before: str, after: str, e: EC.Edit) -> str:
+    """'' when the edit kept the document's shape, else the invariant it
+    broke: (a) the same entries with the same date and provider lines; (b)
+    no fewer sentences, an add exactly its own; (c) no other paragraph
+    changed; (d) a swapped paragraph ends with its old citation; (e) no new
+    line reads as a date or provider line."""
+    if _heads(after) != _heads(before):
+        return "a"
+    n = _sentences(e.new)
+    gain = ER.count_sentences(CL.body_of(after)) - ER.count_sentences(CL.body_of(before))
+    if gain < 0 or (e.kind == "add" and (n < 1 or gain != n)):
+        return "b"
+    pb, pa = before.split("\n\n"), after.split("\n\n")
+    if e.kind == "add":
+        if len(pa) != len(pb) + 1 or e.new not in pa or [p for p in pa if p != e.new] != pb:
+            return "c"
+    else:
+        diff = [i for i in range(max(len(pa), len(pb))) if i >= len(pa) or i >= len(pb) or pa[i] != pb[i]]
+        if len(pa) != len(pb) or len(diff) != 1:
+            return "c"
+        if _last_cite(pa[diff[0]]) != _last_cite(pb[diff[0]]):
+            return "d"
+    if any(B.HEAD.match(ln.strip()) or _PROVIDER.search(ln) for ln in e.new.split("\n")):
+        return "e"
+    return ""
+
+
+def _order(md: str, e: EC.Edit) -> tuple[int, int]:
+    ents = B.entries_of(md)[1]
+    k = int(e.anchor[1:]) - 1 if e.anchor[1:].isdigit() else len(ents)
+    return k, ents[k].find(e.line) if k < len(ents) else 0
+
+
+def edit_document(md: str, edits: list[EC.Edit]) -> tuple[str, Counter]:
+    """Each edit made one at a time on a copy, in document order, and kept
+    only when ``broken`` finds nothing; a reverted one is recorded
+    ``breaks_structure``. Returns the text and the broken invariants."""
+    broke: Counter = Counter()
+    added: dict[str, list[str]] = {}
+    for e in sorted(edits, key=lambda x: _order(md, x)):
         _pre, ents = B.entries_of(md)
         k = int(e.anchor[1:]) - 1 if e.anchor[1:].isdigit() else -1
-        new = _edit_entry(ents[k], e) if 0 <= k < len(ents) and md.count(ents[k]) == 1 else None
+        mine = added.setdefault(e.anchor, [])
+        new = _edit_entry(ents[k], e, mine) if 0 <= k < len(ents) and md.count(ents[k]) == 1 else None
         if new is None:
-            e.outcome = QUOTE_LOST
+            e.outcome = EC.QUOTE_NOT_ONCE
             continue
-        md = md.replace(ents[k], new, 1)
-        e.outcome = "applied"
-    return md
+        after = md.replace(ents[k], new, 1)
+        why = broken(md, after, e)
+        if why:
+            e.outcome = BREAKS_STRUCTURE
+            broke[why] += 1
+            continue
+        md, e.outcome = after, "applied"
+        if e.kind == "add":
+            mine.append(e.new)
+    return md, broke
 
 
-QUOTE_LOST = EC.QUOTE_NOT_ONCE
+BREAKS_STRUCTURE = "breaks_structure"
 
 
-def apply(sr: StageRun, doc: Path, md: str, decisions: list[EC.Decision]) -> tuple[str, dict[str, str] | None]:
-    """('', SMD's release when one was used) when the edits were applied (or
-    none were due), else (why held, None) with the document untouched.
-    Writes the document once."""
+def apply(sr: StageRun, doc: Path, md: str, decisions: list[EC.Decision]) -> tuple[str, dict[str, str] | None, Counter]:
+    """('', SMD's release when one was used, invariants broken) when the
+    surviving edits were written (or none were due), else (why held, None,
+    ...) with the document untouched. Writes the document once."""
     edits = [d[1] for d in decisions if d[0] == "apply"]
+    new, broke = edit_document(md, edits)
+    kept = [e for e in edits if e.outcome == "applied"]
     before = ER.count_sentences(CL.body_of(md))
     rel = None
-    if ER.over_share(len(edits), before):
+    if ER.over_share(len(kept), before):
         sha = doc_sha(md)
-        why = f"tripwire: {len(edits)} edits on {before} sentences (more than {ER.EDIT_SHARE:.0%}); doc_sha {sha}"
+        why = f"tripwire: {len(kept)} edits on {before} sentences (more than {ER.EDIT_SHARE:.0%}); doc_sha {sha}"
         rel = release(sr, sha)
         if rel is None:
-            return why, None
+            for e in kept:
+                e.outcome = "not applied: the run held at the tripwire"
+            return why, None, broke
         sr.log(f"entry read: {why}; released by {rel['by']} ({rel['why'][:200]})")
-    new = edit_document(md, edits)
-    after = ER.count_sentences(CL.body_of(new))
-    if after < before:
-        for e in edits:
-            e.outcome = "not written: the edits together removed sentences" if e.outcome == "applied" else e.outcome
-        return f"the edits removed sentences ({before} -> {after})", None
     if new != md:
         doc.write_text(new, encoding="utf-8")
         sync_entries(sr, md, new)
-    return "", rel
+    return "", rel, broke
 
 
 def sync_entries(sr: StageRun, md: str, new: str) -> None:
@@ -207,7 +280,14 @@ def _rows(reads: list[IO.Read], items: list[Item], decisions: list[EC.Decision])
     return list(by.values())
 
 
-LINE_COUNTS = ("lines_ok", "lines_problem", "lines_unreadable", "problem_without_finding", "omitted_over_cap")
+LINE_COUNTS = (
+    "lines_ok",
+    "lines_problem",
+    "lines_unreadable",
+    "problem_without_finding",
+    "omitted_over_cap",
+    "units_all_unreadable",
+)
 
 
 def _line_counts(parsed: list[ER.Parsed]) -> dict[str, int]:
@@ -221,11 +301,14 @@ def _line_counts(parsed: list[ER.Parsed]) -> dict[str, int]:
     out = {f"lines_{v}": sum(1 for x in merged.values() if x == v) for v in ("ok", "problem", "unreadable")}
     out["problem_without_finding"] = sum(p.problem_without_finding for p in parsed)
     out["omitted_over_cap"] = sum(p.omitted_over_cap for p in parsed)
+    s_lines = [v for lb, v in merged.items() if lb.startswith("S")]
+    out["units_all_unreadable"] = int(bool(s_lines) and all(v == "unreadable" for v in s_lines))  # still read
     return out
 
 
 def record(sr: StageRun, ask: IO.Asker, doc: Path, pl: IO.Plan, reads: list[IO.Read], decisions: list,
-           items: Any = (), held: str = "", released: dict[str, str] | None = None) -> None:  # fmt: skip
+           items: Any = (), held: str = "", released: dict[str, str] | None = None,
+           broke: Counter | None = None) -> None:  # fmt: skip
     rows = _rows(reads, list(items), decisions)
     rec = EC.summary(pl.units, [p for r in reads for _n, _u, p in r.got], decisions, pl.gaps)
     rec |= {
@@ -242,5 +325,6 @@ def record(sr: StageRun, ask: IO.Asker, doc: Path, pl: IO.Plan, reads: list[IO.R
     }
     if released is not None:
         rec["tripwire_release"] = released
+    rec["breaks_structure_by_invariant"] = dict(broke or {})
     p = sr.slug_dir / "runs" / sr.unit.unit / IO.RECORD
     p.write_text(json.dumps(rec, indent=1), encoding="utf-8")

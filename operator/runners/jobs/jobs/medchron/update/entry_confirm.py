@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..audit import claims as CL
@@ -44,11 +44,16 @@ NOT_WRONG, NOT_SUPPORTED, VERIFY_FAILED, VERIFY_UNPARSED = (
     "verify_failed",
     "verify_unparsed",
 )
-QUOTE_NOT_ONCE, SAME_LINE, ADD_ON_HEADER, POINTER_MULTI = (
-    "quote_not_once",
-    "same_line",
-    "add_on_header",
-    "pointer_multi",
+QUOTE_NOT_ONCE, SAME_LINE, ADD_ON_HEADER = "quote_not_once", "same_line", "add_on_header"
+#: Round 5: a pointer is never applied (moving a paragraph's one trailing
+#: citation moves it for every sentence it covers); a [D] or [P] line is never
+#: edited; the verify's page must be one the line cites; a verify with no
+#: picture to look at is never sent.
+POINTER_RECORDED, HEADER_LINE, PAGE_NOT_CITED, NO_PICTURE = (
+    "pointer_recorded",
+    "header_line",
+    "page_not_cited",
+    "no_picture",
 )
 CODES_IN_INDEX, DUPLICATE_ADD, PARTIAL_VIEW = "codes_in_index", "duplicate_add", "partial_view"
 RECORD_ONLY_CLASS, PRIOR_HISTORY, ADD_CITATION = "record_only_class", "prior_history", "add_citation"
@@ -74,6 +79,7 @@ class Proposal:
     finding: ReadFinding
     unit: Unit
     edit: Edit
+    shown: list[tuple[int, int]] = field(default_factory=list)  # the pages its verify showed as pictures
 
 
 @dataclass
@@ -98,18 +104,31 @@ def _line_pages(line: str, unit: Unit) -> set[tuple[int, int]]:
     return {(hit[0].exhibit, p) for p in hit[0].pages} if len(hit) == 1 else set()
 
 
+_TAIL = re.compile(r"(?:\s*" + CL.CITE.pattern + r")+\s*$")
+
+
+def _split_tail(s: str) -> tuple[str, str]:
+    """(the sentence, its trailing citations with the space before them)."""
+    m = _TAIL.search(s)
+    return (s[: m.start()], s[m.start() :]) if m else (s, "")
+
+
 def _swap(f: ReadFinding, line: str) -> str:
-    if f.klass == "pointer":
-        own = list(CL.CITE.finditer(line))
-        pages = CL.parse_pages(own[0].group(2)) or [] if len(own) == 1 else []
-        if len(pages) != 1 or (int(own[0].group(1)), pages[0]) == (f.exhibit, f.page):
-            return POINTER_MULTI
-        return f"{line[: own[0].start()]}(Exhibit {f.exhibit} - p. {f.page}){line[own[0].end() :]}"
+    """The line with the reader's replacement over its quote, citations kept
+    byte for byte, and the line's closing . ! or ? kept when the splice
+    dropped it (round 5)."""
     if line.count(f.quote) != 1 or not f.replacement.strip() or CL.CITE.search(f.replacement):
         return QUOTE_NOT_ONCE
     new = line.replace(f.quote, f.replacement, 1)
     cites = [m.group() for m in CL.CITE.finditer(line)]
-    return new if [m.group() for m in CL.CITE.finditer(new)] == cites else QUOTE_NOT_ONCE
+    if [m.group() for m in CL.CITE.finditer(new)] != cites:
+        return QUOTE_NOT_ONCE
+    old_body, _ = _split_tail(line)
+    body, tail = _split_tail(new)
+    mark = old_body.rstrip()[-1:]
+    if mark in (".", "!", "?") and body.strip() and body.rstrip()[-1:] not in (".", "!", "?"):
+        new = body.rstrip() + mark + tail
+    return new
 
 
 def _add(f: ReadFinding, unit: Unit) -> str:
@@ -131,13 +150,17 @@ def propose(f: ReadFinding, unit: Unit) -> Proposal | str:
         return PRIOR_HISTORY
     if f.klass in RECORD_CLASSES:
         return RECORD_ONLY_CLASS
+    if f.klass == "pointer":
+        return POINTER_RECORDED
+    if f.line in ("D", "P") and f.klass != "omitted":
+        return HEADER_LINE
     line = unit.lines.get(f.line, "")
     if not line or unit.text.count(line) != 1:
         return QUOTE_NOT_ONCE
     if unit.sub and _line_pages(line, unit) - set(unit.pages):
         return PARTIAL_VIEW  # a one-page read cannot judge a line that cites more
     new = _add(f, unit) if f.klass == "omitted" else _swap(f, line)
-    if new in (ADD_ON_HEADER, CODES_IN_INDEX, ADD_CITATION, POINTER_MULTI, QUOTE_NOT_ONCE):
+    if new in (ADD_ON_HEADER, CODES_IN_INDEX, ADD_CITATION, QUOTE_NOT_ONCE):
         return new
     return Proposal(f, unit, Edit("add" if f.klass == "omitted" else "swap", unit.anchor, line, new))
 
@@ -168,9 +191,22 @@ def verify_request(p: Proposal, cfg: Any, client: str, images: Images) -> tuple[
         )
     )
     out: list[dict[str, Any]] = [{"type": "text", "text": client}, {"type": "text", "text": asked}]
+    p.shown = []
     for ex, pg in verify_pages(p):
-        out += RV.page_blocks(ex, pg, "", images, None)
+        blocks = RV.page_blocks(ex, pg, "", images, None)
+        if any(b.get("type") == "image" for b in blocks):  # a page with no picture is not shown
+            p.shown.append((ex, pg))
+        out += blocks
     return load(PROMPT, cfg), out
+
+
+def cited_pages(p: Proposal) -> set[tuple[int, int]]:
+    """The pages a verify may settle a proposal on: those the swapped line
+    cites (its paragraph's when it has no citation of its own), or those the
+    added sentence's own citation names."""
+    if p.edit.kind == "add":
+        return {(int(m.group(1)), q) for m in CL.CITE.finditer(p.edit.new) for q in CL.parse_pages(m.group(2)) or []}
+    return _line_pages(p.edit.line, p.unit)
 
 
 def _flag(v: object) -> bool | None:
@@ -199,12 +235,17 @@ def parse_verify(reply: str) -> Verify | None:
 
 def decide(p: Proposal, v: Verify | None) -> Decision:
     """Apply only on a verify that finds the line wrong, the proposed
-    sentence supported, and names a page it was shown."""
+    sentence supported, and names a page the line cites (``cited_pages``)
+    that it was shown."""
     if v is None:
         return ("record", VERIFY_UNPARSED)
     if not v.original_wrong:
         return ("record", NOT_WRONG)
-    if not v.corrected_supported or (v.exhibit, v.page) not in verify_pages(p):
+    if not v.corrected_supported:
+        return ("record", NOT_SUPPORTED)
+    if (v.exhibit, v.page) not in cited_pages(p):
+        return ("record", PAGE_NOT_CITED)
+    if (v.exhibit, v.page) not in (p.shown or verify_pages(p)):
         return ("record", NOT_SUPPORTED)
     return ("apply", p.edit)
 
@@ -219,7 +260,14 @@ def summary(units: list[Unit], parsed: list[Parsed], decisions: list[Decision], 
         "dropped": dict(sum((p.dropped for p in parsed), Counter())),
         "over_cap": sum(p.over_cap for p in parsed),
         "decided": len(decisions),
-        "recorded_by_reason": dict(Counter(d[1] for d in decisions if d[0] == "record")),
+        # an applying decision the write reverted (``breaks_structure``) is recorded too
+        "recorded_by_reason": dict(
+            Counter(
+                d[1] if d[0] == "record" else d[1].outcome
+                for d in decisions
+                if d[0] == "record" or d[1].outcome not in ("applied", "")
+            )  # fmt: skip
+        ),
         "gaps_codes": sum(1 for g in gl if g.kind == "codes"),
         "gaps_no_entry": sum(1 for g in gl if g.kind == "no_entry"),
     }

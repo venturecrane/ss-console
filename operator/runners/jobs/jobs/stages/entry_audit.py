@@ -33,9 +33,10 @@ replaced three rounds of token rules), and leaves every decision to code:
 7. TRIPWIRE: more applied edits than ``entry_read.EDIT_SHARE`` of the
    document's sentences holds the job with the document untouched, unless
    SMD wrote a release (``entry_audit_apply``'s docstring).
-8. APPLY once: a whole labelled line swapped, or a new paragraph added after
-   the paragraph holding its line. The document is written only when it has
-   no fewer sentences.
+8. APPLY: a whole labelled line swapped, or a new paragraph added after the
+   paragraph holding its line, one edit at a time on a copy; an edit that
+   breaks the document's shape is reverted alone (``breaks_structure``,
+   round 5) and the rest go on. The document is written once.
 9. RECORD ``runs/<unit>/entry_read.json``: counts and per-unit rows with a
    reason code for each recorded finding, never the document's text.
 
@@ -145,8 +146,8 @@ def _run(c: Ctx, doc: Path, md: str, pl: IO.Plan) -> int:
     if c.ask.pending:
         return _pending(c, "verify")
     decisions = AP.decide(proposals, verifies)
-    held, released = AP.apply(sr, doc, md, decisions)
-    AP.record(sr, c.ask, doc, pl, reads, decisions, items, held=held, released=released)
+    held, released, broke = AP.apply(sr, doc, md, decisions)
+    AP.record(sr, c.ask, doc, pl, reads, decisions, items, held=held, released=released, broke=broke)
     if held:
         sr.log(f"entry read HELD: {held}; the document is unchanged")
         return EXIT_HELD
@@ -309,6 +310,8 @@ def _verify(c: Ctx, name: str, p: EC.Proposal | str) -> Any:
     if not isinstance(p, EC.Proposal):
         return None
     system, content = EC.verify_request(p, c.sr.cfg, c.client, c.images)
+    if not p.shown:
+        return AP.NO_PICTURE  # a verify with no page to look at is never sent
     ok: IO.Valid = lambda t: EC.parse_verify(t) is not None  # noqa: E731
     for attempt in (1, 2):
         text = c.ask.peek(name, f"verify{attempt}", system, content, ok)
