@@ -146,6 +146,8 @@ NOT_APPLICABLE: dict[str, str] = {
         "(workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch"
         for ev in ("cap_hold", "deploy_stop", "machine_stop", "upload_readback_mismatch")
     },
+    "running/exit.run.audit.9": "the entry audit's answers-pending exit is reached only under its $0 replay switch "
+    "(ENTRY_AUDIT_REPLAY=1, read only by stages/entry_audit_io.replaying), which no seat run sets",
 }
 
 
@@ -302,7 +304,10 @@ def teardown(life: Life) -> None:
 # Reaching a state
 # ---------------------------------------------------------------------------
 
-AUDIT_HOLD = "audit coverage: two entries still need a verdict"
+#: The full chronology's audit holds when an entry could not be read against
+#: its cited pages, or the corrections passed the edit tripwire
+#: (``stages/entry_audit``, 2026-11-18; it was the per-claim coverage gate).
+AUDIT_HOLD = "audit coverage: entry N2 was not read against its pages"
 
 
 def reach(life: Life, state: str) -> str:

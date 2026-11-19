@@ -46,6 +46,14 @@ def claims_to_verify(slug_dir: Path, unit: str) -> int | None:
     return sum(1 for c in claims if c["key"] not in verified)
 
 
+def entry_audit_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:
+    """The full chronology's entry read (``stages/entry_audit``): the entries
+    not yet read, each read and confirmed, priced at the judgment tier."""
+    from ..stages import entry_audit_io
+
+    return entry_audit_io.projected_usd(slug_dir, unit, cfg, pricing)
+
+
 def update_review_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:
     """The update review loop's projection (``stages/update_review``)."""
     from ..stages import update_review

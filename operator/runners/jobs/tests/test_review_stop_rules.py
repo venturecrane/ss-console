@@ -207,19 +207,19 @@ def _review_on(sr: StageRun, doorway: FakeDoorway, today: date) -> int:
     return review.run(sr, today=today, verify=lambda _b, _a: [], images=lambda _x, _p: None, audit=lambda _s: 0)
 
 
-def test_an_entry_dated_after_today_is_redated_from_its_page_and_files(job_dir, firm_config_path, data_root):
-    """The DOC's 03/30/2026 entry, reviewed as of 2026-02-01, is a misread:
-    its page dates the visit 01/30/2026."""
+def test_an_entry_dated_after_today_holds_and_is_never_redated_by_the_review(job_dir, firm_config_path, data_root):
+    """The DOC's 03/30/2026 entry, reviewed as of 2026-02-01, is a misread
+    its page dates 01/30/2026. 2026-11-18: the review's repair round is gone
+    (no edit follows the entry read, ``stages/entry_audit``), so the date is
+    not moved here: the code finding holds for SMD."""
     sr, log = _package(job_dir, firm_config_path, data_root, PLAN_DOC)
     _pages(sr, f"Patient: Alpha Example. Visit date 01/30/2026. {PLAN}")
     d = FakeDoorway(CLEAN, REDATE)
-    assert _review_on(sr, d, date(2026, 2, 1)) == 0, log
-    md = _md(sr)
-    assert "01/30/2026" in md and "03/30/2026\n" not in md
-    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
-    assert rec["must_fix"] == 0 and any(f["finding"].startswith("corrected before delivery") for f in rec["findings"])
+    assert _review_on(sr, d, date(2026, 2, 1)) == 2, log
+    assert len(d.calls) == 1 and "03/30/2026\n" in _md(sr)
+    assert log[-1].startswith("review_held:") and "03/30/2026" in log[-1]
     pol = json.loads((sr.slug_dir / "runs" / "alpha" / review_policy.POLICY_RECORD).read_text())
-    assert pol["repair_pending_by_check"] == {"5": 1} and pol["repair_settled"] == 1
+    assert pol["repair_pending_by_check"] == {"5": 1} and pol["repair_settled"] == 0
 
 
 def test_an_entry_still_dated_after_today_holds(job_dir, firm_config_path, data_root):

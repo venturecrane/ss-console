@@ -70,8 +70,8 @@ class _Model(_NoNetwork):
             from test_decisions_driver import _Stream
 
             return _Stream(_text_msg(TRANSCRIBED))
-        if "INDEPENDENT PRE-DELIVERY REVIEW" in self._system(kw):
-            return super().stream(**kw)
+        if "INDEPENDENT PRE-DELIVERY REVIEW" in self._system(kw) or "ENTRY READ:" in self._system(kw):
+            return super().stream(**kw)  # the review and the entry read (stages/entry_audit) of a clean package
         self.calls.append(kw)
         from test_decisions_driver import _Stream
 
@@ -286,7 +286,7 @@ class _JointModel(_Model):
 
     def stream(self, **kw):
         sysm = self._system(kw)
-        if "transcribe one scanned page" in sysm or "INDEPENDENT PRE-DELIVERY REVIEW" in sysm:
+        if "transcribe one scanned page" in sysm or "INDEPENDENT PRE-DELIVERY REVIEW" in sysm or "ENTRY READ:" in sysm:
             return super().stream(**kw)
         self.calls.append(kw)
         from test_decisions_driver import _Stream

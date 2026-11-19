@@ -87,11 +87,21 @@ def _unit(ud: Path) -> dict[str, int]:
     return out
 
 
+def _entry_read(path: Path) -> dict[str, int]:
+    """A full chronology's entry read (``stages/entry_audit``): its findings
+    applied from the page, and those recorded only."""
+    rec = _read(path)
+    return {"entry_read_applied": _num(rec.get("applied")), "entry_read_recorded": _num(rec.get("recorded"))}
+
+
 def derived(job_dir: str | Path) -> dict[str, int]:
-    """The ``checks`` counts for this job, summed over its units; {} for a job with no update files."""
+    """The ``checks`` counts for this job, summed over its units; {} for a
+    job with no update files and no entry-read record."""
     total: dict[str, int] = {}
-    for ud in sorted(Path(job_dir).glob("data/*/runs/*/update")):
-        for k, n in _unit(ud).items():
+    units = [_unit(ud) for ud in sorted(Path(job_dir).glob("data/*/runs/*/update"))]
+    units += [_entry_read(p) for p in sorted(Path(job_dir).glob("data/*/runs/*/entry_read.json"))]
+    for counts in units:
+        for k, n in counts.items():
             total[k] = total.get(k, 0) + n
     return total
 

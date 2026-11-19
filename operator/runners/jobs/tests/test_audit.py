@@ -141,7 +141,7 @@ def test_render_is_cached_and_capped(tmp_path: Path) -> None:
     assert render.img_block(out)["source"]["media_type"] == "image/png"
 
 
-def _exhibit_set(sr: StageRun, pages: list[str]) -> Path:
+def _exhibit_set(sr: StageRun, pages: list[str], name: str = "clinic note", row_id: bool = False) -> Path:
     """One exhibit PDF from one unit file, with the map, page_map and text
     the index needs to call its pages native."""
     d = sr.slug_dir
@@ -151,10 +151,8 @@ def _exhibit_set(sr: StageRun, pages: list[str]) -> Path:
     (d / "text").mkdir(exist_ok=True)
     data = make_pdf(pages)
     (out / "Exhibit 1 - Example Clinic - 01-02-2026 (Medical Records).pdf").write_bytes(data)
-    (d / "units" / "alpha.json").write_text(json.dumps([{"id": "f1", "name": "clinic note", "ext": ".pdf"}]))
-    (d / "extracted.jsonl").write_text(
-        json.dumps({"id": "f1", "name": "clinic note", "pages": len(pages), "chars": 100}) + "\n"
-    )
+    (d / "units" / "alpha.json").write_text(json.dumps([{"id": "f1", "name": name, "ext": ".pdf"}]))
+    (d / "extracted.jsonl").write_text(json.dumps({"id": "f1", "name": name, "pages": len(pages), "chars": 100}) + "\n")
     (d / "text" / "f1.txt").write_text("".join(f"[p.{i}]\n{t}\n" for i, t in enumerate(pages, 1)))
     (out / "page_map.json").write_text(
         json.dumps(
@@ -162,7 +160,15 @@ def _exhibit_set(sr: StageRun, pages: list[str]) -> Path:
                 {
                     "exhibit": 1,
                     "total_pages": len(pages),
-                    "files": [{"file": "clinic note.pdf", "old_exhibit": 1, "start_page": 1, "pages": len(pages)}],
+                    "files": [
+                        {
+                            "file": ("renamed since" if row_id else name) + ".pdf",
+                            **({"id": "f1"} if row_id else {}),
+                            "old_exhibit": 1,
+                            "start_page": 1,
+                            "pages": len(pages),
+                        }
+                    ],
                 }
             ]
         )
@@ -181,6 +187,29 @@ def test_page_index_calls_a_native_text_page_eligible_and_a_blank_one_not(
     assert ix.classify(1, 2)[0] == "short" and ix.classify(1, 3)[0] == "unmapped"
     assert "===== Exhibit 1 p.1 =====" in ix.window_text(1, [1, 2])
     assert page_text.content_agrees("Information25 N Via MonteWalnut", "Information 25 N Via Monte Walnut")
+    ix.close()
+
+
+def test_a_file_whose_title_has_a_slash_or_a_dot_still_resolves(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """2026-11-18: a matter file titled with a date written with slashes
+    resolved none of its exhibit's 177 pages, because the title was cut as if
+    it were a path; every sentence citing them went to a page picture."""
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    _exhibit_set(sr, [PROSE], name="visit 1/2/26 Dr. A. Example note")
+    ix = page_text.PageIndex(sr.slug_dir, "alpha")
+    assert ix.resolve(1, 1) == ("f1", 1) and ix.classify(1, 1)[0] == "native"
+    ix.close()
+
+
+def test_a_page_map_row_that_names_the_file_id_needs_no_title_match(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    sr = _sr(job_dir, firm_config_path, data_root, None)
+    _exhibit_set(sr, [PROSE], row_id=True)
+    ix = page_text.PageIndex(sr.slug_dir, "alpha")
+    assert ix.resolve(1, 1) == ("f1", 1)
     ix.close()
 
 

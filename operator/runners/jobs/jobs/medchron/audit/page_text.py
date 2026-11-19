@@ -32,6 +32,16 @@ EXHIBIT_PDF = re.compile(r"Exhibit (\d+) - .*\.pdf$")
 CLASSES = ("native", "vision", "form", "ocr", "empty", "short", "join-mismatch", "unmapped", "no-text")
 
 
+def _stem(name: str) -> str:
+    """A source file's name without its extension. Never ``Path(name).stem``:
+    a matter file's name is a title, not a path, and one with a slash in it (a
+    date written 1/2/24) lost everything before the last slash, so none of
+    that exhibit's pages resolved (2026-11-18: 177 pages of one exhibit, 212
+    sentences sent to page pictures that had text)."""
+    cut = name.rfind(".")
+    return name[:cut] if cut > 0 else name
+
+
 def parse_segments(text: str) -> dict[int, tuple[str, bool]]:
     """{page: (text, machine_transcribed)} from a text/<id>.txt body."""
     out = {}
@@ -181,7 +191,9 @@ class PageIndex:
                     continue
                 s, n = f["start_page"], f["pages"]
                 if s <= orig < s + n:
-                    rec = self.by_name.get(f["file"]) or self.by_name.get(Path(f["file"]).stem)
+                    rec = (
+                        self.by_id.get(f.get("id")) or self.by_name.get(f["file"]) or self.by_name.get(_stem(f["file"]))
+                    )
                     return (rec["id"], orig - s + 1) if rec else None
         return None
 

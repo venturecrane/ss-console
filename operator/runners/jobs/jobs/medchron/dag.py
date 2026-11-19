@@ -24,13 +24,15 @@ runs as a subprocess any more; `script` stays on the Stage for the strangler's h
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 from .job import Job, Unit
 from ..stages import (
     assemble as _assemble,
     audit_loop as _audit,
+    audit_loop_exits as _loop_exits,
+    entry_audit as _entry_audit,
     billing as _billing,
     billing_chart as _bchart,
     billing_docx as _bdocx,
@@ -479,25 +481,24 @@ STAGES: tuple[Stage, ...] = (
         exit_map={1: (REFUSED, "billing worksheet refused (a suspect amount, or no patient filter on a joint matter)")},
     ),
     # ---- audit last; render only after it passes ---------------------------
+    # 2026-11-18: the full chronology's audit reads each ENTRY against its own
+    # cited pages (``stages/entry_audit.py``). The stage keeps the name
+    # ``audit`` so saved state and ``--redo audit`` resolve. The update lane
+    # keeps the per-claim audit loop (``AUDIT_LOOP`` below).
     Stage(
         "audit",
         "",
         lambda c: ["3"],
         paid=True,
         requires=("billing_docx",),
-        runner=_audit.run,
-        rehearse=_audit.rehearse,
+        runner=_entry_audit.run,
+        rehearse=_entry_audit.rehearse,
+        # Exit 1 keeps the "audit coverage:" prefix: the broker resumes a hold
+        # by it (workspace_broker AUDIT_GATE_HOLD_PREFIX, pinned against this row).
         exit_map={
-            1: (HELD, "audit coverage: a live claim is not finally SUPPORTED"),
-            2: (
-                FAILED,
-                "audit INVALID: a control was wrongly SUPPORTED, no exhibit bytes, or a repair did not reconcile",
-            ),
-            3: (
-                FAILED,
-                "audit refused at the double-sweep guard: prior rows for this body carry keys no longer produced",
-            ),
-        },
+            1: (HELD, "audit coverage: an entry was not read against its pages, or the edit tripwire held"),
+            **_entry_audit.EXITS,
+        },  # fmt: skip
     ),
     Stage(
         "render",
@@ -545,7 +546,18 @@ STAGES: tuple[Stage, ...] = (
     ),
 )
 
-BY_NAME = {s.name: s for s in STAGES}
+#: The per-claim audit loop: the update lane's ``audit`` (``dag_update`` reuses
+#: ``BY_NAME["audit"]``), unchanged since the full lane moved to the entry read.
+AUDIT_LOOP = replace(
+    next(s for s in STAGES if s.name == "audit"),
+    runner=_audit.run,
+    rehearse=_audit.rehearse,
+    exit_map=_loop_exits.EXITS,
+)
+
+#: The rows ``dag_update`` reuses by name: the full lane's, except ``audit``,
+#: which is the loop above. The full lane's own rows are ``by_name()``.
+BY_NAME = {**{s.name: s for s in STAGES}, "audit": AUDIT_LOOP}
 ORDER = [s.name for s in STAGES]
 
 

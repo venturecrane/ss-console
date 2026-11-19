@@ -163,7 +163,7 @@ def test_the_gates_behind_the_paid_stage_are_answered_anyway(
     cov = [n for n in o.notes if n.startswith("rehearse coverage_gate: ")]
     assert cov and "unit file(s); with nothing cited:" in cov[0], o.notes
     aud = [n for n in o.notes if n.startswith("rehearse audit: ")]
-    assert aud and "claims" in aud[0] and "USD/claim" in aud[0], o.notes
+    assert aud and "entr(ies) to read from the built chronology" in aud[0] and "USD" in aud[0], o.notes
 
 
 def test_an_undone_external_stage_stops_the_walk_and_never_opens_the_seat(
@@ -193,36 +193,25 @@ def test_the_audit_is_projected_from_the_built_chronology(
     aud = [n for n in o.notes if n.startswith("rehearse audit: ") and "from the built chronology" in n]
     assert aud, o.notes
     assert any(n.startswith("rehearse summary: projected ") and "audit " in n for n in o.notes)
-    # a resume projects only what is still unverified: verdicts on disk for THIS
-    # body cost nothing again (live 2026-09-16: a resume with 1,998 paid
-    # verdicts was held at the cap on a projection that re-counted them all)
+    # a resume projects only what is still unread: an entry whose read is on
+    # disk costs nothing again (live 2026-09-16: a resume with 1,998 paid
+    # verdicts was held at the cap on a projection that re-counted them all).
+    # 2026-11-18: the full chronology's audit is the entry read
+    # (``stages/entry_audit``), its answers under runs/<unit>/entry_read/.
     import re
-
-    from jobs.medchron.audit import claims as CL
-    from jobs.medchron.audit.page_text import exhibit_paths
+    import shutil
 
     def projected(notes: list[str]) -> float:
         m = next(re.search(r"STOP paid, not done \(~([0-9.]+) USD\)", n) for n in notes if "rehearse audit: STOP" in n)
         return float(m.group(1))
 
-    # the delivered fixture's own audit verdicts are on disk, so the first rehearsal
+    # the delivered fixture's own entry reads are on disk, so the first rehearsal
     # above already projected 0; remove them to see the full projection
-    results = sd / "out" / "alpha" / "audit-results.jsonl"
-    assert projected(o.notes) == 0.0 and results.is_file()
-    results.unlink()
+    answers = sd / "runs" / "alpha" / "entry_read"
+    assert projected(o.notes) == 0.0 and any(answers.glob("*.read1.json"))
+    shutil.rmtree(answers)
     _copy1, outs1 = _rehearse(job_dir, firm_config_path, pricing_path, client=client)
-    full = projected(outs1[0].notes)
-    body = CL.body_of((sd / "runs" / "alpha" / "final-chronology.md").read_text(encoding="utf-8"))
-    claims = CL.extract_claims(body, set(exhibit_paths(sd / "out" / "alpha")))
-    assert claims and full > 0
-    rows = [{"key": c["key"], "kind": "real", "verdict": "SUPPORTED", "doc_sha": CL.doc_sha_of(body)} for c in claims]
-    results.write_text("".join(json.dumps(r) + "\n" for r in rows))
-    _copy2, outs2 = _rehearse(job_dir, firm_config_path, pricing_path, client=client)
-    assert projected(outs2[0].notes) == 0.0, "every claim already verified for this body: nothing to re-bill"
-    # verdicts for a DIFFERENT body do not count
-    results.write_text("".join(json.dumps({**r, "doc_sha": "another-body"}) + "\n" for r in rows))
-    _copy3, outs3 = _rehearse(job_dir, firm_config_path, pricing_path, client=client)
-    assert projected(outs3[0].notes) == full
+    assert projected(outs1[0].notes) > 0
 
 
 def test_redo_reopens_a_free_stage_in_the_copy_only_and_refuses_paid_or_external(
@@ -349,8 +338,9 @@ def test_a_paid_stage_answers_its_own_free_probe_before_it_spends(
 
     `merge` reports what the code merged and what goes to the model, which is
     the shape of the live 62.01 USD failure where the model could not merge a
-    routed cluster. `audit` reports the claim count times the rate -- what its
-    own docstring calls "the cap answer, at $0".
+    routed cluster. `audit` reports the entries still to read and their
+    projected price (``stages/entry_audit_io.projection_lines``), the cap
+    answer at $0.
 
     Falsifier: drop the `probe_before_spend` call from `driver._execute` and a
     real run carries no `rehearse ` note at all.
@@ -364,7 +354,7 @@ def test_a_paid_stage_answers_its_own_free_probe_before_it_spends(
     merge_lines = [n for n in notes if n.startswith("rehearse merge: ")]
     audit_lines = [n for n in notes if n.startswith("rehearse audit: ")]
     assert merge_lines and "clusters" in merge_lines[0], notes
-    assert audit_lines and "claims" in audit_lines[0], notes
+    assert audit_lines and "entr(ies) to read" in audit_lines[0], notes
 
 
 def test_a_paid_stage_without_a_probe_adds_no_noise(data_root: Path) -> None:
