@@ -98,7 +98,7 @@ def pdf(index: int, pages: list[Page]) -> bytes:
     return data
 
 
-def locked(index: int) -> bytes:
+def _locked_once(index: int) -> bytes:
     import pymupdf
 
     doc = pymupdf.open()
@@ -107,6 +107,20 @@ def locked(index: int) -> bytes:
     data = doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="not-on-file", owner_pw="owner-only")
     doc.close()
     return data
+
+
+def locked(index: int) -> bytes:
+    """A password-locked PDF of one fixed size.
+
+    The encryption keys are random on every build, and how they are written
+    makes about 1 build in 50 a byte or more shorter (10 of 500 measured,
+    2026-11-18). The reader goldens record this file's size, so a short build
+    failed the goldens check on a change that touched nothing here. Nine
+    builds are made and one of the most common size is returned."""
+    builds = [_locked_once(index) for _ in range(9)]
+    sizes = [len(b) for b in builds]
+    usual = max(set(sizes), key=sizes.count)
+    return next(b for b in builds if len(b) == usual)
 
 
 def jpg(index: int) -> bytes:
