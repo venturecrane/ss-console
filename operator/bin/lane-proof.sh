@@ -15,6 +15,7 @@
 #   operator/bin/lane-proof.sh <slug> pull <job_id> [DEST]
 #   operator/bin/lane-proof.sh <slug> accept <job_id> --evidence vfy_... --by <name>
 #   operator/bin/lane-proof.sh <slug> revoke <lane-key> --why "..." --by <name>
+#   operator/bin/lane-proof.sh <slug> withdraw <lane> <job_id> --by <name> --why "..."
 #
 # Runs as ROOT on the seat, on purpose and unlike seat-probe.sh: the proof
 # record lives in the root-owned medchron tree so that no other uid (the
@@ -26,12 +27,17 @@
 # `pull` copies a proof run's twin (the rendered documents, the reports) to
 # DEST, default ${TMPDIR}/lane-proof/<slug>/<job_id>. It is client material:
 # DEST is refused inside any git checkout, so it can never be committed here.
+#
+# `withdraw` ends a held (or any) job for good with the runner's `jobs.stop`
+# (2026-11-19): a job whose request was answered by hand must never run when
+# its lane is accepted. <lane> is the queue (drafting, demand, ...), not the
+# lane key. Exit 0 stopped, 1 refused, 3 written but not yet recorded.
 set -euo pipefail
 
 SLUG="${1:-}"
 ACTION="${2:-}"
 [ -n "${SLUG}" ] && [ -n "${ACTION}" ] || {
-  echo "usage: $0 <slug> status | dry-run <job> [--wait S] | keep <job> | pull <job> [DEST] | accept <job> --evidence vfy_... --by NAME | revoke <key> --why ... --by NAME" >&2
+  echo "usage: $0 <slug> status | dry-run <job> [--wait S] | keep <job> | pull <job> [DEST] | accept <job> --evidence vfy_... --by NAME | revoke <key> --why ... --by NAME | withdraw <lane> <job> --by NAME --why ..." >&2
   exit 2
 }
 shift 2
@@ -58,6 +64,9 @@ case "${ACTION}" in
   status | dry-run | keep | accept | revoke)
     on_seat "${JOBS}" lane-proof "${ACTION}" "$@"
     ;;
+  withdraw)
+    on_seat "${SMD_LAYOUT_JOBS_PYTHON}" -m jobs.stop "$@"
+    ;;
   pull)
     JOB="${1:-}"
     [[ "${JOB}" =~ ^[0-9A-HJKMNP-TV-Z]{26}$ ]] || { echo "pull needs a job id" >&2; exit 2; }
@@ -79,7 +88,7 @@ case "${ACTION}" in
     find "${DEST}" -type f \( -name '*.docx' -o -name '*.xlsx' -o -name 'proof.json' -o -name 'dry-run-report.txt' \) | sort
     ;;
   *)
-    echo "unknown action '${ACTION}' (status, dry-run, keep, pull, accept, revoke)" >&2
+    echo "unknown action '${ACTION}' (status, dry-run, keep, pull, accept, revoke, withdraw)" >&2
     exit 2
     ;;
 esac
