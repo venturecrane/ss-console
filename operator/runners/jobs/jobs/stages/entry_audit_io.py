@@ -294,6 +294,8 @@ def projection_lines(sr: StageRun) -> list[str]:
         return ["no built chronology yet (build_doc has not run); the entry read is unprojectable"]
     n, done, tin, tout = got
     usd = _dollars([{"model": model(sr.cfg), "in": tin, "out": tout}])
+    if not usd.endswith("USD"):  # no pricing file on this host; the driver's limits price it from their own
+        usd = "USD not priced on this host"
     return [
         f"{n} entr(ies) to read from the built chronology, {done} already read; {tin} input and {tout} output "
         f"tokens (each read plus {VERIFIES_PER_UNIT} verifies per entry) on {model(sr.cfg)} = ~{usd}"
