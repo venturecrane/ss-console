@@ -66,7 +66,7 @@
     "hermes-smd-overlay/shared/policy_profile.py::resolve_role_policy": 81,
     "hermes-smd-overlay/shared/prerendered_dispatch.py::dispatch_prerendered": 217,
     "hermes-smd-overlay/shared/read_volume.py::note_read": 90,
-    "hermes-smd-overlay/shared/request_cards.py::decide": 113,
+    "hermes-smd-overlay/shared/request_cards.py::decide": 106,
     "hermes-smd-overlay/shared/request_cards.py::send_due_cards": 105,
     "hermes-smd-overlay/shared/spec_gate.py::check_spec_gate": 118,
     "hermes-smd-overlay/skills_applier/applier.py::stage": 91,

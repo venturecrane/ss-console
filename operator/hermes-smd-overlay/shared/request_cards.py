@@ -1112,26 +1112,23 @@ def send_due_cards(
     try:
         now_s = now_fn()
         now = datetime.fromtimestamp(now_s, tz=timezone.utc)
-        requests = request_index.read_requests(
-            now_s - LOOKBACK.total_seconds(), path=requests_db_path
-        )
-        # No early return on an empty index: a held scheduled run has no
-        # request and still pages (the lane-proof gate).
+        since = now_s - LOOKBACK.total_seconds()
+        requests = request_index.read_requests(since, path=requests_db_path)
+        # No early return on an empty index: a held scheduled run still pages.
         try:
             openings: dict[str, str | None] | None = request_index.read_reply_openings(
-                now_s - LOOKBACK.total_seconds(), path=requests_db_path
+                since, path=requests_db_path
             )
         except Exception:  # noqa: BLE001 — "could not look" decides no follow-ups, never "none"
             logger.error("request_cards: cannot read the reply openings", exc_info=True)
             openings = None
         try:
             texts: dict[str, str | None] | None = request_index.read_reply_texts(
-                now_s - LOOKBACK.total_seconds(), path=requests_db_path
+                since, path=requests_db_path
             )
         except Exception:  # noqa: BLE001 — a follow-up card without its text is still a card
             logger.warning("request_cards: cannot read the reply texts", exc_info=True)
             texts = None
-        indexed = request_index.read_request_ids(path=requests_db_path)
         proofs = lane_proofs.load(proofs_dir)
         if not audit_db_path or not os.path.exists(audit_db_path):
             # Without the ledger "no reply" cannot be told from "could not look".
@@ -1155,7 +1152,7 @@ def send_due_cards(
                 openings=openings,
                 texts=texts,
                 name_of=name_of if name_of is not None else _authored_names(),
-                indexed=indexed,
+                indexed=request_index.read_request_ids(path=requests_db_path),
             )
         finally:
             conn.close()
