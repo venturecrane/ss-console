@@ -8,9 +8,12 @@
   "limits-grid": [],
   "litigation": [],
   "litigation_cap": [],
-  "medchron": [],
+  "medchron": ["<file>"],
   "medchron_update": [],
-  "model-facts": [],
+  "model-facts": [
+    "sent_in_paid_call_goldens.claude-opus-5-5.cases.__set",
+    "sent_in_paid_call_goldens.claude-sonnet-5.cases.__set"
+  ],
   "model-facts-disagreements": [],
   "negotiation": [],
   "records": [],
