@@ -271,20 +271,19 @@ CONTRA = (
 )
 
 
-def test_a_check2_must_is_repaired_once_by_the_finisher_audited_and_filed(job_dir, firm_config_path, data_root):
+def test_a_check2_must_is_flagged_never_rewritten_after_the_entry_read(job_dir, firm_config_path, data_root):
+    """2026-11-18: the review's repair round is gone. The full chronology is
+    read entry by entry before this review (``stages/entry_audit``) and no
+    edit follows it: a check 2 MUST-FIX is flagged for the attorney, the
+    finisher is never called and the document is not touched."""
     sr, log = _package(job_dir, firm_config_path, data_root, PLAN_DOC)
     audited: list[str] = []
     d = FakeDoorway(_verdict(CONTRA), FINISH)
     assert _settle_review(sr, d, audit=lambda s: audited.append("audit") or 0) == 0, log
-    assert d.calls[1]["stage"] == "update_review" and audited == ["audit"]
+    assert len(d.calls) == 1 and audited == []
     md = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
-    assert "three times weekly" in md and PLAN not in md
-    chron = sr.slug_dir / "out" / "alpha" / "Alpha Example - Medical Chronology 10-13-26.docx"
-    assert "three times weekly" in review.docx_text(chron)
-    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
-    assert rec["must_fix"] == 0 and rec["findings"][0]["finding"].startswith("corrected before delivery")
-    names = _manifest_names(sr)
-    assert "corrected before delivery" in review.docx_text(sr.slug_dir / "out" / "alpha" / names[1])
+    assert PLAN in md and "three times weekly" not in md
+    _flagged_not_corrected(sr)
 
 
 def _flagged_not_corrected(sr) -> None:

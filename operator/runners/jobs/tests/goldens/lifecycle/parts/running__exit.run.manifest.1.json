@@ -1,0 +1,24 @@
+{
+  "code": "manifest",
+  "ended_while_away": false,
+  "ending": "failed",
+  "filed_sets": 0,
+  "firm_messages": 0,
+  "firm_owed": 0,
+  "owner": "smd",
+  "paged": ["job_stopped"],
+  "record_late": false,
+  "run": {
+    "by": "code",
+    "code": "manifest",
+    "event": "stop",
+    "kind": "plumbing",
+    "stage": "manifest",
+    "v": 1
+  },
+  "second": null,
+  "state": "failed",
+  "told_while_away": 0,
+  "way_out": ["medchron_job_resume", "medchron_job_submit"],
+  "wiped": false
+}

@@ -1,5 +1,5 @@
 """What the full build's pre-delivery review does with its findings before it
-decides: drop, note, delete, or repair once. $0 except the one repair round.
+decides: drop, note or delete. $0 (the one repair round was removed 2026-11-18).
 
 WHY (2026-10-23). The review could only hold (``proof/review.py``). On the
 Curtis chronology (3CH59XBY, 22h29m, eight stops) three holds were the review
@@ -20,13 +20,13 @@ delivery with no SMD touch. So, in order:
    matches exactly ONE summary line (the tables before the entries, the Prior
    Medical History block) has that line deleted from ``final-chronology.md``.
    Deletion only: nothing is written. Otherwise it stays MUST.
-4. ONE repair round for the check 2/4 MUST-FIX left, with the update lane's
-   finisher (``update/finisher.py`` via ``stages/update_review``): anchored to
-   the entry the finding cites, every entry anchored ``N<k>`` (an empty
-   delivered base), each sentence it writes audited on its page and reverted
-   when unsupported, then the audit loop to its gate. A finding the round
-   settled is a NOTE ("corrected before delivery"); one it did not stays
-   MUST and the job holds (an integrity stop).
+4. REMOVED 2026-11-18. There was one repair round here: the update lane's
+   finisher rewrote entries for the check 2/4 MUST-FIX left, then the audit
+   loop re-graded them. The full chronology is now read entry by entry and
+   corrected from its pages before this review (``stages/entry_audit``), and
+   nothing edits an entry after that read. A check 2/4 MUST-FIX goes to
+   steps 5 and 6 (disclosed in the notes); code's entry dated after today
+   holds.
 
 BEFORE those (2026-10-24, the stop audit rows 11 to 13), on the cited page
 (``review_evidence``): a check 3 MUST-FIX whose quoted words the cited page
@@ -80,8 +80,7 @@ left). Each settles by deletion or disclosure, never by a written word:
 Code integrity findings (an empty chronology, a cited exhibit not delivered,
 an entry dated after today) and a check 1 finding the page's identifiers did
 not settle (another person's records) are never touched: they hold.
-Nothing here invents client text: steps 1-3b and 5 only delete or re-grade,
-and step 4's sentences are the update lane's grounded, audited corrections.
+Nothing here invents client text: every step only deletes or re-grades.
 """
 
 from __future__ import annotations
@@ -97,7 +96,7 @@ from .. import wording
 from ..medchron.audit import claims as CL
 from ..proof import checks, review
 from .base import StageRun
-from ..text_rules import EXHIBIT_PAGE_MENTION as _EXHIBIT_PAGE, US_DATE as _DATE
+from ..text_rules import EXHIBIT_PAGE_MENTION as _EXHIBIT_PAGE, US_DATE as _DATE  # noqa: F401 - review_settle reads them here
 
 #: A double-quoted span a reviewer quotes (straight or curly quotes).
 _QUOTED = re.compile(r"\"([^\"]{8,})\"|“([^”]{8,})”")
@@ -202,125 +201,10 @@ def delete_supported(md: str, f: review.Finding) -> tuple[str, str | None]:
     return re.sub(r"\n{3,}", "\n\n", "".join(lines)), gone
 
 
-# ---- step 4: one repair round -------------------------------------------------------
-def _provider(entry_text: str) -> str:
-    """The provider an entry's second line names, lower case ('' when none)."""
-    lines = entry_text.split("\n")
-    return lines[1].split("|")[0].strip().lower() if len(lines) > 1 else ""
-
-
-def anchor(f: review.Finding, ents: list[Any]) -> tuple[str, int | None, int | None] | None:
-    """(the entry anchor ``N<k>``, exhibit, page) the finding is on, from the
-    date (and the provider, when the date has several entries) it cites; None
-    when no single entry is named. The page is the one the finding cites, else
-    the entry's own first cited page of that exhibit."""
-    t = _text(f).lower()
-    for d in dict.fromkeys(_DATE.findall(f.cite) + _DATE.findall(f.finding)):
-        same = [e for e in ents if e.text.startswith(d)]
-        if len(same) > 1:
-            same = [e for e in same if _provider(e.text) and _provider(e.text) in t]
-        if len(same) != 1:
-            continue
-        e = same[0]
-        m = _EXHIBIT_PAGE.search(f.cite) or _EXHIBIT_PAGE.search(f.finding)
-        ex = int(m.group(1)) if m else None
-        page = int(m.group(2)) if m and m.group(2) else None
-        own = [c for c in e.claims if ex is None or c.exhibit == ex]
-        if page is None and own:
-            ex, page = own[0].exhibit, own[0].pages[0]
-        return e.anchor, ex, page
-    return None
-
-
+# ---- step 4: removed ---------------------------------------------------------------
+#: The review's repair round once took this callable (the audit loop to its
+#: gate); the round is gone (2026-11-18) and ``review.run`` still names it.
 Audit = Callable[[StageRun], int]
-
-
-def repair_round(
-    sr: StageRun,
-    doc: Path,
-    musts: list[review.Finding],
-    *,
-    verify: Any = None,
-    images: Any = None,
-    audit: Audit | None = None,
-) -> tuple[set[int], str]:
-    """The update lane's finisher, once, over the full build's chronology:
-    (the indices into `musts` it settled, a note for the log). The finisher's
-    sentences are graded on their pages and reverted when unsupported; the
-    audit loop then runs to its gate. Nothing settles on a grading refusal or
-    an audit that does not pass."""
-    from ..medchron.update import review_repair as RR
-    from . import update_review as UR
-    from .update_base import headings
-
-    keep, heads = UR._keep(sr), headings(sr.cfg)
-    md = doc.read_text(encoding="utf-8")
-    ents = RR.anchor_entries(md, keep, heads)
-    todo: list[RR.Finding] = []
-    idx: list[int] = []
-    for i, f in enumerate(musts):
-        at = anchor(f, ents)
-        if at is None:
-            continue
-        g = RR.Finding(RR.MUST, f.check, at[0], at[1], at[2], f.finding, "none", "", "")
-        g.fid = f"F{len(todo) + 1}"
-        todo.append(g)
-        idx.append(i)
-    if not todo:
-        return set(), "no finding names one entry to correct"
-    from . import review_evidence as EV
-
-    # The page text a redate is checked against (2026-10-24: an entry dated
-    # after today is re-read on its page; with no text, no date moves).
-    pages = EV.Pages(sr)
-    c = UR._ctx(sr, images, lambda x, p: pages.text(x, p) or None, verify)
-    c.rnd = 1
-    try:
-        return _finish(sr, doc, md, musts, todo, idx, ents, c, audit)
-    finally:
-        pages.close()
-
-
-def _finish(
-    sr: StageRun,
-    doc: Path,
-    md: str,
-    musts: list[review.Finding],
-    todo: list[Any],
-    idx: list[int],
-    ents: list[Any],
-    c: Any,
-    audit: Audit | None,
-) -> tuple[set[int], str]:
-    """The finisher's edits on the document, graded, then the audit loop."""
-    from ..medchron.update import finisher as FN
-    from . import audit_loop, update_review as UR
-
-    try:
-        edits, left = UR._finish_calls(c, todo, ents, [])
-        new_md, _ = UR._apply(c, md, edits, [])
-        bad, _ = FN.failed(edits, c.verify(md, new_md)) if new_md != md else ([], 0)
-        if bad:
-            ids = {id(e) for e in bad}
-            for e in edits:
-                if id(e) in ids:
-                    e.outcome = "reverted: the audit did not find the edited sentence on its page"
-                elif e.outcome == "applied":
-                    e.outcome = ""
-            new_md, _ = UR._apply(c, md, edits, [])
-    except UR.GradeFailed as exc:
-        doc.write_text(md, encoding="utf-8")
-        return set(), f"the grader returned no verdict ({exc}); nothing kept"
-    FN.settle(todo, edits, left)
-    if new_md == md:
-        why = "; ".join(dict.fromkeys(g.outcome for g in todo if g.outcome))[:300]
-        return set(), "the finisher changed nothing" + (f" ({why})" if why else "")
-    doc.write_text(new_md, encoding="utf-8")
-    rc = (audit or audit_loop.run)(sr)
-    if rc != 0:
-        return set(), f"the audit after the repair exited {rc}; nothing is counted settled"
-    done = {idx[j] for j, g in enumerate(todo) if UR._closed(g)}
-    return done, f"{len(done)} of {len(musts)} settled by the finisher, {c.calls} call(s)"
 
 
 def _phrases(f: review.Finding) -> list[str]:
@@ -394,26 +278,10 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
         sr.log("review: Treatment Timeline and Diagnostic Highlights re-derived from the remaining entries")
 
 
-def _future_still(md: str, f: review.Finding, today: date | None) -> bool:
-    """True when the entry a future-date finding names is still dated after
-    today: its date still heads an entry and that date is after today."""
-    if today is None:
-        return False
-    for d in _DATE.findall(f.finding + " " + f.cite):
-        mo, dy, yr = (int(x) for x in d.split("/"))
-        try:
-            when = date(yr, mo, dy)
-        except ValueError:
-            continue
-        if when > today and any(ln.strip() == d for ln in md.splitlines()):
-            return True
-    return False
-
-
 def _repairable(f: review.Finding) -> bool:
-    """A MUST-FIX the one repair round may settle: the model's check 2 or 4,
-    and code's entry dated after today (a misread year the finisher re-reads
-    on the page, 2026-10-24)."""
+    """A MUST-FIX the removed repair round once settled (the model's check 2
+    or 4, code's entry dated after today), still counted in
+    ``review-policy.json`` as pending and residual."""
     if f.grade != review.MUST:
         return False
     if f.by == "model":
@@ -426,7 +294,7 @@ def settle(
     doc: Path | None,
     found: list[review.Finding],
     *,
-    repair: bool,
+    repair: bool = False,
     verify: Any = None,
     images: Any = None,
     audit: Audit | None = None,
@@ -434,7 +302,10 @@ def settle(
 ) -> Outcome:
     """Every step in order. ``doc`` is the full build's ``final-chronology.md``
     (None on an update, which has its own repair before this review and only
-    gets steps 1 and 2)."""
+    gets steps 1 and 2). ``repair``, ``verify``, ``images``, ``audit`` and
+    ``today`` fed the removed repair round; callers still pass them and they
+    change nothing."""
+    del repair, verify, images, audit, today
     from . import review_settle
 
     kept, dropped = wording_and_notes(found)
@@ -483,19 +354,10 @@ def settle(
     before_rounds = {str(check_no(out.findings[k])): 0 for k in pend}
     for k in pend:
         before_rounds[str(check_no(out.findings[k]))] += 1
-    if repair and pend:
-        before = doc.read_text(encoding="utf-8")
-        done, why = repair_round(sr, doc, [out.findings[k] for k in pend], verify=verify, images=images, audit=audit)
-        sr.log(f"review repair round: {why}")
-        after = doc.read_text(encoding="utf-8")
-        for j in done:
-            k = pend[j]
-            f = out.findings[k]
-            if f.by == "code" and _future_still(after, f, today):
-                continue  # the date is still after today: unsettled, it holds
-            out.findings[k] = replace(f, grade=review.NOTE, finding=f"corrected before delivery: {f.finding}")
-            out.repaired += 1
-        out.changed = out.changed or after != before
+    # Step 4, the one repair round, is gone (2026-11-18): the review reads and
+    # settles in code, and no edit to an entry follows the entry read
+    # (``stages/entry_audit``). What it once repaired is disclosed by steps 5
+    # and 6, and code's entry dated after today holds.
     review_settle.disclose_differ(sr, doc, out, stats)
     review_settle.flag_residual(out, stats)
     _record(sr, out, pend, before_rounds, stats)

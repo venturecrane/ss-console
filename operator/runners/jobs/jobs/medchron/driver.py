@@ -322,6 +322,8 @@ class Driver:
         still catch a run that already reached a line)."""
         if stage.name == "vision":
             return projection.read_usd(extracted, self.limits.usd_per_scanned_page, self.budget)
+        if stage.name == "audit" and not self.job.update:  # the entries still to read (``stages/entry_audit_io``)
+            return projection.entry_audit_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
         if stage.name == "audit":  # the claims still to verify (``projection``)
             n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit)
             return None if n is None else n * self.limits.usd_per_audit_claim

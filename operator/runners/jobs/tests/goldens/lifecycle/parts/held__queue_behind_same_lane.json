@@ -1,0 +1,24 @@
+{
+  "code": "audit",
+  "ended_while_away": false,
+  "ending": "held",
+  "filed_sets": 0,
+  "firm_messages": 0,
+  "firm_owed": 0,
+  "owner": "smd",
+  "paged": ["gate_held"],
+  "record_late": false,
+  "run": {
+    "by": "code",
+    "code": "audit",
+    "event": "stop",
+    "kind": "check",
+    "stage": "audit",
+    "v": 1
+  },
+  "second": { "firm_messages": 1, "state": "delivered" },
+  "state": "held",
+  "told_while_away": 0,
+  "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+  "wiped": false
+}

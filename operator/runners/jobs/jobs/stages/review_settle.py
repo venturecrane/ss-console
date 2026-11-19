@@ -380,8 +380,13 @@ def confirmed_claims(sr: StageRun, md: str) -> list[tuple[str, dict[str, Any]]]:
     """(entry date, claim) for every live claim whose latest real row in
     ``audit-results.jsonl`` is SUPPORTED or SUPPORTED_WIDENED; the date is
     '' before the first entry."""
+    from ..medchron.gates import claim_audit
     from . import update_review as UR
 
+    if claim_audit.entry_read(sr.slug_dir, sr.unit.unit) is not None:
+        # The entry read grades no claim (``stages/entry_audit``): no row here
+        # is a confirmation of this document, and an older run's rows never are.
+        return []
     keep = UR._keep(sr)
     body = CL.body_of(md)
     live = {c["key"] for c in CL.extract_claims(body, keep)}

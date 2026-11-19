@@ -542,6 +542,11 @@ class _Stream:
         return self.msg
 
 
+#: The entry read's verdict for every line a test entry can carry (``entry_read.parse``
+#: refuses a reply that skips a label).
+_ALL_OK = {"D": "ok", "P": "ok", **{f"S{i}": "ok" for i in range(1, 200)}}
+
+
 class _NoNetwork:
     """Answers each paid shape the run makes from a script; anything else
     reaching the SDK fails loudly. Streams are the compose; a forced tool is
@@ -581,6 +586,9 @@ class _NoNetwork:
         if "INDEPENDENT PRE-DELIVERY REVIEW" in self._system(kw):
             # The pre-delivery review (stages/review.py) of a clean package.
             return _Stream(_text_msg("VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"))
+        if "ENTRY READ:" in self._system(kw):
+            # The full chronology's audit (stages/entry_audit.py) of a correct entry.
+            return _Stream(_text_msg(json.dumps({"lines": _ALL_OK, "findings": [], "complete": True})))
         return _Stream(_text_msg(REAL_MAP))
 
 
@@ -678,11 +686,11 @@ def test_the_whole_dag_runs_in_process_without_the_frozen_pipeline(
     assert "(Exhibit 1 - p. 2)" in doc and "| S13.4XXA | Sprain of ligaments" in doc
     assert json.loads((sd / "nonrecord.json").read_text())["1"]["drop_pages"] == []
     assert json.loads((sd / "scanned_labels.json").read_text())["controls_ok"] is True
-    audit_rows = [json.loads(line) for line in (sd / "out" / "alpha" / "audit-results.jsonl").read_text().splitlines()]
-    assert [r["verdict"] for r in audit_rows if r["kind"] == "real"] == [
-        "SUPPORTED"
-    ]  # "Cervical strain." is under the 30-char floor
-    assert "GATE PASS" in (sd / "runs" / "alpha" / "log-audit.txt").read_text()
+    # The full chronology's audit is the entry read (stages/entry_audit.py,
+    # 2026-11-18): every entry read against its pages, nothing to correct.
+    read = json.loads((sd / "runs" / "alpha" / "entry_read.json").read_text())
+    assert read["complete"] is True and read["rows"] and {r["status"] for r in read["rows"]} == {"read"}
+    assert read["applied"] == 0 and "entry read:" in (sd / "runs" / "alpha" / "log-audit.txt").read_text()
     # The worksheet read the invoice the run transcribed: one claim form, no
     # ledger, so the total is stated as not derivable rather than invented.
     chart = json.loads((sd / "billing_chart.json").read_text())["rows"][0]
