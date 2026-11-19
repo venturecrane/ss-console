@@ -45,6 +45,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .. import budget, llm, paid
+from ..deadline import is_transient
+from ..limits import LimitHold
 from ..medchron import job as job_mod
 from ..medchron.audit.page_text import exhibit_paths
 from ..medchron.page_mode import Modes
@@ -65,12 +67,36 @@ CONFIRM_MAX_TOKENS = 4_000  # a confirm answers one small JSON object
 #: pages each shows, and the prompt.
 CONFIRMS_PER_UNIT = 3
 SYSTEM_TOKENS = 3_000
+#: The output a projection prices, per call: the hand read's measured medians
+#: on 2026-11-18 were about 1,700 output tokens for a read and 900 for a
+#: confirm; a read carries margin for its per-line verdicts, a confirm's
+#: answer is one small JSON object. Priced at the maximum instead, a
+#: 164-entry job projected five times real spend and would hold for nothing.
+#: The real guards are the doorway's per-call cap check and the confirm
+#: phase re-priced from the real findings.
+READ_OUT_EXPECTED = 2_500
+CONFIRM_OUT_EXPECTED = 600
 _LABEL = re.compile(r"^Exhibit (\d+) p\. (\d+)")
 Valid = Callable[[str], bool]
 
 
 class Pending(Exception):
     """An answer the replay has not written yet (only under REPLAY_ENV)."""
+
+
+class ModelError(Exception):
+    """The API refused one call for a reason that is not the network (a 4xx,
+    a refusal, a request too large): that one read is unread, that one
+    confirm is recorded, never the job failed (round 3, 2026-11-18)."""
+
+    def __init__(self, cause: Exception) -> None:
+        super().__init__(f"{type(cause).__name__}: {str(cause)[:300]}")
+        self.cause = cause
+
+    def too_large(self) -> bool:
+        """The API refused the request for its size (HTTP 413, or a 400 saying so)."""
+        status, msg = getattr(self.cause, "status_code", None), str(self.cause).lower()
+        return status == 413 or (status == 400 and any(w in msg for w in ("too large", "too long", "too many")))
 
 
 def replaying() -> bool:
@@ -155,16 +181,23 @@ class Asker:
             with self._lock:
                 self.pending.append(f"{name}.{kind}")
             raise Pending(f"{name}.{kind}")
-        r = self.sr.doorway.call(
-            STAGE,
-            model=self.model,
-            system=system,
-            messages=[{"role": "user", "content": content}],
-            max_tokens=max_tokens,
-            stream=True,
-            effort="high",
-            custom_id=re.sub(r"[^A-Za-z0-9_-]", "-", f"{STAGE}-{name}-{kind}")[:64],
-        )
+        try:
+            r = self.sr.doorway.call(
+                STAGE,
+                model=self.model,
+                system=system,
+                messages=[{"role": "user", "content": content}],
+                max_tokens=max_tokens,
+                stream=True,
+                effort="high",
+                custom_id=re.sub(r"[^A-Za-z0-9_-]", "-", f"{STAGE}-{name}-{kind}")[:64],
+            )
+        except LimitHold:
+            raise
+        except Exception as exc:
+            if is_transient(exc):
+                raise
+            raise ModelError(exc) from exc
         _write(
             self.d / f"{name}.{kind}.json",
             {"hash": h, "text": r.text, "stop_reason": r.stop_reason, "model": self.model},
@@ -194,7 +227,8 @@ class Plan:
 
 
 def plan(slug_dir: Path, unit: str, cfg: Any, md: str) -> Plan:
-    """The document's units, each carrying the writer's index gaps for it."""
+    """The document's units, and the writer's index gaps counted for the
+    record only (never shown to the read: 2026-11-18, round 3)."""
     out = slug_dir / "out" / unit
     keep, heads, npages = set(exhibit_paths(out)), headings(cfg), page_counts(out)
     units = ER.plan(md, keep, heads, npages)
@@ -205,7 +239,6 @@ def plan(slug_dir: Path, unit: str, cfg: Any, md: str) -> Plan:
         g, b = IG.scan(m.read_text(encoding="utf-8"), ents)
         gaps += g
         bad += b
-    IG.attach(units, gaps)
     return Plan(units, gaps, bad, keep, heads, npages)
 
 
@@ -217,12 +250,12 @@ def _page(modes: Modes | None, x: int, p: int) -> int:
 def unit_tokens(u: ER.Unit, modes: Modes | None) -> tuple[int, int]:
     """(input, output) tokens of one unit: its read, every shown page as
     text or picture, and CONFIRMS_PER_UNIT confirms of up to 8 pages each at
-    the unit's own mean page cost; output at each call's real maximum."""
+    the unit's own mean page cost; output at the expected figures."""
     pages = [_page(modes, x, p) for x, p in u.pages]
     mean = sum(pages) // max(len(pages), 1)
     confirm = SYSTEM_TOKENS + mean * min(EC.CONFIRM_PAGES, max(len(pages), 1))
     tin = SYSTEM_TOKENS + len(u.text) // RV.CHARS_PER_TOKEN + sum(pages) + CONFIRMS_PER_UNIT * confirm
-    return tin, MAX_TOKENS + CONFIRMS_PER_UNIT * CONFIRM_MAX_TOKENS
+    return tin, READ_OUT_EXPECTED + CONFIRMS_PER_UNIT * CONFIRM_OUT_EXPECTED
 
 
 def tokens(slug_dir: Path, unit: str, cfg: Any) -> tuple[int, int, int, int] | None:
@@ -275,17 +308,29 @@ def confirm_usd(sr: StageRun, modes: Modes | None, items: list[tuple[ER.Unit, ER
     except (OSError, ValueError, KeyError, budget.BudgetError):
         return None
     tin = sum(SYSTEM_TOKENS + sum(_page(modes, x, p) for x, p in EC.confirm_pages(f, u)) for u, f in items)
-    return priced(pricing, sr.cfg, tin, len(items) * CONFIRM_MAX_TOKENS)
+    return priced(pricing, sr.cfg, tin, len(items) * CONFIRM_OUT_EXPECTED)
 
 
-def cap_room(sr: StageRun) -> float | None:
-    """What the job's cap leaves, as the driver reckons it: the firm's cap,
-    lowered by the envelope's, less the job's spend so far."""
+def check_limits(sr: StageRun, projected_usd: float) -> None:
+    """The driver's own check before a paid stage (``driver._check_limits``),
+    for the confirm phase priced from the real findings: the same caps, the
+    same spend, the same ``LimitHold`` and so the same cap hold the firm is
+    told of for any paid stage. Nothing when no rate card can be read."""
     try:
         pricing = paid.load_pricing()
     except (OSError, ValueError, KeyError, budget.BudgetError):
-        return None
-    firm = float(sr.cfg.per_job_cap_usd)
-    cap = firm if sr.job.cap_usd is None else min(float(sr.job.cap_usd), firm)
-    spent = paid.budget(pricing, cap, job_mod.usage_ledgers(sr.job)).refresh()
-    return cap - spent
+        return
+    job, cfg = sr.job, sr.cfg
+    cap = cfg.per_job_cap_usd if job.cap_usd is None else min(job.cap_usd, cfg.per_job_cap_usd)
+    limits = paid.Caps(
+        cap_usd=cap,
+        monthly_budget_usd=cfg.monthly_budget_usd,
+        usd_per_scanned_page=cfg.usd_per_scanned_page,
+        usd_per_audit_claim=cfg.usd_per_audit_claim,
+        month_cents_used=job.month_cents_used,
+        allowance_remaining_pages=job.allowance_remaining_pages,
+        allowance_month=job.allowance_month,
+        allowance_cycle_label=job.allowance_cycle_label,
+    ).limits()
+    spent = paid.budget(pricing, cap, job_mod.usage_ledgers(job)).refresh()
+    limits.check_before_paid(projected_usd=projected_usd, spent_usd=spent, stage=STAGE)

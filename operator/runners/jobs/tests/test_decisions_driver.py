@@ -542,6 +542,11 @@ class _Stream:
         return self.msg
 
 
+#: The entry read's verdict for every line a test entry can carry (``entry_read.parse``
+#: refuses a reply that skips a label).
+_ALL_OK = {"D": "ok", "P": "ok", **{f"S{i}": "ok" for i in range(1, 200)}}
+
+
 class _NoNetwork:
     """Answers each paid shape the run makes from a script; anything else
     reaching the SDK fails loudly. Streams are the compose; a forced tool is
@@ -583,7 +588,7 @@ class _NoNetwork:
             return _Stream(_text_msg("VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"))
         if "ENTRY READ:" in self._system(kw):
             # The full chronology's audit (stages/entry_audit.py) of a correct entry.
-            return _Stream(_text_msg('{"findings": [], "complete": true}'))
+            return _Stream(_text_msg(json.dumps({"lines": _ALL_OK, "findings": [], "complete": True})))
         return _Stream(_text_msg(REAL_MAP))
 
 

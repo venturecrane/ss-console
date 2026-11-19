@@ -41,14 +41,26 @@ def units(md: str | None = None) -> list[ER.Unit]:
     return ER.plan(md or doc([E1, E2]), {1, 2, 3}, HEADINGS, npages)
 
 
-def reply(*items: dict[str, Any], complete: bool = True) -> str:
-    return json.dumps({"findings": list(items), "complete": complete})
+#: A verdict for every label an invented entry here can carry, all ``ok``.
+ALL_OK = {"D": "ok", "P": "ok", **{f"S{i}": "ok" for i in range(1, 60)}}
+
+
+def reply(*items: dict[str, Any], complete: bool = True, lines: dict[str, str] | None = None) -> str:
+    return json.dumps({"lines": ALL_OK if lines is None else lines, "findings": list(items), "complete": complete})
 
 
 def item(**kw: Any) -> dict[str, Any]:
-    base = {"class": "value", "exhibit": 1, "page": 4, "quote": "pulse was 72", "action": "replace",
+    base = {"line": "S1", "class": "value", "exhibit": 1, "page": 4, "quote": "pulse was 72", "action": "replace",
             "replacement": "pulse was 78", "problem": "the page records 78"}  # fmt: skip
     return {**base, **kw}
+
+
+def on_line(u: ER.Unit, **kw: Any) -> dict[str, Any]:
+    """An item whose line is the unit's line holding its quote (unless named)."""
+    it = item(**kw)
+    if "line" not in kw:
+        it["line"] = next((lb for lb, t in u.lines.items() if it["quote"] in t), "S1")
+    return it
 
 
 # ---- plan --------------------------------------------------------------------------
@@ -82,11 +94,10 @@ def test_an_entry_showing_more_than_24_pages_is_split() -> None:
     assert [(u.part, u.parts, len(u.pages)) for u in one] == [(1, 1, 23)]
 
 
-def test_the_request_carries_the_entry_whole_the_gaps_and_each_page_by_the_one_rule(firm_config_path) -> None:
+def test_the_request_carries_the_entry_whole_and_each_page_by_the_one_rule(firm_config_path) -> None:
     from jobs.medchron import config as config_mod
 
     u = units()[1]
-    u.gaps.append("The writer's own index for this visit lists codes M54.5 that the entry does not state.")
 
     def modes(ex: int, pg: int) -> PM.Mode:
         return PM.Mode(PM.TEXT, "Vitals: BP 128/84, pulse 72.", "native") if pg == 4 else PM.Mode(PM.IMAGE, None, "x")
@@ -94,8 +105,12 @@ def test_the_request_carries_the_entry_whole_the_gaps_and_each_page_by_the_one_r
     system, content = ER.request(u, config_mod.load(str(firm_config_path)), "CLIENT: Alpha Example", _img, modes)
     texts = [b.get("text", "") for b in content]
     assert "{{" not in system and "ENTRY READ" in system
-    assert any(t.startswith("ENTRY N1:\n01/05/2025\nExample Clinic") for t in texts)
-    assert any("codes M54.5" in t for t in texts)
+    assert (
+        "ENTRY N1:\n[D] 01/05/2025\n[P] Example Clinic | Medical Diagnoses\n\nMedical Diagnoses\n"
+        "[S1] Blood pressure was 128/84 and pulse was 72 at triage. (Exhibit 1 - p. 4)\n\nAll Other Information\n"
+        "[S2] Therapy twice weekly for four weeks was planned. (Exhibit 1 - p. 5)"
+    ) in texts
+    assert not any("INDEX" in t for t in texts)  # no index-gap line, ever (round 3)
     assert sum(1 for b in content if b.get("type") == "image") == 2  # pp. 3 and 5
     assert any(t.startswith("PAGE TEXT") and "pulse 72" in t for t in texts)  # p. 4 as text
 
@@ -147,3 +162,66 @@ def test_over_share_fires_past_eight_per_hundred() -> None:
     assert not ER.over_share(8, 100)
     assert ER.over_share(9, 100)
     assert ER.over_share(1, 0)
+
+
+# ---- every line accounted for (round 3, 2026-11-18) ----------------------------------
+def test_a_reply_that_skips_one_line_is_unparsed() -> None:
+    n1 = units()[1]
+    assert n1.labels == ("D", "P", "S1", "S2")
+    skip = {"D": "ok", "P": "ok", "S1": "ok"}  # S2 never judged
+    with pytest.raises(RR.ReplyUnparsed):
+        ER.parse(reply(lines=skip), n1)
+    with pytest.raises(RR.ReplyUnparsed):
+        ER.parse(json.dumps({"findings": [], "complete": True}), n1)  # no lines at all
+    with pytest.raises(RR.ReplyUnparsed):
+        ER.parse(reply(lines={**skip, "S2": "fine"}), n1)  # not one of the three verdicts
+    assert ER.parse(reply(lines={**skip, "S2": "unreadable"}), n1).lines["S2"] == "unreadable"
+
+
+def test_a_quote_from_another_line_is_dropped() -> None:
+    n1 = units()[1]
+    got = ER.parse(reply(item(line="S2")), n1)  # "pulse was 72" is on S1, not S2
+    assert got.findings == [] and got.dropped == {"quote": 1}
+    assert ER.parse(reply(item(line="S9")), n1).dropped == {"line": 1}
+
+
+def test_findings_on_an_unreadable_line_or_page_are_dropped_and_a_bare_problem_is_counted() -> None:
+    n1 = units()[1]
+    lines = {"D": "ok", "P": "problem", "S1": "unreadable", "S2": "ok"}
+    got = ER.parse(reply(item(), lines=lines), n1)
+    assert got.findings == [] and got.dropped == {"unreadable": 1} and got.problem_without_finding == 1
+    obj = json.loads(reply(item(), lines={**lines, "S1": "problem"}))
+    obj["unreadable_pages"] = [{"exhibit": 1, "page": 4}]
+    assert ER.parse(json.dumps(obj), n1).dropped == {"unreadable": 1}
+
+
+def test_the_fifth_omitted_finding_is_counted_over_cap() -> None:
+    n1 = units()[1]
+    om = item(**{"class": "omitted", "action": "add", "replacement": "A plan was made. (Exhibit 1 - p. 4)"})
+    got = ER.parse(reply(*[om] * 5), n1)
+    assert len(got.findings) == 4 and got.omitted_over_cap == 1 and got.over_cap == 0
+
+
+def test_labels_and_the_tripwire_count_agree_on_a_heading_a_bare_citation_and_two_sentences_on_a_line() -> None:
+    from jobs.medchron.audit import claims as CL
+
+    e = (
+        "03/03/2025\nExample Clinic | All Other Information\n\nAll Other Information\n"
+        "Gait was steady at the visit. (Exhibit 1 - p. 2) Home exercise was reviewed again. (Exhibit 1 - p. 3)\n"
+        "(Exhibit 1 - p. 3)\n\nMedical Diagnoses\nA lumbar strain was assessed by the examiner. (Exhibit 1 - p. 4)"
+    )
+    md = doc([e])
+    us = ER.plan(md, {1}, HEADINGS, npages)
+    shown = ER.EL.numbered(e)[0].split("\n")
+    assert "(Exhibit 1 - p. 3)" in shown and "Medical Diagnoses" in shown  # shown, unlabelled
+    s_labels = [lb for u in us for lb in u.labels if lb.startswith("S")]
+    assert len(s_labels) == ER.count_sentences(CL.body_of(md)) == 4  # PRE's one, and three in the entry
+    n1 = next(u for u in us if u.anchor == "N1")
+    assert n1.lines["S1"] == "Gait was steady at the visit. (Exhibit 1 - p. 2)"
+    assert n1.lines["S2"] == "Home exercise was reviewed again. (Exhibit 1 - p. 3)"
+
+
+def test_the_prior_history_unit_has_only_sentence_labels() -> None:
+    pre = units()[0]
+    assert pre.anchor == ER.PRE and pre.labels == ("S1",)
+    assert pre.lines["S1"] == "A prior knee sprain was reported in an earlier year. (Exhibit 1 - p. 1)"

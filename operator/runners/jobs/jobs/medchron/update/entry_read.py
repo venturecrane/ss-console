@@ -14,9 +14,15 @@ reply says is applied here: ``entry_confirm.decide`` decides that.
   ``N<k>`` scheme; ``PRE`` for the prior-history block, read but
   ``record_only``), the pages it cites with one page either side inside the
   same exhibit, and is split so no unit shows more than MAX_SHOWN pages.
-* A finding names a class from CLASSES, a page the read was SHOWN, and a
-  quote found verbatim in the entry; any other finding is dropped and
-  counted. At most MAX_FINDINGS per unit are kept; the rest are counted.
+* The entry is shown as numbered lines (``entry_lines``): ``[D]``, ``[P]``,
+  ``[S1]``... The reply gives EVERY label a verdict (``ok``, ``problem`` or
+  ``unreadable``), or it is unparsed (retried, then split, then held:
+  round 3, 2026-11-18).
+* A finding names a class from CLASSES, a page the read was SHOWN, a line
+  label of the unit and a quote found verbatim in THAT line; any other
+  finding, and one on an ``unreadable`` line or page, is dropped and
+  counted. At most MAX_FINDINGS per unit are kept, MAX_OMITTED of them
+  ``omitted``; the rest are counted.
 """
 
 from __future__ import annotations
@@ -29,7 +35,8 @@ from typing import Any, Callable
 
 from ..audit import claims as CL
 from ..prompts import load
-from . import body as B, review_pages as RV, review_parts as RP, review_repair as RR
+from . import body as B, entry_lines as EL, review_pages as RV, review_parts as RP, review_repair as RR
+from .entry_lines import count_sentences as count_sentences  # the tripwire's count, the labels' splitter
 
 PROMPT = "entry-read-system"
 CLASSES = ("value", "wrong_field", "unsupported", "pointer", "omitted", "date", "provider", "another_person")
@@ -39,6 +46,8 @@ CLASSES = ("value", "wrong_field", "unsupported", "pointer", "omitted", "date", 
 #: request show up to 120.
 MAX_SHOWN = RP.FINISH_MAX_IMAGES
 MAX_FINDINGS = 12
+MAX_OMITTED = 4
+VERDICTS = ("ok", "problem", "unreadable")
 #: Applied edits per sentence of the document above which the run is held.
 EDIT_SHARE = 0.08
 PRE = "PRE"
@@ -54,8 +63,12 @@ class Unit:
     record_only: bool = False
     part: int = 1
     parts: int = 1
-    gaps: list[str] = field(default_factory=list)  # index-gap lines (``index_gaps.attach``)
     cited: list[tuple[int, int]] = field(default_factory=list)  # the cited pages this unit shows (never sent)
+    lines: dict[str, str] = field(default_factory=dict)  # label -> the line's exact text (``entry_lines``)
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        return tuple(self.lines)
 
     @property
     def key(self) -> str:
@@ -78,6 +91,7 @@ class ReadFinding:
     replacement: str
     problem: str = ""
     record_only: bool = False
+    line: str = ""  # the label of the line it is about
 
 
 @dataclass
@@ -85,6 +99,9 @@ class Parsed:
     findings: list[ReadFinding]
     dropped: Counter = field(default_factory=Counter)
     over_cap: int = 0
+    lines: dict[str, str] = field(default_factory=dict)  # label -> ok | problem | unreadable
+    omitted_over_cap: int = 0
+    problem_without_finding: int = 0
 
 
 def _cites_of(text: str) -> set[tuple[int, int]]:
@@ -114,8 +131,10 @@ def _chunks(ps: list[tuple[int, int]], npages: Callable[[int], int]) -> list[lis
 
 def _units(anchor: str, text: str, cited: set[tuple[int, int]], npages: Callable[[int], int], **kw: Any) -> list[Unit]:
     chunks = _chunks(sorted(cited), npages)
+    lines = EL.numbered(text, bool(kw.get("record_only")))[1]
     return [
-        Unit(anchor, text, _shown(c, npages), part=i, parts=len(chunks), cited=c, **kw) for i, c in enumerate(chunks, 1)
+        Unit(anchor, text, _shown(c, npages), part=i, parts=len(chunks), cited=c, lines=lines, **kw)
+        for i, c in enumerate(chunks, 1)
     ]
 
 
@@ -147,9 +166,8 @@ def request(
     split = f" (part {unit.part} of {unit.parts}: only the pages below are shown)" if unit.parts > 1 else ""
     kind = "PRIOR HISTORY BLOCK" if unit.record_only else "ENTRY"
     out: list[dict[str, Any]] = [{"type": "text", "text": client}]
-    out.append({"type": "text", "text": f"{kind} {unit.anchor}{split}:\n{unit.text}"})
-    if unit.gaps:
-        out.append({"type": "text", "text": "WRITER'S INDEX:\n" + "\n".join(unit.gaps)})
+    shown = EL.numbered(unit.text, unit.record_only)[0]
+    out.append({"type": "text", "text": f"{kind} {unit.anchor}{split}:\n{shown}"})
     out.append({"type": "text", "text": f"PAGES SHOWN: {_page_list(unit.pages)}"})
     cited = unit.cites()
     for ex, pg in unit.pages:
@@ -161,16 +179,25 @@ def request(
 _int = RR._int  # the review's own field reader (a bool or a non-digit is None)
 
 
-def _items(reply: str, lenient: bool) -> list[Any]:
-    """The reply's findings list. Raises ``review_repair.ReplyUnparsed`` exactly
-    as the update review's parse does (not JSON, no ``complete``): the stage
-    retries or splits the unit on it."""
+def _reply(reply: str, unit: Unit, lenient: bool) -> dict[str, Any]:
+    """The reply object. Raises ``review_repair.ReplyUnparsed`` as the update
+    review's parse does (not JSON, no ``complete``), and when ``lines`` does
+    not give every label of the unit one of VERDICTS: the stage retries or
+    splits the unit on it, and a line no verdict covers is never passed."""
     RR.parse_reply(reply, lenient=lenient)
     obj = json.loads(reply[reply.find("{") : reply.rfind("}") + 1])
-    return list(obj.get("findings") or [])
+    lines = obj.get("lines")
+    if not isinstance(lines, dict):
+        raise RR.ReplyUnparsed("the reply gives no verdict per line")
+    missing = [lb for lb in unit.labels if lb not in lines]
+    if missing:
+        raise RR.ReplyUnparsed(f"the reply gives no verdict for line(s) {', '.join(missing[:6])}")
+    if any(v not in VERDICTS for v in lines.values()):
+        raise RR.ReplyUnparsed("a line's verdict is not ok, problem or unreadable")
+    return obj
 
 
-def _one(item: object, unit: Unit) -> ReadFinding | str:
+def _one(item: object, unit: Unit, verdicts: dict[str, str], dark: set[tuple[int, int]]) -> ReadFinding | str:
     """One item as a finding, or the reason it is dropped."""
     if not isinstance(item, dict):
         return "not_object"
@@ -182,8 +209,13 @@ def _one(item: object, unit: Unit) -> ReadFinding | str:
         ex = unit.pages[0][0]
     if ex is None or pg is None or (ex, pg) not in unit.pages:
         return "page"
+    line = str(item.get("line") or "").strip().strip("[]")
+    if line not in unit.lines:
+        return "line"
+    if verdicts.get(line) == "unreadable" or (ex, pg) in dark:
+        return "unreadable"
     quote = item.get("quote") if isinstance(item.get("quote"), str) else ""
-    if not quote.strip() or quote not in unit.text:
+    if not quote.strip() or quote not in unit.lines[line]:
         return "quote"
     action = str(item.get("action") or "").strip().lower()
     return ReadFinding(
@@ -197,45 +229,53 @@ def _one(item: object, unit: Unit) -> ReadFinding | str:
         item.get("replacement") if isinstance(item.get("replacement"), str) else "",
         str(item.get("problem") or "")[:400],
         unit.record_only,
+        line,
     )
 
 
+def _dark(obj: dict[str, Any]) -> set[tuple[int, int]]:
+    """The pages the reply says it could not read."""
+    out = set()
+    for d in obj.get("unreadable_pages") or []:  # the prompt names no shape: each one a reader might write
+        if isinstance(d, dict):
+            ex, pg = _int(d.get("exhibit")), _int(d.get("page"))
+        elif isinstance(d, list) and len(d) == 2:
+            ex, pg = _int(d[0]), _int(d[1])
+        else:
+            m = _PAGE_NAME.search(str(d))
+            ex, pg = (int(m.group(1)), int(m.group(2))) if m else (None, None)
+        if ex is not None and pg is not None:
+            out.add((ex, pg))
+    return out
+
+
+_PAGE_NAME = re.compile(r"Exhibit\s*(\d+)\D+?(\d+)", re.I)
+
+
 def parse(reply: str, unit: Unit, *, lenient: bool = False) -> Parsed:
-    """The read's findings, each checked against the unit. Raises
-    ``review_repair.ReplyUnparsed`` when the reply is not one complete JSON
-    object (the same signal ``review_repair.parse_reply`` gives)."""
-    out = Parsed([])
-    for item in _items(reply, lenient):
-        got = _one(item, unit)
+    """The read's verdicts and findings, each finding checked against the
+    unit. Raises ``review_repair.ReplyUnparsed`` when the reply is not one
+    complete JSON object or skips a line (``_reply``)."""
+    obj = _reply(reply, unit, lenient)
+    verdicts = {lb: str(obj["lines"][lb]) for lb in unit.labels}
+    out = Parsed([], lines=verdicts)
+    dark = _dark(obj)
+    for item in list(obj.get("findings") or []):
+        got = _one(item, unit, verdicts, dark)
         if isinstance(got, str):
             out.dropped[got] += 1
+        elif got.klass == "omitted" and sum(f.klass == "omitted" for f in out.findings) >= MAX_OMITTED:
+            out.omitted_over_cap += 1
         elif len(out.findings) >= MAX_FINDINGS:
             out.over_cap += 1
         else:
             out.findings.append(got)
+    on = {f.line for f in out.findings}
+    out.problem_without_finding = sum(1 for lb, v in verdicts.items() if v == "problem" and lb not in on)
     return out
 
 
 # ---- the tripwire -----------------------------------------------------------------
-_END = re.compile(r"(?<=[.!?])\s+")
-_WORDY = re.compile(r"[A-Za-z]{2,}")
-
-
-def _line_sentences(line: str) -> int:
-    text = CL.CITE.sub("", line).strip()
-    if not _WORDY.search(text) or (len(text) <= 60 and not re.search(r"[.!?:;]$", text)):
-        return 0  # a bare citation, or a heading
-    return sum(1 for s in _END.split(text) if _WORDY.search(s))
-
-
-def count_sentences(body: str) -> int:
-    """Sentences of the chronology body: entry text past its date and
-    provider lines, the preamble, never a heading or a bare citation."""
-    pre, ents = B.split_body(body)
-    lines = pre.splitlines() + [ln for e in ents for ln in e.splitlines()[2:]]
-    return sum(_line_sentences(ln) for ln in lines)
-
-
 def over_share(applied_count: int, sentence_count: int) -> bool:
     """True when applied edits exceed EDIT_SHARE of the document's sentences."""
     return applied_count > EDIT_SHARE * max(sentence_count, 0)

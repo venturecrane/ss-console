@@ -596,11 +596,12 @@ def test_the_fixture_pdfs_are_the_same_size_on_every_call() -> None:
 def test_a_planted_effort_change_fails_the_chronology_case(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: Any
 ) -> None:
-    """FALSIFIER: the audit stage's default effort removed (``llm.EFFORT_DEFAULTS``),
-    and the chronology's recorded requests no longer match their golden."""
+    """FALSIFIER: the audit loop's default effort removed (``llm.EFFORT_DEFAULTS``),
+    and the update's recorded requests no longer match their golden (the full
+    chronology no longer runs that loop; the update lane does)."""
     monkeypatch.setattr(llm, "EFFORT_DEFAULTS", {})
-    got = record_case("medchron", tmp_path, monkeypatch, request)
-    bad = gk.compare_jsonl(DIR / "medchron.jsonl", got)
+    got = record_case("medchron_update", tmp_path, monkeypatch, request)
+    bad = gk.compare_jsonl(DIR / "medchron_update.jsonl", got)
     assert bad and any(p.endswith(".effort") for p in bad), bad
 
 

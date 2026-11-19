@@ -2875,7 +2875,7 @@
       "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
       "wiped": false
     },
-    "running/exit.run.audit.2": {
+    "running/exit.run.audit.3": {
       "code": "audit",
       "ended_while_away": false,
       "ending": "failed",
@@ -2899,28 +2899,26 @@
       "way_out": ["medchron_job_resume", "medchron_job_submit"],
       "wiped": false
     },
-    "running/exit.run.audit.3": {
-      "code": "audit",
+    "running/exit.run.audit.75": {
+      "code": null,
       "ended_while_away": false,
-      "ending": "failed",
-      "filed_sets": 0,
-      "firm_messages": 0,
-      "firm_owed": 0,
-      "owner": "smd",
-      "paged": ["job_stopped"],
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
       "record_late": false,
       "run": {
         "by": "code",
-        "code": "audit",
-        "event": "stop",
-        "kind": "check",
-        "stage": "audit",
+        "event": "end",
+        "release": "unknown",
         "v": 1
       },
       "second": null,
-      "state": "failed",
+      "state": "delivered",
       "told_while_away": 0,
-      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "way_out": ["done"],
       "wiped": false
     },
     "running/exit.run.billing_docx.1": {
@@ -6060,6 +6058,7 @@
     "delivered/deploy_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
     "delivered/machine_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
     "delivered/upload_readback_mismatch": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
+    "running/exit.run.audit.9": "the entry audit's answers-pending exit is reached only under its $0 replay switch (ENTRY_AUDIT_REPLAY=1, read only by stages/entry_audit_io.replaying), which no seat run sets",
     "submitted/upload_readback_mismatch": "a submitted job has run nothing, so nothing of a run can stop, mismatch or be decided (daemon.claim_next moves it to its job dir; only run_job starts a child)"
   }
 }

@@ -7,15 +7,15 @@ the item, never the proposed replacement (except an added sentence, which it
 is shown and asked only whether the pages state it). ``decide`` is pure code
 (tightened in the fix round of 2026-11-18):
 
-* provider and another_person findings, and every finding on a record-only
-  unit, are recorded, never applied; a date finding is applied only on an
-  entry dated after today, to a date the cited page's text states and the
-  blind read gives;
+* date, provider and another_person findings, and every finding on a
+  record-only unit, are recorded, never applied (a re-dated entry would
+  leave the summary tables built before the audit stale);
 * value / wrong_field / unsupported: applied only when the blind read names
-  the finding's page and its value agrees with the replacement's changed
-  value, a negation it changes is carried by the blind read too, it drops
-  no other content (``drops_content``), and on a text page the page's own
-  layer carries every number, 4+ letter word and negation it adds;
+  the finding's page and its value agrees (``_agrees``: what the replacement
+  adds is in it, its numbers are in the corrected sentence, its polarity and
+  units match), the replacement drops no other content (``drops_content``),
+  and on a text page the page's own layer carries every number, 4+ letter
+  word and negation it adds;
 * pointer: only a one-page citation moved to one page the blind read names
   (else ``pointer_multi``);
 * omitted: applied only on YES on the finding's page, a page the entry
@@ -35,14 +35,13 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
 from typing import Any
 
 from ..audit import claims as CL
 from ..prompts import load
 from . import review_pages as RV, review_repair as RR
 from .entry_read import Images, Parsed, ReadFinding, Unit
-from .values import NUM, numbers, words
+from .values import NUM, norm_number, numbers, words
 
 PROMPT = "entry-confirm-system"
 STATED, NOT_STATED, CANNOT_READ, YES, NO, UNPARSED = "STATED", "NOT_STATED", "CANNOT_READ", "YES", "NO", "UNPARSED"
@@ -147,9 +146,10 @@ Decision = tuple[str, Any]  # ("apply", RR.Finding) | ("record", reason)
 #: Words that turn a statement into its opposite; a change of them is checked
 #: like a changed value (fix round 2026-11-18).
 NEGATIONS = frozenset({"no", "not", "denies", "deny", "denied", "without", "negative", "none"})
-#: A diagnosis code as the writer's INDEX states one (``icd.ICD_SHAPE``'s
-#: letter forms, and an ICD-9 code with its decimal), found inside a sentence.
-CODE = re.compile(r"\b(?:[A-Z]\d{2}(?:\.[0-9A-Z]{1,4}|[0-9A-Z]{0,4})|\d{3}\.\d{1,2})\b")
+#: An ICD-10 code as the writer's INDEX states one: a letter, two digits, a
+#: dot and one to four characters, found inside a sentence (round 3: an
+#: ordinary number such as a temperature or a vertebra never matches).
+CODE = re.compile(r"\b[A-Z]\d{2}\.[0-9A-Z]{1,4}\b")  # never "100.4" or "T12"
 CODES_IN_INDEX, DROPS_CONTENT, POINTER_MULTI = "codes_in_index", "drops_content", "pointer_multi"
 
 
@@ -167,10 +167,30 @@ def _blind_agrees(f: ReadFinding, c: Confirm | None) -> bool:
 
 
 def _claim(f: ReadFinding, unit: Unit) -> RR.Claim | str:
-    hits = [c for c in (unit.entry.claims if unit.entry else []) if f.quote in c.text]
-    if len(hits) != 1 or hits[0].text.count(f.quote) != 1:
-        return "the quote is not in exactly one cited sentence of the entry" if not hits else "the quote is ambiguous"
+    """The cited paragraph the finding's labelled line sits in (round 3: the
+    line is the handle, not a free quote)."""
+    line = unit.lines.get(f.line, "")
+    if not line or line.count(f.quote) != 1:
+        return "the quote is not once in its line"
+    hits = [c for c in (unit.entry.claims if unit.entry else []) if line in c.text]
+    if len(hits) != 1 or hits[0].text.count(line) != 1:
+        return "the line is not in exactly one cited sentence of the entry"
     return hits[0]
+
+
+def _cite_of(f: ReadFinding, unit: Unit, claim: RR.Claim) -> re.Match[str]:
+    """The line's own last citation, else its paragraph's."""
+    own = list(CL.CITE.finditer(unit.lines.get(f.line, "")))
+    return own[-1] if own else list(CL.CITE.finditer(claim.text))[-1]
+
+
+def edited_line(f: ReadFinding, unit: Unit) -> str:
+    """The finding's line as a value or pointer edit leaves it."""
+    line = unit.lines[f.line]
+    if f.klass == "pointer":
+        m = list(CL.CITE.finditer(line))[-1]
+        return f"{line[: m.start()]}(Exhibit {f.exhibit} - p. {f.page}){line[m.end() :]}"
+    return line.replace(f.quote, f.replacement, 1)
 
 
 def _edit(f: ReadFinding, anchor: str, action: str, corrected: str) -> RR.Finding:
@@ -206,9 +226,33 @@ def _changed(quote: str, replacement: str) -> str:
     return " ".join(t for t in _norm(replacement).split() if t not in old)
 
 
-def _agrees(f: ReadFinding, c: Confirm) -> bool:
-    got, changed = _norm(c.value), _changed(f.quote, f.replacement)
-    return bool(changed) and got in (changed, _norm(f.replacement))
+#: A unit printed right after a number: two values in different units never agree.
+_UNIT = re.compile(r"(\d+(?:[.,/:]\d+)*)\s*(mcg|mg|g|ml|units|mmhg|lbs|kg|cm|mm|%)(?![a-z])", re.I)
+
+
+def _units(s: str) -> dict[str, str]:
+    return {norm_number(m.group(1)): m.group(2).lower() for m in _UNIT.finditer(CL.CITE.sub("", s))}
+
+
+def _agrees(f: ReadFinding, c: Confirm, sentence: str) -> bool:
+    """The blind value agrees with the correction (round 3, 2026-11-18):
+    (a) every number, 4+ letter word and negation the replacement adds is in
+    the blind value; (b) every number of the blind value is in the corrected
+    sentence; (c) the blind value carries a negation exactly when the
+    replacement's changed words do; (d) a number both print with a unit
+    carries the same unit. The blind value's units and other words are
+    otherwise ignored."""
+    nums, ws = _added(f.quote, f.replacement)
+    ch = nums | ws
+    bv_n = numbers(c.value)
+    if not ch or not ch <= bv_n | _w4(c.value) | _negations(c.value):
+        return False
+    if bv_n - numbers(sentence):
+        return False
+    if bool(_negations(c.value)) != bool(_negations(_changed(f.quote, f.replacement))):
+        return False
+    mine, theirs = _units(f.replacement), _units(c.value)
+    return all(mine[n] == theirs[n] for n in nums if n in mine and n in theirs)
 
 
 def _page_carries(claim_text: str, f: ReadFinding, page_text: str) -> str:
@@ -230,7 +274,7 @@ def _value(f: ReadFinding, c: Confirm | None, page_text: str | None, unit: Unit)
         return _record(claim)
     if not f.replacement.strip() or CL.CITE.search(f.replacement):
         return _record("no replacement, or one carrying a citation")
-    cite = list(CL.CITE.finditer(claim.text))[-1]
+    cite = _cite_of(f, unit, claim)
     if int(cite.group(1)) != f.exhibit or f.page not in CL.parse_pages(cite.group(2)):
         return _record("the page is not one the sentence cites")
     if _drops(f.quote, f.replacement):
@@ -239,27 +283,26 @@ def _value(f: ReadFinding, c: Confirm | None, page_text: str | None, unit: Unit)
         return _record(why)
     if not _blind_agrees(f, c):
         return _record("no agreeing blind read on the finding's page")
-    if not _agrees(f, c):
+    line = unit.lines[f.line]
+    corrected = claim.text.replace(line, edited_line(f, unit), 1)
+    if not _agrees(f, c, corrected):
         return _record("the blind read's value differs from the replacement")
-    if _negations(f.quote) != _negations(f.replacement) and bool(_negations(c.value)) != bool(
-        _negations(f.replacement)
-    ):
-        return _record("a negation changes and the blind read does not carry it")
-    return ("apply", _edit(f, claim.anchor, "replace", claim.text.replace(f.quote, f.replacement, 1)))
+    return ("apply", _edit(f, claim.anchor, "replace", corrected))
 
 
 def _pointer(f: ReadFinding, c: Confirm | None, unit: Unit) -> Decision:
-    """Only a one-page citation moved to one other page the blind read names."""
+    """Only the line's own one-page citation moved to one other page the
+    blind read names."""
     claim = _claim(f, unit)
     if isinstance(claim, str):
         return _record(claim)
-    m = list(CL.CITE.finditer(claim.text))[-1]
-    pages = CL.parse_pages(m.group(2)) or []
-    if len(pages) != 1 or (int(m.group(1)), pages[0]) == (f.exhibit, f.page):
+    own = list(CL.CITE.finditer(unit.lines[f.line]))
+    pages = CL.parse_pages(own[-1].group(2)) or [] if len(own) == 1 else []
+    if len(pages) != 1 or (int(own[-1].group(1)), pages[0]) == (f.exhibit, f.page):
         return _record(POINTER_MULTI)
     if c is None or c.answer != STATED or not _same_page(f, c):
         return _record(POINTER_MULTI)
-    new = f"{claim.text[: m.start()]}(Exhibit {f.exhibit} - p. {f.page}){claim.text[m.end() :]}"
+    new = claim.text.replace(unit.lines[f.line], edited_line(f, unit), 1)
     return ("apply", _edit(f, claim.anchor, "replace", new))
 
 
@@ -283,36 +326,10 @@ def _omitted(f: ReadFinding, c: Confirm | None, unit: Unit, others: list[RR.Entr
         return _record("the sentence states no value to compare")
     if _carried(f.replacement, (f.exhibit, f.page), [e for e in others if e.anchor != unit.anchor]):
         return _record("another entry already carries that page and those values")
-    return ("apply", _edit(f, unit.anchor, "add", f.replacement.strip()))
-
-
-def _mdy(s: str) -> date | None:
-    m = re.match(r"(\d{2})/(\d{2})/(\d{4})$", s.strip())
-    try:
-        return date(int(m.group(3)), int(m.group(1)), int(m.group(2))) if m else None
-    except ValueError:
-        return None
-
-
-def dated_after(unit: Unit, today: date | None) -> bool:
-    """True when the unit's entry is dated after `today` (a misread date)."""
-    d = _mdy(unit.entry.text[:10]) if unit.entry is not None else None
-    return d is not None and today is not None and d > today
-
-
-def _date(f: ReadFinding, c: Confirm | None, page_text: str | None, unit: Unit, today: date | None) -> Decision:
-    """A date finding is applied only on an entry dated after today, to a date
-    the cited page's text states and the blind read gives."""
-    new = _mdy(f.replacement)
-    if unit.entry is None or not dated_after(unit, today) or new is None or today is None or new > today:
-        return _record("a date finding is recorded unless the entry is dated after today")
-    if (f.exhibit, f.page) not in unit.cites():
-        return _record("the page is not one the entry cites")
-    edit = _edit(f, unit.anchor, "redate", f.replacement.strip())
-    if RR._date_on_page(edit, unit.entry, lambda _x, _p: page_text):
-        return _record("the page text does not state the corrected date")
-    if not _blind_agrees(f, c) or _mdy(c.value) != new:
-        return _record("no agreeing blind read of the date")
+    if f.line not in unit.lines or not unit.lines[f.line]:
+        return _record("the line to add after is not in the entry")
+    edit = _edit(f, unit.anchor, "add", f.replacement.strip())
+    edit.fid = f.line  # the label of the line the sentence goes after (``entry_audit_apply``)
     return ("apply", edit)
 
 
@@ -322,17 +339,16 @@ def decide(
     page_text: str | None,
     unit: Unit,
     others: list[RR.Entry] | None = None,
-    today: date | None = None,
 ) -> Decision:
     """("apply", edit) or ("record", reason). `page_text` is the finding
     page's usable text layer (``page_mode`` TEXT), None when it is shown as a
     picture; `others` is every entry of the document (``unit.entry`` excluded
-    by anchor); `today` decides whether a date finding may apply."""
+    by anchor). A date finding is always recorded (round 3, 2026-11-18): a
+    re-dated entry would leave the summary tables built before the audit
+    (``stages/build_doc.py``) stale."""
     f = finding
     if f.record_only or unit.record_only:
         return _record("a prior-history finding is recorded, never applied")
-    if f.klass == "date":
-        return _date(f, confirm, page_text, unit, today)
     if f.klass in RECORD_CLASSES:
         return _record(f"a {f.klass} finding is recorded, never applied")
     if confirm is not None and confirm.answer in (UNPARSED, CANNOT_READ, NOT_STATED, NO):

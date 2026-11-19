@@ -57,9 +57,7 @@ def test_a_stated_code_is_no_gap_dotted_or_not() -> None:
     assert [g for g in IG.gaps(MAP, ents) if g.kind == "codes"] == []
 
 
-def test_the_gap_line_rides_into_its_entry_s_unit_only() -> None:
+def test_no_gap_rides_into_a_unit() -> None:
+    """Round 3 (2026-11-18): a gap is counted, never shown to the read."""
     us = ER.plan(doc([E1, E2]), {1, 2}, HEADINGS, lambda ex: 5)
-    left = IG.attach(us, IG.gaps(MAP))
-    by = {u.anchor: u.gaps for u in us}
-    assert by["N1"] == ["The writer's own index for this visit lists codes S33.5XXA that the entry does not state."]
-    assert by["N2"] == [] and by[ER.PRE] == [] and left == []
+    assert IG.gaps(MAP) and not hasattr(IG, "attach") and not any(hasattr(u, "gaps") for u in us)

@@ -1,0 +1,17 @@
+{
+  "code": null,
+  "ended_while_away": false,
+  "ending": "delivered",
+  "filed_sets": 1,
+  "firm_messages": 1,
+  "firm_owed": 1,
+  "owner": "firm",
+  "paged": ["reply_unproven"],
+  "record_late": false,
+  "run": { "by": "code", "event": "end", "release": "unknown", "v": 1 },
+  "second": null,
+  "state": "delivered",
+  "told_while_away": 1,
+  "way_out": ["done"],
+  "wiped": true
+}

@@ -13,14 +13,14 @@ from typing import Any
 
 from jobs.medchron.audit import claims as CL
 from jobs.medchron.update import entry_confirm as EC, entry_read as ER, review_repair as RR
-from test_entry_read import E1, E2, HEADINGS, _img, doc, item, reply, units
+from test_entry_read import E1, E2, HEADINGS, _img, doc, item, on_line, reply, units
 
 KEEP = {1, 2, 3}
 PAGE4 = "Triage vitals. Blood pressure 128/84. Pulse 78. Lumbar flexion limited to 40 degrees."
 
 
 def found(u: ER.Unit, **kw: Any) -> ER.ReadFinding:
-    got = ER.parse(reply(item(**kw)), u)
+    got = ER.parse(reply(on_line(u, **kw)), u)
     assert got.findings, got.dropped
     return got.findings[0]
 
@@ -215,20 +215,45 @@ def test_a_pointer_on_a_multi_page_citation_or_to_its_own_page_is_recorded() -> 
     assert EC.decide(same, EC.Confirm("STATED", 1, 4), None, u) == ("record", EC.POINTER_MULTI)
 
 
-def test_a_date_applies_only_on_an_entry_dated_after_today_stated_on_its_page_and_read_blind() -> None:
-    from datetime import date
-
-    md, u = _n1()
+def test_a_date_is_always_recorded_even_on_an_entry_dated_after_today() -> None:
+    """Round 3: a re-dated entry would leave the summary tables built before
+    the audit stale, so even a well-evidenced date is recorded."""
+    _md, u = _n1()
     f = found(u, **{"class": "date", "quote": "03/30/2026", "replacement": "01/30/2026", "action": "redate"})
-    page, c, today = "Visit date 01/30/2026. Patient seen.", EC.Confirm("STATED", 1, 4, "01/30/2026"), date(2026, 2, 1)
-    d = EC.decide(f, c, page, u, today=today)
-    assert d[0] == "apply" and d[1].action == "redate"
-    out, _ = RR.apply(md, [d[1]], KEEP, HEADINGS, evidence=lambda _x, _p: page, shown=EC.shown([u]))
-    assert d[1].outcome == "applied" and "01/30/2026\nExample Clinic" in out and "03/30/2026" not in out
-    assert EC.decide(f, c, page, u, today=date(2026, 4, 1))[0] == "record"  # not after today
-    assert EC.decide(f, None, page, u, today=today)[0] == "record"  # no blind read
-    assert EC.decide(f, c, "Patient seen.", u, today=today)[0] == "record"  # the page does not state it
-    assert EC.decide(f, c, page, u)[0] == "record"  # no today: recorded
+    page, c = "Visit date 01/30/2026. Patient seen.", EC.Confirm("STATED", 1, 4, "01/30/2026")
+    assert EC.decide(f, c, page, u) == ("record", "a date finding is recorded, never applied")
+    assert not hasattr(EC, "dated_after")
+
+
+# ---- the agreement rule (round 3) ----------------------------------------------------
+E6 = (
+    "02/02/2025\nExample Clinic | All Other Information\n\nAll Other Information\n"
+    "BP 142/90 was recorded at intake for the visit. (Exhibit 1 - p. 4)\n\n"
+    "The plan was ibuprofen 800 mg for the neck pain. (Exhibit 1 - p. 4)\n\n"
+    "Prednisone 20 mg was started for the flare today. (Exhibit 1 - p. 4)"
+)
+
+
+def _value(quote: str, repl: str, blind: str, entry: str = E6) -> str:
+    _md, u = _n1(entry)
+    return EC.decide(found(u, quote=quote, replacement=repl), EC.Confirm("STATED", 1, 4, blind), None, u)[0]
+
+
+def test_a_blind_value_carrying_the_unit_or_more_words_still_agrees() -> None:
+    assert _value("BP 142/90", "BP 124/90", "124/90 mmHg") == "apply"
+    assert _value("ibuprofen 800 mg", "ibuprofen 600 mg", "600 mg three times daily") == "apply"
+
+
+def test_a_blind_value_with_another_number_or_unit_disagrees() -> None:
+    assert _value("2 tablets", "4 tablets", "2 tablets", E5) == "record"
+    assert _value("20 mg", "40 mg", "40 mcg") == "record"
+    assert _value("20 mg", "40 mg", "40 mg") == "apply"
+    assert _value("BP 142/90", "BP 124/90", "124/90 and 88/60") == "record"  # a number the sentence does not state
+
+
+def test_an_ordinary_number_is_not_a_diagnosis_code() -> None:
+    assert not EC.CODE.search("Temperature was 100.4 at triage.") and not EC.CODE.search("Fracture at T12 seen.")
+    assert EC.CODE.search("Lumbar strain M54.5 was assessed.")
 
 
 def test_a_confirm_shows_at_most_eight_pages_around_the_finding(firm_config_path) -> None:

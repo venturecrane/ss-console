@@ -36,14 +36,25 @@ DOC = (
     "Alpha Example - Medical Chronology\n\n## Treatment Timeline\n\n## Diagnostic Highlights\n\n"
     f"## Medical Chronology\n\n{E1}\n\n{E2}\n\n## Exhibit List\n"
 )
-VALUE = {"class": "value", "exhibit": 1, "page": 2, "quote": "pulse was 72", "action": "replace",
+VALUE = {"line": "S1", "class": "value", "exhibit": 1, "page": 2, "quote": "pulse was 72", "action": "replace",
          "replacement": "pulse was 78", "problem": "the page records 78"}  # fmt: skip
-DATE = {"class": "date", "exhibit": 1, "page": 2, "quote": "01/05/2025", "action": "none", "replacement": ""}
+DATE = {
+    "line": "D",
+    "class": "date",
+    "exhibit": 1,
+    "page": 2,
+    "quote": "01/05/2025",
+    "action": "none",
+    "replacement": "",
+}
 STATED = {"answer": "STATED", "exhibit": 1, "page": 2, "value": "78"}
 
 
+ALL_OK = {"D": "ok", "P": "ok", **{f"S{i}": "ok" for i in range(1, 60)}}
+
+
 def _reply(*items: dict[str, Any]) -> str:
-    return json.dumps({"findings": list(items), "complete": True})
+    return json.dumps({"lines": ALL_OK, "findings": list(items), "complete": True})
 
 
 def _read_reply(text: str) -> str:
@@ -255,31 +266,6 @@ def test_rehearse_projects_the_reads_and_confirms_from_the_built_document(scene)
 
 
 # ---- the fix round (2026-11-18) -------------------------------------------------------
-#: The read requests of the scene's two entries, hashed before the fix round
-#: (a $0 proof's saved replies are keyed by these): unchanged for any unit
-#: that shows 24 pages or fewer.
-PINNED = {
-    "N1": "cceea83e6a2ecddec2d1cc1c0ba69b13b31c8d9a4e16a9f060f38136d08ab058",
-    "N2": "9ee3defc436726d14fd109ee83e6279a33b08723d15c357b350a7c0b3baf647f",
-}
-
-
-def test_a_small_units_read_request_is_byte_identical_to_before_the_fix_round(scene) -> None:
-    from jobs.medchron.page_mode import Modes
-    from jobs.stages import update_review as UR
-    from jobs.stages.update_review_io import _image_source
-
-    sr, _doc, _log = scene(None)
-    pl = IO.plan(sr.slug_dir, "alpha", sr.cfg, DOC)
-    modes = Modes.open(sr.slug_dir, "alpha")
-    got = {}
-    for u in pl.units:
-        system, content = ER.request(u, sr.cfg, UR._client(sr), _image_source(sr), modes)
-        got[u.key] = IO.request_hash(IO.model(sr.cfg), system, content)
-    modes.close()
-    assert got == PINNED
-
-
 def test_a_bad_saved_reply_is_asked_again_and_only_the_unread_entry_is_paid_for(scene) -> None:
     sr, doc, log = scene(Client(lambda t: "no answer" if "ENTRY N1" in t else _reply()))
     assert EA.run(sr) == EA.EXIT_HELD
@@ -297,18 +283,25 @@ def test_a_bad_saved_reply_is_asked_again_and_only_the_unread_entry_is_paid_for(
     assert third.calls.count("read") == 1  # a reply that ran out is never reused
 
 
-def test_a_released_tripwire_applies_and_is_recorded(scene, monkeypatch) -> None:
+def test_a_released_tripwire_applies_only_for_the_document_it_names(scene, monkeypatch) -> None:
+    import re
+
     monkeypatch.setattr(ER, "EDIT_SHARE", 0.0)
     sr, doc, log = scene(Client())
     assert EA.run(sr) == EA.EXIT_HELD and doc.read_text(encoding="utf-8") == DOC
+    sha = re.search(r"doc_sha ([0-9a-f]{64})", " ".join(log)).group(1)  # the hold line names it for SMD
     rel = sr.slug_dir / "runs" / "alpha" / IO.DIR / IO.RELEASE
-    rel.write_text(json.dumps({"by": "smd-operator", "why": ""}), encoding="utf-8")
-    assert EA.run(scene(Client(), fresh=False)[0]) == EA.EXIT_HELD  # an empty why is no release
-    rel.write_text(json.dumps({"by": "smd-operator", "why": "read every edit against its page"}), encoding="utf-8")
+    why = "read every edit against its page"
+    for bad in ({"by": "smd-operator", "why": ""}, {"by": "smd-operator", "why": why},
+                {"by": "smd-operator", "why": why, "doc_sha": "0" * 64}):  # fmt: skip
+        rel.write_text(json.dumps(bad), encoding="utf-8")
+        sr2, _d, log2 = scene(Client(), fresh=False)
+        assert EA.run(sr2) == EA.EXIT_HELD and any("release is ignored" in ln for ln in log2)
+    rel.write_text(json.dumps({"by": "smd-operator", "why": why, "doc_sha": sha}), encoding="utf-8")
     sr3, _d, log3 = scene(Client(), fresh=False)
     assert EA.run(sr3) == 0, log3
     assert "pulse was 78" in doc.read_text(encoding="utf-8")
-    assert _record(sr)["tripwire_release"] == {"by": "smd-operator", "why": "read every edit against its page"}
+    assert _record(sr)["tripwire_release"] == {"by": "smd-operator", "why": why, "doc_sha": sha}
 
 
 def test_a_network_failure_in_a_confirm_exits_for_a_retry(scene) -> None:
@@ -353,18 +346,28 @@ def test_a_request_refused_as_too_large_is_read_page_by_page(scene) -> None:
     assert _record(sr)["complete"] is True
 
 
-def test_the_confirm_phase_past_the_cap_holds_before_any_confirm(scene, monkeypatch, pricing_path) -> None:
+def test_the_confirm_phase_past_the_cap_is_the_firms_ordinary_cap_hold(scene, monkeypatch, pricing_path) -> None:
+    from dataclasses import replace as dc_replace
+
+    from jobs.limits import CAP_SETTING, LimitHold
+
     monkeypatch.setenv("JOBS_PRICING_JSON", str(pricing_path))
-    monkeypatch.setattr(IO, "cap_room", lambda _sr: 0.0)
     client = Client()
     sr, doc, log = scene(client)
-    assert EA.run(sr) == EA.EXIT_HELD
-    assert "confirm" not in client.calls and any("would pass what the job's cap leaves" in ln for ln in log)
+    sr.job = dc_replace(sr.job, cap_usd=0.000001)
+    with pytest.raises(LimitHold) as hold:
+        EA.run(sr)
+    assert "confirm" not in client.calls and doc.read_text(encoding="utf-8") == DOC
+    # word for word what the driver tells the firm before any paid stage (limits.check_before_paid)
+    assert hold.value.reason == (
+        f"{CAP_SETTING}: this run's projected cost would exceed the job's cost cap before audit; "
+        "the package was not started"
+    )
 
 
 def test_an_added_sentence_reaches_the_entries_copy(scene) -> None:
     add = "Gait was steady during the follow up visit. (Exhibit 1 - p. 3)"
-    item = {"class": "omitted", "exhibit": 1, "page": 3, "quote": "All Other Information", "action": "add",
+    item = {"line": "S2", "class": "omitted", "exhibit": 1, "page": 3, "quote": "Therapy twice weekly", "action": "add",
             "replacement": add}  # fmt: skip
     client = Client(lambda t: _reply(item) if "ENTRY N1" in t else _reply(), {"answer": "YES", "exhibit": 1, "page": 3})
     sr, doc, log = scene(client)
@@ -398,3 +401,100 @@ def test_a_redone_audit_reopens_render_manifest_and_review(tmp_path: Path) -> No
         ("render", "manifest", "review"), "pending"
     )
     assert next(s for s in dag_update.UPDATE_STAGES if s.name == "audit").invalidates == ("update_review",)
+
+
+# ---- round 3 (2026-11-18) -----------------------------------------------------------
+MAP = (
+    "## ENTRIES\n\n" + E1 + "\n\n## INDEX\n"
+    "2025-01-05 | Example Clinic | M54.5 | clinic note\n"
+    "2025-03-09 | Nowhere Clinic | S13.4XXA | other note\n"
+)
+
+
+def test_an_index_gap_is_counted_and_never_shown_to_the_read(scene) -> None:
+    seen: list[str] = []
+    client = Client(lambda t: seen.append(t) or _read_reply(t))
+    sr, doc, log = scene(client)
+    (sr.slug_dir / "runs" / "alpha" / "map-01.md").write_text(MAP, encoding="utf-8")
+    assert EA.run(sr) == 0, log
+    assert seen and not any("M54.5" in t or "INDEX" in t for t in seen)
+    rec = _record(sr)
+    assert rec["gaps_codes"] == 1 and rec["gaps_no_entry"] == 1
+
+
+def test_the_same_added_sentence_from_two_parts_is_added_once() -> None:
+    from jobs.medchron.update import review_repair as RR
+    from jobs.stages import entry_audit_apply as AP
+
+    def add(text: str, anchor: str = "N1") -> Any:
+        return ("apply", RR.Finding(RR.MUST, "omitted", anchor, 1, 2, "", "add", text, ""))
+
+    got = AP.dedupe_adds([
+        add("Gait was steady. (Exhibit 1 - p. 2)"),
+        add("Gait was steady at the visit. (Exhibit 1 - p. 3)"),  # contains the first: a duplicate
+        add("Gait was steady. (Exhibit 1 - p. 2)", anchor="N2"),  # another entry: kept
+    ])  # fmt: skip
+    assert [d[0] for d in got] == ["apply", "record", "apply"] and got[1][1] == AP.DUPLICATE_ADD
+
+
+def test_an_api_refusal_of_one_read_holds_the_unit_unread_and_never_fails_the_job(scene) -> None:
+    client = Client(fail=lambda k, t: ValueError("refused") if k == "read" and "ENTRY N1" in t else None)
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == EA.EXIT_HELD, log
+    n1 = next(r for r in _record(sr)["rows"] if r["key"] == "N1")
+    assert n1["status"] == "unread" and n1["why"] == "the API refused the read"
+    assert doc.read_text(encoding="utf-8") == DOC
+
+
+def test_a_resume_uses_saved_page_by_page_answers_and_never_asks_the_whole_entry_again(scene) -> None:
+    def read(text: str) -> str:
+        whole = "ENTRY N1" in text and "pp. 1, 2, 3, 4" in text
+        return "I could not finish." if whole else _read_reply(text)
+
+    sr, doc, log = scene(Client(read))
+    assert EA.run(sr) == 0, log
+    doc.write_text(DOC, encoding="utf-8")
+    again = Client()
+    assert EA.run(scene(again, fresh=False)[0]) == 0
+    assert again.calls.count("read") == 0
+
+
+def test_an_added_sentence_goes_right_after_its_line_and_line_verdicts_are_recorded(scene, monkeypatch) -> None:
+    monkeypatch.setattr(ER, "EDIT_SHARE", 0.5)  # two edits on a 16-sentence scene
+    add = "Gait was steady during the follow up visit. (Exhibit 1 - p. 3)"
+    om = {"line": "S1", "class": "omitted", "exhibit": 1, "page": 3, "quote": "pulse was 72", "action": "add",
+          "replacement": add}  # fmt: skip
+    lines = {**ALL_OK, "S1": "problem"}
+
+    def read(t: str) -> str:
+        if "ENTRY N1" not in t:
+            return _reply()
+        return json.dumps({"lines": lines, "findings": [VALUE, om], "complete": True})
+
+    client = Client(read, {"answer": "YES", "exhibit": 1, "page": 3, "value": "78"})
+    client.confirm = None  # answered per question below
+
+    def stream(**kw: Any) -> _Stream:
+        text = "\n".join(str(b.get("text", "")) for b in kw["messages"][0]["content"])
+        if "ENTRY " in text:
+            client.calls.append("read")
+            return _Stream(read(text))
+        client.calls.append("confirm")
+        yes = "Is every statement" in text
+        return _Stream(json.dumps({"answer": "YES", "exhibit": 1, "page": 3} if yes else STATED))
+
+    client.stream = stream  # type: ignore[method-assign]
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == 0, log
+    out = doc.read_text(encoding="utf-8")
+    assert f"The pulse was 78 at triage during the visit. (Exhibit 1 - p. 2)\n{add}\n" in out
+    rec = _record(sr)
+    n1 = next(r for r in rec["rows"] if r["key"] == "N1")
+    assert (n1["lines_ok"], n1["lines_problem"], n1["lines_unreadable"]) == (3, 1, 0)
+    assert rec["lines_problem"] == 1 and rec["lines_ok"] == 3 + 16 and rec["applied"] == 2  # N2: D, P, 14 sentences
+
+
+def test_the_projection_prices_output_at_the_expected_figures(scene) -> None:
+    sr, _doc, _log = scene(None)
+    _n, _done, _tin, tout = IO.tokens(sr.slug_dir, "alpha", sr.cfg)
+    assert tout == 2 * (IO.READ_OUT_EXPECTED + IO.CONFIRMS_PER_UNIT * IO.CONFIRM_OUT_EXPECTED) == 2 * 4_300

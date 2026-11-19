@@ -17,15 +17,20 @@ every decision to code. In order:
    exhibit's end, or no picture and no text) is UNREAD and never sent. An
    unparsed reply is asked once more, then a unit citing more than one page
    is read page by page (so is a request the API refuses as too large);
-   still unparsed, the stage HOLDS.
+   still unparsed, or refused by the API for another reason, the unit is
+   unread and the stage HOLDS. A resume whose page-by-page answers are all
+   on file uses them and never pays for the whole unit again.
 3. Before any confirm, the confirm phase is priced from the real findings
-   and the pages each confirm shows; past what the job's cap leaves, HOLD.
-4. CONFIRM each finding blind; a confirm that fails twice for a reason that
-   is not the network is recorded ``confirm_failed`` (a network failure
+   and the pages each confirm shows and checked by the driver's own limits:
+   past the job's cap it is the firm's ordinary cap hold (``LimitHold``).
+4. CONFIRM each finding blind; a confirm the API refuses twice is recorded
+   ``confirm_failed`` (a network failure
    exits 75 and the daemon retries). A finding code records whatever the
    confirm says is not confirmed.
 5. DECIDE in code (``entry_audit_apply``); a correction on a sentence SMD
-   wrote by hand (``drops.json`` citation_edits) is recorded, never applied.
+   wrote by hand (``drops.json`` citation_edits) is recorded, never applied;
+   an added sentence another part of the same entry already adds is
+   recorded ``duplicate_add``.
 6. TRIPWIRE: more applied edits than ``entry_read.EDIT_SHARE`` of the
    document's sentences holds the job with the document untouched, unless
    SMD wrote a release (``entry_audit_apply``'s docstring).
@@ -36,9 +41,9 @@ every decision to code. In order:
 
 Nothing is ever removed from the document here. Answers are saved before use
 and a resume pays for none twice; ``ENTRY_AUDIT_REPLAY=1`` answers at $0
-(``entry_audit_io``). Exits: 0 read and settled; 1 held (an entry not read,
-the confirm phase past the cap, or the tripwire); 3 the stage crashed (a
-defect, never read as a hold); 75 the model could not be reached (the daemon
+(``entry_audit_io``). Exits: 0 read and settled; 1 held (an entry not read, or
+the tripwire); 3 the stage crashed outside a model call (a defect, never
+read as a hold); 75 the model could not be reached (the daemon
 retries); 9 answers pending, under the replay switch only.
 """
 
@@ -46,7 +51,6 @@ from __future__ import annotations
 
 import traceback
 from dataclasses import dataclass, replace
-from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
@@ -72,8 +76,6 @@ EXITS = {
     EXIT_PENDING: ("failed", "audit replay: answers pending (ENTRY_AUDIT_REPLAY is set; a real run never sets it)"),
 }
 PAGE_MISSING = "a cited page could not be shown"
-#: Today, as the review's code check reads it (``review.code_findings``).
-TODAY: Callable[[], date] = date.today
 
 
 @dataclass
@@ -85,7 +87,6 @@ class Ctx:
     client: str
     workers: int
     npages: Callable[[int], int]
-    today: date
 
 
 def rehearse(sr: StageRun) -> list[str]:
@@ -118,7 +119,7 @@ def _start(sr: StageRun) -> int:
     workers = int(sr.cfg.get("levers", "audit_workers") or DEFAULT_AUDIT_WORKERS)
     modes = Modes.open(sr.slug_dir, sr.unit.unit)
     ask = IO.Asker(sr, IO.model(sr.cfg), rd / IO.DIR, IO.replaying())
-    c = Ctx(sr, ask, _image_source(sr), modes, _client(sr), workers, pl.npages, TODAY())
+    c = Ctx(sr, ask, _image_source(sr), modes, _client(sr), workers, pl.npages)
     try:
         return _run(c, doc, md, pl)
     finally:
@@ -137,15 +138,11 @@ def _run(c: Ctx, doc: Path, md: str, pl: IO.Plan) -> int:
         sr.log(f"entry read HELD: {len(unread)} entr(ies) could not be read against their pages: {', '.join(unread)}")
         return EXIT_HELD
     items = [(f"{name}.f{i}", u, f) for r in reads for name, u, p in r.got for i, f in enumerate(p.findings)]
-    over = _over_cap(c, items)
-    if over:
-        AP.record(sr, c.ask, doc, pl, reads, [], held=over)
-        sr.log(f"entry read HELD: {over}")
-        return EXIT_HELD
+    _check_cost(c, items)
     confirms = _pool(c, items, lambda it: _confirm(c, *it))
     if c.ask.pending:
         return _pending(c, "confirm")
-    decisions = AP.decide(sr, c.modes, md, pl, items, confirms, c.today)
+    decisions = AP.decide(sr, c.modes, md, pl, items, confirms)
     held, released = AP.apply(sr, c.modes, doc, md, pl, decisions)
     AP.record(sr, c.ask, doc, pl, reads, decisions, items, held=held, released=released)
     if held:
@@ -174,16 +171,18 @@ def _pending(c: Ctx, phase: str) -> int:
     return EXIT_PENDING
 
 
-def _over_cap(c: Ctx, items: list[AP.Item]) -> str:
-    """'' unless the confirm phase, priced from the real findings, would pass
-    what the job's cap leaves (not under the $0 replay)."""
-    todo = [(u, f) for _n, u, f in items if AP.needs_confirm(f, u, c.today)]
+def _check_cost(c: Ctx, items: list[AP.Item]) -> None:
+    """The confirm phase, priced from the real findings and the pages each
+    confirm shows, through the driver's own limits: past the job's cap it
+    raises the same ``LimitHold`` (the firm's cap hold) as any paid stage.
+    Not under the $0 replay."""
+    todo = [(u, f) for _n, u, f in items if AP.needs_confirm(f, u)]
     if c.ask.replay or not todo:
-        return ""
-    usd, room = IO.confirm_usd(c.sr, c.modes, todo), IO.cap_room(c.sr)
-    if usd is None or room is None or usd <= room:
-        return ""
-    return f"the confirm phase ({len(todo)} confirm(s), ~{usd:.2f} USD) would pass what the job's cap leaves ({room:.2f} USD)"
+        return
+    usd = IO.confirm_usd(c.sr, c.modes, todo)
+    if usd is not None:
+        c.sr.log(f"entry read: the confirm phase is {len(todo)} confirm(s), ~{usd:.2f} USD")
+        IO.check_limits(c.sr, usd)
 
 
 # ---- read ---------------------------------------------------------------------------
@@ -198,15 +197,24 @@ def _parses(unit: ER.Unit, lenient: bool) -> IO.Valid:
     return ok
 
 
-def _read_once(c: Ctx, unit: ER.Unit, name: str, lenient: bool) -> ER.Parsed | None:
-    """The unit's read: a good answer on file for either attempt, else asked
-    (and asked once more when the reply ran out or did not parse)."""
+def _saved(c: Ctx, unit: ER.Unit, name: str, lenient: bool) -> ER.Parsed | None:
+    """A good answer on file for either attempt of this read, or None."""
     system, content = ER.request(unit, c.sr.cfg, c.client, c.images, c.modes)
     for attempt in (1, 2):
         lax = lenient and attempt == 2
         text = c.ask.peek(name, f"read{attempt}", system, content, _parses(unit, lax))
         if text is not None and _parses(unit, lax)(text):
             return ER.parse(text, unit, lenient=lax)
+    return None
+
+
+def _read_once(c: Ctx, unit: ER.Unit, name: str, lenient: bool) -> ER.Parsed | None:
+    """The unit's read: a good answer on file, else asked (and asked once
+    more when the reply ran out or did not parse)."""
+    got = _saved(c, unit, name, lenient)
+    if got is not None:
+        return got
+    system, content = ER.request(unit, c.sr.cfg, c.client, c.images, c.modes)
     for attempt in (1, 2):
         lax = lenient and attempt == 2
         text, stop = c.ask.ask(name, f"read{attempt}", system, content, _parses(unit, lax))
@@ -228,43 +236,49 @@ def _missing(c: Ctx, unit: ER.Unit) -> bool:
     return False
 
 
-def _too_large(exc: Exception) -> bool:
-    """The API refused the request for its size (HTTP 413, or a 400 saying so)."""
-    status, msg = getattr(exc, "status_code", None), str(exc).lower()
-    return status == 413 or (status == 400 and any(w in msg for w in ("too large", "too long", "too many")))
+def _subs(unit: ER.Unit) -> list[tuple[str, ER.Unit]]:
+    """The unit's cited pages, each as a unit of its own (``N3~s1``...)."""
+    cited = [pg for pg in unit.pages if pg in set(unit.cited)]
+    return [(f"{unit.key}~s{i}", replace(unit, pages=[pg], cited=[pg])) for i, pg in enumerate(cited, 1)]
 
 
 def _read_unit(c: Ctx, unit: ER.Unit) -> IO.Read:
     """The unit read once (and asked once more); else each page it cites
-    read alone; else unread."""
+    read alone; else unread. A resume whose page-by-page answers are all on
+    file uses them and never asks for the whole unit again."""
     r = IO.Read(unit)
     if _missing(c, unit):
         r.why = PAGE_MISSING
         c.sr.log(f"  {unit.key}: {PAGE_MISSING}; not read")
         return r
+    subs = _subs(unit)
+    if _saved(c, unit, unit.key, lenient=False) is None and len(subs) > 1:
+        saved = [_saved(c, u, n, lenient=True) for n, u in subs]
+        if all(p is not None for p in saved):
+            r.status, r.got = "read", [(n, u, p) for (n, u), p in zip(subs, saved)]
+            return r
     try:
         got = _read_once(c, unit, unit.key, lenient=False)
     except IO.Pending:
         r.status = "pending"
         return r
-    except Exception as exc:
-        if not _too_large(exc):
-            raise
-        c.sr.log(f"  {unit.key}: the request was refused as too large")
+    except IO.ModelError as exc:
+        c.sr.log(f"  {unit.key}: the API refused the read ({exc})")
+        if not exc.too_large():
+            r.why = "the API refused the read"
+            return r
         got = None
     if got is not None:
         r.status, r.got = "read", [(unit.key, unit, got)]
         return r
-    return _split(c, unit, r)
+    return _split(c, subs, r)
 
 
-def _split(c: Ctx, unit: ER.Unit, r: IO.Read) -> IO.Read:
-    cited = [pg for pg in unit.pages if pg in set(unit.cited)]
-    if len(cited) < 2:
+def _split(c: Ctx, subs: list[tuple[str, ER.Unit]], r: IO.Read) -> IO.Read:
+    if len(subs) < 2:
         r.why = "the reply did not parse"
         return r
-    c.sr.log(f"  {unit.key}: read page by page ({len(cited)} pages)")
-    subs = [(f"{unit.key}~s{i}", replace(unit, pages=[pg], cited=[pg])) for i, pg in enumerate(cited, 1)]
+    c.sr.log(f"  {r.unit.key}: read page by page ({len(subs)} pages)")
     parts = [_sub(c, name, u) for name, u in subs]
     if any(p == "pending" for p in parts):
         r.status = "pending"
@@ -280,17 +294,17 @@ def _sub(c: Ctx, name: str, unit: ER.Unit) -> ER.Parsed | str | None:
         return _read_once(c, unit, name, lenient=True)
     except IO.Pending:
         return "pending"
-    except Exception as exc:
-        if not _too_large(exc):
-            raise
+    except IO.ModelError as exc:
+        c.sr.log(f"  {name}: the API refused the read ({exc})")
         return None
 
 
 # ---- confirm ------------------------------------------------------------------------
 def _confirm(c: Ctx, name: str, unit: ER.Unit, f: ER.ReadFinding) -> Any:
     """The blind confirm: a good answer on file, else asked, once more when
-    it fails or does not parse. A network failure is raised (exit 75)."""
-    if not AP.needs_confirm(f, unit, c.today):
+    the API refuses it or it does not parse. A network failure is raised
+    (exit 75); a refusal twice is recorded ``confirm_failed``."""
+    if not AP.needs_confirm(f, unit):
         return AP.NO_CONFIRM
     system, content = EC.confirm_request(f, unit, c.sr.cfg, c.client, c.images, c.modes)
     ok: IO.Valid = lambda t: EC.parse_confirm(t).answer != EC.UNPARSED  # noqa: E731
@@ -304,12 +318,8 @@ def _confirm(c: Ctx, name: str, unit: ER.Unit, f: ER.ReadFinding) -> Any:
             text, _stop = c.ask.ask(name, f"confirm{attempt}", system, content, ok, max_tokens=IO.CONFIRM_MAX_TOKENS)
         except IO.Pending:
             return None
-        except LimitHold:
-            raise
-        except Exception as exc:
-            if is_transient(exc):
-                raise
-            c.sr.log(f"  {name}: confirm {attempt} failed: {type(exc).__name__}: {str(exc)[:160]}")
+        except IO.ModelError as exc:
+            c.sr.log(f"  {name}: confirm {attempt} refused: {exc}")
             continue
         last = EC.parse_confirm(text)
         if last.answer != EC.UNPARSED:

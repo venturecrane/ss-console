@@ -1,0 +1,24 @@
+{
+  "code": "summary",
+  "ended_while_away": false,
+  "ending": "held",
+  "filed_sets": 0,
+  "firm_messages": 0,
+  "firm_owed": 0,
+  "owner": "smd",
+  "paged": ["stage_refused"],
+  "record_late": false,
+  "run": {
+    "by": "code",
+    "code": "summary",
+    "event": "stop",
+    "kind": "plumbing",
+    "stage": "summarize",
+    "v": 1
+  },
+  "second": null,
+  "state": "held",
+  "told_while_away": 0,
+  "way_out": ["medchron_job_resume", "redo_doc"],
+  "wiped": false
+}

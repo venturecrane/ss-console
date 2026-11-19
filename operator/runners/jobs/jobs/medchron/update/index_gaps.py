@@ -4,23 +4,23 @@ Each window's writer output (``prompts/map-system.md``) carries an ENTRIES
 block and an INDEX block, one row per entry: ``YYYY-MM-DD | provider | codes
 | file``. ``stages/assemble.py`` reads the entries and ignores the INDEX;
 ``stages/build_doc.py`` reads only its codes. A row whose visit has an entry
-but whose codes the entry never states is a gap the entry read is told about
-(one line); a row that matches no entry is recorded only. A row that does not
-parse is counted, never raised on.
+but whose codes the entry never states is a gap; a row that matches no entry
+is another. Both are COUNTED in the entry read's record only: since round 3 of
+2026-11-18 no gap is shown to the read (a gap line asked the read to add codes
+from the writer's own index). A row that does not parse is counted, never
+raised on.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
 
 from ...text_rules import DATE_HEAD, ENTRY_START
 from . import body as B
 from .icd import ICD_SHAPE
 
 _ROW_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-LINE = "The writer's own index for this visit lists codes {codes} that the entry does not state."
 
 
 @dataclass
@@ -30,7 +30,6 @@ class Gap:
     provider: str
     file: str
     codes: list[str] = field(default_factory=list)
-    anchor: str = ""  # the entry the gap rides into (``attach``)
 
 
 def section(txt: str, name: str) -> str:
@@ -101,18 +100,3 @@ def scan(map_text: str, entries: list[str] | None = None) -> tuple[list[Gap], in
 
 def gaps(map_text: str, entries: list[str] | None = None) -> list[Gap]:
     return scan(map_text, entries)[0]
-
-
-def attach(units: list[Any], found: list[Gap]) -> list[Gap]:
-    """Put each codes gap's line on the units of the entry it names (same
-    date, same provider); returns the codes gaps no unit took."""
-    left = []
-    for g in (x for x in found if x.kind == "codes"):
-        hits = [u for u in units if not u.record_only and B.iso(u.text) == g.date
-                and _same_provider(B.provider_of(u.text), g.provider)]  # fmt: skip
-        for u in hits:
-            u.gaps.append(LINE.format(codes=", ".join(g.codes)))
-            g.anchor = u.anchor
-        if not hits:
-            left.append(g)
-    return left
