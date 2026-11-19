@@ -183,6 +183,23 @@ def test_record_inbound_first_write_wins_and_opening_is_first_reply_only(tmp_pat
     assert rows[0]["subject"] == "A" and rows[0]["reply_opening"] == "first reply"
 
 
+def test_read_request_ids_keeps_a_request_past_its_text_window(tmp_path) -> None:
+    path = str(tmp_path / "r.db")
+    assert ri.read_request_ids(path=path) == frozenset()
+    now = time.time()
+    ri.record_inbound(
+        vendor_message_id="old",
+        internet_message_id="<old@x>",
+        sender="a@b",
+        subject="s",
+        received_at=now - 8 * 86400,
+        path=path,
+    )
+    ri.record_inbound(vendor_message_id="new", sender="a@b", subject="s", path=path)
+    assert ri.read_requests(now - 7 * 86400, path=path)[0]["vendor_message_id"] == "new"
+    assert ri.read_request_ids(path=path) == frozenset({"old", "<old@x>", "new"})
+
+
 def test_custody_nulls_text_after_a_week_and_deletes_after_a_month(tmp_path) -> None:
     path = str(tmp_path / "r.db")
     now = time.time()
@@ -1336,6 +1353,24 @@ def test_a_follow_up_is_carded_once(ledger) -> None:
     }
     openings = {"sent-1": "a", "sent-2": "b"}
     assert _followups(_decide_f(ledger, [_request(61)], done_at=landed, openings=openings)) == []
+
+
+def test_a_reply_whose_request_aged_out_of_the_text_window_is_not_carded(ledger) -> None:
+    """2026-11-19: the request left the 7-day window two minutes before its
+    reply did, and the reply was mailed as "no request on record". The
+    request's row is still in the index; only its text window passed. A reply
+    sent days after its request is covered the same way, whatever its age."""
+    _sent(ledger, 7 * 24 * 60 - 1, "sent-old")
+    _sent(ledger, 60, "sent-new")
+    openings = {"sent-old": "the answer", "sent-new": "a late answer"}
+    conn = ledger.ro()
+    try:
+        cards = rc.decide([], conn, set(), NOW, openings=openings, indexed=frozenset({VID}))
+    finally:
+        conn.close()
+    assert _followups(cards) == []
+    # With no row for the request they are genuine strays, and still carded.
+    assert len(_followups(_decide_f(ledger, [], openings=openings))) == 2
 
 
 def test_a_reply_to_a_message_the_index_never_held_is_carded_to_its_recipient(ledger) -> None:
