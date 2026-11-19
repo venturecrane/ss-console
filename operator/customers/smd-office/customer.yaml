@@ -113,7 +113,11 @@ personas:
           manual: false
           scheduled: true
           webhook: false
-        enabled: true
+        # OFF since 2026-11-18, on the Captain's word: the keeper was moving
+        # mail out of his inbox that he wanted to see there. The broker
+        # answers a disabled skill with not_enabled and touches nothing. It
+        # goes back on by its own PR once the sorting rule is refined.
+        enabled: false
         settings:
           mailbox: smdurgan@smdurgan.com
           owner_addresses: 'smdurgan@smdurgan.com,scott@smd.services'
@@ -140,14 +144,16 @@ personas:
           cost_fence_cents: 150
           # Appended by code to every reply draft.
           draft_signoff: "Thanks,\nScott"
-    cron:
-      # Hourly at :47 seat-local, America/Phoenix (business_hours.timezone
-      # below, exported as HERMES_TIMEZONE by bootstrap.sh). Every run files
-      # SMD Ops mail at $0; the first run at or after 06:00 sends the list.
-      - skill: mailbox-keeper
-        schedule: '47 * * * *'
-        pre_run: pre_run.py
-        wake_policy: pre_run_decides
+    # No schedule while the mailbox keeper is off (2026-11-18, see its skill
+    # entry above). The row to restore with it, hourly at :47 seat-local,
+    # America/Phoenix (business_hours.timezone below, exported as
+    # HERMES_TIMEZONE by bootstrap.sh); every run files SMD Ops mail at $0 and
+    # the first run at or after 06:00 sends the list:
+    #   - skill: mailbox-keeper
+    #     schedule: '47 * * * *'
+    #     pre_run: pre_run.py
+    #     wake_policy: pre_run_decides
+    cron: []
 
 # ---- CONNECTORS ----
 connectors:
