@@ -226,7 +226,8 @@ def parse_verify(reply: str) -> Verify | None:
     wrong, supported = _flag(obj.get("original_wrong")), _flag(obj.get("corrected_supported"))
     if wrong is None or supported is None:
         return None
-    page = obj.get("page") if isinstance(obj.get("page"), dict) else {}
+    raw = obj.get("page")
+    page: dict[str, Any] = raw if isinstance(raw, dict) else {}
     ints = [
         v if isinstance(v, int) and not isinstance(v, bool) else None for v in (page.get("exhibit"), page.get("page"))
     ]

@@ -217,7 +217,8 @@ def _one(item: object, unit: Unit, verdicts: dict[str, str], dark: set[tuple[int
         return "line"
     if verdicts.get(line) == "unreadable" or (ex, pg) in dark:
         return "unreadable"
-    quote = item.get("quote") if isinstance(item.get("quote"), str) else ""
+    raw_quote, raw_new = item.get("quote"), item.get("replacement")
+    quote: str = raw_quote if isinstance(raw_quote, str) else ""
     if not quote.strip() or quote not in unit.lines[line]:
         return "quote"
     action = str(item.get("action") or "").strip().lower()
@@ -229,7 +230,7 @@ def _one(item: object, unit: Unit, verdicts: dict[str, str], dark: set[tuple[int
         pg,
         quote,
         action if action in RR.ACTIONS else "none",
-        item.get("replacement") if isinstance(item.get("replacement"), str) else "",
+        raw_new if isinstance(raw_new, str) else "",
         str(item.get("problem") or "")[:400],
         unit.record_only,
         line,

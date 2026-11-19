@@ -257,7 +257,7 @@ def _read_unit(c: Ctx, unit: ER.Unit) -> IO.Read:
     if _saved(c, unit, unit.key, lenient=False) is None and len(subs) > 1:
         saved = [_saved(c, u, n, lenient=True) for n, u in subs]
         if all(p is not None for p in saved):
-            r.status, r.got = "read", [(n, u, p) for (n, u), p in zip(subs, saved)]
+            r.status, r.got = "read", [(n, u, p) for (n, u), p in zip(subs, saved) if p is not None]
             return r
     try:
         got = _read_once(c, unit, unit.key, lenient=False)
@@ -285,7 +285,7 @@ def _split(c: Ctx, subs: list[tuple[str, ER.Unit]], r: IO.Read) -> IO.Read:
     if any(p == "pending" for p in parts):
         r.status = "pending"
     elif all(p is not None for p in parts):
-        r.status, r.got = "read", [(n, u, p) for (n, u), p in zip(subs, parts)]
+        r.status, r.got = "read", [(n, u, p) for (n, u), p in zip(subs, parts) if isinstance(p, ER.Parsed)]
     else:
         r.why = "a page read alone did not parse"
     return r
@@ -312,7 +312,10 @@ def _verify(c: Ctx, name: str, p: EC.Proposal | str) -> Any:
     system, content = EC.verify_request(p, c.sr.cfg, c.client, c.images)
     if not p.shown:
         return AP.NO_PICTURE  # a verify with no page to look at is never sent
-    ok: IO.Valid = lambda t: EC.parse_verify(t) is not None  # noqa: E731
+
+    def ok(t: str) -> bool:
+        return EC.parse_verify(t) is not None
+
     for attempt in (1, 2):
         text = c.ask.peek(name, f"verify{attempt}", system, content, ok)
         if text is not None and ok(text):
