@@ -95,10 +95,44 @@ envelope: `operator/bin/lane-proof.sh <slug> keep <job_id>` copies the request
 jobs of that kind wait again. A revocation in `lane-proofs.yaml` (the
 `revoked:` list) wins over every runtime proof until the file changes.
 
+## Withdraw a held job
+
+Use this when a job is waiting on a proof and should never run: its request
+was answered by hand, or the job's scope is wrong and a corrected request will
+replace it. Left alone, a held job runs live the moment its lane is accepted,
+and the firm gets a second document for an ask already answered.
+
+`operator/bin/lane-proof.sh <slug> withdraw <lane> <job_id> --by <you> --why "<reason>"`
+
+It runs the runner's own stop as root on the seat
+(`operator/runners/jobs/jobs/stop.py`); the same thing by hand is
+`fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.stop <lane> <job_id> --by <you> --why '<reason>'"`.
+`<lane>` is the queue, not the lane key: `medchron`, `demand`, `drafting`
+(every `document-drafter.<class>`), `litigation`, `negotiation`, `casefile`
+(every `case-file-manager.*`) or `records`.
+
+The envelope leaves the queue at once, so nothing can claim it, and the lane
+records the job `failed` with reason `stopped_by_smd: by <you>: <reason>` and
+sets its hold aside within a second or two. Nothing is filed, no Operator turn
+runs, and the client hears nothing. Running it twice is safe.
+
+Exit codes: `0` stopped (or already stopped or failed); `1` refused (not root,
+unknown lane, no such job, or the job was already delivered); `3` the stop is
+written but the lane has not recorded it yet. On `3` the job still never
+starts; run the same command again to read it back. On `0` the last line reads
+`after: state=stopped_by_smd ... ledger_recorded=True`.
+
+Read it back: `operator/bin/lane-proof.sh <slug> status` shows the job gone
+from "Waiting on a proof".
+
+The broker's `job_cancel` verb (`operator/workspace_broker/job_verbs.py`) acts
+on the agent-job ledger, not a lane's queue: it does not stop a held lane job.
+
 ## What this does not cover
 
 - An in-turn ask is paged, not held.
 - A misread ask filed under a proven lane (the agent chose the kind) runs: the
   pre-delivery review is the control for that, not this gate.
 - A held job nobody proves waits indefinitely. `status` lists every hold with
-  its age; the card fires once per held job.
+  its age; the card fires once per held job. One that should never run is
+  withdrawn (above).
