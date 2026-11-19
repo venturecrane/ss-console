@@ -4,7 +4,8 @@ ending its code reaches, compared with ``goldens/host_matrix/``.
 A change to how any lane host claims, runs, records, wakes or waits must
 leave every cell equal to its golden, except the dotted paths
 ``goldens/host_matrix/allowed-changes.json`` names for that cell (a reviewed
-change, made in the PR that changes the behaviour). A cell the code cannot
+change, made in the PR that changes the behaviour; an entry the merge-base
+already carried excuses nothing, ``golden_diff.reviewed``). A cell the code cannot
 reach is declared in ``host_matrix_kit.NOT_APPLICABLE`` with its reason; any
 other missing cell fails.
 
@@ -25,7 +26,7 @@ from typing import Any
 
 import pytest
 from host_matrix_cells import CELLS, run_cell
-from host_matrix_kit import ENDINGS, GOLDENS, LANES, NOT_APPLICABLE, diffs, load_allowed, unexplained
+from host_matrix_kit import ENDINGS, GOLDENS, LANES, NOT_APPLICABLE, diffs, reviewed, unexplained
 from wire_kit import check_cell
 
 
@@ -69,6 +70,7 @@ def test_a_cell_matches_its_golden(tmp_path, monkeypatch, real_lane_gate, cell):
         if out:
             return
     want: Any = json.loads((GOLDENS / _file(cell)).read_text(encoding="utf-8"))
-    allowed = load_allowed(GOLDENS).get(_file(cell)[: -len(".json")], [])
+    # Only this change's own entries: one the merge-base carried excuses nothing.
+    allowed = reviewed(GOLDENS).get(_file(cell)[: -len(".json")], [])
     assert unexplained(diffs(want, got), allowed) == []
     assert wire_changed == [], f"the cell's live wire differs from wire.json's by_cell row for {wire_changed}"

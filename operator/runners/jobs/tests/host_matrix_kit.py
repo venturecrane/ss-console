@@ -47,7 +47,7 @@ OPERATOR = Path(__file__).resolve().parents[3]
 if str(OPERATOR) not in sys.path:
     sys.path.insert(0, str(OPERATOR))
 
-from bin.lib.golden_diff import diffs, load_allowed, unexplained  # noqa: E402 - needs the tree root on sys.path, set just above
+from bin.lib.golden_diff import diffs, load_allowed, reviewed, unexplained  # noqa: E402 - needs the tree root on sys.path, set just above
 
 CHILD = Path(__file__).resolve().parent / "host_matrix_child.py"
 GOLDENS = Path(__file__).resolve().parent / "goldens" / "host_matrix"
@@ -421,6 +421,7 @@ __all__ = [
     "diffs",
     "install_child",
     "load_allowed",
+    "reviewed",
     "secret_names",
     "serve",
     "unexplained",

@@ -10,6 +10,9 @@ test regenerates it and compares. Three things every family needs live here:
 * ``write_or_compare``: the one switch. ``JOBS_WRITE_KIT_GOLDENS=1`` rewrites
   the golden (then read the diff); otherwise any difference outside the allowed
   list fails, naming the paths.
+* ``allowed``: a family's allowed list as this change names it. An entry the
+  merge-base tree already carried (another change's leftover) excuses nothing
+  (``bin.lib.golden_diff.reviewed``).
 """
 
 from __future__ import annotations
@@ -21,8 +24,15 @@ import hashlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Sequence
+
+OPERATOR = Path(__file__).resolve().parents[3]
+if str(OPERATOR) not in sys.path:
+    sys.path.insert(0, str(OPERATOR))
+
+from bin.lib.golden_diff import reviewed  # noqa: E402 - needs the tree root on sys.path, set just above
 
 GOLDENS = Path(__file__).resolve().parent / "goldens"
 WRITE_ENV = "JOBS_WRITE_KIT_GOLDENS"
@@ -106,8 +116,19 @@ def diffs(a: Any, b: Any, path: str = "") -> list[str]:
     return [] if a == b else [path or "<root>"]
 
 
+def reviewed_allowed(family: str) -> dict[str, list[str]]:
+    """``family``'s entries this change added, every key kept."""
+    return reviewed(GOLDENS / family)
+
+
 def allowed(family: str) -> dict[str, list[str]]:
-    return json.loads((GOLDENS / family / "allowed-changes.json").read_text(encoding="utf-8"))
+    """The list a family's compare honours: this change's own entries. Under
+    the write switch every entry, unfiltered: the compare after a rewrite sees
+    no difference, and the integrity job writes in a base tree with no commit
+    to find a merge-base from."""
+    if writing():
+        return json.loads((GOLDENS / family / "allowed-changes.json").read_text(encoding="utf-8"))
+    return reviewed_allowed(family)
 
 
 def dump(doc: Any) -> str:
