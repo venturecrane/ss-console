@@ -99,13 +99,24 @@ describe('busy', () => {
     expect(arrived(headlineOf(f.arrivals(100, RECORDED), 1)).split).toEqual(split(25, 25, 0, 0))
   })
 
-  it('an attempt with no recorded busy seconds makes the split not recorded', () => {
+  it('an attempt with no recorded busy seconds leaves busy not recorded and its wait inside pipeline; holds still count', () => {
     const f = new Fleet()
     const r = f.image(1, 0)
     f.waited(r, 'twin-a', 'done', [4, 6], 0)
+    f.hold('client-a', 8, 10)
+    // The seat waited for a client job inside this attempt; no writer records it yet.
     f.roll(r, 'client-a', 'done', 10, 25)
-    const a = arrived(headlineOf(f.arrivals(100, RECORDED), 1))
-    expect(a.split).toEqual({ recorded: false, totalMinutes: 25, missing: 'busy time' })
+    const [m] = f.arrivals(100, RECORDED)
+    expect(arrived(m.headline).split).toEqual({
+      recorded: true,
+      totalMinutes: 25,
+      pipelineMinutes: 23,
+      heldMinutes: 2,
+      busyMinutes: null,
+    })
+    expect(describeArrival(m).text).toBe(
+      '25 min (23 pipeline, including any wait on a client job; 2 held)'
+    )
   })
 
   it('a seat busy at the first visit and done at a later one: busy is the wait, not a count of rows', () => {
@@ -185,7 +196,9 @@ describe('rounding', () => {
           holdHistorySinceMs: 0,
         })
         if (!s.recorded) throw new Error('expected a recorded split')
-        expect(s.pipelineMinutes + s.heldMinutes + s.busyMinutes).toBe(s.totalMinutes)
+        // Every attempt here carries busy seconds, so busy is a number.
+        expect(s.busyMinutes).not.toBeNull()
+        expect(s.pipelineMinutes + s.heldMinutes + (s.busyMinutes ?? NaN)).toBe(s.totalMinutes)
         expect(s.pipelineMinutes).toBeGreaterThanOrEqual(0)
       }
     }
@@ -206,5 +219,48 @@ describe('rounding', () => {
       [2, 20],
       [30, 40],
     ])
+  })
+})
+
+describe('hold events with busy not recorded', () => {
+  it('a hold placed and lifted inside an arrival window shows its held minutes and is not marked when the rest is under 45', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    // The tick wrote no row while client-a was held; the hold events recorded it.
+    f.hold('client-a', 8, 100)
+    f.roll('img-1', 'client-a', 'done', 100, 110)
+    const [m] = f.arrivals(200, RECORDED)
+    const a = arrived(m.headline)
+    expect(a.split).toEqual({
+      recorded: true,
+      totalMinutes: 110,
+      pipelineMinutes: 18,
+      heldMinutes: 92,
+      busyMinutes: null,
+    })
+    expect(overThreshold(a)).toBe(false)
+    expect(describeArrival(m)).toEqual({
+      text: '110 min (18 pipeline, including any wait on a client job; 92 held)',
+      marked: false,
+    })
+  })
+
+  it('pipeline over 45 with busy not recorded is marked, since it may include a client job wait', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    f.roll('img-1', 'client-a', 'done', 40, 50)
+    const [m] = f.arrivals(200, RECORDED)
+    expect(arrived(m.headline).split).toMatchObject({ pipelineMinutes: 50, busyMinutes: null })
+    expect(describeArrival(m).marked).toBe(true)
+  })
+
+  it('a seat whose latest attempt is waiting_idle says it is waiting for the seat to be free', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    f.roll('img-1', 'client-a', 'waiting_idle', 8, 18)
+    const [m] = f.arrivals(40, RECORDED)
+    expect(describeArrival(m).text).toMatch(
+      /^waiting for the seat to be free \(client-a: a client job or another deploy\), 40 min so far/
+    )
   })
 })

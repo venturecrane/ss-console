@@ -11,17 +11,18 @@
  *   fleet_releases  one row per image, bundle or skills release
  *   fleet_rollouts  one row per attempt (`start_rollout` inserts it,
  *                   `update_rollout` sets its end state and `finished_at`)
- *   fleet_holds     the holds in place NOW. `fleet unhold` deletes the row, and
- *                   the tick never rolls a held seat (tick.py `_front`), so a
- *                   hold placed and lifted leaves no trace in any table
+ *   fleet_hold_events  every hold placed and lifted (migration 0153's triggers
+ *                   on fleet_holds), read when hold-history.ts finds the
+ *                   history whole; otherwise fleet_holds, the holds in place
+ *                   NOW (`fleet unhold` deletes the row, and the tick never
+ *                   rolls a held seat, so a lifted hold leaves no trace there)
  * A read that hits its safety cap is an error the page states, never a partial
  * week shown as whole.
  *
- * THREE INPUTS THE FLEET DOES NOT RECORD YET. The parsers read them when a
+ * TWO INPUTS THE FLEET DOES NOT RECORD YET. The parsers read them when a
  * column carries them and read null otherwise; the SQL names only columns that
- * exist today, so the follow-on that records them adds the column to the
+ * exist today, so the change that records them adds the column to a
  * migration, the writer and the SELECT below, and nothing else:
- *   HoldInterval.liftedAtMs        `lifted_at` on a hold-events row; null = in place
  *   RolloutRow.busySeconds         `busy_seconds`: seconds this attempt waited on a
  *                                  client job (never on another run's lease)
  *   ReleaseRow.reachedMainAtMs     `reached_main_at`: when the merge reached main
@@ -200,7 +201,11 @@ const ROLLOUTS_SQL =
   'SELECT o.release_id, o.customer_slug, o.state, o.started_at, o.finished_at ' +
   `FROM fleet_rollouts o WHERE o.release_id IN (${RELEASES_IN_WINDOW}) LIMIT ?`
 
-const HOLDS_SQL = 'SELECT customer_slug, held_at FROM fleet_holds LIMIT ?'
+const HOLDS_NOW_SQL = 'SELECT customer_slug, held_at FROM fleet_holds LIMIT ?'
+
+const HOLD_EVENTS_SQL =
+  'SELECT customer_slug, held_at, lifted_at FROM fleet_hold_events ' +
+  'WHERE lifted_at IS NULL OR lifted_at >= ? LIMIT ?'
 
 async function read<T>(
   name: string,
@@ -227,20 +232,33 @@ async function read<T>(
   return out
 }
 
-/** Every release recorded in the window, their rollouts, and the holds in place now. */
+/**
+ * Every release recorded in the window, their rollouts, and the holds: every
+ * hold interval open or lifted inside the window from `fleet_hold_events` when
+ * `holdEventsRecorded` (hold-history.ts said the history is whole), else only
+ * the holds in place now from `fleet_holds`.
+ */
 export async function fetchFleetHistory(
   db: D1Database,
-  nowMs: number
+  nowMs: number,
+  holdEventsRecorded: boolean
 ): Promise<{ history: FleetHistory; error: string | null }> {
   const since = new Date(historyStartMs(nowMs)).toISOString().replace(/\.\d{3}Z$/, 'Z')
   const over = ROW_CAP + 1
+  const holds = holdEventsRecorded
+    ? read(
+        'fleet_hold_events',
+        () => db.prepare(HOLD_EVENTS_SQL).bind(since, over).all(),
+        parseHold
+      )
+    : read('fleet_holds', () => db.prepare(HOLDS_NOW_SQL).bind(over).all(), parseHold)
   try {
-    const [releases, rollouts, holds] = await Promise.all([
+    const [releases, rollouts, holdRows] = await Promise.all([
       read('fleet_releases', () => db.prepare(RELEASES_SQL).bind(since, over).all(), parseRelease),
       read('fleet_rollouts', () => db.prepare(ROLLOUTS_SQL).bind(since, over).all(), parseRollout),
-      read('fleet_holds', () => db.prepare(HOLDS_SQL).bind(over).all(), parseHold),
+      holds,
     ])
-    return { history: { releases, rollouts, holds }, error: null }
+    return { history: { releases, rollouts, holds: holdRows }, error: null }
   } catch (e) {
     return {
       history: { releases: [], rollouts: [], holds: [] },

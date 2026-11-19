@@ -12,16 +12,17 @@ import {
   type WeekStats,
 } from '../../lib/admin/lead-time-summary'
 import { REVIEW_THRESHOLD_PIPELINE_MINUTES } from '../../lib/admin/lead-time'
-import { HOLD_HISTORY_RECORDED_SINCE } from '../../lib/admin/lead-time-split'
+import type { HoldHistory } from '../../lib/admin/hold-history'
 import { phoenixTime, weekLabel, type SeatGroups } from '../../lib/admin/merge-to-seat'
 
 interface Props {
   summary: LeadTimeSummary
   groups: SeatGroups
+  holdHistory: HoldHistory
   error: string | null
 }
 
-const { summary, groups, error } = Astro.props
+const { summary, groups, holdHistory, error } = Astro.props
 
 const KIND_LABEL: Record<KindSummary['kind'], string> = {
   image: 'Image',
@@ -32,6 +33,12 @@ const KIND_LABEL: Record<KindSummary['kind'], string> = {
 function minutes(value: number | null): string {
   return value === null ? 'none measured' : `${value} min`
 }
+
+function busyCount(value: number | null): string {
+  return value === null ? 'not recorded' : String(value)
+}
+
+const holdsSince = holdHistory.since === null ? null : phoenixTime(Date.parse(holdHistory.since))
 
 function weekRows(pick: (k: KindSummary) => WeekStats[]) {
   return summary.kinds.flatMap((k) => pick(k).map((w) => ({ kind: KIND_LABEL[k.kind], w })))
@@ -47,8 +54,8 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
 >
   <h3 class="text-base font-semibold text-[color:var(--ss-color-text-primary)]">Merge to seat</h3>
   <p class="text-sm text-[color:var(--ss-color-text-secondary)] mt-1">
-    Minutes from a merged change to the last client seat running it, split into pipeline time, time
-    on hold and time waiting on a busy seat.
+    Minutes from a merged change to the last client seat running it, split into time on hold and
+    pipeline time, including any wait on a client job.
   </p>
   {
     error ? (
@@ -91,7 +98,7 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
                     </td>
                     <td class="py-2 pr-4 text-right">{minutes(w.p90Pipeline)}</td>
                     <td class="py-2 pr-4 text-right">{w.held}</td>
-                    <td class="py-2 pr-4 text-right">{w.busy}</td>
+                    <td class="py-2 pr-4 text-right">{busyCount(w.busy)}</td>
                     <td class="py-2 pr-4 text-right">{w.clear}</td>
                     <td class="py-2 text-right">{w.unrecorded}</td>
                   </tr>
@@ -113,8 +120,8 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
             {untwinnedRows.map(({ kind, w }) => (
               <li>
                 Week of {weekLabel(w.weekStart)}, {kind}: median {minutes(w.medianPipeline)}, slow
-                case {minutes(w.p90Pipeline)}, {w.held} on hold, {w.busy} busy, {w.clear} clear,{' '}
-                {w.unrecorded} not recorded
+                case {minutes(w.p90Pipeline)}, {w.held} on hold, busy {busyCount(w.busy)}, {w.clear}{' '}
+                clear, {w.unrecorded} not recorded
               </li>
             ))}
           </ul>
@@ -156,7 +163,8 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
                           {cell.text}
                           {cell.marked ? (
                             <span class="block text-xs font-semibold text-[color:var(--ss-color-error)]">
-                              Over {REVIEW_THRESHOLD_PIPELINE_MINUTES} min of pipeline: review
+                              Over {REVIEW_THRESHOLD_PIPELINE_MINUTES} min of pipeline (may include
+                              a wait on a client job): review
                             </span>
                           ) : null}
                         </td>
@@ -190,23 +198,27 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
       of the same commit was published.
     </p>
     {
-      HOLD_HISTORY_RECORDED_SINCE === null ? (
+      holdsSince === null ? (
         <p>
-          <strong>Not recorded.</strong> The fleet keeps no record of a hold once it is lifted, and
-          no record of how long a rollout waited for a client job. So for now no change can be split
-          into pipeline, held and busy minutes: each shows its total only, counts as not recorded,
-          and is left out of the median and the slow case. On hold and busy count only changes
-          waiting on a hold or a busy seat right now.
+          <strong>Hold time not recorded.</strong> The hold history cannot be trusted right now:{' '}
+          {holdHistory.why}. Each change shows its total minutes only, counts as not recorded, and
+          is left out of the median and the slow case. On hold counts only changes waiting on a hold
+          right now.
         </p>
       ) : (
         <p>
-          <strong>Not recorded.</strong> Holds are recorded from {HOLD_HISTORY_RECORDED_SINCE}. A
-          change that merged before then, or whose rollouts carry no record of how long they waited
-          for a client job, shows its total only, counts as not recorded, and is left out of the
-          median and the slow case.
+          <strong>Hold time</strong> is recorded from {holdsSince}: every hold placed and lifted
+          since then is counted exactly. A change that merged before then shows its total minutes
+          only, counts as not recorded, and is left out of the median and the slow case.
         </p>
       )
     }
+    <p>
+      <strong>Busy.</strong> The fleet does not yet record how long a rollout waited for a client job
+      to finish, so busy shows as not recorded and that wait stays inside the pipeline minutes. The review
+      mark at {REVIEW_THRESHOLD_PIPELINE_MINUTES} minutes of pipeline time may therefore include a wait
+      on a client job.
+    </p>
     <p>A change whose build was skipped is not listed: it rides the next release built.</p>
   </div>
 </div>

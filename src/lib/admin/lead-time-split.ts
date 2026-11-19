@@ -2,39 +2,35 @@
  * The split of one arrival's minutes into pipeline, held and busy, or the
  * honest answer that the fleet did not record what the split needs.
  *
- * HELD comes only from hold intervals ({seat, heldAtMs, liftedAtMs}). Today the
- * only source is `fleet_holds`, which holds the holds in place now: a hold
- * placed and lifted is deleted, and the tick never writes a rollout row for a
- * held seat (tick.py `_front` leaves it out of the seats it rolls), so past
- * holds leave no trace. Until the fleet records hold events, the split of any
- * window that starts before HOLD_HISTORY_RECORDED_SINCE (or always, while it is
- * null) is not recorded.
+ * HELD comes only from hold intervals ({seat, heldAtMs, liftedAtMs}), read from
+ * `fleet_hold_events` (migration 0153: triggers on `fleet_holds` record every
+ * hold placed and lifted). The tick never writes a rollout row for a held seat
+ * (tick.py `_front` leaves it out), so nothing else can show a past hold. A
+ * window that starts before hold history was recorded (`holdHistorySinceMs`:
+ * when 0153 was applied, or null when the reader found the history incomplete)
+ * is not split at all: its total only.
  *
  * BUSY comes only from each attempt's `busySeconds`: the seconds it waited on a
  * client job. A rollout waits for idle inside a row that can end `done`, and a
  * `waiting_idle` row can mean another run holds the seat's lease, which is not
- * a client job; neither is recoverable from states. So any attempt in the
- * window with no recorded busy seconds makes the split not recorded. An attempt
- * that ended `waiting_idle` with busy seconds above zero was still busy when it
- * gave up: its busy stretch runs on to the seat's next attempt. One with zero
- * (a lease wait) is not busy.
+ * a client job; neither is recoverable from states. No writer records busy
+ * seconds yet, so when any attempt in the window lacks them, busy is null (not
+ * recorded) and its time stays inside pipeline: "pipeline, including any wait
+ * on a client job". When every attempt carries them: an attempt that ended
+ * `waiting_idle` with busy seconds above zero was still busy when it gave up,
+ * so its busy stretch runs on to the seat's next attempt; zero (a lease wait)
+ * is not busy.
  *
  * A release twin gates its client only until the twin's first `done` on a
  * carrier, so its intervals are clipped there.
  *
  * Rounding: computed in milliseconds and rounded once, cumulatively: held is
  * round(held), held+busy is round(held+busy), total is round(total), so
- * pipeline + held + busy equals the total exactly, and pipeline cannot go
+ * pipeline + held + busy (busy as 0 when null) equals the total exactly, and pipeline cannot go
  * below zero because held and busy are disjoint stretches inside the window.
  */
 
 import type { HoldInterval, RolloutRow } from './merge-to-seat'
-
-/**
- * The first moment the fleet records every hold placed and lifted (ISO UTC), or
- * null while it does not. The follow-on change that adds hold events sets it.
- */
-export const HOLD_HISTORY_RECORDED_SINCE: string | null = null
 
 const MINUTE_MS = 60_000
 
@@ -44,9 +40,10 @@ export type Split =
       totalMinutes: number
       pipelineMinutes: number
       heldMinutes: number
-      busyMinutes: number
+      /** Null when an attempt in the window carries no busy seconds: then pipeline includes any busy wait. */
+      busyMinutes: number | null
     }
-  | { recorded: false; totalMinutes: number; missing: 'hold history' | 'busy time' }
+  | { recorded: false; totalMinutes: number; missing: 'hold history' }
 
 /** One seat whose holds and busy waits count, up to `untilMs` (a twin: its first done). */
 export interface Track {
@@ -121,6 +118,7 @@ export function splitFor(input: SplitInput): Split {
   }
   const held: Interval[] = []
   const busy: Interval[] = []
+  let busyKnown = true
   for (const track of input.tracks) {
     const end = Math.min(toMs, track.untilMs)
     for (const h of input.holds) {
@@ -129,20 +127,20 @@ export function splitFor(input: SplitInput): Split {
       }
     }
     const waits = busyIntervals(input.bySeat.get(track.seat) ?? [], fromMs, end)
-    if (waits === null) return { recorded: false, totalMinutes, missing: 'busy time' }
-    busy.push(...clipUnion(waits, fromMs, end))
+    if (waits === null) busyKnown = false
+    else busy.push(...clipUnion(waits, fromMs, end))
   }
   const heldU = clipUnion(held, fromMs, toMs)
   const busyU = clipUnion(busy, fromMs, toMs)
   const heldMs = measure(heldU)
-  const busyMs = measure(busyU) - overlap(busyU, heldU)
+  const busyMs = busyKnown ? measure(busyU) - overlap(busyU, heldU) : 0
   const heldMinutes = minutes(heldMs)
   const heldAndBusy = minutes(heldMs + busyMs)
   return {
     recorded: true,
     totalMinutes,
     heldMinutes,
-    busyMinutes: heldAndBusy - heldMinutes,
+    busyMinutes: busyKnown ? heldAndBusy - heldMinutes : null,
     pipelineMinutes: totalMinutes - heldAndBusy,
   }
 }
