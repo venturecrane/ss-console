@@ -1,65 +1,195 @@
 /**
- * Merge to seat: how many minutes a merged change takes to reach every paying
- * client's seat, per image release and as a weekly median (the admin Fleet
- * page's "Merge to seat" card).
+ * Merge to seat, the data side: the rows the admin Fleet page's "Merge to seat"
+ * card measures, read from D1 and parsed, and the seat groups it measures
+ * against. The measuring itself is pure and lives in `lead-time.ts`; the page
+ * summary in `lead-time-summary.ts`.
  *
- * The metric is "merge to the LAST client seat done", never one named client:
- * with 10 to 20 client seats, the slowest one is the one a client feels. The
- * clock starts at `fleet_releases.merged_at` (the merge commit's committer
- * time, written by `fleet build` since migration 0148) and stops at the latest
- * `finished_at` over the client seats' `done` rollouts of that release. A
- * rollout's `finished_at` is also set for failed, rolled-back and skipped
- * states, so only `state = 'done'` counts.
+ * Three reads, all static SQL:
+ *   fleet_releases  every image, bundle and skills release, newest first
+ *   fleet_rollouts  every rollout attempt of those releases (one row per
+ *                   attempt: `start_rollout` inserts it, `update_rollout` sets
+ *                   its end state and `finished_at`)
+ *   fleet_holds     the holds in place NOW (`fleet unhold` deletes the row, so
+ *                   a lifted hold is visible only through the `skipped_held`
+ *                   rollout rows it caused)
+ *
+ * Timestamps: every fleet writer stores `strftime('%Y-%m-%dT%H:%M:%SZ','now')`
+ * or `ids.iso` (the same form). `parseUtc` also takes the SQLite
+ * `YYYY-MM-DD HH:MM:SS` form (UTC by SQLite's definition), fractional seconds
+ * and an explicit `+00:00`, because `ids.parse_iso` on the writer side accepts
+ * them too. Any other value is read as missing, never guessed.
  *
  * A client seat is a provisioned seat whose authored `seat.yaml` says
- * `purpose: client` (ADR 0107, through the generated SEAT_PURPOSES), never a
- * list kept here and never inferred from ring numbers. An unprovisioned client
- * seat has no Fly app to release to, so it is not waited for.
- *
- * Never invents a number (docs/style/empty-state-pattern.md): a release with no
- * merge time, or with any client seat not yet done, has no all-clients time; a
- * week with no measured release has no median; a failed query is returned as
- * an error for the page to say so.
+ * `purpose: client` (ADR 0107, through the generated SEAT_PURPOSES). An
+ * unprovisioned client seat has no Fly app to release to, so it is not waited
+ * for. A client seat with a release twin is in the headline group; one without
+ * a twin is its own group, never mixed into the headline.
  */
 
 import { SEAT_PURPOSES, type SeatPurposeEntry } from '../operator/seat-purposes.generated'
 
-/** One image release joined with one done rollout (or none: the LEFT JOIN). */
-export interface MergeToSeatRow {
+export type ArtifactKind = 'image' | 'bundle' | 'skills'
+export const ARTIFACT_KINDS: readonly ArtifactKind[] = ['image', 'bundle', 'skills']
+
+export interface ReleaseRow {
   releaseId: string
-  ssConsoleSha: string | null
-  createdAt: string
-  mergedAt: string | null
-  seat: string | null
-  finishedAt: string | null
+  kind: ArtifactKind
+  sha: string | null
+  notes: string | null
+  createdAtMs: number
+  mergedAtMs: number | null
 }
 
-export interface ReleaseMergeToSeat {
+export interface RolloutRow {
   releaseId: string
-  shortSha: string
-  mergedAt: string | null
-  imageBuiltAt: string
-  /** When the last client seat finished; null while any client seat has no done rollout. */
-  allClientsDoneAt: string | null
-  minutesMergeToClients: number | null
-  minutesImageToClients: number | null
+  seat: string
+  state: string
+  startedAtMs: number
+  finishedAtMs: number | null
 }
 
-export interface WeeklyMedian {
-  /** Monday of the ISO week (UTC), YYYY-MM-DD. */
-  weekStart: string
-  medianMinutes: number
-  releases: number
+export interface HoldRow {
+  seat: string
+  heldAtMs: number
 }
 
-export interface MergeToSeatSummary {
-  releases: ReleaseMergeToSeat[]
-  weeks: WeeklyMedian[]
+export interface FleetHistory {
+  releases: ReleaseRow[]
+  rollouts: RolloutRow[]
+  holds: HoldRow[]
 }
 
-const ISO_Z = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000
-const WEEKS_SHOWN = 8
+export interface SeatGroups {
+  /** Client seats with a release twin: the headline. */
+  twinned: string[]
+  /** Client seats with no release twin: their own group. */
+  untwinned: string[]
+  /** Client seat -> its release twin. */
+  twins: Record<string, string>
+}
+
+const UTC_FORM = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(Z|\+00:00)?$/
+
+/** A UTC timestamp in one of the forms the fleet writers store, as epoch ms; else null. */
+export function parseUtc(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const m = UTC_FORM.exec(value.trim())
+  if (!m) return null
+  // The `T` form must say it is UTC; the SQLite space form is UTC by definition.
+  if (value.includes('T') && !m[7]) return null
+  const [y, mo, d, h, mi, s] = m.slice(1, 7).map(Number)
+  const ms = Date.UTC(y, mo - 1, d, h, mi, s)
+  const back = new Date(ms)
+  if (back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d || h > 23 || mi > 59 || s > 59) {
+    return null
+  }
+  return ms
+}
+
+function text(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function kind(value: unknown): ArtifactKind | null {
+  return value === 'image' || value === 'bundle' || value === 'skills' ? value : null
+}
+
+function record(raw: unknown): Record<string, unknown> | null {
+  return typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : null
+}
+
+/** One release row, or null when it cannot be placed (no id, kind or build time). */
+export function parseRelease(raw: unknown): ReleaseRow | null {
+  const r = record(raw)
+  if (!r) return null
+  const releaseId = text(r['release_id'])
+  const k = kind(r['kind'])
+  const createdAtMs = parseUtc(r['created_at'])
+  if (!releaseId || !k || createdAtMs === null) return null
+  return {
+    releaseId,
+    kind: k,
+    sha: text(r['ss_console_sha']),
+    notes: text(r['notes']),
+    createdAtMs,
+    mergedAtMs: parseUtc(r['merged_at']),
+  }
+}
+
+/** One rollout row, or null when it cannot be placed (no release, seat, state or start). */
+export function parseRollout(raw: unknown): RolloutRow | null {
+  const r = record(raw)
+  if (!r) return null
+  const releaseId = text(r['release_id'])
+  const seat = text(r['customer_slug'])
+  const state = text(r['state'])
+  const startedAtMs = parseUtc(r['started_at'])
+  if (!releaseId || !seat || !state || startedAtMs === null) return null
+  return { releaseId, seat, state, startedAtMs, finishedAtMs: parseUtc(r['finished_at']) }
+}
+
+/** One current hold, or null when it cannot be placed. */
+export function parseHold(raw: unknown): HoldRow | null {
+  const r = record(raw)
+  if (!r) return null
+  const seat = text(r['customer_slug'])
+  const heldAtMs = parseUtc(r['held_at'])
+  return seat && heldAtMs !== null ? { seat, heldAtMs } : null
+}
+
+const RELEASES_SQL =
+  'SELECT release_id, kind, ss_console_sha, notes, created_at, merged_at FROM fleet_releases ' +
+  "WHERE kind IN ('image', 'bundle', 'skills') ORDER BY created_at DESC LIMIT ?"
+
+const ROLLOUTS_SQL =
+  'SELECT o.release_id, o.customer_slug, o.state, o.started_at, o.finished_at ' +
+  'FROM fleet_rollouts o JOIN (SELECT release_id FROM fleet_releases ' +
+  "WHERE kind IN ('image', 'bundle', 'skills') ORDER BY created_at DESC LIMIT ?) r " +
+  'ON r.release_id = o.release_id'
+
+const HOLDS_SQL = 'SELECT customer_slug, held_at FROM fleet_holds'
+
+function parseAll<T>(rows: unknown[] | undefined, parse: (raw: unknown) => T | null): T[] {
+  const out: T[] = []
+  for (const raw of rows ?? []) {
+    const row = parse(raw)
+    if (row) out.push(row)
+  }
+  return out
+}
+
+async function read<T>(
+  name: string,
+  run: () => Promise<{ results?: unknown[] }>,
+  parse: (raw: unknown) => T | null
+): Promise<T[]> {
+  try {
+    return parseAll((await run()).results, parse)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`${name} query failed: ${msg}`, { cause: e })
+  }
+}
+
+/** The newest `limit` releases of every kind, their rollouts, and the holds in place now. */
+export async function fetchFleetHistory(
+  db: D1Database,
+  limit: number
+): Promise<{ history: FleetHistory; error: string | null }> {
+  try {
+    const [releases, rollouts, holds] = await Promise.all([
+      read('fleet_releases', () => db.prepare(RELEASES_SQL).bind(limit).all(), parseRelease),
+      read('fleet_rollouts', () => db.prepare(ROLLOUTS_SQL).bind(limit).all(), parseRollout),
+      read('fleet_holds', () => db.prepare(HOLDS_SQL).all(), parseHold),
+    ])
+    return { history: { releases, rollouts, holds }, error: null }
+  } catch (e) {
+    return {
+      history: { releases: [], rollouts: [], holds: [] },
+      error: e instanceof Error ? e.message : String(e),
+    }
+  }
+}
 
 /** The client seats: every provisioned seat whose purpose is client, sorted. */
 export function clientSeats(
@@ -70,149 +200,20 @@ export function clientSeats(
     .sort()
 }
 
-/** A D1 UTC timestamp in the `...Z` form, or null. */
-function utc(value: unknown): string | null {
-  return typeof value === 'string' && ISO_Z.test(value) && !Number.isNaN(Date.parse(value))
-    ? value
-    : null
-}
-
-function text(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null
-}
-
-/** One joined row, or null when it cannot be placed (no release id or build time). */
-export function parseRow(raw: unknown): MergeToSeatRow | null {
-  if (typeof raw !== 'object' || raw === null) return null
-  const r = raw as Record<string, unknown>
-  const releaseId = text(r['release_id'])
-  const createdAt = utc(r['created_at'])
-  if (!releaseId || !createdAt) return null
+/** The client seats split by whether a release twin gates them (ADR 0107). */
+export function seatGroups(
+  purposes: Readonly<Record<string, SeatPurposeEntry>> = SEAT_PURPOSES
+): SeatGroups {
+  const twins: Record<string, string> = {}
+  for (const [seat, entry] of Object.entries(purposes)) {
+    if (entry.purpose === 'release-twin' && entry.twinOf) twins[entry.twinOf] = seat
+  }
+  const clients = clientSeats(purposes)
   return {
-    releaseId,
-    ssConsoleSha: text(r['ss_console_sha']),
-    createdAt,
-    mergedAt: utc(r['merged_at']),
-    seat: text(r['customer_slug']),
-    finishedAt: utc(r['finished_at']),
+    twinned: clients.filter((s) => s in twins),
+    untwinned: clients.filter((s) => !(s in twins)),
+    twins: Object.fromEntries(clients.filter((s) => s in twins).map((s) => [s, twins[s]])),
   }
-}
-
-/**
- * The newest `limit` image releases, each joined with its done rollouts. The
- * seat filter is applied in `summarizeMergeToSeat`, so the SQL is static.
- */
-export async function fetchMergeToSeatRows(
-  db: D1Database,
-  limit: number
-): Promise<{ rows: MergeToSeatRow[]; error: string | null }> {
-  try {
-    const result = await db
-      .prepare(
-        'SELECT r.release_id, r.ss_console_sha, r.created_at, r.merged_at, ' +
-          'o.customer_slug, o.finished_at ' +
-          "FROM (SELECT * FROM fleet_releases WHERE kind = 'image' " +
-          'ORDER BY created_at DESC LIMIT ?) r ' +
-          "LEFT JOIN fleet_rollouts o ON o.release_id = r.release_id AND o.state = 'done' " +
-          'ORDER BY r.created_at DESC'
-      )
-      .bind(limit)
-      .all<Record<string, unknown>>()
-    const rows: MergeToSeatRow[] = []
-    for (const raw of result.results ?? []) {
-      const row = parseRow(raw)
-      if (row) rows.push(row)
-    }
-    return { rows, error: null }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return { rows: [], error: `fleet_releases query failed: ${msg}` }
-  }
-}
-
-function minutesBetween(from: string | null, to: string | null): number | null {
-  if (!from || !to) return null
-  return Math.round((Date.parse(to) - Date.parse(from)) / 60000)
-}
-
-/** Monday 00:00 UTC of the ISO week holding `ms`. */
-function weekStartMs(ms: number): number {
-  const d = new Date(ms)
-  const sinceMonday = (d.getUTCDay() + 6) % 7
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - sinceMonday)
-}
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 1 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2)
-}
-
-/** Latest done time per client seat for one release's rows. */
-function lastDonePerSeat(rows: MergeToSeatRow[], seats: Set<string>): Map<string, string> {
-  const done = new Map<string, string>()
-  for (const row of rows) {
-    if (!row.seat || !row.finishedAt || !seats.has(row.seat)) continue
-    const prior = done.get(row.seat)
-    if (!prior || row.finishedAt > prior) done.set(row.seat, row.finishedAt)
-  }
-  return done
-}
-
-function summarizeRelease(rows: MergeToSeatRow[], seats: Set<string>): ReleaseMergeToSeat {
-  const first = rows[0]
-  const done = lastDonePerSeat(rows, seats)
-  const allDone = seats.size > 0 && done.size === seats.size
-  const allClientsDoneAt = allDone ? ([...done.values()].sort().at(-1) ?? null) : null
-  return {
-    releaseId: first.releaseId,
-    shortSha: (first.ssConsoleSha ?? first.releaseId.split('-').at(-1) ?? '').slice(0, 8),
-    mergedAt: first.mergedAt,
-    imageBuiltAt: first.createdAt,
-    allClientsDoneAt,
-    minutesMergeToClients: minutesBetween(first.mergedAt, allClientsDoneAt),
-    minutesImageToClients: minutesBetween(first.createdAt, allClientsDoneAt),
-  }
-}
-
-function weeklyMedians(releases: ReleaseMergeToSeat[], now: Date): WeeklyMedian[] {
-  const oldest = weekStartMs(now.getTime()) - (WEEKS_SHOWN - 1) * WEEK_MS
-  const byWeek = new Map<number, number[]>()
-  for (const r of releases) {
-    if (r.minutesMergeToClients === null || !r.allClientsDoneAt) continue
-    const week = weekStartMs(Date.parse(r.allClientsDoneAt))
-    if (week < oldest) continue
-    byWeek.set(week, [...(byWeek.get(week) ?? []), r.minutesMergeToClients])
-  }
-  return [...byWeek.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([week, values]) => ({
-      weekStart: new Date(week).toISOString().slice(0, 10),
-      medianMinutes: median(values),
-      releases: values.length,
-    }))
-}
-
-/**
- * Per release (newest first) and per ISO week of the last client done time
- * (newest first, the last 8 weeks, only weeks with a measured release).
- */
-export function summarizeMergeToSeat(
-  rows: MergeToSeatRow[],
-  seats: string[],
-  now: Date = new Date()
-): MergeToSeatSummary {
-  const seatSet = new Set(seats)
-  const byRelease = new Map<string, MergeToSeatRow[]>()
-  for (const row of rows) {
-    byRelease.set(row.releaseId, [...(byRelease.get(row.releaseId) ?? []), row])
-  }
-  const releases = [...byRelease.values()]
-    .map((group) => summarizeRelease(group, seatSet))
-    .sort((a, b) =>
-      a.imageBuiltAt < b.imageBuiltAt ? 1 : a.imageBuiltAt > b.imageBuiltAt ? -1 : 0
-    )
-  return { releases, weeks: weeklyMedians(releases, now) }
 }
 
 const PHOENIX_TIME = new Intl.DateTimeFormat('en-US', {
@@ -229,12 +230,12 @@ const WEEK_DAY = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
 })
 
-/** A UTC timestamp as Phoenix (MST) wall time, e.g. "Nov 4, 9:14 PM". */
-export function phoenixTime(value: string): string {
-  return PHOENIX_TIME.format(new Date(value))
+/** Epoch ms as Phoenix (MST) wall time, e.g. "Nov 4, 9:14 PM". */
+export function phoenixTime(ms: number): string {
+  return PHOENIX_TIME.format(new Date(ms))
 }
 
-/** A week's Monday as "Nov 2". */
+/** A week's Monday (YYYY-MM-DD) as "Nov 2". */
 export function weekLabel(weekStart: string): string {
   return WEEK_DAY.format(new Date(`${weekStart}T00:00:00Z`))
 }
