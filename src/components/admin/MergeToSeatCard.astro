@@ -12,6 +12,7 @@ import {
   type WeekStats,
 } from '../../lib/admin/lead-time-summary'
 import { REVIEW_THRESHOLD_PIPELINE_MINUTES } from '../../lib/admin/lead-time'
+import { HOLD_HISTORY_RECORDED_SINCE } from '../../lib/admin/lead-time-split'
 import { phoenixTime, weekLabel, type SeatGroups } from '../../lib/admin/merge-to-seat'
 
 interface Props {
@@ -76,6 +77,7 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
                   <th class="pb-2 font-medium text-right">On hold</th>
                   <th class="pb-2 font-medium text-right">Busy</th>
                   <th class="pb-2 font-medium text-right">Clear</th>
+                  <th class="pb-2 font-medium text-right">Not recorded</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-[color:var(--ss-color-border-subtle)]">
@@ -90,7 +92,8 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
                     <td class="py-2 pr-4 text-right">{minutes(w.p90Pipeline)}</td>
                     <td class="py-2 pr-4 text-right">{w.held}</td>
                     <td class="py-2 pr-4 text-right">{w.busy}</td>
-                    <td class="py-2 text-right">{w.clear}</td>
+                    <td class="py-2 pr-4 text-right">{w.clear}</td>
+                    <td class="py-2 text-right">{w.unrecorded}</td>
                   </tr>
                 ))}
               </tbody>
@@ -110,7 +113,8 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
             {untwinnedRows.map(({ kind, w }) => (
               <li>
                 Week of {weekLabel(w.weekStart)}, {kind}: median {minutes(w.medianPipeline)}, slow
-                case {minutes(w.p90Pipeline)}, {w.held} on hold, {w.busy} busy, {w.clear} clear
+                case {minutes(w.p90Pipeline)}, {w.held} on hold, {w.busy} busy, {w.clear} clear,{' '}
+                {w.unrecorded} not recorded
               </li>
             ))}
           </ul>
@@ -129,7 +133,7 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
               <thead>
                 <tr class="text-left text-xs text-[color:var(--ss-color-text-secondary)] border-b border-[color:var(--ss-color-border)]">
                   <th class="pb-2 font-medium">Merge</th>
-                  <th class="pb-2 font-medium">Merged</th>
+                  <th class="pb-2 font-medium">Clock start</th>
                   <th class="pb-2 font-medium">Image</th>
                   <th class="pb-2 font-medium">Jobs bundle</th>
                   <th class="pb-2 font-medium">Skills</th>
@@ -143,7 +147,7 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
                     </td>
                     <td class="py-2 pr-4">
                       {phoenixTime(m.startMs)}
-                      {m.clockFrom === 'publish' ? ' (published)' : ''}
+                      {` (from ${m.clockFrom})`}
                     </td>
                     {(['image', 'bundle', 'skills'] as const).map((kind) => {
                       const cell = describeArrival(m.byKind[kind])
@@ -172,19 +176,37 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
     class="mt-4 pt-4 border-t border-[color:var(--ss-color-border-subtle)] space-y-2 text-xs text-[color:var(--ss-color-text-muted)]"
   >
     <p>
-      <strong>Measured</strong> per change merged to main and built by CI, from its merge time to the
-      first finished rollout, on the last client seat, of any release that contains it. A release overtaken
-      before a seat took it counts nothing there; the newer release that carried the change does. A hand-built
-      or hotfix release never counts. Held is time a seat or its release twin was on hold; busy is time
-      its latest rollout was waiting for it to go idle; pipeline is the rest. Image, jobs bundle and skills
-      are measured separately. A bundle or skills change with no image of the same commit is timed from
-      when it was published. Weeks are the week the change merged, Monday to Sunday, over the last 8 weeks.
-      Times are Phoenix time.
+      <strong>Measured</strong> per change merged to main and built by CI, to the first finished rollout,
+      on the last client seat, of any release that contains it. A release overtaken before a seat took
+      it counts nothing there; the newer release that carried the change does. A hand-built or hotfix
+      release never counts. A client seat counts for a change only if it had taken a release of that kind
+      before the change merged. Image, jobs bundle and skills are measured separately. Weeks are the week
+      the change merged, Monday to Sunday, over the last 8 weeks. Times are Phoenix time.
     </p>
     <p>
-      A hold placed and lifted with no rollout attempt in between leaves no record and is counted as
-      pipeline time. A merge whose build was skipped is not listed: its change rides the next
-      release built.
+      <strong>Clock start.</strong> "From queued" is when the merge queue built the merge commit, several
+      minutes before the change reached main; the fleet does not record when it reached main yet. "From
+      merged" is when it reached main. "From published" is when a bundle or skills change with no image
+      of the same commit was published.
     </p>
+    {
+      HOLD_HISTORY_RECORDED_SINCE === null ? (
+        <p>
+          <strong>Not recorded.</strong> The fleet keeps no record of a hold once it is lifted, and
+          no record of how long a rollout waited for a client job. So for now no change can be split
+          into pipeline, held and busy minutes: each shows its total only, counts as not recorded,
+          and is left out of the median and the slow case. On hold and busy count only changes
+          waiting on a hold or a busy seat right now.
+        </p>
+      ) : (
+        <p>
+          <strong>Not recorded.</strong> Holds are recorded from {HOLD_HISTORY_RECORDED_SINCE}. A
+          change that merged before then, or whose rollouts carry no record of how long they waited
+          for a client job, shows its total only, counts as not recorded, and is left out of the
+          median and the slow case.
+        </p>
+      )
+    }
+    <p>A change whose build was skipped is not listed: it rides the next release built.</p>
   </div>
 </div>

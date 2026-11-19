@@ -1,7 +1,8 @@
 /**
  * Lead time, merge to client seat: for every merged change, when it reached
- * the LAST client seat of a group, split into pipeline, held and busy minutes.
- * Pure: every input is a parsed row from `merge-to-seat.ts`.
+ * the LAST client seat of a group, and what it waits on until then. Pure:
+ * every input is a parsed row from `merge-to-seat.ts`; the minutes split is
+ * `lead-time-split.ts`.
  *
  * WHICH MERGES. A merge is a commit recorded on a release that CI built from
  * main: an image or bundle row whose notes read `merge <sha8> (CI)` with that
@@ -27,63 +28,69 @@
  *           skills merges seconds apart could record out of order).
  * A release contains merge M when its (order, created_at) is at or after M's.
  *
- * ARRIVAL. Per seat, the first `done` rollout of any release containing M; the
- * merge arrived for a group when every seat of the group has one, at the
- * latest of those (the last seat, the one a client feels). A release overtaken
- * before a seat took it is simply not a done row there; the newer release that
- * carried M is. Bundles go only to seats that author a job lane, so for a
- * bundle a seat counts only if it has any bundle rollout row in the history.
+ * WHICH SEATS COUNT. A client seat counts for a merge only if it has a rollout
+ * row of that kind that STARTED at or before the merge's clock start: a seat
+ * added mid-window is not waited for by the merges before it, and a seat with
+ * no job lane, which never takes a bundle, is not waited for by bundles.
  *
- * THE SPLIT. The clock starts at the image row's `merged_at` (for a bundle or
- * skills merge, the same commit's image `merged_at` when it has one, else the
- * release's own `created_at`, labelled "from publish"). Over [start, arrival],
- * for the last seat and its release twin:
- *   held   time a current hold was in place (`fleet_holds.held_at` to now), or
- *          the seat's latest rollout row of this kind was `skipped_held`
- *   busy   time the seat's latest rollout row of this kind was `waiting_idle`,
- *          not already counted as held
- *   pipeline  the rest
- * Each is a measure of time intervals between rows, never a count of rows, so
- * a tick that writes more or fewer rows does not move them. A hold placed and
- * lifted with no rollout attempt in between leaves no row and is invisible.
+ * ARRIVAL. Per seat, the first `done` rollout of any release containing M; the
+ * merge arrived for a group when every counted seat has one, at the latest of
+ * those (the last seat, the one a client feels). A release overtaken before a
+ * seat took it is simply not a done row there; the newer release that carried
+ * M is.
+ *
+ * THE CLOCK. It starts when the change reached main (`reachedMainAtMs`, not
+ * recorded yet), else at `merged_at`, the merge commit's committer time, which
+ * is when the merge queue BUILT the commit, minutes before it reached main
+ * (labelled "from queued"). A bundle or skills merge takes the same commit's
+ * image clock when it has one, else its own `created_at` ("from published").
  */
 
-import type { ArtifactKind, FleetHistory, ReleaseRow, RolloutRow } from './merge-to-seat'
+import { HOLD_HISTORY_RECORDED_SINCE, splitFor, type Split, type Track } from './lead-time-split'
+import {
+  parseUtc,
+  type ArtifactKind,
+  type FleetHistory,
+  type HoldInterval,
+  type ReleaseRow,
+  type RolloutRow,
+} from './merge-to-seat'
 
-/** The review threshold: an arrival whose pipeline minutes (held and busy excluded) exceed this is marked for review. */
+/** The review threshold: an arrival whose recorded pipeline minutes (held and busy excluded) exceed this is marked for review. */
 export const REVIEW_THRESHOLD_PIPELINE_MINUTES = 45
 
 const CI_MERGE_NOTE = /^merge ([0-9a-f]{8}) \(CI\)$/
 const CI_SKILLS_NOTE = 'published by CI'
-const MINUTE_MS = 60_000
+
+export type ClockFrom = 'merged' | 'queued' | 'published'
 
 export interface Merge {
   sha: string
   kind: ArtifactKind
   releaseId: string
   startMs: number
-  clockFrom: 'merge' | 'publish'
+  clockFrom: ClockFrom
   order: [number, number]
-}
-
-export interface Split {
-  pipelineMinutes: number
-  heldMinutes: number
-  busyMinutes: number
 }
 
 export type WaitingOn =
   | { reason: 'hold'; seat: string }
   | { reason: 'busy'; seat: string }
+  | { reason: 'idle_wait'; seat: string }
   | { reason: 'twin'; seat: string }
   | { reason: 'nothing'; seat: string }
 
 export type Arrival =
-  | { status: 'arrived'; atMs: number; lastSeat: string; totalMinutes: number; split: Split }
-  | { status: 'in_progress'; waitingOn: WaitingOn; elapsedMinutes: number; split: Split }
+  | { status: 'arrived'; atMs: number; lastSeat: string; split: Split }
+  | { status: 'in_progress'; waitingOn: WaitingOn; split: Split }
   | { status: 'no_seats' }
 
-type Interval = [number, number]
+export interface SeatContext {
+  bySeat: Map<string, RolloutRow[]>
+  holds: HoldInterval[]
+  twins: Record<string, string>
+  holdHistorySinceMs: number | null
+}
 
 /** Whether CI built this release from main (see the module header). */
 export function onMainLine(r: ReleaseRow): boolean {
@@ -102,27 +109,36 @@ function atOrAfter(a: [number, number], b: [number, number]): boolean {
   return a[0] > b[0] || (a[0] === b[0] && a[1] >= b[1])
 }
 
+function imageClocks(releases: ReleaseRow[]): Map<string, { ms: number; from: ClockFrom }> {
+  const clocks = new Map<string, { ms: number; from: ClockFrom }>()
+  for (const r of releases) {
+    if (r.kind !== 'image' || !r.sha || r.mergedAtMs === null || !onMainLine(r)) continue
+    clocks.set(
+      r.sha,
+      r.reachedMainAtMs === null
+        ? { ms: r.mergedAtMs, from: 'queued' }
+        : { ms: r.reachedMainAtMs, from: 'merged' }
+    )
+  }
+  return clocks
+}
+
 /** Every merge CI recorded, newest first, one per (kind, commit). */
 export function mergesOf(releases: ReleaseRow[]): Merge[] {
-  const imageMerged = new Map<string, number>()
-  for (const r of releases) {
-    if (r.kind === 'image' && r.sha && r.mergedAtMs !== null && onMainLine(r)) {
-      imageMerged.set(r.sha, r.mergedAtMs)
-    }
-  }
+  const clocks = imageClocks(releases)
   const seen = new Set<string>()
   const merges: Merge[] = []
   for (const r of releases) {
     const order = orderOf(r)
     if (!r.sha || !order || !onMainLine(r) || seen.has(`${r.kind}:${r.sha}`)) continue
     seen.add(`${r.kind}:${r.sha}`)
-    const merged = imageMerged.get(r.sha)
+    const clock = clocks.get(r.sha) ?? { ms: r.createdAtMs, from: 'published' as const }
     merges.push({
       sha: r.sha,
       kind: r.kind,
       releaseId: r.releaseId,
-      startMs: merged ?? r.createdAtMs,
-      clockFrom: merged === undefined ? 'publish' : 'merge',
+      startMs: clock.ms,
+      clockFrom: clock.from,
       order,
     })
   }
@@ -141,8 +157,7 @@ export function carriersOf(merge: Merge, releases: ReleaseRow[]): Set<string> {
   return out
 }
 
-/** Each seat's rollout rows of one kind, oldest attempt first. */
-export function rowsBySeat(history: FleetHistory, kind: ArtifactKind): Map<string, RolloutRow[]> {
+function rowsBySeat(history: FleetHistory, kind: ArtifactKind): Map<string, RolloutRow[]> {
   const kindOf = new Map(history.releases.map((r) => [r.releaseId, r.kind]))
   const bySeat = new Map<string, RolloutRow[]>()
   for (const row of history.rollouts) {
@@ -151,6 +166,21 @@ export function rowsBySeat(history: FleetHistory, kind: ArtifactKind): Map<strin
   }
   for (const rows of bySeat.values()) rows.sort((a, b) => a.startedAtMs - b.startedAtMs)
   return bySeat
+}
+
+/** The per-kind seat context. `holdHistorySince` defaults to HOLD_HISTORY_RECORDED_SINCE. */
+export function seatContext(
+  history: FleetHistory,
+  kind: ArtifactKind,
+  twins: Record<string, string>,
+  holdHistorySince: string | null = HOLD_HISTORY_RECORDED_SINCE
+): SeatContext {
+  return {
+    bySeat: rowsBySeat(history, kind),
+    holds: history.holds,
+    twins,
+    holdHistorySinceMs: holdHistorySince === null ? null : parseUtc(holdHistorySince),
+  }
 }
 
 function firstDone(rows: RolloutRow[], carriers: Set<string>): number | null {
@@ -162,84 +192,37 @@ function firstDone(rows: RolloutRow[], carriers: Set<string>): number | null {
   return best
 }
 
-/** The intervals during which the seat's latest row was in `state`, each running to the next row's start. */
-function latestRowIntervals(rows: RolloutRow[], state: string): Interval[] {
-  const out: Interval[] = []
-  rows.forEach((row, i) => {
-    if (row.state === state) out.push([row.startedAtMs, rows[i + 1]?.startedAtMs ?? Infinity])
-  })
-  return out
+function heldNow(holds: HoldInterval[], seat: string, nowMs: number): boolean {
+  return holds.some(
+    (h) => h.seat === seat && h.heldAtMs <= nowMs && (h.liftedAtMs === null || h.liftedAtMs > nowMs)
+  )
 }
 
-/** The union of `intervals` clipped to [from, to], as sorted disjoint intervals. */
-export function clipUnion(intervals: Interval[], from: number, to: number): Interval[] {
-  const clipped = intervals
-    .map(([s, e]): Interval => [Math.max(s, from), Math.min(e, to)])
-    .filter(([s, e]) => e > s)
-    .sort((a, b) => a[0] - b[0])
-  const out: Interval[] = []
-  for (const [s, e] of clipped) {
-    const last = out.at(-1)
-    if (last && s <= last[1]) last[1] = Math.max(last[1], e)
-    else out.push([s, e])
+/** A seat and its twin; the twin counts only until its first done on a carrier. */
+function tracks(seat: string, carriers: Set<string>, ctx: SeatContext): Track[] {
+  const twin = ctx.twins[seat]
+  const out: Track[] = [{ seat, untilMs: Infinity }]
+  if (twin) {
+    out.push({ seat: twin, untilMs: firstDone(ctx.bySeat.get(twin) ?? [], carriers) ?? Infinity })
   }
   return out
 }
 
-function measure(intervals: Interval[]): number {
-  return intervals.reduce((sum, [s, e]) => sum + (e - s), 0)
-}
-
-function overlap(a: Interval[], b: Interval[]): number {
-  let total = 0
-  for (const [as, ae] of a) {
-    for (const [bs, be] of b) total += Math.max(0, Math.min(ae, be) - Math.max(as, bs))
+/** What a seat not yet done waits on: a hold, a busy seat, an idle wait, its twin, or nothing. */
+function waitingFor(
+  seat: string,
+  carriers: Set<string>,
+  ctx: SeatContext,
+  nowMs: number
+): WaitingOn {
+  const live = tracks(seat, carriers, ctx).filter((t) => t.untilMs > nowMs)
+  const held = live.find((t) => heldNow(ctx.holds, t.seat, nowMs))
+  if (held) return { reason: 'hold', seat: held.seat }
+  for (const t of live) {
+    const last = (ctx.bySeat.get(t.seat) ?? []).at(-1)
+    if (last?.state !== 'waiting_idle' || last.busySeconds === 0) continue
+    return { reason: last.busySeconds === null ? 'idle_wait' : 'busy', seat: t.seat }
   }
-  return total
-}
-
-interface SeatContext {
-  bySeat: Map<string, RolloutRow[]>
-  holds: Map<string, number>
-  twins: Record<string, string>
-}
-
-/** Held, busy and pipeline minutes over [from, to] for these seats (a seat and its twin). */
-export function splitFor(seats: string[], from: number, to: number, ctx: SeatContext): Split {
-  const held: Interval[] = []
-  const busy: Interval[] = []
-  for (const seat of seats) {
-    const rows = ctx.bySeat.get(seat) ?? []
-    held.push(...latestRowIntervals(rows, 'skipped_held'))
-    busy.push(...latestRowIntervals(rows, 'waiting_idle'))
-    const heldAt = ctx.holds.get(seat)
-    if (heldAt !== undefined) held.push([heldAt, Infinity])
-  }
-  const heldU = clipUnion(held, from, to)
-  const busyU = clipUnion(busy, from, to)
-  const heldMs = measure(heldU)
-  const busyMs = measure(busyU) - overlap(busyU, heldU)
-  const total = Math.max(0, to - from)
-  const heldMinutes = Math.round(heldMs / MINUTE_MS)
-  const busyMinutes = Math.round(busyMs / MINUTE_MS)
-  return {
-    heldMinutes,
-    busyMinutes,
-    pipelineMinutes: Math.max(0, Math.round(total / MINUTE_MS) - heldMinutes - busyMinutes),
-  }
-}
-
-function track(seat: string, twins: Record<string, string>): string[] {
-  return twins[seat] ? [seat, twins[seat]] : [seat]
-}
-
-/** What a seat not yet done waits on: a hold, a busy seat, its twin, or nothing. */
-function waitingFor(seat: string, carriers: Set<string>, ctx: SeatContext): WaitingOn {
-  const seats = track(seat, ctx.twins)
-  const held = seats.find((s) => ctx.holds.has(s))
-  if (held) return { reason: 'hold', seat: held }
-  const busy = seats.find((s) => (ctx.bySeat.get(s) ?? []).at(-1)?.state === 'waiting_idle')
-  if (busy) return { reason: 'busy', seat: busy }
   const twin = ctx.twins[seat]
   if (twin && firstDone(ctx.bySeat.get(twin) ?? [], carriers) === null) {
     return { reason: 'twin', seat: twin }
@@ -247,10 +230,33 @@ function waitingFor(seat: string, carriers: Set<string>, ctx: SeatContext): Wait
   return { reason: 'nothing', seat }
 }
 
-const WAIT_RANK: Record<WaitingOn['reason'], number> = { hold: 0, busy: 1, twin: 2, nothing: 3 }
+const WAIT_RANK: Record<WaitingOn['reason'], number> = {
+  hold: 0,
+  busy: 1,
+  idle_wait: 2,
+  twin: 3,
+  nothing: 4,
+}
 
-function seatsTaking(kind: ArtifactKind, group: string[], ctx: SeatContext): string[] {
-  return kind === 'bundle' ? group.filter((s) => (ctx.bySeat.get(s) ?? []).length > 0) : group
+function seatsCounted(merge: Merge, group: string[], ctx: SeatContext): string[] {
+  return group.filter((s) => (ctx.bySeat.get(s) ?? []).some((r) => r.startedAtMs <= merge.startMs))
+}
+
+function splitOver(
+  seats: string[],
+  merge: Merge,
+  toMs: number,
+  carriers: Set<string>,
+  ctx: SeatContext
+): Split {
+  return splitFor({
+    tracks: seats.flatMap((s) => tracks(s, carriers, ctx)),
+    fromMs: merge.startMs,
+    toMs,
+    bySeat: ctx.bySeat,
+    holds: ctx.holds,
+    holdHistorySinceMs: ctx.holdHistorySinceMs,
+  })
 }
 
 /** When the merge reached the last seat of `group`, or what it is waiting on. */
@@ -261,49 +267,34 @@ export function arrivalOf(
   ctx: SeatContext,
   nowMs: number
 ): Arrival {
-  const seats = seatsTaking(merge.kind, group, ctx)
+  const seats = seatsCounted(merge, group, ctx)
   if (seats.length === 0) return { status: 'no_seats' }
   const done = seats.map((s) => ({ seat: s, at: firstDone(ctx.bySeat.get(s) ?? [], carriers) }))
   const pending = done.filter((d) => d.at === null).map((d) => d.seat)
   if (pending.length > 0) {
-    const waits = pending.map((s) => waitingFor(s, carriers, ctx))
+    const waits = pending.map((s) => waitingFor(s, carriers, ctx, nowMs))
     waits.sort((a, b) => WAIT_RANK[a.reason] - WAIT_RANK[b.reason] || a.seat.localeCompare(b.seat))
-    const tracked = pending.flatMap((s) => track(s, ctx.twins))
     return {
       status: 'in_progress',
       waitingOn: waits[0],
-      elapsedMinutes: Math.max(0, Math.round((nowMs - merge.startMs) / MINUTE_MS)),
-      split: splitFor(tracked, merge.startMs, nowMs, ctx),
+      split: splitOver(pending, merge, Math.max(merge.startMs, nowMs), carriers, ctx),
     }
   }
   const last = done.reduce((a, b) => ((b.at ?? 0) > (a.at ?? 0) ? b : a))
-  const atMs = last.at ?? merge.startMs
+  const atMs = Math.max(merge.startMs, last.at ?? merge.startMs)
   return {
     status: 'arrived',
     atMs,
     lastSeat: last.seat,
-    totalMinutes: Math.max(0, Math.round((atMs - merge.startMs) / MINUTE_MS)),
-    split: splitFor(track(last.seat, ctx.twins), merge.startMs, atMs, ctx),
+    split: splitOver([last.seat], merge, atMs, carriers, ctx),
   }
 }
 
-/** The per-kind seat context: rows by seat, holds in place now, twins. */
-export function seatContext(
-  history: FleetHistory,
-  kind: ArtifactKind,
-  twins: Record<string, string>
-): SeatContext {
-  return {
-    bySeat: rowsBySeat(history, kind),
-    holds: new Map(history.holds.map((h) => [h.seat, h.heldAtMs])),
-    twins,
-  }
-}
-
-/** Whether an arrival's pipeline minutes exceed the review threshold. */
+/** Whether an arrival's RECORDED pipeline minutes exceed the review threshold; an unrecorded split is never marked. */
 export function overThreshold(arrival: Arrival): boolean {
   return (
     arrival.status === 'arrived' &&
+    arrival.split.recorded &&
     arrival.split.pipelineMinutes > REVIEW_THRESHOLD_PIPELINE_MINUTES
   )
 }

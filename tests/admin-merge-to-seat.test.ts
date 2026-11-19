@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest'
 import {
   clientSeats,
   fetchFleetHistory,
+  historyStartMs,
   parseHold,
   parseRelease,
   parseRollout,
@@ -65,8 +66,15 @@ describe('row parsers', () => {
       notes: release.notes,
       createdAtMs: AT,
       mergedAtMs: AT - 10 * 60_000,
+      reachedMainAtMs: null,
     })
     expect(parseRelease({ ...release, merged_at: null })?.mergedAtMs).toBeNull()
+  })
+
+  it('reads the reached-main time when a row carries it (the follow-on column)', () => {
+    expect(
+      parseRelease({ ...release, reached_main_at: '2026-11-04T00:10:00Z' })?.reachedMainAtMs
+    ).toBe(AT)
   })
 
   it('drops a release with no id, an unknown kind or no build time', () => {
@@ -90,20 +98,35 @@ describe('row parsers', () => {
       state: 'waiting_idle',
       startedAtMs: AT,
       finishedAtMs: null,
+      busySeconds: null,
     })
+    expect(parseRollout({ ...rollout, busy_seconds: 90 })?.busySeconds).toBe(90)
+    expect(parseRollout({ ...rollout, busy_seconds: -1 })?.busySeconds).toBeNull()
+    expect(parseRollout({ ...rollout, busy_seconds: '90' })?.busySeconds).toBeNull()
     expect(parseRollout({ ...rollout, started_at: null })).toBeNull()
     expect(parseHold({ customer_slug: 'client-a', held_at: '2026-11-04T00:10:00Z' })).toEqual({
       seat: 'client-a',
       heldAtMs: AT,
+      liftedAtMs: null,
     })
+    expect(
+      parseHold({
+        customer_slug: 'client-a',
+        held_at: '2026-11-04T00:10:00Z',
+        lifted_at: '2026-11-04T00:20:00Z',
+      })?.liftedAtMs
+    ).toBe(AT + 10 * 60_000)
     expect(parseHold({ customer_slug: 'client-a', held_at: 'now' })).toBeNull()
   })
 })
 
 describe('fetchFleetHistory', () => {
-  function fakeDb(fail: string | null): D1Database {
+  const RELEASE = { release_id: 'img-1', kind: 'image', created_at: '2026-11-04T00:10:00Z' }
+
+  function fakeDb(fail: string | null, releases: unknown[] = [RELEASE]) {
+    const binds: Record<string, unknown[]> = {}
     const rows: Record<string, unknown[]> = {
-      fleet_releases: [{ release_id: 'img-1', kind: 'image', created_at: '2026-11-04T00:10:00Z' }],
+      fleet_releases: releases,
       fleet_rollouts: [],
       fleet_holds: [{ customer_slug: 'client-a', held_at: '2026-11-04T00:10:00Z' }],
     }
@@ -118,20 +141,44 @@ describe('fetchFleetHistory', () => {
         if (table(sql) === fail) throw new Error('D1_ERROR: no such table')
         return { results: rows[table(sql)] }
       }
-      return { bind: () => ({ all }), all }
+      return {
+        bind: (...args: unknown[]) => {
+          binds[table(sql)] = args
+          return { all }
+        },
+        all,
+      }
     }
-    return { prepare: stmt } as unknown as D1Database
+    return { db: { prepare: stmt } as unknown as D1Database, binds }
   }
 
-  it('reads all three tables', async () => {
-    const { history, error } = await fetchFleetHistory(fakeDb(null), 10)
+  // Wednesday 2026-11-18; its week starts Monday 2026-11-16.
+  const NOW = Date.UTC(2026, 10, 18, 12, 0, 0)
+
+  it('reads every release since one week before the oldest week shown, and the holds in place', async () => {
+    const { db, binds } = fakeDb(null)
+    const { history, error } = await fetchFleetHistory(db, NOW)
     expect(error).toBeNull()
+    expect(historyStartMs(NOW)).toBe(Date.UTC(2026, 8, 21))
+    expect(binds['fleet_releases'][0]).toBe('2026-09-21T00:00:00Z')
+    expect(binds['fleet_rollouts'][0]).toBe('2026-09-21T00:00:00Z')
     expect(history.releases).toHaveLength(1)
-    expect(history.holds).toEqual([{ seat: 'client-a', heldAtMs: AT }])
+    expect(history.holds).toEqual([{ seat: 'client-a', heldAtMs: AT, liftedAtMs: null }])
+  })
+
+  it('a read past its safety cap is an error, never a partial week shown as whole', async () => {
+    const { db } = fakeDb(
+      null,
+      Array.from({ length: 5001 }, () => RELEASE)
+    )
+    const { history, error } = await fetchFleetHistory(db, NOW)
+    expect(error).toContain('fleet_releases has more than 5000 rows')
+    expect(history.releases).toEqual([])
   })
 
   it('a failed query is an error naming the table, with nothing measured', async () => {
-    const { history, error } = await fetchFleetHistory(fakeDb('fleet_holds'), 10)
+    const { db } = fakeDb('fleet_holds')
+    const { history, error } = await fetchFleetHistory(db, NOW)
     expect(error).toContain('fleet_holds query failed')
     expect(history).toEqual({ releases: [], rollouts: [], holds: [] })
   })

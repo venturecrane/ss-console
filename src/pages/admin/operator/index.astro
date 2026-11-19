@@ -127,10 +127,11 @@ views.sort((a, b) => {
 
 const totalOperators = roster.length
 
-// Merge to seat: enough releases of every kind to cover the 8-week summary.
+// Merge to seat: every release since one week before the oldest week shown.
+const mergeToSeatNow = Date.now()
 const mergeToSeatGroups = seatGroups()
-const mergeToSeatRead = await fetchFleetHistory(env.DB, 600)
-const mergeToSeat = summarizeLeadTime(mergeToSeatRead.history, mergeToSeatGroups, Date.now())
+const mergeToSeatRead = await fetchFleetHistory(env.DB, mergeToSeatNow)
+const mergeToSeat = summarizeLeadTime(mergeToSeatRead.history, mergeToSeatGroups, mergeToSeatNow)
 ---
 
 <AdminLayout
