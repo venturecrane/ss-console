@@ -12,11 +12,14 @@
  *   - either trigger is missing from `sqlite_master` (the documented back-out
  *     is DROP TRIGGER by hand);
  *   - a seat has an open hold event but no hold in place, or a hold in place
- *     with no open event (the two tables disagree).
+ *     with no open event (the two tables disagree);
+ *   - a history row cannot be read (no seat, an unreadable `held_at`, or a
+ *     `lifted_at` that is set but unreadable): it is never dropped or read as
+ *     "still in place".
  * Static SQL only; any query error is itself a reason, never a pass.
  */
 
-import { parseUtc } from './merge-to-seat'
+import { checkHoldEvent, parseUtc } from './merge-to-seat'
 
 export const HOLD_HISTORY_MIGRATION = '0153_fleet_hold_events.sql'
 export const HOLD_TRIGGERS = ['fleet_holds_record_placed', 'fleet_holds_record_lifted'] as const
@@ -31,6 +34,9 @@ export interface HoldHistory {
 const MIGRATION_SQL = 'SELECT applied_at FROM d1_migrations WHERE name = ?'
 const TRIGGERS_SQL =
   "SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'fleet_holds'"
+const EVENTS_SQL = 'SELECT customer_slug, held_at, lifted_at FROM fleet_hold_events LIMIT ?'
+/** The history is one row per hold ever placed: small. More than this is itself a reason. */
+const EVENTS_CAP = 5000
 const AGREEMENT_SQL =
   'SELECT ' +
   '(SELECT COUNT(*) FROM fleet_hold_events e WHERE e.lifted_at IS NULL AND NOT EXISTS ' +
@@ -87,6 +93,24 @@ async function disagreement(db: D1Database): Promise<string | null> {
   return null
 }
 
+async function unreadableRow(db: D1Database): Promise<string | null> {
+  const rows =
+    (
+      await db
+        .prepare(EVENTS_SQL)
+        .bind(EVENTS_CAP + 1)
+        .all()
+    ).results ?? []
+  if (rows.length > EVENTS_CAP) {
+    return `the hold history has more than ${EVENTS_CAP} rows, too many to check`
+  }
+  for (const raw of rows) {
+    const checked = checkHoldEvent(raw)
+    if (typeof checked === 'string') return checked
+  }
+  return null
+}
+
 /** Since when hold history is recorded, or why it is not. */
 export async function readHoldHistory(db: D1Database): Promise<HoldHistory> {
   try {
@@ -99,8 +123,8 @@ export async function readHoldHistory(db: D1Database): Promise<HoldHistory> {
         `the trigger ${missing.join(' and ')} is missing, so holds are no longer recorded`
       )
     }
-    const disagree = await disagreement(db)
-    if (disagree) return notRecorded(disagree)
+    const problem = (await disagreement(db)) ?? (await unreadableRow(db))
+    if (problem) return notRecorded(problem)
     return { since: new Date(applied).toISOString().replace(/\.\d{3}Z$/, 'Z'), why: null }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

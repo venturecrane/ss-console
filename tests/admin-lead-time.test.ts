@@ -208,10 +208,17 @@ describe('the recent real pattern: 61 image releases over three days', () => {
     expect(untwinned).toMatchObject({ merges: 61, clear: 61, medianPipeline: 20 })
   })
 
-  it('with hold events recorded and busy not yet: 40 held, busy not recorded, clear-case median near 15', () => {
-    // The two busy merges' waits stay inside pipeline: they count as clear (18), at 35 minutes each.
+  it('with hold events recorded and busy not yet: 40 held, 2 waited on the seat, 16 clear, clear-case median near 15', () => {
+    // The two merges whose rows show a waiting_idle attempt are never clear: their minutes are unknown.
     const { week } = totals(realPattern(false, true), RECORDED)
-    expect(week).toMatchObject({ merges: 61, arrived: 58, held: 40, busy: null, clear: 18 })
+    expect(week).toMatchObject({
+      merges: 61,
+      arrived: 58,
+      held: 40,
+      busy: null,
+      waited: 2,
+      clear: 16,
+    })
     expect(week.unrecorded).toBe(0)
     expect(week.clearMedian).toBe(15)
     expect(week.medianPipeline).not.toBeNull()

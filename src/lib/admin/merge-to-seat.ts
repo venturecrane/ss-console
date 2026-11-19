@@ -176,6 +176,33 @@ export function parseHold(raw: unknown): HoldInterval | null {
   return seat && heldAtMs !== null ? { seat, heldAtMs, liftedAtMs: parseUtc(r['lifted_at']) } : null
 }
 
+/**
+ * One `fleet_hold_events` row read strictly: the interval, or why the row
+ * cannot be trusted. Unlike `parseHold`, a row is never dropped and an
+ * unreadable `lifted_at` is never read as "still in place": either would state
+ * exact held time from bad data.
+ */
+export function checkHoldEvent(raw: unknown): HoldInterval | string {
+  const r = record(raw)
+  if (!r) return 'a hold history row is not a row'
+  const seat = text(r['customer_slug'])
+  const heldAtMs = parseUtc(r['held_at'])
+  const lifted = r['lifted_at']
+  const liftedAtMs = lifted === null || lifted === undefined ? null : parseUtc(lifted)
+  if (!seat) return 'a hold history row has no seat'
+  if (heldAtMs === null) return `a hold history row for ${seat} has an unreadable held_at`
+  if (lifted !== null && lifted !== undefined && liftedAtMs === null) {
+    return `a hold history row for ${seat} has an unreadable lifted_at`
+  }
+  return { seat, heldAtMs, liftedAtMs }
+}
+
+function strictHoldEvent(raw: unknown): HoldInterval {
+  const checked = checkHoldEvent(raw)
+  if (typeof checked === 'string') throw new Error(`fleet_hold_events: ${checked}`)
+  return checked
+}
+
 /** Monday 00:00 UTC of the ISO week holding `ms`. */
 export function weekStartMs(ms: number): number {
   const d = new Date(ms)
@@ -236,7 +263,10 @@ async function read<T>(
  * Every release recorded in the window, their rollouts, and the holds: every
  * hold interval open or lifted inside the window from `fleet_hold_events` when
  * `holdEventsRecorded` (hold-history.ts said the history is whole), else only
- * the holds in place now from `fleet_holds`.
+ * the holds in place now from `fleet_holds`. A history row that cannot be read
+ * fails the whole read with its reason, never a dropped or guessed interval
+ * (hold-history.ts already reads such a row as "hold time not recorded"; this
+ * is the backstop for a row written between the two reads).
  */
 export async function fetchFleetHistory(
   db: D1Database,
@@ -249,7 +279,7 @@ export async function fetchFleetHistory(
     ? read(
         'fleet_hold_events',
         () => db.prepare(HOLD_EVENTS_SQL).bind(since, over).all(),
-        parseHold
+        strictHoldEvent
       )
     : read('fleet_holds', () => db.prepare(HOLDS_NOW_SQL).bind(over).all(), parseHold)
   try {

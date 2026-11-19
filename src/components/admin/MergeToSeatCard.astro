@@ -83,6 +83,9 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
                   <th class="pb-2 font-medium text-right">Slow case (p90)</th>
                   <th class="pb-2 font-medium text-right">On hold</th>
                   <th class="pb-2 font-medium text-right">Busy</th>
+                  <th class="pb-2 font-medium text-right">
+                    Waited on the seat (minutes not recorded)
+                  </th>
                   <th class="pb-2 font-medium text-right">Clear</th>
                   <th class="pb-2 font-medium text-right">Not recorded</th>
                 </tr>
@@ -99,6 +102,7 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
                     <td class="py-2 pr-4 text-right">{minutes(w.p90Pipeline)}</td>
                     <td class="py-2 pr-4 text-right">{w.held}</td>
                     <td class="py-2 pr-4 text-right">{busyCount(w.busy)}</td>
+                    <td class="py-2 pr-4 text-right">{w.waited}</td>
                     <td class="py-2 pr-4 text-right">{w.clear}</td>
                     <td class="py-2 text-right">{w.unrecorded}</td>
                   </tr>
@@ -120,8 +124,9 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
             {untwinnedRows.map(({ kind, w }) => (
               <li>
                 Week of {weekLabel(w.weekStart)}, {kind}: median {minutes(w.medianPipeline)}, slow
-                case {minutes(w.p90Pipeline)}, {w.held} on hold, busy {busyCount(w.busy)}, {w.clear}{' '}
-                clear, {w.unrecorded} not recorded
+                case {minutes(w.p90Pipeline)}, {w.held} on hold, busy {busyCount(w.busy)},{' '}
+                {w.waited} waited on the seat (minutes not recorded), {w.clear} clear,{' '}
+                {w.unrecorded} not recorded
               </li>
             ))}
           </ul>
@@ -217,7 +222,9 @@ const seatList = (seats: string[]) => (seats.length === 0 ? 'none' : seats.join(
       <strong>Busy.</strong> The fleet does not yet record how long a rollout waited for a client job
       to finish, so busy shows as not recorded and that wait stays inside the pipeline minutes. The review
       mark at {REVIEW_THRESHOLD_PIPELINE_MINUTES} minutes of pipeline time may therefore include a wait
-      on a client job.
+      on a client job. A change whose rollout records show the seat made it wait is counted as "waited
+      on the seat", never as clear, and is left out of the clear-case figures. Any hold, even one under
+      a minute, makes a change "on hold".
     </p>
     <p>A change whose build was skipped is not listed: it rides the next release built.</p>
   </div>

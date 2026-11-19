@@ -22,6 +22,7 @@ import {
 import path from 'node:path'
 import { HOLD_HISTORY_MIGRATION, readHoldHistory } from '../src/lib/admin/hold-history'
 import { fetchFleetHistory } from '../src/lib/admin/merge-to-seat'
+import { readFileSync } from 'node:fs'
 
 const MIGRATIONS = path.resolve(__dirname, '..', 'migrations')
 const isNew = (f: string) => /(^|\/)0153_[^/]*\.sql$/.test(f)
@@ -211,5 +212,75 @@ describe('readHoldHistory on the real schema', () => {
     const history = await readHoldHistory(db)
     expect(history.since).toBeNull()
     expect(history.why).toBe('1 seat(s) have an open hold in the history but no hold in place')
+  })
+})
+
+describe('a bad history row is never read as fact', () => {
+  const insertEvent = (db: Db, held: string, lifted: string | null) =>
+    db
+      .prepare('INSERT INTO fleet_hold_events (customer_slug, held_at, lifted_at) VALUES (?, ?, ?)')
+      .bind('acme', held, lifted)
+      .run()
+
+  it('an unreadable held_at: hold time not recorded, and the events read fails with the reason', async () => {
+    const db = await schema()
+    await insertEvent(db, 'last tuesday', '2026-11-18T00:00:00Z')
+    expect(await readHoldHistory(db)).toEqual({
+      since: null,
+      why: 'a hold history row for acme has an unreadable held_at',
+    })
+    const { error } = await fetchFleetHistory(db, Date.now(), true)
+    expect(error).toBe('fleet_hold_events: a hold history row for acme has an unreadable held_at')
+  })
+
+  it('a set but unreadable lifted_at is never read as "still in place"', async () => {
+    const db = await schema()
+    await insertEvent(db, '2026-11-18T00:00:00Z', 'yesterday')
+    expect(await readHoldHistory(db)).toEqual({
+      since: null,
+      why: 'a hold history row for acme has an unreadable lifted_at',
+    })
+    const { error, history } = await fetchFleetHistory(db, Date.now(), true)
+    expect(error).toBe('fleet_hold_events: a hold history row for acme has an unreadable lifted_at')
+    expect(history.holds).toEqual([])
+  })
+})
+
+describe('the whole migration chain keeps the table and both triggers', () => {
+  async function wholeChain() {
+    const db = createTestD1()
+    await runMigrations(db, { files: discoverNumericMigrations(MIGRATIONS) })
+    return db
+  }
+
+  it('after every migration, fleet_hold_events and both triggers exist and record a hold', async () => {
+    const db = await wholeChain()
+    const objects = await db
+      .prepare(
+        "SELECT type, name FROM sqlite_master WHERE name IN ('fleet_hold_events', 'fleet_holds_record_placed', 'fleet_holds_record_lifted') ORDER BY name"
+      )
+      .all<{ type: string; name: string }>()
+    expect(objects.results).toEqual([
+      { type: 'table', name: 'fleet_hold_events' },
+      { type: 'trigger', name: 'fleet_holds_record_lifted' },
+      { type: 'trigger', name: 'fleet_holds_record_placed' },
+    ])
+    await run(db, holdSql('acme'))
+    await run(db, deleteSql('fleet_holds', 'acme'))
+    expect(await events(db)).toEqual(['acme:closed'])
+  })
+
+  it('the warning holds: a table dropped under its triggers breaks every hold, and the rollback file mends it', async () => {
+    const db = await wholeChain()
+    await db.exec('DROP TABLE fleet_hold_events')
+    await expect((async () => run(db, holdSql('acme')))()).rejects.toThrow(
+      /no such table: (main\.)?fleet_hold_events/
+    )
+    await db.exec(
+      readFileSync(path.join(MIGRATIONS, 'rollbacks', '0153_fleet_hold_events_down.sql'), 'utf8')
+    )
+    await run(db, holdSql('acme'))
+    const held = await db.prepare('SELECT customer_slug FROM fleet_holds').all()
+    expect(held.results).toEqual([{ customer_slug: 'acme' }])
   })
 })

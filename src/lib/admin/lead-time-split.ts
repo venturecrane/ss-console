@@ -40,8 +40,12 @@ export type Split =
       totalMinutes: number
       pipelineMinutes: number
       heldMinutes: number
+      /** Held time unrounded: a hold under 30 seconds shows 0 minutes but still counts as held. */
+      heldMs: number
       /** Null when an attempt in the window carries no busy seconds: then pipeline includes any busy wait. */
       busyMinutes: number | null
+      /** An attempt in the window ended waiting for the seat to be free (`waiting_idle`). */
+      waitedOnSeat: boolean
     }
   | { recorded: false; totalMinutes: number; missing: 'hold history' }
 
@@ -105,6 +109,14 @@ function busyIntervals(rows: RolloutRow[], from: number, to: number): Interval[]
   return out
 }
 
+/** Whether any attempt overlapping [from, to] ended `waiting_idle`: the rows prove the seat made it wait. */
+function sawIdleWait(rows: RolloutRow[], from: number, to: number): boolean {
+  return rows.some((row, i) => {
+    const next = rows[i + 1]?.startedAtMs ?? Infinity
+    return row.state === 'waiting_idle' && row.startedAtMs < to && next > from
+  })
+}
+
 function minutes(ms: number): number {
   return Math.round(ms / MINUTE_MS)
 }
@@ -119,6 +131,7 @@ export function splitFor(input: SplitInput): Split {
   const held: Interval[] = []
   const busy: Interval[] = []
   let busyKnown = true
+  let waitedOnSeat = false
   for (const track of input.tracks) {
     const end = Math.min(toMs, track.untilMs)
     for (const h of input.holds) {
@@ -126,7 +139,9 @@ export function splitFor(input: SplitInput): Split {
         held.push(...clipUnion([[h.heldAtMs, h.liftedAtMs ?? Infinity]], fromMs, end))
       }
     }
-    const waits = busyIntervals(input.bySeat.get(track.seat) ?? [], fromMs, end)
+    const rows = input.bySeat.get(track.seat) ?? []
+    if (sawIdleWait(rows, fromMs, end)) waitedOnSeat = true
+    const waits = busyIntervals(rows, fromMs, end)
     if (waits === null) busyKnown = false
     else busy.push(...clipUnion(waits, fromMs, end))
   }
@@ -140,7 +155,9 @@ export function splitFor(input: SplitInput): Split {
     recorded: true,
     totalMinutes,
     heldMinutes,
+    heldMs,
     busyMinutes: busyKnown ? heldAndBusy - heldMinutes : null,
+    waitedOnSeat,
     pipelineMinutes: totalMinutes - heldAndBusy,
   }
 }

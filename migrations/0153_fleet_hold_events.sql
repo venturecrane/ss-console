@@ -28,6 +28,13 @@
 -- `reason` and `held_by` are deliberately not copied: the card needs only
 -- when, and the reason text stays where it is written.
 --
+-- WARNING. Never drop, rename or rebuild fleet_hold_events without dropping
+-- the two triggers on fleet_holds FIRST. A trigger whose table is missing makes
+-- every `fleet hold` and `fleet unhold` fail, so a seat could not be held or
+-- released. If a hold ever fails with "no such table: fleet_hold_events", run
+-- migrations/rollbacks/0153_fleet_hold_events_down.sql, which drops the
+-- triggers before the table.
+--
 -- Back-out is DROP TRIGGER by hand (fleet_holds_record_placed,
 -- fleet_holds_record_lifted); the card then reads the triggers as missing and
 -- shows hold time as not recorded. Re-creating the triggers must be a new

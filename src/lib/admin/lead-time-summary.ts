@@ -30,6 +30,7 @@ import {
   type Merge,
   type WaitingOn,
 } from './lead-time'
+import type { Split } from './lead-time-split'
 import {
   ARTIFACT_KINDS,
   WEEKS_SHOWN,
@@ -56,7 +57,12 @@ export interface WeekStats {
   held: number
   /** Null when busy waits were not recorded for some merge of the week. */
   busy: number | null
-  /** Recorded arrivals with no hold and no recorded busy wait. */
+  /**
+   * Merges whose rows prove the seat made them wait (an attempt ended
+   * `waiting_idle`) while busy seconds were not recorded: never clear, minutes unknown.
+   */
+  waited: number
+  /** Recorded arrivals with no hold, no busy wait and no proven wait on the seat. */
   clear: number
   medianPipeline: number | null
   p90Pipeline: number | null
@@ -106,36 +112,49 @@ export function p90(values: number[]): number | null {
   return sorted[Math.ceil(0.9 * sorted.length) - 1]
 }
 
-type Class = 'held' | 'busy' | 'clear' | 'unrecorded' | 'waiting' | 'none'
+type Class = 'held' | 'busy' | 'waited' | 'clear' | 'unrecorded' | 'waiting' | 'none'
 
-function busyOf(a: Arrival): number | null {
-  return a.status !== 'no_seats' && a.split.recorded ? a.split.busyMinutes : null
+/** What a recorded split proves: any hold (by milliseconds), a recorded busy wait, a proven wait on the seat. */
+function proven(split: Split): { held: boolean; busy: boolean; waited: boolean } {
+  if (!split.recorded) return { held: false, busy: false, waited: false }
+  return {
+    held: split.heldMs > 0,
+    busy: (split.busyMinutes ?? 0) > 0,
+    waited: split.busyMinutes === null && split.waitedOnSeat,
+  }
 }
 
-/** How an arrival counts in the week. An unknown busy wait never makes a merge "busy". */
+/**
+ * How an arrival counts in the week. Held is decided on held milliseconds, so a
+ * hold under 30 seconds (0 minutes shown) is still held. An unknown busy wait
+ * never makes a merge "busy", but a window whose rows show the seat made it
+ * wait is "waited", never clear.
+ */
 function classify(a: Arrival): Class {
   if (a.status === 'no_seats') return 'none'
-  const held = a.split.recorded && a.split.heldMinutes > 0
-  const busy = (busyOf(a) ?? 0) > 0
+  const { held, busy, waited } = proven(a.split)
   if (a.status === 'in_progress') {
-    if (a.waitingOn.reason === 'hold' || held) return 'held'
-    return a.waitingOn.reason === 'busy' || busy ? 'busy' : 'waiting'
+    const reason = a.waitingOn.reason
+    if (reason === 'hold' || held) return 'held'
+    if (reason === 'busy' || busy) return 'busy'
+    return reason === 'idle_wait' || waited ? 'waited' : 'waiting'
   }
   if (!a.split.recorded) return 'unrecorded'
   if (held) return 'held'
-  return busy ? 'busy' : 'clear'
+  if (busy) return 'busy'
+  return waited ? 'waited' : 'clear'
 }
 
 function weekStats(weekStart: number, arrivals: Arrival[]): WeekStats {
   const pipeline: number[] = []
   const clear: number[] = []
-  const counts = { held: 0, busy: 0, unrecorded: 0, arrived: 0 }
+  const counts = { held: 0, busy: 0, waited: 0, unrecorded: 0, arrived: 0 }
   // Busy is a count only when some split was recorded and every recorded one carries busy minutes.
   let sawRecorded = false
   let busyKnown = true
   for (const a of arrivals) {
     const c = classify(a)
-    if (c === 'held' || c === 'busy' || c === 'unrecorded') counts[c]++
+    if (c === 'held' || c === 'busy' || c === 'waited' || c === 'unrecorded') counts[c]++
     if (a.status !== 'no_seats' && a.split.recorded) {
       sawRecorded = true
       if (a.split.busyMinutes === null) busyKnown = false
@@ -249,11 +268,16 @@ export function describeArrival(a: MergeArrival | null): { text: string; marked:
   const arrival = a.headline
   if (arrival.status === 'no_seats') return { text: 'no client seat takes it', marked: false }
   const split = arrival.split
+  const held = !split.recorded
+    ? ''
+    : split.heldMinutes === 0 && split.heldMs > 0
+      ? 'under 1 min held'
+      : `${split.heldMinutes} held`
   const parts = !split.recorded
     ? 'hold time not recorded'
     : split.busyMinutes === null
-      ? `${split.pipelineMinutes} pipeline, including any wait on a client job; ${split.heldMinutes} held`
-      : `${split.pipelineMinutes} pipeline, ${split.heldMinutes} held, ${split.busyMinutes} busy`
+      ? `${split.pipelineMinutes} pipeline, including any wait on a client job; ${held}`
+      : `${split.pipelineMinutes} pipeline, ${held}, ${split.busyMinutes} busy`
   if (arrival.status === 'in_progress') {
     const wait = WAIT_TEXT[arrival.waitingOn.reason](arrival.waitingOn.seat)
     return { text: `${wait}, ${split.totalMinutes} min so far (${parts})`, marked: false }
