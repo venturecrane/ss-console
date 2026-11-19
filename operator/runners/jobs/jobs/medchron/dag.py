@@ -493,6 +493,8 @@ STAGES: tuple[Stage, ...] = (
         requires=("billing_docx",),
         runner=_entry_audit.run,
         rehearse=_entry_audit.rehearse,
+        # A redone audit's corrections are rendered and filed: what follows reopens.
+        invalidates=("render", "manifest", "review"),
         # Exit 1 keeps the "audit coverage:" prefix: the broker resumes a hold
         # by it (workspace_broker AUDIT_GATE_HOLD_PREFIX, pinned against this row).
         exit_map={
@@ -552,6 +554,7 @@ AUDIT_LOOP = replace(
     next(s for s in STAGES if s.name == "audit"),
     runner=_audit.run,
     rehearse=_audit.rehearse,
+    invalidates=(),
     exit_map=_loop_exits.EXITS,
 )
 

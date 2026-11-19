@@ -29,6 +29,9 @@ def confirm(**kw: Any) -> EC.Confirm:
     return EC.parse_confirm(json.dumps(kw))
 
 
+STATED78 = EC.Confirm("STATED", 1, 4, "78")
+
+
 def applied(md: str, d: EC.Decision, us: list[ER.Unit]) -> str:
     assert d[0] == "apply", d
     edits = EC.to_repair_findings([d])
@@ -41,9 +44,11 @@ def applied(md: str, d: EC.Decision, us: list[ER.Unit]) -> str:
 # ---- value -------------------------------------------------------------------------
 def test_a_wrong_value_is_corrected_when_the_page_text_carries_it() -> None:
     md, us = doc([E1, E2]), units()
-    d = EC.decide(found(us[1]), None, PAGE4, us[1])
+    d = EC.decide(found(us[1]), STATED78, PAGE4, us[1])
     out = applied(md, d, us)
     assert "pulse was 78 at triage. (Exhibit 1 - p. 4)" in out and "pulse was 72" not in out
+    # Fix round: the text layer alone is not enough; the blind read must agree too.
+    assert EC.decide(found(us[1]), None, PAGE4, us[1])[0] == "record"
 
 
 def test_a_wrong_value_is_not_applied_when_the_page_text_lacks_it() -> None:
@@ -54,7 +59,7 @@ def test_a_wrong_value_is_not_applied_when_the_page_text_lacks_it() -> None:
 
 def test_a_change_that_adds_nothing_checkable_is_recorded() -> None:
     us = units()
-    f = found(us[1], quote="Blood pressure was", replacement="No blood pressure was")
+    f = found(us[1], quote="Blood pressure was", replacement="The blood pressure was")
     assert EC.decide(f, None, PAGE4, us[1]) == ("record", "the change adds nothing the page text can be checked for")
 
 
@@ -152,8 +157,89 @@ def test_the_confirm_never_sees_the_replacement_or_the_entry(firm_config_path) -
 def test_the_summary_is_counts_only() -> None:
     us = units()
     parsed = [ER.parse(reply(item(), item(page=9)), us[1])]
-    ds = [EC.decide(parsed[0].findings[0], None, PAGE4, us[1])]
+    ds = [EC.decide(parsed[0].findings[0], STATED78, PAGE4, us[1])]
     s = EC.summary(us, parsed, ds)
     assert s["units"] == 3 and s["applied"] == 1 and s["dropped"] == {"page": 1}
     assert s["findings_by_class"] == {"value": 1} and s["confirmed"] == 1
     assert "pulse" not in json.dumps(s) and "72" not in json.dumps(s)
+
+
+# ---- the fix round (2026-11-18) -------------------------------------------------------
+E5 = (
+    "03/30/2026\nExample Clinic | All Other Information\n\nAll Other Information\n"
+    "The patient denies chest pain and took 2 tablets daily. (Exhibit 1 - p. 4)\n\n"
+    "Gait was steady at both of the visits. (Exhibit 1 - p. 4-5)"
+)
+
+
+def _n1(entry: str = E5) -> tuple[str, ER.Unit]:
+    md = doc([entry], pre="")
+    return md, next(u for u in ER.plan(md, KEEP, HEADINGS, lambda ex: 12) if u.anchor == "N1")
+
+
+def test_a_correction_that_removes_a_negation_the_blind_read_keeps_is_recorded() -> None:
+    _md, u = _n1()
+    f = found(u, quote="denies chest pain", replacement="reports chest pain")
+    c = EC.Confirm("STATED", 1, 4, "reports no chest pain")
+    assert EC.decide(f, c, "The patient reports no chest pain today.", u)[0] == "record"
+
+
+def test_a_page_number_never_confirms_a_dose() -> None:
+    _md, u = _n1()
+    f = found(u, quote="2 tablets", replacement="4 tablets")
+    c = EC.Confirm("STATED", 1, 4, "2 tablets")
+    assert EC.decide(f, c, "Page 4 of 12. The patient took tablets daily.", u)[0] == "record"
+    # the text layer carries "4" and "tablets", but with no blind read nothing applies
+    assert EC.decide(f, None, "Page 4 of 12. The patient took tablets daily.", u)[0] == "record"
+
+
+def test_a_correction_that_drops_other_content_is_recorded() -> None:
+    us = units()
+    f = found(us[1], quote="128/84 and pulse was 72", replacement="pulse was 78")
+    assert EC.decide(f, STATED78, PAGE4, us[1]) == ("record", EC.DROPS_CONTENT)
+
+
+def test_an_added_sentence_carrying_a_diagnosis_code_is_recorded() -> None:
+    us = units()
+    f = _omitted(us[1], replacement="Lumbar strain M54.5 was recorded at the visit. (Exhibit 1 - p. 4)")
+    others = [u.entry for u in us if u.entry]
+    got = EC.decide(f, confirm(answer="YES", exhibit=1, page=4), None, us[1], others)
+    assert got == ("record", EC.CODES_IN_INDEX)
+
+
+def test_a_pointer_on_a_multi_page_citation_or_to_its_own_page_is_recorded() -> None:
+    _md, u = _n1()
+    multi = found(u, **{"class": "pointer", "page": 3, "quote": "Gait was steady at both of the visits."})
+    assert EC.decide(multi, EC.Confirm("STATED", 1, 3), None, u) == ("record", EC.POINTER_MULTI)
+    same = found(u, **{"class": "pointer", "page": 4, "quote": "took 2 tablets daily."})
+    assert EC.decide(same, EC.Confirm("STATED", 1, 4), None, u) == ("record", EC.POINTER_MULTI)
+
+
+def test_a_date_applies_only_on_an_entry_dated_after_today_stated_on_its_page_and_read_blind() -> None:
+    from datetime import date
+
+    md, u = _n1()
+    f = found(u, **{"class": "date", "quote": "03/30/2026", "replacement": "01/30/2026", "action": "redate"})
+    page, c, today = "Visit date 01/30/2026. Patient seen.", EC.Confirm("STATED", 1, 4, "01/30/2026"), date(2026, 2, 1)
+    d = EC.decide(f, c, page, u, today=today)
+    assert d[0] == "apply" and d[1].action == "redate"
+    out, _ = RR.apply(md, [d[1]], KEEP, HEADINGS, evidence=lambda _x, _p: page, shown=EC.shown([u]))
+    assert d[1].outcome == "applied" and "01/30/2026\nExample Clinic" in out and "03/30/2026" not in out
+    assert EC.decide(f, c, page, u, today=date(2026, 4, 1))[0] == "record"  # not after today
+    assert EC.decide(f, None, page, u, today=today)[0] == "record"  # no blind read
+    assert EC.decide(f, c, "Patient seen.", u, today=today)[0] == "record"  # the page does not state it
+    assert EC.decide(f, c, page, u)[0] == "record"  # no today: recorded
+
+
+def test_a_confirm_shows_at_most_eight_pages_around_the_finding(firm_config_path) -> None:
+    from jobs.medchron import config as config_mod
+
+    sents = "\n\n".join(f"Finding number {i} was recorded at the visit. (Exhibit 3 - p. {i})" for i in range(2, 13))
+    md = doc([f"03/01/2025\nExample Clinic | All Other Information\n\nAll Other Information\n{sents}"], pre="")
+    u = ER.plan(md, KEEP, HEADINGS, lambda ex: 50)[0]
+    f = found(u, exhibit=3, page=7, quote="Finding number 7 was", replacement="Finding number 8 was")
+    assert EC.confirm_pages(f, u) == [(3, 6), (3, 7), (3, 8)] and len(u.pages) == 13
+    content = EC.confirm_request(f, u, config_mod.load(str(firm_config_path)), "CLIENT", _img)[1]
+    assert sum(1 for b in content if b.get("type") == "image") == 3
+    wide = found(u, exhibit=3, page=7, quote="Finding number 7 was", replacement="Finding number 8 was")
+    assert len(EC.confirm_pages(wide, u)) <= EC.CONFIRM_PAGES == 8

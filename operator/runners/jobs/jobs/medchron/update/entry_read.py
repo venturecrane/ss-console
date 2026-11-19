@@ -13,7 +13,7 @@ reply says is applied here: ``entry_confirm.decide`` decides that.
 * A unit carries the entry's full text, its anchor (``review_repair``'s
   ``N<k>`` scheme; ``PRE`` for the prior-history block, read but
   ``record_only``), the pages it cites with one page either side inside the
-  same exhibit, and is split when the entry cites more than MAX_PAGES pages.
+  same exhibit, and is split so no unit shows more than MAX_SHOWN pages.
 * A finding names a class from CLASSES, a page the read was SHOWN, and a
   quote found verbatim in the entry; any other finding is dropped and
   counted. At most MAX_FINDINGS per unit are kept; the rest are counted.
@@ -29,12 +29,15 @@ from typing import Any, Callable
 
 from ..audit import claims as CL
 from ..prompts import load
-from . import body as B, review_pages as RV, review_repair as RR
+from . import body as B, review_pages as RV, review_parts as RP, review_repair as RR
 
 PROMPT = "entry-read-system"
 CLASSES = ("value", "wrong_field", "unsupported", "pointer", "omitted", "date", "provider", "another_person")
-#: The pages one unit cites before the entry is split into several units.
-MAX_PAGES = 40
+#: The pages one request shows at most (the update finisher's figure,
+#: ``review_parts.FINISH_MAX_IMAGES``); an entry showing more is split. Before
+#: 2026-11-18 (fix round) a split came at 40 CITED pages, which let one
+#: request show up to 120.
+MAX_SHOWN = RP.FINISH_MAX_IMAGES
 MAX_FINDINGS = 12
 #: Applied edits per sentence of the document above which the run is held.
 EDIT_SHARE = 0.08
@@ -52,6 +55,7 @@ class Unit:
     part: int = 1
     parts: int = 1
     gaps: list[str] = field(default_factory=list)  # index-gap lines (``index_gaps.attach``)
+    cited: list[tuple[int, int]] = field(default_factory=list)  # the cited pages this unit shows (never sent)
 
     @property
     def key(self) -> str:
@@ -96,15 +100,29 @@ def _shown(cited: list[tuple[int, int]], npages: Callable[[int], int]) -> list[t
     return sorted(out)
 
 
+def _chunks(ps: list[tuple[int, int]], npages: Callable[[int], int]) -> list[list[tuple[int, int]]]:
+    """The cited pages in order, cut so no chunk shows more than MAX_SHOWN pages."""
+    out: list[list[tuple[int, int]]] = []
+    cur: list[tuple[int, int]] = []
+    for p in ps:
+        if cur and len(_shown(cur + [p], npages)) > MAX_SHOWN:
+            out.append(cur)
+            cur = []
+        cur.append(p)
+    return out + [cur] if cur else out or [[]]
+
+
 def _units(anchor: str, text: str, cited: set[tuple[int, int]], npages: Callable[[int], int], **kw: Any) -> list[Unit]:
-    ps = sorted(cited)
-    chunks = [ps[i : i + MAX_PAGES] for i in range(0, len(ps), MAX_PAGES)] or [[]]
-    return [Unit(anchor, text, _shown(c, npages), part=i, parts=len(chunks), **kw) for i, c in enumerate(chunks, 1)]
+    chunks = _chunks(sorted(cited), npages)
+    return [
+        Unit(anchor, text, _shown(c, npages), part=i, parts=len(chunks), cited=c, **kw) for i, c in enumerate(chunks, 1)
+    ]
 
 
 def plan(md: str, keep: set[int], headings: set[str], npages: Callable[[int], int]) -> list[Unit]:
-    """One unit per dated entry of the built document (split past MAX_PAGES
-    cited pages), and one record-only unit for a cited prior-history block."""
+    """One unit per dated entry of the built document (split so no unit
+    shows more than MAX_SHOWN pages), and one record-only unit for a cited
+    prior-history block."""
     pre, _ = B.entries_of(md)
     out: list[Unit] = []
     pre_cites = {(x, p) for x, p in _cites_of(pre) if x in keep}

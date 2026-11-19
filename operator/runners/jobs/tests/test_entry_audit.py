@@ -68,8 +68,13 @@ class _Stream:
 class Client:
     """The SDK client, scripted: a read answers `read(text)`, a confirm `confirm`."""
 
-    def __init__(self, read: Callable[[str], str] = _read_reply, confirm: dict | None = None) -> None:
-        self.read, self.confirm = read, confirm or STATED
+    def __init__(
+        self,
+        read: Callable[[str], str] = _read_reply,
+        confirm: dict | None = None,
+        fail: Callable[[str, str], Exception | None] = lambda _k, _t: None,
+    ) -> None:
+        self.read, self.confirm, self.fail = read, confirm or STATED, fail
         self.calls: list[str] = []
         self.messages = self
 
@@ -77,18 +82,24 @@ class Client:
         text = "\n".join(str(b.get("text", "")) for b in kw["messages"][0]["content"])
         kind = "read" if "ENTRY " in text or "PRIOR HISTORY BLOCK" in text else "confirm"
         self.calls.append(kind)
+        exc = self.fail(kind, text)
+        if exc is not None:
+            raise exc
         return _Stream(self.read(text) if kind == "read" else json.dumps(self.confirm))
 
 
 @pytest.fixture
 def scene(job_dir: Path, firm_config_path: Path, data_root: Path):
-    def make(client: Client | None = None, doc: str = DOC):
+    def make(client: Client | None = None, doc: str = DOC, fresh: bool = True):
+        """A StageRun on the scene; `fresh` False keeps what an earlier run left."""
         log: list[str] = []
         sr = _sr(job_dir, firm_config_path, data_root, client, log)
-        _exhibit_set(sr, PAGES)
         rd = sr.slug_dir / "runs" / "alpha"
-        rd.mkdir(parents=True, exist_ok=True)
-        (rd / "final-chronology.md").write_text(doc, encoding="utf-8")
+        if fresh:
+            _exhibit_set(sr, PAGES)
+            rd.mkdir(parents=True, exist_ok=True)
+            (rd / "final-chronology.md").write_text(doc, encoding="utf-8")
+        sr.doorway.sleep = lambda _s: None  # a retried call never waits in a test
         return sr, rd / "final-chronology.md", log
 
     return make
@@ -225,7 +236,8 @@ def test_the_gate_reads_the_record_and_falls_back_to_the_claim_rule(tmp_path: Pa
 def test_the_full_lane_reads_entries_and_the_update_lane_keeps_the_claim_loop() -> None:
     full = dag.by_name()["audit"]
     assert full.runner is EA.run and full.rehearse is EA.rehearse and full.paid
-    assert set(full.exit_map) == {EA.EXIT_HELD, EA.EXIT_INFRA, EA.EXIT_PENDING}
+    assert set(full.exit_map) == {EA.EXIT_HELD, EA.EXIT_DEFECT, EA.EXIT_INFRA, EA.EXIT_PENDING}
+    assert full.exit_map[EA.EXIT_DEFECT] == (dag.FAILED, "audit: the stage crashed (a defect)")
     assert full.exit_map[EA.EXIT_HELD][0] == dag.HELD and full.exit_map[EA.EXIT_INFRA][0] == dag.FAILED
     # the broker resumes an audit hold by this prefix (workspace_broker AUDIT_GATE_HOLD_PREFIX)
     assert EA.EXIT_HELD == 1 and full.exit_map[1][1].startswith("audit coverage:")
@@ -240,3 +252,149 @@ def test_rehearse_projects_the_reads_and_confirms_from_the_built_document(scene)
     assert len(lines) == 1 and lines[0].startswith("2 entr(ies) to read from the built chronology, 0 already read; ")
     assert lines[0].endswith(" USD")
     assert IO.tokens(sr.slug_dir, "alpha", sr.cfg)[2] > 0
+
+
+# ---- the fix round (2026-11-18) -------------------------------------------------------
+#: The read requests of the scene's two entries, hashed before the fix round
+#: (a $0 proof's saved replies are keyed by these): unchanged for any unit
+#: that shows 24 pages or fewer.
+PINNED = {
+    "N1": "cceea83e6a2ecddec2d1cc1c0ba69b13b31c8d9a4e16a9f060f38136d08ab058",
+    "N2": "9ee3defc436726d14fd109ee83e6279a33b08723d15c357b350a7c0b3baf647f",
+}
+
+
+def test_a_small_units_read_request_is_byte_identical_to_before_the_fix_round(scene) -> None:
+    from jobs.medchron.page_mode import Modes
+    from jobs.stages import update_review as UR
+    from jobs.stages.update_review_io import _image_source
+
+    sr, _doc, _log = scene(None)
+    pl = IO.plan(sr.slug_dir, "alpha", sr.cfg, DOC)
+    modes = Modes.open(sr.slug_dir, "alpha")
+    got = {}
+    for u in pl.units:
+        system, content = ER.request(u, sr.cfg, UR._client(sr), _image_source(sr), modes)
+        got[u.key] = IO.request_hash(IO.model(sr.cfg), system, content)
+    modes.close()
+    assert got == PINNED
+
+
+def test_a_bad_saved_reply_is_asked_again_and_only_the_unread_entry_is_paid_for(scene) -> None:
+    sr, doc, log = scene(Client(lambda t: "no answer" if "ENTRY N1" in t else _reply()))
+    assert EA.run(sr) == EA.EXIT_HELD
+    again = Client()
+    sr2, _doc, log2 = scene(again, fresh=False)
+    assert EA.run(sr2) == 0, log2
+    assert again.calls.count("read") == 1  # N1 asked afresh; N2's good answer reused
+    assert "pulse was 78" in doc.read_text(encoding="utf-8")
+    saved = sr.slug_dir / "runs" / "alpha" / IO.DIR / "N1.read1.json"
+    row = json.loads(saved.read_text(encoding="utf-8"))
+    saved.write_text(json.dumps({**row, "stop_reason": "max_tokens"}), encoding="utf-8")
+    doc.write_text(DOC, encoding="utf-8")
+    third = Client()
+    assert EA.run(scene(third, fresh=False)[0]) == 0
+    assert third.calls.count("read") == 1  # a reply that ran out is never reused
+
+
+def test_a_released_tripwire_applies_and_is_recorded(scene, monkeypatch) -> None:
+    monkeypatch.setattr(ER, "EDIT_SHARE", 0.0)
+    sr, doc, log = scene(Client())
+    assert EA.run(sr) == EA.EXIT_HELD and doc.read_text(encoding="utf-8") == DOC
+    rel = sr.slug_dir / "runs" / "alpha" / IO.DIR / IO.RELEASE
+    rel.write_text(json.dumps({"by": "smd-operator", "why": ""}), encoding="utf-8")
+    assert EA.run(scene(Client(), fresh=False)[0]) == EA.EXIT_HELD  # an empty why is no release
+    rel.write_text(json.dumps({"by": "smd-operator", "why": "read every edit against its page"}), encoding="utf-8")
+    sr3, _d, log3 = scene(Client(), fresh=False)
+    assert EA.run(sr3) == 0, log3
+    assert "pulse was 78" in doc.read_text(encoding="utf-8")
+    assert _record(sr)["tripwire_release"] == {"by": "smd-operator", "why": "read every edit against its page"}
+
+
+def test_a_network_failure_in_a_confirm_exits_for_a_retry(scene) -> None:
+    from jobs.deadline import CallDeadlineError
+
+    client = Client(fail=lambda k, _t: CallDeadlineError("no reply") if k == "confirm" else None)
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == EA.EXIT_INFRA, log
+    assert doc.read_text(encoding="utf-8") == DOC
+
+
+def test_a_confirm_that_errors_otherwise_is_recorded_confirm_failed(scene) -> None:
+    client = Client(fail=lambda k, _t: ValueError("a malformed reply object") if k == "confirm" else None)
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == 0, log
+    assert _record(sr)["recorded_by_reason"].get("confirm_failed") == 1 and doc.read_text(encoding="utf-8") == DOC
+
+
+def test_an_entry_whose_cited_page_is_past_its_exhibit_is_unread_and_never_sent(scene) -> None:
+    client = Client()
+    sr, doc, log = scene(client, DOC.replace("(Exhibit 1 - p. 5)", "(Exhibit 1 - p. 9)"))
+    assert EA.run(sr) == EA.EXIT_HELD
+    assert client.calls.count("read") == 1  # N1 only
+    n2 = next(r for r in _record(sr)["rows"] if r["key"] == "N2")
+    assert n2["status"] == "unread" and n2["why"] == EA.PAGE_MISSING
+
+
+def test_a_request_refused_as_too_large_is_read_page_by_page(scene) -> None:
+    import anthropic
+    import httpx
+
+    def big(kind: str, text: str) -> Exception | None:
+        if kind == "read" and "ENTRY N1" in text and "pp. 1, 2, 3, 4" in text:
+            resp = httpx.Response(413, request=httpx.Request("POST", "https://api.example.invalid/v1/messages"))
+            return anthropic.APIStatusError("request too large", response=resp, body=None)
+        return None
+
+    client = Client(fail=big)
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == 0, log
+    assert (sr.slug_dir / "runs" / "alpha" / IO.DIR / "N1~s2.read1.json").is_file()
+    assert _record(sr)["complete"] is True
+
+
+def test_the_confirm_phase_past_the_cap_holds_before_any_confirm(scene, monkeypatch, pricing_path) -> None:
+    monkeypatch.setenv("JOBS_PRICING_JSON", str(pricing_path))
+    monkeypatch.setattr(IO, "cap_room", lambda _sr: 0.0)
+    client = Client()
+    sr, doc, log = scene(client)
+    assert EA.run(sr) == EA.EXIT_HELD
+    assert "confirm" not in client.calls and any("would pass what the job's cap leaves" in ln for ln in log)
+
+
+def test_an_added_sentence_reaches_the_entries_copy(scene) -> None:
+    add = "Gait was steady during the follow up visit. (Exhibit 1 - p. 3)"
+    item = {"class": "omitted", "exhibit": 1, "page": 3, "quote": "All Other Information", "action": "add",
+            "replacement": add}  # fmt: skip
+    client = Client(lambda t: _reply(item) if "ENTRY N1" in t else _reply(), {"answer": "YES", "exhibit": 1, "page": 3})
+    sr, doc, log = scene(client)
+    entries = sr.slug_dir / "runs" / "alpha" / "entries_scoped_final.md"
+    entries.write_text(f"{E1}\n\n{E2}\n", encoding="utf-8")
+    assert EA.run(sr) == 0, log
+    assert add in doc.read_text(encoding="utf-8") and add in entries.read_text(encoding="utf-8")
+
+
+def test_a_crash_is_a_defect_never_a_hold(scene, monkeypatch) -> None:
+    from jobs.stages import entry_audit_apply as AP
+
+    def boom(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("an invented defect")
+
+    monkeypatch.setattr(AP, "decide", boom)
+    sr, doc, log = scene(Client())
+    assert EA.run(sr) == EA.EXIT_DEFECT and any("CRASHED (RuntimeError" in ln for ln in log)
+
+
+def test_a_redone_audit_reopens_render_manifest_and_review(tmp_path: Path) -> None:
+    from jobs.medchron.state import RunState
+
+    row = dag.by_name()["audit"]
+    assert row.invalidates == ("render", "manifest", "review")
+    st = RunState.load_or_new(tmp_path / "state.json", slug="example-matter", unit="alpha")
+    for name in ("render", "manifest", "review"):
+        st.finish(name, status="done", exit_code=0, dollars=0.0, pages=0)
+    st.invalidate(list(row.invalidates))
+    assert {n: st.stage(n).status for n in ("render", "manifest", "review")} == dict.fromkeys(
+        ("render", "manifest", "review"), "pending"
+    )
+    assert next(s for s in dag_update.UPDATE_STAGES if s.name == "audit").invalidates == ("update_review",)

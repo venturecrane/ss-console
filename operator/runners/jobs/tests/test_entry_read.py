@@ -67,14 +67,19 @@ def test_neighbour_pages_stay_inside_the_exhibit() -> None:
     assert units()[0].pages == [(1, 1), (1, 2)]  # no page 0
 
 
-def test_an_entry_citing_45_pages_is_split() -> None:
+def test_an_entry_showing_more_than_24_pages_is_split() -> None:
     sents = "\n\n".join(f"Finding number {i} was recorded at the visit. (Exhibit 3 - p. {i})" for i in range(1, 46))
     big = f"03/01/2025\nExample Clinic | All Other Information\n\nAll Other Information\n{sents}"
     us = [u for u in units(doc([E1, big], pre="")) if u.anchor == "N2"]
     assert [(u.part, u.parts) for u in us] == [(1, 2), (2, 2)]
     assert [u.key for u in us] == ["N2-1", "N2-2"]
-    assert max(p for _, p in us[0].pages) == 41 and min(p for _, p in us[1].pages) == 40
+    assert max(p for _, p in us[0].pages) == 24 and min(p for _, p in us[1].pages) == 23
+    assert all(len(u.pages) <= ER.MAX_SHOWN == 24 for u in us)
     assert all(u.text == us[0].text for u in us)  # the whole entry rides with every split
+    # 22 cited pages show 23: one unit, as before the cap.
+    small = "\n\n".join(f"Finding number {i} was recorded at the visit. (Exhibit 3 - p. {i})" for i in range(1, 23))
+    one = [u for u in units(doc([E1, big.replace(sents, small)], pre="")) if u.anchor == "N2"]
+    assert [(u.part, u.parts, len(u.pages)) for u in one] == [(1, 1, 23)]
 
 
 def test_the_request_carries_the_entry_whole_the_gaps_and_each_page_by_the_one_rule(firm_config_path) -> None:
