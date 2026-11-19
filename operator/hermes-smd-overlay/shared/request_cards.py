@@ -674,15 +674,6 @@ def decide(
     held = _hold_cards(requests, audit_conn, proofs, done, now) if proofs is not None else []
     horizon = _iso(now - LOOKBACK - timedelta(days=1))[:19]
     replies = _reply_rows(audit_conn, horizon)
-    if not requests:
-        return _named(
-            sorted(
-                held
-                + _followup_cards(requests, replies, done, done_at or {}, openings, texts, indexed),
-                key=lambda c: (c["event_at"], c["card_key"]),
-            ),
-            name_of,
-        )
     sent_by_vid: dict[str, list[dict]] = {}
     held_vids: set[str] = set()
     for row in replies:
