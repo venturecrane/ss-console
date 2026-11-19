@@ -1,43 +1,43 @@
 """`audit` on the full chronology: each entry read against its own cited
 pages before it is filed, and what that read can prove wrong corrected from
-the page. Paid (the judgment tier, for the read and for its blind confirm).
+the page. Paid (the judgment tier, for the read and for the second reader's
+verify).
 
 WHY (2026-11-18). The per-paragraph audit (``stages/audit_loop.py``, still
 the update lane's) passed every false statement of a real chronology: it
 graded the paragraph a citation closes, so an entry's date and provider lines
 were never read, an omission was never a defect, and the checker was shown
-the claim's own values. This stage reads the ENTRY whole
-(``medchron/update/entry_read.py``), has a second read that never sees the
-proposed correction confirm each finding (``entry_confirm.py``), and leaves
-every decision to code. In order:
+the claim's own values. This stage reads the ENTRY whole, line by line
+(``medchron/update/entry_read.py``), has a second reader VERIFY each proposed
+correction against the page pictures (``entry_confirm.py``, round 4: it
+replaced three rounds of token rules), and leaves every decision to code:
 
 1. The handwritten-records note leaves entries whose cited pages are all
    typed (``audit_loop._drop_typed_ntd``, unchanged).
 2. READ each unit. A unit whose cited page cannot be shown (past its
    exhibit's end, or no picture and no text) is UNREAD and never sent. An
    unparsed reply is asked once more, then a unit citing more than one page
-   is read page by page (so is a request the API refuses as too large);
-   still unparsed, or refused by the API for another reason, the unit is
-   unread and the stage HOLDS. A resume whose page-by-page answers are all
-   on file uses them and never pays for the whole unit again.
-3. Before any confirm, the confirm phase is priced from the real findings
-   and the pages each confirm shows and checked by the driver's own limits:
-   past the job's cap it is the firm's ordinary cap hold (``LimitHold``).
-4. CONFIRM each finding blind; a confirm the API refuses twice is recorded
-   ``confirm_failed`` (a network failure
-   exits 75 and the daemon retries). A finding code records whatever the
-   confirm says is not confirmed.
-5. DECIDE in code (``entry_audit_apply``); a correction on a sentence SMD
-   wrote by hand (``drops.json`` citation_edits) is recorded, never applied;
-   an added sentence another part of the same entry already adds is
-   recorded ``duplicate_add``.
-6. TRIPWIRE: more applied edits than ``entry_read.EDIT_SHARE`` of the
+   is read page by page, each page told it is shown alone (so is a request
+   the API refuses as too large); still unparsed, or refused by the API for
+   another reason, the unit is unread and the stage HOLDS, naming each unit
+   and why. A resume asks again only for what was not read.
+3. PROPOSE: each finding becomes the whole line it would write, or a reason
+   code (``entry_audit_apply``).
+4. Before any verify, the verify phase is priced from the real proposals and
+   checked by the driver's own limits: past the job's cap it is the firm's
+   ordinary cap hold (``LimitHold``).
+5. VERIFY each proposal; one the API refuses twice is ``verify_failed`` (a
+   network failure exits 75 and the daemon retries).
+6. DECIDE: apply only a line found wrong AND a proposed sentence found
+   supported on a page the verify was shown.
+7. TRIPWIRE: more applied edits than ``entry_read.EDIT_SHARE`` of the
    document's sentences holds the job with the document untouched, unless
    SMD wrote a release (``entry_audit_apply``'s docstring).
-7. APPLY once through ``review_repair.apply``; an edit it rejects is
-   recorded. The document is written only when it has no fewer sentences.
-8. RECORD ``runs/<unit>/entry_read.json``: counts and per-unit rows, never
-   the document's text. Recorded findings live only there, not in the notes.
+8. APPLY once: a whole labelled line swapped, or a new paragraph added after
+   the paragraph holding its line. The document is written only when it has
+   no fewer sentences.
+9. RECORD ``runs/<unit>/entry_read.json``: counts and per-unit rows with a
+   reason code for each recorded finding, never the document's text.
 
 Nothing is ever removed from the document here. Answers are saved before use
 and a resume pays for none twice; ``ENTRY_AUDIT_REPLAY=1`` answers at $0
@@ -90,7 +90,7 @@ class Ctx:
 
 
 def rehearse(sr: StageRun) -> list[str]:
-    """The $0 half for `jobs rehearse`: what the read and its confirms would cost."""
+    """The $0 half for `jobs rehearse`: what the read and its verifies would cost."""
     return IO.projection_lines(sr)
 
 
@@ -132,18 +132,20 @@ def _run(c: Ctx, doc: Path, md: str, pl: IO.Plan) -> int:
     reads = _pool(c, pl.units, lambda u: _read_unit(c, u))
     if any(r.status == "pending" for r in reads):
         return _pending(c, "read")
-    unread = [r.unit.key for r in reads if r.status != "read"]
+    unread = [r for r in reads if r.status != "read"]
     if unread:
         AP.record(sr, c.ask, doc, pl, reads, [], held=f"{len(unread)} unit(s) could not be read")
-        sr.log(f"entry read HELD: {len(unread)} entr(ies) could not be read against their pages: {', '.join(unread)}")
+        named = "; ".join(f"{r.unit.key} ({r.why or 'not read'})" for r in unread)
+        sr.log(f"entry read HELD: {len(unread)} entr(ies) could not be read against their pages: {named}")
         return EXIT_HELD
     items = [(f"{name}.f{i}", u, f) for r in reads for name, u, p in r.got for i, f in enumerate(p.findings)]
-    _check_cost(c, items)
-    confirms = _pool(c, items, lambda it: _confirm(c, *it))
+    proposals = AP.propose(sr, items)
+    _check_cost(c, [p for p in proposals if isinstance(p, EC.Proposal)])
+    verifies = _pool(c, list(zip(items, proposals)), lambda ip: _verify(c, ip[0][0], ip[1]))
     if c.ask.pending:
-        return _pending(c, "confirm")
-    decisions = AP.decide(sr, c.modes, md, pl, items, confirms)
-    held, released = AP.apply(sr, c.modes, doc, md, pl, decisions)
+        return _pending(c, "verify")
+    decisions = AP.decide(proposals, verifies)
+    held, released = AP.apply(sr, doc, md, decisions)
     AP.record(sr, c.ask, doc, pl, reads, decisions, items, held=held, released=released)
     if held:
         sr.log(f"entry read HELD: {held}; the document is unchanged")
@@ -171,17 +173,16 @@ def _pending(c: Ctx, phase: str) -> int:
     return EXIT_PENDING
 
 
-def _check_cost(c: Ctx, items: list[AP.Item]) -> None:
-    """The confirm phase, priced from the real findings and the pages each
-    confirm shows, through the driver's own limits: past the job's cap it
+def _check_cost(c: Ctx, proposals: list[EC.Proposal]) -> None:
+    """The verify phase, priced from the real proposals and the pictures each
+    verify shows, through the driver's own limits: past the job's cap it
     raises the same ``LimitHold`` (the firm's cap hold) as any paid stage.
     Not under the $0 replay."""
-    todo = [(u, f) for _n, u, f in items if AP.needs_confirm(f, u)]
-    if c.ask.replay or not todo:
+    if c.ask.replay or not proposals:
         return
-    usd = IO.confirm_usd(c.sr, c.modes, todo)
+    usd = IO.verify_usd(c.sr, proposals)
     if usd is not None:
-        c.sr.log(f"entry read: the confirm phase is {len(todo)} confirm(s), ~{usd:.2f} USD")
+        c.sr.log(f"entry read: the verify phase is {len(proposals)} verif(ies), ~{usd:.2f} USD")
         IO.check_limits(c.sr, usd)
 
 
@@ -239,7 +240,7 @@ def _missing(c: Ctx, unit: ER.Unit) -> bool:
 def _subs(unit: ER.Unit) -> list[tuple[str, ER.Unit]]:
     """The unit's cited pages, each as a unit of its own (``N3~s1``...)."""
     cited = [pg for pg in unit.pages if pg in set(unit.cited)]
-    return [(f"{unit.key}~s{i}", replace(unit, pages=[pg], cited=[pg])) for i, pg in enumerate(cited, 1)]
+    return [(f"{unit.key}~s{i}", replace(unit, pages=[pg], cited=[pg], sub=True)) for i, pg in enumerate(cited, 1)]
 
 
 def _read_unit(c: Ctx, unit: ER.Unit) -> IO.Read:
@@ -299,29 +300,31 @@ def _sub(c: Ctx, name: str, unit: ER.Unit) -> ER.Parsed | str | None:
         return None
 
 
-# ---- confirm ------------------------------------------------------------------------
-def _confirm(c: Ctx, name: str, unit: ER.Unit, f: ER.ReadFinding) -> Any:
-    """The blind confirm: a good answer on file, else asked, once more when
-    the API refuses it or it does not parse. A network failure is raised
-    (exit 75); a refusal twice is recorded ``confirm_failed``."""
-    if not AP.needs_confirm(f, unit):
-        return AP.NO_CONFIRM
-    system, content = EC.confirm_request(f, unit, c.sr.cfg, c.client, c.images, c.modes)
-    ok: IO.Valid = lambda t: EC.parse_confirm(t).answer != EC.UNPARSED  # noqa: E731
+# ---- verify -------------------------------------------------------------------------
+def _verify(c: Ctx, name: str, p: EC.Proposal | str) -> Any:
+    """The second reader on one proposal: a good answer on file, else asked,
+    once more when the API refuses it or it does not parse. A network
+    failure is raised (exit 75); a refusal twice is ``verify_failed``; an
+    answer that never parses is None (``verify_unparsed``)."""
+    if not isinstance(p, EC.Proposal):
+        return None
+    system, content = EC.verify_request(p, c.sr.cfg, c.client, c.images)
+    ok: IO.Valid = lambda t: EC.parse_verify(t) is not None  # noqa: E731
     for attempt in (1, 2):
-        text = c.ask.peek(name, f"confirm{attempt}", system, content, ok)
+        text = c.ask.peek(name, f"verify{attempt}", system, content, ok)
         if text is not None and ok(text):
-            return EC.parse_confirm(text)
-    last: Any = AP.FAILED
+            return EC.parse_verify(text)
+    refused = 0
     for attempt in (1, 2):
         try:
-            text, _stop = c.ask.ask(name, f"confirm{attempt}", system, content, ok, max_tokens=IO.CONFIRM_MAX_TOKENS)
+            text, _stop = c.ask.ask(name, f"verify{attempt}", system, content, ok, max_tokens=IO.VERIFY_MAX_TOKENS)
         except IO.Pending:
             return None
         except IO.ModelError as exc:
-            c.sr.log(f"  {name}: confirm {attempt} refused: {exc}")
+            c.sr.log(f"  {name}: verify {attempt} refused: {exc}")
+            refused += 1
             continue
-        last = EC.parse_confirm(text)
-        if last.answer != EC.UNPARSED:
-            return last
-    return last
+        got = EC.parse_verify(text)
+        if got is not None:
+            return got
+    return AP.FAILED if refused == 2 else None

@@ -10,8 +10,8 @@ ANSWER FILES. Every model reply is saved under
 `name` is the unit's key (``N3``, ``N3-2``, ``PRE``; a unit split after two
 unparsed replies, or a request the API refused as too large, reads each cited
 page as ``N3~s1``, ``N3~s2``...) for a read, and ``<read name>.f<i>`` for the
-confirm of that read's i-th finding (from 0). `kind` is ``read1``/``read2``
-(the first read and its one retry) or ``confirm1``/``confirm2``. A file is
+verify of that read's i-th finding (from 0). `kind` is ``read1``/``read2``
+(the first read and its one retry) or ``verify1``/``verify2``. A file is
 the answer only when its hash matches the request, it did not run out
 (``stop_reason`` max_tokens) and it parses for its kind: anything else is
 asked again, so a resumed hold asks afresh for exactly what was not read and
@@ -62,20 +62,21 @@ RECORD = "entry_read.json"
 RELEASE = "tripwire-release.json"
 STAGE = "audit"  # the ledger's stage name: the stage keeps its name
 MAX_TOKENS = 16_000  # a read's output budget
-CONFIRM_MAX_TOKENS = 4_000  # a confirm answers one small JSON object
-#: The projection's figures before anything is read: confirms per entry, the
-#: pages each shows, and the prompt.
-CONFIRMS_PER_UNIT = 3
+VERIFY_MAX_TOKENS = 4_000  # a verify answers one small JSON object
+#: The projection's figures before anything is read: verifies per entry (each
+#: shows up to ``entry_confirm.VERIFY_PAGES`` pages, always as pictures) and
+#: the prompt.
+VERIFIES_PER_UNIT = 3
 SYSTEM_TOKENS = 3_000
-#: The output a projection prices, per call: the hand read's measured medians
-#: on 2026-11-18 were about 1,700 output tokens for a read and 900 for a
-#: confirm; a read carries margin for its per-line verdicts, a confirm's
-#: answer is one small JSON object. Priced at the maximum instead, a
+#: The output a projection prices, per call: the hand read's measured median
+#: on 2026-11-18 was about 1,700 output tokens for a read, which carries
+#: margin here for its per-line verdicts; a verify's answer is two flags, a
+#: page and a reason under 25 words. Priced at the maximum instead, a
 #: 164-entry job projected five times real spend and would hold for nothing.
-#: The real guards are the doorway's per-call cap check and the confirm
-#: phase re-priced from the real findings.
+#: The real guards are the doorway's per-call cap check and the verify phase
+#: re-priced from the real findings.
 READ_OUT_EXPECTED = 2_500
-CONFIRM_OUT_EXPECTED = 600
+VERIFY_OUT_EXPECTED = 300
 _LABEL = re.compile(r"^Exhibit (\d+) p\. (\d+)")
 Valid = Callable[[str], bool]
 
@@ -87,7 +88,7 @@ class Pending(Exception):
 class ModelError(Exception):
     """The API refused one call for a reason that is not the network (a 4xx,
     a refusal, a request too large): that one read is unread, that one
-    confirm is recorded, never the job failed (round 3, 2026-11-18)."""
+    verify is recorded, never the job failed (round 3, 2026-11-18)."""
 
     def __init__(self, cause: Exception) -> None:
         super().__init__(f"{type(cause).__name__}: {str(cause)[:300]}")
@@ -249,13 +250,12 @@ def _page(modes: Modes | None, x: int, p: int) -> int:
 
 def unit_tokens(u: ER.Unit, modes: Modes | None) -> tuple[int, int]:
     """(input, output) tokens of one unit: its read, every shown page as
-    text or picture, and CONFIRMS_PER_UNIT confirms of up to 8 pages each at
-    the unit's own mean page cost; output at the expected figures."""
+    text or picture, and VERIFIES_PER_UNIT verifies of up to 8 pictures
+    each; output at the expected figures."""
     pages = [_page(modes, x, p) for x, p in u.pages]
-    mean = sum(pages) // max(len(pages), 1)
-    confirm = SYSTEM_TOKENS + mean * min(EC.CONFIRM_PAGES, max(len(pages), 1))
-    tin = SYSTEM_TOKENS + len(u.text) // RV.CHARS_PER_TOKEN + sum(pages) + CONFIRMS_PER_UNIT * confirm
-    return tin, READ_OUT_EXPECTED + CONFIRMS_PER_UNIT * CONFIRM_OUT_EXPECTED
+    verify = SYSTEM_TOKENS + RV.PAGE_TOKENS * min(EC.VERIFY_PAGES, max(len(pages), 1))
+    tin = SYSTEM_TOKENS + len(u.text) // RV.CHARS_PER_TOKEN + sum(pages) + VERIFIES_PER_UNIT * verify
+    return tin, READ_OUT_EXPECTED + VERIFIES_PER_UNIT * VERIFY_OUT_EXPECTED
 
 
 def tokens(slug_dir: Path, unit: str, cfg: Any) -> tuple[int, int, int, int] | None:
@@ -296,24 +296,24 @@ def projection_lines(sr: StageRun) -> list[str]:
     usd = _dollars([{"model": model(sr.cfg), "in": tin, "out": tout}])
     return [
         f"{n} entr(ies) to read from the built chronology, {done} already read; {tin} input and {tout} output "
-        f"tokens (each read plus {CONFIRMS_PER_UNIT} confirms per entry) on {model(sr.cfg)} = ~{usd}"
+        f"tokens (each read plus {VERIFIES_PER_UNIT} verifies per entry) on {model(sr.cfg)} = ~{usd}"
     ]
 
 
-def confirm_usd(sr: StageRun, modes: Modes | None, items: list[tuple[ER.Unit, ER.ReadFinding]]) -> float | None:
-    """The confirm phase priced from the real findings and the real pages
-    each confirm shows; None when no rate card can be read."""
+def verify_usd(sr: StageRun, proposals: list[EC.Proposal]) -> float | None:
+    """The verify phase priced from the real proposals and the pictures each
+    verify shows; None when no rate card can be read."""
     try:
         pricing = paid.load_pricing()
     except (OSError, ValueError, KeyError, budget.BudgetError):
         return None
-    tin = sum(SYSTEM_TOKENS + sum(_page(modes, x, p) for x, p in EC.confirm_pages(f, u)) for u, f in items)
-    return priced(pricing, sr.cfg, tin, len(items) * CONFIRM_OUT_EXPECTED)
+    tin = sum(SYSTEM_TOKENS + RV.PAGE_TOKENS * len(EC.verify_pages(p)) for p in proposals)
+    return priced(pricing, sr.cfg, tin, len(proposals) * VERIFY_OUT_EXPECTED)
 
 
 def check_limits(sr: StageRun, projected_usd: float) -> None:
     """The driver's own check before a paid stage (``driver._check_limits``),
-    for the confirm phase priced from the real findings: the same caps, the
+    for the verify phase priced from the real findings: the same caps, the
     same spend, the same ``LimitHold`` and so the same cap hold the firm is
     told of for any paid stage. Nothing when no rate card can be read."""
     try:

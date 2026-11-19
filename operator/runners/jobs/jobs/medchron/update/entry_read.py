@@ -8,7 +8,7 @@ so an entry's date and provider lines were never read; omissions were not
 defects; and the checker was handed the claim's own values. This reads the
 ENTRY, header lines included, as the update lane's review does
 (``review_repair``, ``review_parts``, ``review_pages``), and nothing the
-reply says is applied here: ``entry_confirm.decide`` decides that.
+reply says is applied here: ``entry_confirm`` verifies and decides that.
 
 * A unit carries the entry's full text, its anchor (``review_repair``'s
   ``N<k>`` scheme; ``PRE`` for the prior-history block, read but
@@ -65,6 +65,7 @@ class Unit:
     parts: int = 1
     cited: list[tuple[int, int]] = field(default_factory=list)  # the cited pages this unit shows (never sent)
     lines: dict[str, str] = field(default_factory=dict)  # label -> the line's exact text (``entry_lines``)
+    sub: bool = False  # a page-by-page read of one cited page (``stages/entry_audit``)
 
     @property
     def labels(self) -> tuple[str, ...]:
@@ -164,6 +165,7 @@ def request(
 ) -> tuple[str, list[dict[str, Any]]]:
     """(system prompt, user content) for one unit's read."""
     split = f" (part {unit.part} of {unit.parts}: only the pages below are shown)" if unit.parts > 1 else ""
+    split = split or (" (only the pages below are shown)" if unit.sub else "")
     kind = "PRIOR HISTORY BLOCK" if unit.record_only else "ENTRY"
     out: list[dict[str, Any]] = [{"type": "text", "text": client}]
     shown = EL.numbered(unit.text, unit.record_only)[0]
@@ -189,6 +191,7 @@ def _reply(reply: str, unit: Unit, lenient: bool) -> dict[str, Any]:
     lines = obj.get("lines")
     if not isinstance(lines, dict):
         raise RR.ReplyUnparsed("the reply gives no verdict per line")
+    lines = obj["lines"] = {str(k).strip().strip("[]").strip(): v for k, v in lines.items()}  # "[S1]" is "S1"
     missing = [lb for lb in unit.labels if lb not in lines]
     if missing:
         raise RR.ReplyUnparsed(f"the reply gives no verdict for line(s) {', '.join(missing[:6])}")

@@ -28,8 +28,15 @@ _HIDE = "\x00"
 
 
 def _is_heading(line: str) -> bool:
+    """A heading or a bare citation. A line with words AND a citation is
+    never a heading (round 4): "BP 128/84, pulse 72 (Exhibit 1 - p. 2)" is a
+    statement the read must judge."""
     text = CL.CITE.sub("", line).strip()
-    return not _WORDY.search(text) or (len(text) <= 60 and not re.search(r"[.!?:;]$", text))
+    if not _WORDY.search(text):
+        return True
+    if CL.CITE.search(line):
+        return False
+    return len(text) <= 60 and not re.search(r"[.!?:;]$", text)
 
 
 def _wordy(s: str) -> bool:

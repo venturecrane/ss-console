@@ -225,3 +225,19 @@ def test_the_prior_history_unit_has_only_sentence_labels() -> None:
     pre = units()[0]
     assert pre.anchor == ER.PRE and pre.labels == ("S1",)
     assert pre.lines["S1"] == "A prior knee sprain was reported in an earlier year. (Exhibit 1 - p. 1)"
+
+
+# ---- round 4 ------------------------------------------------------------------------
+def test_a_short_line_carrying_a_citation_is_a_sentence_never_a_heading() -> None:
+    e = (
+        "03/03/2025\nExample Clinic | All Other Information\n\nAll Other Information\n"
+        "BP 128/84, pulse 72 (Exhibit 1 - p. 2)\n(Exhibit 1 - p. 3)"
+    )
+    _shown, lines = ER.EL.numbered(e)
+    assert lines["S1"] == "BP 128/84, pulse 72 (Exhibit 1 - p. 2)" and "S2" not in lines  # the bare citation is not
+
+
+def test_line_keys_written_with_brackets_are_the_same_labels() -> None:
+    n1 = units()[1]
+    got = ER.parse(reply(lines={"[D]": "ok", "[P]": "ok", "[S1]": "ok", " S2 ": "problem"}), n1)
+    assert got.lines == {"D": "ok", "P": "ok", "S1": "ok", "S2": "problem"}
