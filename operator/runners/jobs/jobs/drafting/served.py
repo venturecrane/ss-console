@@ -32,7 +32,9 @@ resumable once SMD writes or fixes the file (the broker's
   an ``operator`` set whose numbered requests ("<label> NO. n" lines) are not
   1 to its ``request_count``, whose responding party is not our client in the
   job's record, or that is a form interrogatory set (answered by SMD until the
-  drafting answers dotted numbers).
+  drafting answers dotted numbers, ``FORM_SETS_BY_OPERATOR``). A form set's
+  own keys (form, revision, checked numbers, definition boxes, additions) are
+  ``served_form.py``'s.
 
 SMD writes and corrects the file with ``python -m jobs.drafting.served``
 (``served_cli.py``), never by hand as root.
@@ -59,7 +61,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import firm_wording
-from . import parties
+from . import parties, served_form
 from .outcome import DraftingFailed
 
 FILE = "served.json"
@@ -80,10 +82,13 @@ OPERATOR, SMD = DRAFTERS
 #: A served set of a kind outside ``SET_TYPES``, named by its own ``label``:
 #: drafted by SMD only, listed in the reply like any other.
 OTHER = "other"
-#: Kinds the Operator does not draft yet, though they are in the closed list:
-#: a form interrogatory set is answered by its dotted numbers (1.1, 2.1), which
-#: the drafting does not do yet. SMD drafts it.
-SMD_ONLY = frozenset({"form_interrogatories", OTHER})
+#: Kinds the Operator does not draft: a set of type other. A form
+#: interrogatory set is checked by its own keys (``served_form.py``) and
+#: refused for the Operator until this switch is on: the drafting does not
+#: answer dotted numbers (1.1, 2.1) yet. A later change turns it on with the
+#: answer path; until then SMD drafts every form set.
+SMD_ONLY = frozenset({OTHER})
+FORM_SETS_BY_OPERATOR = False
 BEING_PREPARED = "being prepared by us"
 FILED = "filed"
 KEYS = (
@@ -96,6 +101,7 @@ KEYS = (
     "request_text_path",
     "drafted_by",
     "label",
+    *served_form.FORM_KEYS,
 )
 _REQUIRED = ("set_type", "set_number", "propounding_party", "responding_party", "request_count", "drafted_by")
 _NUMBERS = "One Two Three Four Five Six Seven Eight Nine Ten".split()
@@ -115,6 +121,19 @@ class ServedSet:
     drafted_by: str
     #: The set's own name, for a set of type ``other`` only.
     other_label: str = ""
+    #: A form interrogatory set's own keys (``served_form.py``); empty for any
+    #: other set, and for an SMD form set that names none. Defaults, so a plan
+    #: frozen before these keys existed still loads.
+    form: str = ""
+    form_revision: str = ""
+    checked: tuple[str, ...] = ()
+    definition_boxes: tuple[str, ...] = ()
+    additions: bool = False
+
+    def __post_init__(self) -> None:
+        # a frozen plan reads lists back from JSON
+        object.__setattr__(self, "checked", tuple(self.checked))
+        object.__setattr__(self, "definition_boxes", tuple(self.definition_boxes))
 
     @property
     def label(self) -> str:
@@ -191,8 +210,7 @@ def _kind(i: int, raw: dict[str, Any], problems: list[str], other: list[str]) ->
     if st != OTHER and "label" in raw:
         problems.append(f'set {i}: "label" is for a set of type "other" only')
     if st in SMD_ONLY and raw.get("drafted_by") == OPERATOR:
-        what = "a set of type other" if st == OTHER else "a form interrogatory set"
-        problems.append(f'set {i}: {what} is drafted by SMD for now; mark it "drafted_by": "smd"')
+        problems.append(f'set {i}: a set of type other is drafted by SMD for now; mark it "drafted_by": "smd"')
     return st
 
 
@@ -232,7 +250,14 @@ def _one(
     text = _text(job_dir, i, raw, problems)
     if problems or st is None:
         return None
-    if raw["drafted_by"] == OPERATOR:
+    form = served_form.fields(i, raw, problems, by_operator=FORM_SETS_BY_OPERATOR)
+    if problems:
+        return None
+    if raw["drafted_by"] == OPERATOR and st == served_form.FORM_TYPE:
+        _ours(i, raw["responding_party"].strip(), clients, problems)
+        if problems:
+            return None
+    elif raw["drafted_by"] == OPERATOR:
         found = _numbering(text)
         if found != list(range(1, raw["request_count"] + 1)):
             problems.append(
@@ -251,6 +276,7 @@ def _one(
         text,
         raw["drafted_by"],
         str(raw.get("label") or "").strip(),
+        **form,
     )
 
 
@@ -377,10 +403,18 @@ def review_map(served: list[ServedSet], plan: list[dict[str, Any]]) -> dict[str,
             "set_type": served[p["served"]].set_type,
             "count": served[p["served"]].request_count,
             "requests": numbered(served[p["served"]].request_text),
+            **_form_review(served[p["served"]]),
         }
         for p in plan
         if isinstance(p.get("served"), int)
     }
+
+
+def _form_review(s: ServedSet) -> dict[str, Any]:
+    """A form set's checked numbers and form, for the review's form check."""
+    if not s.checked:
+        return {}
+    return {"checked": list(s.checked), "form": s.form, "form_revision": s.form_revision}
 
 
 def outcomes(served: list[ServedSet], plan: list[dict[str, Any]], names: dict[str, str]) -> list[dict[str, Any]]:
@@ -410,7 +444,8 @@ def to_file(found: list[ServedSet]) -> str:
     """``served.json`` in its closed shape (``KEYS``), texts inlined: what ``read`` reads back."""
     rows = []
     for s in found:
-        raw = {k: v for k, v in asdict(s).items() if k != "other_label"}
+        drop = {"other_label", *([] if s.form else served_form.FORM_KEYS)}
+        raw = {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(s).items() if k not in drop}
         rows.append({**raw, **({"label": s.other_label} if s.set_type == OTHER else {})})
     return json.dumps({"sets": rows}, indent=1)
 
@@ -438,6 +473,11 @@ SHAPE = {
             "request_count": "1 or more",
             "request_text": "the requests verbatim (or request_text_path: a file in the job dir)",
             "drafted_by": f"one of {list(DRAFTERS)}",
+            "form, form_revision, checked, definition_boxes, additions": (
+                "a form interrogatory set only: the form and its revision, the checked numbers in form order "
+                "(request_count is their count), the checked Sec. 4(a) boxes, whether extra interrogatories are "
+                "attached"
+            ),
         }
     ]
 }
