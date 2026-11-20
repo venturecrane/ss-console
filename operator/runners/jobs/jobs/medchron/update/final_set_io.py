@@ -168,13 +168,7 @@ def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
         write_atomic(pre, src)  # the input, kept before anything else is written
     write_atomic(ud / ROWS, "".join(json.dumps(r) + "\n" for r in o.rows))
     write_atomic(ud / CORRECTIONS, json.dumps(o.corrections, indent=1))
-    mark = {
-        "counts": dict(o.counts),
-        "ops": o.ops,
-        "values_dropped": sorted(o.values_dropped),
-        "in_sha": _sha(src),
-        "out_sha": _sha(o.md),
-    }
+    mark = {"counts": dict(o.counts), "ops": o.ops, "in_sha": _sha(src), "out_sha": _sha(o.md)}
     write_atomic(ud / REPORT, json.dumps(mark, indent=1))
     if doc.read_text(encoding="utf-8") != o.md:
         write_atomic(doc, o.md)
@@ -194,16 +188,6 @@ def ran(ud: Path) -> bool:
     if mark.get("no_added_entries") is True:  # the document it saw, or none, must still be the one there
         return "out_sha" in mark and mark.get("out_sha") == now
     return now is not None and mark.get("out_sha") == now
-
-
-def values_dropped(ud: Path) -> set[str]:
-    """The values the final set's paragraph drops removed on purpose (times
-    of day and bare years their keepers do not state), from its marker, only
-    when the document is still its output (``ran``): what proof 10 excuses."""
-    mark = _json(ud / REPORT, None)
-    if not ran(ud) or not isinstance(mark, dict):
-        return set()
-    return {str(v) for v in mark.get("values_dropped") or []}
 
 
 def read_rows(ud: Path) -> list[dict[str, Any]]:
