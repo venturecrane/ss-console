@@ -24,7 +24,7 @@ from typing import Any
 from ..demand import draft as d
 from ..demand.gapaudit import output_max
 from ..demand.summarize import sha
-from . import quote_tail
+from . import quote_tail, response_scope
 
 AUDIT_MAX_TOKENS = 32_000
 #: A served set's requests are read this many at a time (``Drafter._chunked``).
@@ -360,6 +360,9 @@ class Drafter:
     def compose(self, digest: str) -> str:
         if (self.data / "draft-v1.md").is_file():
             return self._read("draft-v1.md")
+        # A discovery-response unit composes from its own capped pack (response_scope.py).
+        pack = response_scope.unit_pack(self.data)
+        digest = digest if pack is None else pack
         user = (
             self.context
             + "\n\n---\n\nTHE RECORD DIGEST (every fact you use must trace to a citation here):\n\n"
