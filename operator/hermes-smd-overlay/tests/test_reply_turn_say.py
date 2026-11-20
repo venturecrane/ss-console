@@ -325,3 +325,89 @@ def test_tier_one_spares_ordinary_legal_sentences(mod: Any) -> None:  # noqa: F8
         "The trial is set; the queue at the clerk's office is long.",
     ):
         assert mod.relay_checks.mechanics_held(origin, SENDER, ordinary, "") is False, ordinary
+
+
+# --------------------------------------------------------------------------
+# Two says, any order (2026-11-20). A firm email stated a rule AND asked for a
+# draft: the rules_by_hand read-back and the drafting acknowledgment were both
+# noted. Draft 1 carried both, in the other order to the tool calls, and was
+# held; the hold named a sentence that WAS present and told the model to send
+# one sentence as the whole body, so draft 2 dropped the other; the cap stopped
+# the reply and the attorney got nothing. Invented sentences below.
+# --------------------------------------------------------------------------
+
+RULE_SAY = "Got it. I'll confirm in this thread once that's in place."
+
+
+def _render(m: Any, detail: str) -> str:
+    return m.notice.render(
+        m.notice.HoldNotice(
+            reason="fixed_wording", recipient=SENDER, message_id=GRAPH_ID, detail=detail
+        )
+    )
+
+
+def test_two_says_in_the_reverse_order_pass_the_block_rule() -> None:
+    from shared import turn_says
+
+    reversed_body = f"Hi,\n\n{ACK}\n\n{RULE_SAY}\n\nThanks,"
+    assert turn_says.block_problem((RULE_SAY, ACK), reversed_body) == ""
+    assert turn_says.block_problem((RULE_SAY, ACK), f"{RULE_SAY}\n\n{ACK}") == ""
+    # Every other rule stands: twice is held, and a say inside a sentence is held.
+    assert turn_says.block_problem((RULE_SAY, ACK), f"{ACK}\n\n{RULE_SAY}\n\n{ACK}")
+    assert turn_says.block_problem((RULE_SAY, ACK), f"{ACK}\n\nAlso, {RULE_SAY}")
+
+
+def test_a_draft_with_both_says_reversed_is_sent_first_time(mod: Any) -> None:  # noqa: F811
+    """The 4:03 PM turn, through the relay's own step 5a. FALSIFIER: restore
+    the order check and this first draft is held."""
+    origin = _email("Always cite the local rule. Also draft responses for matter 4417.")
+    _note(mod, "establish_propose", {"say": RULE_SAY})
+    _note(mod, "drafting_job_submit", {"accepted": True, "say": ACK})
+    assert _check(mod, origin, text=f"{ACK}\n\n{RULE_SAY}") is True
+    assert _held(mod) == []
+
+
+def test_a_missing_say_is_named_alone_and_the_notice_lists_both(mod: Any) -> None:  # noqa: F811
+    origin = _email()
+    _note(mod, "establish_propose", {"say": RULE_SAY})
+    _note(mod, "drafting_job_submit", {"say": ACK})
+    answer = "The trial in matter 4417 is set for the spring calendar."
+    assert _check(mod, origin, text=f"{ACK}\n\n{answer}") is False
+    detail = [c for c in mod.calls if c[0] == "_held"][-1][2]["_detail"]
+    missing_clause = detail.split(" All 2 of these sentences")[0]
+    # The problem names only the sentence that is missing, never the present one.
+    assert f'own paragraph: "{RULE_SAY}"' in missing_clause and ACK not in missing_clause
+    # The notice lists both, any order, and allows the other paragraphs.
+    assert f'any order: "{RULE_SAY}" "{ACK}"' in detail
+    rendered = _render(mod, detail)
+    assert "in any order" in rendered and "Other paragraphs that answer the email" in rendered
+    assert "as the whole body" not in rendered and "no other sentence" not in rendered
+    # The redraft the notice asks for goes out.
+    assert _check(mod, origin, text=f"{ACK}\n\n{answer}\n\n{RULE_SAY}") is True
+
+
+def test_a_one_say_relay_hold_allows_other_paragraphs(mod: Any) -> None:  # noqa: F811
+    """One required sentence is a paragraph, not the whole reply: its notice
+    must not contradict that (the relay registers it as a required block)."""
+    origin = _email()
+    _note(mod, "drafting_job_submit", {"say": ACK})
+    shortly = ACK.replace("you'll get a reply", "you'll get a reply shortly")
+    assert _check(mod, origin, text=shortly) is False
+    detail = [c for c in mod.calls if c[0] == "_held"][-1][2]["_detail"]
+    assert "All 1 of" not in detail and "any order:" not in detail
+    rendered = _render(mod, detail)
+    assert "as the whole body" not in rendered and "Other paragraphs" in rendered
+
+
+def test_a_jobs_whole_body_wording_keeps_todays_notice(mod: Any) -> None:  # noqa: F811
+    """The broker's bound reply IS the whole body: unchanged."""
+    rendered = _render(mod, 'fixed_wording: nothing was sent. Send exactly this: "Filed."')
+    assert "exactly the text below as the whole body" in rendered
+
+
+def test_the_refusal_lead_is_one_string_in_both_places(mod: Any) -> None:  # noqa: F811
+    from shared import turn_says
+
+    assert turn_says.REFUSAL_LEAD == mod.notice.SAY_REFUSAL_LEAD
+    assert turn_says.refusal("x").startswith(mod.notice.SAY_REFUSAL_LEAD)
