@@ -60,7 +60,9 @@ covered set. A refusal writes nothing.
 ([ops-close-by-smd](ops-close-by-smd.md)); left open, it lapses after seven days
 into a "lapsed unanswered" letter to the requester.
 
-Code: `operator/runners/jobs/jobs/medchron/deliver_by_smd.py` (tests:
+Code: `operator/runners/jobs/jobs/medchron/deliver_by_smd.py`, with its
+lane-neutral half in `operator/runners/jobs/jobs/hand_delivery.py`, shared with
+[drafting-deliver-by-smd](drafting-deliver-by-smd.md) (tests:
 `operator/runners/jobs/tests/test_deliver_by_smd.py`). The reply binds when
 the job's request reference is a mailbox Graph id as well as an RFC Message-ID
 (`operator/workspace_broker/reply_binding.py`, 2026-10-14).

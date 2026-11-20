@@ -16,9 +16,14 @@ on the seat (``operator/bin/lane-proof.sh`` wraps it from a laptop).
 * ``revoke KEY --why ... --by NAME``
                  un-prove a lane (new jobs of that kind wait again).
 
-There is deliberately no command that proves a lane without a passed proof
-run: the authored ``lane-proofs.yaml`` (reviewed in git) is the only other way
-in, and that is for lanes whose live record already proves them.
+A lane is opened in one of two ways. This command opens it from a passed proof
+run (``accept``); there is deliberately no command that opens one without.
+The other way is an authored entry in the seat's ``lane-proofs.yaml``, reviewed
+in git and staged by the provisioner, which opens the lane on its own say-so,
+with no job run on the seat, while the seat holds no runtime ``accept`` or
+``revoke`` for that key (``lane_proof.load``): SMD's decision recorded in review, for example
+for a lane whose work SMD reads by hand or whose live record already proves it.
+``status`` names each proven lane's source (``authored`` or the runtime event).
 
 Every output line is plain text for a person reading a terminal. File names
 and matter text stay on the seat; only lane keys, job ids, counts and paths
@@ -120,7 +125,10 @@ def _accept(run_dir: Path, job_id: str, evidence: str, by: str) -> int:
         return 2
     mine = [r for r in proof_run.results(run_dir) if r.get("job_id") == job_id]
     if not mine:
-        print(f"no proof run of {job_id} on the volume; run `lane-proof dry-run {job_id}` first")
+        print(
+            f"no proof run of {job_id} on the volume; run `lane-proof dry-run {job_id}` first "
+            "(or open the lane by an authored entry in the seat's lane-proofs.yaml)"
+        )
         return 2
     last = mine[-1]
     if last.get("status") != "passed":
