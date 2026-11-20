@@ -15,7 +15,9 @@
 #   * Each run reads the bottom of each registered pane. Claude's limit message
 #     is "You've hit your <session|weekly|Opus|...> limit · resets <when>"
 #     (Claude Code docs, errors page, 2026-11-08). Spend, budget and fast-mode
-#     limits are not account limits and are ignored.
+#     limits are not account limits and are ignored, unless the same line also
+#     names an account limit resetting ("... spend limit · your weekly limit
+#     resets ...", 2026-11-19).
 #   * Seen once is not enough: a session can print those words while working
 #     (an agent discussing this very script). Only a pane showing the message on
 #     two runs in a row with an unchanged screen is stuck. Then the account is
@@ -85,8 +87,15 @@ for f in "$P"/pane-*; do
   if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then rm -f "$f" "$f".*; continue; fi
   [ "$account" = login ] && continue   # the stored /login: no other account to move to from here
   screen=$(tmux capture-pane -p -J -t "$pane" 2>/dev/null | tail -n 30) || continue
-  hit=$(printf '%s\n' "$screen" | grep -E "You.ve hit your [A-Za-z0-9 .-]*limit" \
-        | grep -v -i -E "spend|budget|fast limit" | grep -i "resets" | tail -1)
+  # A spend, budget or fast-mode limit alone is not the account's limit: moving
+  # to the other account does not lift it. But on 2026-11-19 every workspace pane
+  # showed "You've hit your monthly spend limit · your weekly limit resets Nov 20,
+  # 11pm", which names the account's own weekly limit, and the old blanket
+  # "spend|budget" drop threw it away, so no pane failed over. A line that names
+  # an account limit resetting counts whatever else it says.
+  hit=$(printf '%s\n' "$screen" | grep -E "You.ve hit your [A-Za-z0-9 .-]*limit" | grep -i "resets" \
+        | awk '{ l = tolower($0) } l ~ /(session|weekly|daily|opus|sonnet|[0-9]+-hour) limit resets/ || l !~ /spend|budget|fast limit/' \
+        | tail -1)
   if [ -z "$hit" ]; then rm -f "$f.seen"; continue; fi
   h=$(printf '%s' "$screen" | cksum | cut -d' ' -f1)
   prev=$(cat "$f.seen" 2>/dev/null || true)

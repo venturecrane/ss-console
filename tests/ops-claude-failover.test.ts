@@ -298,6 +298,24 @@ describe('ops-claude-failover: the watcher', () => {
     writeFileSync(join(home, 'screen.txt'), "You've hit your monthly spend limit · resets Dec 1")
     watch(home)
     expect(watch(home)).toBe('')
+    writeFileSync(join(home, 'screen.txt'), "You've hit your fast limit · resets 3:45pm")
+    watch(home)
+    expect(watch(home)).toBe('')
+  })
+
+  // 2026-11-19: this exact line sat on every workspace pane, and the blanket
+  // "spend" drop discarded it, so no pane failed over. It names the account's
+  // weekly limit resetting, so it is the account's limit.
+  it('fails over on a spend notice that names the weekly limit resetting', () => {
+    const home = makeHome()
+    register(home, 'B')
+    writeFileSync(
+      join(home, 'screen.txt'),
+      "  ⎿  You've hit your monthly spend limit · your weekly limit resets Nov 20, 11pm"
+    )
+    expect(watch(home)).toContain('confirming next run')
+    expect(watch(home)).toContain('would: restart pane %7 on A')
+    expect(stateOf(home).B.exhausted_until).toBe(Date.UTC(2026, 10, 21, 6, 0) / 1000)
   })
 
   it('with every account spent, pages once and does not restart', () => {
