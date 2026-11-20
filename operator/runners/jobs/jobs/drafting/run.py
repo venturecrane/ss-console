@@ -3,7 +3,8 @@
 The graph, per class::
 
     facts -> destination -> pull (privilege wall) -> preflight -> estimate
-      -> [discovery responses: the served sets SMD named, served.py; its stops end the job here]
+      -> [discovery responses: find the served sets in the file (served_find.py; SMD's hand
+         served.json overrides), then plan from them (served.py); their stops end the job here]
       -> transcribe -> digest (cited)
       -> [mediation brief: howell table] -> [court classes: caption read, record diff + corrections]
       -> per document (finish.py; one per set a discovery request names):
@@ -572,7 +573,7 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
 
     def _current(self) -> str:
         mid = ("evidence-extract", "evidence-verify", "evidence-images", "index") if self.evidence.ledger else ()
-        plan = ("plan",) if self.cls in served_mod.PLANNED_CLASSES else ()
+        plan = ("find", "plan") if self.cls in served_mod.PLANNED_CLASSES else ()
         head = (
             "facts",
             "destination",
