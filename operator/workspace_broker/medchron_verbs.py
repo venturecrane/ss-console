@@ -563,22 +563,9 @@ class MedchronVerbs:
         refusal = self._requester_refusal(envelope)
         if refusal is not None:
             return {"ok": True, "accepted": False, "reason": refusal}
-        twin = self._db.active_duplicate(envelope)
-        if twin is not None:
-            twin_id, twin_state = twin
-            where = {
-                "submitted": f"already queued as job {twin_id} and has not started yet",
-                "running": f"already running as job {twin_id}",
-                "held": f"already submitted as job {twin_id}, which is HELD and waiting on a decision",
-            }.get(twin_state, f"already submitted as job {twin_id} (state {twin_state})")
-            return {
-                "ok": True,
-                "accepted": False,
-                "reason": f"this chronology package is {where}; nothing new was queued and the "
-                "allowance was not charged twice",
-                "job_id": twin_id,
-                "job_state": twin_state,
-            }
+        dup = medchron_progress.duplicate_refusal(self._db.active_duplicate(envelope), self._db.person_cover(envelope))
+        if dup is not None:
+            return dup
         # A RUN or plain append on a matter that already holds a delivered
         # chronology is an UPDATE the agent mis-routed (2026-10-13: a $150 full
         # run queued on a client matter). Refused with the update shape so the

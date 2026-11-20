@@ -322,3 +322,44 @@ def test_a_check1_on_another_persons_page_with_no_single_entry_still_holds(job_d
     assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 2, log
     assert _md(sr).count("03/30/2026\nExample Clinic") == 3
     assert not (sr.slug_dir / "out" / "alpha" / review_evidence.LEFT_OUT).exists()
+
+
+TWO_PAGES = (
+    "| MUST-FIX | 1 another person's records | the 03/30/2026 entry cites Exhibit 1 p. 2 (intake) but the "
+    "lab at Exhibit 1 p. 3 is another person's | entry 03/30/2026 Example Clinic |"
+)
+NO_PAGE = (
+    "| MUST-FIX | 1 another person's records | the 03/30/2026 visit reads as someone else's "
+    "| entry 03/30/2026 Example Clinic |"
+)
+
+
+def test_a_check1_naming_two_pages_where_the_second_is_another_persons_stays_a_must_fix(
+    job_dir, firm_config_path, data_root
+):
+    """Every page the finding names decides, never only the first: the intake
+    page is the client's, the lab page is another person's, and no single
+    entry can be left out, so it holds.
+
+    MUTATION: decide on ``cited_pages`` (its first named page only) and the
+    client's intake page settles it."""
+    sr, log = _package(job_dir, firm_config_path, data_root, MANY)
+    _pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Lab panel.")
+    assert _settle_review(sr, FakeDoorway(_verdict(TWO_PAGES))) == 2, log
+    assert proof_review.load(sr.slug_dir / "runs" / "alpha")["must_fix"] == 1
+
+
+def test_a_check1_naming_two_pages_that_are_both_the_clients_settles(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root, MANY)
+    _pages(sr, "Patient: Alpha Example DOB: 01/01/1970. Lab panel.")
+    assert _settle_review(sr, FakeDoorway(_verdict(TWO_PAGES))) == 0, log
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0
+    assert rec["findings"][0]["finding"].startswith("checked against the cited page, which is the client's")
+
+
+def test_a_check1_naming_no_page_and_no_single_entry_holds(job_dir, firm_config_path, data_root):
+    sr, log = _package(job_dir, firm_config_path, data_root, MANY)
+    _pages(sr, "Patient: Alpha Example DOB: 01/01/1970. Continue therapy.")
+    assert _settle_review(sr, FakeDoorway(_verdict(NO_PAGE))) == 2, log
+    assert proof_review.load(sr.slug_dir / "runs" / "alpha")["must_fix"] == 1

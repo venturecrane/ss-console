@@ -734,8 +734,7 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
         wrong sentence a person then relays to a client.
         """
         want = work_digest(envelope)
-        cutoff = datetime.now(UTC) - HELD_STALE_AFTER
-        stale_before = cutoff.strftime("%Y-%m-%dT%H:%M:%S.") + f"{cutoff.microsecond // 1000:03d}Z"
+        stale_before = _stale_before()
         conn = self._connect()
         try:
             row = conn.execute(_ACTIVE_TWIN_SQL, (want, *_TERMINAL_ORDERED, stale_before)).fetchone()
@@ -746,6 +745,10 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
         # 2026-11-19: the same person (surname and date of birth) and kind on
         # this matter is the same request, whatever files it names.
         return medchron_progress.same_person(self, envelope, stale_before)
+
+    def person_cover(self, envelope: dict[str, Any]) -> list[dict[str, Any]]:
+        """Per client, the active job already for that person (``medchron_progress``)."""
+        return medchron_progress.person_cover(self, envelope, _stale_before())
 
     def work_twin(self, job_id: str) -> dict[str, Any] | None:
         """Another job carrying THIS job's work that is delivered or still live.
@@ -881,17 +884,26 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
         vals.append(job_id)
         conn.execute(f"UPDATE medchron_jobs SET {', '.join(sets)} WHERE id=?", vals)  # noqa: S608 - sets holds only the literal 'col=?' fragments built above; values are bound
 
-    def _guard(self, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any]) -> None:
-        """A stage note lands only on a running row. The runner's heartbeat
-        sends it while the child runs, and one in flight as the job ends
-        would otherwise move a HELD row back to running (held -> running is a
-        legal edge, for a resume)."""
-        if medchron_progress.is_stage_note(state, fields) and cur["state"] != "running":
-            raise ValueError(f"job {job_id} is {cur['state']}; a stage note lands only on a running job")
+    def _early(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+        """A stage note, answered without a transition: it never writes
+        ``state``, only one UPDATE conditioned on ``state='running'``. The
+        heartbeat sends notes while the child runs, and one in flight as the
+        job ends (the beat thread is joined with a timeout) would otherwise
+        commit after the held or failed record and move the row back to
+        running; this ledger takes no write lock before reading the row."""
+        if not medchron_progress.is_stage_note(state, fields):
+            return None
+        return medchron_progress.apply_note(self, job_id, fields)
 
     def _result(self, row: dict[str, Any], cur: sqlite3.Row, state: str, extra: Any) -> dict[str, Any]:
         """The row after, as it is: this lane's record never carried ``prev_state``."""
         return row
+
+
+def _stale_before() -> str:
+    """The cutoff before which a hold no longer counts as active (``HELD_STALE_AFTER``)."""
+    cutoff = datetime.now(UTC) - HELD_STALE_AFTER
+    return cutoff.strftime("%Y-%m-%dT%H:%M:%S.") + f"{cutoff.microsecond // 1000:03d}Z"
 
 
 def now_utc() -> datetime:

@@ -267,10 +267,17 @@ def _identity(sr: StageRun, doc: Path, md: str, out: Outcome, k: int, pages: Any
     f = out.findings[k]
     text = _text(f)
     block = EV.entry_for(md, text)
-    cited = EV.cited_pages(block[2] if block else "", text)
-    if not cited:
+    # EVERY page the finding names decides, never only the first: a finding
+    # that names the client's intake page and another person's lab page is
+    # another person's. With no page named, the entry's own cited pages.
+    cited = list(dict.fromkeys(EV.named_pages(text))) or (EV.cited_pages(block[2], text) if block else [])
+    texts = [pages.text(ex, pg) for ex, pg in cited]
+    if not cited or (block is None and not any(t.strip() for t in texts)):
+        # No page to decide on, or no single entry and no page that reads:
+        # it holds, as it did before the named pages decided first. With its
+        # one entry found, an unreadable page names no one (a NOTE, the B1 rule).
         return md
-    kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
+    kind = _whose_all(sr, EV, texts)
     if kind != "other":
         # The client's page, or a page naming no one: the entry is a record
         # the map read, and suspicion alone never drops it.
@@ -292,6 +299,15 @@ def _identity(sr: StageRun, doc: Path, md: str, out: Outcome, k: int, pages: Any
     out.left_out += 1
     sr.log(f"review: the {date_line} entry left out by rule (its cited page: {kind})")
     return doc.read_text(encoding="utf-8")
+
+
+def _whose_all(sr: StageRun, EV: Any, texts: list[str]) -> str:
+    """'other' when ANY page is another person's, 'client' only when EVERY
+    page is the client's own, 'unnamed' otherwise (a page naming no one)."""
+    kinds = [EV.whose(sr, [t]) for t in texts]
+    if "other" in kinds:
+        return "other"
+    return "client" if all(x == "client" for x in kinds) else "unnamed"
 
 
 def _repairable(f: review.Finding) -> bool:

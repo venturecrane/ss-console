@@ -43,6 +43,7 @@ class _FakeBroker:
             "medchron_update_files": {
                 "ok": True,
                 "coverage_record": True,
+                "coverage_complete": True,
                 "new_document_ids": ["d-4", "d-3"],
                 "count": 2,
                 "previously_uncovered": ["d-3"],
@@ -425,10 +426,43 @@ def test_update_files_sends_the_listing_and_relays_the_broker_computed_set(broke
     }
     assert out == {
         "coverage_record": True,
+        "coverage_complete": True,
+        "coverage_note": None,
         "new_document_ids": ["d-4", "d-3"],
         "count": 2,
         "previously_uncovered": ["d-3"],
     }
+
+
+def test_a_refused_submit_relays_which_client_matched_and_which_did_not(broker):
+    """A two-client request with one client in flight: the model sees which
+    client matched which job and which client to submit alone."""
+    cover = [
+        {"client_name": "Alpha Example", "job_id": "01J", "job_state": "running"},
+        {"client_name": "Beta Sample", "job_id": None, "job_state": None},
+    ]
+    broker.answers["medchron_job_submit"] = {
+        "ok": True,
+        "accepted": False,
+        "reason": "a chronology on this matter is already in flight",
+        "clients": cover,
+        "uncovered_clients": ["Beta Sample"],
+    }
+    out = json.loads(
+        _tools()["medchron_job_submit"]["handler"](
+            {
+                "matter_id": "m-1",
+                "matter_number": "2026-PI-102",
+                "units": [
+                    {"client_name": "Alpha Example", "surname": "Example", "dob": "01/02/1980"}
+                ],
+                "incident_date": "2026-01-15",
+                "incident_source": "administrator_request",
+            }
+        )
+    )
+    assert out["accepted"] is False and out["clients"] == cover
+    assert out["uncovered_clients"] == ["Beta Sample"] and "job_id" not in out
 
 
 def test_the_tools_are_classified():

@@ -152,6 +152,10 @@ def _named_pages(text: str) -> list[tuple[int, int]]:
     return [(int(m.group(1)), int(m.group(2))) for m in _EXHIBIT_PAGE.finditer(text) if m.group(2)]
 
 
+#: Every (exhibit, page) a finding's text names, for ``review_policy._identity``.
+named_pages = _named_pages
+
+
 def _cites(block: str, exhibit: int, page: int) -> bool:
     return any(
         int(c.group(1)) == exhibit and page in (CL.parse_pages(c.group(2)) or [1]) for c in CL.CITE.finditer(block)

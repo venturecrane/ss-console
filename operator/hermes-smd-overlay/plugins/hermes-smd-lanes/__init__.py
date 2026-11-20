@@ -135,7 +135,13 @@ def _medchron_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) -
             envelope["update"]["chronology_file_id"] = str(update["chronology_file_id"])
     resp = JobsBrokerClient().submit(envelope)
     if not resp.get("accepted"):
-        return json.dumps({"accepted": False, "reason": resp.get("reason")}, ensure_ascii=False)
+        # A duplicate refusal names the live job and, per client, which job is
+        # theirs and which client no job covers: the skill words each truthfully.
+        refused = {"accepted": False, "reason": resp.get("reason")}
+        for key in ("job_id", "job_state", "clients", "uncovered_clients"):
+            if resp.get(key) is not None:
+                refused[key] = resp[key]
+        return json.dumps(refused, ensure_ascii=False)
     logger.info("medchron_job_submit: queued %s", resp.get("job_id"))
     return json.dumps(
         {
@@ -199,7 +205,14 @@ def _medchron_update_files(args: dict[str, Any], **_: Any) -> str:
         str(args.get("client_name") or "").strip(),
         listing,
     )
-    keys = ("coverage_record", "new_document_ids", "count", "previously_uncovered")
+    keys = (
+        "coverage_record",
+        "coverage_complete",
+        "coverage_note",
+        "new_document_ids",
+        "count",
+        "previously_uncovered",
+    )
     return json.dumps({k: resp.get(k) for k in keys}, ensure_ascii=False)
 
 
@@ -332,7 +345,9 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         "what the delivered chronologies covered, in listing order), count (documents, not "
         "pages: the record holds no page counts) and previously_uncovered (those on the matter "
         "at delivery that went unread). coverage_record false means no record exists for that "
-        "client, and nothing was computed.",
+        "client, and nothing was computed. coverage_complete false (a joint matter where an older "
+        "delivery recorded no client) means the set cannot be trusted: name the client's records "
+        "from the listing instead.",
         _schema(
             {
                 "matter_id": {

@@ -380,13 +380,20 @@ seat does not queue a second full run on a delivered matter.
    client work on this lane, not a change to the seat. A duplicate refusal that
    names a job (`job_id`, `job_state`) means that job IS the work in flight,
    including when the new request named the same client another way or
-   asked for other files (the broker matches the person, by surname and date
-   of birth, and the kind):
+   asked for other files (the broker matches the person, by first name,
+   surname and date of birth, and the kind):
    call `medchron_job_status` with that `job_id` and tell the requester what
    its record shows (submitted, running or held: "The chronology for matter
    <number> is under way. Nothing is needed from you; the next message you get
    about it will be the filed one."; a stopped job is SMD's to finish, and
-   nothing about why it stopped reaches the firm). The broker no longer
+   nothing about why it stopped reaches the firm). **When the refusal lists
+   `uncovered_clients`, only some clients are in flight.** Nothing was
+   queued: submit again on this turn with only the units of the clients
+   `uncovered_clients` names, and in the reply say the under-way sentence only
+   for the clients whose `clients` entry carries a `job_id`, by name ("The
+   chronology for <client> on matter <number> is under way."). Never say a
+   chronology is under way for a client the refusal lists as not covered;
+   say what the resubmission's own answer says for them. The broker no longer
    names a hold that a later delivery on the matter superseded, or one too old
    to resume, so a named job is never history (2026-10-13: a three-week-old
    upload hold, delivered twice since, refused an administrator's request for
@@ -446,7 +453,11 @@ reported, never read.
    out yourself, and never state a page count for it from memory: the answer
    carries documents, not pages. A scan that arrived without a text layer is
    NOT covered, and an update reads it again. `coverage_record: false` is the
-   "no coverage record" case below.
+   "no coverage record" case below. `coverage_complete: false` (a joint
+   matter where an older delivery recorded no client) means the delta cannot
+   be trusted: name this client's medical records from the listing by their
+   names and folders, as the "no coverage record" case does, and never treat
+   a document as covered because the tool left it out.
    **Name medical records only.** The named ids override the runner's folder
    rules, so this list IS the selection: keep medical records and medical
    bills (files in the matter's medical folders, or plainly records by their

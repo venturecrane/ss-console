@@ -226,7 +226,7 @@ class StateRecord(LaneLedger):
         """Apply one transition; returns the row after. A same-state record is
         a note (merges fields). ValueError on an unknown job or an illegal move."""
         f = self._check(state, fields)
-        early = self._early(job_id, f)
+        early = self._early(job_id, state, f)
         if early is not None:
             return early
         return self._transition(job_id, lambda _cur: (state, f))
@@ -238,7 +238,7 @@ class StateRecord(LaneLedger):
             raise ValueError(f"unknown state {state!r}")
         return fields
 
-    def _early(self, job_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+    def _early(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any] | None:
         """A record answered without a transition (None: there is none)."""
         return None
 

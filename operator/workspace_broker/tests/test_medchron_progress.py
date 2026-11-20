@@ -128,14 +128,28 @@ def test_a_running_rows_status_names_its_client_kind_and_stage_and_never_its_fin
 
 
 def test_a_stage_note_never_moves_a_held_row_back_to_running(verbs):
-    """MUTATION: drop MedchronLedger._guard and the late note re-opens the hold."""
+    """MUTATION: route the note through the ordinary transition (held ->
+    running is a legal edge) and the late note re-opens the hold."""
     v, _, _ = verbs
     job = _submit(v)["job_id"]
     _record(v, job, "running")
+    _record(v, job, "running", stage="compose")
     _record(v, job, "held", reason="review_held: one must-fix")
     with pytest.raises(ValueError, match="lands only on a running job"):
         _record(v, job, "running", stage="review")
-    assert call(v, "medchron_job_status", job_id=job)["job"]["state"] == "held"
+    # The real ledger, the note applied AFTER the held record, as a beat in flight would.
+    with pytest.raises(ValueError, match="lands only on a running job"):
+        v.ledger.record(job, "running", {"stage": "review", "expected_finish": "2026-11-20T03:00:00Z"})
+    row = v.ledger.read(job)
+    assert row["state"] == "held" and row["stage"] == "compose" and row["expected_finish"] is None
+
+
+def test_twins_on_one_matter_are_two_people(verbs):
+    """One surname, one birth date, two first names: both accepted."""
+    v, _, _ = verbs
+    a = _submit(v, units=[{"client_name": "Alpha Example", "surname": "Example", "dob": "01/02/1980"}])
+    b = _submit(v, units=[{"client_name": "Beta Example", "surname": "Example", "dob": "01/02/1980"}])
+    assert a["accepted"] and b["accepted"]
 
 
 def test_a_stage_name_outside_the_dags_spelling_is_refused(verbs):
@@ -173,15 +187,67 @@ def test_an_updates_new_documents_are_the_listing_minus_what_was_covered(verbs):
         client_name="alpha  example",
         listing_ids=["d-4", "d-1", "d-3", "d-2", "d-4"],
     )
-    assert got["coverage_record"] is True
+    assert got["coverage_record"] is True and got["coverage_complete"] is True
     assert got["new_document_ids"] == ["d-4", "d-3"] and got["count"] == 2
     assert got["previously_uncovered"] == ["d-3"]
+
+
+def test_on_a_joint_matter_a_delivery_that_names_no_client_is_not_subtracted(verbs):
+    """A delivered row with no recorded client may be the OTHER client's
+    delivery: its coverage must never drop documents from this client's
+    update unread. MUTATION: count NULL-client rows for every client again
+    and d-1 and d-2 leave the answer."""
+    v, _, _ = verbs
+    _delivered(v, ["d-1", "d-2"], ["d-3"])
+    v.ledger.submit(
+        envelope(units=[{"client_name": "Beta Sample", "surname": "Sample", "dob": "05/06/1990"}]), remaining=1
+    )
+    got = call(
+        v, "medchron_update_files", matter_id="m-1", client_name="Alpha Example", listing_ids=["d-1", "d-2", "d-4"]
+    )
+    assert got["coverage_complete"] is False and "name no client" in got["coverage_note"]
+    assert got["coverage_record"] is False and got["new_document_ids"] is None
 
 
 def test_with_no_coverage_record_nothing_is_computed(verbs):
     v, _, _ = verbs
     got = call(v, "medchron_update_files", matter_id="m-1", client_name="Alpha Example", listing_ids=["d-1"])
-    assert got == {"ok": True, "coverage_record": False, "new_document_ids": None, "count": None}
+    assert got == {
+        "ok": True,
+        "coverage_complete": True,
+        "coverage_record": False,
+        "new_document_ids": None,
+        "count": None,
+    }
+
+
+# ---- a request in which only some clients have a live job ------------------------
+ALPHA = {"client_name": "Alpha Example", "surname": "Example", "dob": "01/02/1980", "folder_prefix": "Alpha"}
+BETA = {"client_name": "Beta Sample", "surname": "Sample", "dob": "05/06/1990", "folder_prefix": "Beta"}
+
+
+def test_two_clients_one_live_names_the_live_one_and_leaves_the_other_to_submit(verbs):
+    v, _, _ = verbs
+    live = _submit(v, units=[ALPHA])["job_id"]
+    both = _submit(v, units=[ALPHA, BETA])
+    assert both["accepted"] is False and both["uncovered_clients"] == ["Beta Sample"]
+    assert [(c["client_name"], c["job_id"]) for c in both["clients"]] == [
+        ("Alpha Example", live),
+        ("Beta Sample", None),
+    ]
+    assert f"for Alpha Example it is already queued as job {live}" in both["reason"]
+    assert "Not covered by any job: Beta Sample" in both["reason"]
+    assert _submit(v, units=[BETA])["accepted"], "the uncovered client is accepted on its own"
+
+
+def test_two_clients_both_live_is_refused_naming_both_jobs(verbs):
+    v, _, _ = verbs
+    a = _submit(v, units=[ALPHA])["job_id"]
+    b = _submit(v, units=[BETA])["job_id"]
+    both = _submit(v, units=[ALPHA, BETA])
+    assert both["accepted"] is False and "uncovered_clients" not in both
+    assert a in both["reason"] and b in both["reason"]
+    assert {c["job_id"] for c in both["clients"]} == {a, b}
 
 
 def test_the_update_files_read_needs_the_listing_and_refuses_an_unknown_caller(verbs):
