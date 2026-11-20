@@ -13,12 +13,16 @@ exactly one row per page shown, each one of CLASSES:
     {"page": 5, "class": "continuation", "entry": "03/14/2019 | Example Clinic"}
     {"page": 6, "class": "non_record"}
     {"page": 7, "class": "duplicate", "of": 6}
-    {"page": 4, "class": "dated_record", "dates": ["03/14/2019"]}
+    {"page": 4, "class": "dated_record", "dates": ["03/14/2019"], "kinds": ["test"]}
+    {"page": 8, "class": "unsure"}
 
-Anything else (a page missing, named twice or not shown, a class not listed,
+A ``dated_record`` names at least one date and at least one of KINDS (the
+measured misses: a vaccine or injection given, a test placed, read or
+resulted, a visit listed by date on a log or statement). Anything else (a page missing, named twice or not shown, a class not listed,
 ``complete`` not true) is UNPARSED, and the stage asks once more. Code acts
-only on the class: a ``dated_record`` page is written again by the writer,
-which is never shown the dates.
+only on the class: a ``dated_record`` page goes to the extra writing pass
+(``stages/update_uncited_write``), shown the dates and kinds read here; an
+``unsure`` page is recorded and goes nowhere.
 """
 
 from __future__ import annotations
@@ -32,8 +36,15 @@ from ..prompts import load
 from . import review_pages as RV
 
 PROMPT = "uncited-read-system"
-CONTINUATION, NON_RECORD, DUPLICATE, DATED = "continuation", "non_record", "duplicate", "dated_record"
-CLASSES = (CONTINUATION, NON_RECORD, DUPLICATE, DATED)
+CONTINUATION, NON_RECORD, DUPLICATE, DATED, UNSURE = (
+    "continuation",
+    "non_record",
+    "duplicate",
+    "dated_record",
+    "unsure",
+)
+CLASSES = (CONTINUATION, NON_RECORD, DUPLICATE, DATED, UNSURE)
+KINDS = ("vaccine_or_injection", "test", "visit_on_log")
 _DATE = re.compile(r"\d{2}/\d{2}/\d{4}")
 
 
@@ -59,6 +70,7 @@ class Answer:
     entry: str = ""
     of: int | None = None
     dates: tuple[str, ...] = ()
+    kinds: tuple[str, ...] = ()
 
 
 def request(run: Run, context: list[str], cfg: Any, images: RV.Images, modes: Any) -> tuple[str, list[dict[str, Any]]]:
@@ -110,11 +122,17 @@ def _answer(row: Any, shown: set[int]) -> Answer:
             raise Unparsed(f"page {page}: a duplicate names no other page")
         return Answer(page, klass, of=of)
     if klass == DATED:
-        dates = row.get("dates") or []
-        if not isinstance(dates, list) or not all(isinstance(d, str) and _DATE.fullmatch(d) for d in dates):
-            raise Unparsed(f"page {page}: dates are not MM/DD/YYYY")
-        return Answer(page, klass, dates=tuple(dates))
+        return _dated(row, page)
     return Answer(page, klass)
+
+
+def _dated(row: dict[str, Any], page: int) -> Answer:
+    dates, kinds = row.get("dates"), row.get("kinds")
+    if not isinstance(dates, list) or not dates or not all(isinstance(d, str) and _DATE.fullmatch(d) for d in dates):
+        raise Unparsed(f"page {page}: a dated record names no MM/DD/YYYY date")
+    if not isinstance(kinds, list) or not kinds or not all(k in KINDS for k in kinds):
+        raise Unparsed(f"page {page}: a dated record names no kind of {KINDS}")
+    return Answer(page, DATED, dates=tuple(dates), kinds=tuple(dict.fromkeys(kinds)))
 
 
 def parse(text: str, run: Run) -> dict[int, Answer]:

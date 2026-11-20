@@ -61,6 +61,18 @@ def update_review_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Prici
     return update_review.projected_usd(slug_dir, unit, cfg, pricing)
 
 
+def update_uncited_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:
+    """The update's uncited-page stage: its reads and its extra writing pass."""
+    from ..stages import update_uncited_cost
+
+    return update_uncited_cost.projected_usd(slug_dir, unit, cfg, pricing)
+
+
+#: The stages priced from this matter's own artifacts by one function of
+#: (slug dir, unit, firm config, rate card), for ``driver._projection``.
+BY_STAGE = {"update_review": update_review_usd, "update_uncited": update_uncited_usd}
+
+
 def expected_finish(drv: Any, st: Any, extracted: Path) -> None:
     """The run's expected finish, written once after extract (``eta.stamp``);
     a dry run or a rehearsal writes none."""

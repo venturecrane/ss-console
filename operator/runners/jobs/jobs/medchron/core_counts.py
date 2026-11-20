@@ -94,12 +94,32 @@ def _entry_read(path: Path) -> dict[str, int]:
     return {"entry_read_applied": _num(rec.get("applied")), "entry_read_recorded": _num(rec.get("recorded"))}
 
 
+#: The uncited-page stage's record (``stages/update_uncited``): what it found,
+#: sent to the extra pass and wrote, and what it left (it never holds).
+UNCITED_COUNTS = {
+    "uncited": "uncited_pages",
+    "open": "uncited_read_pages",
+    "routed": "uncited_routed",
+    "entries_written": "uncited_entries_written",
+    "unclassed": "uncited_unclassed",
+    "still_uncited": "uncited_still_uncited",
+}
+
+
+def _uncited(path: Path) -> dict[str, int]:
+    rec = _read(path)
+    out = {name: _num(rec.get(key)) for key, name in UNCITED_COUNTS.items()}
+    out["uncited_unsure"] = _num((rec.get("classed") or {}).get("unsure"))
+    return out
+
+
 def derived(job_dir: str | Path) -> dict[str, int]:
     """The ``checks`` counts for this job, summed over its units; {} for a
     job with no update files and no entry-read record."""
     total: dict[str, int] = {}
     units = [_unit(ud) for ud in sorted(Path(job_dir).glob("data/*/runs/*/update"))]
     units += [_entry_read(p) for p in sorted(Path(job_dir).glob("data/*/runs/*/entry_read.json"))]
+    units += [_uncited(p) for p in sorted(Path(job_dir).glob("data/*/runs/*/uncited_pages.json"))]
     for counts in units:
         for k, n in counts.items():
             total[k] = total.get(k, 0) + n

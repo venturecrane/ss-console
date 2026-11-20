@@ -145,12 +145,10 @@ class Asker:
     model: str
     d: Path
     replay: bool
+    stage: str = STAGE  # the ledger's stage name of every call (``update_repeats`` asks through this too)
     calls: int = 0
     pending: list[str] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
-    #: The ledger's stage name for these calls (the update's uncited-page
-    #: reader shares this machinery under its own name, ``stages/update_uncited``).
-    stage: str = STAGE
 
     def _saved(self, name: str, kind: str, h: str, valid: Valid | None) -> str | None:
         f = self.d / f"{name}.{kind}.json"

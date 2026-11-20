@@ -327,8 +327,8 @@ class Driver:
         if stage.name == "audit":  # the claims still to verify (``projection``)
             n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit)
             return None if n is None else n * self.limits.usd_per_audit_claim
-        if stage.name == "update_review":
-            return projection.update_review_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
+        if (by_stage := projection.BY_STAGE.get(stage.name)) is not None:  # update_review, update_uncited
+            return by_stage(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
         return None
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:

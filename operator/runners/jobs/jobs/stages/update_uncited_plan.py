@@ -10,9 +10,18 @@ base chunks count, never the extra chunks this stage wrote: their entries
 must not change which pages are uncited, or a resume would route a
 different set.
 
-Code settles, with its reason, what code can know (``SETTLED``); every other
-uncited page goes to the reader, in runs of at most ``RUN_PAGES`` adjacent
-pages of one document.
+Code settles, with its reason, what code can know (``SETTLED``). Before any
+request, ``prefilter`` settles two more ($0): a page whose trusted text layer
+(``page_mode``: native, not a form, a grid or a result) prints no date
+outside a print, fax or as-of header line (``no_date``), and a page that is an
+exact copy, by its words or its picture, of an uncited page already kept for
+the reader (``duplicate_uncited``: it is read once). Every other uncited page
+goes to the reader, in runs of at most ``RUN_PAGES`` adjacent pages of one
+document.
+
+LIMIT: a page some entry cites is never examined here, though it may hold
+dated rows the entry does not chart (a real update cited 2 of 20
+immunization rows on one page).
 """
 
 from __future__ import annotations
@@ -23,7 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..medchron import pages_record as PR
+from ..medchron import page_mode as PM, pages_record as PR
+from ..medchron.audit.page_text import PageIndex
 from ..medchron.update import pageid_io as PG, select as S
 from ..medchron.update.billing_page import is_billing
 from .assemble import CITE, CITE_NOPAGE, FILE_HEADER, MAP_FILE, Resolver, parse_maps, section
@@ -47,9 +57,18 @@ TRUNCATED, NAMED_UNREAD, BILLING, BLANK, DELIVERED_COPY, CITED_COPY = (
     "delivered_copy",
     "cited_copy",
 )
+NO_DATE, DUP_UNCITED = "no_date", "duplicate_uncited"
 #: Reasons code settles a page by, without a model. ``truncated``: the
 #: chunk's map ran out and ``repair_truncated`` reads it again.
-SETTLED = (TRUNCATED, NAMED_UNREAD, BILLING, BLANK, DELIVERED_COPY, CITED_COPY)
+SETTLED = (TRUNCATED, NAMED_UNREAD, BILLING, BLANK, DELIVERED_COPY, CITED_COPY, NO_DATE, DUP_UNCITED)
+#: Any written date (wider than MM/DD/YYYY on purpose: a page settles only when it has none).
+_ANY_DATE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b")
+#: A line whose date is the printout's, never care's.
+_HEADER = re.compile(
+    r"(?i)\b(printed|print date|printed on|fax(ed)?|as of|generated|run date|report date|page \d+ of)\b"
+)
+#: A page's words are compared as a copy only when it carries at least this many characters of them.
+DUP_MIN_CHARS = 40
 _EXHIBIT = re.compile(r"^Exhibit (\d+) - ")
 _ALNUM = re.compile(r"[A-Za-z0-9]")
 Page = tuple[int, int]  # (exhibit, page)
@@ -76,6 +95,7 @@ class Sweep:
     settled: dict[Page, str] = field(default_factory=dict)
     open: list[Page] = field(default_factory=list)
     context: dict[int, list[str]] = field(default_factory=dict)  # exhibit -> date | provider lines
+    settler: Any = None
 
     @property
     def uncited(self) -> int:
@@ -272,9 +292,9 @@ def sweep(slug_dir: Path, unit: str, extras: dict[int, str]) -> Sweep:
     base = base_chunks(d, extras)
     held, trunc = _held(d, base, docs)
     got, billing, context = _scan(d, maps_of(d, base), docs, held)
-    sw = Sweep(docs, held, got, context=context)
-    truncated = _chunk_pages(d, trunc, docs)
     settler = _Settler(slug_dir, d, docs, got, billing)
+    sw = Sweep(docs, held, got, context=context, settler=settler)
+    truncated = _chunk_pages(d, trunc, docs)
     for x, p in sorted(held - got):
         why = TRUNCATED if (x, p) in truncated else settler.reason(x, p)
         if why is None:
@@ -294,3 +314,68 @@ def runs(pages: list[Page]) -> list[tuple[int, tuple[int, ...]]]:
         else:
             out.append((x, [p]))
     return [(x, tuple(ps)) for x, ps in out]
+
+
+def dated_outside_headers(text: str) -> bool:
+    """A date is printed on a line that is not a print, fax or as-of header."""
+    return any(_ANY_DATE.search(ln) and not _HEADER.search(ln) for ln in text.splitlines())
+
+
+def modes_for(slug_dir: Path, unit: str, docs: dict[int, Doc]) -> PM.Modes:
+    """The page rule over the new exhibits as the writer read them: the page
+    index's exhibit-to-file rows built here, since ``page_map.json`` is written
+    later, by ``update_collect``. Every page a picture when it cannot open."""
+    from .update_review_io import page_counts
+
+    n = page_counts(slug_dir / "out" / unit)
+    rows = [
+        {
+            "exhibit": x,
+            "total_pages": n(x),
+            "files": [{"file": doc.name, "id": doc.doc_id, "start_page": 1, "pages": n(x)}],
+        }
+        for x, doc in docs.items()
+    ]
+    try:
+        return PM.Modes(PageIndex(slug_dir, unit, min_chars=PM.TEXT_MIN_CHARS, page_map=rows))
+    except Exception:  # noqa: BLE001 - an index that cannot open shows every page as a picture
+        return PM.Modes(None)
+
+
+def _words(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def prefilter(sw: Sweep, modes: PM.Modes) -> None:
+    """Settle, before any request, a trusted text page with no dated line
+    (``no_date``) and an exact copy of an uncited page already kept (``duplicate_uncited``)."""
+    kept: list[Page] = []
+    words: set[str] = set()
+    for x, p in sw.open:
+        m = modes(x, p)
+        if m.kind == PM.TEXT and m.text and not dated_outside_headers(m.text):
+            sw.settled[(x, p)] = NO_DATE
+            continue
+        key = _words(sw.settler.text(x, p)) if sw.settler is not None else ""
+        if (len(key) >= DUP_MIN_CHARS and key in words) or _picture_copy(sw, x, p, set(kept)):
+            sw.settled[(x, p)] = DUP_UNCITED
+            continue
+        if len(key) >= DUP_MIN_CHARS:
+            words.add(key)
+        kept.append((x, p))
+    sw.open = kept
+
+
+def _picture_copy(sw: Sweep, x: int, p: int, kept: set[Page]) -> bool:
+    st = sw.settler
+    if st is None:
+        return False
+    hit = (st.ident.pages.get(st.docs[x].doc_id) or {}).get(p)
+    other = st.by_id.get(hit.other) if hit is not None and hit.exact else None
+    return other is not None and hit is not None and (other, hit.page) in kept
+
+
+def accounted(d: Path, maps: list[str], docs: dict[int, Doc], held: set[Page]) -> set[Page]:
+    """Every page an entry cites or a BILLING-DATES line names, in these maps."""
+    got, billing, _ = _scan(d, maps, docs, held)
+    return got | billing

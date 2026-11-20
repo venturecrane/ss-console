@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 import pytest
 
-from jobs.medchron import dag
+from jobs.medchron import core_counts, dag, prompts
 from jobs.medchron.update import body as B, collect as C, uncited_read as UR
 from jobs.stages import assemble, compose, entry_audit_io as IO
 from jobs.stages import update_uncited as UU, update_uncited_plan as UP, update_uncited_write as UW
@@ -71,7 +71,8 @@ def reader_all(klass: str = UR.DATED) -> Callable[[str], str]:
 
     def reply(text: str) -> str:
         pages = [int(p) for p in re.findall(r"^Exhibit \d+ p\. (\d+):", text, re.M)]
-        rows = [{"page": p, "class": klass, **({"dates": ["10/01/2018"]} if klass == UR.DATED else {})} for p in pages]
+        more = {"dates": ["10/01/2018"], "kinds": ["vaccine_or_injection"]} if klass == UR.DATED else {}
+        rows = [{"page": p, "class": klass, **more} for p in pages]
         return json.dumps({"pages": rows, "complete": True})
 
     return reply
@@ -128,18 +129,25 @@ def _chunk(rd: Path, i: int, rows: list[tuple[str, str, list[int], list[str]]]) 
 
 @pytest.fixture
 def scene(job_dir: Path, firm_config_path: Path, data_root: Path):
-    def make(client: Client | None = None, maps: list[str] | None = None, docs3: bool = False, fresh: bool = True):
+    def make(
+        client: Client | None = None,
+        maps: list[str] | None = None,
+        docs3: bool = False,
+        fresh: bool = True,
+        doc2: list[str] | None = None,
+    ):
         log: list[str] = []
         sr = _sr(job_dir, firm_config_path, data_root, client, log)
         sd, rd = sr.slug_dir, sr.slug_dir / "runs" / "alpha"
         if fresh:
             rd.mkdir(parents=True, exist_ok=True)
-            rows = [_doc(sd, "n2", T2, DOC2)] + ([_doc(sd, "n3", T3, DOC3)] if docs3 else [])
+            pages2 = doc2 or DOC2
+            rows = [_doc(sd, "n2", T2, pages2)] + ([_doc(sd, "n3", T3, DOC3)] if docs3 else [])
             (sd / "units").mkdir(exist_ok=True)
             (sd / "units" / "alpha.json").write_text(json.dumps(rows))
             ink = [{"doc": r["id"], "page": p, "evidence": {"inked": True}} for r in rows for p in range(1, 5)]
             (rd / "pages.jsonl").write_text("".join(json.dumps(r) + "\n" for r in ink))
-            _chunk(rd, 1, [(T2, "n2", [1, 2, 3, 4], DOC2)])
+            _chunk(rd, 1, [(T2, "n2", [1, 2, 3, 4], pages2)])
             if docs3:
                 _chunk(rd, 2, [(T3, "n3", [1], DOC3)])
             for i, m in enumerate(maps or [BASE_MAP], 1):
@@ -154,25 +162,31 @@ def _rec(rd: Path) -> dict[str, Any]:
     return json.loads((rd / UU.RECORD).read_text())
 
 
+DATED_ON = {"dates": ["10/01/2018"], "kinds": ["vaccine_or_injection"]}
+
+
 def _fax_is_non_record(text: str) -> str:
     pages = [int(p) for p in re.findall(r"^Exhibit \d+ p\. (\d+):", text, re.M)]
     rows = [
-        {"page": p, "class": UR.NON_RECORD} if p == 4 else {"page": p, "class": UR.DATED, "dates": []} for p in pages
+        {"page": p, "class": UR.NON_RECORD} if p == 4 else {"page": p, "class": UR.DATED, **DATED_ON} for p in pages
     ]
     return json.dumps({"pages": rows, "complete": True})
 
 
 # ---- the thin path -------------------------------------------------------------------
-def test_a_dated_printout_block_no_entry_cited_is_written_by_the_existing_writer(scene) -> None:
+def test_a_dated_printout_block_no_entry_cited_is_written_by_the_extra_pass(scene) -> None:
     client = Client(read=_fax_is_non_record)
     sr, rd, log = scene(client)
     assert UU.run(sr) == 0, log
     assert client.calls == ["read", "write"]  # one run of pages 2-4, one extra chunk
-    wrote = client.requests[1]
-    assert wrote["system"][0]["text"] == client.requests[1]["system"][0]["text"]
-    assert "ENTRIES" in wrote["system"][0]["text"] and "UNCITED PAGES" not in wrote["system"][0]["text"]
-    assert re.findall(r"\[p\.(\d+)\]", wrote["messages"][0]["content"]) == ["2", "3"]
-    assert "10/01/2018" not in json.dumps(UW.read_extras(rd)) and (rd / "map-02.md").is_file()
+    system, content = client.requests[1]["system"][0]["text"], client.requests[1]["messages"][0]["content"]
+    # its own narrow prompt, never the writer's
+    assert "WRITE ONE ENTRY FOR EACH DATED ITEM" in system and "pages the first writing pass wrote nothing" in system
+    assert system != prompts.load("map-system", sr.cfg)
+    # shown what the reader found and what is already charted, and only the routed pages
+    assert "- page 2: dates 10/01/2018; kinds vaccine_or_injection" in content
+    assert "- 03/02/2019 | Example Family Clinic" in content
+    assert re.findall(r"\[p\.(\d+)\]", content) == ["2", "3"] and (rd / "map-02.md").is_file()
     rec = _rec(rd)
     assert rec["uncited"] == 3 and rec["classed"] == {UR.DATED: 2, UR.NON_RECORD: 1}
     assert rec["routed"] == 2 and rec["extra_chunks"] == 1 and rec["entries_written"] == 2
@@ -181,7 +195,7 @@ def test_a_dated_printout_block_no_entry_cited_is_written_by_the_existing_writer
 
 def test_a_page_that_continues_an_entry_and_holds_a_dated_record_is_routed(scene) -> None:
     def reply(text: str) -> str:
-        rows = [{"page": p, "class": UR.DATED, "dates": ["09/03/2018"]} for p in (2, 3)]
+        rows = [{"page": p, "class": UR.DATED, "dates": ["09/03/2018"], "kinds": ["test"]} for p in (2, 3)]
         rows.append({"page": 4, "class": UR.CONTINUATION, "entry": "03/02/2019 | Example Family Clinic"})
         return json.dumps({"pages": rows, "complete": True})
 
@@ -299,7 +313,7 @@ def test_a_replay_answers_the_reader_and_the_writer_from_files_at_no_cost(scene,
     assert UU.run(sr) == UU.EXIT_PENDING, log
     req = json.loads((rd / UW.DIR / "x2-p2-4.read1.request.json").read_text())
     assert [b for b in req["content"] if b["type"] == "image"][0] == {"type": "image", "exhibit": 2, "page": 2}
-    rows = [{"page": p, "class": UR.DATED, "dates": []} for p in (2, 3, 4)]
+    rows = [{"page": p, "class": UR.DATED, **DATED_ON} for p in (2, 3, 4)]
     answer = {"hash": req["hash"], "text": json.dumps({"pages": rows, "complete": True}), "stop_reason": "end_turn"}
     (rd / UW.DIR / "x2-p2-4.read1.json").write_text(json.dumps(answer))
     assert UU.run(sr) == UU.EXIT_PENDING, log
@@ -310,20 +324,47 @@ def test_a_replay_answers_the_reader_and_the_writer_from_files_at_no_cost(scene,
     assert never.calls == [] and _rec(rd)["entries_written"] == 3
 
 
-# ---- the holds ---------------------------------------------------------------------------
-def test_a_dated_record_the_extra_pass_writes_no_entry_for_holds_naming_its_pages(scene) -> None:
+# ---- the stage never holds -----------------------------------------------------------------
+def test_a_page_the_extra_pass_writes_nothing_for_is_recorded_and_the_job_goes_on(scene) -> None:
     client = Client(write=lambda _t: map_text([], f"=== FILE: {T2}.pdf (fileId n2) === nothing extractable: none"))
     sr, rd, log = scene(client)
-    assert UU.run(sr) == UU.EXIT_STILL_UNCITED, log
-    assert _rec(rd)["held"] == [{"exhibit": 2, "pages": [2, 3, 4]}] and client.calls.count("write") == 1
-    assert UU.EXITS[UU.EXIT_STILL_UNCITED][0] == "held"
+    assert UU.run(sr) == 0, log
+    rec = _rec(rd)
+    assert rec["still_uncited"] == 3 and rec["still_uncited_pages"] == [{"exhibit": 2, "pages": [2, 3, 4]}]
+    assert client.calls.count("write") == 1 and set(UU.EXITS) == {UU.EXIT_DEFECT, UU.EXIT_INFRA, UU.EXIT_PENDING}
+    assert core_counts.derived(sr.slug_dir.parents[1])["uncited_still_uncited"] == 3  # the triage reads it
 
 
-def test_a_reply_unreadable_after_one_retry_holds(scene) -> None:
+def test_a_reply_unreadable_after_one_retry_is_recorded_unclassed_and_the_job_goes_on(scene) -> None:
     client = Client(read=lambda _t: '{"pages": [], "complete": true}')
     sr, rd, log = scene(client)
-    assert UU.run(sr) == UU.EXIT_UNREAD, log
-    assert client.calls == ["read", "read"] and _rec(rd)["unread"][0]["pages"] == [2, 3, 4]
+    assert UU.run(sr) == 0, log
+    rec = _rec(rd)
+    assert client.calls == ["read", "read"] and rec["unclassed"] == 3 and rec["routed"] == 0
+    assert rec["unclassed_pages"] == [{"exhibit": 2, "pages": [2, 3, 4]}]
+    assert core_counts.derived(sr.slug_dir.parents[1])["uncited_unclassed"] == 3
+
+
+def test_an_unsure_page_is_recorded_and_never_sent_to_the_extra_pass(scene) -> None:
+    client = Client(read=reader_all(UR.UNSURE))
+    sr, rd, log = scene(client)
+    assert UU.run(sr) == 0, log
+    assert client.calls == ["read"] and _rec(rd)["classed"] == {UR.UNSURE: 3} and _rec(rd)["routed"] == 0
+    assert core_counts.derived(sr.slug_dir.parents[1])["uncited_unsure"] == 3
+
+
+def test_a_billing_reply_from_the_extra_pass_accounts_for_the_page(scene) -> None:
+    def billing_only(_t: str) -> str:
+        body = map_text([], f"=== FILE: {T2}.pdf (fileId n2) === billing-dates: 3")
+        lines = "\n".join(f"2018-09-0{p} | Example Clinic | (FILE: {T2}.pdf, p. {p})" for p in (2, 3, 4))
+        return body.replace("## BILLING-DATES\nnone in this chunk", "## BILLING-DATES\n" + lines)
+
+    client = Client(write=billing_only)
+    sr, rd, log = scene(client)
+    assert UU.run(sr) == 0, log
+    assert _rec(rd)["still_uncited"] == 0
+    again = Client(read=lambda _t: "never", write=lambda _t: "never")
+    assert UU.run(scene(again, fresh=False)[0]) == 0 and again.calls == []  # a resume pays nothing and holds nothing
 
 
 def test_a_network_failure_is_the_infrastructure_exit(scene) -> None:
@@ -341,8 +382,13 @@ def test_the_reply_parser_takes_one_class_per_page_shown() -> None:
     run = UR.Run(2, (2, 3))
     ok = {"pages": [{"page": 2, "class": "non_record"}, {"page": 3, "class": "duplicate", "of": 2}], "complete": True}
     assert UR.parse(json.dumps(ok), run)[3].of == 2
+    unsure = {"pages": [{"page": 2, "class": "unsure"}, ok["pages"][1]], "complete": True}
+    assert UR.parse(json.dumps(unsure), run)[2].klass == UR.UNSURE
     for bad in (
         {**ok, "complete": False},
+        {"pages": [{"page": 2, "class": "dated_record", "dates": [], "kinds": ["test"]}, ok["pages"][1]]},
+        {"pages": [{"page": 2, "class": "dated_record", "dates": ["01/02/2019"]}, ok["pages"][1]], "complete": True},
+        {"pages": [{"page": 2, "class": "dated_record", "dates": ["01/02/2019"], "kinds": ["rx"]}, ok["pages"][1]]},
         {"pages": ok["pages"][:1], "complete": True},
         {"pages": [*ok["pages"], {"page": 9, "class": "non_record"}], "complete": True},
         {"pages": [{"page": 2, "class": "maybe"}, ok["pages"][1]], "complete": True},
@@ -360,10 +406,94 @@ def test_runs_are_adjacent_pages_of_one_exhibit_and_bounded() -> None:
 #: The thin path's reader request, hashed as its saved answer is keyed
 #: (``entry_audit_io.request_hash``): a change to the prompt, the page blocks or
 #: the context lines moves it, and every saved answer of a proof run with it.
-PINNED_READ = "f6ca1a555e1115dd920e7ab5fc245b294f2e4eabce3cabbbbc2e69baf87aa577"
+PINNED_READ = "ce70415ced6d3d9090c6907cb5ba5a17c5800fdec8f83a3c59beef8643a0c8ca"
 
 
 def test_the_reader_request_is_pinned(scene) -> None:
     sr, rd, log = scene(Client(read=_fax_is_non_record))
     assert UU.run(sr) == 0, log
     assert json.loads((rd / UW.DIR / "x2-p2-4.read1.json").read_text())["hash"] == PINNED_READ
+
+
+# ---- the $0 pre-filter (E), billing statements (F), the price (G) ------------------------
+def _long(*lines: str) -> str:
+    """A page long enough for its text layer to be trusted (``page_mode.TEXT_MIN_CHARS``)."""
+    filler = "The list continues with entries reviewed with the patient at the front desk on arrival."
+    return "\n".join([*lines, filler, filler, filler])
+
+
+PROBLEM_LIST = _long("Problem list. Seasonal allergies. Mild intermittent asthma. Low back strain, resolved.")
+PRINTED_ON = _long(
+    "Medication list. Printed on 01/05/2020 by the front desk.", "Cetirizine daily. Albuterol as needed."
+)
+NOTE_DATED = _long("Office note. Seen 03/02/2019 for a sore throat. Throat exam red without exudate.")
+
+
+def test_a_trusted_text_page_with_no_dated_line_is_settled_with_no_read(scene) -> None:
+    client = Client(read=reader_all(UR.NON_RECORD))
+    sr, rd, log = scene(client, doc2=[VISIT, PROBLEM_LIST, PRINTED_ON, NOTE_DATED])
+    modes = UP.modes_for(sr.slug_dir, "alpha", UP.docs_of(sr.slug_dir, "alpha"))
+    assert [modes(2, p).kind for p in (2, 3, 4)] == ["text", "text", "text"]  # a trusted layer on all three
+    modes.close()
+    assert UU.run(sr) == 0, log
+    rec = _rec(rd)
+    # the problem list and the medication list "printed on" a date settle; the dated note is read
+    assert rec["settled_by_code"] == {UP.NO_DATE: 2} and rec["open"] == 1
+    assert client.calls == ["read"] and "Exhibit 2 p. 4" in client.requests[0]["messages"][0]["content"][1]["text"]
+
+
+def test_an_exact_copy_of_another_uncited_page_is_read_once(scene) -> None:
+    client = Client(read=reader_all(UR.NON_RECORD))
+    sr, rd, log = scene(client, doc2=[VISIT, IMMS, IMMS + " ", TB])
+    assert UU.run(sr) == 0, log
+    assert _rec(rd)["settled_by_code"] == {UP.DUP_UNCITED: 1} and _rec(rd)["open"] == 2
+
+
+def test_a_scanned_billing_statement_the_writer_listed_is_accounted_for_with_no_read(scene) -> None:
+    listed = BASE_MAP.replace(
+        "## BILLING-DATES\nnone in this chunk",
+        "## BILLING-DATES\n"
+        + "\n".join(f"2018-09-0{p} | Example Clinic | (FILE: {T2}.pdf, p. {p})" for p in (2, 3, 4)),
+    )
+    client = Client()
+    sr, rd, log = scene(client, maps=[listed], doc2=[VISIT, "", "", ""])  # no text layer: a scan
+    assert UU.run(sr) == 0, log
+    assert client.calls == [] and _rec(rd)["settled_by_code"] == {UP.BILLING: 3}
+
+
+def test_a_scanned_statement_the_reader_dates_goes_to_the_extra_pass_under_the_visit_log_rule(scene) -> None:
+    def statement(text: str) -> str:
+        pages = [int(p) for p in re.findall(r"^Exhibit \d+ p\. (\d+):", text, re.M)]
+        rows = [{"page": p, "class": UR.DATED, "dates": ["09/03/2018"], "kinds": ["visit_on_log"]} for p in pages]
+        return json.dumps({"pages": rows, "complete": True})
+
+    client = Client(read=statement)
+    sr, rd, log = scene(client, doc2=[VISIT, "", "", ""])
+    assert UU.run(sr) == 0, log
+    content = client.requests[1]["messages"][0]["content"]
+    assert (
+        "kinds visit_on_log" in content
+        and "a visit or session listed by its date" in client.requests[1]["system"][0]["text"]
+    )
+    assert _rec(rd)["routed_kinds"] == {"visit_on_log": 3}
+
+
+def test_the_driver_prices_the_stage_with_its_reads_and_its_extra_pass(scene, pricing_path) -> None:
+    from jobs import budget
+    from jobs.medchron import driver, projection
+    from jobs.stages import update_uncited_cost as COST
+
+    sr, rd, log = scene(Client())
+    pricing = budget.Pricing.load(pricing_path)
+    reads_only = COST.projected_usd(sr.slug_dir, "alpha", sr.cfg, pricing)
+    assert reads_only is not None and reads_only > 0
+    assert projection.update_uncited_usd(sr.slug_dir, "alpha", sr.cfg, pricing) == reads_only
+    drv = object.__new__(driver.Driver)  # the driver's own projection branch, with only what it reads set
+    drv.slug_dir, drv.cfg, drv.pricing, drv.job = sr.slug_dir, sr.cfg, pricing, sr.job
+    stage = next(s for s in dag.stages(update=True) if s.name == "update_uncited")
+    assert stage.paid and drv._projection(stage, dag.Ctx(sr.job, sr.unit, ""), rd) == reads_only
+    # once the read has answered and routed nothing, only nothing more is priced
+    assert UU.run(scene(Client(read=reader_all(UR.NON_RECORD)), fresh=False)[0]) == 0
+    assert COST.projected_usd(sr.slug_dir, "alpha", sr.cfg, pricing) == 0.0
+    # a picture is priced at the measured 2,650 tokens
+    assert COST.PICTURE_TOKENS == 2_650

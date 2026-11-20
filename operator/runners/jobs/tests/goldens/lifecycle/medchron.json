@@ -6222,58 +6222,6 @@
    ],
    "wiped": false
   },
-  "running/exit.update.update_uncited.1": {
-   "code": "update_held",
-   "ended_while_away": false,
-   "ending": "held",
-   "filed_sets": 0,
-   "firm_messages": 0,
-   "firm_owed": 0,
-   "owner": "smd",
-   "paged": [
-    "update_held"
-   ],
-   "record_late": false,
-   "run": {
-    "by": "code",
-    "code": "update_held",
-    "event": "stop",
-    "v": 1
-   },
-   "second": null,
-   "state": "held",
-   "told_while_away": 0,
-   "way_out": [
-    "update_decide"
-   ],
-   "wiped": false
-  },
-  "running/exit.update.update_uncited.2": {
-   "code": "update_held",
-   "ended_while_away": false,
-   "ending": "held",
-   "filed_sets": 0,
-   "firm_messages": 0,
-   "firm_owed": 0,
-   "owner": "smd",
-   "paged": [
-    "update_held"
-   ],
-   "record_late": false,
-   "run": {
-    "by": "code",
-    "code": "update_held",
-    "event": "stop",
-    "v": 1
-   },
-   "second": null,
-   "state": "held",
-   "told_while_away": 0,
-   "way_out": [
-    "update_decide"
-   ],
-   "wiped": false
-  },
   "running/exit.update.update_uncited.3": {
    "code": "update_uncited",
    "ended_while_away": false,
@@ -7507,7 +7455,7 @@
    "wiped": false
   }
  },
- "count": 283,
+ "count": 281,
  "not_applicable": {
   "delivered/cap_hold": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
   "delivered/deploy_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",

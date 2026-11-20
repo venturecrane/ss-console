@@ -116,10 +116,14 @@ def page_traits(page: Any) -> dict[str, Any]:
 
 
 class PageIndex:
-    def __init__(self, slug_dir: Path, unit: str, min_chars: int = 80) -> None:
+    def __init__(self, slug_dir: Path, unit: str, min_chars: int = 80, page_map: list[Any] | None = None) -> None:
+        """`page_map`: the exhibit-to-file rows, given by a stage that runs before
+        ``update_collect`` writes ``page_map.json`` (``stages/update_uncited``)."""
         self.slug_dir, self.unit, self.min_chars = slug_dir, unit, min_chars
         self.out = slug_dir / "out" / unit
-        self.page_map = json.loads((self.out / "page_map.json").read_text(encoding="utf-8"))
+        self.page_map: list[Any] = (
+            page_map if page_map is not None else json.loads((self.out / "page_map.json").read_text(encoding="utf-8"))
+        )
         unit_files = json.loads((slug_dir / "units" / f"{unit}.json").read_text(encoding="utf-8"))
         self.by_name = {f["name"]: f for f in unit_files}
         self.by_id = {f["id"]: f for f in unit_files}

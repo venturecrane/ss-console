@@ -1,14 +1,26 @@
 """The uncited-page stage's extra writing pass (``stages/update_uncited``):
-the pages the reader called a dated record, written by the EXISTING writer.
+the pages the reader called a dated record, written again.
+
+WHY ITS OWN PROMPT (``prompts/uncited-write-system.md``). The measured
+failure is that the writer, with its own prompt, declines these pages again.
+This pass is told what it is shown (pages the first pass wrote nothing from,
+on each of which a reader found dated items), the only kinds to write (a
+vaccine or injection given; a test placed, read or resulted; a visit listed
+by date on a log or statement with no entry for that date and provider), and
+what never to write (a prescription or medication-list row, a problem-list
+row, a print, fax or as-of date, a billing amount, an appointment not kept, a
+history line with no date). Each request opens with the dates and kinds the
+reader found, page by page, and the date and provider lines of the entries
+the chronology already holds for that document, so a charted visit is not
+written twice. Its reply is the writer's own five-block shape.
 
 The routed pages of each document are cut into requests exactly as ``map``
 cuts a document (``chunking.build_chunks`` with ``windows.cut``; a routed
 page whose neighbour is not routed carries that neighbour as a context block,
 ``select.selected_text``), and each request is a writer ``Chunk`` numbered
-after the writer's own chunks, composed by the writer's own ``_Composer``
-with the writer's prompt (``map-system``). Its map file is then one more
-``map-XX.md``, so repair, assemble and everything after it read its entries
-like any other. The reader's dates are never shown to the writer.
+after the writer's own chunks, composed by the writer's own ``_Composer``.
+Its map file is then one more ``map-XX.md``, so repair, assemble and
+everything after it read its entries like any other.
 
 The numbers and text shas written are recorded (``extras.json``) BEFORE any
 call, so a resume keeps a chunk whose text and map are unchanged and pays for
@@ -19,7 +31,7 @@ chunk without a map has its request written to
 ``runs/<unit>/uncited_read/writer/map-XX.request.json`` ({chunk, sha,
 answer, model, max_tokens, system, content}); the reply is written by hand
 (or by an agent) to the file its ``answer`` field names,
-``map-XX.<sha12>.answer.md``, in the writer's five-block shape. The next run
+``map-XX.<sha12>.answer.md``, in the five-block shape the prompt asks for. The next run
 takes that file as the chunk's map, records a usage row with that sha, and
 goes on; a chunk whose text changed has a new sha and so a new answer name.
 """
@@ -35,8 +47,10 @@ from ..medchron import prompts, windows as WN
 from ..medchron.update import select as S
 from . import compose as C, compose_pool
 from .base import StageRun, append_jsonl, read_json
-from .chunking import build_chunks, chunk_size, sha
-from .update_uncited_plan import Doc, Page
+from .chunking import build_chunks, chunk_size, pieces_pages, sha
+from .update_uncited_plan import Page, Sweep
+
+PROMPT = "uncited-write-system"
 
 DIR = "uncited_read"
 EXTRAS = "extras.json"
@@ -58,10 +72,13 @@ def _write_extras(d: Path, rows: dict[int, str]) -> None:
     p.write_text(json.dumps(body, indent=1), encoding="utf-8")
 
 
-def texts(sr: StageRun, d: Path, docs: dict[int, Doc], routed: list[Page]) -> list[str]:
-    """The extra requests: each routed document's routed pages, cut as ``map`` cuts."""
+def texts(sr: StageRun, d: Path, sw: Sweep, found: dict[Page, Any]) -> list[str]:
+    """The extra requests: each routed document's routed pages, cut as ``map``
+    cuts, each opening with what the reader found on its pages (`found`:
+    page -> its ``uncited_read.Answer``) and the entries already charted."""
     wd = d / DIR / "routed"
     wd.mkdir(parents=True, exist_ok=True)
+    routed, docs = sorted(found), sw.docs
     files = []
     for x in sorted({x for x, _ in routed}):
         doc = docs[x]
@@ -70,7 +87,29 @@ def texts(sr: StageRun, d: Path, docs: dict[int, Doc], routed: list[Page]) -> li
         out = wd / f"{doc.doc_id}.txt"
         out.write_text(S.selected_text(pages, sorted(p for y, p in routed if y == x)), encoding="utf-8")
         files.append({**doc.row, "text_path": str(out)})
-    return build_chunks(files, chunk_size(_max_tokens(sr)), cut=WN.cut) if files else []
+    chunks = build_chunks(files, chunk_size(_max_tokens(sr)), cut=WN.cut) if files else []
+    return [_preamble(c, sw, found) + c for c in chunks]
+
+
+def _preamble(chunk: str, sw: Sweep, found: dict[Page, Any]) -> str:
+    """What the reader found on this request's pages, and the entries already
+    charted for its documents. Pages are named "page N", never ``[p.N]``: a
+    page mark here would read as a page the request holds."""
+    by_name = {doc.name: x for x, doc in sw.docs.items()}
+    lines = ["WHAT THE READER FOUND ON THESE PAGES:"]
+    charted = ["ENTRIES ALREADY IN THE CHRONOLOGY FOR THIS DOCUMENT (date | provider):"]
+    for piece in pieces_pages(chunk):
+        x = by_name.get(str(piece["file"]).strip())
+        if x is None:
+            continue
+        for p in piece["pages"] or []:
+            a = found.get((x, p))
+            if a is not None:
+                lines.append(f"- page {p}: dates {', '.join(a.dates)}; kinds {', '.join(a.kinds)}")
+        charted += [f"- {c}" for c in sw.context.get(x, []) if f"- {c}" not in charted]
+    if len(charted) == 1:
+        charted.append("- none")
+    return "\n".join(lines + [""] + charted) + "\n\n"
 
 
 def _max_tokens(sr: StageRun) -> int:
@@ -120,7 +159,7 @@ def write(sr: StageRun, d: Path, extra: list[str], first: int, replay: bool) -> 
     nums = sorted(numbered)
     if not todo:
         return OK, nums
-    system = prompts.load("map-system", sr.cfg)
+    system = prompts.load(PROMPT, sr.cfg)
     if replay:
         return _replay(sr, d, todo, system), nums
     models = {t: llm.model_for(sr.cfg, t) for t in ("composition", "judgment")}
