@@ -264,7 +264,6 @@ def report(job: Path, unit: str | None = None, firm_config: Path | None = None) 
             "config": used,
             "no_added_entries": True,
             "added_entries": 0,
-            "distinct_visits_merged": 0,
             "new_claim_keys_created": 0,
         }
     md = (job / "runs" / u / "final-chronology.md").read_text(encoding="utf-8")
@@ -281,9 +280,6 @@ def report(job: Path, unit: str | None = None, firm_config: Path | None = None) 
         "no_added_entries": False,
         "stray_lines": {"before": c["stray lines before"], "after": c["stray lines after"]},
         "left_key_changing": c["left_key_changing"],
-        "repeats": {k.split(": ", 1)[1]: v for k, v in sorted(c.items()) if k.startswith("repeats: ")},
-        "repeat_pairs_by_condition": {k[len("pair: ") :]: v for k, v in sorted(c.items()) if k.startswith("pair: ")},
-        "distinct_visits_merged": c["distinct visits merged"],
         "headings": {
             **{w: c[f"headings {w}"] for w in (HD.CITED, HD.SAME_NOTE, HD.NO_TEXT, HD.FAILED)},
             "read on a transcript": c["headings read on a transcript"],
@@ -314,13 +310,9 @@ def carried(base_ents: list[str], updated: Path) -> dict[str, Any]:
 
 
 def _record_only(x: Inputs, o: Outcome) -> dict[str, int]:
-    """The record-only proofs that read only the final set: 13 over its
-    entries and 15 over the reviewed document as it now stands."""
+    """The record-only proof that reads only the final set: 15 over the
+    reviewed document as it now stands (13 is retired, ``proofs_final``)."""
     from .. import graded_proof as GP
-    from . import proofs_final as PF
 
-    got = PF.p13(
-        PF.Inputs([], [], [], [], [], 0, [], {}, o.rows, B.entries_of(o.md)[1], canon=x.canon, page_id=x.page_id)
-    )
     g = GP.check(CL.body_of(o.md), GP.latest_supported(x.audit_rows), headings=x.headings)
-    return dict(got) | GP.codes(g)
+    return dict(GP.codes(g))

@@ -67,10 +67,10 @@ def test_the_wired_stage_sits_between_review_and_assemble_and_is_rehearsable() -
     seq = dag.stages(update=True)
     names = [s.name for s in seq]
     i = names.index("update_final_set")
-    assert names[i - 1] == "update_review" and names[i + 1] == "update_assemble"
+    assert names[i - 2 : i] == ["update_review", "update_repeats"] and names[i + 1] == "update_assemble"
     by = {s.name: s for s in seq}
     fin = by["update_final_set"]
-    assert fin.requires == ("update_review",) and by["update_assemble"].requires == ("update_final_set",)
+    assert fin.requires == ("update_repeats",) and by["update_assemble"].requires == ("update_final_set",)
     assert fin.runner is update_final_set.run and fin.exit_map == update_final_set.EXITS
     assert not fin.paid and not fin.external  # `jobs rehearse --redo update_final_set` is permitted
     # A redo of the review reopens the final set and what reads its document; the final set
@@ -125,7 +125,7 @@ def test_an_update_runs_the_final_set_and_files_no_stray_line(
     proofs = json.loads((sd / "runs" / "alpha" / "update" / "proofs.json").read_text())
     assert proofs["fails"] == []
     assert "11. ok" in proofs["lines"]
-    for n in ("12", "13", "14", "15"):
+    for n in ("12", "14", "15"):
         assert any(ln.startswith(f"{n}. (recorded, never fails the run)") for ln in proofs["lines"]), n
     assert proofs["filed"]["sha256"] and set(proofs["recorded"]) >= {"P15_unsupported_claim", "P15_ungraded_text"}
 
@@ -137,11 +137,11 @@ def _failing(code: str):
 def test_failing_record_only_proofs_are_recorded_and_the_update_still_delivers(
     scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Mutation: proofs 12, 13, 14 and 15 all find something. Each is recorded;
+    """Mutation: proofs 12, 14 and 15 all find something (13 is retired). Each is recorded;
     none fails the run, and the update is filed."""
     job_dir, seat = scene
     _upload_pause(monkeypatch)
-    for n in ("12", "13", "14"):
+    for n in ("12", "14"):
         monkeypatch.setitem(PF.CHECKS, n, _failing(f"P{n}_mutated"))
     real_codes = PF.GP.codes
     monkeypatch.setattr(PF.GP, "codes", lambda res: {**real_codes(res), "P15_unsupported_claim": 1})
@@ -149,11 +149,8 @@ def test_failing_record_only_proofs_are_recorded_and_the_update_still_delivers(
     assert o.outcome == "delivered", o
     proofs = json.loads((data_root / "example-matter" / "runs" / "alpha" / "update" / "proofs.json").read_text())
     assert proofs["fails"] == []
-    assert {
-        k: proofs["recorded"][k] for k in ("P12_mutated", "P13_mutated", "P14_mutated", "P15_unsupported_claim")
-    } == {
+    assert {k: proofs["recorded"][k] for k in ("P12_mutated", "P14_mutated", "P15_unsupported_claim")} == {
         "P12_mutated": 1,
-        "P13_mutated": 1,
         "P14_mutated": 1,
         "P15_unsupported_claim": 1,
     }
@@ -163,12 +160,12 @@ def test_failing_record_only_proofs_are_recorded_and_the_update_still_delivers(
 def test_only_proof_11_of_the_final_proofs_can_fail_an_update(
     scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Every one of proofs 11 to 15 finds something: the update fails on 11
+    """Every one of proofs 11, 12, 14 and 15 finds something: the update fails on 11
     alone, and nothing is filed."""
     job_dir, seat = scene
     _upload_pause(monkeypatch)
-    assert PF.ENFORCE == frozenset({"11"}) and PF.RECORD == frozenset({"12", "13", "14", "15"})
-    for n in ("11", "12", "13", "14"):
+    assert PF.ENFORCE == frozenset({"11"}) and PF.RECORD == frozenset({"12", "14", "15"})
+    for n in ("11", "12", "14"):
         monkeypatch.setitem(PF.CHECKS, n, _failing(f"P{n}_mutated"))
     real_codes = PF.GP.codes
     monkeypatch.setattr(PF.GP, "codes", lambda res: {**real_codes(res), "P15_ungraded_text": 1})
@@ -259,14 +256,15 @@ def _old_dag() -> tuple[dag.Stage, ...]:
     """The update's order before this change: no final set, assemble after the review."""
     out = []
     for s in dag_update.UPDATE_STAGES:
-        if s.name == "update_final_set":
+        if s.name in ("update_repeats", "update_final_set"):
             continue
         if s.name == "update_review":
             s = replace(s, invalidates=())
         if s.name == "update_assemble":
             s = replace(s, requires=("update_review",))
         out.append(s)
-    return tuple(out)
+    names = {s.name for s in out}  # the old order had no repeats read either: nothing reopens it
+    return tuple(replace(s, invalidates=tuple(n for n in s.invalidates if n in names)) for s in out)
 
 
 def _sent_then_resumed(job_dir: Path, data_root: Path, firm: Path, pricing: Path, seat, monkeypatch) -> list[str]:

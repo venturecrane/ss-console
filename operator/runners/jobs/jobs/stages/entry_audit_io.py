@@ -145,6 +145,7 @@ class Asker:
     model: str
     d: Path
     replay: bool
+    stage: str = STAGE  # the ledger's stage name of every call (``update_repeats`` asks through this too)
     calls: int = 0
     pending: list[str] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
@@ -184,14 +185,14 @@ class Asker:
             raise Pending(f"{name}.{kind}")
         try:
             r = self.sr.doorway.call(
-                STAGE,
+                self.stage,
                 model=self.model,
                 system=system,
                 messages=[{"role": "user", "content": content}],
                 max_tokens=max_tokens,
                 stream=True,
                 effort="high",
-                custom_id=re.sub(r"[^A-Za-z0-9_-]", "-", f"{STAGE}-{name}-{kind}")[:64],
+                custom_id=re.sub(r"[^A-Za-z0-9_-]", "-", f"{self.stage}-{name}-{kind}")[:64],
             )
         except LimitHold:
             raise
@@ -313,7 +314,7 @@ def verify_usd(sr: StageRun, proposals: list[EC.Proposal]) -> float | None:
     return priced(pricing, sr.cfg, tin, len(proposals) * VERIFY_OUT_EXPECTED)
 
 
-def check_limits(sr: StageRun, projected_usd: float) -> None:
+def check_limits(sr: StageRun, projected_usd: float, stage: str = STAGE) -> None:
     """The driver's own check before a paid stage (``driver._check_limits``),
     for the verify phase priced from the real findings: the same caps, the
     same spend, the same ``LimitHold`` and so the same cap hold the firm is
@@ -335,4 +336,4 @@ def check_limits(sr: StageRun, projected_usd: float) -> None:
         allowance_cycle_label=job.allowance_cycle_label,
     ).limits()
     spent = paid.budget(pricing, cap, job_mod.usage_ledgers(job)).refresh()
-    limits.check_before_paid(projected_usd=projected_usd, spent_usd=spent, stage=STAGE)
+    limits.check_before_paid(projected_usd=projected_usd, spent_usd=spent, stage=stage)

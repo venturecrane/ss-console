@@ -31,14 +31,14 @@ only go with an entry the step drops on purpose. In order:
    heading's "audited predecessor" could be a different encounter sharing a
    page, and five successive real runs found false failures, so it acts on
    nothing.)
-3. REPEATS (``update/encounter``). An added entry that is one encounter with
-   a delivered entry or another added entry is DROPPED WHOLE only when the
-   other covers it: every value and finding term (``repeats._covered``) and
-   either every run of four words of its body (``encounter.held``) or every
-   page it cites, by picture (``encounter.page_identical``). Otherwise both
-   stay whole and the pair is recorded. A drop that would leave an exhibit
-   uncited is not made (assemble refuses a gap). Nothing is recut: recut
-   text is ungraded.
+REPEATS are no longer this step's (2026-11-20). Its rule dropped an added
+entry whose values and terms another entry carried; a value-and-term match
+cannot tell the same fact reworded from a different fact worded alike, and
+two such rules were broken in review ("no disc herniation" dropped against a
+herniation). The paid ``update_repeats`` stage before this step decides them
+by a reader (``update/repeat_read``, ``repeat_veto``); its date and exhibit
+rules are the two helpers below. ``repeats._covered`` stays: collect's
+``dedupe_new`` uses it.
 
 Outputs, besides the document: ``update/final_rows.jsonl``, one row per
 added claim (or per added entry that has none) with its entry's date, raw
@@ -64,8 +64,7 @@ from pathlib import Path
 from typing import Any
 
 from ..audit import claims as CL
-from . import body as B, encounter as E, entry_edits as EE, heading as HD, repeats as R, uncited as U
-from .values import content_numbers, terms, words
+from . import body as B, encounter as E, entry_edits as EE, heading as HD, uncited as U
 
 ROWS, CORRECTIONS, REPORT = "final_rows.jsonl", "corrections.json", "final_set.json"
 #: Where an added entry's heading comes from. Nothing on disk tells an entry
@@ -203,14 +202,13 @@ def headings_check(ents: list[str], x: Inputs, o: Outcome) -> dict[str, HD.Check
     return checks
 
 
-# ---- 3. repeats -------------------------------------------------------------------------------
+# ---- dates and exhibits, for the repeats read (``repeat_veto``) ---------------------------------
 
 
 _MONTHS: tuple[str, ...] = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 _NUM_DATE = re.compile(r"(?<![\d/.-])(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?!\d|[/.-]\d)")
 _ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
 _WORD_DATE = re.compile(r"(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b")
-_RANGE = re.compile(r"\s*(?:-|–|to|through|thru|until)\s*", re.I)
 
 
 def _dates_at(text: str) -> list[tuple[int, int, str]]:
@@ -227,94 +225,16 @@ def _dates_at(text: str) -> list[tuple[int, int, str]]:
     return sorted(out)
 
 
-def dates_written(e: str) -> tuple[set[str], set[tuple[str, str]]]:
-    """(every date, every date range) written in an entry's BODY (its date
-    line aside), citations aside."""
-    body = B.CITE.sub(" ", "\n".join(e.split("\n")[2:]))
-    at = _dates_at(body)
-    ranges = {(a[2], b[2]) for a, b in zip(at, at[1:]) if _RANGE.fullmatch(body[a[1] : b[0]])}
-    return {d for _s, _e, d in at}, ranges
+def dates_in(text: str) -> set[str]:
+    """Every date written in `text`, citations aside, one spelling each
+    (03/18/2026, 3/18/26, 2026-03-18 and March 18, 2026 are one date)."""
+    return {d for _s, _e, d in _dates_at(B.CITE.sub(" ", text))}
 
 
-def dates_present(e: str, keeper: str) -> bool:
-    """THE SECOND CONDITION of a safe drop, in its one place: every date and
-    every date range written in `e`'s body is written in `keeper`'s body too.
-    2026-11-17, on a real update: of 9 covered pairs of two exports, 2 held an
-    order date range the kept entry only implied through other dates; this
-    keeps them whole. (A run-of-words or a pixel-identity test dropped none:
-    two exports are different prints, worded differently.)"""
-    mine, my_ranges = dates_written(e)
-    have, have_ranges = dates_written(keeper)
-    return mine <= have and my_ranges <= have_ranges
-
-
-def covers(keeper: str, e: str, page_id: E.PageId | None = None) -> bool:
-    """`keeper` says everything `e` says: every value and finding term
-    (``repeats._covered``) and every date and range (``dates_present``).
-    `e`, an added entry no longer than `keeper`, may then go whole."""
-    return R._covered(e, keeper) and dates_present(e, keeper)
-
-
-def _yn(b: bool) -> str:
-    return "yes" if b else "no"
-
-
-def _kept_why(e: str, cond: list[tuple[str, str, bool, bool]]) -> str:
-    """Why an added entry matched by key stays whole (the first rule it fails)."""
-    if not any(c for _k, _x, c, _d in cond):
-        return "not covered (it states a value or finding the other lacks)"
-    if not any(c and d for _k, _x, c, d in cond):
-        return "a date or date range the other does not write"
-    return "the entry that covers it is the shorter one"
-
-
-def _lost(e: str, keeper: str) -> bool:
-    """The falsifier of a drop, read independently of the rule: a content
-    value or a finding term of `e` that `keeper` does not state."""
-    return bool(content_numbers(e) - content_numbers(keeper)) or bool(terms(e) - words(keeper))
-
-
-def repeats(ents: list[str], base_ents: list[str], x: Inputs, o: Outcome) -> list[str]:
-    """Rule 3. Longer entries are kept first; a fold is never dropped."""
-    order = sorted(range(len(ents)), key=lambda i: -len(ents[i]))
-    dropped: set[int] = set()
-    cited_before = set().union(*(B.cited(e) for e in ents)) if ents else set()
-    for i in order:
-        e = ents[i]
-        if EE.is_fold(e):
-            continue
-        keep_by = [("delivered", d) for d in base_ents if E.same_encounter(d, e, x.canon, x.page_id)]
-        keep_by += [
-            ("added", ents[j])
-            for j in order
-            if j != i and j not in dropped and not EE.is_fold(ents[j]) and len(ents[j]) >= len(e)
-            if E.same_encounter(ents[j], e, x.canon, x.page_id) and (len(ents[j]) > len(e) or j < i)
-        ]
-        if not keep_by:
-            continue
-        cond = [(kind, k, R._covered(e, k), dates_present(e, k)) for kind, k in keep_by]
-        for kind, _k, _c, _d in cond:
-            o.counts[f"repeats: key matches ({kind})"] += 1
-        hit = next(((kind, k) for kind, k, c, d in cond if c and d and len(k) >= len(e)), None)
-        why = "" if hit else _kept_why(e, cond)
-        if hit is not None:
-            rest = [ents[j] for j in range(len(ents)) if j != i and j not in dropped]
-            still = set().union(*(B.cited(r) for r in rest)) if rest else set()
-            why = "an exhibit would be uncited" if cited_before - still else ""
-        for kind, k, c, d in cond:
-            gone = not why and hit is not None and k is hit[1]
-            o.counts[f"pair: covered {_yn(c)}, dates present {_yn(d)}, dropped {_yn(gone)}"] += 1
-        if why:
-            o.counts[f"repeats: kept whole, {why}"] += 1
-            o.ops.append({"op": "repeat", "entry": E.key(e), "applied": False, "why": why})
-            continue
-        assert hit is not None
-        dropped.add(i)
-        o.removed |= keys_of(e)
-        o.counts[f"repeats: safe drops ({hit[0]})"] += 1
-        o.counts["distinct visits merged"] += int(_lost(e, hit[1]))
-        o.ops.append({"op": "repeat", "entry": E.key(e), "applied": True, "by": hit[0]})
-    return [e for i, e in enumerate(ents) if i not in dropped]
+def exhibits_uncited(before: str, after: str) -> set[int]:
+    """The exhibits `before` cites that `after` cites nowhere: a removal that
+    leaves one is not made (assemble refuses an exhibit with no citation)."""
+    return B.cited(before) - B.cited(after)
 
 
 # ---- rows and corrections ---------------------------------------------------------------------
@@ -407,7 +327,6 @@ def run(x: Inputs) -> Outcome:
     keys0 = keys_of(x.md)
     ents = strays(ents, x.headings, o)
     checks = headings_check(ents, x, o)
-    ents = repeats(ents, base_ents, x, o)
     md = with_entries(x.md, ents) if ents != B.entries_of(x.md)[1] else x.md
     after = keys_of(md)
     created, lost = after - keys0, keys0 - after - o.removed
@@ -449,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("config: NONE: the firm's provider aliases are not applied, so repeat counts can differ from the stage's")
     print(json.dumps(out, indent=1))
-    return 1 if out["distinct_visits_merged"] or out["new_claim_keys_created"] else 0
+    return 1 if out["new_claim_keys_created"] else 0
 
 
 if __name__ == "__main__":

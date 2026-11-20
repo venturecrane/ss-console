@@ -13,11 +13,13 @@ proofs read the RENDERED document and the final set's rows
 12. every delivered Exhibit List row is in the updated list as delivered,
     every new exhibit's number is above the delivered highest, and no
     delivered exhibit is in the upload manifest (it is on the matter already);
-13. no two added entries are one encounter (``encounter.same_encounter``)
-    with the longer covering the shorter (``final_set.covers``) and nothing
-    keeping it: a repeat the final set should have dropped (``p13`` also
-    counts, apart, the pairs kept for an exhibit and the pairs only the
-    shorter covers);
+13. RETIRED 2026-11-20 with the final set's value-and-term repeat rule it
+    tested: it flagged a pair the rule should have dropped, and now every
+    same-date pair the ``update_repeats`` reader keeps on purpose (a
+    conflict, a different visit, a paragraph the code vetoed) would read as
+    one. It was record-only and failed no run; the repeats stage records its
+    own counts (``runs/<unit>/update_repeats.json``). The number stays
+    unused so the record's codes keep their meaning;
 14. each new exhibit's title names a provider and dates that a final row
     citing that exhibit carries;
 15. every paragraph of the filed body is graded, delivered, or a listed label
@@ -39,12 +41,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .. import graded_proof as GP
-from . import body as B, encounter as E, entry_edits as EE
+from . import encounter as E
 
 #: Proofs whose failure fails the run.
 ENFORCE = frozenset({"11"})
 #: Proofs that record their findings and never fail the run.
-RECORD = frozenset({"12", "13", "14", "15"})
+RECORD = frozenset({"12", "14", "15"})
 _MDY = re.compile(r"\d{2}-\d{2}-\d{4}")
 _TITLE_HEAD = re.compile(r" - \d{2}-\d{2}-\d{4}| -\s+\(| \(")
 
@@ -112,31 +114,6 @@ def p12(x: Inputs) -> Counter[str]:
     return out
 
 
-def p13(x: Inputs) -> Counter[str]:
-    """Pairs of added entries that are one encounter, by the drop rule's own
-    direction (``final_set.covers``: the LONGER covers the shorter, values,
-    findings, dates and ranges): ``P13_covered_repeat_left`` when nothing kept
-    the shorter (a repeat the final set should have dropped: 0 when it ran),
-    ``P13_kept_for_an_exhibit`` when dropping it would uncite an exhibit.
-    ``P13_shorter_covers_longer`` counts pairs only the shorter covers, which
-    the rule never drops (the longer one stays). A pair a date or range keeps
-    whole is in none of them: ``covers`` requires ``dates_present``."""
-    from .final_set import covers
-
-    ents = [e for e in x.added if not EE.is_fold(e)]
-    out = Counter({"P13_covered_repeat_left": 0, "P13_kept_for_an_exhibit": 0, "P13_shorter_covers_longer": 0})
-    every = set().union(*(B.cited(e) for e in x.added)) if x.added else set()
-    for i, j in E.pairs(ents, x.canon, x.page_id):
-        long_, short = (ents[i], ents[j]) if len(ents[i]) >= len(ents[j]) else (ents[j], ents[i])
-        if covers(long_, short, x.page_id):
-            rest = [e for e in x.added if e is not short]
-            still = set().union(*(B.cited(e) for e in rest)) if rest else set()
-            out["P13_kept_for_an_exhibit" if every - still else "P13_covered_repeat_left"] += 1
-        elif covers(short, long_, x.page_id):
-            out["P13_shorter_covers_longer"] += 1
-    return out
-
-
 def _words(name: str) -> set[str]:
     """A provider's words, credentials aside: a title's provider is its
     rows' provider, or that name with words left out (``stages.group.Canon``)."""
@@ -163,7 +140,7 @@ def p14(x: Inputs) -> Counter[str]:
     return out
 
 
-CHECKS: dict[str, Callable[[Inputs], Counter[str]]] = {"11": p11, "12": p12, "13": p13, "14": p14}
+CHECKS: dict[str, Callable[[Inputs], Counter[str]]] = {"11": p11, "12": p12, "14": p14}
 
 
 def run(x: Inputs) -> Result:
@@ -185,4 +162,4 @@ def run(x: Inputs) -> Result:
     return r
 
 
-__all__ = ["CHECKS", "ENFORCE", "RECORD", "Inputs", "Result", "p11", "p12", "p13", "p14", "run"]
+__all__ = ["CHECKS", "ENFORCE", "RECORD", "Inputs", "Result", "p11", "p12", "p14", "run"]

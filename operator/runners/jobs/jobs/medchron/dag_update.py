@@ -26,6 +26,7 @@ from ..stages import (
     update_final_set as _ufinal,
     update_finish as _ufinish,
     update_pages as _upages,
+    update_repeats as _urepeats,
     update_select as _uselect,
     update_review as _ureview,
     update_upload as _uupload,
@@ -114,7 +115,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
             )
         },
     ),
-    _reuse("audit", requires=("update_summary",), invalidates=("update_review",)),
+    _reuse("audit", requires=("update_summary",), invalidates=("update_review", "update_repeats")),
     # The gate before assemble: an INDEPENDENT review of the added entries
     # against every page of the documents they cite, then a FINISHER that
     # corrects each must-fix finding (every new sentence audited, an
@@ -132,7 +133,14 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         # set: an update that already sent its files runs the final set as a
         # no-op on resume (``stages/update_final_set``), and its success must
         # never rebuild what was sent (the send record would hold other bytes).
-        invalidates=("update_final_set", "update_assemble", "update_render", "update_proofs", "update_manifest"),
+        invalidates=(
+            "update_repeats",
+            "update_final_set",
+            "update_assemble",
+            "update_render",
+            "update_proofs",
+            "update_manifest",
+        ),
         runner=_ureview.run,
         exit_map={
             1: (FAILED, "update_review: the grader of the finisher's sentences gave no verdict; a rerun grades again"),
@@ -145,15 +153,40 @@ UPDATE_STAGES: tuple[Stage, ...] = (
             4: (FAILED, "audit INVALID after the update finisher's corrections: a control failed or no exhibit bytes"),
         },
     ),
+    # The repeats read (``stages/update_repeats``, paid, text only,
+    # DELETE-ONLY): a paragraph of an added entry that only states again what
+    # another entry of its date states goes, when two reads agree and the
+    # code's veto passes. After the audit, so the reader never undoes it;
+    # before the final set, which reads what it leaves.
+    Stage(
+        "update_repeats",
+        "",
+        _slug_unit,
+        paid=True,
+        requires=("audit",),
+        # It reopens nothing, as the final set: an update that already sent its
+        # files runs it as a no-op on resume (``already_sent``), and its success
+        # must never rebuild what was sent. What reads its document is reopened
+        # by the stage that rewrote the document before it.
+        runner=_urepeats.run,
+        rehearse=_urepeats.rehearse,
+        # Exit 1 keeps the "audit coverage:" prefix: the broker resumes a hold
+        # by it (workspace_broker AUDIT_GATE_HOLD_PREFIX), and a resume asks
+        # again only for the entries not read.
+        exit_map={
+            1: (HELD, "audit coverage: an added entry was not read against the other entries of its date (repeats)"),
+            **_urepeats.EXITS,
+        },  # fmt: skip
+    ),
     # The final set of the added entries (``stages/update_final_set``, $0,
-    # delete-only): stray citation-only lines joined, a repeat the other entry
-    # covers dropped, every heading checked against its pages (recorded only).
-    # It reopens nothing: a redo of the review reopens it and what follows it.
+    # delete-only): stray citation-only lines joined, every heading checked
+    # against its pages (recorded only). It reopens nothing: a redo of the
+    # review reopens it and what follows it.
     Stage(
         "update_final_set",
         "",
         _slug_unit,
-        requires=("update_review",),
+        requires=("update_repeats",),
         runner=_ufinal.run,
         exit_map=_ufinal.EXITS,
     ),

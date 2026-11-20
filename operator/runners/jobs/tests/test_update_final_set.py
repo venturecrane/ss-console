@@ -88,94 +88,15 @@ def _added(o: FS.Outcome) -> list[str]:
     return B.entries_of(o.md)[1]
 
 
-# ---- rule 3: repeats ------------------------------------------------------------------------
+# ---- repeats are no longer this step's ---------------------------------------------------
 
 
-def test_a_covered_repeat_under_another_heading_is_dropped_whole() -> None:
+def test_the_final_set_no_longer_drops_a_covered_repeat() -> None:
+    """2026-11-20: the value-and-term drop is removed; the paid
+    ``update_repeats`` stage before this step decides repeats by a reader."""
     o = FS.run(_inputs([ROE_A, COPY]))
-    assert _added(o) == [ROE_A]
-    assert o.counts["repeats: safe drops (added)"] == 1 and o.counts["distinct visits merged"] == 0
-
-
-def test_an_uncovered_repeat_stays_whole_and_the_pair_is_recorded() -> None:
-    """The shorter copy states a value (a time of day) the longer lacks."""
-    o = FS.run(_inputs([ROE_A, TIMED]))
-    assert _added(o) == [ROE_A, TIMED] and o.md == _doc([ROE_A, TIMED])
-    assert o.counts["repeats: kept whole, not covered (it states a value or finding the other lacks)"] == 1
-    assert o.counts["pair: covered no, dates present yes, dropped no"] == 1
-    assert any(op["op"] == "repeat" and not op["applied"] for op in o.ops)
-    timed_keeper = ROE_A.replace("Neck pain after", "Seen at 10:32 for neck pain after")
-    assert _added(FS.run(_inputs([timed_keeper, TIMED]))) == [timed_keeper]  # mutation: the keeper states it, it goes
-
-
-def test_a_covered_copy_worded_otherwise_is_dropped() -> None:
-    """Two exports word one visit otherwise: covered and every date written,
-    it goes (no run-of-words or picture test, which dropped none on a real job)."""
-    reordered = COPY.replace(
-        "Neck pain after the collision rated 6 of 10; examination revealed",
-        "Examination revealed, after the collision, neck pain rated 6 of 10 and",
-    )
-    assert R._covered(reordered, ROE_A) and not E.held(reordered, ROE_A)
-    o = FS.run(_inputs([ROE_A, reordered]))
-    assert _added(o) == [ROE_A] and o.counts["pair: covered yes, dates present yes, dropped yes"] == 1
-
-
-RANGE_COPY = COPY.replace(
-    "(Exhibit 2 - p. 4)", "Physical therapy was ordered 03/05/2026 through 04/02/2026. (Exhibit 2 - p. 4)"
-)
-RANGE_KEEPER = ROE_A.replace(
-    "ibuprofen 600 mg as needed.",
-    "ibuprofen 600 mg as needed. Physical therapy was ordered; therapy began 03/05/2026 and a recheck is set 04/02/2026.",
-)
-
-
-def test_a_covered_pair_with_a_date_range_the_keeper_does_not_write_stays() -> None:
-    assert R._covered(RANGE_COPY, RANGE_KEEPER) and not FS.dates_present(RANGE_COPY, RANGE_KEEPER)
-    o = FS.run(_inputs([RANGE_KEEPER, RANGE_COPY]))
-    assert len(_added(o)) == 2
-    assert o.counts["repeats: kept whole, a date or date range the other does not write"] == 1
-    written = RANGE_KEEPER.replace("therapy began 03/05/2026", "therapy runs 03/05/2026 through 04/02/2026; begun")
-    assert _added(FS.run(_inputs([written, RANGE_COPY]))) == [written]  # mutation: the keeper writes the range
-
-
-def test_a_single_date_the_keeper_lacks_keeps_the_copy() -> None:
-    dated = COPY.replace("(Exhibit 2 - p. 4)", "Seen again on March 18, 2026. (Exhibit 2 - p. 4)")
-    keeper = ROE_A.replace("as needed.", "as needed. Seen again on 03/18/2026.")
-    assert FS.dates_written(dated)[0] == {"2026-03-18"} and FS.dates_present(dated, keeper)
-    assert not FS.dates_present(dated, ROE_A)
-
-
-def test_the_second_condition_is_one_named_predicate(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(FS, "dates_present", lambda *_a: True)
-    assert _added(FS.run(_inputs([RANGE_KEEPER, RANGE_COPY]))) == [RANGE_KEEPER]
-
-
-def test_a_drop_that_would_leave_an_exhibit_uncited_is_skipped() -> None:
-    only_three = COPY.replace("(Exhibit 2 - p. 4)", "(Exhibit 3 - p. 1)")
-    o = FS.run(_inputs([ROE_A, only_three]))
-    assert _added(o) == [ROE_A, only_three]
-    assert o.counts["repeats: kept whole, an exhibit would be uncited"] == 1
-
-
-def test_a_covered_copy_of_a_delivered_visit_is_dropped() -> None:
-    copy = K.ENTRY_POST.replace("Exhibit 1", "Exhibit 2")
-    o = FS.run(_inputs([copy, NEW_POST]))
-    assert _added(o) == [NEW_POST] and o.counts["repeats: safe drops (delivered)"] == 1
-
-
-def test_a_delivered_row_is_never_dropped() -> None:
-    """A longer added entry covering a delivered row drops nothing: the
-    delivered row is not the final set's to drop, and the added one is not
-    covered by the shorter delivered row."""
-    longer = K.ENTRY_POST.replace("Exhibit 1", "Exhibit 2").replace(
-        "at intake.", "at intake; cyclobenzaprine 7.5 mg was prescribed."
-    )
-    o = FS.run(_inputs([longer]))
-    assert _added(o) == [longer] and B.entries_of(o.md)[1] == [longer]
-    assert sum(v for k, v in o.counts.items() if k.startswith("repeats: safe drops")) == 0
-    assert B.entries_of(K.base_md())[1][1] == K.ENTRY_POST  # the delivered row is where it was
-    shorter = K.ENTRY_POST.replace("Exhibit 1", "Exhibit 2")
-    assert _added(FS.run(_inputs([longer, shorter, NEW_POST]))) == [longer, NEW_POST]  # mutation: added, it goes
+    assert _added(o) == [ROE_A, COPY] and o.md == _doc([ROE_A, COPY]) and not o.removed
+    assert not any(k.startswith("repeats") for k in o.counts)
 
 
 def _main_dedupe_new(kept: list[str], canon) -> tuple[list[str], int]:
@@ -386,7 +307,7 @@ def test_the_final_set_marker_is_the_stage_s_own_file(tmp_path: Path) -> None:
 
 def test_the_enforce_and_record_table_is_pinned() -> None:
     assert PF.ENFORCE == {"11"}
-    assert PF.RECORD == {"12", "13", "14", "15"}
+    assert PF.RECORD == {"12", "14", "15"}  # 13 retired with the final set's repeat rule
     assert not PF.ENFORCE & PF.RECORD and set(PF.CHECKS) | {"15"} == PF.ENFORCE | PF.RECORD
 
 
@@ -459,26 +380,6 @@ def test_p12_records_a_renumbered_exhibit_and_never_fails_the_run(tmp_path: Path
     assert r.recorded["P12_new_number_not_above_delivered"] == 1 and r.recorded["P12_delivered_pdf_in_manifest"] == 1
 
 
-def test_p13_records_a_covered_repeat_left_in_the_added_entries(tmp_path: Path) -> None:
-    md = _assembled([NEW_POST])
-    assert PF.run(_pf(tmp_path, md, added=[ROE_A, COPY])).recorded["P13_covered_repeat_left"] == 1
-    assert PF.run(_pf(tmp_path, md, added=[ROE_A, TIMED])).recorded["P13_covered_repeat_left"] == 0
-    only_three = COPY.replace("(Exhibit 2 - p. 4)", "(Exhibit 3 - p. 1)")
-    kept = PF.run(_pf(tmp_path, md, added=[ROE_A, only_three])).recorded
-    assert kept["P13_kept_for_an_exhibit"] == 1 and kept["P13_covered_repeat_left"] == 0
-    # a pair a date range keeps whole is in no P13 count: covers requires every date and range
-    ranged = PF.run(_pf(tmp_path, md, added=[RANGE_KEEPER, RANGE_COPY])).recorded
-    assert ranged["P13_covered_repeat_left"] == ranged["P13_kept_for_an_exhibit"] == 0
-    # only the shorter covers the longer: the rule keeps the longer, recorded apart
-    short = COPY.replace("(Exhibit 2 - p. 4)", "Pulse 74. (Exhibit 2 - p. 4)")
-    long_ = COPY.replace(
-        "(Exhibit 2 - p. 4)", "It was a long and careful visit in the clinic that day. (Exhibit 2 - p. 4)"
-    )
-    assert len(long_) > len(short)
-    both = PF.run(_pf(tmp_path, md, added=[long_, short])).recorded
-    assert both["P13_shorter_covers_longer"] == 1 and both["P13_covered_repeat_left"] == 0
-
-
 def test_p14_records_a_title_its_rows_do_not_carry(tmp_path: Path) -> None:
     md = _assembled([NEW_POST])
     rows = FS.run(_inputs([NEW_POST])).rows
@@ -529,7 +430,7 @@ def test_the_stage_writes_the_set_its_rows_and_carried_verdicts(
     assert update_final_set.run(sr) == 0, log
     ud = sr.slug_dir / "runs" / "alpha" / "update"
     md = (sr.slug_dir / "runs" / "alpha" / "final-chronology.md").read_text()
-    assert B.entries_of(md)[1][0] == ROE_A and len(B.entries_of(md)[1]) == 2
+    assert B.entries_of(md)[1][0] == ROE_A and len(B.entries_of(md)[1]) == 3  # repeats: update_repeats'
     rows = FIO.read_rows(ud)
     assert rows and all(r["verdict"] == "SUPPORTED" for r in rows if r["claim_key"])
     gate = GP.latest_supported(CL.read_rows(sr.slug_dir / "out" / "alpha" / "audit-results.jsonl"))
@@ -580,7 +481,7 @@ def test_a_crash_between_the_temp_write_and_the_replace_leaves_the_original(
     monkeypatch.setattr(store.os, "replace", real)
     assert update_final_set.run(sr) == 0  # the rerun reads the original and finishes
     done = doc.read_text()
-    assert done != original and len(B.entries_of(done)[1]) == 2
+    assert done != original and len(B.entries_of(done)[1]) == 3
 
 
 def test_a_document_rewritten_upstream_is_read_afresh(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
@@ -670,11 +571,7 @@ def test_the_report_prints_counts_and_no_record_text(
     got = json.loads(rest)
     assert got["no_added_entries"] is False
     assert got["stray_lines"] == {"before": 2, "after": 1} and got["left_key_changing"] == 1
-    assert got["repeats"]["safe drops (added)"] == 1 and got["distinct_visits_merged"] == 0
-    assert got["repeat_pairs_by_condition"] == {
-        "covered yes, dates present yes, dropped yes": 1,  # the clinic's copy of the visit
-        "covered no, dates present yes, dropped no": 1,  # the clinic's other note of that day, kept whole
-    }
+    assert "repeats" not in got and "distinct_visits_merged" not in got  # the update_repeats stage's now
     assert got["new_claim_keys_created"] == 0 and got["delivered_entries"]["delivered"] == 2
     assert set(got["headings"]) == {
         HD.CITED,
@@ -683,7 +580,7 @@ def test_the_report_prints_counts_and_no_record_text(
         HD.FAILED,
         "read on a transcript",
     }  # every count prints, 0 included
-    assert got["record_only"]["P13_covered_repeat_left"] == 0
+    assert not any(k.startswith("P13") for k in got["record_only"])
     for words in ("paraspinal", "Roe", "Neck pain", "recheck"):
         assert words not in printed
 
@@ -732,7 +629,7 @@ FINAL_SET = dag.Stage(
     "update_final_set",
     "",
     dag._slug_unit,
-    requires=("update_review",),
+    requires=("update_repeats",),
     runner=update_final_set.run,
     exit_map=update_final_set.EXITS,  # passed as it is: (outcome, reason) per code
 )
@@ -776,42 +673,6 @@ def test_the_report_writes_nothing_even_on_a_read_only_copy(
     sr = _sr(job_dir, firm_config_path, data_root, [])
     assert update_final_set.run(sr) == 0
     assert _snapshot(data_root) != before  # falsifier: the snapshot sees a write, the stage's own
-
-
-def test_the_report_counts_what_the_stage_counts_with_the_firms_aliases(
-    job_dir: Path, tmp_path: Path, data_root: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """The stage canonicalises providers with the firm's aliases; a report
-    without them counted 12 delivered key matches where the stage counted 16."""
-    import yaml
-
-    from jobs_testkit import FIRM_CONFIG
-
-    firm = tmp_path / "aliases" / "firm.yaml"
-    firm.parent.mkdir()
-    data = json.loads(json.dumps(FIRM_CONFIG))
-    data.setdefault("providers", {})["aliases"] = [{"match": "Acme Spine", "label": "Example Clinic"}]
-    firm.write_text(yaml.safe_dump(data, sort_keys=False))
-    aliased = (
-        "01/20/2026\nAcme Spine Partners | Medical Diagnoses\n\nMedical Diagnoses\n"
-        "Cyclobenzaprine 7.5 mg was prescribed for the spasm at the visit. (Exhibit 2 - p. 3)"
-    )
-    sr = _sr(job_dir, firm, data_root, [])
-    _job(sr.slug_dir, [aliased, NEW_POST])
-    assert FS.main(["report", str(sr.slug_dir), "--firm-config", str(firm)]) == 0
-    first, _, rest = capsys.readouterr().out.partition("\n")
-    got = json.loads(rest)
-    assert first == f"config: {firm}" and got["config"] == str(firm)
-    assert update_final_set.run(sr) == 0
-    stage = json.loads((sr.slug_dir / "runs" / "alpha" / "update" / FS.REPORT).read_text())["counts"]
-    for k, v in got["repeats"].items():
-        assert stage[f"repeats: {k}"] == v, k
-    assert got["repeats"]["key matches (delivered)"] == 1
-    assert got["stray_lines"] == {"before": stage["stray lines before"], "after": stage["stray lines after"]}
-    assert got["headings"][HD.CITED] == stage.get(f"headings {HD.CITED}", 0)
-    assert FS.main(["report", str(sr.slug_dir)]) == 0  # falsifier: with no config the count differs, and says so
-    first, _, rest = capsys.readouterr().out.partition("\n")
-    assert first.startswith("config: NONE") and "key matches (delivered)" not in json.loads(rest)["repeats"]
 
 
 def test_a_crash_inside_the_stage_is_never_reported_as_a_refusal(

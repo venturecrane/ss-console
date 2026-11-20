@@ -1,9 +1,9 @@
 """`update_final_set`: the update's final set of added entries, between the
 update review and assemble. $0: no model call, nothing sent anywhere.
 
-The rules are ``medchron/update/final_set``'s (stray citation lines, every
-heading looked for on its pages, repeats dropped only when the other entry
-covers them, all delete-only). This stage reads the reviewed audit document
+The rules are ``medchron/update/final_set``'s (stray citation lines joined
+or removed, every heading looked for on its pages and recorded only); a
+repeat is the ``update_repeats`` stage's, which runs before this one. This stage reads the reviewed audit document
 (``runs/<unit>/final-chronology.md``), writes it back, and writes
 ``update/final_rows.jsonl``, ``update/corrections.json`` and
 ``update/final_set.json``. It makes only edits that leave every claim key
@@ -94,9 +94,7 @@ def run(sr: StageRun) -> int:
     c = o.counts
     sr.log(
         f"final set: {c['added entries']} added entries; stray citation lines {c['stray lines before']} -> "
-        f"{c['stray lines after']} ({c['left_key_changing']} left: removing them would change a claim); repeats dropped "
-        f"{sum(v for k, v in c.items() if k.startswith('repeats: safe drops'))}, kept whole "
-        f"{sum(v for k, v in c.items() if k.startswith('repeats: kept whole'))}; "
+        f"{c['stray lines after']} ({c['left_key_changing']} left: removing them would change a claim); "
         f"headings on a cited page {c['headings ' + HD.CITED]}, same note {c['headings ' + HD.SAME_NOTE]}, "
         f"no text layer {c['headings ' + HD.NO_TEXT]}, failed {c['headings ' + HD.FAILED]} "
         f"(recorded only); new claim keys {c['new claim keys created']}, keys lost {c['claim keys lost unaccounted']}"
