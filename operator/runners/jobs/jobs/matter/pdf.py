@@ -14,7 +14,8 @@ the lane records:
   empty page).
 * :func:`page_texts` and :func:`page_text`: the whole-PDF readers (an exemplar,
   a foreign-identity check, a billing chart, an evidence page, an update's
-  delivered pages), pymupdf with no lock.
+  delivered pages, a served form's pages), pymupdf with no lock.
+* :func:`page_grays`: every page as a grayscale image (the form checkbox read).
 
 MEMORY (2026-10-13: A&P litigation job 01M4V2G6 was OOM-killed in its 1 GiB
 cgroup at 2525 of 4808 documents). MuPDF keeps a PROCESS-WIDE store of
@@ -143,13 +144,34 @@ def pypdf_layers(path: Path) -> list[tuple[int, str]]:
     return pages
 
 
-def page_texts(path: Path | str) -> list[str]:
-    """Every page's text layer of a whole PDF (pymupdf, no lock). Raises what
-    the open raises; each caller keeps its own handling."""
+def _open_any(src: bytes | Path | str) -> Any:
     import pymupdf
 
-    with pymupdf.open(str(path)) as doc:
+    if isinstance(src, bytes):
+        return pymupdf.open(stream=src, filetype="pdf")
+    return pymupdf.open(str(src))
+
+
+def page_texts(path: bytes | Path | str) -> list[str]:
+    """Every page's text layer of a whole PDF (pymupdf, no lock), from a path
+    or the file's bytes. Raises what the open raises; each caller keeps its own
+    handling."""
+    with _open_any(path) as doc:
         return [pg.get_text() for pg in doc]
+
+
+def page_grays(src: bytes | Path | str, dpi: int = 150) -> list[Any]:
+    """Every page rendered as a grayscale image (a height x width uint8 numpy
+    array) at ``dpi``: what the form checkbox read measures ink in."""
+    import numpy as np
+    import pymupdf
+
+    out: list[Any] = []
+    with _open_any(src) as doc:
+        for pg in doc:
+            pix = pg.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY, alpha=False)
+            out.append(np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width).copy())
+    return out
 
 
 def page_text(path: Path | str, page: int) -> str | None:
@@ -166,6 +188,7 @@ __all__ = [
     "MUPDF",
     "court_layers",
     "open_pdf",
+    "page_grays",
     "page_text",
     "page_texts",
     "png",

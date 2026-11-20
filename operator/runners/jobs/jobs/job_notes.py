@@ -164,7 +164,17 @@ DRAFTING_NEXT = {
     "served_unknown": "name the served sets (jobs.drafting.served write), then resume",
     "served_invalid": "fix the served sets (jobs.drafting.served write), then resume",
     "served_other_set": "record that set as type other, drafted by smd, then resume",
+    "served_none": "no served set found (found-report.json); name them with served write, then resume",
+    "served_scan": "the served set is a scan: name it with served write, then resume, or draft by hand",
+    "served_ambiguous": "check found-report.json, name the sets with served write, then resume",
+    "served_unnumbered": "the requests do not number 1 to N: name the set with served write, then resume",
+    "served_many": "too many sets for the finder: name them with served write, then resume",
+    "served_prior_draft": "a prior draft is on the matter: a revision, by hand",
     "party_unknown": "name the parties in parties.json, then resume, or draft by hand",
+    "form_incomplete": "the served form lacks a page: find the whole form, or draft the set by hand",
+    "form_unconfirmed": "confirm the checked boxes (form-read.json; jobs.drafting.served write), then resume",
+    "policy_missing": "author the firm's form_responses policy in drafting-firm.yaml, then resume",
+    "rule_unplaced": "place the wording rule in form_responses.rules (apply or not), then resume",
 }
 
 

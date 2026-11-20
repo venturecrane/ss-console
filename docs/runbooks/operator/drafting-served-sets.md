@@ -1,10 +1,86 @@
-# Discovery responses: name the served sets
+# Discovery responses: the served sets, found or named
 
-When an attorney asks for responses to discovery, the Operator drafts only the
-sets SMD has named as served. Until SMD names them, the job stops before
-anything is paid and SMD is paged `job_stopped` with `served_unknown`. The
-attorney has the acknowledgment and hears nothing more until the drafts are
-filed.
+When an attorney asks for responses to discovery, the Operator first finds the
+served sets itself (the `find` stage, `operator/runners/jobs/jobs/drafting/served_find.py`),
+after preflight and before anything large is paid. It writes the same
+`served.json` this runbook's command writes, and a `found-report.json` beside
+it in the job directory: every candidate in the matter file and why it was
+kept or dropped. **SMD's command is the override**: when a `served.json` is
+already in the job directory, the finder does nothing.
+
+## What the finder does
+
+- **Finds candidates by code**, from the first two pages of each file: an
+  asking-party line (PROPOUNDING, REQUESTING or DEMANDING PARTY) and a
+  RESPONDING PARTY line and a title from the closed list (form, special or
+  specially prepared interrogatories; requests or demands for production or
+  inspection; requests for admission), or a page that reads as the Judicial
+  Council form (`DISC-001` and "Page N of 8"), which is always form
+  interrogatories. Byte copies in a second folder count once (the report
+  lists the copies). A set our client propounded is not served on us and is
+  dropped. A file with no text whose name reads as discovery is only listed.
+- **Recognises response papers** by their title ("RESPONSES TO ..."). One of
+  ours with a later listed date answers its served set (same kind, set number
+  and asking party), and that set is dropped. The other side's responses to
+  our discovery are ignored.
+- **Reads each served set once** (at most 12 sets, at most 0.50 USD for the
+  stage): kind, set number, both parties, the request count and the date
+  served. Code checks every value against the paper: the kind against the
+  title, each party on the page, the set number on a SET line, the responding
+  party our client, the date on the page, and the requests cut from the file
+  numbering 1 to the count (labelled "REQUEST FOR PRODUCTION NO. 3:" or a bare
+  "3." under the section heading; blank "RESPONSE:" lines are removed). A form
+  set carries no request text: its `source` names the file, and its parties
+  come from the form's text or the matter record (the report says which).
+- **Narrows to the request**: "responses to the special interrogatories"
+  plans only those; otherwise every unanswered set.
+- **Who drafts**: special interrogatories and requests for production, the
+  Operator; form interrogatories, requests for admission and anything else,
+  SMD (reported to the attorney as "being prepared by us").
+
+## When the finder stops
+
+Each is a failed job before any large spend, resumable once SMD writes
+`served.json` with the command below. The attorney has the acknowledgment and
+hears nothing more. Read `found-report.json` in the job directory first.
+
+| Code                 | What it means                                                                                                                | What staff do                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `served_none`        | No served set in the matter file (or every one is answered, or none of the kinds asked)                                      | Check the file. Name the sets with `write` and resume, or tell the attorney through an SMD note |
+| `served_scan`        | Nothing read as text, and a no-text discovery file sits in a discovery folder                                                | Read the scan, name the set with `write` and resume, or draft by hand                           |
+| `served_ambiguous`   | Two different sets of one kind, number and asking party; a read value not on the paper; or a response paper code cannot pair | Decide from the papers, name the sets with `write`, resume                                      |
+| `served_unnumbered`  | The requests do not number 1 to the count                                                                                    | Put the requests in a text file numbered as served, `write`, resume                             |
+| `served_many`        | More than 12 served sets, or the stage would pass its 0.50 USD cap                                                           | Name the sets with `write`, resume                                                              |
+| `served_prior_draft` | An Operator draft of a set still owed is already on the matter                                                               | It is a revision: draft the change by hand                                                      |
+| `served_other_set`   | A served set of a kind outside the list                                                                                      | Record it as type `other`, drafted by `smd`, with `write`; resume                               |
+
+## A served form interrogatory set
+
+Form sets are SMD's until the lead turns on the one switch,
+`FORM_SETS_BY_OPERATOR` in `operator/runners/jobs/jobs/drafting/served.py`
+(off). With it on, the finder marks a found form set `operator`, and the same
+`find` stage reads its checked boxes three ways (two model reads and the
+pixel read, `forms/read_stage.py`), writing `form`, `form_revision` and
+`checked` into `served.json` and every read into `form-read.json`. Each stop
+below is a failed job before the transcription is paid, resumable; the
+attorney hears nothing more.
+
+| Code               | What it means                                                                                       | What staff do                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `form_incomplete`  | The served form lacks one of its eight pages, or its file is not on disk                            | Find the whole form and resume, or draft the set by hand                             |
+| `form_unconfirmed` | The reads disagree, an addition is attached, the revision is not carried, or the count does not fit | Read `form-read.json`, confirm the boxes with the form keys and `write`, then resume |
+| `policy_missing`   | The firm authored no form-response policy, or its shell lacks the body slot                         | Author `form_responses` in `drafting-firm.yaml`, then resume                         |
+| `rule_unplaced`    | A frozen wording rule the policy neither applies to form sets nor excludes                          | Place it in `form_responses.rules`, then resume                                      |
+
+A delivered form set's answers are kept in the lane's store,
+`<run dir>/drafting-form-answers/<job id>.json`, so a change request revises
+them. They are text from the matter file. Remove a job's or a matter's with
+`python -m jobs.drafting.forms.saved purge --job <id>` or `--matter <id>`.
+
+## SMD names the sets by hand
+
+Until the finder ran, the Operator drafted only the sets SMD named. The command
+below is still how SMD names or corrects them.
 
 The page says what to do next. The job directory holds `smd-needs.json`: why
 the job stopped, the shape of the file to write, and the firm's wording rules

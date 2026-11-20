@@ -15,9 +15,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import parties, sets
+from . import parties, served as served_mod, served_find, sets
+from .forms import lane_hook, read_stage
 from .outcome import DraftingFailed
-from .served import PLAN_STOPS, PLANNED_CLASSES, frozen, has_plan, outcomes, plan_units, review_map, stop_note
+from .served import PLAN_STOPS, PLANNED_CLASSES, clients_of, frozen, has_plan, outcomes, plan_units, review_map
+from .served import stop_note
+from .served_find import other_side
 
 
 class DiscoveryPlan:
@@ -29,6 +32,11 @@ class DiscoveryPlan:
         data: Path
         job: Any
         firm: Any
+        doorway: Any
+        budget: Any
+        pricing: Any
+        _title: str
+        log: Callable[[str], None]
 
         def _state(self) -> dict[str, Any]: ...
         def _put(self, key: str, value: Any) -> None: ...
@@ -46,12 +54,54 @@ class DiscoveryPlan:
         if self.cls not in PLANNED_CLASSES:
             return
         try:
+            # The served sets found in the matter file first; SMD's hand
+            # served.json, when there, is the override (served_find.py).
+            self._stage("find", self._find_served)
             self._stage("plan", self.units)
+            lane_hook.before_spend(self)  # a served form set's policy, rules and boxes (forms/lane_hook.py)
         except DraftingFailed as exc:
             code = str(exc).split(":", 1)[0]
-            if code in PLAN_STOPS:
-                stop_note(self.job.job_dir, self.data, str(exc), served_shape=True)
+            if code in PLAN_STOPS or code in lane_hook.STOPS:
+                stop_note(self.job.job_dir, self.data, str(exc), served_shape=code not in lane_hook.POLICY_STOPS)
             raise
+
+    def _find_served(self) -> None:
+        """The ``find`` stage: one capped call per served candidate through the
+        job's own doorway and spend ledger (stage ``served-find``)."""
+        model = self.firm.model("transcription")
+        rate = self.pricing.rate_for(model)
+
+        def ask(text: str) -> str:
+            messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
+            return self.doorway.call(
+                served_find.STAGE, model=model, system=served_find.SYSTEM, messages=messages,
+                max_tokens=served_find.MAX_TOKENS, effort="",
+            ).text  # fmt: skip
+
+        def spent() -> float:
+            self.budget.refresh()
+            return float(self.budget.by_stage().get(served_find.STAGE, 0.0))
+
+        def next_cost(chars: int) -> float:
+            # About 3 characters a token for the input (an over-estimate), every output token asked for.
+            cents = chars / 3 * rate.input_per_million_cents + served_find.MAX_TOKENS * rate.output_per_million_cents
+            return cents / 1e8
+
+        served_find.find(
+            self.data,
+            self.job.job_dir,
+            self.job.request_text,
+            served_find.Reader(ask, spent, next_cost),
+            clients=clients_of(self.data),
+            other_side=other_side(self.data),
+            title=self._title,
+        )
+        # Each served form set the Operator drafts: its boxes read before the plan
+        # (forms/read_stage.py); with the switch off nothing is read or spent.
+        read_stage.read_found(
+            self.data, self.job.job_dir, self.doorway, model,
+            by_operator=served_mod.FORM_SETS_BY_OPERATOR, log=self.log,
+        )  # fmt: skip
 
     def _freeze_plan(self, plan: list[dict[str, Any]]) -> None:
         self._put("units", plan)

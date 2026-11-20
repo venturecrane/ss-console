@@ -30,6 +30,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from . import served_form
+from .forms.checked import compact
 from .outcome import DraftingFailed
 from .served import FILE, OPERATOR, PLAN, STOP_NOTE, ServedSet, clients_of, parse, read, to_file
 
@@ -66,7 +68,8 @@ def job_dir_for(job_id: str) -> Path:
 
 
 def template() -> dict[str, Any]:
-    """A served.json in its closed shape, one set, every value to replace."""
+    """A served.json in its closed shape, every value to replace: a numbered
+    set, then a form interrogatory set with its own keys (``served_form.py``)."""
     return {
         "sets": [
             {
@@ -77,16 +80,26 @@ def template() -> dict[str, Any]:
                 "request_count": 1,
                 "request_text_path": "<a file beside this one holding the requests, verbatim>",
                 "drafted_by": "operator",
-            }
+            },
+            served_form.template(),
         ]
     }
 
 
+def _line(s: ServedSet) -> str:
+    who = "the Operator drafts it" if s.drafted_by == OPERATOR else "SMD drafts it"
+    if not s.checked:
+        return f"{s.label}: {s.request_count} requests, {who}"
+    boxes = ", ".join(s.definition_boxes) or "none"
+    extra = "; extra interrogatories attached" if s.additions else ""
+    return (
+        f"{s.label}: {s.form} [{s.form_revision}], {s.request_count} numbers checked "
+        f"({compact(s.checked)}), definition boxes {boxes}{extra}, {who}"
+    )
+
+
 def summary(found: list[ServedSet]) -> list[str]:
-    return [
-        f"{s.label}: {s.request_count} requests, {'the Operator drafts it' if s.drafted_by == OPERATOR else 'SMD drafts it'}"
-        for s in found
-    ]
+    return [_line(s) for s in found]
 
 
 def _client(client: Any) -> Any:

@@ -38,6 +38,7 @@ from ...matter import pull as matter_pull
 from .. import format_check
 from .. import review as review_mod
 from ..outcome import DraftingFailed, DraftingHold, Verdict, markers
+from ..forms import revise_hook as form_revise
 from ..run import DraftingRun
 from . import checklist as ck, checks, core, filed as filed_mod, inplace, layout as lay, prior as prior_mod
 from . import sections as sec, versions
@@ -406,6 +407,9 @@ class ReviseRun(DraftingRun):
 
     # ---- the walk ---------------------------------------------------------------
     def _walk(self) -> Verdict:
+        rec = form_revise.record_for(self)  # a form set the Operator drafted: revised from its saved values
+        if rec is not None:
+            return form_revise.walk(self, rec)
         if self._is_done("manifest"):
             return self._file()
         self._stage("destination", self._destination)

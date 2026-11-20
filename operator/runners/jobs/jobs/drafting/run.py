@@ -3,8 +3,10 @@
 The graph, per class::
 
     facts -> destination -> pull (privilege wall) -> preflight -> estimate
-      -> [discovery responses: the served sets SMD named, served.py; its stops end the job here]
-      -> transcribe -> digest (cited)
+      -> [discovery responses: find the served sets in the file (served_find.py; SMD's hand
+         served.json overrides), then plan from them (served.py); their stops end the job here;
+         then scope, and the estimate over what its sets read (response_scope.py, response_cost.py)]
+      -> transcribe -> digest (cited; a response job: each set's capped pack instead)
       -> [mediation brief: howell table] -> [court classes: caption read, record diff + corrections]
       -> per document (finish.py; one per set a discovery request names):
          compose -> audit -> repair -> reaudit -> final pass -> defined terms -> gate
@@ -73,11 +75,14 @@ from . import (
     job as job_mod,
     library_pick,
     repair_guard,
+    response_cost,
+    response_scope,
     review as review_mod,
     review_first,
     served as served_mod,
 )
 from .evidence_lane import CHARGES_LINE, EvidenceLane
+from .forms import lane_hook as form_hook
 from .placing import Placing
 from .served_plan import DiscoveryPlan
 from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
@@ -94,6 +99,8 @@ SHORT = "stage_unfinished: file: the read-back is short after its retries; the f
 DIGEST_BUDGET_CHARS = 1_600_000
 COURT_CLASSES = ("mediation_brief", "discovery_set", "discovery_response")
 CHARGES_CLASSES = ("mediation_brief", "memo")
+#: Scoped and priced over what its sets read (response_scope.py, response_cost.py).
+RESPONSE = "discovery_response"
 TITLES = {
     "mediation_brief": "Mediation Brief",
     "discovery_set": "Discovery Set",
@@ -309,7 +316,8 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
                 "drafting_allowance_per_cycle",
                 "drafting_allowance_per_cycle: this cycle's drafting jobs are used; nothing was spent",
             )
-        est = self._json("preflight.json")["estimate"]
+        # PR3: a response job is priced over its scoped corpus (response_cost.py).
+        est = self._json(response_cost.FILE) if self.cls == RESPONSE else self._json("preflight.json")["estimate"]
         spent = self.budget.refresh()
         try:
             self.limits.check_before_paid(
@@ -322,6 +330,18 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
                 f"{est['characters']:,} characters, {est['transcription_pages']:,} pages to transcribe, "
                 f"{est['usd']:.2f} USD)",
             ) from None
+
+    def _scope(self) -> None:
+        """PR3 hook: a response job reads only what its sets need; the estimate
+        over that, its finish time, and the units cheapest first (response_cost.py)."""
+        plan = self._state()["units"]
+        est = response_cost.scope_and_estimate(
+            self.data, self.firm.data, self.pricing, plan, self._json("facts.json"),
+            self.firm.model("transcription"), self.log,
+        )  # fmt: skip
+        self._put("units", response_cost.cheapest_first(plan, est))
+        self._units = None
+        self._put("expected_finish", est["expected_finish"])
 
     # ---- paid stages -----------------------------------------------------------------
     def _digest(self) -> str:
@@ -349,6 +369,13 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
         )
         self._atomic("digest.md", out)
         return out
+
+    def _packs(self) -> str:
+        p = self.data / "digest.md"
+        if not p.is_file():
+            plan = self._state()["units"]
+            self._atomic("digest.md", response_scope.write_packs(self.data, plan, self._json("facts.json")))
+        return p.read_text(encoding="utf-8")
 
     def _howell(self) -> None:
         try:
@@ -426,6 +453,7 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
         released = review_first.gate(
             self.evidence.review_first, self.job.ledger_releases, self.job.job_dir, self.data, manifest
         )
+        form_released = form_hook.first_set_gate(self, manifest)  # the first form set, too (forms/lane_hook.py)
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
         if rec["exit"] == 1 and str(rec.get("said") or "").startswith("readback_mismatch:"):
@@ -455,7 +483,8 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
             folder_id=str(rec.get("folder_id")),
             files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
             proof=proof,
-            smd_released=released,
+            smd_released=released or form_released,
+            smd_released_class=form_hook.FORM_SET if form_released else "",
             served_sets=rows or [],
         )
 
@@ -484,9 +513,15 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
             self._close_request()
             self._place_finish()
             return self._file()
-        self._estimate()
-        # A response job's served sets, before anything is paid (served_plan.py).
-        self._plan_before_spend()
+        if self.cls == RESPONSE:
+            # PR3 hook: the plan, then the scope, then the estimate over what is read.
+            self._plan_before_spend()
+            self._stage("scope", self._scope)
+            self._estimate()
+        else:
+            self._estimate()
+            # A response job's served sets, before anything is paid (served_plan.py).
+            self._plan_before_spend()
         transcribing = not self._is_done("transcribe")
         self._stage(
             "transcribe",
@@ -515,6 +550,9 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
             # The evidence-first path (evidence_lane.py): the whole file read
             # into verified facts; digest.md is the fact index's text.
             digest = self.evidence_digest()
+        elif self.cls == RESPONSE:
+            # PR3 hook: no whole-file digest; each unit composes from its own pack.
+            digest = self._packs()
         else:
             digest = self._digest()
         # Measured, never refused: digest cites spanning a block of pages
@@ -572,7 +610,7 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
 
     def _current(self) -> str:
         mid = ("evidence-extract", "evidence-verify", "evidence-images", "index") if self.evidence.ledger else ()
-        plan = ("plan",) if self.cls in served_mod.PLANNED_CLASSES else ()
+        plan = ("find", "plan", "scope") if self.cls in served_mod.PLANNED_CLASSES else ()
         head = (
             "facts",
             "destination",

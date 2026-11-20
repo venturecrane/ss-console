@@ -42,6 +42,7 @@ from . import base_lay, library_pick, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, parties as parties_mod, settle as settle_mod, wording
 from . import repair_budget, repair_guard, served as served_mod
+from .forms import lane_hook as form_hook
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
@@ -217,6 +218,8 @@ class Finish:
         return firm_wording.attach(d, self.data)
 
     def _draft(self, u: Unit, digest: str) -> str:
+        if form_hook.takes(self, u):
+            return form_hook.draft(self, u)  # a served form set: answered in code (forms/lane_hook.py)
         out = u.data / FINAL
         if out.is_file():
             return out.read_text(encoding="utf-8")
@@ -504,6 +507,7 @@ class Finish:
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
         render_notes = [self._block_note(), *render_notes]
         md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
+        md = form_hook.with_cite_tables(self, md)  # each form set's cite table, by code
         # SMD's hand-written sections of the notes this replaces, carried by
         # code: never sent to the model above, kept byte for byte (2026-11-05).
         prior = self.data / "notes-final.md"

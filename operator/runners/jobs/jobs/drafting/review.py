@@ -407,6 +407,18 @@ def _num_key(x: str) -> tuple[int, ...]:
     return tuple(int(p) for p in x.split("."))
 
 
+def _form_findings(p: Paper, s: Mapping[str, Any]) -> list[Finding]:
+    """A form set whose plan carries its checked numbers, checked in code
+    against the official form (``forms.checks.structure``): exactly the
+    checked numbers in the form's order, each restated as the catalogue
+    prints it, every lettered subpart present per item on its own line."""
+    from .forms import catalog, checks
+
+    cat = catalog.load(s.get("form") or catalog.DISC_001, s.get("form_revision") or catalog.CURRENT)
+    found = checks.structure(p.text, list(s["checked"]), cat)
+    return [_f(MUST, "1 response numbering", f"{p.label}: {x.number}: {x.detail}", p.label) for x in found]
+
+
 def response_findings(papers: list[Paper], served: Mapping[str, Mapping[str, Any]]) -> list[Finding]:
     """A response set, in code, before anything is filed: the served requests
     restated 1..N with no gap and in order (when the document restates them),
@@ -421,6 +433,9 @@ def response_findings(papers: list[Paper], served: Mapping[str, Mapping[str, Any
             out.append(_f(MUST, "2 the served sets", f"{p.label} answers no served set", p.label))
             continue
         label, n, form = _RESPONSE_LABELS[s["set_type"]], int(s["count"]), s["set_type"] == "form_interrogatories"
+        if form and s.get("checked"):
+            out += _form_findings(p, s)
+            continue
         requests, responses, restated = _scan(p.text, label)
         problems = _sequence_problems(responses, n, form, "response")
         if requests:
