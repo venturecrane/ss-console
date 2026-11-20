@@ -329,6 +329,9 @@ class EstablishmentStore:
     def ops_close_by_smd(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._ops.ops_close_by_smd(request)
 
+    def rule_close_by_smd(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self._ops.rule_close_by_smd(request)
+
     def act_propose(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._acts.act_propose(request)
 

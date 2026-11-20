@@ -421,6 +421,9 @@ ACCEPTED_ACTION_TYPES = frozenset(
         # SMD closed a request quietly: the requester was already answered
         # elsewhere, so no letter follows (ops_close_by_smd, root only).
         "OPS_REQUEST_CLOSED_BY_SMD",
+        # SMD closed a stated rule quietly (rule_close_by_smd, root only, the
+        # rules-by-hand stopgap of 2026-11-20).
+        "RULE_CLOSED_BY_SMD",
         # ADR 0089 staff send-as, written by the workspace broker.
         "SEND_AS_PROPOSED",
         "SEND_AS_REVISED",

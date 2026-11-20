@@ -682,6 +682,33 @@ class PendingRuleStore:
         finally:
             conn.close()
 
+    def close_rule_by_smd(
+        self,
+        proposal_id: str,
+        closed_by: str,
+        reason: str | None,
+        now: float | None = None,
+    ) -> bool:
+        """End one RULE row quietly on root's word (2026-11-20, the rules-by-hand
+        stopgap). :meth:`close_ops_by_smd`'s columns and race safety, for
+        ``kind='rule'``: never committed, never declined, nobody yet told, no
+        notify claim. True iff THIS call ended it."""
+        now = time.time() if now is None else now
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                "UPDATE pending_rules SET lapsed_at=COALESCE(lapsed_at, ?), lapse_notified_at=?, "
+                "smd_closed_at=?, resolved_by=?, outcome_reason=? "
+                "WHERE proposal_id=? AND kind='rule' AND consumed_at IS NULL "
+                "AND declined_at IS NULL AND lapse_notified_at IS NULL "
+                "AND notify_claimed_at IS NULL AND smd_closed_at IS NULL",
+                (now, now, now, closed_by, reason, proposal_id),
+            )
+            conn.commit()
+            return bool(cursor.rowcount)
+        finally:
+            conn.close()
+
     def mark_ask_sent(self, proposal_id: str, now: float | None = None) -> bool:
         """Record that SMD has been asked, once, for an answer this parser reads.
 

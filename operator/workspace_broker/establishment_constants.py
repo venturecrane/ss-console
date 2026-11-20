@@ -51,6 +51,10 @@ OPS_REQUEST_LAPSED_ACTION_TYPE = "OPS_REQUEST_LAPSED"
 # because that type means "SMD answered and the requester is told by the seat",
 # and this row means the opposite half of that sentence.
 OPS_REQUEST_CLOSED_BY_SMD_ACTION_TYPE = "OPS_REQUEST_CLOSED_BY_SMD"
+# 2026-11-20 (the rules-by-hand stopgap). Root ends a stated RULE with no
+# letter to anyone: SMD records rules by hand on that seat. ``rule_close_by_smd``
+# appends only this type.
+RULE_CLOSED_BY_SMD_ACTION_TYPE = "RULE_CLOSED_BY_SMD"
 
 # The two spec properties an output class carries (ADR 0083 §2-3). Mirrors
 # SPEC_PROPERTIES in corrections.py and src/lib/operator/output-class-specs.ts.

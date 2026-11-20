@@ -642,6 +642,11 @@
       "producerFile": "operator/workspace_broker/establishment_constants.py",
       "reason": "2026-10-13. Appended when SMD closes an operations request through the root-only ops_close_by_smd because the requester was already answered elsewhere, so the seat must send no done, declined or lapse letter. Its own type rather than an OPS_REQUEST_RESOLVED outcome, because that type means the requester is told by the seat and this one means the opposite. Ids only: proposal id, closed_by, source_ref (the evidence of the earlier answer), instructed_by, text digest and has_reason; never the reason text (ADR 0083)."
     },
+    "RULE_CLOSED_BY_SMD": {
+      "side": "ss-console",
+      "producerFile": "operator/workspace_broker/establishment_constants.py",
+      "reason": "2026-11-20, the rules-by-hand stopgap. Appended when SMD, as root, ends a stated rule through rule_close_by_smd so the seat sends no lapse, decline or outcome letter about it: SMD records the firm's rules by hand on that seat. Ids only: proposal id, closed_by, instructed_by, text digest, state_before and has_reason; never the reason or the rule text."
+    },
     "SEND_AS_PROPOSED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/send_as_acts.py",

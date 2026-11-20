@@ -69,6 +69,8 @@ _METHODS: dict[str, str] = {
     # Root only (verbs.py): SMD closes an operations request whose requester
     # was already answered elsewhere, so no sweeper path ever writes to them.
     "ops_close_by_smd": "ops_close_by_smd",
+    # Root only: SMD ends a stated rule quietly (rules-by-hand stopgap, 2026-11-20).
+    "rule_close_by_smd": "rule_close_by_smd",
 }
 
 VERBS: tuple[str, ...] = tuple(_METHODS)

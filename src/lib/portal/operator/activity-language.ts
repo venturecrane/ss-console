@@ -112,6 +112,7 @@ export const CLIENT_ACTIVITY_CATEGORIES: readonly ClientActivityCategory[] = [
       'OPS_REQUEST_RESOLVED',
       'OPS_REQUEST_LAPSED',
       'OPS_REQUEST_CLOSED_BY_SMD',
+      'RULE_CLOSED_BY_SMD',
       'MEDCHRON_JOB_SUBMITTED',
       'MEDCHRON_JOB_RUNNING',
       'MEDCHRON_JOB_HELD',
@@ -444,6 +445,8 @@ const CLIENT_LANGUAGE: Record<string, SummaryBuilder> = {
   // SMD finished the request by hand and the requester was already answered
   // in their own thread, so the seat sends no letter. Same vagueness rule.
   OPS_REQUEST_CLOSED_BY_SMD: () => 'SMD closed a setup request',
+  // SMD records rules by hand on a seat with the rules-by-hand stopgap.
+  RULE_CLOSED_BY_SMD: () => 'SMD closed a stated rule',
   ESCALATION_FIRED: (e) => e.reason ?? 'Flagged something for your attention',
   ESCALATION_ACKNOWLEDGED: () => 'An escalation was acknowledged',
   AGENT_STOPPED: () => 'Your operator was paused',

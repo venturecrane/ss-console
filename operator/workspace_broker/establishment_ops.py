@@ -16,6 +16,7 @@ from .establishment_constants import (
     OPS_REQUEST_KIND,
     OPS_REQUEST_RECORDED_ACTION_TYPE,
     OPS_REQUEST_RESOLVED_ACTION_TYPE,
+    RULE_CLOSED_BY_SMD_ACTION_TYPE,
     _MAX_SHORT_TEXT,
 )
 from .establishment_lifecycle import ProposalLifecycle
@@ -329,6 +330,91 @@ class OpsRequests(ProposalLifecycle):
             "source_ref": source_ref,
         }
 
+    def rule_close_by_smd(self, request: dict[str, Any]) -> dict[str, Any]:
+        """End one stated RULE with NO letter, on root's word, exactly once
+        (2026-11-20, the rules-by-hand stopgap: SMD records rules by hand, so an
+        open row must neither lapse into a letter nor be confirmed by a "yes").
+
+        :meth:`ops_close_by_smd`'s shape for ``kind='rule'``: root only, the same
+        closed columns, one ledger row of ids only (never the reason, never the
+        rule), nothing sent to anyone. A committed, declined, already ended or
+        claimed row is refused. ``dry_run`` writes nothing. Returns the row's
+        fields before and after."""
+        pending = self._require_pending()
+        proposal_id = _require_proposal_id(request.get("proposal_id"))
+        closed_by = require_address(request.get("closed_by"), "closed_by")
+        reason = normalize_outcome_reason(request.get("reason"))
+        if reason is None:
+            raise EstablishmentValidationError("reason is required: say why this rule is closed without a letter")
+        dry_run = request.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise EstablishmentValidationError("dry_run must be a boolean")
+        row = pending.get(proposal_id)
+        if row is None:
+            raise EstablishmentValidationError(f"no rule was recorded under {proposal_id}; nothing to close")
+        self._refuse_rule_unclosable(row, proposal_id)
+        before = _close_view(row)
+        if dry_run:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "proposal_id": proposal_id,
+                "before": before,
+                "would_become": "closed_by_smd",
+                "closed_by": closed_by,
+                "reason": reason,
+            }
+        if not pending.close_rule_by_smd(proposal_id, closed_by, reason):
+            self._refuse_rule_unclosable(pending.get(proposal_id) or row, proposal_id)
+            raise EstablishmentValidationError(f"rule {proposal_id} changed while closing; nothing was changed")
+        self.ledger.append(
+            {
+                "action_type": RULE_CLOSED_BY_SMD_ACTION_TYPE,
+                "actor": "smd",
+                "actor_role": "captain",
+                "metadata": json.dumps(
+                    {
+                        "proposal_id": proposal_id,
+                        "closed_by": closed_by,
+                        "instructed_by": row["instructed_by"],
+                        "text_sha256": row["text_sha256"],
+                        "state_before": before["state"],
+                        "has_reason": True,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            }
+        )
+        return {
+            "ok": True,
+            "dry_run": False,
+            "proposal_id": proposal_id,
+            "before": before,
+            "after": _close_view(pending.get(proposal_id) or row),
+            "closed_by": closed_by,
+        }
+
+    @staticmethod
+    def _refuse_rule_unclosable(row: dict[str, Any], proposal_id: str) -> None:
+        """Name why a quiet rule close cannot land, before the UPDATE tries it."""
+        if str(row["kind"] or "rule") != "rule":
+            raise EstablishmentValidationError(f"{proposal_id} is not a rule; nothing was changed")
+        if row.get("smd_closed_at") is not None:
+            raise EstablishmentValidationError(f"rule {proposal_id} was already closed by SMD; nothing was changed")
+        if row["consumed_at"] is not None:
+            raise EstablishmentValidationError(f"rule {proposal_id} was already committed; it cannot be closed")
+        if row["declined_at"] is not None:
+            raise EstablishmentValidationError(f"rule {proposal_id} was already declined; nothing was changed")
+        if row["lapse_notified_at"] is not None:
+            raise EstablishmentValidationError(
+                f"rule {proposal_id} already ended and nobody is owed a note; nothing was changed"
+            )
+        if row.get("notify_claimed_at") is not None:
+            raise EstablishmentValidationError(
+                f"rule {proposal_id} has an outcome letter claimed; it may be on its way, so it cannot be closed quietly"
+            )
+
     @staticmethod
     def _refuse_unclosable(row: dict[str, Any], proposal_id: str) -> None:
         """Name why a quiet close cannot land, before the UPDATE tries it.
@@ -393,3 +479,20 @@ class OpsRequests(ProposalLifecycle):
                 "no longer open; nothing was changed"
             )
         return {"ok": True, "proposal_id": proposal_id, "ask_sent": True}
+
+
+def _close_view(row: dict[str, Any]) -> dict[str, Any]:
+    """The fields a close changes or is judged by, for the CLI's before/after."""
+    keys = (
+        "kind",
+        "instructed_by",
+        "text",
+        "consumed_at",
+        "declined_at",
+        "lapsed_at",
+        "lapse_notified_at",
+        "smd_closed_at",
+        "notify_claimed_at",
+        "resolved_by",
+    )
+    return {"state": proposal_state(row), **{k: row.get(k) for k in keys}}

@@ -61,6 +61,7 @@
       "ops_resolve",
       "pending_rules",
       "propose",
+      "rule_close_by_smd",
       "stage_document",
       "status",
       "submit",
@@ -165,6 +166,7 @@
       "_hydrate",
       "claim_notify",
       "close_ops_by_smd",
+      "close_rule_by_smd",
       "consume",
       "create",
       "decline",
@@ -185,6 +187,10 @@
   "RESULT_TTL_SECONDS": {
     "type": "int",
     "value": 1800
+  },
+  "RULE_CLOSED_BY_SMD_ACTION_TYPE": {
+    "type": "str",
+    "value": "RULE_CLOSED_BY_SMD"
   },
   "RULE_DECLINED_ACTION_TYPE": {
     "type": "str",
