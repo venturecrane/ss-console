@@ -302,6 +302,10 @@ def _transcribe(sr: StageRun, groups: list[list[llm.Item]], on_result: Callable[
             timed_out += len(sr.doorway.batch_call("vision", items, on_result, **kw).timed_out)
         return timed_out
     lock = threading.Lock()
+    # Anything raised in a worker (a failed save, a stop, a defect) halts the
+    # pool: a queued page returns before its call, so nothing more is paid
+    # for. run_pool cancels queued tasks only on a limit.
+    halt = threading.Event()
 
     def locked(item: llm.Item, r: llm.Result | None, err: str | None) -> None:
         with lock:
@@ -309,8 +313,16 @@ def _transcribe(sr: StageRun, groups: list[list[llm.Item]], on_result: Callable[
 
     def task(item: llm.Item) -> Callable[[], None]:
         def one() -> None:
-            stop_request.check("vision")  # every finished page is already appended to its part file
-            sr.doorway.batch_call("vision", [item], locked, **kw)
+            if halt.is_set():
+                return
+            try:
+                # No new page starts once a stop is requested; a call already
+                # in flight is the residual exposure (paid, unrecorded if killed).
+                stop_request.check("vision")
+                sr.doorway.batch_call("vision", [item], locked, **kw)
+            except BaseException:
+                halt.set()
+                raise
 
         return one
 

@@ -186,6 +186,45 @@ def test_a_limit_stops_every_worker_and_leaves_attempts_unchanged(
     }
 
 
+def test_a_machine_stop_starts_no_new_piece_and_keeps_the_queue(
+    job_dir: Path, firm_config_path: Path, data_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jobs import stop_request
+
+    monkeypatch.setattr(compose_pool.time, "sleep", lambda *_: None)
+    flag = tmp_path / stop_request.NAME
+    monkeypatch.setattr(stop_request._Armed, "path", flag)
+
+    asked: list[str] = []
+
+    def hook(stage: str) -> None:
+        # The stop lands before the fan-out's first call is sent (call 1 is
+        # the warm-up chunk), so each worker starts at most the one piece whose
+        # stop check it had already passed.
+        asked.append(stage)
+        if len(asked) == 2:
+            flag.write_text("stop")
+
+    client = Slow()
+    sr = _sr(job_dir, firm_config_path, data_root, client)
+    sr.before_request = hook
+    _unit_files(sr, FILES)
+    d = sr.slug_dir / "runs" / "alpha"
+    with pytest.raises(stop_request.StopRequested):
+        compose_stage.run(sr)
+    assert len(client.calls) <= 1 + compose_pool.COMPOSE_WORKERS, "pieces kept starting after the stop"
+    queued = compose_stage.read_queue(d)
+    assert {r["i"] for r in queued} == {
+        i for i in range(1, len(list(d.glob("chunk-??.txt"))) + 1) if not compose_stage.produced(d, i)
+    }
+    tries: dict[str, int] = {}
+    for row in compose_stage.read_usage(d):
+        tries[str(row["chunk"])] = tries.get(str(row["chunk"]), 0) + 1
+    for r in queued:
+        label = f"{r['i']}.{r['part']}" if r["part"] else str(r["i"])
+        assert r["attempts"] == tries.get(label, 0), f"{label}: attempts changed without a recorded call"
+
+
 def test_the_replay_harness_reproduces_a_saved_run_at_eight_workers(
     job_dir: Path, firm_config_path: Path, data_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

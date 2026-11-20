@@ -28,6 +28,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any, Callable
 
+from .. import stop_request
 from ..medchron.audit.run import run_pool
 
 if TYPE_CHECKING:
@@ -68,6 +69,10 @@ class _Pool:
 
     def _pieces(self, q: list["Chunk"]) -> None:
         while q and not self.halt.is_set():
+            # The Machine's stop: no new piece starts once it is requested (the
+            # doorway checks only SMD's). A call already in flight is the
+            # residual exposure: paid, and unrecorded if the drain kills it.
+            stop_request.check("compose")
             with self.lock:
                 self._save()
             c = q[0]

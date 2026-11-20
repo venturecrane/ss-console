@@ -68,3 +68,81 @@ def test_eight_pages_at_once_write_what_one_at_a_time_wrote(
         rows = [sorted((x / "partial" / f"{fid}.jsonl").read_text().splitlines()) for x in (one, eight)]
         assert rows[0] == rows[1]
     assert (one / "ocr_results.jsonl").read_bytes() == (eight / "ocr_results.jsonl").read_bytes()
+
+
+def _twenty_pages(sr) -> None:
+    _seed_scan(sr, {"s1": ("example fax.pdf", make_pdf([f"fax page {k}" for k in range(1, 21)]))})
+
+
+class Gated(Slow):
+    """The first `free` calls answer at once; every later call waits until
+    `gate` is set, so nothing finishes between the event and its effect."""
+
+    def __init__(self, free: int, gate: threading.Event) -> None:
+        super().__init__()
+        self.free, self.gate = free, gate
+        self.after_gate = 0
+
+    def _answer(self, params) -> object:
+        with self.lock:
+            n = len(self.calls)
+            if self.gate.is_set():
+                self.after_gate += 1
+        if n > self.free:
+            self.gate.wait(10)
+        return super()._answer(params)
+
+
+def test_a_failed_save_halts_the_pool_before_the_queued_pages_are_paid_for(
+    job_dir: Path, firm_config_path: Path, data_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The third save raises (a full disk). Before it, only the first wave and
+    the two workers freed by saves 1 and 2 have started; after it, a worker
+    may start at most the one page whose halt check it had already passed."""
+    real = vision_stage.append_jsonl
+    failed = threading.Event()
+    saves = []
+
+    def save(path: Path, row: dict) -> None:
+        if path.parent.name == "partial":
+            saves.append(row["page"])
+            if len(saves) == 3:
+                failed.set()
+                raise OSError("no space left on device")
+        real(path, row)
+
+    monkeypatch.setattr(vision_stage, "append_jsonl", save)
+    client = Gated(free=3, gate=failed)
+    sr = _sr(job_dir, firm_config_path, data_root, client)
+    _twenty_pages(sr)
+    with pytest.raises(OSError):
+        vision_stage.run(sr)
+    w = vision_stage.VISION_WORKERS
+    assert client.after_gate <= w - 1, "a page started after the halt"
+    assert len(client.calls) <= (w + 2) + (w - 1) < 20, "queued pages were paid for after the failure"
+
+
+def test_no_page_starts_once_a_stop_is_requested(
+    job_dir: Path, firm_config_path: Path, data_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The stop lands before the second call is even sent (the doorway's
+    pre-call hook writes it), so each worker starts at most the one page whose
+    stop check it had already passed, and none after."""
+    from jobs import stop_request
+
+    flag = tmp_path / stop_request.NAME
+    monkeypatch.setattr(stop_request._Armed, "path", flag)
+    asked = []
+
+    def hook(stage: str) -> None:
+        asked.append(stage)
+        if len(asked) == 2:
+            flag.write_text("stop")
+
+    client = Slow()
+    sr = _sr(job_dir, firm_config_path, data_root, client)
+    sr.before_request = hook
+    _twenty_pages(sr)
+    with pytest.raises(stop_request.StopRequested):
+        vision_stage.run(sr)
+    assert len(client.calls) <= vision_stage.VISION_WORKERS < 20
