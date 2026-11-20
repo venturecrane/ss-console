@@ -48,7 +48,7 @@ from __future__ import annotations
 from operator import attrgetter
 from typing import Any
 
-from . import own_rule_verbs, readback_bindings
+from . import own_rule_verbs, readback_bindings, readback_rounds, sender_block
 from .broker_context import BrokerContext
 
 #: verb -> EstablishmentStore method name. ``establish_status`` is the
@@ -97,13 +97,16 @@ def establish(
 # two are not EstablishmentStore methods, they act on one table beside its rows.
 # ---------------------------------------------------------------------------
 
-READBACK_VERBS: tuple[str, ...] = readback_bindings.VERBS + own_rule_verbs.VERBS
+READBACK_VERBS: tuple[str, ...] = (
+    readback_bindings.VERBS + own_rule_verbs.VERBS + sender_block.VERBS + readback_rounds.VERBS
+)
 _READBACK_HANDLERS = {
     readback_bindings.VERB_OWED: readback_bindings.readback_owed,
     readback_bindings.VERB_SENT: readback_bindings.readback_sent,
     readback_bindings.VERB_FOR: readback_bindings.readback_for,
-    readback_bindings.VERB_SIGNATURE: readback_bindings.signature_record,
     **own_rule_verbs.HANDLERS,
+    **sender_block.HANDLERS,
+    **readback_rounds.HANDLERS,
 }
 
 

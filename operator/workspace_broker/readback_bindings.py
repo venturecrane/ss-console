@@ -86,22 +86,6 @@ CREATE TABLE IF NOT EXISTS readback_verified (
   created_at  REAL NOT NULL
 )
 """
-#: The signature block a sender closes his email with, recorded ONCE per address
-#: from an email of his that no rule decision rode on (2026-11-20). A reply's
-#: signature-shaped line is skipped as signature only when it is one of these
-#: lines or is in that reply's own quoted history (``shared/reply_shape``). Lines
-#: in anchor form (whitespace and case folded), never anything else of the email.
-CREATE_SIGNATURE_SQL = """
-CREATE TABLE IF NOT EXISTS sender_signatures (
-  recipient  TEXT PRIMARY KEY,
-  lines      TEXT NOT NULL,
-  created_at REAL NOT NULL
-)
-"""
-#: The longest signature block kept, and the longest line of it.
-MAX_SIGNATURE_LINES = 24
-MAX_SIGNATURE_LINE = 300
-
 logger = logging.getLogger(__name__)
 
 RETENTION_DAYS = 30
@@ -113,8 +97,7 @@ _MAX_MESSAGE_ID = 500
 VERB_OWED = "establish_readback_owed"
 VERB_SENT = "establish_readback_sent"
 VERB_FOR = "establish_readback_for"
-VERB_SIGNATURE = "establish_signature_record"
-VERBS: tuple[str, ...] = (VERB_OWED, VERB_SENT, VERB_FOR, VERB_SIGNATURE)
+VERBS: tuple[str, ...] = (VERB_OWED, VERB_SENT, VERB_FOR)
 
 
 def normalize_message_id(value: Any) -> str:
@@ -161,7 +144,6 @@ class ReadbackBindings:
             conn.execute(CREATE_INDEX_SQL)
             conn.execute(CREATE_PENDING_SQL)
             conn.execute(CREATE_VERIFIED_SQL)
-            conn.execute(CREATE_SIGNATURE_SQL)
             conn.commit()
         finally:
             conn.close()
@@ -244,29 +226,6 @@ class ReadbackBindings:
         found = {str(r[0]) for r in rows}
         return [p for p in among if p in found]
 
-    def note_signature(self, recipient: str, lines: list[str]) -> bool:
-        """Keep ``recipient``'s signature block the first time; never replaced."""
-        conn = self._pending._connect()
-        try:
-            with conn:
-                return bool(
-                    conn.execute(
-                        "INSERT OR IGNORE INTO sender_signatures (recipient, lines, created_at) VALUES (?, ?, ?)",
-                        (recipient, json.dumps(lines), time.time()),
-                    ).rowcount
-                )
-        finally:
-            conn.close()
-
-    def signature(self, recipient: str) -> list[str]:
-        conn = self._pending._connect()
-        try:
-            row = conn.execute("SELECT lines FROM sender_signatures WHERE recipient = ?", (recipient,)).fetchone()
-        finally:
-            conn.close()
-        lines = json.loads(row[0]) if row else []
-        return [str(s) for s in lines if isinstance(s, str)]
-
     def carried(self, sent_message_id: str, recipient: str) -> tuple[list[str], bool]:
         conn = self._pending._connect()
         try:
@@ -338,6 +297,10 @@ def readback_owed(broker: BrokerContext, request: dict[str, Any]) -> dict[str, A
     if not isinstance(listed, bool):
         raise EstablishmentValidationError("listed must be a boolean")
     verified = [str(v) for v in request.get("verified_ids") or [] if isinstance(v, str) and v in ids]
+    from . import readback_rounds
+
+    # At most two read-backs per rule (readback_rounds): refused past the cap.
+    readback_rounds.note_owed(pending, ids, _inbound(request))
     ReadbackBindings(pending).owe(_inbound(request), recipient, ids, listed, verified)
     return {"ok": True, "owed": ids}
 
@@ -404,12 +367,12 @@ def readback_for(broker: BrokerContext, request: dict[str, Any]) -> dict[str, An
     reader = _agentmail_headers if "@" in message_id else _graph_headers
     ops = getattr(broker, "agentmail" if reader is _agentmail_headers else "msgraph", None)
     if ops is None:
-        return {**unbound, "lookup": "no mailbox on this broker"}
+        return {**unbound, **_extras(pending, sender), "lookup": "no mailbox on this broker"}
     try:
         from_address, in_reply_to, references = reader(ops, message_id)
     except Exception as exc:  # noqa: BLE001 - could not look: ask, never guess
         logger.warning("readback_bindings: could not read the headers of %s (%s)", message_id, type(exc).__name__)
-        return {**unbound, "lookup": f"failed: {type(exc).__name__}"}
+        return {**unbound, **_extras(pending, sender), "lookup": f"failed: {type(exc).__name__}"}
     if from_address != sender:
         return {**unbound, "lookup": "the reply is not from that person"}
     store = ReadbackBindings(pending)
@@ -417,9 +380,11 @@ def readback_for(broker: BrokerContext, request: dict[str, Any]) -> dict[str, An
     # naming a recorded read-back is unbound, and the seat lists again. The
     # citation exemption reaches only the sentences this reply's answer shows:
     # the rules it answers when bound, the sender's open own rules (the list)
-    # when not. The sender's recorded signature rides every answer.
-    signature = store.signature(sender)
-    listing = {"verified_ids": store.verified(sender, _open_own_ids(pending, sender)), "signature": signature}
+    # when not. Every answer carries the sender's learned signature block
+    # (sender_block) and how many read-backs each open rule has had
+    # (readback_rounds), which caps them at two.
+    extra = _extras(pending, sender)
+    listing = {"verified_ids": store.verified(sender, _open_own_ids(pending, sender)), **extra}
     parent = parent_id(in_reply_to, references)
     if not parent:
         return {**unbound, **listing, "lookup": "no reply header"}
@@ -431,8 +396,14 @@ def readback_for(broker: BrokerContext, request: dict[str, Any]) -> dict[str, An
             parent,
         )
         return {**unbound, **listing, "header": True, "lookup": "replies to no recorded read-back"}
-    extra = {"verified_ids": store.verified(sender, ids), "signature": signature}
-    return {"ok": True, "bound": True, "header": True, "proposal_ids": ids, "listed": listed, **extra}
+    bound = {"verified_ids": store.verified(sender, ids), **extra}
+    return {"ok": True, "bound": True, "header": True, "proposal_ids": ids, "listed": listed, **bound}
+
+
+def _extras(pending: Any, sender: str) -> dict[str, Any]:
+    from . import readback_rounds, sender_block
+
+    return {"block": sender_block.block_for(pending, sender), **readback_rounds.rounds_for(pending, sender)}
 
 
 def _open_own_ids(pending: Any, sender: str) -> list[str]:
@@ -451,18 +422,6 @@ def _open_own_ids(pending: Any, sender: str) -> list[str]:
     return [str(r[0]) for r in rows]
 
 
-def signature_record(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
-    """Keep the signature block of a sender's email that no rule decision rode
-    on, the first time (``establish_signature_record``). Lines only."""
-    pending = _pending_store(broker)
-    sender = require_address(request.get("sender"), "sender")
-    raw = request.get("lines")
-    if not isinstance(raw, list) or not 2 <= len(raw) <= MAX_SIGNATURE_LINES:
-        raise EstablishmentValidationError(f"lines must be a list of 2 to {MAX_SIGNATURE_LINES} lines")
-    lines = [str(s).strip()[:MAX_SIGNATURE_LINE] for s in raw if isinstance(s, str) and str(s).strip()]
-    return {"ok": True, "recorded": ReadbackBindings(pending).note_signature(sender, lines)}
-
-
 __all__ = [
     "CREATE_SQL",
     "MAX_CARRIED",
@@ -472,11 +431,9 @@ __all__ = [
     "VERB_FOR",
     "VERB_OWED",
     "VERB_SENT",
-    "VERB_SIGNATURE",
     "normalize_message_id",
     "parent_id",
     "readback_for",
     "readback_owed",
     "readback_sent",
-    "signature_record",
 ]

@@ -65,6 +65,8 @@ KIND_RULE = "rule_stated"
 KIND_NOT_RECORDED = "rule_not_recorded"
 #: A rule the person was told is recorded whose install then failed (the broker's).
 KIND_INSTALL = "rule_install_failed"
+#: A rule read back twice with no plain yes, handed to SMD (the broker's own).
+KIND_NEEDS_PERSON = "rule_needs_person"
 #: The kinds the agent may record (the others are the broker's own).
 AGENT_KINDS = frozenset({KIND_HELP, KIND_RULE, KIND_NOT_RECORDED})
 _LANE = {
@@ -73,6 +75,7 @@ _LANE = {
     KIND_HELP: "operator",
     KIND_RULE: "operator",
     KIND_INSTALL: "operator",
+    KIND_NEEDS_PERSON: "operator",
     KIND_NOT_RECORDED: "operator",
 }
 DETAIL_MAX = 300

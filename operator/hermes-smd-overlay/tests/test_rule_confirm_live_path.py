@@ -26,12 +26,14 @@ import pytest
 from shared import inbound, outbound_gate, readback_send
 from tests.conftest import load_plugin
 from tests.rule_turns import bound_turn
+from tests.test_rule_reply_shapes import REAL_BLOCK, REAL_YESES, ROSTER_NAME
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workspace_broker import (
     readback_bindings as rb,  # noqa: E402 - after the operator tree is on the path
 )
+from workspace_broker import sender_block  # noqa: E402 - the same
 from workspace_broker.tests import test_readback_bindings as broker_kit  # noqa: E402 - the same
 
 PAT = broker_kit.ATTORNEY
@@ -40,9 +42,11 @@ FIRST, REPLY = "AAMkFirst=", broker_kit.GRAPH_ID
 RULE = "In memos, no headings."
 
 
-def _prompt(body: str, message_id: str) -> str:
+def _prompt(body: str, message_id: str, bare: bool = False) -> str:
+    """The turn prompt. ``bare``: the Graph lane's from: line, the address alone."""
+    sender = PAT if bare else f"Pat Q. Doe <{PAT}>"
     return (
-        f"An inbound email arrived.\nfrom: Pat Q. Doe <{PAT}>\nsubject: Re: memos\n"
+        f"An inbound email arrived.\nfrom: {sender}\nsubject: Re: memos\n"
         f"message_id: {message_id}\n{inbound.UNTRUSTED_EMAIL_DELIMITER}\n{body}"
     )
 
@@ -105,13 +109,13 @@ def loop(monkeypatch, tmp_path):
     inbound.SESSION_INBOUND_ORIGIN._reset_for_tests()
 
 
-def _propose_and_send(reply: Any, est: Any, broker: Any) -> tuple[str, str]:
+def _propose_and_send(
+    reply: Any, est: Any, broker: Any, stated: str = f"From now on: {RULE}", bare: bool = False
+) -> tuple[str, str]:
     """Turn 1: the attorney states the rule; the read-back goes out through the
     relay's send record. Returns (proposal id, the read-back sent)."""
     bound_turn("s1", PAT, FIRST)
-    est.on_pre_llm_call(
-        session_id="s1", sender_id=PAT, user_message=_prompt(f"From now on: {RULE}", FIRST)
-    )
+    est.on_pre_llm_call(session_id="s1", sender_id=PAT, user_message=_prompt(stated, FIRST, bare))
     out = json.loads(
         est._propose(
             {
@@ -213,19 +217,27 @@ def test_a_signed_yes_from_a_sender_with_no_recorded_signature_is_read_back_agai
     assert "s2" not in est._CONFIRMED_SAY
 
 
-def test_an_earlier_email_records_his_signature_and_a_signed_yes_then_confirms(loop) -> None:
-    """An email of his that no rule decision rides on (a request, no yes in it)
-    records its closing block, once; his next signed yes is plain."""
+def _two_earlier_emails(est: Any) -> None:
+    """Two emails of his that no rule decision rides on (requests, no yes in them),
+    each ending with his block: the broker learns it (sender_block)."""
+    for n in (1, 2):
+        mid = f"AAMkEarlier{n}="
+        bound_turn(f"s0{n}", PAT, mid)
+        est.on_pre_llm_call(
+            session_id=f"s0{n}",
+            sender_id=PAT,
+            user_message=_prompt(f"Please pull the file for matter 44{n}.\n\n{SIGNATURE}", mid),
+        )
+
+
+def test_two_earlier_emails_teach_his_block_and_a_signed_yes_then_confirms(loop) -> None:
+    """FALSIFIER: drop reply_reading.observe from _could_answer and nothing is
+    learned, so the signed yes is read back again."""
     reply, est, broker = loop
-    est.own_rules._SIGNED.discard(PAT)
-    bound_turn("s0", PAT, "AAMkEarlier=")
-    est.on_pre_llm_call(
-        session_id="s0",
-        sender_id=PAT,
-        user_message=_prompt(f"Please pull the Jones file.\n\n{SIGNATURE}", "AAMkEarlier="),
-    )
-    store = rb.ReadbackBindings(broker.establishment._require_pending())
-    assert "patrick q. doe" in store.signature(PAT) and "doe & roe llp" in store.signature(PAT)
+    est.own_rules.reply_reading._OBSERVED.clear()
+    _two_earlier_emails(est)
+    block = sender_block.block_for(broker.establishment._require_pending(), PAT)
+    assert "patrick q. doe" in block and "doe & roe llp" in block
     proposal_id = _yes_signed(reply, est, broker)
     assert est._CONFIRMED_SAY["s2"] == "Got it. That is recorded."
     still_open = broker_kit._call(broker, action="establish_pending", sender=PAT)["pending"]
@@ -361,20 +373,146 @@ def test_with_rules_by_hand_on_a_lapsed_rule_is_not_reopened(loop, monkeypatch, 
     assert est.own_rules.reopen_note("s2", PAT, _prompt("Yes.", REPLY)) is None
 
 
-def test_with_rules_by_hand_on_the_signature_recorder_still_records(
-    loop, monkeypatch, tmp_path
-) -> None:
-    """Harmless while the switch is on: it decides nothing, and the anchor is
+def test_with_rules_by_hand_on_the_block_is_still_learned(loop, monkeypatch, tmp_path) -> None:
+    """Harmless while the switch is on: it decides nothing, and his block is
     ready when the switch comes off."""
     _reply_plugin, est, broker = loop
     _by_hand(monkeypatch, tmp_path)
-    est.own_rules._SIGNED.discard(PAT)
-    bound_turn("s0", PAT, "AAMkEarlier=")
-    est.on_pre_llm_call(
-        session_id="s0",
-        sender_id=PAT,
-        user_message=_prompt(f"Please pull the Jones file.\n\n{SIGNATURE}", "AAMkEarlier="),
+    est.own_rules.reply_reading._OBSERVED.clear()
+    _two_earlier_emails(est)
+    assert "patrick q. doe" in sender_block.block_for(broker.establishment._require_pending(), PAT)
+
+
+# ---------------------------------------------------------------------------
+# The FIRST rule after a deploy (the replay of the firm's real emails,
+# 2026-11-20): his block is seeded from the seat mailbox by the root command,
+# the from: line is his bare address, his name is the roster's. His plain yes
+# with his real block confirms; anything added to it restates; and a rule
+# whose replies never become a plain yes is read back at most twice, then SMD.
+# ---------------------------------------------------------------------------
+
+
+class _Mailbox(broker_kit._Graph):
+    """The seat mailbox: his 34 earlier emails, each ending with his block."""
+
+    def __init__(self, headers: list[dict]) -> None:
+        super().__init__(headers)
+        self.history = [
+            f"Please pull the file for matter {4400 + n}.\n\n{REAL_BLOCK}" for n in range(34)
+        ]
+
+    def _request(self, path, method, body, credential_path=None, role=None):
+        if "$filter" in path:
+            return {
+                "value": [
+                    {"id": f"AAMkHist{n}=", "uniqueBody": {"contentType": "text", "content": t}}
+                    for n, t in enumerate(self.history)
+                ]
+            }
+        return super()._request(path, method, body, credential_path, role)
+
+
+def _seeded(broker: Any, monkeypatch: Any) -> None:
+    monkeypatch.setattr(
+        _Cfg, "authored_person_name", lambda _self, a: ROSTER_NAME if a == PAT else None
     )
-    assert "patrick q. doe" in rb.ReadbackBindings(
-        broker.establishment._require_pending()
-    ).signature(PAT)
+    broker.msgraph = _Mailbox([])
+    seed = broker.handle(
+        {"action": "establish_block_seed", "senders": [PAT]}, peer_pid=1, peer_uid=0
+    )
+    assert seed["senders"][PAT] == {"lines": 7, "matched": 34, "read": 34}
+
+
+def _answer_read_back(reply: Any, est: Any, broker: Any, answer: str) -> str:
+    proposal_id, _readback = _propose_and_send(reply, est, broker, bare=True)
+    broker.msgraph = _Mailbox([{"name": "In-Reply-To", "value": SENT}])
+    bound_turn("s2", PAT, REPLY)
+    est.on_pre_llm_call(
+        session_id="s2", sender_id=PAT, user_message=_prompt(answer, REPLY, bare=True)
+    )
+    return proposal_id
+
+
+@pytest.mark.parametrize("yes", REAL_YESES)
+def test_the_first_yes_after_deploy_with_his_real_block_confirms(loop, monkeypatch, yes) -> None:
+    """FALSIFIER: skip the seed, or learn the block from anything but his own
+    emails, and every one of these restates: the loop the client was in."""
+    reply, est, broker = loop
+    _seeded(broker, monkeypatch)
+    proposal_id = _answer_read_back(reply, est, broker, f"{yes}\n\n{REAL_BLOCK}")
+    assert est._CONFIRMED_SAY.get("s2") == "Got it. That is recorded."
+    assert proposal_id not in _ids(broker)
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "Only For Craig LLC",
+        "12 Point Font Avenue",
+        "Patrick Never Doe",
+        "_____\nmake it 14",
+        "(602) 555-0199 cell",
+    ],
+)
+def test_his_block_with_anything_added_restates(loop, monkeypatch, extra) -> None:
+    reply, est, broker = loop
+    _seeded(broker, monkeypatch)
+    proposal_id = _answer_read_back(reply, est, broker, f"Yes\n{extra}\n\n{REAL_BLOCK}")
+    assert "s2" not in est._CONFIRMED_SAY and proposal_id in _ids(broker)
+
+
+def test_a_rule_whose_replies_are_never_plain_is_read_back_twice_then_handed_to_smd(
+    loop, monkeypatch
+) -> None:
+    """Rounds 0, 1, 2 through the real send record and the real broker: the
+    read-back, one restatement, then the stopgap sentence and an owed item for
+    SMD, and no third read-back. FALSIFIER: remove readback_rounds.note_owed or
+    the cap check in own_rules.own_ask_note, and a third read-back is owed."""
+    from workspace_broker import smd_owed
+
+    reply, est, broker = loop
+    monkeypatch.setattr(
+        _Cfg, "authored_person_name", lambda _self, a: ROSTER_NAME if a == PAT else None
+    )
+    proposal_id, _readback = _propose_and_send(reply, est, broker, bare=True)
+    sent_ids = [SENT, "<CAlive2@mail.firm.example>"]
+    for n, sent in enumerate(sent_ids, start=1):
+        broker.msgraph = broker_kit._Graph([{"name": "In-Reply-To", "value": sent}])
+        inbound_id = f"AAMkRound{n}="
+        broker.msgraph.message["id"] = inbound_id
+        bound_turn(f"r{n}", PAT, inbound_id)
+        context = est.on_pre_llm_call(
+            session_id=f"r{n}",
+            sender_id=PAT,
+            user_message=_prompt("Yes\nletters only", inbound_id, bare=True),
+        )["context"]
+        if n == 1:  # the restatement: read back again, owed, and sent
+            assert "Reply yes to confirm." in context
+            origin = inbound.InboundOrigin(
+                sender_address=PAT, message_id=inbound_id, inbox_id="op@x"
+            )
+            reply._relay_sent(
+                f"r{n}",
+                origin,
+                f"k{n}",
+                PAT,
+                "x",
+                ("x", ""),
+                (None, None),
+                sent_ids[1],
+                "msgraph",
+                None,
+                False,
+            )
+        else:  # the second non-plain reply: SMD, never a third read-back
+            assert "once that's in place" in context and "Reply yes to confirm" not in context
+    owed_kinds = [r["kind"] for r in smd_owed.open_items(broker.audit_db_path)["owed"]]
+    assert owed_kinds == ["rule_needs_person"]
+    conn = broker.establishment._require_pending()._connect()
+    try:
+        rounds = conn.execute(
+            "SELECT COUNT(*) FROM readback_rounds WHERE proposal_id = ?", (proposal_id,)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert rounds == 2 and proposal_id in _ids(broker)

@@ -1,8 +1,12 @@
-"""The replay table: every reply shape the reviews found, and what it does.
+"""The replay table: every reply shape, and what the plain-yes grammar does with it.
 
-Each row is one reply to the Operator, the person's own rules that are open,
-the read-back the broker bound the reply to (or none), the sender, and the one
-verdict the reply must produce. The table is run twice:
+The grammar (``shared/reply_shape.py``, approved 2026-11-20): after quoted
+history is removed, the sender's own text is exactly
+``[G] A+ [C [N]] [B] [F]``: greeting, answer lines, closing, his name, HIS learned
+signature block (whole), a device footer. Nothing else. Each row is one reply,
+the person's open rules, the read-back the broker bound it to (or none), the
+sender, his learned block, and the one verdict it must produce. The table runs
+twice:
 
 * through :func:`shared.rule_confirm.resolve`, the decision itself;
 * through the establishment plugin's confirmation hook, with a fake broker, so
@@ -10,8 +14,9 @@ verdict the reply must produce. The table is run twice:
   ``establish_submit``, nothing stashed for a submit, no act confirmed.
 
 Then a property test: an affirmative first line followed by any one line of
-ordinary words is never a confirmation. Every name, address, rule and id here
-is invented.
+ordinary words is never a confirmation, whatever block is learned. Every name,
+address, rule and id here is invented; the block follows the SHAPE of the firm
+attorney's real one (the replay of his 40 real emails), with placeholder values.
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ from shared import inbound, reply_shape
 from shared import rule_confirm as rc
 from shared import rule_confirm_reply as rcr
 from tests.rule_turns import bound_turn
+from tests.test_confirm_by_reply import _Cfg as _ShapeCfg
 from tests.test_confirm_by_reply import seat  # noqa: F401 - the fixture
 
 PAT = "pat@firm.example"
@@ -39,35 +45,33 @@ TEXT = {
     ACT: 'Place a records order on matter 4417. Reply "yes, place it" to proceed.',
 }
 DISPLAY = {PAT: "Pat Q. Doe", SAM: "Sam Roe"}
+#: His roster name (users[].full_name); on the Graph lane the from: line is the
+#: bare address, so it is the only source of his name.
+ROSTER_NAME = "Patrick Q. Doe"
 
-SIGNATURE = (
-    "Cordially,\n\nPatrick Q. Doe\nDoe & Roe, P.L.C.\n1234 N. Central Ave., Suite 500\n"
-    "Phoenix, AZ 85004\nOffice: (602) 555-0100\nFax: (602) 555-0101"
+#: The shape of his real block: closing, full name with a middle initial, firm
+#: line, street, city, two phones with the label after the number.
+REAL_BLOCK = (
+    "Cordially,\n\nPatrick Q. Doe\nDoe & Roe LLP\n1234 N. Central Ave., Suite 500\n"
+    "Phoenix, AZ 85004\n(602) 555-0100 office\n(602) 555-0101 fax"
 )
-#: Thirteen lines, every one signature-shaped.
-LONG_SIGNATURE = (
+#: Thirteen lines, a title, a web line and a notice in it: learned whole, it is his.
+LONG_BLOCK = (
     "Best regards,\n\nPat Q. Doe, Esq.\nPartner\nDoe & Roe LLP\n1234 N. Central Ave.\n"
     "Suite 500\nPhoenix, AZ 85004\nOffice: (602) 555-0100\nFax: (602) 555-0101\n"
-    "Cell: 602-555-0102\npat@firm.example\nwww.doeroe.example\nSent from my iPhone"
+    "pat@firm.example\nwww.doeroe.example\nCONFIDENTIALITY NOTICE: This email may be privileged."
 )
-NOTICE = (
-    "CONFIDENTIALITY NOTICE: This email and any attachments are confidential and may be "
-    "privileged. If you received it in error, delete it and tell the sender."
-)
+LEARNED = tuple(line for line in REAL_BLOCK.splitlines() if line.strip())
+LONG_LEARNED = tuple(line for line in LONG_BLOCK.splitlines() if line.strip())
+#: The plain yeses the replay found confirming nothing (S08 S10 S12 S14 S20 S23
+#: S30 S31 S33 S35 S38 S39 by shape; the client workspace holds the texts).
+REAL_YESES = (
+    "Yes", "Yes.", "yes", "Yes, thanks", "Yes please", "Yes, that's right",
+    "Confirmed.", "OK", "Correct", "Yes - thank you", "Sounds good, thanks", "Hi,\nYes",
+)  # fmt: skip
 QUOTE_AB = (
     f"\n\nOn Tue, Riley <ops@firm.example> wrote:\n> [rule {A}] {TEXT[A]}\n"
     f"> [rule {B}] {TEXT[B]}\n> Reply yes to confirm both."
-)
-
-
-#: What the seat recorded for Pat: the closing lines of an earlier email of his.
-RECORDED: tuple[str, ...] = (
-    *SIGNATURE.splitlines(),
-    *LONG_SIGNATURE.splitlines(),
-    NOTICE,
-    "Partner",
-    "Cell: 602-555-0102 | Fax: 602-555-0101",
-    "Patrick Doe",
 )
 
 
@@ -83,8 +87,11 @@ class Row:
     sender: str = PAT
     reason: str | None = None
     rows: tuple[dict, ...] = field(default_factory=tuple)
-    #: The signature the seat recorded for the sender from an earlier email.
-    signature: tuple[str, ...] = ()
+    #: His learned block (workspace_broker/sender_block), as the broker returns it.
+    block: tuple[str, ...] = LEARNED
+    #: The Graph lane: from: is the bare address, his name is the roster's.
+    bare_from: bool = True
+    full_name: str = ROSTER_NAME
 
 
 def _yes(name, body, **kw):
@@ -97,50 +104,50 @@ def _restate(name, body, **kw):
 
 
 ABC = (A, B, C)
+LISTED = {"open": ABC, "binding": ABC, "listed": True}
 
 ROWS: tuple[Row, ...] = (
-    # ---- a plain yes to a read-back confirms every open rule it carried ----------
+    # ---- the firm's real plain yeses with his real block (the client's loop) ---
+    *(_yes(f"real: {yes!r} and his block", f"{yes}\n\n{REAL_BLOCK}") for yes in REAL_YESES),
+    _yes(
+        "real: a yes to two and his block",
+        f"Yes\n\n{REAL_BLOCK}",
+        confirms=(A, B),
+        open=(A, B),
+        binding=(A, B),
+    ),
+    _yes(
+        "real: from: with a display name too", f"Yes\n\n{REAL_BLOCK}", bare_from=False, full_name=""
+    ),
+    # ---- a plain yes with no block -------------------------------------------
     _yes("yes", "yes"),
     _yes("Yes.", "Yes."),
     _yes("Yes!!!", "Yes!!!"),
     _yes("Yes, thanks", "Yes, thanks"),
     _yes("Thanks, yes", "Thanks, yes"),
     _yes("greeting line then yes", "Hi,\nYes"),
-    _yes("yes then own first name", "Yes - Pat"),
+    _yes("yes then his first name", "Yes - Patrick"),
     _yes("ok", "ok"),
     _yes("Confirmed.", "Confirmed."),
     _yes("yes please", "Yes please"),
-    _yes("yes, addressing the Operator", "Good morning Riley,\nYes, thanks.\nPat"),
+    _yes("yep thx", "yep thx"),
+    _yes("ok cool", "ok cool"),
+    _yes("yes, addressing the Operator", "Good morning Riley,\nYes, thanks."),
     _yes("yes to both, bound to two", "Yes to both", confirms=(A, B), open=(A, B), binding=(A, B)),
     _yes("yes to all three", "Yes to all three.", confirms=ABC, open=ABC, binding=ABC),
-    _yes("cordially and a full block", f"Yes\n\n{SIGNATURE}", signature=RECORDED),
-    _yes("a thirteen-line signature", f"Yes\n\n{LONG_SIGNATURE}", signature=RECORDED),
-    _yes("a confidentiality footer", f"Yes\n\nThanks,\nPat\n\n{NOTICE}", signature=RECORDED),
-    _yes(
-        "a full block anchored by the quoted history",
-        f"Yes\n\n{SIGNATURE}\n\nOn Tue, Nov 18, 2026 at 3:04 PM Riley <ops@firm.example> wrote:\n"
-        + "\n".join(f"> {line}" for line in SIGNATURE.splitlines()),
-    ),
-    _restate("a full block nothing anchors", f"Yes\n\n{SIGNATURE}"),
-    _restate("a notice nothing anchors", f"Yes\n\nThanks,\nPat\n\n{NOTICE}"),
+    _yes("a closing", "Yes\nThanks,"),
+    _yes("a closing then his name", "Yes\nThanks,\nPatrick"),
+    _yes("a closing with his full name", "Yes\nBest regards, Patrick Doe"),
     _yes("device footer", "Yes\n\nSent from my iPhone"),
+    _yes("block then device footer", f"Yes\n\n{REAL_BLOCK}\n\nSent from my iPhone"),
     _yes("Outlook footer", "Yes\n\nGet Outlook for iOS"),
-    _yes("a job title", "Yes\nPartner", signature=RECORDED),
-    _restate("a job title nothing anchors", "Yes\nPartner"),
-    _yes("the RFC separator then the name", "Yes\n-- \nPat Doe"),
-    _yes("/s/ and Esq.", "Yes\n\nRegards,\n/s/ Pat Q. Doe, Esq."),
+    _yes("a thirteen-line block learned whole", f"Yes\n\n{LONG_BLOCK}", block=LONG_LEARNED),
     _yes(
-        "phones on one line",
-        "Yes\nPat Doe\nCell: 602-555-0102 | Fax: 602-555-0101",
-        signature=RECORDED,
+        "Gmail attribution wrapped over two lines",
+        "Yes\n\nOn Tue, Nov 18, 2026 at 3:04 PM Riley <\nops@firm.example> wrote:\n> anything quoted",
     ),
-    _yes("nickname for the display name", "Yes\nPatrick Doe", signature=RECORDED),
-    _restate("a nickname nothing anchors", "Yes\nPatrick Doe"),
     _yes(
-        "a quoted tag of another rule changes nothing",
-        f"Yes.{QUOTE_AB}",
-        open=(A, B),
-        binding=(A,),
+        "a quoted tag of another rule changes nothing", f"Yes.{QUOTE_AB}", open=(A, B), binding=(A,)
     ),
     _yes("a carried rule since closed is skipped", "Yes", open=(A,), binding=(A, B)),
     _yes(
@@ -151,26 +158,19 @@ ROWS: tuple[Row, ...] = (
         binding=(B, D),
         listed=True,
     ),
-    # ---- a pick from the numbered list -----------------------------------------
-    _yes("list: all", "all", confirms=ABC, open=ABC, binding=ABC, listed=True),
-    _yes("list: a plain yes is all", "Yes", confirms=ABC, open=ABC, binding=ABC, listed=True),
-    _yes("list: 1 and 3", "1 and 3", confirms=(A, C), open=ABC, binding=ABC, listed=True),
-    _yes("list: 1, 3", "1, 3", confirms=(A, C), open=ABC, binding=ABC, listed=True),
-    _yes("list: 1-3", "1-3", confirms=ABC, open=ABC, binding=ABC, listed=True),
-    _yes("list: the first one", "the first one", open=ABC, binding=ABC, listed=True),
-    _yes("list: 2", "2", confirms=(B,), open=ABC, binding=ABC, listed=True),
+    # ---- a pick from the numbered list ---------------------------------------
+    _yes("list: all", "all", confirms=ABC, **LISTED),
+    _yes("list: a plain yes is all", "Yes", confirms=ABC, **LISTED),
+    _yes("list: 1 and 3", "1 and 3", confirms=(A, C), **LISTED),
+    _yes("list: 1, 3", "1, 3", confirms=(A, C), **LISTED),
+    _yes("list: 1-3", "1-3", confirms=ABC, **LISTED),
+    _yes("list: 1 to 3 is a range", "1 to 3", confirms=ABC, **LISTED),
+    _yes("list: 1 through 2", "1 through 2", confirms=(A, B), **LISTED),
+    _yes("list: the first one", "the first one", **LISTED),
+    _yes("list: 2", "2", confirms=(B,), **LISTED),
     _yes("list: both", "both", confirms=(A, B), open=(A, B), binding=(A, B), listed=True),
-    _yes(
-        "list: yes to 2, signed",
-        f"Yes to 2\n\n{SIGNATURE}",
-        confirms=(B,),
-        signature=RECORDED,
-        open=ABC,
-        binding=ABC,
-        listed=True,
-    ),
+    _yes("list: yes to 2, and his block", f"Yes to 2\n\n{REAL_BLOCK}", confirms=(B,), **LISTED),
     _yes("old list: 1 and 3, 3 since closed", "1 and 3", open=(A, B), binding=ABC, listed=True),
-    # ---- tags the sender typed in their own text -------------------------------
     _yes(
         "[rule A] yes and [rule B] yes, no binding",
         f"[rule {A}] yes and [rule {B}] yes",
@@ -178,12 +178,10 @@ ROWS: tuple[Row, ...] = (
         open=(A, B),
         binding=None,
     ),
-    # ---- the review of 2026-11-20: instructions shaped like signature lines ----
-    # Each confirmed before anchoring. The recorded signature is present, and
-    # does not help: none of these lines is in it.
+    # ---- instructions shaped like signature lines: never his block -----------
     *(
-        _restate(f"disguised: {body}", f"Yes\n{body}", signature=RECORDED)
-        for body in (
+        _restate(f"disguised: {extra}", f"Yes\n{extra}\n\n{REAL_BLOCK}")
+        for extra in (
             "Only For Craig LLC",
             "But Only In PA",
             "Use Twelve Point LP",
@@ -201,64 +199,68 @@ ROWS: tuple[Row, ...] = (
             "P: 1.5 1.5 1.5 1.5",
             "Craig only, az 85004",
             "Pat Never Doe",
+            "Patrick Never Doe",
+            "Partner",
         )
     ),
-    Row(
-        "disguised on a list: a street-shaped line",
-        "1\n12 Point Font Avenue",
-        rc.ASK,
-        open=ABC,
-        binding=ABC,
-        listed=True,
-        reason=rc.ASK_PICK,
-        signature=RECORDED,
+    _restate("his block with an instruction under it", f"Yes\n\n{REAL_BLOCK}\nOnly For Craig LLC"),
+    _restate(
+        "his block with a line inserted",
+        f"Yes\n\n{REAL_BLOCK.replace('Doe & Roe LLP', 'Doe & Roe LLP' + chr(10) + 'Only for Craig')}",
     ),
-    _restate("a request to confirm", "Please confirm."),
-    _restate("a request to confirm, after a yes", "Yes, please confirm"),
-    _yes("list: 1 to 3 is a range", "1 to 3", confirms=ABC, open=ABC, binding=ABC, listed=True),
-    _yes("list: 1 through 2", "1 through 2", confirms=(A, B), open=ABC, binding=ABC, listed=True),
-    Row(
-        "list: both on three",
-        "both",
-        rc.ASK,
-        open=ABC,
-        binding=ABC,
-        listed=True,
-        reason=rc.ASK_PICK,
+    _restate("his block missing a line", f"Yes\n\n{REAL_BLOCK.replace('(602) 555-0101 fax', '')}"),
+    _restate("a block nobody learned", f"Yes\n\n{REAL_BLOCK}", block=()),
+    _restate("a learned block of someone else's", f"Yes\n\n{REAL_BLOCK}", block=LONG_LEARNED),
+    _restate(
+        "a qualifier from his own quoted email, re-typed",
+        f"Yes\nCraig & Associates\n\n{REAL_BLOCK}\n\nOn Tue, Nov 18, 2026, Pat <{PAT}> wrote:\n> Craig & Associates",
     ),
-    Row("list: one", "one", rc.ASK, open=ABC, binding=ABC, listed=True, reason=rc.ASK_PICK),
-    Row(
-        "list: 1 only for Craig",
-        "1 only for craig",
-        rc.ASK,
-        open=ABC,
-        binding=ABC,
-        listed=True,
-        reason=rc.ASK_PICK,
-    ),
-    Row("list: 3 to 1", "3 to 1", rc.ASK, open=ABC, binding=ABC, listed=True, reason=rc.ASK_PICK),
     # ---- content anywhere: read back again ------------------------------------
     _restate("closing then a change", "Yes\nThanks,\nActually make that 12pt"),
     _restate("closing then a withdrawal", "Yes\nThanks\nNo, scratch that"),
-    _restate("a P.S. under the name", "Yes\nBest,\nPat\nP.S. just Craig's cases"),
-    _restate("a narrowing under the name", "Yes\nPat\nfor letters to Craig"),
+    _restate("a P.S. under the name", "Yes\nBest,\nPatrick\nP.S. just Craig's cases"),
+    _restate("a narrowing under the name", "Yes\nThanks,\nPatrick\nfor letters to Craig"),
     _restate("a change under the device footer", "Yes\nSent from my iPhone\nMake it 50"),
+    _restate("his name with no closing", "Yes\nPatrick"),
     _restate("qualified on one line", "Yes for memos"),
     _restate("a second line of real content", "Yes\nletters only"),
     _restate("a question then yes", "Is this right?\nyes"),
     _restate("yes then a new request", "Yes\nAlso please draft the Jones demand."),
     _restate("yes but", "Yes but make it letters only"),
-    _restate("another person's name", "Yes\nChris"),
+    _restate("another person's name", "Yes\nThanks,\nChris"),
     _restate("a bare number line", "Yes\n12.5"),
     _restate("From: that is not a quote header", "Yes\nFrom: now on use 12pt\nThanks"),
     _restate("content after the RFC separator", "Yes\n-- \nActually make it 12pt"),
-    _restate("a sentence opening with Confidentiality", "Yes\nConfidentiality matters, only Craig"),
-    _restate("a firm suffix on a sentence", "Yes\nMake it Arial LLC"),
-    _restate("a street-shaped sentence", "Yes\n12 point to the court"),
     _restate("yes to both, bound to one", "Yes to both"),
     _restate("2 when one exists", "2"),
-    _restate("numbered edit under the block", f"Yes\n\n{SIGNATURE}\n1. use 12 point"),
-    Row("a question", "Yes?", rc.ASK, reason=rc.ASK_QUALIFIED),
+    _restate("numbered edit under the block", f"Yes\n\n{REAL_BLOCK}\n1. use 12 point"),
+    _restate("a request to confirm", "Please confirm."),
+    _restate("a request to confirm, after a yes", "Yes, please confirm"),
+    _restate("a question", "Yes?"),
+    # ---- the numbered list: a failed pick lists again -------------------------
+    Row("list: both on three", "both", rc.ASK, reason=rc.ASK_PICK, **LISTED),
+    Row("list: one", "one", rc.ASK, reason=rc.ASK_PICK, **LISTED),
+    Row("list: 1 only for Craig", "1 only for craig", rc.ASK, reason=rc.ASK_PICK, **LISTED),
+    Row("list: 3 to 1", "3 to 1", rc.ASK, reason=rc.ASK_PICK, **LISTED),
+    Row("list: 1 / Suite 3", "1\nSuite 3", rc.ASK, reason=rc.ASK_PICK, **LISTED),
+    Row(
+        "list: 1 / a street-shaped line",
+        "1\n12 Point Font Avenue",
+        rc.ASK,
+        reason=rc.ASK_PICK,
+        **LISTED,
+    ),
+    Row("list: out of range", "4", rc.ASK, reason=rc.ASK_PICK, **LISTED),
+    Row(
+        "old list: the pick closed",
+        "2",
+        rc.ASK,
+        open=(A,),
+        binding=ABC,
+        listed=True,
+        reason=rc.ASK_PICK,
+    ),
+    Row("list: none", "none", rc.NONE, **LISTED),
     # ---- no binding: a plain yes or a pick gets the list, nothing else confirms -
     Row("reply to a different email", "Yes", rc.ASK, open=(A, B), binding=None, reason=rc.ASK_PICK),
     Row("ok, thanks unbound", "ok, thanks", rc.ASK, open=(A, B), binding=None, reason=rc.ASK_PICK),
@@ -287,7 +289,7 @@ ROWS: tuple[Row, ...] = (
         binding=None,
     ),
     Row("a greeting and content", "Hi, no headings", rc.NONE, binding=None),
-    # ---- not the person, or not an answer --------------------------------------
+    # ---- not the person, or not an answer ------------------------------------
     Row("an assistant replying", "Yes", rc.ASK, binding=None, sender=SAM, reason=rc.ASK_NEEDS_TAG),
     Row(
         "a cc'd colleague", "Yes, thanks", rc.ASK, binding=None, sender=SAM, reason=rc.ASK_NEEDS_TAG
@@ -310,19 +312,8 @@ ROWS: tuple[Row, ...] = (
     ),
     Row("an auto-reply", "I am out of the office until Monday and will reply then.", rc.NONE),
     Row("an auto-reply thanking", "Thank you for your email. I will respond shortly.", rc.NONE),
-    Row("list: none", "none", rc.NONE, open=ABC, binding=ABC, listed=True),
-    Row("list: out of range", "4", rc.ASK, open=ABC, binding=ABC, listed=True, reason=rc.ASK_PICK),
-    Row(
-        "old list: the pick closed",
-        "2",
-        rc.ASK,
-        open=(A,),
-        binding=ABC,
-        listed=True,
-        reason=rc.ASK_PICK,
-    ),
     Row("a plain no to the read-back", "No.", rc.DECLINED),
-    # ---- acts and administrators keep the tag path exactly ---------------------
+    # ---- acts keep the tag path exactly --------------------------------------
     Row(
         "an act's phrase without its tag",
         "yes, place it",
@@ -354,8 +345,9 @@ def _rows(row: Row) -> list[dict]:
 
 
 def _prompt(row: Row) -> str:
+    sender = row.sender if row.bare_from else f"{DISPLAY[row.sender]} <{row.sender}>"
     return (
-        f"An inbound email arrived.\nfrom: {DISPLAY[row.sender]} <{row.sender}>\n"
+        f"An inbound email arrived.\nfrom: {sender}\n"
         "to: Riley <ops@firm.example>\nsubject: Re: rules\nmessage_id: AAMkReply=\n"
         f"{inbound.UNTRUSTED_EMAIL_DELIMITER}\n{row.body}"
     )
@@ -367,15 +359,28 @@ def _binding(row: Row) -> rcr.ReadbackBinding | None:
     return rcr.ReadbackBinding(proposal_ids=row.binding, listed=row.listed)
 
 
+def _who(row: Row) -> reply_shape.People:
+    """What the seat feeds the grammar: his roster name and his learned block.
+    The block rides only a reply from him (the broker returns his)."""
+    mine = row.sender == PAT
+    return reply_shape.people(
+        _prompt(row),
+        addressed=["Riley"],
+        block=row.block if mine else (),
+        full_name=row.full_name if mine else "",
+    )
+
+
 def test_the_table_has_every_shape():
-    assert len(ROWS) >= 60
+    assert len(ROWS) >= 90
     assert len({r.name for r in ROWS}) == len(ROWS)
 
 
 @pytest.mark.parametrize("row", ROWS, ids=[r.name for r in ROWS])
 def test_the_decision(row: Row) -> None:
-    who = reply_shape.people(_prompt(row), signature=row.signature)
-    verdict = rc.resolve(_prompt(row), _rows(row), row.sender, True, binding=_binding(row), who=who)
+    verdict = rc.resolve(
+        _prompt(row), _rows(row), row.sender, True, binding=_binding(row), who=_who(row)
+    )
     assert verdict.kind == row.expect, verdict
     if row.expect == rc.CONFIRMED:
         assert tuple(verdict.proposal_ids or (verdict.proposal_id,)) == row.confirms
@@ -389,9 +394,14 @@ def test_the_hook_commits_exactly_what_the_table_says(seat, monkeypatch, row: Ro
     stashed for a submit, and whether an act was confirmed. A row that does not
     confirm commits nothing at all."""
     mod, state = seat
+    name = row.full_name
+    monkeypatch.setattr(
+        _ShapeCfg, "authored_person_name", lambda _self, a: name if a == PAT else None
+    )
+    monkeypatch.setattr(_ShapeCfg, "personas", [{"name": "Riley"}], raising=False)
     state["pending"] = _rows(row)
     state["binding"] = (
-        {"proposal_ids": list(row.binding), "listed": row.listed, "signature": list(row.signature)}
+        {"proposal_ids": list(row.binding), "listed": row.listed, "block": list(row.block)}
         if row.binding
         else None
     )
@@ -420,35 +430,47 @@ _VOCABULARY = (
     "to", "every", "brief", "court", "point", "font", "arial", "change", "later", "not",
     "except", "just", "cases", "with", "a", "copy", "paralegal", "line", "first", "two",
     "actually", "wait", "maybe", "keep", "drop", "add", "remove", "monday", "50", "pages",
+    "llc", "avenue", "suite", "office", "fax", "partner", "associates", "&",
 )  # fmt: skip
 
 
 def test_an_affirmative_and_one_line_of_words_never_confirms() -> None:
     rand = random.Random(20261120)
-    who = reply_shape.people(_prompt(ROWS[0]))
     tried = 0
     for _ in range(3000):
-        words = [rand.choice(_VOCABULARY) for _ in range(rand.randint(1, 6))]
-        line = " ".join(words)
-        alone = _prompt(Row("x", line, rc.NONE))
-        if (
-            reply_shape.signature_line(line, who)
-            or reply_shape.affirmative_line(line, who, 2) is not None
-            or rcr.read_pick(alone, 2) is not None
-        ):
-            continue  # a signature, a yes or a pick is not "a line of content"
+        line = " ".join(rand.choice(_VOCABULARY) for _ in range(rand.randint(1, 6)))
+        probe = Row("x", line, rc.NONE)
+        who = _who(probe)
+        if reply_shape.affirmative_line(reply_shape.norm(line), who, 2) is not None:
+            continue  # a yes or a courtesy is not "a line of content"
+        if rcr.read_pick(_prompt(probe), 2, who) is not None:
+            continue  # nor is a pick
         tried += 1
+        tail = rand.choice(["", "Thanks,", "Best,", f"\n{REAL_BLOCK}"])
+        where = rand.choice(["before", "after"])
         body = (
-            f"{rand.choice(_FIRST_LINES)}\n{rand.choice(['', 'Thanks,', 'Best,', 'Pat'])}\n{line}"
+            f"{rand.choice(_FIRST_LINES)}\n{line}\n{tail}"
+            if where == "before"
+            else f"{rand.choice(_FIRST_LINES)}\n{tail}\n{line}"
         )
         row = Row("p", body, rc.ASK, open=(A, B), binding=(A, B), listed=rand.random() < 0.5)
-        verdict = rc.resolve(_prompt(row), _rows(row), PAT, True, binding=_binding(row))
+        verdict = rc.resolve(
+            _prompt(row), _rows(row), PAT, True, binding=_binding(row), who=_who(row)
+        )
         assert verdict.kind != rc.CONFIRMED, body
     assert tried > 2000
 
 
-def test_the_shape_module_reads_the_same_affirmatives() -> None:
+def test_the_grammar_reads_the_same_affirmatives_and_normal_form_as_the_broker() -> None:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from workspace_broker import sender_block
+
     assert reply_shape.AFFIRMATIVES == rc.BARE_AFFIRMATIVES
+    for line in ("  Patrick Q. Doe ", "That’s “right”", "(602) 555-0100 office"):
+        assert reply_shape.norm(line) == sender_block.norm_line(line)
 
 
 @pytest.mark.parametrize(
@@ -471,3 +493,36 @@ def test_a_reply_that_is_not_a_plain_yes_is_read_back_again_by_code(seat, body) 
     assert "Answer anything else the email asked." in context
     owed = [r for r in state["requests"] if r.get("action") == "establish_readback_owed"]
     assert owed and owed[-1]["proposal_ids"] == [A]
+
+
+def test_a_rule_read_back_twice_is_handed_to_smd_not_read_back_again(seat) -> None:  # noqa: F811
+    """The cap: a second reply that is not a plain yes gets the stopgap
+    sentence, the rule is handed to SMD, and no third read-back is owed.
+    FALSIFIER: drop the cap check in own_rules.own_ask_note."""
+    mod, state = seat
+    row = Row("r", "Yes\nletters only", rc.ASK)
+    state["pending"] = _rows(row)
+    state["binding"] = {"proposal_ids": [A], "listed": False, "rounds": {A: 2}}
+    real = mod._broker_request
+
+    def broker(payload):
+        if payload.get("action") == "establish_readback_handoff":
+            state["requests"].append(payload)
+            return {"ok": True, "smd_told": True, "handed_off": payload["proposal_ids"]}
+        return real(payload)
+
+    mod._broker_request = broker
+    try:
+        bound_turn("sess-c", PAT, "AAMkReply=")
+        context = mod.on_pre_llm_call(
+            session_id="sess-c", sender_id=PAT, user_message=_prompt(row)
+        )["context"]
+    finally:
+        mod._broker_request = real
+    assert [
+        r["proposal_ids"]
+        for r in state["requests"]
+        if r.get("action") == "establish_readback_handoff"
+    ] == [[A]]
+    assert not [r for r in state["requests"] if r.get("action") == "establish_readback_owed"]
+    assert "once that's in place" in context and "Reply yes to confirm" not in context

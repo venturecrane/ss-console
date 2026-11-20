@@ -174,6 +174,8 @@ def _admin_turn(session: str = SESSION, sender: str = ADMIN) -> None:
     SESSION_INBOUND_ORIGIN.record(
         session, InboundOrigin(sender_address=sender, message_id=MESSAGE_ID, inbox_id="inbox-1")
     )
+    # This turn's own prompt named that email, as on the seat (bound_this_turn).
+    SESSION_INBOUND_ORIGIN.note_turn_prompt(session, MESSAGE_ID)
 
 
 def _propose_calls(calls: list[dict]) -> list[dict]:

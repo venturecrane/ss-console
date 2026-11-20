@@ -45,7 +45,8 @@ logger = logging.getLogger(__name__)
 #: The broker verbs (``workspace_broker/readback_bindings.py``).
 VERB_OWED = "establish_readback_owed"
 VERB_FOR = "establish_readback_for"
-VERB_SIGNATURE = "establish_signature_record"
+VERB_OBSERVE = "establish_block_observe"
+VERB_HANDOFF = "establish_readback_handoff"
 
 #: The last line of a single rule's read-back.
 REPLY_YES = "Reply yes to confirm."
@@ -154,19 +155,6 @@ def can_register(session_id: str) -> bool:
     return origin is not None and bool(getattr(origin, "message_id", "")) and turn_says.published()
 
 
-def record_signature(broker: BrokerFn, sender: str, lines: list[str]) -> bool:
-    """Keep ``sender``'s signature block with the broker (it keeps the first).
-    True when the broker answered."""
-    if not sender or len(lines) < 2:
-        return False
-    try:
-        answer = broker({"action": VERB_SIGNATURE, "sender": sender, "lines": list(lines)})
-    except Exception:  # noqa: BLE001 - not recorded: his next reply restates once more
-        logger.debug("readback_confirm: signature not recorded", exc_info=True)
-        return False
-    return isinstance(answer, dict) and bool(answer.get("ok"))
-
-
 def confirmed_say(rows: list[dict[str, Any]], reach_on: bool | None = None) -> str:
     """The reply to a person who just confirmed their own rules, from the
     committed rows alone (critic issue 8: never the installed file, which the
@@ -264,13 +252,15 @@ def check_installs(broker: BrokerFn) -> list[str]:
 
 def fetch_binding(
     broker: BrokerFn, inbound_message_id: str, sender: str
-) -> tuple[rule_confirm_reply.ReadbackBinding | None, tuple[str, ...], tuple[str, ...]]:
-    """``(binding, verified ids, recorded signature lines)`` as the broker matched
-    them from the reply's own headers. There is no fallback to a list sent
-    earlier: no header naming a recorded read-back is no binding, and the person
-    is listed again."""
+) -> tuple[rule_confirm_reply.ReadbackBinding | None, dict[str, Any] | None]:
+    """``(binding, extras)`` as the broker matched them from the reply's own
+    headers. There is no fallback to a list sent earlier: no header naming a
+    recorded read-back is no binding, and the person is listed again. ``extras``
+    is ``verified`` (ids), ``block`` (his learned signature lines), ``rounds``
+    (read-backs per open rule) and ``handed_off``; ``None`` when the broker
+    could not be read at all (then nothing of his own rules moves this turn)."""
     if not inbound_message_id or not sender:
-        return None, (), ()
+        return None, None
     try:
         answer = broker(
             {"action": VERB_FOR, "inbound_message_id": inbound_message_id, "sender": sender}
@@ -279,9 +269,9 @@ def fetch_binding(
         logger.warning(
             "readback_confirm: binding lookup failed for %s", inbound_message_id, exc_info=True
         )
-        return None, (), ()
+        return None, None
     if not isinstance(answer, dict) or not answer.get("ok"):
-        return None, (), ()
+        return None, None
 
     def _ids(key: str) -> tuple[str, ...]:
         return tuple(str(p) for p in answer.get(key) or () if isinstance(p, str))
@@ -292,7 +282,14 @@ def fetch_binding(
         if ids
         else None
     )
-    return binding, _ids("verified_ids"), _ids("signature")
+    rounds = answer.get("rounds") if isinstance(answer.get("rounds"), dict) else {}
+    extras = {
+        "verified": _ids("verified_ids"),
+        "block": tuple(str(s) for s in answer.get("block") or () if isinstance(s, str)),
+        "rounds": {str(k): int(v) for k, v in rounds.items() if isinstance(v, int)},
+        "handed_off": _ids("handed_off"),
+    }
+    return binding, extras
 
 
 def note_firm(sentences: list[str], session_id: str) -> None:

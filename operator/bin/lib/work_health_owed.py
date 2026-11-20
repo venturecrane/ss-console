@@ -74,8 +74,16 @@ _WHAT = {
     "rule_install_failed": (
         "A rule a firm person was told is recorded did not install at {at} ({detail}). Request email {ref}."
     ),
+    "rule_needs_person": (
+        "A rule a firm person stated was read back twice with no plain yes at {at} ({detail}); they were told it "
+        "will be confirmed in the thread once in place. Request email {ref}."
+    ),
 }
 _TODO = {
+    "rule_needs_person": (
+        "Read the thread, confirm the rule with them by note in that thread, record it with the administrator "
+        "path, then close it in work-health-closed.yaml (job: {owed})."
+    ),
     "rule_not_recorded": (
         "Record the rule, answer in that thread through the SMD note lane, then close it in "
         "work-health-closed.yaml (job: {owed})."

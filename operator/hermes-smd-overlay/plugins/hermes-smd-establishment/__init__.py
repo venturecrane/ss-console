@@ -4173,7 +4173,7 @@ def _confirmation_note(
     _clear_confirmation_stash(session_id)
     if not isinstance(user_message, str) or not user_message.strip():
         return None
-    if not own_rules._could_answer(user_message, sender):
+    if not own_rules._could_answer(user_message, sender, session_id):
         # Nothing that could be an answer. Skip the broker round trip entirely —
         # this runs on every attributed turn.
         return None

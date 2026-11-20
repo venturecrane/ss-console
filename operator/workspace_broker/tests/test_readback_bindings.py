@@ -241,14 +241,11 @@ def test_message_ids_match_with_or_without_brackets():
 def test_the_read_back_verbs_are_agent_only_on_the_table():
     from workspace_broker import establish_verbs, verbs
 
-    assert rb.VERBS == (
-        "establish_readback_owed",
-        "establish_readback_sent",
-        "establish_readback_for",
-        "establish_signature_record",
-    )
+    assert rb.VERBS == ("establish_readback_owed", "establish_readback_sent", "establish_readback_for")
     for name in establish_verbs.READBACK_VERBS:
-        assert verbs.TABLE[name].auth == frozenset({verbs.AGENT})
+        # The mailbox seed is SMD's, run as root on the seat; the rest are the agent's.
+        want = verbs.ROOT if name == "establish_block_seed" else verbs.AGENT
+        assert verbs.TABLE[name].auth == frozenset({want})
     assert {
         "establish_reopen_lapsed",
         "establish_restated",
@@ -311,20 +308,6 @@ def test_the_citation_exemption_reaches_only_the_rules_this_reply_answers(tmp_pa
     _lapse(broker, a)
     broker.msgraph = _Graph([])
     assert _for(broker)["verified_ids"] == [b]
-
-
-def test_a_senders_signature_is_kept_once_and_rides_every_answer(tmp_path):
-    """The anchor a reply's signature lines are read against (shared/reply_shape):
-    recorded the first time, never replaced, returned bound or not."""
-    broker = _broker(tmp_path)
-    first = ["cordially,", "patrick q. doe", "doe & roe llp"]
-    assert _call(broker, action=rb.VERB_SIGNATURE, sender=ATTORNEY, lines=first)["recorded"] is True
-    again = _call(broker, action=rb.VERB_SIGNATURE, sender=ATTORNEY, lines=["only for craig llc", "x"])
-    assert again["recorded"] is False
-    broker.msgraph = _Graph([])
-    assert _for(broker)["signature"] == first
-    with pytest.raises(EstablishmentValidationError):
-        _call(broker, action=rb.VERB_SIGNATURE, sender=ATTORNEY, lines=["one line"])
 
 
 def _lapse(broker: Broker, proposal_id: str) -> None:

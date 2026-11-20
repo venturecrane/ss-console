@@ -587,10 +587,21 @@ def _envelope(body: str, sender: str = "Pat Q. Doe <pat.doe@firm.example>") -> s
 
 @pytest.mark.parametrize(
     "body",
-    ["Yes\nPat", "Yes.\n\nThanks,\nPat", "Ok\nBest regards, Pat Doe", "Yes\n-PQD", "Yes\nCheers"],
+    [
+        "Yes.\n\nThanks,\nPat",
+        "Ok\nBest regards, Pat Doe",
+        "Yes\nCheers",
+        "Yes\nThanks,\nPat Q. Doe",
+    ],
 )
 def test_a_yes_signed_with_a_courtesy_or_the_senders_own_name_is_plain(body):
     assert rcr.pure_affirmative(_envelope(body))
+
+
+@pytest.mark.parametrize("body", ["Yes\nPat", "Yes\n-PQD"])
+def test_his_name_alone_with_no_closing_is_not_in_the_grammar(body):
+    """[G] A+ [C [N]] [B] [F]: the name line follows a closing (2026-11-20)."""
+    assert not rcr.pure_affirmative(_envelope(body))
 
 
 @pytest.mark.parametrize(
@@ -652,7 +663,8 @@ def test_not_a_plain_yes(body):
         ("Yes - Pat", True),
         ("Yes, Pat Doe", True),
         ("Hi,\nYes", True),
-        ("Good morning Riley,\nYes, thanks.\nPat", True),
+        ("Good morning Riley,\nYes, thanks.", True),
+        ("Good morning Riley,\nYes, thanks.\nPat", False),  # a name needs its closing
         ("Hello\nok", True),
         ("Yes, Riley", True),
         # Still qualified: another name, a narrowing, a greeting that is the answer.
@@ -663,7 +675,7 @@ def test_not_a_plain_yes(body):
         ("Hi,\nYes for memos", False),
         ("Yes\nletters only", False),
         ("Ok\nbut not briefs", False),
-        # A job title is signature-SHAPED, and skipped only when anchored
+        # A job title alone is content: only a learned block, whole, is signature
         # (2026-11-20): bare, it is content.
         ("Yes\nPartner", False),
     ],
@@ -695,39 +707,23 @@ def _from_pat(body: str) -> str:
     )
 
 
-#: The signature the seat recorded for Pat from an earlier email of his.
-_RECORDED = (
-    *_BLOCK.splitlines(),
-    "/s/ Pat Q. Doe, Esq.",
-    "Patrick Q. Doe, Esq.",
-    "Doe & Roe LLP",
-    "Doe & Roe",
-    "Partner",
-    "CONFIDENTIALITY NOTICE: This email and any attachments are privileged.",
-)
+#: Pat's learned block (workspace_broker/sender_block): the lines his emails end with.
+_LEARNED = tuple(line for line in _BLOCK.splitlines() if line.strip())
 
 
 @pytest.mark.parametrize(
-    ("body", "anchored", "bare"),
+    ("body", "learned", "unlearned"),
     [
         # Review 2026-11-19: twelve real plain yeses ended in a block like this
-        # and every one failed. 2026-11-20: a signature-shaped line is skipped
-        # only when it is the sender's own recorded signature (or quoted in the
-        # reply); bare, it is content. FALSIFIER: skip a shape without its anchor.
+        # and every one failed. 2026-11-20: the block counts only WHOLE, as his
+        # learned block; there are no signature-line shapes. FALSIFIER: accept a
+        # block nobody learned.
         (f"Yes\n\n{_BLOCK}", True, False),
         (f"Yes, please.\n\n{_BLOCK}", True, False),
         ("Yes\n\nRegards,\n/s/ Pat Q. Doe, Esq.", True, True),
-        ("Yes\n\nPatrick Q. Doe, Esq.\nDoe & Roe LLP", True, False),
-        # A firm line with no legal-entity ending is not signature-shaped
-        # unless it is the seat's own firm name (passed by the plugin).
-        ("Yes\n\nPatrick Q. Doe, Esq.\nDoe & Roe", False, False),
-        (
-            "Yes\n\nThanks\nPat\n\nCONFIDENTIALITY NOTICE: This email and any attachments are privileged.",
-            True,
-            False,
-        ),
         ("Yes\n\nVery truly yours,\nPat Doe", True, True),
-        # A qualifier inside the block, or a line nobody recorded: not a plain yes.
+        # Part of the block, the block with a line under it or inside it: not his.
+        (f"Yes\n\n{_BLOCK.split(chr(10), 3)[3]}", False, False),
         (f"Yes\n\n{_BLOCK}\nbut only for letters", False, False),
         ("Yes\n\nCordially,\nPat Doe\n1. use 12 point", False, False),
         ("Yes\n\nCordially,\n" + "\n".join(f"line {i}" for i in range(13)), False, False),
@@ -736,25 +732,30 @@ _RECORDED = (
         ("Yes\nfor memos", False, False),
         ("Ok\nbut not briefs", False, False),
         ("Yes\nThanks, and use 12 point", False, False),
-        ("Yes\nPartner", True, False),
+        ("Yes\nPartner", False, False),
         ("Yes\nChris", False, False),
         ("Yes but no", False, False),
     ],
 )
-def test_a_signature_block_is_skipped_only_when_it_is_his(body, anchored, bare):
+def test_a_signature_block_counts_only_whole_and_learned(body, learned, unlearned):
     message = _from_pat(body)
-    recorded = reply_shape.people(message, signature=_RECORDED)
-    assert rcr.pure_affirmative(message, None, recorded) is anchored
-    assert rcr.pure_affirmative(message) is bare
-    # Quoted below the reply (his earlier email's block under the read-back)
-    # anchors it the same way.
-    quoted = "\n".join(f"> {line}" for line in _RECORDED)
-    assert rcr.pure_affirmative(_from_pat(f"{body}\n\n{quoted}")) is anchored
+    assert (
+        rcr.pure_affirmative(message, None, reply_shape.people(message, block=_LEARNED)) is learned
+    )
+    assert rcr.pure_affirmative(message) is unlearned
+    # Quoted history never vouches for a line: his block quoted below changes nothing.
+    quoted = "\n".join(f"> {line}" for line in _LEARNED)
+    assert (
+        rcr.pure_affirmative(
+            _from_pat(f"{body}\n\nOn Tue, Nov 18, 2026, Pat <p@x.example> wrote:\n{quoted}")
+        )
+        is unlearned
+    )
 
 
 def test_a_pick_signed_with_a_block_is_still_a_pick():
     message = _from_pat(f"1 and 3\n\n{_BLOCK}")
-    assert rcr.read_pick(message, 3, reply_shape.people(message, signature=_RECORDED)) == (1, 3)
+    assert rcr.read_pick(message, 3, reply_shape.people(message, block=_LEARNED)) == (1, 3)
 
 
 def test_a_tagged_whole_clause_yes_confirms_inside_a_binding_too():

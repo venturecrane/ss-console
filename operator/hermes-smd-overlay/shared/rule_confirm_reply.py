@@ -57,6 +57,9 @@ class ReadbackBinding:
 
 #: The longest list code renders, and so the largest number a pick may name.
 MAX_PICK = 20
+#: Read-backs a rule may be sent before it is handed to SMD (the broker enforces
+#: the same number: workspace_broker/readback_rounds.MAX_READBACKS).
+MAX_READBACKS = 2
 
 
 def is_own_rule(row: dict[str, Any], sender: Any) -> bool:

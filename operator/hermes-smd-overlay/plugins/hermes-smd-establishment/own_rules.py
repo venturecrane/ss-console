@@ -25,7 +25,7 @@ from shared import (
 )
 from shared.inbound import SESSION_INBOUND_ORIGIN
 
-from . import readback_confirm
+from . import readback_confirm, reply_reading
 from .turn_handles import (  # noqa: F401 - the plugin calls them here
     real_id,
     turn_handle,
@@ -131,8 +131,18 @@ def own_ask_note(
     """The note for an ASK about the person's own rules, rendered by code: the
     numbered list (``ASK_PICK``), or the read-back again (``ASK_QUALIFIED``).
     ``None`` for every other verdict, which keeps the plugin's own templates."""
-    if verdict.kind != rule_confirm.ASK:
+    if verdict.kind != rule_confirm.ASK or verdict.reason not in (
+        rule_confirm.ASK_PICK,
+        rule_confirm.ASK_QUALIFIED,
+    ):
         return None
+    by_id = {str(p.get("proposal_id")): p for p in pending}
+    own = tuple(
+        c for c in verdict.candidates if rule_confirm_reply.is_own_rule(by_id.get(c, {}), sender)
+    )
+    if own and reply_reading.over_cap(reply_reading.ROUNDS.get(session_id, {}), own):
+        # Two read-backs and no plain yes: no third. SMD confirms it by hand.
+        return reply_reading.hand_off(session_id, sender, own, _inbound_message_id(session_id))
     if verdict.reason == rule_confirm.ASK_PICK:
         return _pick_note(session_id, sender, is_admin, pending, verdict.candidates)
     if verdict.reason == rule_confirm.ASK_QUALIFIED:
@@ -210,12 +220,11 @@ def _note_verified(session_id: str, rows: list[dict[str, Any]]) -> None:
     )
 
 
-def _could_answer(user_message: str, sender: str = "") -> bool:
+def _could_answer(user_message: str, sender: str = "", session_id: str = "") -> bool:
     """Could this message be an answer at all? Skip the broker when not.
 
-    A message that cannot be an answer is one no rule decision rides on, so
-    its closing signature block is what the seat records for the sender (the
-    anchor a later reply's signature lines are read against; first time only)."""
+    A message that cannot be an answer is one no rule decision rides on, so its
+    end is handed to the broker to learn his signature block from (reply_reading)."""
     who = reply_shape.people(user_message)
     could = bool(
         rule_confirm.find_tags(user_message)
@@ -223,16 +232,9 @@ def _could_answer(user_message: str, sender: str = "") -> bool:
         # "1 and 3", "both", "one", "none" answer a numbered list with no yes in them.
         or reply_shape.looks_like_pick(user_message, who)
     )
-    if not could and sender and sender not in _SIGNED:
-        lines = reply_shape.trailing_signature(user_message, who)
-        if lines and readback_confirm.record_signature(_plugin()._broker_request, sender, lines):
-            _SIGNED.add(sender)
+    if not could:
+        reply_reading.observe(sender, _inbound_message_id(session_id), user_message)
     return could
-
-
-#: Senders whose signature block this process has recorded (the broker keeps
-#: the first one; this only spares the round trip).
-_SIGNED: set[str] = set()
 
 
 def _resolve_reply(
@@ -253,37 +255,33 @@ def _resolve_reply(
         # the person's own: nothing here binds, lists, restates or confirms one.
         # Acts and rules waiting on an administrator keep the tag path.
         pending = [p for p in pending if not rule_confirm_reply.is_own_rule(p, sender)]
-    binding, signature = None, ()
+    binding, extras = None, None
     if any(rule_confirm_reply.is_own_rule(p, sender) for p in pending):
         # Only the reply's own headers bind it (no fallback to an earlier list).
-        binding, verified, signature = readback_confirm.fetch_binding(
+        binding, extras = readback_confirm.fetch_binding(
             plug._broker_request, _inbound_message_id(session_id), sender
         )
-        plug._VERIFIED.setdefault(session_id, set()).update(verified)
-    return rule_confirm.resolve(
-        user_message,
-        pending,
-        sender,
-        is_admin,
-        extra_open=extra_open,
-        binding=binding,
-        who=_who(user_message, signature),
+        # Unreadable, or handed to SMD after two read-backs: his rule does not move here.
+        gone = None if extras is None else set(extras["handed_off"])
+        pending = [
+            p
+            for p in pending
+            if not (
+                rule_confirm_reply.is_own_rule(p, sender)
+                and (gone is None or str(p.get("proposal_id")) in gone)
+            )
+        ]
+        if extras is not None:
+            plug._VERIFIED.setdefault(session_id, set()).update(extras["verified"])
+            reply_reading.ROUNDS[session_id] = extras["rounds"]
+    who = reply_reading.who(user_message, (extras or {}).get("block", ()), sender)
+    verdict = rule_confirm.resolve(
+        user_message, pending, sender, is_admin, extra_open=extra_open, binding=binding, who=who
     )
-
-
-def _who(user_message: Any, signature: Any = ()) -> reply_shape.People:
-    """Whose names this reply may carry: the sender's (from the envelope), the
-    Operator's (the seat's persona names) and the firm's (``customer_name``),
-    with the signature lines the broker recorded for the sender (``signature``)."""
-    addressed: list[str] = []
-    firm: list[str] = []
-    try:
-        cfg = _plugin().CustomerConfig.from_volume()
-        addressed = [str(p.get("name") or "") for p in cfg.personas if isinstance(p, dict)]
-        firm = [cfg.customer_name]
-    except Exception:  # noqa: BLE001 - no config: the sender's own name only
-        logger.debug("hermes-smd-establishment: no persona names for the reply reading")
-    return reply_shape.people(user_message, addressed=addressed, firm=firm, signature=signature)
+    reply_reading.observe(
+        sender, _inbound_message_id(session_id), user_message
+    )  # after: never self-vouching
+    return verdict
 
 
 def _confirmed_note(
@@ -592,7 +590,9 @@ def reopen_note(session_id: str, sender: str, user_message: Any) -> str | None:
     is proposed again and read back (R8). Never says it lapsed."""
     if rules_by_hand.on():
         return None  # the stopgap owns rules: nothing is re-opened or read back
-    if not rule_confirm_reply.pure_affirmative(user_message, None, _who(user_message)):
+    if not rule_confirm_reply.pure_affirmative(
+        user_message, None, reply_reading.who(user_message, (), sender)
+    ):
         return None
     plug = _plugin()
     try:
