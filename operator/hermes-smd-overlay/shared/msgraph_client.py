@@ -28,7 +28,6 @@ live path reporting success.
 
 from __future__ import annotations
 
-import html
 import http.client
 import json
 import logging
@@ -37,10 +36,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from html.parser import HTMLParser
 from typing import Any
 
 from shared import reply_text as reply_text_mod
+from shared.mail_text import html_to_text
 from shared.same_origin_redirects import open_same_origin
 from shared.secrets import get_secret
 
@@ -142,58 +141,6 @@ class MsGraphApiError(RuntimeError):
         # and nothing a reader acts on. ``self.url`` keeps it whole for callers.
         shown = url.split("?", 1)[0]
         super().__init__(f"MSGraph {method} {shown} -> HTTP {status}: {body or '(empty body)'}")
-
-
-# ---------------------------------------------------------------------------
-# HTML → text (mirrors operator/connectors/msgraph-mail normalize.py)
-# ---------------------------------------------------------------------------
-
-_DROP_CONTENT_TAGS = {"script", "style", "head", "title"}
-_BREAK_TAGS = {"br", "p", "div", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6"}
-
-
-class _TextExtractor(HTMLParser):
-    """Collect visible text from an HTML fragment, dropping script/style content
-    and inserting newlines at block boundaries."""
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self._parts: list[str] = []
-        self._skip_depth = 0
-
-    def handle_starttag(self, tag: str, attrs: Any) -> None:
-        if tag in _DROP_CONTENT_TAGS:
-            self._skip_depth += 1
-        elif tag in _BREAK_TAGS:
-            self._parts.append("\n")
-
-    def handle_startendtag(self, tag: str, attrs: Any) -> None:
-        if tag in _BREAK_TAGS:
-            self._parts.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in _DROP_CONTENT_TAGS and self._skip_depth:
-            self._skip_depth -= 1
-        elif tag in _BREAK_TAGS:
-            self._parts.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if not self._skip_depth:
-            self._parts.append(data)
-
-    def get_text(self) -> str:
-        return "".join(self._parts)
-
-
-def html_to_text(raw_html: str) -> str:
-    """Strip an HTML mail body to plain text (stdlib only): block boundaries become
-    line breaks, empty lines dropped, entities decoded. Content, not layout."""
-    parser = _TextExtractor()
-    parser.feed(raw_html)
-    parser.close()
-    text = html.unescape(parser.get_text())
-    lines = [ln.strip() for ln in text.splitlines()]
-    return "\n".join(ln for ln in lines if ln)
 
 
 # ---------------------------------------------------------------------------

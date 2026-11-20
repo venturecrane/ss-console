@@ -38,8 +38,9 @@ _CLASS_CHOICE_MAP = (
 #: WHY THE READBACK SHAPE IS SPELLED OUT HERE. It is the whole control. The
 #: person is agreeing to a specific sentence, so they have to be shown that
 #: sentence, told what it attaches to, and given something unambiguous to
-#: answer. A readback that paraphrases, or that omits the tag, produces a "yes"
-#: that means something the seat cannot act on.
+#: answer. A readback that paraphrases produces a "yes" that means something the
+#: seat cannot act on. Since 2026-11-20 the person's own rule carries no tag:
+#: the call returns the whole read-back, and the relay holds the reply to it.
 #:
 #: AND WHY IT FORBIDS ONE SENTENCE BY NAME. On 2026-08-21 two rehearsal turns
 #: spoken by an Operator admin were both answered "captured and queued for
@@ -56,12 +57,11 @@ _ESTABLISH_NUDGE = (
     "- about how a KIND OF FIRM OUTPUT reads (every client letter, every memo): "
     f"{_PROPOSE} with scope 'firm_adjust' and subject {{output_class, "
     "property}} — 'voice' for how it sounds, 'format' for how it is shaped.\n"
-    "Then reply with, in this order: the rule in one plain sentence; what it "
-    "attaches to, in words the firm would use ('That will attach to every "
-    "letter we send clients, how it sounds.'); the tag the call returned, "
-    "exactly as returned; and 'Reply yes to confirm.' Include the returned "
-    "block word for word — they are agreeing to that sentence, not to your "
-    "summary of it.\n"
+    "The call returns the read-back: the rule, what it covers, and the line "
+    "asking them to reply yes. Include it in your reply word for word, as its "
+    "own paragraph, with no id or tag of your own: they are agreeing to that "
+    "sentence, not to your summary of it. Put the rule in `text` in their words, "
+    "and keep any citation they wrote exactly as they wrote it.\n"
     "Never tell someone their own rule is queued for review, or not in effect "
     "until a person acts, when they are the person. Say what it will do and ask "
     "them to confirm. And do not say it IS in effect until you have called "

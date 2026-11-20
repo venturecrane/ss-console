@@ -49,7 +49,7 @@ from shared.action_classes import TOOL_ACTION_CLASS_MAP, ActionClass
 from shared.audit_contract import CANONICAL_TOOL_CALL_KEY, agent_event_params
 from shared.audit_contract import INSERT_SQL as _INSERT_SQL
 from shared.audit_status import NoAuditWarner
-from shared.outbound_gate import GateDecision, evaluate
+from shared.outbound_gate import GateDecision, evaluate, firm_sentences_for
 
 logger = logging.getLogger(__name__)
 
@@ -971,6 +971,24 @@ def _check_identifiers(
 # ---------------------------------------------------------------------------
 
 
+def _evaluate(
+    body: str, cohort: Any, vertical: Any, register: Any, session_id: str
+) -> GateDecision:
+    """The fabrication and citation gate with this session's provenance: the
+    captions and money it read (ss #1758, ss-console#2258), and the firm's own
+    rule sentences it rendered from the broker's row (2026-11-19), exempt from
+    the citation scan alone and only as written. None of either: the gate as it
+    was."""
+    return evaluate(
+        body,
+        cohort,
+        vertical,
+        allowed_case_names=register.captions(),
+        allowed_money=register.money(),
+        firm_sentences=firm_sentences_for(session_id),
+    )
+
+
 def check_outbound_draft(
     *,
     tool_name: str,
@@ -1063,13 +1081,7 @@ def check_outbound_draft(
     # default. The skill authorizes a figure that exists in an authored source on
     # the matter; without this the gate refused what the skill permitted.
     _register = provenance.register_for(session_id)
-    decision = evaluate(
-        body,
-        cohort,
-        vertical,
-        allowed_case_names=_register.captions(),
-        allowed_money=_register.money(),
-    )
+    decision = _evaluate(body, cohort, vertical, _register, session_id)
     if decision.allowed:
         # A1 identifier gate: refuse any identifier not traceable to a source
         # read this session (ss #2171). Scans the concatenated draft surface
@@ -1355,13 +1367,7 @@ def check_outbound_send(
     # default. The skill authorizes a figure that exists in an authored source on
     # the matter; without this the gate refused what the skill permitted.
     _register = provenance.register_for(session_id)
-    decision = evaluate(
-        body,
-        cohort,
-        vertical,
-        allowed_case_names=_register.captions(),
-        allowed_money=_register.money(),
-    )
+    decision = _evaluate(body, cohort, vertical, _register, session_id)
     if decision.allowed:
         # A1 identifier gate on the send surface — NO empty-register carve
         # here: an autonomous external send composed with nothing read is
@@ -1436,13 +1442,7 @@ def check_outbound_attachment(text: str, *, session_id: str, tool_call_id: str =
     vertical = _resolve_vertical()
     cohort = _resolve_cohort()
     register = provenance.register_for(session_id)
-    decision = evaluate(
-        text,
-        cohort,
-        vertical,
-        allowed_case_names=register.captions(),
-        allowed_money=register.money(),
-    )
+    decision = _evaluate(text, cohort, vertical, register, session_id)
     if not decision.allowed:
         _emit_fabrication_audit(
             tool_name=ATTACHMENT_SCAN_TOOL,

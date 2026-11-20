@@ -128,6 +128,14 @@ modules:
       - operator/workspace_broker/logic_in_code.py
       - operator/connectors/smokeball/smokeball_connector/logic_in_code.py
 
+  # An HTML mail body as text: the seat reads a Graph email with it, and the
+  # broker's signature-block seed (sender_block) learns from the same mailbox
+  # with it, so his signature reads the same lines in both (2026-11-20).
+  mail_text:
+    source: operator/hermes-smd-overlay/shared/mail_text.py
+    copies:
+      - operator/workspace_broker/mail_text.py
+
   # The staff-mailbox read rule: the gateway (mail_spool_message) and the
   # msgraph-mail connector (list_staff_messages, read_staff_message) must refuse
   # the same mailboxes (ADR 0089 amendment 5a).

@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-from shared import rules_by_hand, smd_owed
+from shared import rules_by_hand, smd_owed, turn_says
 from shared.inbound import SESSION_INBOUND_ORIGIN, SESSION_TAINT, InboundOrigin
 from tests.conftest import load_plugin
 
@@ -77,6 +77,9 @@ def seat(monkeypatch, tmp_path):
         monkeypatch.setattr(mod, "_broker_request", broker)
         monkeypatch.setattr(smd_owed, "_request", owed)
         monkeypatch.setattr(mod, "CustomerConfig", _CustomerConfig)
+        # No reply plugin on this seat, whatever an earlier test loaded: nothing
+        # is owed or registered, so the switch alone decides what is said.
+        monkeypatch.setattr(turn_says, "_NOTE", None)
         monkeypatch.setenv("SMD_ADMIN_POSSESSION_DB_PATH", str(tmp_path / "possession.db"))
         mod._ADMIN_STASH.clear()
         mod._CONFIRMED_STASH.clear()

@@ -20,8 +20,9 @@ from __future__ import annotations
 import pytest
 
 from bootstrap.translate import _INBOUND_EMAIL_PROMPT, _INBOUND_EMAIL_PROMPT_MSGRAPH
-from shared import inbound
+from shared import inbound, reply_shape
 from shared import rule_confirm as rc
+from shared import rule_confirm_reply as rcr
 
 ADMIN = "christa@firm.com"
 PARALEGAL = "sarah@firm.com"
@@ -92,8 +93,9 @@ def test_a_quoted_readback_cannot_confirm_itself():
     assert rc.strip_quoted(only_the_quote) == ""
     assert rc.read_own_text(only_the_quote).affirmative is False
     verdict = rc.resolve(only_the_quote, [_row()], ADMIN, is_admin=True)
-    assert verdict.kind == rc.ASK
-    assert verdict.reason == rc.ASK_NEEDS_AFFIRMATIVE
+    # 2026-11-20: a tag in quoted history names none of the sender's own rules,
+    # so a reply with nothing of their own in it is simply not an answer.
+    assert verdict.kind == rc.NONE
 
 
 # ---------------------------------------------------------------------------
@@ -167,19 +169,34 @@ def test_a_tag_that_is_not_the_shape_is_not_a_tag(bad):
 # ---------------------------------------------------------------------------
 
 
-def test_a_bare_yes_on_a_quoted_thread_confirms_the_senders_own_rule():
+def test_a_bare_yes_on_a_quoted_thread_with_no_binding_gets_the_list():
+    """2026-11-20 (review defect b): a tag quoted below the reply names nothing.
+    With no read-back bound by the reply's headers, a plain yes is listed.
+    FALSIFIER: read the quoted tag and this confirms."""
     verdict = rc.resolve(QUOTED_REPLY, [_row()], ADMIN, is_admin=True)
-    assert verdict.kind == rc.CONFIRMED
-    assert verdict.proposal_id == RULE_A
+    assert verdict.kind == rc.ASK and verdict.reason == rc.ASK_PICK
+    bound = rc.resolve(QUOTED_REPLY, [_row()], ADMIN, is_admin=True, binding=_bound(RULE_A))
+    assert bound.kind == rc.CONFIRMED and bound.proposal_id == RULE_A
 
 
 def test_an_affirmative_with_no_tag_asks_rather_than_picking():
     """This kills the "ok" on an unrelated thread. The person agreed with
-    something; nothing says it was a rule."""
+    something; nothing says it was a rule. REWORKED for confirm-by-reply: the question is
+    the numbered list of their own rules (code renders it), not a tag ask."""
     verdict = rc.resolve("ok, thanks", [_row(), _row(RULE_B)], ADMIN, is_admin=True)
     assert verdict.kind == rc.ASK
+    assert verdict.reason == rc.ASK_PICK
+    assert verdict.candidates == (RULE_A, RULE_B)
+
+
+def test_an_untagged_yes_over_an_administrators_queue_still_asks_for_the_tag():
+    """Rows waiting on an administrator keep the tag path exactly."""
+    rows = [
+        _row(instructed_by=PARALEGAL, for_admin=True),
+        _row(RULE_B, instructed_by=PARALEGAL, for_admin=True),
+    ]
+    verdict = rc.resolve("ok, thanks", rows, ADMIN, is_admin=True)
     assert verdict.reason == rc.ASK_NEEDS_TAG
-    assert set(verdict.candidates) == {RULE_A, RULE_B}
 
 
 def test_a_tag_with_no_affirmative_asks():
@@ -188,9 +205,23 @@ def test_a_tag_with_no_affirmative_asks():
     assert verdict.reason == rc.ASK_NEEDS_AFFIRMATIVE
 
 
-def test_two_named_rules_and_one_yes_asks():
+def test_two_named_own_rules_and_one_yes_confirm_both():
+    """REWORKED (the reported failure: "[rule A] yes and [rule B] yes"
+    recorded nothing). Both named rules are the sender's own, so the yes
+    confirms both."""
     body = f"yes [rule {RULE_A}] [rule {RULE_B}]"
     verdict = rc.resolve(body, [_row(), _row(RULE_B)], ADMIN, is_admin=True)
+    assert verdict.kind == rc.CONFIRMED
+    assert verdict.proposal_ids == (RULE_A, RULE_B)
+
+
+def test_two_named_waiting_rules_and_one_apply_still_asks():
+    """An administrator's "apply that" over two requests asks which, as before."""
+    rows = [
+        _row(instructed_by=PARALEGAL, for_admin=True),
+        _row(RULE_B, instructed_by=PARALEGAL, for_admin=True),
+    ]
+    verdict = rc.resolve(f"apply that [rule {RULE_A}] [rule {RULE_B}]", rows, ADMIN, is_admin=True)
     assert verdict.kind == rc.ASK
     assert verdict.reason == rc.ASK_AMBIGUOUS
     assert set(verdict.candidates) == {RULE_A, RULE_B}
@@ -214,8 +245,9 @@ def test_a_qualified_yes_is_neither_committed_nor_reported_as_a_refusal():
 
 def test_a_tag_nobody_holds_asks_and_commits_nothing():
     verdict = rc.resolve("yes [rule deadbeef]", [_row()], ADMIN, is_admin=True)
-    assert verdict.kind == rc.ASK
-    assert verdict.reason == rc.ASK_UNKNOWN_TAG
+    assert verdict.kind == rc.ASK and verdict.proposal_id is None
+    acts_only = rc.resolve("yes [rule deadbeef]", [{**_row(), "kind": "tool_call"}], ADMIN, True)
+    assert acts_only.reason == rc.ASK_UNKNOWN_TAG
 
 
 def test_nothing_pending_is_nothing_to_do():
@@ -360,7 +392,9 @@ def test_the_live_reply_confirms_the_rule_its_sender_stated(adapter):
 @pytest.mark.parametrize("adapter", ADAPTERS)
 def test_a_quoted_thread_inside_the_real_prompt_still_confirms(adapter):
     """Both cuts have to hold at once: the fence comes off, then the quote."""
-    verdict = rc.resolve(_prompt(adapter, QUOTED_REPLY), [_row()], ADMIN, is_admin=True)
+    verdict = rc.resolve(
+        _prompt(adapter, QUOTED_REPLY), [_row()], ADMIN, is_admin=True, binding=_bound(RULE_A)
+    )
     assert verdict.kind == rc.CONFIRMED
     assert verdict.proposal_id == RULE_A
 
@@ -435,3 +469,330 @@ def test_the_delimiter_has_one_spelling():
 @pytest.mark.parametrize("empty", ["", None, 17, []])
 def test_email_body_is_total(empty):
     assert rc.email_body(empty) == ""
+
+
+# ---------------------------------------------------------------------------
+# Confirm by the message replied to (R2.1)
+# ---------------------------------------------------------------------------
+
+RULE_C = "3c3c3c3c"
+LAST_WEEK = "9a9a9a9a"
+
+
+def _bound(*ids, listed=False):
+    return rcr.ReadbackBinding(proposal_ids=tuple(ids), listed=listed)
+
+
+def test_a_plain_yes_to_a_read_back_carrying_two_rules_confirms_both():
+    rows = [_row(), _row(RULE_B)]
+    verdict = rc.resolve("Yes.", rows, ADMIN, is_admin=True, binding=_bound(RULE_A, RULE_B))
+    assert verdict.kind == rc.CONFIRMED
+    assert verdict.proposal_ids == (RULE_A, RULE_B)
+
+
+def test_a_yes_in_a_long_thread_confirms_only_the_replied_to_messages_rules():
+    """Last week's read-back is quoted below (its sentence and all), and is
+    still open; only the message replied to binds."""
+    rows = [_row(LAST_WEEK), _row(), _row(RULE_B)]
+    body = (
+        "Yes.\n\nOn Mon, Operator <ops@firm.com> wrote:\n> In client letters, be more formal and"
+        " shorter.\n> Reply yes to confirm.\n\nOn the Monday before, Operator wrote:\n"
+        "> In client letters, be more formal and shorter.\n> Reply yes to confirm.\n"
+    )
+    verdict = rc.resolve(body, rows, ADMIN, is_admin=True, binding=_bound(RULE_A, RULE_B))
+    assert verdict.kind == rc.CONFIRMED
+    assert verdict.proposal_ids == (RULE_A, RULE_B)
+    assert LAST_WEEK not in verdict.proposal_ids
+
+
+def test_a_yes_with_no_reply_header_and_three_open_rules_gets_the_list():
+    rows = [_row(), _row(RULE_B), _row(RULE_C)]
+    verdict = rc.resolve("Yes.", rows, ADMIN, is_admin=True, binding=None)
+    assert verdict.kind == rc.ASK
+    assert verdict.reason == rc.ASK_PICK
+    assert verdict.candidates == (RULE_A, RULE_B, RULE_C)
+
+
+def test_one_and_three_from_the_list_confirms_those_two():
+    rows = [_row(), _row(RULE_B), _row(RULE_C)]
+    listed = _bound(RULE_A, RULE_B, RULE_C, listed=True)
+    verdict = rc.resolve("1 and 3", rows, ADMIN, is_admin=True, binding=listed)
+    assert verdict.kind == rc.CONFIRMED
+    assert verdict.proposal_ids == (RULE_A, RULE_C)
+    assert rc.resolve("all", rows, ADMIN, True, binding=listed).proposal_ids == (
+        RULE_A,
+        RULE_B,
+        RULE_C,
+    )
+
+
+def test_a_plain_yes_to_the_list_confirms_every_rule_it_carried():
+    """The list holds only the person's own rules and says "Reply all to confirm
+    every one": a plain yes to it is all of them, never the list again."""
+    rows = [_row(), _row(RULE_B)]
+    verdict = rc.resolve("Yes.", rows, ADMIN, True, binding=_bound(RULE_A, RULE_B, listed=True))
+    assert verdict.kind == rc.CONFIRMED
+    assert verdict.proposal_ids == (RULE_A, RULE_B)
+
+
+@pytest.mark.parametrize("body", ["none", "None of them.", "no", "No, leave them."])
+def test_none_or_a_no_to_the_list_confirms_nothing(body):
+    rows = [_row(), _row(RULE_B)]
+    verdict = rc.resolve(body, rows, ADMIN, True, binding=_bound(RULE_A, RULE_B, listed=True))
+    assert verdict.kind != rc.CONFIRMED
+
+
+def test_a_number_outside_the_list_asks_again_rather_than_guessing():
+    rows = [_row(), _row(RULE_B)]
+    verdict = rc.resolve("3", rows, ADMIN, True, binding=_bound(RULE_A, RULE_B, listed=True))
+    assert verdict.reason == rc.ASK_PICK
+
+
+@pytest.mark.parametrize("body", ["yes but only for memos", "Yes for memos", "1 but not 3"])
+def test_anything_but_a_plain_yes_confirms_nothing_on_a_binding(body):
+    rows = [_row(), _row(RULE_B)]
+    verdict = rc.resolve(body, rows, ADMIN, True, binding=_bound(RULE_A, RULE_B))
+    assert verdict.kind != rc.CONFIRMED
+
+
+def test_a_binding_cannot_reach_a_rule_waiting_on_an_administrator():
+    """An administrator-waiting rule is untouched by any binding, even one
+    naming it (the broker would refuse to record it)."""
+    rows = [_row(instructed_by=PARALEGAL, for_admin=True)]
+    verdict = rc.resolve("Yes.", rows, ADMIN, True, binding=_bound(RULE_A))
+    assert verdict.kind != rc.CONFIRMED
+    assert rc.resolve(f"apply that [rule {RULE_A}]", rows, ADMIN, True).kind == rc.CONFIRMED
+
+
+def test_a_plain_no_to_a_bound_read_back_of_one_rule_declines_it():
+    verdict = rc.resolve("No.", [_row()], ADMIN, True, binding=_bound(RULE_A))
+    assert verdict.kind == rc.DECLINED
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["Yes.", "Yes, thanks", "ok", "Yes please, thank you!", "Yes\n\nSent from my iPhone"],
+)
+def test_a_plain_yes(body):
+    assert rcr.pure_affirmative(body)
+
+
+def _envelope(body: str, sender: str = "Pat Q. Doe <pat.doe@firm.example>") -> str:
+    """An email-lane turn prompt: the code-rendered envelope, the fence, the body."""
+    return (
+        f"An inbound email arrived.\nfrom: {sender}\nsubject: Re: rules\n"
+        f"{inbound.UNTRUSTED_EMAIL_DELIMITER}\n{body}"
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Yes.\n\nThanks,\nPat",
+        "Ok\nBest regards, Pat Doe",
+        "Yes\nCheers",
+        "Yes\nThanks,\nPat Q. Doe",
+    ],
+)
+def test_a_yes_signed_with_a_courtesy_or_the_senders_own_name_is_plain(body):
+    assert rcr.pure_affirmative(_envelope(body))
+
+
+@pytest.mark.parametrize("body", ["Yes\nPat", "Yes\n-PQD"])
+def test_his_name_alone_with_no_closing_is_not_in_the_grammar(body):
+    """[G] A+ [C [N]] [B] [F]: the name line follows a closing (2026-11-20)."""
+    assert not rcr.pure_affirmative(_envelope(body))
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Yes\nletters only",
+        "Yes\nSee my edits below",
+        "Yes.\nJust for Craig",
+        "Yes\nmake it bold",
+        "Yes\nfor memos",
+        "Ok\nbut not briefs",
+        "Yes\nThanks, and use 12 point",
+        "Yes\nChris",
+    ],
+)
+def test_anything_else_under_the_yes_is_not_a_plain_yes(body):
+    """Review: a short second line used to count as a sign-off, so a qualified
+    yes installed the rule as stated. Only a closed courtesy, the sender's own
+    name or initials, or a device footer may follow."""
+    assert not rcr.pure_affirmative(_envelope(body))
+
+
+@pytest.mark.parametrize("body", ["Yes\nletters only", "Yes\nmake it bold"])
+def test_a_qualified_yes_to_a_read_back_is_restated_not_confirmed(body):
+    rows = [_row(), _row(RULE_B)]
+    verdict = rc.resolve(_envelope(body), rows, ADMIN, True, binding=_bound(RULE_A, RULE_B))
+    assert verdict.kind == rc.ASK and verdict.reason == rc.ASK_QUALIFIED
+
+
+@pytest.mark.parametrize(
+    "body", ["Ok, please draft the Jones demand.", "Yes, what is the trial date in Jones?"]
+)
+def test_an_email_that_only_contains_a_yes_word_gets_no_rule_note(body):
+    """Review: these reached the numbered list. The list is offered only for a
+    plain yes or a pick; every other email leaves the rule open."""
+    verdict = rc.resolve(_envelope(body), [_row(), _row(RULE_B)], ADMIN, True)
+    assert verdict.kind == rc.NONE
+
+
+@pytest.mark.parametrize("body", ["Yes.", "1 and 2", "all"])
+def test_a_plain_yes_or_a_pick_with_no_binding_gets_the_list(body):
+    verdict = rc.resolve(_envelope(body), [_row(), _row(RULE_B)], ADMIN, True)
+    assert verdict.reason == rc.ASK_PICK
+
+
+@pytest.mark.parametrize(
+    "body", ["Yes for memos", "yes but no", "Yes?", "Yes. Also, what about memos?"]
+)
+def test_not_a_plain_yes(body):
+    assert not rcr.pure_affirmative(body)
+
+
+@pytest.mark.parametrize(
+    ("body", "plain"),
+    [
+        # Everyday plain yeses (review 2026-11-19): the sender's own name in the
+        # answer, the name the email addressed, and a greeting line first.
+        ("Yes, Pat", True),
+        ("Yes - Pat", True),
+        ("Yes, Pat Doe", True),
+        ("Hi,\nYes", True),
+        ("Good morning Riley,\nYes, thanks.", True),
+        ("Good morning Riley,\nYes, thanks.\nPat", False),  # a name needs its closing
+        ("Hello\nok", True),
+        ("Yes, Riley", True),
+        # Still qualified: another name, a narrowing, a greeting that is the answer.
+        ("Yes, Chris", False),
+        ("Hi,\nYes\nletters only", False),
+        ("Yes - for memos", False),
+        ("Hi", False),
+        ("Hi,\nYes for memos", False),
+        ("Yes\nletters only", False),
+        ("Ok\nbut not briefs", False),
+        # A job title alone is content: only a learned block, whole, is signature
+        # (2026-11-20): bare, it is content.
+        ("Yes\nPartner", False),
+    ],
+)
+def test_plain_and_qualified_answers_in_one_table(body, plain):
+    """FALSIFIER: drop the greeting or name allowance and "Hi,\\nYes" falls to
+    the restate path; widen it past the sender's own names and "Yes, Chris"
+    confirms a rule the sender did not."""
+    envelope = (
+        "An inbound email arrived.\nfrom: Pat Q. Doe <pat.doe@firm.example>\n"
+        "to: Riley <riley@operator.example>\nsubject: Re: rules\n"
+        f"{inbound.UNTRUSTED_EMAIL_DELIMITER}\n{body}"
+    )
+    assert rcr.pure_affirmative(envelope) is plain
+
+
+#: An invented attorney's real-shaped signature block: a closing, the full
+#: name with a middle initial, the firm, a street, a city line, phone and fax.
+_BLOCK = (
+    "Cordially,\n\nPatrick Q. Doe\nDoe & Roe, P.L.C.\n1234 N. Central Ave., Suite 500\n"
+    "Phoenix, Arizona 85004\nOffice: (602) 555-0100\nFax: (602) 555-0101"
+)
+
+
+def _from_pat(body: str) -> str:
+    return (
+        "An inbound email arrived.\nfrom: Pat Doe <pdoe@firm.example>\nsubject: Re: rules\n"
+        f"{inbound.UNTRUSTED_EMAIL_DELIMITER}\n{body}"
+    )
+
+
+#: Pat's learned block (workspace_broker/sender_block): the lines his emails end with.
+_LEARNED = tuple(line for line in _BLOCK.splitlines() if line.strip())
+
+
+@pytest.mark.parametrize(
+    ("body", "learned", "unlearned"),
+    [
+        # Review 2026-11-19: twelve real plain yeses ended in a block like this
+        # and every one failed. 2026-11-20: the block counts only WHOLE, as his
+        # learned block; there are no signature-line shapes. FALSIFIER: accept a
+        # block nobody learned.
+        (f"Yes\n\n{_BLOCK}", True, False),
+        (f"Yes, please.\n\n{_BLOCK}", True, False),
+        ("Yes\n\nRegards,\n/s/ Pat Q. Doe, Esq.", True, True),
+        ("Yes\n\nVery truly yours,\nPat Doe", True, True),
+        # Part of the block, the block with a line under it or inside it: not his.
+        (f"Yes\n\n{_BLOCK.split(chr(10), 3)[3]}", False, False),
+        (f"Yes\n\n{_BLOCK}\nbut only for letters", False, False),
+        ("Yes\n\nCordially,\nPat Doe\n1. use 12 point", False, False),
+        ("Yes\n\nCordially,\n" + "\n".join(f"line {i}" for i in range(13)), False, False),
+        # The earlier qualified cases are still refused.
+        ("Yes\nletters only", False, False),
+        ("Yes\nfor memos", False, False),
+        ("Ok\nbut not briefs", False, False),
+        ("Yes\nThanks, and use 12 point", False, False),
+        ("Yes\nPartner", False, False),
+        ("Yes\nChris", False, False),
+        ("Yes but no", False, False),
+    ],
+)
+def test_a_signature_block_counts_only_whole_and_learned(body, learned, unlearned):
+    message = _from_pat(body)
+    assert (
+        rcr.pure_affirmative(message, None, reply_shape.people(message, block=_LEARNED)) is learned
+    )
+    assert rcr.pure_affirmative(message) is unlearned
+    # Quoted history never vouches for a line: his block quoted below changes nothing.
+    quoted = "\n".join(f"> {line}" for line in _LEARNED)
+    assert (
+        rcr.pure_affirmative(
+            _from_pat(f"{body}\n\nOn Tue, Nov 18, 2026, Pat <p@x.example> wrote:\n{quoted}")
+        )
+        is unlearned
+    )
+
+
+def test_a_pick_signed_with_a_block_is_still_a_pick():
+    message = _from_pat(f"1 and 3\n\n{_BLOCK}")
+    assert rcr.read_pick(message, 3, reply_shape.people(message, block=_LEARNED)) == (1, 3)
+
+
+def test_a_tagged_whole_clause_yes_confirms_inside_a_binding_too():
+    """Review 2026-11-19: resolve_bound ran first and called this qualified,
+    though the tag path confirms it. FALSIFIER: read tags only without a binding."""
+    message = f"[rule {RULE_A}] yes and [rule {RULE_B}] yes"
+    rows = [_row(), _row(RULE_B)]
+    verdict = rc.resolve(message, rows, ADMIN, True, binding=_bound(RULE_A, RULE_B))
+    assert verdict.kind == rc.CONFIRMED and set(verdict.proposal_ids) == {RULE_A, RULE_B}
+
+
+ACT_A = "5c5c5c5c"
+_ORDER_READBACK = (
+    "Place a medical-records order with Records Co on matter 4417 for J. Example, 1 facility: "
+    'Valley Clinic. Reply "yes, place it" to proceed.'
+)
+
+
+def _act(proposal_id=ACT_A):
+    return {**_row(proposal_id), "kind": "tool_call", "text": _ORDER_READBACK}
+
+
+@pytest.mark.parametrize(
+    "body", ["yes, place it", "Yes, place it.", "Yes place it\n\nThanks,\nChris"]
+)
+def test_an_acts_instructed_phrase_without_its_tag_confirms_nothing(body):
+    """2026-11-20 (review defect c). An act can place a paid order, so it is
+    answered by its tag alone, exactly as on main: there is no phrase shortcut,
+    bound or not. FALSIFIER: confirm the act from its own instructed phrase."""
+    verdict = rc.resolve(body, [_act()], ADMIN, True)
+    assert verdict.kind == rc.ASK and verdict.reason == rc.ASK_NEEDS_TAG
+    bound = rc.resolve(body, [_act()], ADMIN, True, binding=_bound(ACT_A))
+    assert bound.kind == rc.ASK and bound.reason == rc.ASK_NEEDS_TAG
+    tagged = rc.resolve(f"{body}\n\n> [act {ACT_A}] Place it.", [_act()], ADMIN, True)
+    assert tagged.kind == rc.CONFIRMED and tagged.proposal_id == ACT_A
+
+
+@pytest.mark.parametrize("body", ["yes, place it but not the clinic", "place it later", "yes"])
+def test_anything_but_the_instructed_phrase_is_not_the_acts_yes(body):
+    assert rc.resolve(body, [_act()], ADMIN, True).kind != rc.CONFIRMED

@@ -123,7 +123,13 @@ def _readback(proposal_id: str, text: str) -> str:
     return f"[rule {proposal_id}] {text}"
 
 
-def _passes_scan(body: str) -> bool:
+#: What an outcome letter says in place of the rule when the rule's own
+#: sentence cannot pass the outbound scan (a dollar figure in it, say). No id:
+#: the letter answers the email the rule was stated in (2026-11-19, R2.2).
+_UNQUOTED_RULE = "(the rule as you wrote it in your earlier email)"
+
+
+def _passes_scan(body: str, firm: tuple[str, ...] = ()) -> bool:
     """Would the seat's own outbound scan let this body out?
 
     WHY AN OUTCOME LETTER CHECKS ITSELF (2026-10-16). Every outcome letter
@@ -143,17 +149,22 @@ def _passes_scan(body: str) -> bool:
     try:
         from shared.outbound_gate import evaluate
 
-        return bool(evaluate(body, None, None).allowed)
+        return bool(evaluate(body, None, None, firm_sentences=firm).allowed)
     except Exception:  # noqa: BLE001 -- unknown means quote less, never more
         logger.warning("rule_dispatch: outcome letter scan could not run; sending the tag only")
         return False
 
 
-def _compose(template: str, tagged: str, tag: str, **values: Any) -> str:
-    """``template`` with the full quotation, or with the tag alone if the
-    quotation would be refused by the outbound scan (see :func:`_passes_scan`)."""
+def _compose(
+    template: str, tagged: str, tag: str, firm: tuple[str, ...] = (), **values: Any
+) -> str:
+    """``template`` with the full quotation, or with ``tag`` (the fallback) if
+    the quotation would be refused by the outbound scan (see
+    :func:`_passes_scan`). ``firm`` is the rule's own sentence, exempt from the
+    citation scan as written (2026-11-19, R2.4): a code section the attorney put
+    in his rule is his, not invented authority."""
     body = template.format(readback=tagged, **values)
-    return body if _passes_scan(body) else template.format(readback=tag, **values)
+    return body if _passes_scan(body, firm) else template.format(readback=tag, **values)
 
 
 _ADMIN_SUBJECT = "A rule for the firm to approve [rule {proposal_id}]"
@@ -169,7 +180,7 @@ Nothing is in effect unless an administrator answers. A request nobody answers
 lapses on its own, and {requester} is told when it does.
 """
 
-_INSTALLED_SUBJECT = "Your rule is in effect [rule {proposal_id}]"
+_INSTALLED_SUBJECT = "Your rule is in effect"
 
 _INSTALLED_BODY = """{applied_by} applied the rule you asked for:
 
@@ -186,7 +197,7 @@ It is in effect from now, and work of that kind is written to it.
 #: because none has been agreed. "Passed to SMD" is backed by the page
 #: :func:`_page_unread_rule` raises, which is what puts it on SMD's desk. It
 #: promises no second letter (2026-11-05): nothing would send one.
-_RECORDED_SUBJECT = "Your rule is recorded [rule {proposal_id}]"
+_RECORDED_SUBJECT = "Your rule is recorded"
 
 _RECORDED_BODY = """{applied_by} applied the rule you asked for:
 
@@ -199,7 +210,7 @@ the rule has been passed to SMD to build into it.
 
 #: A layout rule, clause by clause (:func:`shared.layout_rules.clause_truth`):
 #: what is in effect and what is recorded are said apart, from the installed file.
-_PARTLY_SUBJECT = "Your rule is partly in effect [rule {proposal_id}]"
+_PARTLY_SUBJECT = "Your rule is partly in effect"
 
 _CLAUSES_BODY = """{applied_by} applied the rule you asked for:
 
@@ -236,7 +247,7 @@ _UNNAMED_WORK = "that kind of work"
 #: The Sentry message that puts an unread rule on SMD's desk.
 UNREAD_RULE_PAGE = "rule_installed_without_reader"
 
-_DECLINED_SUBJECT = "Your rule was declined [rule {proposal_id}]"
+_DECLINED_SUBJECT = "Your rule was declined"
 
 _DECLINED_BODY = """{declined_by} declined the rule you asked for:
 
@@ -246,7 +257,7 @@ Nothing changed. If you think it was misread, say it again and it will be put to
 an administrator again.
 """
 
-_LAPSED_SUBJECT = "Your rule lapsed unanswered [rule {proposal_id}]"
+_LAPSED_SUBJECT = "Your rule lapsed unanswered"
 
 _LAPSED_BODY = """No administrator answered the rule you asked for, so it has
 lapsed:
@@ -505,7 +516,7 @@ def _installed_letter(
     if has_live_rule_reader(output_class):
         return (
             _INSTALLED_SUBJECT.format(proposal_id=proposal_id),
-            _compose(_INSTALLED_BODY, readback, tag, applied_by=by),
+            _compose(_INSTALLED_BODY, readback, tag, firm=(readback,), applied_by=by),
         )
     # A wording rule a queued job now reads (shared/wording_letter.py), first:
     # it is the one answer that can call prose in effect for a lane document.
@@ -529,7 +540,7 @@ def _installed_letter(
     work = describe_output_class(output_class) or _UNNAMED_WORK
     return (
         _RECORDED_SUBJECT.format(proposal_id=proposal_id),
-        _compose(_RECORDED_BODY, readback, tag, applied_by=by, work=work),
+        _compose(_RECORDED_BODY, readback, tag, firm=(readback,), applied_by=by, work=work),
     )
 
 
@@ -566,7 +577,7 @@ def _clause_letter(
     full = body(True, readback)
     return (
         subject.format(proposal_id=proposal_id),
-        full if _passes_scan(full) else body(False, tag),
+        full if _passes_scan(full, (readback,)) else body(False, tag),
     )
 
 
@@ -642,8 +653,13 @@ def notify_outcome(
     if not requester:
         return Notification(sent=False, note="", reason="no requester to tell")
     is_act = _clean(row_kind) == "tool_call"
-    tag = f"[{'act' if is_act else 'rule'} {proposal_id}]"
-    readback = f"{tag} {_clean(text)}" if is_act else _readback(proposal_id, _clean(text))
+    # 2026-11-19 (R2.2). A rule's letter to the person who asked carries the
+    # sentence and no id: they are told about the rule they stated, in the
+    # thread they stated it in, and an id is nothing they can use. An act keeps
+    # its tag (it is still answered by tag).
+    tag = f"[act {proposal_id}]" if is_act else _UNQUOTED_RULE
+    readback = f"{tag} {_clean(text)}" if is_act else _clean(text)
+    firm = () if is_act else (_clean(text),)
     by = _clean(by) or "An administrator"
     if kind == "installed":
         subject, body = _installed_letter(proposal_id, readback, tag, by, output_class)
@@ -652,13 +668,17 @@ def notify_outcome(
             proposal_id=proposal_id
         )
         body = _compose(
-            _ACT_DECLINED_BODY if is_act else _DECLINED_BODY, readback, tag, declined_by=by
+            _ACT_DECLINED_BODY if is_act else _DECLINED_BODY,
+            readback,
+            tag,
+            firm=firm,
+            declined_by=by,
         )
     elif kind == "lapsed":
         subject = (_ACT_LAPSED_SUBJECT if is_act else _LAPSED_SUBJECT).format(
             proposal_id=proposal_id
         )
-        body = _compose(_ACT_LAPSED_BODY if is_act else _LAPSED_BODY, readback, tag)
+        body = _compose(_ACT_LAPSED_BODY if is_act else _LAPSED_BODY, readback, tag, firm=firm)
     else:  # pragma: no cover — a caller bug, not a runtime state
         raise ValueError(f"unknown outcome kind: {kind!r}")
     result = send(

@@ -478,14 +478,16 @@ def test_the_nudge_pins_the_readback_shape(establishment):
 
     The person is agreeing to a specific sentence. They have to be shown that
     sentence, told what it attaches to, and given something unambiguous to
-    answer. A readback that paraphrases, or omits the tag, produces a "yes"
-    that means something the seat cannot act on.
+    answer. A readback that paraphrases produces a "yes" that means something
+    the seat cannot act on. 2026-11-20: the call renders the read-back (its
+    covers line and "Reply yes to confirm."), and no id or tag is the model's.
     """
     plugin, _ = establishment
     nudge = plugin._ESTABLISH_NUDGE.lower()
     assert "word for word" in nudge, "the returned block goes out verbatim"
-    assert "reply yes to confirm" in nudge, "the person needs one unambiguous answer"
-    assert "attach to" in nudge, "they must be told what the rule binds"
+    assert "reply yes" in nudge, "the person needs one unambiguous answer"
+    assert "what it covers" in nudge, "they must be told what the rule binds"
+    assert "no id or tag" in nudge and "the tag the call returned" not in nudge
 
 
 def test_the_nudge_forbids_the_sentence_that_broke_the_rehearsal(establishment):

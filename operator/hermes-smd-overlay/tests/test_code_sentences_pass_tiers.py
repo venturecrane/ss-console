@@ -49,6 +49,9 @@ MODULES = (
     OVERLAY / "plugins/hermes-smd-initiation/help_line.py",
     OVERLAY / "plugins/hermes-smd-establishment/__init__.py",
     OVERLAY / "plugins/hermes-smd-establishment/nudges.py",
+    # A person's own rule, read back with no id and confirmed by reply (2026-11-20).
+    OVERLAY / "plugins/hermes-smd-establishment/own_rules.py",
+    OVERLAY / "plugins/hermes-smd-establishment/readback_confirm.py",
     OVERLAY / "plugins/hermes-smd-escalation/digest_reply.py",
     OVERLAY / "plugins/hermes-smd-escalation/casework_reply.py",
     OVERLAY / "plugins/hermes-smd-escalation/reply_items.py",
@@ -146,6 +149,26 @@ def _fixed_sentences() -> list[str]:
                 },
             )
         )
+    return says + _own_rule_sentences()
+
+
+def _own_rule_sentences() -> list[str]:
+    """Every sentence code renders for a person's own rule: the read-back and its
+    answer line, the numbered list, the reply to a confirmation, and the line
+    for a rule that did not record (2026-11-20)."""
+    est = load_plugin("hermes-smd-establishment")
+    rb, own = est.readback_confirm, est.own_rules
+    rule = "In memos, object under section 1.2, see Example v. Sample."
+    row = {
+        "text": rule,
+        "subject": {"output_class": "work_product", "doc_kinds": ["memo", "demand_letter"]},
+    }
+    letter = {"text": rule, "subject": {"output_class": "outbound_client"}}
+    says = [rb.own_readback(rule), rb.pick_list([rule, rule + " Two."]), rb.PICK_END]
+    says += [rb.ask_line(n) for n in (1, 2, 3, 12)]
+    says += [rb.own_readbacks([rule] * n) for n in (1, 2, 3)]
+    says += [rb.confirmed_say([row], True), rb.confirmed_say([letter], True)]
+    says += [rb.confirmed_say([row, letter], True), own.NOT_RECORDED.format(sentence=rule)]
     return says
 
 

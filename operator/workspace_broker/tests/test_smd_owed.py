@@ -118,6 +118,19 @@ def test_the_agent_records_a_help_question_keyed_on_its_email(owed_seat) -> None
     }
 
 
+def test_a_rule_not_recorded_is_the_agents_and_an_install_failure_is_the_brokers(owed_seat) -> None:
+    """2026-11-20: the person is told "is not recorded yet. I'm looking into
+    it" only once this row exists; an install that fails after "recorded" is
+    the broker's own (own_rule_verbs). Both are listed for the triage."""
+    broker, db, _yaml, _q = owed_seat
+    out = call(broker, "smd_owed_record", pid=1, uid=AGENT_UID, kind="rule_not_recorded", request_ref=ASKING)
+    assert out["ok"] and out["smd_told"] is True
+    with pytest.raises(Exception):
+        smd_owed.record_verb(broker, "x", {"kind": "rule_install_failed", "request_ref": ASKING}, 1, 0)
+    assert smd_owed.record(db, broker.ledger.append, smd_owed.KIND_INSTALL, ASKING, "rule 1a1a1a1a failed")
+    assert sorted(r["kind"] for r in _open(db)) == ["rule_install_failed", "rule_not_recorded"]
+
+
 def test_the_open_read_has_no_lookback_and_lists_owed_served_sets(owed_seat) -> None:
     """Review 2026-11-19: owed work fell off the triage after the 192-hour
     ledger window. FALSIFIER: read the audit window instead of the table."""
