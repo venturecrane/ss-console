@@ -7,14 +7,5 @@
   "records/schema": [],
   "records/transitions": [],
   "records/verbs": [],
-  "drafting/verbs": [
-    "drafting_job_submit | gateway | empty.code",
-    "drafting_job_submit | gateway | empty.correct_call",
-    "drafting_job_submit | gateway | known job.code",
-    "drafting_job_submit | gateway | known job.correct_call",
-    "drafting_job_submit | root | empty.code",
-    "drafting_job_submit | root | empty.correct_call",
-    "drafting_job_submit | root | known job.code",
-    "drafting_job_submit | root | known job.correct_call"
-  ]
+  "drafting/verbs": []
 }
