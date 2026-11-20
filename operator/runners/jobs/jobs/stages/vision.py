@@ -31,11 +31,13 @@ from __future__ import annotations
 import base64
 import json
 import re
+import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .. import llm, stop_request, unopened
 from ..matter import paid as matter_paid, policy as matter_policy, store as page_store_mod
+from ..medchron.audit.run import run_pool
 from ..medchron.update.pageid import SKIPPED
 from . import vision_seed
 from .base import StageRun, append_jsonl, read_jsonl
@@ -45,6 +47,9 @@ PAGE_TIMEOUT = 180.0
 MAX_TOKENS = 8000
 GROUP_B64_BUDGET = 400_000_000  # rendered pages held in memory per submission
 IMAGE_B64_LIMIT = 4_500_000  # the API judges the encoded size
+#: Pages read at once when the stage is not batched (2026-11-19: one at a
+#: time, page reading spent 144 minutes of a 3,821-page matter).
+VISION_WORKERS = 8
 #: The chronology's transcription prompt (its row in ``matter/policy``).
 SYSTEM = matter_policy.RECORD_SYSTEM
 USER_TEXT = matter_policy.RECORD_USER_TEXT
@@ -282,6 +287,39 @@ def _finish(sr: StageRun, f: dict[str, Any], log_path: Path) -> bool:
     return True
 
 
+def _transcribe(sr: StageRun, groups: list[list[llm.Item]], on_result: Callable[..., None], model: str, d: Path) -> int:
+    """Every group's pages; the pages still in a processing batch. Batched,
+    one submission per group as before; live, VISION_WORKERS pages at once,
+    each its own task with the stop check first, and every result recorded
+    under one lock (the part files, the page store, the file's done map)."""
+    kw: dict[str, Any] = dict(
+        model=model, system=SYSTEM, max_tokens=MAX_TOKENS, effort="", cache_blocks=("system",), batch_dir=d / "batch"
+    )
+    if "vision" in sr.doorway.batch_stages:
+        timed_out = 0
+        for items in groups:
+            stop_request.check("vision")  # every finished page is already appended to its part file
+            timed_out += len(sr.doorway.batch_call("vision", items, on_result, **kw).timed_out)
+        return timed_out
+    lock = threading.Lock()
+
+    def locked(item: llm.Item, r: llm.Result | None, err: str | None) -> None:
+        with lock:
+            on_result(item, r, err)
+
+    def task(item: llm.Item) -> Callable[[], None]:
+        def one() -> None:
+            stop_request.check("vision")  # every finished page is already appended to its part file
+            sr.doorway.batch_call("vision", [item], locked, **kw)
+
+        return one
+
+    items = [it for g in groups for it in g]
+    if items:
+        run_pool([task(it) for it in items], max(1, min(VISION_WORKERS, len(items))))
+    return 0
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir
     (d / "partial").mkdir(parents=True, exist_ok=True)
@@ -327,21 +365,7 @@ def run(sr: StageRun) -> int:
         size += len(b64)
     if group:
         groups.append(group)
-    timed_out = 0
-    for items in groups:
-        stop_request.check("vision")  # every finished page is already appended to its part file
-        s = sr.doorway.batch_call(
-            "vision",
-            items,
-            on_result,
-            model=model,
-            system=SYSTEM,
-            max_tokens=MAX_TOKENS,
-            effort="",
-            cache_blocks=("system",),
-            batch_dir=d / "batch",
-        )
-        timed_out += len(s.timed_out)
+    timed_out = _transcribe(sr, groups, on_result, model, d)
 
     store.store.flush()
     incomplete = sum(0 if _finish(sr, f, log_path) else 1 for f in files.values())

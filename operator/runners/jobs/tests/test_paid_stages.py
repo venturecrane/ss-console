@@ -99,7 +99,7 @@ def test_vision_transcribes_every_page_checkpoints_and_ledgers_pages(
     text = (sr.slug_dir / "text" / "s1.txt").read_text()
     assert text.count("(machine transcription)") == 3 and "[p.3]" in text
     partial = [json.loads(line) for line in (sr.slug_dir / "partial" / "s1.jsonl").read_text().splitlines()]
-    assert [r["page"] for r in partial] == [1, 2, 3]
+    assert sorted(r["page"] for r in partial) == [1, 2, 3]  # pages are read at once: rows land as they finish
     row = json.loads((sr.slug_dir / "ocr_results.jsonl").read_text().splitlines()[-1])
     assert row == {
         "id": "s1",
@@ -115,7 +115,7 @@ def test_vision_transcribes_every_page_checkpoints_and_ledgers_pages(
     assert len(ledger) == 3 and all(
         r["stage"] == "vision" and r["pages"] == 1 and r["model"] == "claude-sonnet-5" for r in ledger
     )
-    assert ledger[0]["custom_id"] == "s1-p1"
+    assert sorted(r["custom_id"] for r in ledger) == ["s1-p1", "s1-p2", "s1-p3"]
     # the request shape: system marked, one image + the instruction, no effort field
     p = client.calls[0]
     assert p["system"][0].get("cache_control") and "output_config" not in p

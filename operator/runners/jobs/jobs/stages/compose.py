@@ -58,13 +58,13 @@ from __future__ import annotations
 
 import json
 import re
-import time
 from pathlib import Path
 from typing import Any
 
 from .. import llm
 from ..medchron import prompts, windows as WN
 from ..limits import LimitHold
+from . import compose_pool
 from .base import StageRun, append_jsonl, read_json
 from .chunking import build_chunks, chunk_size, pieces_pages, sha, split_chunk, split_files
 
@@ -286,7 +286,8 @@ def record_unread(d: Path, label: str, text: str, reason: str, out_name: str) ->
     )
     p = d / UNREAD
     kept = [r for r in read_json(p, []) if str(r.get("chunk")) != label]
-    p.write_text(json.dumps(kept + rows, indent=1), encoding="utf-8")
+    # Ordered by chunk, so pieces composed at once write the same file (``compose_pool``).
+    p.write_text(json.dumps(sorted(kept + rows, key=compose_pool.chunk_of), indent=1), encoding="utf-8")
     return rows
 
 
@@ -371,7 +372,8 @@ class _Composer:
         self.sr.log(f"chunk {c.label} {r.stop_reason} ({r.usage.input_tokens}in/{r.usage.output_tokens}out)")
         return "ok"
 
-    def compose_one(self, c: Chunk) -> str:
+    def ask(self, c: Chunk) -> tuple[llm.Result | None, str | None]:
+        """One call for piece `c`: (reply, None), or (None, error) for handle()."""
         try:
             r = self.sr.doorway.call(
                 "compose",
@@ -387,8 +389,8 @@ class _Composer:
         except LimitHold:
             raise  # a limit stops the stage and reaches the driver as a hold (N10)
         except Exception as exc:  # noqa: BLE001 - classified by handle()
-            return self.handle(c, None, str(exc))
-        return self.handle(c, r, None)
+            return None, str(exc)
+        return r, None
 
     def _subs(self, c: Chunk, parts: list[str], budget: int = REFUSAL_ATTEMPTS) -> list[Chunk]:
         """Split `c` into numbered parts, recording them in the chunk's parts
@@ -479,21 +481,6 @@ class _Composer:
         parts = split_chunk(c.text, 2)
         self.sr.log(f"chunk {c.i}: splitting into {len(parts)} parts ({[len(p) for p in parts]} chars)")
         return self._subs(c, parts)
-
-    def run_serial(self, todo: list[Chunk]) -> None:
-        queue = list(todo)
-        while queue:
-            self.save_queue(queue)
-            c = queue.pop(0)
-            state = self.compose_one(c)
-            nxt = self.after(c, state)
-            queue[0:0] = nxt
-            self.save_queue(queue)
-            if state in ("refused", "error") and nxt and nxt[0] is c:
-                time.sleep(10 * max(c.attempts, 1))
-            if state == "ok":
-                time.sleep(1)
-        self.save_queue([])
 
     def run_batched(self, todo: list[Chunk]) -> None:
         """One batch per tier per round for the whole unit. The id carries the
@@ -605,7 +592,7 @@ def run(sr: StageRun) -> int:
     if "compose" in sr.doorway.batch_stages:
         comp.run_batched(todo)
     else:
-        comp.run_serial(todo)
+        compose_pool.run(comp, todo)
 
     done = [i for i in range(1, len(chunks) + 1) if produced(d, i)]
     missing = [i for i in range(1, len(chunks) + 1) if i not in done]

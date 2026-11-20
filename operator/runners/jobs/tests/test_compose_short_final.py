@@ -41,7 +41,7 @@ def test_a_whole_chunks_short_reply_naming_every_file_is_kept_and_paid_once(
     sr = _sr(job_dir, firm_headings, data_root, client, log=log)
     _unit_files(sr, {"inspection report": BODY, "survey report": BODY})
     cut_before_windows(sr)  # a whole chunk of two files (a unit cut before the writer's windows)
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     assert len(client.calls) == 1  # never split, never paid twice
@@ -58,7 +58,7 @@ def test_falsifier_a_whole_chunks_short_reply_that_skips_a_file_still_splits(
     sr = _sr(job_dir, firm_headings, data_root, client, log=log)
     _unit_files(sr, {"inspection report": BODY, "survey report": BODY})
     cut_before_windows(sr)
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     assert len(client.calls) == 3 and not (d / "map-01.md").exists()
@@ -76,7 +76,7 @@ def test_a_window_whose_short_reply_names_its_file_is_kept_and_paid_once(
     client = Scripted(lambda p, n: _msg(_short(p)))
     sr = _sr(job_dir, firm_headings, data_root, client)
     _unit_files(sr, {"inspection report": window})
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0 and len(client.calls) == 1
     client2 = Scripted(lambda p, n: _msg(_short(p, keep=0 if n == 1 else None)))
     sr2 = _sr(job_dir, firm_headings, data_root, client2)

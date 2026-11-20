@@ -59,3 +59,12 @@ def update_review_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Prici
     from ..stages import update_review
 
     return update_review.projected_usd(slug_dir, unit, cfg, pricing)
+
+
+def expected_finish(drv: Any, st: Any, extracted: Path) -> None:
+    """The run's expected finish, written once after extract (``eta.stamp``);
+    a dry run or a rehearsal writes none."""
+    from . import eta
+
+    if not (drv.dry_run or drv.rehearse):
+        eta.stamp(st, extracted, drv.log)

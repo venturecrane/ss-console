@@ -127,7 +127,9 @@ def test_the_clean_path_delivers_with_no_orphan_or_coverage_hold_and_names_every
     ]
     # decide_orphans ran before the document, and nothing was rebuilt.
     st = _state(data_root)
-    assert st.stage("decide_orphans").finished < st.stage("build_doc").finished
+    # Stamps are to the second, and the writer no longer pauses a second per
+    # chunk (``compose_pool``), so the two can share one.
+    assert st.stage("decide_orphans").finished <= st.stage("build_doc").finished
     assert st.stage("build_doc").attempts == 1 and not (sd / "runs" / "alpha" / "coverage_redo.json").exists()
     # Both are named to the firm, with the reason, in the delivered document.
     doc = (sd / "runs" / "alpha" / "final-chronology.md").read_text()

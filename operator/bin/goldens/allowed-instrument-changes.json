@@ -1,5 +1,5 @@
 {
   "_why": "What the golden harness itself may stop pinning (bin/goldens/golden_manifest.py): <cases> names a dropped case or cell, or a cell newly declared not applicable, as <set>.<list>:<item> (e.g. host_matrix.cells:medchron/busy); <normaliser> names a normaliser added, changed or removed (e.g. host_matrix_normal._ULID). Each entry is exact, reviewed with the PR, and cleared after it merges. The lifecycle matrix and run record PR (2026-11-17): every chronology record carries a run block (fields.run on the wire, metadata.run on the audit row, run_pending in the state between a resume and its start); an ending the broker did not take is kept as record_pending and recorded on a later tick, while the firm's message goes as before (medchron__broker_down_mid_run); the new host ending queued_behind_same_lane is not applicable to the note, negotiation and library setup lanes.",
   "<cases>": [],
-  "<normaliser>": []
+  "<normaliser>": ["reader_frozen.reader_lanes.py"]
 }
