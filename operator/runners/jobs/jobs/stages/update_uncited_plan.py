@@ -30,6 +30,7 @@ from .assemble import CITE, CITE_NOPAGE, FILE_HEADER, MAP_FILE, Resolver, parse_
 from .base import read_json
 from .chunking import pieces_pages, sha
 from .compose import UNREAD
+from .coverage import file_key
 from .repair import truncated_targets
 
 #: Adjacent pages of one document one reader request shows at most.
@@ -64,7 +65,7 @@ class Doc:
 
     @property
     def name(self) -> str:
-        return f"{self.row['name']}{self.row.get('ext') or ''}"
+        return file_key(self.row)
 
 
 @dataclass
