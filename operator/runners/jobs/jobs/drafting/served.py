@@ -37,7 +37,9 @@ resumable once SMD writes or fixes the file (the broker's
   ``served_form.py``'s.
 
 SMD writes and corrects the file with ``python -m jobs.drafting.served``
-(``served_cli.py``), never by hand as root.
+(``served_cli.py``), never by hand as root. Since 2026-11-20 the ``find`` stage
+writes it first, from the matter file itself (``served_find.py``); a file SMD
+wrote is the override and the finder leaves it alone.
 
 Each writes ``smd-needs.json`` in the job directory (``stop_note``): the code,
 the reason, the shape above, and the job's frozen firm wording rules, so a set
@@ -82,13 +84,35 @@ OPERATOR, SMD = DRAFTERS
 #: A served set of a kind outside ``SET_TYPES``, named by its own ``label``:
 #: drafted by SMD only, listed in the reply like any other.
 OTHER = "other"
-#: Kinds the Operator does not draft: a set of type other. A form
-#: interrogatory set is checked by its own keys (``served_form.py``) and
-#: refused for the Operator until this switch is on: the drafting does not
-#: answer dotted numbers (1.1, 2.1) yet. A later change turns it on with the
-#: answer path; until then SMD drafts every form set.
-SMD_ONLY = frozenset({OTHER})
+#: Who drafts a form interrogatory set: THE one switch. A form set is answered
+#: by its dotted numbers (1.1, 2.1) from the matter file (``forms/``); it is
+#: checked by its own keys (``served_form.py``) and refused for the Operator
+#: until this is on. The lane's form hook (``forms.lane_hook.enabled``), the
+#: validator and the finder (``found_drafted_by``) all read it; nothing else
+#: decides it. Off: SMD drafts every form set, exactly as before.
 FORM_SETS_BY_OPERATOR = False
+#: Kinds the Operator does not draft: a set of type other.
+SMD_ONLY = frozenset({OTHER})
+#: Who drafts each kind of set the finder found (``served_find.py``): the
+#: Operator drafts special interrogatories and requests for production; SMD the
+#: rest. A form set follows ``FORM_SETS_BY_OPERATOR`` (``found_drafted_by``). A
+#: hand file (``served_cli``) says its own ``drafted_by``.
+FOUND_DRAFTED_BY = {
+    "special_interrogatories": OPERATOR,
+    "requests_for_production": OPERATOR,
+    "requests_for_admission": SMD,
+    OTHER: SMD,
+}
+
+
+def form_drafted_by() -> str:
+    """Who drafts a form interrogatory set now: the switch, read at call time."""
+    return OPERATOR if FORM_SETS_BY_OPERATOR else SMD
+
+
+def found_drafted_by(kind: str) -> str:
+    """Who drafts a set of this kind the finder found."""
+    return form_drafted_by() if kind == "form_interrogatories" else FOUND_DRAFTED_BY[kind]
 BEING_PREPARED = "being prepared by us"
 FILED = "filed"
 KEYS = (
@@ -101,6 +125,7 @@ KEYS = (
     "request_text_path",
     "drafted_by",
     "label",
+    "source",
     *served_form.FORM_KEYS,
 )
 _REQUIRED = ("set_type", "set_number", "propounding_party", "responding_party", "request_count", "drafted_by")
@@ -121,6 +146,9 @@ class ServedSet:
     drafted_by: str
     #: The set's own name, for a set of type ``other`` only.
     other_label: str = ""
+    #: The matter file's document id the set was read from (``source``; the
+    #: finder writes it, ``served_find.py``); "" for a hand-named set.
+    source: str = ""
     #: A form interrogatory set's own keys (``served_form.py``); empty for any
     #: other set, and for an SMD form set that names none. Defaults, so a plan
     #: frozen before these keys existed still loads.
@@ -158,8 +186,12 @@ def numbered(text: str) -> dict[int, str]:
     return out
 
 
-def _numbering(text: str) -> list[int]:
+def numbering(text: str) -> list[int]:
+    """Every numbered request's number in the served text, in order."""
     return [int(m.group(1)) for m in _SERVED_ITEM.finditer(text or "")]
+
+
+_numbering = numbering
 
 
 def _fail(code: str, why: str) -> DraftingFailed:
@@ -172,6 +204,8 @@ def _whole(v: Any) -> bool:
 
 def _text(job_dir: Path, i: int, raw: dict[str, Any], problems: list[str]) -> str:
     has_text, has_path = "request_text" in raw, "request_text_path" in raw
+    if not (has_text or has_path) and raw.get("set_type") == "form_interrogatories" and raw.get("source"):
+        return ""  # a form set the finder found: its checked numbers are the form reader's, not text
     if has_text == has_path:
         problems.append(f"set {i}: exactly one of request_text or request_text_path")
         return ""
@@ -247,6 +281,8 @@ def _one(
             problems.append(f"set {i}: {k} must name the party")
     if "drafted_by" in raw and raw["drafted_by"] not in DRAFTERS:
         problems.append(f"set {i}: drafted_by must be one of {list(DRAFTERS)}")
+    if "source" in raw and (not isinstance(raw["source"], str) or not raw["source"].strip()):
+        problems.append(f"set {i}: source must name the matter file's document")
     text = _text(job_dir, i, raw, problems)
     if problems or st is None:
         return None
@@ -276,6 +312,7 @@ def _one(
         text,
         raw["drafted_by"],
         str(raw.get("label") or "").strip(),
+        str(raw.get("source") or "").strip(),
         **form,
     )
 
@@ -444,9 +481,11 @@ def to_file(found: list[ServedSet]) -> str:
     """``served.json`` in its closed shape (``KEYS``), texts inlined: what ``read`` reads back."""
     rows = []
     for s in found:
-        drop = {"other_label", *([] if s.form else served_form.FORM_KEYS)}
+        drop = {"other_label", "source", "request_text", *([] if s.form else served_form.FORM_KEYS)}
         raw = {k: (list(v) if isinstance(v, tuple) else v) for k, v in asdict(s).items() if k not in drop}
-        rows.append({**raw, **({"label": s.other_label} if s.set_type == OTHER else {})})
+        raw.update({"request_text": s.request_text} if s.request_text else {})
+        raw.update({"label": s.other_label} if s.set_type == OTHER else {})
+        rows.append({**raw, **({"source": s.source} if s.source else {})})
     return json.dumps({"sets": rows}, indent=1)
 
 
@@ -514,8 +553,20 @@ def stop_note(job_dir: Path, data: Path, reason: str, *, served_shape: bool) -> 
 #: The classes whose units are planned before anything is paid (``_plan_before_spend``):
 #: a response job's served sets only. A propounded set plans after its caption stage.
 PLANNED_CLASSES = ("discovery_response",)
+#: The finder's stops (``served_find.py``), each before any large spend: no
+#: candidate; only scans; two sets code cannot tell apart, a value it cannot
+#: confirm, or a response paper it cannot pair; requests that do not number 1 to
+#: the count; more than the finder reads; a prior draft of a set (a revision).
+FIND_STOPS = (
+    "served_none",
+    "served_scan",
+    "served_ambiguous",
+    "served_unnumbered",
+    "served_many",
+    "served_prior_draft",
+)
 #: The plan's stops: SMD resolves each (a hand file and a resume, or a hand draft).
-PLAN_STOPS = ("served_unknown", "served_other_set", "served_invalid")
+PLAN_STOPS = ("served_unknown", "served_other_set", "served_invalid", *FIND_STOPS)
 
 
 def main(argv: list[str] | None = None, client: Any = None) -> int:

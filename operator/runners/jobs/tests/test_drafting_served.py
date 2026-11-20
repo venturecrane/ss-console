@@ -332,7 +332,7 @@ def _response_run(tmp_path, pricing, client=None, request="Please draft response
     return r
 
 
-def test_responses_with_no_served_file_end_served_unknown_with_nothing_spent_and_the_frozen_rules_for_smd(
+def test_responses_with_no_served_set_in_the_file_end_served_none_with_nothing_spent_and_the_frozen_rules_for_smd(
     tmp_path, pricing
 ):
     client = Client()
@@ -340,10 +340,11 @@ def test_responses_with_no_served_file_end_served_unknown_with_nothing_spent_and
     frozen = {"kind": "discovery_response", "attorney": None, "reader": None, "rules": [{"id": "r1", "text": "x"}]}
     (r.data / "wording-rules.json").write_text(json.dumps(frozen))  # as freeze() leaves it when switched on
     v = r.run()
-    assert v.outcome == "failed" and "served_unknown: " in v.reason, (v.stage, v.reason)
-    assert v.dollars == 0 and client.calls == [] and v.stage == "plan"
+    # The finder runs first (served_find.py): a file with no served set stops it, nothing read or paid.
+    assert v.outcome == "failed" and "served_none: " in v.reason, (v.stage, v.reason)
+    assert v.dollars == 0 and client.calls == [] and v.stage == "find"
     note = json.loads((r.job.job_dir / served.STOP_NOTE).read_text())
-    assert note["code"] == "served_unknown" and note["wording_rules"] == frozen
+    assert note["code"] == "served_none" and note["wording_rules"] == frozen
     assert note["write"]["file"] == served.FILE
 
 
@@ -415,10 +416,10 @@ def test_a_served_plan_is_frozen_so_an_edited_hand_file_does_not_change_a_resume
     assert [(u.key, u.label) for u in r2.units()] == first
 
 
-def test_served_unknown_then_smd_writes_the_file_and_a_resume_plans_from_it(tmp_path, pricing, monkeypatch):
+def test_served_none_then_smd_writes_the_file_and_a_resume_plans_from_it(tmp_path, pricing, monkeypatch):
     seen: dict = {}
     r = _response_run(tmp_path, pricing)
-    assert "served_unknown: " in r.run().reason
+    assert "served_none: " in r.run().reason
     _write_served(r.job.job_dir, THREE)
     _stop_at_estimate(monkeypatch, seen)
     r2 = DraftingRun(r.job.job_dir, inputs_dir=str(tmp_path / "inputs"), pricing=str(pricing),
@@ -744,7 +745,7 @@ def test_a_drafted_set_missing_a_response_is_held_by_the_code_check_and_nothing_
 def test_the_served_codes_are_reason_codes_so_no_verdict_reads_unexpected(tmp_path, pricing):
     assert set(served.PLAN_STOPS) <= set(outcome.REASON_CODES)
     r = _response_run(tmp_path, pricing)
-    assert r.run().reason.startswith("served_unknown: ")
+    assert r.run().reason.startswith("served_none: ")
 
 
 def test_the_delivered_verdict_carries_served_sets_and_every_other_verdict_is_unchanged():

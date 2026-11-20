@@ -82,6 +82,17 @@ REASON_CODES = (
     "served_unknown",
     "served_other_set",
     "served_invalid",
+    # The finder (served_find.py), each failed and resumable before any large spend, SMD paged with
+    # smd-needs.json and found-report.json: no served set in the file; only no-text discovery files in a
+    # discovery folder; two sets code cannot tell apart, a read value not on the page, or a response it
+    # cannot pair; requests that do not number 1 to the count; more than the finder reads or its cap;
+    # a prior Operator draft of a set still owed (a revision).
+    "served_none",
+    "served_scan",
+    "served_ambiguous",
+    "served_unnumbered",
+    "served_many",
+    "served_prior_draft",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
