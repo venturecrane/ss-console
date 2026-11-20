@@ -90,9 +90,14 @@ class _Client:
         self.broker = broker
         self.replies: list[dict] = []
         self.requests: list[dict] = []
+        #: Actions that fail once, as a broker timeout would (the next call goes through).
+        self.fail_once: set[str] = set()
 
     def _request(self, req: dict) -> dict:
         self.requests.append(req)
+        if req["action"] in self.fail_once:
+            self.fail_once.discard(req["action"])
+            raise BrokerError("broker socket: timed out")
         if req["action"] == "delivery_reply_status":
             return {"ok": True, "replies": list(self.replies)}
         try:
@@ -180,7 +185,7 @@ def _wakes(lane) -> list[str]:
     return lane._wakes_pending()
 
 
-@pytest.mark.parametrize("how", ["held", "failed", "stopped"])
+@pytest.mark.parametrize("how", ["failed", "stopped"])
 def test_an_ended_job_with_two_hand_filed_files_becomes_delivered(seat, how):
     broker, client, lane, _db, _q = seat
     jid = _ended(seat, how)
@@ -205,9 +210,141 @@ def test_an_ended_job_with_two_hand_filed_files_becomes_delivered(seat, how):
     assert "Interrogatories" not in task  # never a file name on the unfenced wake
 
 
+def _audits(db: str, kind: str) -> int:
+    conn = sqlite3.connect(db)
+    try:
+        return conn.execute("SELECT COUNT(*) FROM audit_log WHERE action_type=?", (kind,)).fetchone()[0]
+    finally:
+        conn.close()
+
+
+def test_a_held_job_is_refused_until_withdrawn_and_no_failed_row_is_written(seat):
+    """FALSIFIER for item 2: walking held -> failed wrote DRAFTING_JOB_FAILED,
+    which the firm's portal reads as "Could not finish drafting a document"."""
+    broker, _client, lane, db, _q = seat
+    jid = _ended(seat, "held")
+    before = _audits(db, "DRAFTING_JOB_FAILED")
+    with pytest.raises(dbs.Refused, match="is held. Withdraw it first"):
+        dbs.plan(lane, jid, _rec(), quiet=False)
+    assert _row(broker, jid)["state"] == "held" and _audits(db, "DRAFTING_JOB_FAILED") == before
+
+
+def test_the_proof_is_written_before_the_row_is_delivered(seat):
+    """FALSIFIER for item 1: with the record first, a proof that times out left
+    a delivered row the revise routing refuses (prior_unidentified)."""
+    broker, client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    client.fail_once.add("delivery_proof_record")
+    with pytest.raises(BrokerError):
+        dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))
+    assert _row(broker, jid)["state"] == "failed" and _wakes(lane) == []
+    dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))  # a re-run finishes it
+    assert _row(broker, jid)["state"] == "delivered" and broker.drafting.ledger.proven_files(jid)
+    assert _wakes(lane) == [jid]
+
+
+def test_a_run_cut_short_after_the_row_moved_is_finished_by_a_re_run(seat, monkeypatch):
+    """FALSIFIER for item 1: a row delivered whose daemon state never landed
+    was refused, leaving no wake and no terminal state."""
+    broker, client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    real = lane._write_state
+
+    def lost(job_id, **fields):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(lane, "_write_state", lost)
+    with pytest.raises(OSError):
+        dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))
+    monkeypatch.setattr(lane, "_write_state", real)
+    assert _row(broker, jid)["state"] == "delivered" and lane._daemon_state(jid)["state"] == "stopped_by_smd"
+    p = dbs.plan(lane, jid, _rec(), quiet=False)
+    assert p["records"] == []  # the ledger is not moved again
+    dbs.apply(lane, p)
+    assert lane._daemon_state(jid)["state"] == "delivered" and _wakes(lane) == [jid]
+    other = _rec()
+    other["folder_id"] = "folder-elsewhere"
+    with pytest.raises(dbs.Refused, match="only a failed or withdrawn job"):
+        dbs.plan(lane, jid, other, quiet=False)  # and never a delivered row with other files
+
+
+def test_another_live_job_for_the_same_request_is_refused_before_any_write(seat):
+    """FALSIFIER for item 3: the ledger's unique (request_ref, class) index
+    refused the failed -> running move after the proof had landed."""
+    broker, client, lane, db, _q = seat
+    jid = _ended(seat, "stopped")
+    again = broker.handle(
+        {"action": "drafting_job_submit", "envelope": _envelope()}, peer_pid=GATEWAY_PID, peer_uid=AGENT_UID
+    )
+    assert again["accepted"]
+    with pytest.raises(dbs.Refused, match=f"job {again['job_id']} is live for the same request email"):
+        dbs.plan(lane, jid, _rec(), quiet=False)
+    assert _row(broker, jid)["state"] == "failed" and _audits(db, "DELIVERY_PROVEN") == 0
+
+
+def test_a_write_that_fails_part_way_exits_3_not_a_traceback(seat, monkeypatch, capsys, tmp_path):
+    broker, client, lane, _db, _q = seat
+    jid = _ended(seat, "stopped")
+    rec = tmp_path / "record.json"
+    rec.write_text(json.dumps(RECORD))
+    monkeypatch.setattr(daemon_mod, "build", lambda: None)
+    monkeypatch.setattr(drafting_lane, "build_lane", lambda _d: lane)
+    monkeypatch.setattr(dbs.hand_delivery, "daemon_env", lambda _names: {})
+    assert dbs.main([jid, str(rec), "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    digest = json.loads(out[: out.rindex("}") + 1])["digest"]
+    client.fail_once.add("drafting_job_record")
+    assert dbs.main([jid, str(rec), "--confirm", digest]) == 3
+    assert "FAILED PARTWAY" in capsys.readouterr().err
+
+
+def test_the_daemon_env_is_read_by_name_only(tmp_path):
+    proc = tmp_path / "proc"
+    (proc / "7").mkdir(parents=True)
+    (proc / "7" / "cmdline").write_bytes(b"/usr/bin/python3\0-c\0pass\0")
+    (proc / "7" / "environ").write_bytes(b"CUSTOMER_SLUG=wrong\0")
+    (proc / "42").mkdir()
+    (proc / "42" / "cmdline").write_bytes(b"/opt/jobs/.venv/bin/python\0-m\0jobs.daemon\0")
+    (proc / "42" / "environ").write_bytes(b"CUSTOMER_SLUG=example\0SECRET_KEY=s3cr3t\0SMD_JOBS_RUN_DIR=/run/x\0")
+    got = dbs.hand_delivery.daemon_env(["CUSTOMER_SLUG", "SMD_JOBS_RUN_DIR"], proc=proc)
+    assert got == {"CUSTOMER_SLUG": "example", "SMD_JOBS_RUN_DIR": "/run/x"}
+    assert dbs.hand_delivery.daemon_env(["CUSTOMER_SLUG"], proc=tmp_path / "none") == {}
+
+
+def test_the_chronology_keeps_its_own_order(seat):
+    """The shared write order is per lane: the chronology (live) still records
+    the ledger before its proof; only the drafting plan sets proof_first."""
+    calls: list[str] = []
+
+    class _Lane:
+        LANE = "medchron"
+
+        class broker:
+            @staticmethod
+            def record(job_id, state, fields):
+                calls.append(f"record:{state}")
+
+            @staticmethod
+            def _request(req):
+                calls.append(req["action"])
+
+        def clock(self):
+            return 1.0
+
+        def _write_state(self, job_id, **fields):
+            calls.append("state")
+
+    plan = {"job_id": "J", "records": [("running", {}), ("delivered", {})], "proof": {"action": "proof"}, "state": {}}
+    dbs.hand_delivery.apply(_Lane(), plan)
+    assert calls == ["record:running", "record:delivered", "proof", "state"]
+    calls.clear()
+    dbs.hand_delivery.apply(_Lane(), {**plan, "proof_first": True})
+    assert calls == ["proof", "record:running", "record:delivered", "state"]
+
+
 def test_quiet_queues_no_reply(seat):
     broker, _client, lane, _db, _q = seat
-    jid = _ended(seat, "held")
+    jid = _ended(seat, "stopped")
     dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=True))
     assert _row(broker, jid)["state"] == "delivered"
     assert _wakes(lane) == []
@@ -217,10 +354,10 @@ def test_quiet_queues_no_reply(seat):
 
 def test_a_second_run_is_refused_and_writes_nothing_twice(seat):
     broker, client, lane, db, _q = seat
-    jid = _ended(seat, "held")
+    jid = _ended(seat, "stopped")
     dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=False))
     before = len(client.requests)
-    with pytest.raises(dbs.Refused, match="only a held, failed or stopped job"):
+    with pytest.raises(dbs.Refused, match="only a failed or withdrawn job"):
         dbs.plan(lane, jid, _rec(), quiet=False)
     assert all(r["action"] == "drafting_job_status" for r in client.requests[before:])
 
@@ -271,12 +408,12 @@ def test_a_delivered_reply_already_claimed_is_refused(seat):
 )
 def test_an_incomplete_file_triple_is_refused(seat, change, match):
     broker, client, lane, _db, _q = seat
-    jid = _ended(seat, "held")
+    jid = _ended(seat, "stopped")
     rec = _rec()
     change(rec)
     with pytest.raises(dbs.Refused, match=match):
         dbs.plan(lane, jid, rec, quiet=False)
-    assert _row(broker, jid)["state"] == "held"
+    assert _row(broker, jid)["state"] == "failed"
 
 
 def test_after_it_the_revise_routing_finds_the_hand_delivered_draft(seat):
@@ -322,7 +459,7 @@ def test_after_it_the_revise_routing_finds_the_hand_delivered_draft(seat):
 
 def test_dry_run_prints_the_digest_and_the_live_run_must_repeat_it(seat, monkeypatch, capsys, tmp_path):
     broker, client, lane, _db, _q = seat
-    jid = _ended(seat, "held")
+    jid = _ended(seat, "stopped")
     rec = tmp_path / "record.json"
     rec.write_text(json.dumps(RECORD))
     monkeypatch.setattr(daemon_mod, "build", lambda: None)
@@ -331,10 +468,10 @@ def test_dry_run_prints_the_digest_and_the_live_run_must_repeat_it(seat, monkeyp
     out = capsys.readouterr().out
     plan = json.loads(out[: out.rindex("}") + 1])
     assert plan["dry_run"] is True and plan["records"][-1][0] == "delivered"
-    assert _row(broker, jid)["state"] == "held" and _wakes(lane) == []
+    assert _row(broker, jid)["state"] == "failed" and _wakes(lane) == []
     assert dbs.main([jid, str(rec)]) == 2  # no digest
     assert dbs.main([jid, str(rec), "--confirm", "0" * 16]) == 2  # the wrong one
-    assert _row(broker, jid)["state"] == "held"
+    assert _row(broker, jid)["state"] == "failed"
     assert dbs.main([jid, str(rec), "--confirm", plan["digest"]]) == 0
     assert _row(broker, jid)["state"] == "delivered" and _wakes(lane) == [jid]
     assert "REFUSED" in capsys.readouterr().err

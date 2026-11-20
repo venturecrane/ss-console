@@ -70,13 +70,17 @@ def check_job(
     refused_why: str,
     requester_keys: tuple[str, str],
     reply_kind: str,
+    finishable: Callable[[dict[str, Any]], bool] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """(ledger row, daemon state, envelope) of a job this tool may record. Raises Refused.
 
     ``recordable``: the ledger states a hand delivery is recorded from.
     ``resumable_daemon``: the daemon states that make a ``running`` ledger row
     this tool's own half-finished write rather than a job the daemon runs.
-    ``requester_keys``: the envelope's (requester, request email) fields."""
+    ``requester_keys``: the envelope's (requester, request email) fields.
+    ``finishable``: a lane may pass a test of a ``delivered`` row; a row that
+    passes it, while the daemon state still says the job ended, is this tool's
+    own write to finish (the daemon state or the wake did not land)."""
     row = d.broker.status(job_id)
     if row is None:
         raise Refused(f"there is no {noun} job {job_id}")
@@ -84,7 +88,11 @@ def check_job(
     # `running` is accepted only as this tool's own half-finished write (the
     # ledger moved, the delivered record did not land): the daemon's state for
     # the job still says it ended. A job the daemon is running says otherwise.
-    resumable = row.get("state") == "running" and st.get("state") in set(resumable_daemon)
+    ended = st.get("state") in set(resumable_daemon)
+    resumable = ended and (
+        row.get("state") == "running"
+        or (row.get("state") == "delivered" and finishable is not None and finishable(row))
+    )
     if row.get("state") not in set(recordable) and not resumable:
         raise Refused(f"job {job_id} is {row.get('state')}; {refused_why}")
     if (d.queue / f"{job_id}.json").exists():
@@ -127,11 +135,17 @@ def proof_request(d: Any, job_id: str, files: list[dict[str, Any]], *, review: s
 
 
 def apply(d: Any, p: dict[str, Any]) -> None:
-    """The plan's writes, in the daemon's own order."""
+    """The plan's writes, in the lane's own order: the chronology's daemon
+    records the ledger and then the proof; the drafting lane writes the proof
+    first (``proof_first``), so its row is never delivered without one. The
+    terminal daemon state is always last."""
     job_id = p["job_id"]
+    if p.get("proof_first"):
+        client(d)._request(p["proof"])
     for state, fields in p["records"]:
         d.broker.record(job_id, state, fields)
-    client(d)._request(p["proof"])
+    if not p.get("proof_first"):
+        client(d)._request(p["proof"])
     d._write_state(job_id, finished_at=d.clock(), **p["state"])
 
 
@@ -139,6 +153,34 @@ def digest(p: dict[str, Any]) -> str:
     """A short digest of a plan: what the dry run showed is what the live run writes."""
     blob = json.dumps(p, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def daemon_env(names: Iterable[str], *, proc: Path = Path("/proc")) -> dict[str, str]:
+    """The named variables from the running jobs daemon's environment, and no
+    others (the daemon's environment holds secrets; only these names are read).
+    {} when no daemon runs or its environment cannot be read. A root shell on
+    the seat (``fly ssh console``) does not carry the entrypoint's exports, so
+    a tool run there takes the daemon's own values instead of a guessed path."""
+    wanted = set(names)
+    try:
+        pids = [p for p in proc.iterdir() if p.name.isdigit()]
+    except OSError:
+        return {}
+    for pid in sorted(pids, key=lambda p: int(p.name)):
+        try:
+            argv = (pid / "cmdline").read_bytes().split(b"\0")
+            if b"jobs.daemon" not in argv or b"-m" not in argv:
+                continue
+            raw = (pid / "environ").read_bytes()
+        except OSError:
+            continue
+        out: dict[str, str] = {}
+        for item in raw.split(b"\0"):
+            key, sep, value = item.decode("utf-8", "replace").partition("=")
+            if sep and key in wanted:
+                out[key] = value
+        return out
+    return {}
 
 
 def read_record(path: str) -> Any:
@@ -153,10 +195,12 @@ def run_cli(
     done: str,
     confirm: str | None = None,
     use_digest: bool = False,
+    partial: tuple[type[BaseException], ...] = (),
 ) -> int:
     """Plan on the built lane ``d``, print, and (not a dry run) apply. Exit 0
     done or dry run, 2 refused (nothing written). With ``use_digest`` a live
-    run must repeat the dry run's digest."""
+    run must repeat the dry run's digest. An error of a ``partial`` type during
+    the writes exits 3: some may have landed, and a fresh run finishes them."""
     try:
         if d is None:
             raise Refused("this seat has no such lane running; nothing was written")
@@ -178,7 +222,13 @@ def run_cli(
             file=sys.stderr,
         )
         return 2
-    apply(d, p)
+    try:
+        apply(d, p)
+    except partial as exc:
+        print(
+            f"FAILED PARTWAY: {exc}. Some writes may have landed; dry-run again and confirm to finish.", file=sys.stderr
+        )
+        return 3
     print(done)
     return 0
 
