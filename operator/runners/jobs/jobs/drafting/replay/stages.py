@@ -1,45 +1,43 @@
-"""The response path's stages, imported lazily and run on a saved matter.
+"""The response path's stages, looked up by name and run on a saved matter.
 
-The modules below arrive on separate branches (design section J, PR1-PR4);
-this harness was built before they were combined, so it names exactly what it
-calls (``EXPECTED``) and, when one is absent, reports the module and function
-it needs instead of failing on an ImportError. Each entry point is called with
-the positional arguments shown and only those keyword arguments its signature
-accepts (``doorway``, ``out_dir``, ``log``, ``served``, ``data_dir``):
+``EXPECTED`` names the real function each replay stage calls, at its real
+signature (``real.py`` makes each call the way the lane makes it); a function
+missing from the tree is reported as the module and function the stage needs
+instead of failing on an ImportError:
 
-* ``find(data_dir, out_dir, *, doorway, log)``: writes ``out_dir/served.json``
-  (today's schema, ``served.py``, plus the form keys) and
-  ``out_dir/found-report.json``. Its model calls go through ``doorway``.
-* ``slice_requests(request_text, set_type) -> list[str]``: requests 1..N of a
-  set, used when a served set carries no ``requests`` list of its own.
-* ``scope(data_dir, served, *, out_dir, log) -> dict``: ``{"categories":
-  {name: {files, pages, scan_pages, chars}}, "packs": {unit: {chars, cap,
-  left_out}}, "unread": [...]}``; None means read ``out_dir/scope.json``.
-* ``project(scope, *, served, data_dir) -> dict``: ``{"dollars", "minutes",
-  "lines": [{"item", "dollars", "minutes"}]}``.
-* ``pixel_read(pdf_path) -> dict``: ``{"checked": [numbers], "unregistered":
-  [numbers], "form", "form_revision"}``, the pixel checkbox read alone (no
-  model).
-* ``kind_of(response_text) -> str | None``: one response's kind (``key.KINDS``).
+* ``find``: ``served_find.find(data, job_dir, request, reader, *, clients,
+  other_side)``, writing ``served.json`` and ``found-report.json`` in
+  ``job_dir`` (the replay's work dir). Its model calls go through the reader's
+  ``ask``, which is the recorded doorway.
+* ``slice``: ``served.numbered(request_text) -> {n: text}``, the requests of a
+  served set by number (what the review checks a restated request against).
+* ``scope``: ``response_scope.scope(data, firm_data, plan, providers) -> dict``
+  on a copy of the saved data; each unit's pack is ``response_scope.pack``.
+* ``cost``: ``response_cost.project(rows, cats, plan, firm_data, pricing, *,
+  request_counts) -> dict``.
+* ``form-read``: ``forms.read_stage.pixel_read(pdf) -> {"checked",
+  "unregistered", "definition_boxes", "form", "form_revision",
+  "unreadable_pages"}``, the pixel checkbox read alone (no model).
+
+A produced body's per-response kind is read only from a JSON body (the answer
+stage's own output); a text or .docx body's kinds are reported unread.
 """
 
 from __future__ import annotations
 
 import importlib
-import inspect
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-#: stage -> (module, function, the branch it comes from).
-EXPECTED: dict[str, tuple[str, str, str]] = {
-    "find": ("jobs.drafting.served_find", "find", "feat/served-find"),
-    "slice": ("jobs.drafting.served_find", "slice_requests", "feat/served-find"),
-    "scope": ("jobs.drafting.response_scope", "scope", "feat/response-scope-cost"),
-    "cost": ("jobs.drafting.response_cost", "project", "feat/response-scope-cost"),
-    "form-read": ("jobs.drafting.forms.read_stage", "pixel_read", "feat/forms-foundation-landed"),
-    "kind": ("jobs.drafting.forms.answer_stage", "kind_of", "feat/form-answers"),
+#: stage -> (module, function).
+EXPECTED: dict[str, tuple[str, str]] = {
+    "find": ("jobs.drafting.served_find", "find"),
+    "slice": ("jobs.drafting.served", "numbered"),
+    "scope": ("jobs.drafting.response_scope", "scope"),
+    "cost": ("jobs.drafting.response_cost", "project"),
+    "form-read": ("jobs.drafting.forms.read_stage", "pixel_read"),
 }
 
 
@@ -48,15 +46,15 @@ class MissingModule(Exception):
 
 
 def entry(stage: str) -> Callable[..., Any]:
-    mod_name, fn_name, branch = EXPECTED[stage]
+    mod_name, fn_name = EXPECTED[stage]
     try:
         # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import - mod_name is only ever a value of the module-constant EXPECTED table above; no input reaches it.
         mod = importlib.import_module(mod_name)
     except ModuleNotFoundError as exc:
-        raise MissingModule(f"needs {mod_name}.{fn_name} (branch {branch}); not in this tree: {exc}") from exc
+        raise MissingModule(f"needs {mod_name}.{fn_name}; not in this tree: {exc}") from exc
     fn = getattr(mod, fn_name, None)
     if not callable(fn):
-        raise MissingModule(f"{mod_name} has no function {fn_name} (expected from branch {branch})")
+        raise MissingModule(f"{mod_name} has no function {fn_name}")
     return fn
 
 
@@ -65,19 +63,6 @@ def optional(stage: str) -> Callable[..., Any] | None:
         return entry(stage)
     except MissingModule:
         return None
-
-
-def call(fn: Callable[..., Any], *args: Any, **optional_kw: Any) -> Any:
-    """``fn(*args, **those of optional_kw its signature accepts)``."""
-    try:
-        params = inspect.signature(fn).parameters
-    except (TypeError, ValueError):
-        return fn(*args, **optional_kw)
-    filled = set(list(params)[: len(args)])  # a name the positionals already gave is never passed twice
-    optional_kw = {k: v for k, v in optional_kw.items() if k not in filled}
-    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
-        return fn(*args, **optional_kw)
-    return fn(*args, **{k: v for k, v in optional_kw.items() if k in params})
 
 
 @dataclass(frozen=True)
@@ -100,28 +85,31 @@ def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
 
 
+def served_source(matter: Matter, work: Path) -> tuple[Any, Path]:
+    """The served sets the later stages use and the directory their paths are
+    relative to: the replay's find output, else the job's own served.json."""
+    mine = read_json(work / "served.json")
+    return (mine, work) if mine else (read_json(matter.job_dir / "served.json"), matter.job_dir)
+
+
 def served_doc(matter: Matter, work: Path) -> Any:
-    """The served sets the later stages use: the replay's find output, else the job's own."""
-    return read_json(work / "served.json") or read_json(matter.job_dir / "served.json")
+    return served_source(matter, work)[0]
 
 
 def slices(served: Any, matter: Matter) -> dict[tuple[str, int], list[str] | None]:
-    """Each served set's requests 1..N: its ``requests`` list, else the finder's slicer."""
+    """Each served set's requests 1..N, by number (``served.numbered``)."""
     out: dict[tuple[str, int], list[str] | None] = {}
     slicer = optional("slice")
     for s in served.get("sets") or [] if isinstance(served, dict) else []:
         if not isinstance(s, dict) or not isinstance(s.get("set_number"), int):
             continue
         k = (str(s.get("set_type") or ""), s["set_number"])
-        reqs = s.get("requests")
-        if isinstance(reqs, list):
-            out[k] = [r.get("text", "") if isinstance(r, dict) else str(r) for r in reqs]
-            continue
         text = s.get("request_text")
         if not isinstance(text, str) and isinstance(s.get("request_text_path"), str):
             p = matter.job_dir / s["request_text_path"]
             text = p.read_text(encoding="utf-8") if p.is_file() else None
-        out[k] = [str(x) for x in slicer(text, k[0])] if slicer is not None and isinstance(text, str) else None
+        got = slicer(text) if slicer is not None and isinstance(text, str) else None
+        out[k] = [str(got[n]) for n in sorted(got)] if isinstance(got, dict) else None
     return out
 
 

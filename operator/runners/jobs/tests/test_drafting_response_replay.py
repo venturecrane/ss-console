@@ -1,7 +1,9 @@
 """The $0 discovery-response replay (jobs/drafting/response_replay.py).
 
-A synthetic saved matter (invented values throughout) and stand-in stage
-modules put in sys.modules under the names the harness expects, so the test
+A synthetic saved matter (invented values throughout). The real scope, pack
+and cost stages run on it; the finder (which would read with a model) and the
+pixel read (which needs the official form's pixels) are stood in for at their
+real signatures with ``monkeypatch.setattr`` on the real modules, so the test
 proves the comparison catches each failure the replay exists to catch: a
 missed set, a wrong request count, a wrong sliced request, a checked-number
 mismatch, and that a needed model call or an absent module stops cleanly.
@@ -12,26 +14,44 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-import types
 from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
-from jobs.drafting import response_replay as R
-from jobs.drafting.replay import body as B, recorded
+from drafting_testkit import firm_data
+from jobs.drafting import response_replay as R, served_find
+from jobs.drafting.forms import read_stage
+from jobs.drafting.replay import body as B, recorded, stages as S
+from jobs_testkit import PRICING
 
 SPECIAL = ["State each fact supporting your claim of loss.", "Identify each person who saw the event."]
 FORM_SHA = hashlib.sha256(b"invented form bytes").hexdigest()
+SPECIAL_TEXT = "".join(f"SPECIAL INTERROGATORY NO. {i}:\n{t}\n\n" for i, t in enumerate(SPECIAL, 1))
+CLIENT, OTHER = "Pat Example", "Sample Transit Co."
 
 
 def _matter(tmp: Path) -> Path:
     job = tmp / "job"
     data = job / "data"
     (data / "raw").mkdir(parents=True, exist_ok=True)
+    (data / "text").mkdir(parents=True, exist_ok=True)
     (data / "raw" / "form.pdf").write_bytes(b"invented form bytes")
-    (data / "manifest.json").write_text(json.dumps({"documents": [{"id": "f1", "name": "Form set.pdf"}]}))
-    (data / "extracted.jsonl").write_text(json.dumps({"id": "f1", "name": "Form set.pdf", "pages": 8}) + "\n")
+    docs = [
+        ("f1", "Form Interrogatories Set One.pdf", "Discovery", "[p.1]\nFORM INTERROGATORIES\n"),
+        ("f2", "Special Interrogatories Set One.pdf", "Discovery", "[p.1]\n" + SPECIAL_TEXT),
+        ("f3", "Sample Clinic records.pdf", "Medical Records", "[p.1]\nneck pain, treatment plan\n"),
+    ]
+    rows = []
+    for i, name, folder, text in docs:
+        p = data / "text" / f"{i}.txt"
+        p.write_text(text)
+        rows.append({"id": i, "name": name, "folder": folder, "ext": ".pdf", "pages": 1, "chars": len(text),
+                     "transcribe": [], "text_path": str(p)})  # fmt: skip
+    (data / "extracted.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (data / "manifest.json").write_text(json.dumps([{"id": i, "name": n} for i, n, _f, _t in docs]))
+    (data / "facts.json").write_text(json.dumps({"client_names": [CLIENT], "medicals": []}))
     row = {"id": "f1", "ok": True, "sha256": FORM_SHA, "path": "/nowhere/on/this/host/form.pdf"}
     (data / "raw_manifest.jsonl").write_text(json.dumps(row) + "\n")
     return job
@@ -55,39 +75,36 @@ def _key(tmp: Path, **over: Any) -> Path:
     return p
 
 
-def _served(**special: Any) -> dict[str, Any]:
-    sp = {"set_type": "special_interrogatories", "set_number": 1, "request_count": 2, "requests": list(SPECIAL)}
-    sp.update(special)
-    form = {"set_type": "form_interrogatories", "set_number": 1, "request_count": 4, "sha256": FORM_SHA}
+def _inputs(tmp: Path) -> list[str]:
+    firm, pricing = tmp / "drafting-firm.yaml", tmp / "pricing.json"
+    firm.write_text(yaml.safe_dump(firm_data()))
+    pricing.write_text(json.dumps(PRICING))
+    return ["--firm", str(firm), "--pricing", str(pricing)]
+
+
+def _set(set_type: str, count: int, **over: Any) -> dict[str, Any]:
+    s = {"set_type": set_type, "set_number": 1, "propounding_party": OTHER, "responding_party": CLIENT,
+         "request_count": count, "drafted_by": "operator"}  # fmt: skip
+    s.update(over)
+    return s
+
+
+def _served(text: str = SPECIAL_TEXT, count: int = 2) -> dict[str, Any]:
+    sp = _set("special_interrogatories", count, request_text=text, source="f2")
+    form = _set("form_interrogatories", 4, drafted_by="smd", source="f1")
     return {"sets": [sp, form]}
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, served: dict[str, Any], checked: list[str], ask: bool = False) -> None:
-    def find(data_dir: Path, out_dir: Path, *, doorway: Any) -> None:
-        assert (data_dir / "manifest.json").is_file()
+    def find(data: Path, job_dir: Path, request: str, reader: Any, *, clients: list[str], other_side: Any) -> None:
+        assert (data / "manifest.json").is_file() and clients == [CLIENT]
         if ask:
-            doorway.call("served_find", model="m", messages=[{"role": "user", "content": "read page 1"}], max_tokens=50)
-        (out_dir / "served.json").write_text(json.dumps(served))
-        (out_dir / "found-report.json").write_text(json.dumps({"candidates": 2}))
+            reader.ask("read page 1")
+        (job_dir / "served.json").write_text(json.dumps(served))
+        (job_dir / "found-report.json").write_text(json.dumps({"stop": None, "candidates": []}))
 
-    def scope(data_dir: Path, served: Any) -> dict[str, Any]:
-        cats = {"medical": {"files": 3, "pages": 40, "scan_pages": 0, "chars": 900}, "other": {"chars": 100}}
-        return {"categories": cats, "packs": {"form": {"chars": 1000, "cap": 100000, "left_out": []}}}
-
-    def project(scope: Any) -> dict[str, Any]:
-        return {"dollars": 1.5, "minutes": 9, "lines": [{"item": "form answers", "dollars": 1.5, "minutes": 9}]}
-
-    for name, attrs in {
-        "jobs.drafting.served_find": {"find": find},
-        "jobs.drafting.response_scope": {"scope": scope},
-        "jobs.drafting.response_cost": {"project": project},
-        "jobs.drafting.forms": {},
-        "jobs.drafting.forms.read_stage": {"pixel_read": lambda path: {"checked": checked, "unregistered": []}},
-    }.items():
-        mod = types.ModuleType(name)
-        for k, v in attrs.items():
-            setattr(mod, k, v)
-        monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.setattr(served_find, "find", find)
+    monkeypatch.setattr(read_stage, "pixel_read", lambda path: {"checked": checked, "unregistered": []})
 
 
 def _report(key: Path) -> dict[str, Any]:
@@ -101,12 +118,28 @@ def _mismatches(key: Path) -> list[str]:
 def test_everything_matching_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _install(monkeypatch, _served(), ["1.1", "6.4", "8.1"])
     key = _key(tmp_path)
-    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--no-model"]) == 0
+    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--no-model", *_inputs(tmp_path)]) == 0
     rep = _report(key)
     assert rep["exit"] == 0 and rep["model_calls"] == 0
     names = [s["name"] for s in rep["sections"]]
     assert names[:4] == ["found vs key", "categories", "packs", "cost"]
+    cats = {r["category"] for s in rep["sections"] if s["name"] == "categories" for r in s["rows"]}
+    assert "medical_records" in cats, "the real scope categorised the saved files"
     assert not (tmp_path / "job" / "served.json").exists(), "the replay never writes into the saved matter"
+    assert not (tmp_path / "job" / "data" / "scope.json").exists(), "the scope step ran on a copy"
+
+
+def test_the_expected_table_names_real_functions() -> None:
+    for stage in S.EXPECTED:
+        assert callable(S.entry(stage)), stage
+
+
+def test_cost_without_a_firm_needs_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _install(monkeypatch, _served(), [])
+    key = _key(tmp_path)
+    monkeypatch.delenv("JOBS_PRICING_JSON", raising=False)
+    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "cost"]) == 2
+    assert [s["status"] for s in _report(key)["sections"]][-1] == "needs_input"
 
 
 def test_a_missed_set_is_a_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -120,7 +153,7 @@ def test_a_missed_set_is_a_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
 def test_an_extra_set_is_a_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     served = _served()
-    served["sets"].append({"set_type": "requests_for_production", "set_number": 1, "request_count": 3})
+    served["sets"].append(_set("requests_for_production", 1, request_text="REQUEST FOR PRODUCTION NO. 1:\nAll.\n"))
     _install(monkeypatch, served, [])
     key = _key(tmp_path)
     assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "find"]) == 1
@@ -128,21 +161,23 @@ def test_an_extra_set_is_a_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
 
 def test_a_wrong_count_is_a_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _install(monkeypatch, _served(request_count=3), [])
+    _install(monkeypatch, _served(count=3), [])
     key = _key(tmp_path)
     assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "find"]) == 1
     assert "special_interrogatories set 1: request count 3 found, 2 in the key" in _mismatches(key)
 
 
 def test_a_wrong_sliced_request_is_a_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _install(monkeypatch, _served(requests=["Describe every vehicle you own.", SPECIAL[1]]), [])
+    text = SPECIAL_TEXT.replace(SPECIAL[0], "Describe every vehicle you own.")
+    _install(monkeypatch, _served(text), [])
     key = _key(tmp_path)
     assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "find"]) == 1
     assert "special_interrogatories set 1 no. 1: sliced request differs" in _mismatches(key)
 
 
 def test_whitespace_alone_does_not_make_a_request_differ(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _install(monkeypatch, _served(requests=["State each fact\n  supporting your claim   of loss.", SPECIAL[1]]), [])
+    text = SPECIAL_TEXT.replace(SPECIAL[0], "State each fact\n  supporting your claim   of loss.")
+    _install(monkeypatch, _served(text), [])
     key = _key(tmp_path)
     assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "find"]) == 0
 
@@ -155,7 +190,8 @@ def test_a_checked_number_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert "form 9.1: read checked, not in the key" in mm and "form 8.1: in the key, not read" in mm
 
 
-def test_an_absent_module_is_named_and_exits_two(tmp_path: Path) -> None:
+def test_an_absent_module_is_named_and_exits_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "jobs.drafting.served_find", None)
     key = _key(tmp_path)
     assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "find"]) == 2
     (sec,) = _report(key)["sections"]
@@ -165,7 +201,8 @@ def test_an_absent_module_is_named_and_exits_two(tmp_path: Path) -> None:
 def test_a_model_call_without_a_recording_stops_cleanly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _install(monkeypatch, _served(), ["1.1", "6.4", "8.1"], ask=True)
     key = _key(tmp_path)
-    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "cost"]) == 2
+    args = [str(_matter(tmp_path)), "--key", str(key), "--stage", "cost", *_inputs(tmp_path)]
+    assert R.main(args) == 2
     rep = _report(key)
     assert [s["status"] for s in rep["sections"]] == ["needs_model"], "scope and cost stop behind find"
     (needed,) = rep["needed_calls"]
@@ -173,7 +210,7 @@ def test_a_model_call_without_a_recording_stops_cleanly(tmp_path: Path, monkeypa
     # A recording for exactly that request answers it, and the chain runs on.
     rec = {"sha": needed["sha"], "text": '{"set_type": "special_interrogatories"}', "in": 10, "out": 5}
     key.with_name(f"{key.stem}.recordings.jsonl").write_text(json.dumps(rec) + "\n")
-    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "cost"]) == 0
+    assert R.main(args) == 0
 
 
 def test_the_request_sha_ignores_levers() -> None:

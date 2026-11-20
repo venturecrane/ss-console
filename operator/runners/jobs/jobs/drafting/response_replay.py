@@ -6,7 +6,8 @@ result with an answer key built from the hand drafts (design
 ``operator-drafts-discovery-responses``, section F)::
 
     python -m jobs.drafting.response_replay <job_dir_or_matter_dir> --key <key.json> \\
-        [--stage find|scope|cost|form-read|all] [--no-model] [--body <file>] [--work <dir>]
+        [--stage find|scope|cost|form-read|all] [--no-model] [--body <file>] [--work <dir>] \\
+        [--firm <drafting-firm.yaml>] [--pricing <rate card>]
 
 Stages, each a code stage of the response path (``replay/stages.py`` names the
 module and function each one calls):
@@ -17,12 +18,15 @@ module and function each one calls):
   first 80 characters of each sliced request against ``request_head``.
 * ``scope``: category assignment and pack sizes (characters per category and
   the share in "other"; characters per unit's pack and what was left out).
-  Uses the find output, or the job's own served.json when find did not run.
+  Uses the find output, or the job's own served.json when find did not run;
+  runs on a copy of the data directory's records under ``--work``. ``--firm``
+  gives the firm's own category patterns.
 * ``cost``: the cost projection, dollars and minutes with each line item.
-  Runs scope first.
+  Runs scope first; needs ``--firm`` (models, budget) and a rate card.
 * ``form-read``: the pixel checkbox read of each form set in the key (found by
   its sha256 in the pull's raw_manifest.jsonl), against ``form.checked``.
-* ``--body <file>``: a produced body's per-number kind, the key's names in
+* ``--body <file>``: a produced body's per-number kind (from a JSON body; a
+  text or .docx body's kinds are reported unread), the key's names in
   each form response, and its layout (one subpart per line, one provider per
   line).
 
@@ -36,7 +40,7 @@ the key.
 
 EXIT: 0 when every compared item matches; 1 when any mismatches (listed) or a
 stage failed; 2 when nothing mismatched but a stage could not run (a missing
-module or a needed model call).
+module, a needed model call, or an input the command line did not give).
 """
 
 from __future__ import annotations
@@ -47,18 +51,31 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from .replay import body as body_mod, compare, key as key_mod, recorded, stages as S
+from .replay import body as body_mod, compare, key as key_mod, real, recorded, stages as S
 from .replay.compare import Section
 
 STAGES = ("find", "scope", "cost", "form-read", "all")
-INCOMPLETE = ("needs_model", "missing_module")
+INCOMPLETE = ("needs_model", "missing_module", "needs_input")
+
+
+class NeedsInput(Exception):
+    """A stage the replay cannot run without an input the command line did not give."""
 
 
 class Run:
     """One replay: the matter, the key, the recorded doorway, the sections so far."""
 
-    def __init__(self, matter: S.Matter, key: key_mod.Key, work: Path, client: recorded.RecordedClient) -> None:
+    def __init__(
+        self,
+        matter: S.Matter,
+        key: key_mod.Key,
+        work: Path,
+        client: recorded.RecordedClient,
+        firm: dict[str, Any] | None = None,
+        pricing: Any = None,
+    ) -> None:
         self.matter, self.key, self.work, self.client = matter, key, work, client
+        self.firm, self.pricing = firm, pricing
         self.doorway = recorded.doorway(work, client)
         self.sections: list[Section] = []
         self.scope: Any = None
@@ -73,42 +90,46 @@ class Run:
             self.sections.append(Section(name, status="needs_model", notes=[str(stop)]))
         except S.MissingModule as exc:
             self.sections.append(Section(name, status="missing_module", notes=[str(exc)]))
+        except NeedsInput as exc:
+            self.sections.append(Section(name, status="needs_input", notes=[str(exc)]))
         except Exception as exc:  # noqa: BLE001 - a stage's own failure is reported as that stage's result
-            self.sections.append(Section(name, status="error", mismatches=[f"{type(exc).__name__}: {exc}"[:300]]))
+            notes = self._report_notes() if name == "find" else []
+            self.sections.append(
+                Section(name, status="error", mismatches=[f"{type(exc).__name__}: {exc}"[:300]], notes=notes)
+            )
         return False
+
+    def _report_notes(self) -> list[str]:
+        report = S.read_json(self.work / "found-report.json")
+        if not isinstance(report, dict):
+            return []
+        return [f"found-report {k}: {report[k]}" for k in ("stop", "reason") if report.get(k)]
 
     # ---- the stages --------------------------------------------------------
     def find(self) -> list[Section]:
-        fn = S.entry("find")
-        S.call(fn, self.matter.data, self.work, doorway=self.doorway, log=lambda _m: None)
+        (self.work / "served.json").unlink(missing_ok=True)  # the finder leaves a served.json alone
+        real.find(self.matter, self.work, self.doorway)
         served = S.read_json(self.work / "served.json")
         if served is None:
-            report = S.read_json(self.work / "found-report.json")
-            raise RuntimeError(f"find wrote no served.json (found-report: {json.dumps(report)[:200]})")
+            raise RuntimeError("find wrote no served.json")
         sec = compare.find(self.key, served, S.slices(served, self.matter))
-        report = S.read_json(self.work / "found-report.json")
-        if isinstance(report, dict):
-            for k in ("code", "stop", "stops"):
-                if report.get(k):
-                    sec.notes.append(f"found-report {k}: {report[k]}")
+        sec.notes.extend(self._report_notes())
         return [sec]
 
     def scope_stage(self) -> list[Section]:
-        served = S.served_doc(self.matter, self.work)
+        served, base = S.served_source(self.matter, self.work)
         if served is None:
             raise RuntimeError("no served.json (run --stage find, or the job's own served.json)")
-        fn = S.entry("scope")
-        out = S.call(fn, self.matter.data, served, out_dir=self.work, log=lambda _m: None)
-        self.scope = out if out is not None else S.read_json(self.work / "scope.json")
+        self.scope = real.scope(self.matter, self.work, served, base, self.firm)
         return [compare.categories(self.scope), compare.packs(self.scope)]
 
     def cost(self) -> list[Section]:
-        fn = S.entry("cost")
+        if self.firm is None or self.pricing is None:
+            raise NeedsInput("the cost projection needs --firm (the firm's drafting-firm.yaml) and a rate card")
         served = S.served_doc(self.matter, self.work)
-        return [compare.cost(S.call(fn, self.scope, served=served, data_dir=self.matter.data))]
+        return [compare.cost(real.cost(self.work, self.scope, served, self.firm, self.pricing))]
 
     def form_read(self) -> list[Section]:
-        fn = S.entry("form-read")
         forms = [s for s in self.key.served_sets if s.type == "form_interrogatories"]
         if not forms:
             return [Section("form pixel read", notes=["the key names no form interrogatory set"])]
@@ -119,11 +140,11 @@ class Run:
             if path is None:
                 out.append(Section(f"form pixel read ({label})", status="error", mismatches=["file not in the matter"]))
                 continue
-            out.append(compare.form_read(label, self.key.checked, S.call(fn, path)))
+            out.append(compare.form_read(label, self.key.checked, real.form_read(path)))
         return out
 
     def body(self, path: Path) -> list[Section]:
-        return [compare.body(self.key, body_mod.read(path, S.optional("kind")))]
+        return [compare.body(self.key, body_mod.read(path, None))]
 
 
 def replay(run: Run, stage: str, body_path: Path | None) -> None:
@@ -172,14 +193,36 @@ def render(sections: list[Section]) -> str:
 
 
 def _args(argv: list[str] | None) -> argparse.Namespace:
-    ap = argparse.ArgumentParser(prog="python -m jobs.drafting.response_replay", description=(__doc__ or "").split("\n")[0])
+    ap = argparse.ArgumentParser(
+        prog="python -m jobs.drafting.response_replay", description=(__doc__ or "").split("\n")[0]
+    )
     ap.add_argument("matter", type=Path, help="a saved job dir (with data/) or matter data dir (with manifest.json)")
     ap.add_argument("--key", type=Path, required=True, help="the answer key JSON")
     ap.add_argument("--stage", choices=STAGES, default="all")
     ap.add_argument("--no-model", action="store_true", help="the only mode: model calls come from recordings")
     ap.add_argument("--body", type=Path, help="a produced response body (.json, .docx or text)")
     ap.add_argument("--work", type=Path, help="where the stages write (default: <key stem>.replay/ beside the key)")
+    ap.add_argument("--firm", type=Path, help="the firm's drafting-firm.yaml (its scope patterns, models and budget)")
+    ap.add_argument("--pricing", type=Path, help="the rate card (default: the lane's own, as the seat finds it)")
     return ap.parse_args(argv)
+
+
+def _firm(path: Path | None) -> dict[str, Any] | None:
+    import yaml
+
+    return yaml.safe_load(path.read_text(encoding="utf-8")) if path is not None else None
+
+
+def _pricing(path: Path | None) -> Any:
+    import os
+
+    from .. import budget as budget_mod
+    from .evidence_cost import load_pricing
+
+    for p in (path, os.environ.get(budget_mod.PRICING_ENV), budget_mod.PRICING_DEFAULT):
+        if p and Path(p).is_file():
+            return load_pricing(Path(p))
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -189,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     work = a.work or a.key.with_name(f"{a.key.stem}.replay")
     work.mkdir(parents=True, exist_ok=True)
     client = recorded.RecordedClient(recorded.load_recordings(a.key))
-    run = Run(matter, key, work, client)
+    run = Run(matter, key, work, client, _firm(a.firm), _pricing(a.pricing))
     if key.dropped:
         run.sections.append(Section("answer key", notes=[f"entries dropped as malformed: {', '.join(key.dropped)}"]))
     replay(run, a.stage, a.body)
