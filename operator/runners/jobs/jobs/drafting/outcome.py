@@ -93,6 +93,14 @@ REASON_CODES = (
     "served_unnumbered",
     "served_many",
     "served_prior_draft",
+    # A served form interrogatory set (forms/), each before anything is paid, failed and resumable,
+    # SMD paged with smd-needs.json, the firm told nothing new: the served form lacks one of its
+    # eight pages; its boxes are not confirmed (the reads disagree, an addition, an unknown revision);
+    # the firm authored no form-response policy; a frozen wording rule the policy places nowhere.
+    "form_incomplete",
+    "form_unconfirmed",
+    "policy_missing",
+    "rule_unplaced",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
@@ -106,7 +114,8 @@ class DraftingFailed(RuntimeError):
 
 
 _WHERE = re.compile(
-    r"(?im)^\W*((?:SPECIAL INTERROGATORY|REQUEST FOR ADMISSION|REQUEST FOR PRODUCTION(?: OF DOCUMENTS)?)\s+NO\.?\s*\d+"
+    r"(?im)^\W*((?:FORM INTERROGATORY|SPECIAL INTERROGATORY|REQUEST FOR ADMISSION|REQUEST FOR PRODUCTION"
+    r"(?: OF DOCUMENTS)?)\s+NO\.?\s*\d+(?:\.\d+)?"
     r"|#{1,6}\s+[^\n]+)"
 )
 
@@ -177,6 +186,8 @@ class Verdict:
     #: This filing is a held ledger brief SMD released (``evidence_lane``):
     #: the lane counts it toward ``evidence.review_first``.
     smd_released: bool = False
+    #: The class the release counts toward: "" for a ledger brief, else the set type (``forms/lane_hook``).
+    smd_released_class: str = ""
     #: A response job's served sets, each filed (with its document's name) or
     #: being prepared by us (``served.outcomes``); on a delivered verdict only.
     served_sets: list[dict[str, Any]] = field(default_factory=list)

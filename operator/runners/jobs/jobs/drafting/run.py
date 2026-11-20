@@ -82,6 +82,7 @@ from . import (
     served as served_mod,
 )
 from .evidence_lane import CHARGES_LINE, EvidenceLane
+from .forms import lane_hook as form_hook
 from .placing import Placing
 from .served_plan import DiscoveryPlan
 from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
@@ -452,6 +453,7 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
         released = review_first.gate(
             self.evidence.review_first, self.job.ledger_releases, self.job.job_dir, self.data, manifest
         )
+        form_released = form_hook.first_set_gate(self, manifest)  # the first form set, too (forms/lane_hook.py)
         kw = {} if self.readback_pause is None else {"pause": self.readback_pause}
         rec = deliver.file_to_matter(self.data, self.seat, self.job.file_to_id, self.log, **kw)
         if rec["exit"] == 1 and str(rec.get("said") or "").startswith("readback_mismatch:"):
@@ -481,7 +483,8 @@ class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
             folder_id=str(rec.get("folder_id")),
             files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
             proof=proof,
-            smd_released=released,
+            smd_released=released or form_released,
+            smd_released_class=form_hook.FORM_SET if form_released else "",
             served_sets=rows or [],
         )
 
