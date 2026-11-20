@@ -165,6 +165,22 @@ RELAY: tuple[Case, ...] = (
     ),
     case("champion_wall", "guard", knobs={"champion": True}, champion__reply_wall="rep_marker"),
     case("champion_answered", "guard", exits=False, knobs={"champion": True}),
+    case("say_other_words", "guard", knobs={"say": "other"}),
+    case("say_matched", "guard", exits=False, knobs={"say": "match"}),
+    case("say_none_beside_a_say", "guard", exits=False, knobs={"say": "none_and_match"}),
+    # Tier 1 (review 2026-11-19): a reply naming the machinery, no say this turn.
+    case(
+        "mechanics_named",
+        "guard",
+        knobs={
+            "args": {
+                "to": ["greg@whitfield.example"],
+                "subject": "Re: New matter",
+                "text": "We received it. This turn could not reach the drafting job.",
+                "html": "",
+            }
+        },
+    ),
     case("checklist_hold", "guard", _checklist_violations=("staff_ids", "name the matter")),
     case("advertising_hold", "guard", _advertising_violations=("rule_7_1", "remove the guarantee")),
     case("empty_body", "guard", relay__draft_body=("Re: x\n", "", "")),

@@ -491,3 +491,36 @@ def test_a_request_without_attachments_queues_no_attachments_key(seat) -> None:
     broker, _db, _, queue = seat
     out = submit(broker)
     assert "attachments" not in json.loads((queue / f"{out['job_id']}.json").read_text())
+
+
+def test_every_refusal_carries_its_closed_code(seat) -> None:
+    """The overlay words the firm's answer from ``code``, never from ``reason``
+    (2026-11-19). FALSIFIER: drop a code and the overlay falls back to the
+    acknowledgment for a cause the firm could act on."""
+    from workspace_broker import drafting_verbs
+
+    broker, _db, yaml_path, _q = seat
+    assert submit(broker, requested_by="staff@firm.example")["code"] == "not_admin"
+    assert submit(broker, request_ref="not a message id")["code"] == "envelope_invalid"
+    assert submit(broker, file_to={"id": OTHER_MATTER, "number": "900202"})["code"] == "filing_target"
+    first = submit(broker)
+    assert first["matter_number"] == "900201"
+    assert submit(broker, request_ref="<another@mail.firm.example>")["code"] == "underway"
+    again = submit(broker)
+    assert again["code"] == drafting_verbs.REFUSAL_DUPLICATE_CODE and again["queued_matter_number"] == "900201"
+    # What the queued job is and where it stands, so the overlay's sentence is
+    # true for it (review 2026-11-19); never its id in the reply.
+    assert (again["queued_mode"], again["queued_state"]) == ("draft", "submitted")
+    # The same email naming a second matter is the same key, and says which matter is queued.
+    second = submit(broker, matter={"id": OTHER_MATTER, "number": "900202"}, request_ref="<CA1x2y3z@mail.firm.example>")
+    assert second["code"] == drafting_verbs.REFUSAL_DUPLICATE_CODE and second["queued_matter_number"] == "900201"
+    yaml_path.write_text(_yaml(classes="'memo'"))
+    assert submit(broker, document_class="depo_outline")["code"] == "class_not_enabled"
+    yaml_path.write_text(_yaml(allowance=1))
+    out = submit(broker, matter={"id": OTHER_MATTER, "number": "900202"})
+    assert out["code"] == "allowance_spent"
+    yaml_path.write_text(_yaml().replace("          drafting_allowance_per_cycle: 25\n", ""))
+    assert submit(broker)["code"] == "allowance_unauthored"
+    yaml_path.write_text(NO_SKILL_YAML)
+    assert submit(broker)["code"] == "lane_not_enabled"
+    assert drafting_verbs.REFUSAL_FIRM_CODES.isdisjoint(drafting_verbs.REFUSAL_OUR_CODES)

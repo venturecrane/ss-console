@@ -2870,6 +2870,8 @@ def test_the_proof_vocabulary_matches_the_broker_list():
         "layout_rule_unplaced",
         "spend_unrecorded",
         "ending_unrecorded",
+        "served_owed",
+        "smd_owed",
     }
     assert hb.DELIVERY_PROOF_LANES == {
         "medchron",
@@ -2934,6 +2936,14 @@ def test_a_review_hold_pages_under_its_own_name(tmp_path, reason):
     that did not go out, and the email has to say which."""
     facts = _shortfalls(tmp_path, lambda led: _reply_row(led, _ts(2), "REPLY_HELD", reason=reason))
     assert [e["code"] for e in facts.events] == [f"reply_held:{reason}"]
+
+
+def test_a_fixed_wording_hold_pages_under_its_own_name(tmp_path):
+    """2026-11-19: it rode as reply_held:other, which names nothing."""
+    facts = _shortfalls(
+        tmp_path, lambda led: _reply_row(led, _ts(2), "REPLY_HELD", reason="fixed_wording")
+    )
+    assert [e["code"] for e in facts.events] == ["reply_held:fixed_wording"]
 
 
 def test_a_lane_review_row_joins_its_request_through_the_job():

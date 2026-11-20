@@ -314,7 +314,8 @@ def plugin(monkeypatch, tmp_path):
             "ok": True,
             "proposal_id": RULE,
             "subject": payload.get("subject"),
-            "readback": f"[rule {RULE}] {payload.get('text')}",
+            # The broker's own-rule read-back carries no tag (R2.2).
+            "readback": f"{payload.get('text')}",
         }
 
     monkeypatch.setattr(mod, "_broker_request", broker)
@@ -373,7 +374,8 @@ def test_off_nothing_is_refused_and_the_recorded_reach_is_cut(plugin, tmp_path, 
     assert mod.on_pre_tool_call(tool_name=mod.TOOL_PROPOSE, session_id="s1", args=wide) is None
     out = json.loads(mod._propose(wide, session_id="s1"))
     assert requests[-1]["subject"]["doc_kinds"] == ["mediation_brief"]
-    assert out["readback"] == f"[rule {RULE}] In mediation briefs, write persuasively."
+    assert out["readback"] == "In mediation briefs, write persuasively.\n\nReply yes to confirm."
+    assert RULE not in json.dumps(out)
 
 
 def test_a_reach_never_rides_on_a_rule_for_another_class(plugin, tmp_path, monkeypatch):
@@ -422,7 +424,7 @@ def test_on_a_lane_kind_is_in_effect(tmp_path, monkeypatch, pages):
     _install(tmp_path, monkeypatch, [_adj(doc_kinds=["mediation_brief"], attorney=ATTORNEY)])
     _seat(tmp_path, monkeypatch, on=True)
     call = _letter()
-    assert call["subject"] == f"Your rule is in effect [rule {RULE}]"
+    assert call["subject"] == "Your rule is in effect"
     assert f"in effect from the next mediation brief in {ATTORNEY}'s name" in call["text"]
     assert "not yet in effect" not in call["text"]
     assert "\u2014" not in call["text"]
@@ -433,7 +435,7 @@ def test_off_a_lane_kind_is_still_recorded(tmp_path, monkeypatch, pages):
     _install(tmp_path, monkeypatch, [_adj(doc_kinds=["mediation_brief"])])
     _seat(tmp_path, monkeypatch, on=False)
     call = _letter()
-    assert call["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert call["subject"] == "Your rule is recorded"
     assert "not yet in effect" in call["text"]
     assert pages == [(RULE, "work_product")]
 
@@ -441,20 +443,20 @@ def test_off_a_lane_kind_is_still_recorded(tmp_path, monkeypatch, pages):
 def test_on_a_kind_no_lane_reads_is_still_recorded(tmp_path, monkeypatch, pages):
     _install(tmp_path, monkeypatch, [_adj(doc_kinds=["letter"])])
     _seat(tmp_path, monkeypatch, on=True)
-    assert _letter()["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert _letter()["subject"] == "Your rule is recorded"
 
 
 def test_on_a_record_product_is_still_recorded(tmp_path, monkeypatch, pages):
     _install(tmp_path, monkeypatch, [_adj(doc_kinds=["memo"])], output_class="record")
     _seat(tmp_path, monkeypatch, on=True)
-    assert _letter("record")["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert _letter("record")["subject"] == "Your rule is recorded"
 
 
 def test_on_a_mixed_reach_is_partly_in_effect_and_pages(tmp_path, monkeypatch, pages):
     _install(tmp_path, monkeypatch, [_adj(doc_kinds=["memo", "letter"])])
     _seat(tmp_path, monkeypatch, on=True)
     call = _letter()
-    assert call["subject"] == f"Your rule is partly in effect [rule {RULE}]"
+    assert call["subject"] == "Your rule is partly in effect"
     effect, recorded = call["text"].split("For letters")
     assert "in effect from the next memo" in effect
     assert "not yet in effect" in recorded
@@ -466,4 +468,38 @@ def test_on_a_torn_store_is_recorded(tmp_path, monkeypatch, pages):
     _seat(tmp_path, monkeypatch, on=True)
     (spec_dir / "manifest.json").write_text("{")
     assert wording_rules.lane_truth(RULE, "work_product") is None
-    assert _letter()["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert _letter()["subject"] == "Your rule is recorded"
+
+
+# ---------------------------------------------------------------------------
+# lane_reads: the truth after a confirm, from the committed row and the switch
+# ---------------------------------------------------------------------------
+
+
+def test_lane_reads_names_the_kinds_a_queued_job_makes():
+    assert wording_rules.lane_reads(
+        "work_product", ["letter", "memo", "mediation_brief"], True
+    ) == (
+        "mediation_brief",
+        "memo",
+    )
+
+
+@pytest.mark.parametrize(
+    "output_class, kinds, on",
+    [
+        ("work_product", ["memo"], False),
+        ("work_product", ["letter"], True),
+        ("work_product", [], True),
+        ("outbound_client", ["memo"], True),
+    ],
+)
+def test_lane_reads_is_empty_when_no_draft_will_read_the_rule(output_class, kinds, on):
+    assert wording_rules.lane_reads(output_class, kinds, on) == ()
+
+
+def test_lane_reads_follows_the_seats_switch(tmp_path, monkeypatch):
+    _seat(tmp_path, monkeypatch, on=True)
+    assert wording_rules.lane_reads("work_product", ["memo"]) == ("memo",)
+    _seat(tmp_path, monkeypatch, on=False)
+    assert wording_rules.lane_reads("work_product", ["memo"]) == ()

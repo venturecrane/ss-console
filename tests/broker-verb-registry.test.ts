@@ -122,6 +122,15 @@ const EXPECTED_VERBS = [
   'establish_notify_release',
   'establish_pending',
   'establish_propose',
+  // Confirm-by-reply: which own rules a sent read-back carried, and which
+  // read-back an inbound reply answers (readback_bindings.py).
+  'establish_install_check',
+  'establish_install_watch',
+  'establish_readback_for',
+  'establish_readback_owed',
+  'establish_readback_sent',
+  'establish_reopen_lapsed',
+  'establish_restated',
   'establish_stage_document',
   'establish_status',
   'establish_submit',
@@ -241,6 +250,9 @@ const EXPECTED_VERBS = [
   // an administrator's code request. Gateway-only; each writes its own row.
   'sender_enrollment_issue',
   'sender_enrollment_redeem',
+  // Work SMD owes a firm person, recorded in the step it arose (smd_owed.py).
+  'smd_owed_open',
+  'smd_owed_record',
   // Every write to a firm's Smokeball, recorded before it is sent (the
   // connector's write_record.py refuses a write whose row did not land).
   'smokeball_write_append',

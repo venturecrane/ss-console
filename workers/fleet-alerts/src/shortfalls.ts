@@ -195,11 +195,21 @@ async function pendingRows(
  */
 export const TRACE_INCOMPLETE = 'reply_sent:trace_incomplete'
 
+/**
+ * Work SMD owes a firm person, recorded by the seat when it arose: a request
+ * refused on our side (the attorney was given the normal acknowledgment), a
+ * question the guide does not answer, a rule not recorded or not installed
+ * (`smd_owed`), and the served sets a delivered response job still owes
+ * (`served_owed`). Nobody else will do the work, so each emails once.
+ */
+export const OWED_CODES: readonly string[] = ['proof:smd_owed', 'proof:served_owed']
+
 /** The kinds that need a person. Everything else is the triage agent's. */
 export function emailsAPerson(r: Pick<LedgerRow, 'class' | 'code'>): boolean {
   return (
     r.class === 'limit' ||
     r.code === TRACE_INCOMPLETE ||
+    OWED_CODES.includes(r.code) ||
     r.code.startsWith('reply_held:') ||
     r.code.startsWith('reply_failed:')
   )
@@ -211,7 +221,8 @@ async function throttled(db: D1Database, slug: string, nowMs: number): Promise<b
     .prepare(
       `SELECT MAX(notified_at) AS last FROM operator_shortfalls
         WHERE customer_slug = ?
-          AND (class = 'limit' OR code = ? OR code LIKE 'reply_held:%' OR code LIKE 'reply_failed:%')`
+          AND (class = 'limit' OR code = ? OR code IN ('proof:smd_owed', 'proof:served_owed')
+               OR code LIKE 'reply_held:%' OR code LIKE 'reply_failed:%')`
     )
     .bind(slug, TRACE_INCOMPLETE)
     .first<{ last: string | null }>()
@@ -269,6 +280,12 @@ export function whatHappened(r: Pick<LedgerRow, 'class' | 'code'>): string {
   if (r.code === TRACE_INCOMPLETE) {
     return "The Operator's reply went out, but an error stopped its record from being finished."
   }
+  if (r.code === 'proof:smd_owed') {
+    return 'A request needs SMD: it stopped on our side, or the Operator told the person it would look into it.'
+  }
+  if (r.code === 'proof:served_owed') {
+    return 'A delivered discovery response job still owes sets that SMD is preparing.'
+  }
   return `A limit stopped the work (${r.code}).`
 }
 
@@ -301,6 +318,12 @@ export function nextStep(
     return (
       `Someone is waiting on this reply (${request} says what was asked). ` +
       `Give this email to an agent to approve or reject it.`
+    )
+  }
+  if (OWED_CODES.includes(r.code)) {
+    return (
+      `Someone is waiting on this work (${request} says what was asked). ` +
+      `The hourly work-health email lists it, with what to run, until it is closed.`
     )
   }
   return (

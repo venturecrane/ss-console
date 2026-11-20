@@ -12,7 +12,34 @@ A turn no email opened submits nothing: a draft is always person-initiated.
 The broker then checks the rest (the lane enabled on the seat, the class
 switched on for the firm, the allowance, the requester on scope.admins, the
 filing target, no unfinished draft of that class on the matter) and answers
-with a job id or a reason to relay as it comes back.
+with a job id, or a refusal carrying a closed ``code``.
+
+WHAT THE FIRM IS TOLD IS CODE'S, NEVER THE MODEL'S (2026-11-19). The submit
+answers with ``say``, one fixed sentence the reply is, word for word (the
+records lane's shape, ``records.py``); the reply relay refuses any other body
+(``hermes-smd-reply/relay_checks.turn_say``). Until then an accepted submit
+answered ``message: "Drafting job <id> is queued on this Machine..."``, and the
+model relayed mechanics, or promised what the job would do. The sentences:
+
+* accepted, a fresh draft: :func:`acknowledgment` (the matter number is the one
+  the broker validated and echoed);
+* accepted, a revision of a filed draft: the revise sentence;
+* refused for a FIRM cause (``FIRM_SAY``): one plain sentence each;
+* the same email already started this kind of draft: the acknowledgment on the
+  same matter, ``SECOND_MATTER_SAY`` on another (nothing is queued for it);
+* refused on SMD's side (owner's ruling, 2026-11-19: our failure is not the
+  attorney's problem, and he is not told of it): the NORMAL acknowledgment, but
+  only when the broker answered ``smd_told: true``, i.e. it recorded the
+  request as work SMD owes in the same step as the refusal
+  (``workspace_broker/smd_owed.py``; the hourly triage lists it until SMD
+  closes it). Otherwise, and whenever the broker did not answer or the refusal
+  is the overlay's own, ``say: "none"`` with ``instruction`` and ``forbid``:
+  nothing is said about this request, the rest of the email is answered, and
+  the relay refuses a reply that mentions the request anyway. An email that
+  asked only this gets no reply and is listed as unanswered.
+
+No job id reaches the model from these tools; the id stays in the logs and the
+broker's rows.
 """
 
 from __future__ import annotations
@@ -52,7 +79,9 @@ MAX_ATTACHMENT_BYTES = 700_000
 
 def _request_attachments(origin: Any) -> tuple[list[dict[str, str]], str]:
     """The request email's own Word documents, as the broker's envelope
-    carries them, or ``([], reason)`` when they exist and cannot be carried.
+    carries them, or ``([], code)`` when they exist and cannot be carried
+    (``too_many_attachments`` and ``attachments_too_large`` are the firm's to
+    fix, ``attachment_unreadable`` SMD's).
 
     Read by the message id of the turn's VERIFIED origin, never an id or a
     file the model names: the documents are the request's, exactly as the
@@ -62,8 +91,9 @@ def _request_attachments(origin: Any) -> tuple[list[dict[str, str]], str]:
         return [], ""
     try:
         found = msgraph_attachments.list_attachments(origin.message_id)
-    except msgraph_attachments.MsGraphAttachmentError as exc:
-        return [], f"the request email's attachments could not be read ({exc}); nothing was queued"
+    except msgraph_attachments.MsGraphAttachmentError:
+        logger.exception("drafting_job_submit: the request email's attachments could not be listed")
+        return [], "attachment_unreadable"
     docs = [
         a
         for a in found
@@ -72,23 +102,18 @@ def _request_attachments(origin: Any) -> tuple[list[dict[str, str]], str]:
         and str(a.get("filename") or "").lower().endswith(".docx")
     ]
     if len(docs) > MAX_ATTACHMENTS:
-        return [], (
-            f"the request attaches {len(docs)} Word documents and one request carries at most "
-            f"{MAX_ATTACHMENTS}; nothing was queued"
-        )
+        return [], "too_many_attachments"
     out, total = [], 0
     for a in docs:
         try:
             receipt = msgraph_attachments.spool_attachment(origin.message_id, a["attachment_id"])
             blob = attachment_spool.read(receipt["spool_token"], expected_sha256=receipt["sha256"])
-        except (msgraph_attachments.MsGraphAttachmentError, attachment_spool.SpoolError) as exc:
-            return [], f"an attached Word document could not be read ({exc}); nothing was queued"
+        except (msgraph_attachments.MsGraphAttachmentError, attachment_spool.SpoolError):
+            logger.exception("drafting_job_submit: an attached Word document could not be read")
+            return [], "attachment_unreadable"
         total += len(blob)
         if total > MAX_ATTACHMENT_BYTES:
-            return [], (
-                "the attached Word documents are too large together for one request "
-                f"(over {MAX_ATTACHMENT_BYTES:,} bytes); nothing was queued"
-            )
+            return [], "attachments_too_large"
         out.append(
             {
                 "filename": receipt["filename"],
@@ -99,7 +124,8 @@ def _request_attachments(origin: Any) -> tuple[list[dict[str, str]], str]:
     return out, ""
 
 
-#: How a reply names a class to the firm (ss-console drafting_ledger.CLASS_LABEL).
+#: How a reply names a class to the firm (ss-console drafting_ledger.CLASS_LABEL),
+#: also the acknowledgment's and the refusals' words.
 _DOCUMENT = {
     "mediation_brief": "mediation brief",
     "discovery_set": "propounded discovery",
@@ -113,6 +139,129 @@ _NOT_ADDED = (
     "Received. What you wrote was not added to the draft in progress. Please reply again in this thread "
     "and we will look at it."
 )
+
+
+#: The firm's own causes for a refused submit (ss-console
+#: ``drafting_verbs.REFUSAL_FIRM_CODES``, and the request's attachments), each
+#: one plain sentence with no mechanics. ``{doc}`` is the document and matter.
+FIRM_SAY = {
+    "not_admin": (
+        "Received. Drafts are requested by one of the firm's named administrators, so we have not started "
+        "the {doc}."
+    ),
+    "class_not_enabled": (
+        "Received. Drafting {a_what} isn't switched on for your firm, so we have not started the {doc}."
+    ),
+    "allowance_spent": (
+        "Received. Your firm's drafts for this billing cycle are all used, so we have not started the {doc}."
+    ),
+    "underway": (
+        "Received. The {doc} {is_} already being drafted from an earlier email, so this one did not start a "
+        "second draft. We'll reply in that thread when it's filed."
+    ),
+    "too_many_attachments": (
+        "Received. This email attaches more Word documents than we can take in one request (at most "
+        f"{MAX_ATTACHMENTS}), so we have not started the {{doc}}. Please send the request again with at most "
+        f"{MAX_ATTACHMENTS} Word documents attached."
+    ),
+    "attachments_too_large": (
+        "Received. The attached Word documents are too large to take together in one request, so we have "
+        "not started the {doc}. Please send the request again with fewer or smaller Word documents attached."
+    ),
+}
+#: The same request email already queued a draft of this kind (ss-console
+#: ``drafting_verbs.REFUSAL_DUPLICATE_CODE``, keyed on the email and the class,
+#: never the matter). On the same matter it is the same request, answered with
+#: the acknowledgment; on another matter it is a second request one email cannot
+#: start, and nothing was queued for it.
+DUPLICATE_CODE = "already_queued"
+#: A drafting request that names no matter (review 2026-11-19): a required
+#: block asking for the number in plain words.
+MATTER_NUMBER_SAY = "Received. Which matter is this for? Please reply with the matter number."
+
+SECOND_MATTER_SAY = (
+    "Received. One email starts one draft of each kind, and this one already started the {queued}. "
+    "Please send the request for matter {number} in its own email."
+)
+#: The relay's "no fixed sentence for this point" say (``shared.turn_says.SAY_NONE``).
+SAY_NONE = "none"
+#: What the model is told with a ``none``: no claim about this request at all.
+NONE_INSTRUCTION = (
+    "Say nothing about this request in your reply: do not acknowledge it, refuse it or explain it. "
+    "Answer anything else the email asked."
+)
+
+
+#: The document phrases that read as plural ("the discovery responses ... are").
+_PLURAL = frozenset({"discovery_response"})
+#: The document phrases a sentence counts with "a" ("drafting a memo").
+_COUNTED = frozenset({"mediation_brief", "memo", "depo_outline"})
+
+
+def _doc(klass: str, number: str) -> str:
+    return f"{_DOCUMENT.get(klass, 'document')} for matter {number}"
+
+
+def _is(klass: str) -> str:
+    return "are" if klass in _PLURAL else "is"
+
+
+def acknowledgment(klass: str, number: str, *, revising: bool = False) -> str:
+    """The sentence a received drafting request is answered with, true whoever
+    does the work: no time, no mechanics, nothing about who drafts it."""
+    if revising:
+        return (
+            f"Received. We'll make those changes to the {_doc(klass, number)} and reply in this thread "
+            "when the new version is filed."
+        )
+    return (
+        f"Received. The {_doc(klass, number)} {_is(klass)} with us, and you'll get a reply in this thread when "
+        "the draft is filed in the matter."
+    )
+
+
+def duplicate_say(klass: str, number: str, mode: str, state: str) -> str:
+    """The sentence for an email whose draft of this kind is already queued: the
+    revise sentence for a revision, the acknowledgment while it is in hand, and
+    for a draft already filed or on hold, no promise of a reply "when it's
+    filed" (it was, or SMD has it)."""
+    if state == "delivered":
+        return (
+            f"Received. The {_doc(klass, number)} from this request {_is(klass)} already filed in the matter, "
+            "as our earlier reply in this thread says."
+        )
+    if state == "held":
+        return (
+            f"Received. The {_doc(klass, number)} from this request {_is(klass)} on hold, as our earlier reply "
+            "in this thread explains."
+        )
+    return acknowledgment(klass, number, revising=mode == "revise")
+
+
+def _a(klass: str) -> str:
+    what = _DOCUMENT.get(klass, "document")
+    return f"a {what}" if klass in _COUNTED else what
+
+
+def refusal_say(code: str, klass: str, number: str, *, smd_told: bool = False) -> str:
+    """A refused submit's say: a firm cause's own sentence; on SMD's side (every
+    other code, an unknown one included) the normal acknowledgment when the
+    broker recorded the request as owed, else ``none``."""
+    template = FIRM_SAY.get(code)
+    if template is None:
+        return acknowledgment(klass, number) if smd_told else SAY_NONE
+    return template.format(doc=_doc(klass, number), a_what=_a(klass), is_=_is(klass))
+
+
+def _refused_say(code: str, klass: str, number: str, *, smd_told: bool = False) -> str:
+    """A refused submit's answer: the closed code, and the say."""
+    say = refusal_say(code, klass, number, smd_told=smd_told)
+    out: dict[str, Any] = {"accepted": False, "code": code, "say": say}
+    if say == SAY_NONE:
+        # Nothing is said about this request; the relay refuses a reply that
+        # mentions it anyway (``forbid``), and the rest of the email is answered.
+        out.update(instruction=NONE_INSTRUCTION, forbid=_doc(klass, number))
+    return json.dumps(out, ensure_ascii=False)
 
 
 def _say(result: str, resp: dict[str, Any]) -> str:
@@ -209,28 +358,54 @@ def drafting_job_add_to_request(args: dict[str, Any], session_id: str = "", **_:
     return _add_to_request(origin, job_id) if job_id else _added_result("no_such_job", {})
 
 
+def _duplicate(resp: dict[str, Any], klass: str, number: str) -> str:
+    """The same email already queued a draft of this kind. On the same matter it
+    is the same request: the sentence true for that job (a revision, or a draft
+    already filed or on hold). On another matter, a second request."""
+    queued = _number(resp.get("queued_matter_number"))
+    if queued != number:
+        say = SECOND_MATTER_SAY.format(queued=_doc(klass, queued), number=number)
+        return json.dumps(
+            {"accepted": False, "code": "second_matter", "say": say}, ensure_ascii=False
+        )
+    mode, state = str(resp.get("queued_mode") or ""), str(resp.get("queued_state") or "")
+    say = duplicate_say(klass, number, mode, state)
+    return json.dumps(
+        {"accepted": True, "duplicate": DUPLICATE_CODE, "say": say}, ensure_ascii=False
+    )
+
+
+def _number(value: Any) -> str:
+    return " ".join(str(value or "").split())
+
+
 def drafting_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) -> str:
     origin = _origin(session_id)
     if origin is None or not origin.sender_address:
+        # No email opened this turn, so there is no one to reply to.
         return _refuse(
             "a draft is submitted only from the turn of the email that asked for it; "
             "this turn was not opened by one, so nothing was queued"
         )
-    if not origin.internet_message_id:
-        return _refuse(
-            "the request email's message id is not available on this turn, so the completion "
-            "reply could not find its thread; nothing was queued"
-        )
-    if not (origin.reply_text or "").strip():
-        return _refuse(
-            "the request email's own words could not be read on this turn, and they are the "
-            "drafting instruction; nothing was queued"
-        )
+    # The model's own arguments first: a call it can correct is told how, and
+    # says nothing to the firm.
     klass = str(args.get("document_class") or "").strip()
     if klass not in DOCUMENT_CLASSES:
         return _refuse(
             f"document_class must be one of {list(DOCUMENT_CLASSES)}; nothing was queued"
         )
+    number = _number(args.get("matter_number"))
+    if not number:
+        # The reply is a fixed sentence asking for the number (review 2026-11-19):
+        # the old prose ("nothing was queued") was the model's to relay.
+        return json.dumps(
+            {"accepted": False, "code": "matter_number_missing", "say": MATTER_NUMBER_SAY},
+            ensure_ascii=False,
+        )
+    if not origin.internet_message_id:
+        return _refused_say("request_ref_unavailable", klass, number)
+    if not (origin.reply_text or "").strip():
+        return _refused_say("request_words_unreadable", klass, number)
     envelope = {
         "matter": _matter(args, "matter_id", "matter_number"),
         "file_to": _matter(args, "file_to_matter_id", "file_to_matter_number"),
@@ -242,51 +417,51 @@ def drafting_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) ->
     if klass in ATTACHMENT_CLASSES:
         attached, why = _request_attachments(origin)
         if why:
-            return _refuse(why)
+            return _refused_say(why, klass, number)
         if attached:
             envelope["attachments"] = attached
     try:
         resp = JobsBrokerClient().drafting_submit(envelope)
-    except JobsBrokerError as exc:
-        return _refuse(f"the request could not be queued: {exc}")
+    except JobsBrokerError:
+        logger.exception("drafting_job_submit: the broker did not answer")
+        return _refused_say("broker_unanswered", klass, number)
     if not resp.get("accepted"):
         if resp.get("underway") and resp.get("job_id"):
             # This email collided with a draft still running: it is about that
-            # draft, and the reply must say whether its words got there.
+            # draft, and the reply must say whether its words got there. The
+            # job's id stays here; the model is never handed it.
             return json.dumps(
-                {
-                    "accepted": False,
-                    "job_id": resp["job_id"],
-                    **json.loads(_add_to_request(origin, resp["job_id"])),
-                },
+                {"accepted": False, **json.loads(_add_to_request(origin, resp["job_id"]))},
                 ensure_ascii=False,
             )
-        out = {"accepted": False, "reason": resp.get("reason")}
-        if resp.get("job_id"):
-            out["job_id"] = resp["job_id"]
-        return json.dumps(out, ensure_ascii=False)
+        code = str(resp.get("code") or "")
+        if resp.get("correct_call"):
+            # The call itself was malformed (first time for this email): the
+            # model corrects it; nothing is said and nothing is owed yet.
+            return _refuse(
+                f"the submission was not valid ({resp.get('reason')}); correct it and submit again"
+            )
+        if code == DUPLICATE_CODE:
+            return _duplicate(resp, klass, number)
+        # Every other code, and none at all (an older broker), is SMD's side:
+        # the acknowledgment only if the broker recorded it as owed.
+        return _refused_say(
+            code or "not_accepted", klass, number, smd_told=resp.get("smd_told") is True
+        )
     logger.info(
         "drafting_job_submit: queued %s (%s)", resp.get("job_id"), resp.get("mode") or "draft"
     )
     revising = resp.get("mode") == "revise"
+    queued_class = str(resp.get("document_class") or klass)
+    # The matter the broker validated the job on, never only the model's word.
+    resolved = _number(resp.get("matter_number")) or number
+    if resolved != number:
+        logger.warning("drafting_job_submit: the broker echoed another matter number; saying its")
     out = {
         "accepted": True,
-        "job_id": resp.get("job_id"),
-        "state": resp.get("state"),
-        "document_class": resp.get("document_class") or klass,
-        "mode": "revise" if revising else "draft",
-        # A factual ticket, no timing (the no-fabricated-content rule).
-        "message": (
-            f"Drafting job {resp.get('job_id')} is queued on this Machine. It makes the requested changes "
-            "to the draft already filed in the matter and files them as new versions of the same files; "
-            "the reply goes to this thread."
-            if revising
-            else f"Drafting job {resp.get('job_id')} is queued on this Machine. The draft is filed "
-            "in the matter when it finishes, and the reply goes to this thread."
-        ),
+        "document_class": queued_class,
+        "say": acknowledgment(queued_class, resolved, revising=revising),
     }
-    if revising and resp.get("revise_of"):
-        out["revise_of"] = resp["revise_of"]
     return json.dumps(out, ensure_ascii=False)
 
 
@@ -333,8 +508,11 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         "and files the document in the matter. Resolve the matter first. Who asked, the email's id "
         "and the request's words are taken from the email itself, never from you. A reply asking "
         "for changes to a draft already filed is submitted the SAME way, with the same class: the "
-        "broker sees the filed draft in that email thread and revises it in place (mode revise), "
-        "never a fresh draft. It answers with a job id, or a reason to relay as it comes back.",
+        "broker sees the filed draft in that email thread and revises it in place, never a fresh "
+        'draft. It answers with "say": your reply must contain this sentence exactly, as its own '
+        "paragraph; answer anything else the email asked in other paragraphs; never describe how the "
+        'work is done. When it is "none", say nothing about that request; answer the rest of the '
+        "email. Any other answer names an argument to correct and is not for the reply.",
         _schema(
             {
                 "matter_id": {
@@ -368,7 +546,9 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         drafting_job_add_to_request,
     ),
     "drafting_job_status": (
-        "A drafting job by id (state, document class, delivery folder, filed file roles), or the last twenty.",
+        "A drafting job by id (state, document class, delivery folder, filed file roles), or the last twenty. "
+        "A job's id is for your tool calls only: never write it in a reply (the seat refuses a reply "
+        "that carries one).",
         _schema({"job_id": STRING}),
         drafting_job_status,
     ),

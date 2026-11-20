@@ -67,6 +67,8 @@ CODES = frozenset(
         "layout_rule_unplaced",
         "spend_unrecorded",
         "ending_unrecorded",
+        "served_owed",
+        "smd_owed",
     }
 )
 REPLY_KINDS = frozenset(

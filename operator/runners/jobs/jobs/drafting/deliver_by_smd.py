@@ -58,7 +58,7 @@ import os
 import sys
 from typing import Any
 
-from .. import daemon as daemon_mod, drafting_lane, hand_delivery, run_record, seat_config, spend
+from .. import budget, daemon as daemon_mod, drafting_lane, hand_delivery, run_record, seat_config, spend
 from ..broker_client import BrokerError
 from ..hand_delivery import Refused
 from ..proof import watch
@@ -73,7 +73,15 @@ ENDED_DAEMON = frozenset({"failed", "stopped_by_smd"})
 ROLES = ("draft", "attorney_notes")
 QUIET = "SMD answered the requester by hand; no DELIVER wake"
 #: What the tool needs from the daemon's environment (`daemon.build`, `drafting_lane.build_lane`).
-ENV = (daemon_mod.SOCKET_ENV, seat_config.SLUG_VAR, daemon_mod.RUN_DIR_ENV, drafting_lane.QUEUE_ENV)
+#: The rate card is one of them: without it a job's spend is priced from a path the seat does not
+#: have, and the record falls back to the row's own cents (seen on the firm seat, 2026-11-20).
+ENV = (
+    daemon_mod.SOCKET_ENV,
+    seat_config.SLUG_VAR,
+    daemon_mod.RUN_DIR_ENV,
+    drafting_lane.QUEUE_ENV,
+    budget.PRICING_ENV,
+)
 
 
 def parse_record(rec: Any) -> dict[str, Any]:
@@ -188,18 +196,58 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, quiet: bool) -> dict[str, 
 
 apply = hand_delivery.apply
 
+#: A served set SMD owed on a delivered response job (``served_deliver.py``).
+from .served_deliver import apply_set, apply_told, plan_set, plan_told  # noqa: E402
+
+
+def _run_set(d: Any, a: Any) -> int:
+    """``--set``: the dry run and the confirmed live run, as for a whole job;
+    with ``--told``, the attorney was told and the set is marked so."""
+    if a.told:
+        return hand_delivery.run_cli(
+            d,
+            lambda lane: plan_told(lane, a.job_id, a.set_label),
+            dry_run=a.dry_run,
+            confirm=a.confirm,
+            use_digest=True,
+            partial=(BrokerError,),
+            done=f"marked {a.set_label} told on {a.job_id}",
+            applier=apply_told,
+        )
+    return hand_delivery.run_cli(
+        d,
+        lambda lane: plan_set(lane, a.job_id, hand_delivery.read_record(a.record), a.set_label, quiet=a.quiet),
+        dry_run=a.dry_run,
+        confirm=a.confirm,
+        use_digest=True,
+        partial=(BrokerError,),
+        done=f"recorded {a.set_label} on {a.job_id}; "
+        + (
+            "no reply (--quiet)"
+            if a.quiet
+            else "now send the reply line above to the attorney as an SMD note, then run this again with --told"
+        ),
+        applier=apply_set,
+    )
+
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="jobs.drafting.deliver_by_smd", description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("job_id")
-    ap.add_argument("record", help="JSON: folder_id, files [{file_id, name, bytes, sha256, role}]")
+    ap.add_argument("record", nargs="?", help="JSON: folder_id, files [{file_id, name, bytes, sha256, role}]")
     ap.add_argument("--quiet", action="store_true", help="SMD already answered the attorney: queue no DELIVER wake")
     ap.add_argument("--dry-run", action="store_true", help="print what would be written and its digest; write nothing")
     ap.add_argument("--confirm", default=None, help="the digest the dry run printed")
+    ap.add_argument("--set", dest="set_label", default=None, help="a served set SMD owed on a delivered response job")
+    ap.add_argument("--told", action="store_true", help="with --set: the attorney was told the set is filed")
     a = ap.parse_args(argv)
+    if not a.record and not (a.set_label and a.told):
+        ap.error("the record is required (only --set ... --told takes none)")
     for k, v in hand_delivery.daemon_env([n for n in ENV if not os.environ.get(n)]).items():
         os.environ[k] = v
     d = drafting_lane.build_lane(daemon_mod.build())
+    if a.set_label:
+        return _run_set(d, a)
     after = "no wake (--quiet)" if a.quiet else "the daemon dispatches its DELIVER wake on its next tick"
     return hand_delivery.run_cli(
         d,

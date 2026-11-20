@@ -14,13 +14,28 @@ redraft in the firm's terms.
 
 ## REQUEST mode
 
-- **Accepted.** "Received. The mediation brief for matter 900201 is being
-  prepared; I'll reply in this thread when it's filed."
-- **Refused by the broker.** The broker's sentence in plain words, then
-  "Nothing was queued." Example: "A deposition outline isn't switched on for
-  your firm, so nothing was queued."
-- **Not a Named Administrator.** A sentence naming the reservation and who at
-  the firm can ask. Nothing is submitted, and no class is named as on or off.
+- **Submitted, accepted or refused.** The submit's `say`: the reply must
+  contain this sentence exactly, as its own paragraph; answer anything else the
+  email asked in other paragraphs; never describe how the work is done. The seat
+  refuses a reply that alters or leaves it out. Accepted: "Received. The
+  mediation brief for matter 900201 is with us, and you'll get a reply in this
+  thread when the draft is filed in the matter." A revision of a filed draft:
+  "Received. We'll make those changes to the mediation brief for matter 900201
+  and reply in this thread when the new version is filed." A refusal is one
+  plain sentence the tool wrote, for example "Received. Drafting a deposition
+  outline isn't switched on for your firm, so we have not started the
+  deposition outline for matter 900201." One email naming a second matter for
+  the same kind of draft: "Received. One email starts one draft of each kind,
+  and this one already started the mediation brief for matter 900201. Please
+  send the request for matter 900202 in its own email." Too many Word
+  documents: "... Please send the request again with at most 6 Word documents
+  attached." (nothing was queued, so a re-send starts clean). Stopped on our
+  side: the same acknowledgment as accepted, because the request is recorded as
+  work we owe and is followed up; the firm is never told of our failure. When
+  the tool's `say` is `none` (nothing could be recorded), say nothing about that
+  request; answer the rest of the email.
+- **Not a Named Administrator, not submitted.** A sentence naming the
+  reservation and who at the firm can ask. No class is named as on or off.
 - **A follow-up on a draft underway.** The tool's `say`, as given, and nothing else
   about it. Only result `applied` may say the words reached the draft. Examples:
   "Received. We added what you wrote to the instructions for the propounded discovery

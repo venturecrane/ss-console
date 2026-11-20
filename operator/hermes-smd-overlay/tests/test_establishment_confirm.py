@@ -113,21 +113,45 @@ def _submit_gate(mod, args, session="sess-1"):
 # ---------------------------------------------------------------------------
 
 
-def test_a_yes_email_stashes_the_confirmed_id(plugin):
+APPLY_EMAIL = f"apply that [rule {RULE}]"
+
+
+def _waiting():
+    return _row(instructed_by=PARALEGAL, for_admin=True)
+
+
+def test_a_yes_email_commits_the_persons_own_rule_by_code(plugin):
+    """REWORKED (R2.1/R2.3). Until today a confirmed own rule was
+    stashed and the model was told to commit it; now the seat commits it in the
+    hook, the way a decline was always handled, and the model is handed the one
+    reply to send. No id reaches the note."""
     mod, state = plugin
     state["pending"] = [_row()]
     context = _turn(mod, ADMIN, YES_EMAIL)["context"]
-    assert mod._CONFIRMED_STASH["sess-1"] == RULE
+    submits = [r for r in state["requests"] if r.get("action") == mod.TOOL_SUBMIT]
+    assert [(r["scope"], r["proposal_id"]) for r in submits] == [("firm_adjust", RULE)]
+    assert "sess-1" not in mod._CONFIRMED_STASH
+    assert "Got it. That is recorded." in context
+    assert RULE not in context
+
+
+def test_a_waiting_rule_still_stashes_the_confirmed_id(plugin):
+    """A rule waiting on an administrator keeps the tag path exactly."""
+    mod, state = plugin
+    state["pending"] = [_waiting()]
+    context = _turn(mod, ADMIN, APPLY_EMAIL)["context"]
+    assert mod._CONFIRMED_STASH["sess-1"] == {RULE}
     assert RULE in context
     assert TEXT in context
 
 
 def test_the_note_forbids_claiming_effect_before_it_is_observed(plugin):
     """Critique point 4. "Recorded" and "in effect" are different facts, and
-    the second one is only sayable after ``establish_status`` says installed."""
+    the second one is only sayable after ``establish_status`` says installed.
+    (The administrator's path, which still hands the commit to the model.)"""
     mod, state = plugin
-    state["pending"] = [_row()]
-    context = _turn(mod, ADMIN, YES_EMAIL)["context"]
+    state["pending"] = [_waiting()]
+    context = _turn(mod, ADMIN, APPLY_EMAIL)["context"]
     assert mod.TOOL_STATUS in context
     assert "only say it is IN EFFECT once the status says installed" in context
     assert "still converging" in context
@@ -138,9 +162,9 @@ def test_a_stale_confirmation_does_not_survive_the_next_message(plugin):
     """The stash says what THIS message confirmed. A later message that
     confirms nothing must not leave the previous turn's permission standing."""
     mod, state = plugin
-    state["pending"] = [_row()]
-    _turn(mod, ADMIN, YES_EMAIL)
-    assert mod._CONFIRMED_STASH.get("sess-1") == RULE
+    state["pending"] = [_waiting()]
+    _turn(mod, ADMIN, APPLY_EMAIL)
+    assert mod._CONFIRMED_STASH.get("sess-1") == {RULE}
     state["pending"] = []
     _turn(mod, ADMIN, "Can you pull the Ashton file?")
     assert "sess-1" not in mod._CONFIRMED_STASH
@@ -164,10 +188,14 @@ def test_a_declined_rule_says_so_and_commits_nothing(plugin):
 
 
 def test_an_ambiguous_answer_asks(plugin):
+    """REWORKED for confirm-by-reply. Two of the person's own rules open and a yes that
+    replies to no read-back: code lists them, numbered, with no id."""
     mod, state = plugin
     state["pending"] = [_row(), _row(OTHER)]
     context = _turn(mod, ADMIN, "yes, thanks")["context"]
-    assert RULE in context and OTHER in context
+    assert f"1. {TEXT}" in context and f"2. {TEXT}" in context
+    assert "Reply all to confirm every one, or the numbers of the ones you want." in context
+    assert RULE not in context and OTHER not in context
     assert "sess-1" not in mod._CONFIRMED_STASH
 
 
@@ -193,8 +221,8 @@ def test_a_broker_that_cannot_answer_costs_the_turn_nothing(plugin, monkeypatch)
 
 def test_a_confirmed_rule_may_be_committed(plugin):
     mod, state = plugin
-    state["pending"] = [_row()]
-    _turn(mod, ADMIN, YES_EMAIL)
+    state["pending"] = [_waiting()]
+    _turn(mod, ADMIN, APPLY_EMAIL)
     assert _submit_gate(mod, {"scope": "firm_adjust", "proposal_id": RULE}) is None
 
 
@@ -247,7 +275,7 @@ def test_a_non_admin_cannot_commit_a_firm_rule_even_holding_a_confirmation(plugi
     mod, state = plugin
     state["pending"] = [_row(instructed_by=PARALEGAL)]
     _turn(mod, PARALEGAL, f"yes [rule {RULE}]")
-    mod._CONFIRMED_STASH["sess-1"] = RULE  # stipulate the earlier hook was wrong
+    mod._CONFIRMED_STASH["sess-1"] = {RULE}  # stipulate the earlier hook was wrong
     assert _submit_gate(mod, {"scope": "firm_adjust", "proposal_id": RULE})["action"] == "block"
 
 
@@ -271,9 +299,14 @@ def test_a_person_confirms_their_own_preference(plugin):
     state["pending"] = [
         _row(instructed_by=PARALEGAL, scope="person") | {"subject": {"person": PARALEGAL}}
     ]
-    _turn(mod, PARALEGAL, f"yes [rule {RULE}]")
-    assert mod._CONFIRMED_STASH.get("sess-1") == RULE
-    assert _submit_gate(mod, {"scope": "person", "proposal_id": RULE, "append": True}) is None
+    context = _turn(mod, PARALEGAL, f"yes [rule {RULE}]")["context"]
+    # REWORKED for confirm-by-reply: committed by code, with append, never a replacement.
+    submits = [r for r in state["requests"] if r.get("action") == mod.TOOL_SUBMIT]
+    assert [(r["scope"], r["proposal_id"], r["append"]) for r in submits] == [
+        ("person", RULE, True)
+    ]
+    assert "Got it. That is recorded." in context
+    assert "sess-1" not in mod._CONFIRMED_STASH
 
 
 def test_a_person_submit_with_an_unconfirmed_id_is_refused(plugin):

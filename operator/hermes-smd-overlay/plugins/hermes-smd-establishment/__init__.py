@@ -307,6 +307,7 @@ from shared.tool_registration import register_wrapped_tool
 from shared.wording_rules_store import KINDS as WORDING_KINDS
 from shared.wording_rules_store import READERS as WORDING_READERS
 
+from . import own_rules, readback_confirm  # noqa: F401 - the tests reach readback_confirm here
 from . import sweeper as lapse_sweeper
 
 logger = logging.getLogger(__name__)
@@ -426,18 +427,40 @@ def _revoke_read_exemption(session_id: str) -> None:
 _READBACK_OWED: OrderedDict[str, list[str]] = OrderedDict()
 _MAX_READBACKS = 8
 
-#: The proposal ``pre_llm_call`` decided this turn's sender confirmed. Written
-#: in the one hook that sees the message and the sender, read by the one hook
-#: that can block, exactly like ``_ADMIN_STASH``. A submit naming any other id
-#: is refused: the model does not get to decide what was confirmed.
-_CONFIRMED_STASH: dict[str, str] = {}
+#: The proposals ``pre_llm_call`` decided this turn's sender confirmed and
+#: left for a submit: a rule waiting on an administrator, and the person's own
+#: rule only when a gate stopped the code commit (2026-11-19). Written in the one
+#: hook that sees the message and the sender, read by the one hook that can
+#: block, exactly like ``_ADMIN_STASH``. A submit naming any other id is
+#: refused: the model does not get to decide what was confirmed. A SET since one
+#: reply may confirm several of a person's own rules.
+_CONFIRMED_STASH: dict[str, set[str]] = {}
 
-#: The confirmed rule's own sentence, kept beside the id for exactly one
+#: The confirmed rules' own sentences, kept beside the ids for exactly one
 #: purpose: :func:`_in_effect_gate` must not read the RULE as a claim about
 #: itself. A rule that says "from now on, letters are formal" carries a claim
 #: phrase in its own body, and a reply that quotes the rule back is quoting,
 #: not asserting.
-_CONFIRMED_TEXT: dict[str, str] = {}
+_CONFIRMED_TEXT: dict[str, list[str]] = {}
+
+#: The fixed reply to a confirmation this turn committed by code
+#: (:func:`readback_confirm.confirmed_say`), discounted by the gates exactly as
+#: the rule's own sentence is: the seat wrote it from the committed row.
+_CONFIRMED_SAY: dict[str, str] = {}
+
+#: The person's own rules this turn committed by code, as their rows, so
+#: ``establish_pending`` can say what became of them (a just-confirmed rule must
+#: not vanish from the list and read as a failure), and so the in-effect gate
+#: still holds a reply that calls one installed.
+_COMMITTED_TURN: dict[str, list[dict[str, Any]]] = {}
+
+#: session -> the proposals whose sentence code found verbatim in the person's
+#: own email: the only rule sentences exempt from the citation scan (R2.4).
+_VERIFIED: dict[str, set[str]] = {}
+
+#: session -> the proposal ids behind this turn's tool handles
+#: (``own_rules.turn_handle``).
+_TURN_HANDLES: dict[str, list[str]] = {}
 
 #: Run id -> proposal id, recorded when a submit that carried a proposal is
 #: accepted. The broker echoes both, and the pair is the only way to read a
@@ -833,6 +856,7 @@ _PROPOSE_SCHEMA: dict[str, Any] = {
                 "Never true for a personal rule."
             ),
         },
+        "restates": own_rules.RESTATES_SCHEMA,
     },
     "required": ["scope", "subject", "text", "instructed_by", "source_ref"],
     "additionalProperties": False,
@@ -1038,10 +1062,10 @@ _STATUS_DESCRIPTION = (
 _PROPOSE_DESCRIPTION = (
     "State a rule back for the person to confirm, when someone tells you how a "
     "kind of output should read from now on. Nothing changes yet: this returns "
-    "the exact block you must include in your reply, with a tag they answer. "
-    "Say the rule in your own words, name what it attaches to, and ask them to "
-    "confirm. When they do, the seat tells you, and you commit it with "
-    f"{TOOL_SUBMIT}."
+    "the exact block you must include in your reply, word for word; it ends by "
+    "asking them to reply yes. Put the rule in `text` in their words, and keep a "
+    "citation they wrote (a code section, a case) exactly as they wrote it. When "
+    "they answer, the seat records it and tells you what to reply."
 )
 
 _PENDING_DESCRIPTION = (
@@ -1323,6 +1347,7 @@ _CONFIRMED_NOTE = (
     "could not be committed, and quote what the seat said. Never claim effect "
     "you have not observed."
 )
+
 
 #: Appended to :data:`_CONFIRMED_NOTE` when the rule's class has no live reader
 #: (:data:`shared.output_classes.LIVE_RULE_READER_CLASSES`, 2026-11-04). The
@@ -2124,11 +2149,13 @@ def _submit_payload(args: dict[str, Any]) -> dict[str, Any]:
 def _submit(args: dict[str, Any], **kwargs: Any) -> str:
     """Submit an analyze/install run. The broker rebuilds the submission from
     this bounded field set; nothing else on the wire reaches the spool."""
-    payload = _submit_payload(args)
+    session_id = provenance.resolve_session(kwargs.get("session_id"))
+    # A per-turn handle ("rule-1-of-this-turn") stands for the proposal id the
+    # model is never shown (R2.2).
+    payload = _submit_payload(own_rules.with_real_id(args, session_id))
     response = _broker_request(payload)
     if _is_old_broker(response):
         return _OLD_BROKER_MESSAGE
-    session_id = provenance.resolve_session(kwargs.get("session_id"))
     if isinstance(response, dict):
         _note_submit_outcome(session_id, payload, response)
         if response.get("ok") and payload.get("proposal_id"):
@@ -2191,13 +2218,12 @@ def _note_submit_outcome(
 
 
 def _note_confirmed_text(session_id: str, text: str) -> None:
-    """Keep the confirmed sentence beside its id, for the gate to discount."""
-    if not session_id:
+    """Keep a confirmed sentence beside its id, for the gate to discount."""
+    if not session_id or not text:
         return
-    if text:
-        _CONFIRMED_TEXT[session_id] = text
-    else:
-        _CONFIRMED_TEXT.pop(session_id, None)
+    texts = _CONFIRMED_TEXT.setdefault(session_id, [])
+    if text not in texts:
+        texts.append(text)
 
 
 def _mark_installed(session_id: str, proposal_id: str) -> None:
@@ -2276,6 +2302,8 @@ def _propose(args: dict[str, Any], **kwargs: Any) -> str:
             str(response.get("readback") or ""), response.get("subject"), reach_on
         )
         readback = rule_reach.readback_with_precedence(readback, args, rule_reach.precedence_on())
+        # 2026-11-19 (R2.1, R2.2): a person's own rule is read back with no id.
+        own, readback = own_rules.own_readback_for(session_id, args, response, readback)
         if readback and readback != response.get("readback"):
             response = {**response, "readback": readback}
         _remember_readback(session_id, readback)
@@ -2303,7 +2331,16 @@ def _propose(args: dict[str, Any], **kwargs: Any) -> str:
         if notes:
             response = dict(response)
             response["seat_note"] = " ".join(notes)
+        # The model never needs the id of a person's own rule (code commits
+        # it), and an id it can see is an id it can quote.
+        response = own_rules.without_ids(response) if own else response
     return json.dumps(response, ensure_ascii=False)
+
+
+#: The person's own rules read back on this turn, in the order proposed:
+#: session -> {proposal id: sentence}. One read-back carries them all and asks
+#: for the answer once, at the end.
+_OWN_TURN: dict[str, dict[str, str]] = {}
 
 
 def _proposed_class(args: dict[str, Any], response: dict[str, Any]) -> str:
@@ -3044,6 +3081,7 @@ def _sweep_lapses_once() -> lapse_sweeper.SweepResult:
     untainted (``shared.inbound.SessionTaint.trust_class``), so the note is
     classified on the recipient alone, exactly as an internal alert is.
     """
+    own_rules.flush_bindings(with_installs=True)
     return lapse_sweeper.run_sweep_once(
         fetch=_fetch_unreported_outcomes,
         notify=lambda *, kind, row, by: _notify_requester(kind=kind, row=row, by=by, session_id=""),
@@ -3085,6 +3123,8 @@ def _pending(args: dict[str, Any], **_: Any) -> str:
     )
     if _is_old_broker(response):
         return _OLD_BROKER_MESSAGE
+    session = provenance.resolve_session(_.get("session_id"))
+    response = own_rules.pending_view(response, args, session)
     return json.dumps(response, ensure_ascii=False)
 
 
@@ -3753,10 +3793,8 @@ def _in_effect_gate(session_id: Any, tool_name: str, args: Any) -> dict[str, Any
     """
     if not isinstance(session_id, str) or not session_id:
         return None
-    proposal_id = _CONFIRMED_STASH.get(session_id)
+    proposal_id, named = own_rules.unproven(session_id)
     if not proposal_id:
-        return None
-    if proposal_id in _INSTALLED_RULES.get(session_id, set()):
         return None
     try:
         blob = json.dumps(args, ensure_ascii=False) if isinstance(args, dict) else str(args)
@@ -3768,7 +3806,7 @@ def _in_effect_gate(session_id: Any, tool_name: str, args: Any) -> dict[str, Any
     # proposal"). The gate asks for both to be quoted, so it must not then read
     # them as the model's claim. Discounting them is not a hole: removing a
     # sentence cannot manufacture a claim the model did not write.
-    quoted = [_CONFIRMED_TEXT.get(session_id) or "", _LAST_SUBMIT_REFUSAL.get(session_id) or ""]
+    quoted = [*own_rules.quoted_runs(session_id), _LAST_SUBMIT_REFUSAL.get(session_id) or ""]
     if not _claims_effect(_discount(blob, quoted)):
         return None
     logger.info(
@@ -3781,7 +3819,9 @@ def _in_effect_gate(session_id: Any, tool_name: str, args: Any) -> dict[str, Any
     return {
         "action": "block",
         "message": _IN_EFFECT_UNPROVEN_MESSAGE.format(
-            proposal_id=proposal_id,
+            # A person's own rule committed by code is named by its sentence,
+            # never its id (R2.2): the model must not be handed one to quote.
+            proposal_id=named,
             status_tool=TOOL_STATUS,
             refusal=(_IN_EFFECT_REFUSAL_BLOCK.format(message=message) if message else ""),
         ),
@@ -3823,7 +3863,7 @@ def _work_underway_gate(session_id: Any, tool_name: str, args: Any) -> dict[str,
     body = "\n".join(_strings_of(args))
     quoted: list[str] = []
     if isinstance(session_id, str):
-        quoted.append(_CONFIRMED_TEXT.get(session_id) or "")
+        quoted.extend(own_rules.quoted_runs(session_id))
         quoted.extend(_READBACK_OWED.get(session_id) or [])
     claim = work_claims.unsupported_claim(_discount(body, quoted), _LIVE_WORK_READER)
     if claim is None:
@@ -4192,8 +4232,10 @@ def _clear_confirmation_stash(session_id: str) -> None:
     entirely (ss-console#2546), and skipping it without this would leave the
     previous turn's permission standing over a submit on this one.
     """
-    _CONFIRMED_STASH.pop(session_id, None)
-    _CONFIRMED_TEXT.pop(session_id, None)
+    for reg in (_CONFIRMED_STASH, _CONFIRMED_TEXT, _CONFIRMED_SAY, _COMMITTED_TURN):
+        reg.pop(session_id, None)
+    for reg in (_OWN_TURN, _TURN_HANDLES):
+        reg.pop(session_id, None)
 
 
 def _confirmation_note(
@@ -4213,10 +4255,7 @@ def _confirmation_note(
     _clear_confirmation_stash(session_id)
     if not isinstance(user_message, str) or not user_message.strip():
         return None
-    if (
-        not rule_confirm.find_tags(user_message)
-        and not rule_confirm.read_own_text(user_message).affirmative
-    ):
+    if not own_rules._could_answer(user_message):
         # Nothing that could be an answer. Skip the broker round trip entirely —
         # this runs on every attributed turn.
         return None
@@ -4249,22 +4288,15 @@ def _confirmation_note(
     # affirmative is ambiguous (ss-console operator-own-matter).
     extra_open = 1 if PENDING_SEND.peek() is not None else 0
     if not pending and not extra_open:
-        return None
-    verdict = rule_confirm.resolve(user_message, pending, sender, is_admin, extra_open=extra_open)
+        # A plain yes after their own rule lapsed: read it back again (R8).
+        return own_rules.reopen_note(session_id, sender, user_message)
+    verdict = own_rules._resolve_reply(
+        session_id, sender, is_admin, user_message, pending, extra_open
+    )
     if verdict.kind == rule_confirm.CONFIRMED and verdict.proposal_id:
-        row = next((p for p in pending if str(p.get("proposal_id")) == verdict.proposal_id), {})
-        if str(row.get("kind") or "rule") == act_broker.KIND_TOOL_CALL:
-            return _act_confirmation_note(session_id, sender, is_admin, verdict.proposal_id, row)
-        _CONFIRMED_STASH[session_id] = verdict.proposal_id
-        _note_confirmed_text(session_id, str(row.get("text") or ""))
-        logger.info(
-            "hermes-smd-establishment: rule %s confirmed by %s", verdict.proposal_id, sender
-        )
-        return _CONFIRMED_NOTE.format(
-            proposal_id=verdict.proposal_id,
-            text=str(row.get("text") or ""),
-            scope=str(row.get("scope") or "firm_adjust"),
-        ) + _unread_class_note(row)
+        return own_rules._confirmed_note(session_id, sender, is_admin, pending, verdict)
+    if verdict.kind == rule_confirm.ASK and verdict.reason == rule_confirm.ASK_PICK:
+        return own_rules._pick_note(session_id, sender, is_admin, pending, verdict.candidates)
     if verdict.kind == rule_confirm.DECLINED:
         # ss-console#2546. A decline is an ACT now, not just a sentence: it
         # closes the proposal in the broker and tells the person who asked. The
@@ -4286,7 +4318,9 @@ def _confirmation_note(
                     proposal_id=str(row.get("proposal_id") or ""),
                     requester=str(row.get("instructed_by") or "the person who asked"),
                 )
-        return _DECLINED_NOTE.format(candidates=", ".join(verdict.candidates))
+        return _DECLINED_NOTE.format(
+            candidates=own_rules._name_candidates(pending, verdict.candidates, sender)
+        )
     if verdict.kind == rule_confirm.ASK:
         if verdict.reason == rule_confirm.ASK_NOT_THEIRS:
             # A "yes" to an act from somebody who is not an administrator. The
@@ -4323,7 +4357,7 @@ def _confirmation_note(
         first = verdict.candidates[0] if verdict.candidates else ""
         first_row = next((p for p in pending if str(p.get("proposal_id")) == first), {})
         return template.format(
-            candidates=", ".join(verdict.candidates),
+            candidates=own_rules._name_candidates(pending, verdict.candidates, sender),
             first=first,
             first_tag=f"[{rule_confirm.tag_word(first_row)} {first}]",
         )
@@ -4835,6 +4869,9 @@ def on_pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
         session_id = kwargs.get("session_id")
         if not isinstance(session_id, str) or not session_id:
             return None
+        # A new turn: last turn's read-back must not ride into this one's.
+        _OWN_TURN.pop(session_id, None)
+        _VERIFIED.pop(session_id, None)
         raw_sender = kwargs.get("sender_id")
         if not raw_sender:
             return None
@@ -5287,11 +5324,10 @@ def _firm_adjust_gate(
     re-checks the sentence against its own store, so this is the first of three
     independent noes rather than the only one.
     """
-    proposal_id = str(args.get("proposal_id") or "").strip().lower()
+    proposal_id = own_rules.real_id(session_id, args.get("proposal_id"))
     if not proposal_id:
         return {"action": "block", "message": _SUBMIT_NEEDS_PROPOSAL_MESSAGE}
-    confirmed = _CONFIRMED_STASH.get(session_id) if isinstance(session_id, str) else None
-    if confirmed != proposal_id:
+    if not own_rules.confirmed_here(session_id, proposal_id):
         logger.info(
             "hermes-smd-establishment: firm_adjust submit refused "
             "(rule %s was not confirmed on this turn)",
@@ -5410,15 +5446,12 @@ def on_pre_tool_call(**kwargs: Any) -> dict[str, Any] | None:
         if tool_name == TOOL_SUBMIT and args.get("scope") == "person":
             subject = _normalize_address(args.get("person"))
             sender = _normalize_address(entry.get("sender")) if entry else ""
-            proposal_id = str(args.get("proposal_id") or "").strip().lower()
+            proposal_id = own_rules.real_id(session_id, args.get("proposal_id"))
             if proposal_id:
                 # A confirmed personal rule. The subject comes from the broker's
                 # row, so ``person`` may be absent — but the confirmation still
                 # has to be one the SEAT saw, exactly as for a firm rule.
-                confirmed = (
-                    _CONFIRMED_STASH.get(session_id) if isinstance(session_id, str) else None
-                )
-                if confirmed != proposal_id:
+                if not own_rules.confirmed_here(session_id, proposal_id):
                     return {
                         "action": "block",
                         "message": _SUBMIT_UNCONFIRMED_MESSAGE.format(proposal_id=proposal_id),

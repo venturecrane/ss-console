@@ -51,6 +51,7 @@ from bin.lib import work_health_boot as boot
 from bin.lib import work_health_casefile as casefile_wh
 from bin.lib import work_health_keeper as keeper_wh
 from bin.lib import work_health_mail as mail
+from bin.lib import work_health_owed as owed_wh
 from bin.lib import work_health_page_store as page_store_wh
 from bin.lib import work_health_proof as proof_wh
 from bin.lib import work_health_runs as runs_wh
@@ -326,8 +327,13 @@ def _operator_items(
     why = probe_not_scheduled_why(has_smokeball, authored, deployed)
     closed = wh.load_closed()
     items = wh.request_items(slug, rows, cfg, now, closed)
+    items += src.could_not_items(slug, rows, cfg, now, closed)
     items += wh.job_items(slug, rows, cfg, now, closed, console.lane_holds.get(slug))
-    items += proof_wh.delivery_proof_items(slug, rows, cfg, now, closed)
+    # Owed work with no lookback (the broker's open read); None falls back to the window.
+    open_owed = owed_wh.read_open_owed(slug)
+    owed_jobs = owed_wh.owed_jobs_kwargs(open_owed, proof_wh.delivery_proof_items)
+    items += proof_wh.delivery_proof_items(slug, rows, cfg, now, closed, **owed_jobs)
+    items += owed_wh.smd_owed_items(slug, rows, cfg, now, closed, open_owed)
     # One job, one line: a hold that is about a job already listed is said on
     # that job's line, not again as a silent run (triage, 2026-11-04).
     listed_jobs = frozenset(it.job for it in items if it.job)

@@ -245,7 +245,8 @@ def test_each_outcome_says_which_thing_happened(kind, needle):
     assert result.sent is True
     assert send.recipients == [PARALEGAL]
     assert needle in send.calls[0]["text"]
-    assert f"[rule {RULE}] {TEXT}" in send.calls[0]["text"]
+    assert TEXT in send.calls[0]["text"]  # the sentence, and no id (R2.2)
+    assert "[rule " not in send.calls[0]["text"]
 
 
 def test_an_outcome_goes_to_the_person_who_asked_and_to_nobody_else():
@@ -1386,7 +1387,7 @@ def test_the_sweeper_never_calls_a_lane_document_rule_in_effect(plugin):
     assert result.reported == 1
     assert _install_notes(state) == []
     (letter,) = [s for s in state["sends"] if s["to"] == [PARALEGAL]]
-    assert letter["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert letter["subject"] == "Your rule is recorded"
     assert "passed to SMD" in letter["text"]
     assert state["marked"] == [RULE]
 

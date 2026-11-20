@@ -47,6 +47,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import own_rule_verbs, readback_bindings
 from .broker_context import BrokerContext
 
 #: verb -> EstablishmentStore method name. ``establish_status`` is the
@@ -85,3 +86,27 @@ def establish(
     with broker._establish_lock:
         broker.establishment.sweep()
         return method(request)
+
+
+# ---------------------------------------------------------------------------
+# The read-back binding (2026-11-19, readback_bindings.py). Its own handler and
+# its own verb list, so the parity check over ``VERBS`` above is unchanged: these
+# two are not EstablishmentStore methods, they act on one table beside its rows.
+# ---------------------------------------------------------------------------
+
+READBACK_VERBS: tuple[str, ...] = readback_bindings.VERBS + own_rule_verbs.VERBS
+_READBACK_HANDLERS = {
+    readback_bindings.VERB_OWED: readback_bindings.readback_owed,
+    readback_bindings.VERB_SENT: readback_bindings.readback_sent,
+    readback_bindings.VERB_FOR: readback_bindings.readback_for,
+    **own_rule_verbs.HANDLERS,
+}
+
+
+def readback(
+    broker: BrokerContext, action: str, request: dict[str, Any], _pid: int, _uid: int | None
+) -> dict[str, Any]:
+    if broker.establishment is None:
+        raise ValueError("establishment spool not configured on this broker")
+    with broker._establish_lock:
+        return _READBACK_HANDLERS[action](broker, request)

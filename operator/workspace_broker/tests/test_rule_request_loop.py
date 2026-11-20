@@ -1818,3 +1818,60 @@ def test_a_table_written_before_the_claim_columns_reads_as_unclaimed(tmp_path):
     # And the row the migration recovered is claimable exactly once.
     assert store.claim_notify("dddddddd", "gateway") is True
     assert store.claim_notify("dddddddd", "webhook-gate") is False
+
+
+# ---------------------------------------------------------------------------
+# A person's own unconfirmed rule lapses with no letter (2026-11-19)
+# ---------------------------------------------------------------------------
+
+
+def test_an_own_rule_lapses_with_no_letter_owed(tmp_path):
+    """A rule the person stated for themselves and never confirmed is nobody
+    else's to answer, so the lapse letter ("no administrator answered") would
+    be false for them. FALSIFIER: drop the CASE arm in ``sweep`` and the own
+    rule is listed for a letter."""
+    broker = _broker(tmp_path)
+    store = broker.establishment.pending
+    own = _propose(broker, instructed_by=ADMIN, for_admin=False)
+    waiting = _propose(broker, text="Name the deadline in the first paragraph.")
+    act = store.create(
+        scope="act",
+        subject={"tool": "mcp_smokeball_create_matter"},
+        text="Create Smokeball matter",
+        instructed_by=ADMIN,
+        for_admin=False,
+        kind="tool_call",
+    )
+    for pid in (own["proposal_id"], waiting["proposal_id"], act["proposal_id"]):
+        _age_out(broker, pid)
+    broker.establishment.sweep()
+
+    owed = {r["proposal_id"] for r in store.unreported_outcomes_for(None)}
+    assert own["proposal_id"] not in owed
+    assert waiting["proposal_id"] in owed
+    assert act["proposal_id"] in owed
+    row = store.get(own["proposal_id"])
+    assert row["lapsed_at"] is not None and row["lapse_notified_at"] == row["lapsed_at"]
+    assert store.get(waiting["proposal_id"])["lapse_notified_at"] is None
+    # Nor does the person's own listing ask for a letter about it.
+    assert own["proposal_id"] not in {r["proposal_id"] for r in store.unreported_outcomes_for(ADMIN)}
+    # The record that it died is still written, at the lapse, saying nobody was told.
+    lapsed = [json.loads(r["metadata"]) for r in _rows(broker, RULE_LAPSED_ACTION_TYPE)]
+    assert [(m["proposal_id"], m["notified"], m["reason"]) for m in lapsed] == [
+        (own["proposal_id"], False, "own_rule_unconfirmed")
+    ]
+    # A second sweep writes no second row.
+    broker.establishment.sweep()
+    assert len(_rows(broker, RULE_LAPSED_ACTION_TYPE)) == 1
+
+
+def test_a_row_an_earlier_sweep_lapsed_is_not_rewritten(tmp_path):
+    broker = _broker(tmp_path)
+    store = broker.establishment.pending
+    waiting = _propose(broker)
+    _age_out(broker, waiting["proposal_id"])
+    store.sweep()
+    before = store.get(waiting["proposal_id"])
+    store.sweep()
+    after = store.get(waiting["proposal_id"])
+    assert (after["lapsed_at"], after["lapse_notified_at"]) == (before["lapsed_at"], None)

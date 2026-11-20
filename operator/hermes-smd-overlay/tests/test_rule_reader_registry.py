@@ -90,7 +90,7 @@ def test_a_rule_no_live_reader_applies_is_never_called_in_effect(output_class, p
     letter = f"{call['subject']}\n{call['text']}"
     assert "in effect from now" not in letter
     assert "is in effect" not in letter
-    assert call["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert call["subject"] == "Your rule is recorded"
     assert "passed to SMD" in call["text"]
     assert call["to"] == [REQUESTER]
     assert pages == [(RULE, output_class)]
@@ -110,7 +110,7 @@ def test_the_recorded_letter_states_no_date(pages):
 @pytest.mark.parametrize("output_class", sorted(output_classes.LIVE_RULE_READER_CLASSES))
 def test_a_rule_a_live_reader_applies_is_still_in_effect(output_class, pages):
     call = _install(output_class)
-    assert call["subject"] == f"Your rule is in effect [rule {RULE}]"
+    assert call["subject"] == "Your rule is in effect"
     assert "in effect from now" in call["text"]
     assert pages == []
 
@@ -222,7 +222,7 @@ def test_a_work_product_rule_the_seat_compiled_is_in_effect(tmp_path, monkeypatc
     _layout(tmp_path, [RULE])
     monkeypatch.setenv("SMD_SPEC_DIR", str(tmp_path))
     call = _install("work_product")
-    assert call["subject"] == f"Your rule is in effect [rule {RULE}]"
+    assert call["subject"] == "Your rule is in effect"
     assert pages == []
 
 
@@ -230,7 +230,7 @@ def test_a_work_product_rule_the_seat_left_as_prose_is_recorded(tmp_path, monkey
     _layout(tmp_path, ["00000000"])  # another rule compiled; this one did not
     monkeypatch.setenv("SMD_SPEC_DIR", str(tmp_path))
     call = _install("work_product")
-    assert call["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert call["subject"] == "Your rule is recorded"
     assert pages == [(RULE, "work_product")]
 
 
@@ -239,7 +239,7 @@ def test_a_compiled_rule_of_a_class_with_no_layout_reader_is_still_recorded(
 ):
     _layout(tmp_path, [RULE])
     monkeypatch.setenv("SMD_SPEC_DIR", str(tmp_path))
-    assert _install("record")["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert _install("record")["subject"] == "Your rule is recorded"
 
 
 def test_the_layout_classes_have_no_send_site_reader():
@@ -296,7 +296,7 @@ def _letter(tmp_path, monkeypatch, text):
 
 def test_every_clause_compiled_says_in_effect_and_lists_them(tmp_path, monkeypatch, pages):
     call = _letter(tmp_path, monkeypatch, "Two blank lines before the court name.")
-    assert call["subject"] == f"Your rule is in effect [rule {RULE}]"
+    assert call["subject"] == "Your rule is in effect"
     assert "- Two blank lines before the court name." in call["text"]
     assert "Recorded and passed to SMD" not in call["text"]
     assert pages == []
@@ -306,7 +306,7 @@ def test_a_mixed_rule_says_which_clause_is_which_and_pages_the_rest(tmp_path, mo
     call = _letter(
         tmp_path, monkeypatch, "Never use the word plainly; two blank lines before the court name."
     )
-    assert call["subject"] == f"Your rule is partly in effect [rule {RULE}]"
+    assert call["subject"] == "Your rule is partly in effect"
     effect, recorded = call["text"].split("Recorded and passed to SMD")
     assert "- two blank lines before the court name." in effect
     assert "- Never use the word plainly" in recorded
@@ -343,7 +343,7 @@ def test_a_damaged_store_is_recorded_not_in_effect(tmp_path, monkeypatch, pages)
         send=send,
         output_class="work_product",
     )
-    assert send.calls[0]["subject"] == f"Your rule is recorded [rule {RULE}]"
+    assert send.calls[0]["subject"] == "Your rule is recorded"
 
 
 # ---- a wording rule is "in effect" only for a kind a job lane reads it for (2026-11-06) ------

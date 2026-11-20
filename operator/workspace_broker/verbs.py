@@ -68,6 +68,7 @@ from . import (
     note_verbs,
     records_order_acts,
     records_verbs,
+    smd_owed,
 )
 from .medchron_verbs import medchron_dispatch
 from .reply_text import with_reply_text
@@ -186,6 +187,18 @@ VERBS: tuple[Verb, ...] = (
     # SMD closes an ops request quietly: the requester was already answered
     # elsewhere, so no letter may follow. Root only (a person on the seat).
     Verb("ops_close_by_smd", _only(ROOT), establish_verbs.establish),
+    # Which own rules a sent read-back carried, and which one a reply answers.
+    Verb("establish_readback_sent", _only(AGENT), establish_verbs.readback),
+    Verb("establish_readback_for", _only(AGENT), establish_verbs.readback),
+    Verb("establish_readback_owed", _only(AGENT), establish_verbs.readback),
+    Verb("establish_reopen_lapsed", _only(AGENT), establish_verbs.readback),
+    Verb("establish_restated", _only(AGENT), establish_verbs.readback),
+    Verb("establish_install_watch", _only(AGENT), establish_verbs.readback),
+    Verb("establish_install_check", _only(AGENT), establish_verbs.readback),
+    # Work SMD owes a person (a help question, a rule not recorded), recorded now.
+    Verb("smd_owed_record", _only(AGENT), smd_owed.record_verb),
+    # The open owed items, no lookback: the seat's smd_owed runtime read (triage).
+    Verb("smd_owed_open", ROOT_OR_AGENT, smd_owed.open_verb),
     # ss#2614 routine 11; compound gates per medchron_verbs.py.
     Verb("medchron_job_submit", GATEWAY_OR_ROOT, _medchron),
     Verb("medchron_job_status", GATEWAY_ROOT_OR_AGENT, _medchron_status),
@@ -372,6 +385,8 @@ if len(TABLE) != len(VERBS):
     raise RuntimeError("duplicate verb name in the broker verb table")
 if set(establish_verbs.VERBS) != {v.name for v in VERBS if _base(v.handler) is establish_verbs.establish}:
     raise RuntimeError("the establishment rows above and establish_verbs.VERBS disagree")
+if set(establish_verbs.READBACK_VERBS) != {v.name for v in VERBS if _base(v.handler) is establish_verbs.readback}:
+    raise RuntimeError("the read-back rows above and establish_verbs.READBACK_VERBS disagree")
 # The same parity the establishment rows have had since they were added. It was
 # missing here, so a medchron verb could be named in one list and not the other:
 # present in medchron_verbs.VERBS but absent from this table is a verb the

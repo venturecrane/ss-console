@@ -104,7 +104,9 @@ def test_a_clean_rule_is_still_quoted_in_full():
         requester="requester@example.com",
         send=send,
     )
-    assert "[rule ab12cd34] Always copy the paralegal on demand letters" in send.calls[0]["text"]
+    # No id reaches the person who asked (R2.2): the sentence alone.
+    assert "Always copy the paralegal on demand letters" in send.calls[0]["text"]
+    assert "ab12cd34" not in send.calls[0]["text"] + send.calls[0]["subject"]
 
 
 def test_an_ops_letter_with_a_figure_passes_the_scan():

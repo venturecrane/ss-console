@@ -1,0 +1,474 @@
+"""A person's own rule: read back with no id, confirmed by the email replied to.
+
+The seat half of R2.1-R2.4 (``plugins/hermes-smd-establishment/readback_confirm.py``
+and the confirmation hook). The broker is a fake that answers the two binding
+verbs the way ``workspace_broker/readback_bindings.py`` does; the decisions it
+feeds (``shared/rule_confirm.resolve``) are the real ones. Every name, address,
+rule and id here is invented.
+
+The cases the build was asked for, each its own test: a "Yes." replying to a
+read-back that carried two rules confirms both; a "Yes." in a long thread that
+also quotes last week's read-back confirms only the replied-to message's rules;
+a "Yes." with no reply header and three open rules gets the numbered list, and
+"1 and 3" then confirms those two; a rule waiting on an administrator is
+untouched; and the same on a seat whose mail custody is AgentMail.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from shared import admin_possession, outbound_gate, readback_send
+from shared.inbound import SESSION_INBOUND_ORIGIN, SESSION_TAINT, InboundOrigin
+from tests.conftest import load_plugin
+
+ATTORNEY = "pat@firm.example"
+PARALEGAL = "sam@firm.example"
+GRAPH_ID = "AAMkReplyGraphId0001="
+SENT = "<CAread1@mail.firm.example>"
+A, B, C, OLD, WAIT = "1a1a1a1a", "2b2b2b2b", "3c3c3c3c", "0f0f0f0f", "4d4d4d4d"
+TEXT = {
+    A: "In memos, object under the cited section, see Example v. Sample.",
+    B: "In memos, put the answer in the first line.",
+    C: "In memos, no headings.",
+    OLD: "In memos, sign off with the attorney's name.",
+}
+ROW_SUBJECT = {"output_class": "work_product", "property": "voice", "doc_kinds": ["memo"]}
+
+
+class _Cfg:
+    def __init__(self, adapter=""):
+        self.connectors = {"Email": {"enabled": True, "adapter": adapter}} if adapter else {}
+
+    @property
+    def admins(self):
+        return [ATTORNEY]
+
+    def sender_is_admin(self, sender):
+        return str(sender or "").strip().lower() == ATTORNEY
+
+    def sender_on_roster(self, sender):
+        return True
+
+    def authored_person_name(self, _address):
+        return None
+
+
+def _own(proposal_id, by=ATTORNEY):
+    return {
+        "proposal_id": proposal_id,
+        "kind": "rule",
+        "scope": "firm_adjust",
+        "subject": dict(ROW_SUBJECT),
+        "text": TEXT[proposal_id],
+        "readback": TEXT[proposal_id],
+        "instructed_by": by,
+        "for_admin": False,
+        "state": "open",
+    }
+
+
+def _waiting():
+    return {
+        "proposal_id": WAIT,
+        "kind": "rule",
+        "scope": "firm_adjust",
+        "subject": {"output_class": "outbound_client", "property": "voice"},
+        "text": "In client letters, be brief.",
+        "readback": f"[rule {WAIT}] In client letters, be brief.",
+        "instructed_by": PARALEGAL,
+        "for_admin": True,
+        "state": "open",
+    }
+
+
+@pytest.fixture
+def seat(monkeypatch, tmp_path):
+    mod = load_plugin("hermes-smd-establishment")
+    state: dict = {"pending": [], "requests": [], "binding": None, "adapter": ""}
+
+    def broker(payload):
+        state["requests"].append(payload)
+        action = payload.get("action")
+        if action == "establish_pending":
+            if payload.get("proposal_id"):
+                return {"ok": True, "pending": []}
+            return {"ok": True, "pending": list(state["pending"])}
+        if action == "establish_readback_for":
+            binding = state["binding"]
+            if binding is None:
+                return {"ok": True, "bound": False, "header": False, "proposal_ids": []}
+            return {"ok": True, "bound": True, "header": True, **binding}
+        if action == "establish_readback_owed":
+            return {"ok": True, "owed": payload["proposal_ids"]}
+        if action == "establish_reopen_lapsed":
+            return state.get("reopen") or {"ok": True, "reopened": False}
+        if action == "establish_restated":
+            state.setdefault("restated", []).append(payload)
+            return {"ok": True, "closed": True}
+        if action == "establish_propose":
+            return {
+                "ok": True,
+                "duplicate_of": None,
+                "proposal_id": A,
+                "scope": payload["scope"],
+                "subject": payload["subject"],
+                "for_admin": payload["for_admin"],
+                "readback": payload["text"],
+            }
+        return {"ok": True, "run_id": f"run-{len(state['requests'])}"}
+
+    class _CfgCls:
+        @classmethod
+        def from_volume(cls, path=None):
+            return _Cfg(state["adapter"])
+
+    monkeypatch.setattr(mod, "_broker_request", broker)
+    monkeypatch.setattr(mod, "CustomerConfig", _CfgCls)
+    monkeypatch.setenv("SMD_ADMIN_POSSESSION_DB_PATH", str(tmp_path / "possession.db"))
+    monkeypatch.setenv("SMD_REQUEST_INDEX_DB_PATH", str(tmp_path / "requests.db"))
+    yaml = tmp_path / "customer.yaml"
+    yaml.write_text("logic_in_code:\n  wording_rules: enforce\n", "utf-8")
+    monkeypatch.setenv("SMD_CUSTOMER_YAML_PATH", str(yaml))
+    for store in (mod._ADMIN_STASH, mod._CONFIRMED_STASH, mod._READBACK_OWED, mod._CONFIRMED_SAY):
+        store.clear()
+    outbound_gate._reset_firm_sentences_for_tests()
+    SESSION_INBOUND_ORIGIN._origins.clear()
+    SESSION_TAINT._tainted.clear()
+    yield mod, state
+    SESSION_TAINT._tainted.clear()
+    outbound_gate._reset_firm_sentences_for_tests()
+
+
+def _reply(mod, message, session="sess-1", sender=ATTORNEY):
+    SESSION_INBOUND_ORIGIN.record(
+        session, InboundOrigin(sender_address=sender, message_id=GRAPH_ID, inbox_id="op@x")
+    )
+    return mod.on_pre_llm_call(session_id=session, sender_id=sender, user_message=message)[
+        "context"
+    ]
+
+
+def _committed(state):
+    return [r["proposal_id"] for r in state["requests"] if r.get("action") == "establish_submit"]
+
+
+LONG_THREAD = f"""Yes.
+
+On Tue, Operator <ops@firm.example> wrote:
+> {TEXT[A]}
+> {TEXT[B]}
+> Reply yes to confirm.
+
+On the Tuesday before, Operator <ops@firm.example> wrote:
+> {TEXT[OLD]}
+> Reply yes to confirm.
+"""
+
+
+def test_a_yes_replying_to_a_read_back_of_two_rules_confirms_both(seat):
+    mod, state = seat
+    state["pending"] = [_own(A), _own(B)]
+    state["binding"] = {"proposal_ids": [A, B], "listed": False}
+    context = _reply(mod, "Yes.")
+    assert _committed(state) == [A, B]
+    assert [r for r in state["requests"] if r["action"] == "establish_readback_for"] == [
+        {"action": "establish_readback_for", "inbound_message_id": GRAPH_ID, "sender": ATTORNEY}
+    ]
+    say = mod._CONFIRMED_SAY["sess-1"]
+    assert say == (
+        f"Got it. These are recorded:\n\n- From the next memos: {TEXT[A]}\n- From the next memos: {TEXT[B]}"
+    )
+    assert say in context
+    for proposal_id in (A, B):
+        assert proposal_id not in context
+    assert "may not appear" not in context
+
+
+def test_a_yes_in_a_long_thread_confirms_only_the_replied_to_rules(seat):
+    mod, state = seat
+    state["pending"] = [_own(OLD), _own(A), _own(B)]
+    state["binding"] = {"proposal_ids": [A, B], "listed": False}
+    _reply(mod, LONG_THREAD)
+    assert _committed(state) == [A, B]
+    assert OLD not in _committed(state)
+
+
+def test_no_reply_header_and_three_open_rules_gets_the_list_then_1_and_3(seat):
+    mod, state = seat
+    state["pending"] = [_own(A), _own(B), _own(C)]
+    context = _reply(mod, "Yes.")
+    assert _committed(state) == []
+    block = (
+        "These rules are waiting for your yes:\n\n"
+        f"1. {TEXT[A]} (This rule covers memos, for any attorney, for any reader, and nothing else.)\n"
+        f"2. {TEXT[B]} (This rule covers memos, for any attorney, for any reader, and nothing else.)\n"
+        f"3. {TEXT[C]} (This rule covers memos, for any attorney, for any reader, and nothing else.)\n\n"
+        "Reply all to confirm every one, or the numbers of the ones you want."
+    )
+    assert block in context
+    assert not any(p in context for p in (A, B, C))
+    # The list is owed to the person word for word, and bound once it is sent.
+    assert block in mod._READBACK_OWED["sess-1"]
+    # Owed to the broker the moment it is rendered (durable), for this email...
+    owed = [r for r in state["requests"] if r["action"] == "establish_readback_owed"]
+    assert owed == [
+        {
+            "action": "establish_readback_owed",
+            "inbound_message_id": GRAPH_ID,
+            "recipient": ATTORNEY,
+            "proposal_ids": [A, B, C],
+            "listed": True,
+            "verified_ids": [],
+        }
+    ]
+    # ...and bound by the relay's send, in the same step as the send.
+    calls: list[dict] = []
+    assert readback_send.bind_sent(
+        GRAPH_ID, SENT, ATTORNEY, send=lambda p: (calls.append(p), {"ok": True, "bound": True})[1]
+    )
+    assert calls == [
+        {
+            "action": "establish_readback_sent",
+            "inbound_message_id": GRAPH_ID,
+            "sent_message_id": SENT,
+            "recipient": ATTORNEY,
+        }
+    ]
+    # The next reply answers that list.
+    state["binding"] = {"proposal_ids": [A, B, C], "listed": True}
+    _reply(mod, "1 and 3", session="sess-2")
+    assert _committed(state) == [A, C]
+
+
+def test_a_rule_waiting_on_an_administrator_is_unaffected(seat):
+    mod, state = seat
+    state["pending"] = [_waiting(), _own(A)]
+    state["binding"] = {"proposal_ids": [A], "listed": False}
+    _reply(mod, "Yes.")
+    assert _committed(state) == [A]
+    assert WAIT not in mod._CONFIRMED_STASH.get("sess-1", set())
+    # And its own path is exactly what it was: "apply that" with its tag.
+    state["binding"] = None
+    context = _reply(mod, f"apply that [rule {WAIT}]", session="sess-3")
+    assert mod._CONFIRMED_STASH["sess-3"] == {WAIT}
+    assert f"[rule {WAIT}]" in context and mod.TOOL_SUBMIT in context
+
+
+def test_on_an_agentmail_custody_seat_an_unproven_mailbox_falls_back_for_that_row(seat):
+    """The possession challenge stops the code commit; that row takes the path
+    every confirmation took before (stashed, committed by the model's submit,
+    which runs the gate), and the model is told no display tag."""
+    mod, state = seat
+    state["adapter"] = "agentmail"
+    state["pending"] = [_own(A), _own(B)]
+    state["binding"] = {"proposal_ids": [A, B], "listed": False}
+    context = _reply(mod, "Yes.")
+    assert _committed(state) == []
+    assert mod._CONFIRMED_STASH["sess-1"] == {A, B}
+    assert f"[rule {A}]" not in context
+    assert "never write it, or any id, in a reply" in context
+
+
+def test_on_an_agentmail_custody_seat_a_proven_mailbox_commits_by_code(seat):
+    mod, state = seat
+    state["adapter"] = "agentmail"
+    nonce = admin_possession.verdict(ATTORNEY, [ATTORNEY])["nonce"]
+    assert admin_possession.try_confirm(ATTORNEY, f"my code {nonce}", [ATTORNEY])
+    state["pending"] = [_own(A), _own(B)]
+    state["binding"] = {"proposal_ids": [A, B], "listed": False}
+    _reply(mod, "Yes.")
+    assert _committed(state) == [A, B]
+
+
+def test_a_rule_no_drafting_lane_reads_is_recorded(seat, monkeypatch, tmp_path):
+    mod, state = seat
+    (tmp_path / "customer.yaml").write_text("customer_id: x\n", "utf-8")
+    state["pending"] = [_own(A)]
+    state["binding"] = {"proposal_ids": [A], "listed": False}
+    _reply(mod, "Yes.")
+    assert mod._CONFIRMED_SAY["sess-1"] == "Got it. That is recorded."
+
+
+def test_a_single_rule_a_lane_reads_says_from_the_next(seat):
+    mod, state = seat
+    state["pending"] = [_own(B)]
+    state["binding"] = {"proposal_ids": [B], "listed": False}
+    _reply(mod, "Yes, thanks")
+    assert mod._CONFIRMED_SAY["sess-1"] == f"Got it. From the next memos: {TEXT[B]}"
+
+
+def test_pending_shows_a_just_committed_rule_and_no_ids(seat):
+    mod, state = seat
+    state["pending"] = [_own(A), _own(B)]
+    state["binding"] = {"proposal_ids": [A], "listed": False}
+    _reply(mod, "Yes.")
+    state["pending"] = [_own(B)]
+    out = json.loads(mod._pending({"sender": ATTORNEY}, session_id="sess-1"))
+    states = sorted((r["text"], r["state"]) for r in out["pending"])
+    assert states == sorted([(TEXT[A], "committed"), (TEXT[B], "open")])
+    assert all("proposal_id" not in r for r in out["pending"])
+
+
+def test_the_propose_result_carries_no_id_and_the_read_back_asks_for_a_yes(seat):
+    mod, state = seat
+    mod.on_pre_llm_call(
+        session_id="sess-p", sender_id=ATTORNEY, user_message=f"From now on: {TEXT[A]}"
+    )
+    out = json.loads(
+        mod._propose(
+            {
+                "scope": "firm_adjust",
+                "subject": dict(ROW_SUBJECT),
+                "text": TEXT[A],
+                "instructed_by": ATTORNEY,
+                "source_ref": "msg-1",
+            },
+            session_id="sess-p",
+        )
+    )
+    assert "proposal_id" not in out and A not in json.dumps(out)
+    assert out["readback"].endswith("\n\nReply yes to confirm.")
+    assert out["readback"].startswith(TEXT[A])
+
+
+def test_the_read_back_with_its_citation_passes_the_gate_and_a_paraphrase_does_not(seat):
+    """R2.4 at the seam: the rule's own sentence, with the case name the
+    attorney wrote, leaves; the same citation in the model's words does not."""
+    mod, state = seat
+    mod.on_pre_llm_call(
+        session_id="sess-p", sender_id=ATTORNEY, user_message=f"From now on: {TEXT[A]}"
+    )
+    out = json.loads(
+        mod._propose(
+            {
+                "scope": "firm_adjust",
+                "subject": dict(ROW_SUBJECT),
+                "text": TEXT[A],
+                "instructed_by": ATTORNEY,
+                "source_ref": "msg-1",
+            },
+            session_id="sess-p",
+        )
+    )
+    firm = outbound_gate.firm_sentences_for("sess-p")
+    assert outbound_gate.evaluate(
+        f"Here it is.\n\n{out['readback']}", None, "law-firm", firm_sentences=firm
+    ).allowed
+    paraphrase = "Noted: you want objections that rely on Example v. Sample."
+    assert not outbound_gate.evaluate(paraphrase, None, "law-firm", firm_sentences=firm).allowed
+
+
+def test_an_unbound_pick_resolves_against_the_newest_list(seat):
+    mod, state = seat
+    state["pending"] = [_own(A), _own(B), _own(C)]
+    state["binding"] = None
+    real = mod._broker_request
+
+    def broker(payload):
+        if payload.get("action") == "establish_readback_for":
+            return {"ok": True, "bound": False, "latest_list": [A, B, C], "verified_ids": []}
+        return real(payload)
+
+    mod._broker_request = broker
+    try:
+        _reply(mod, "1 and 3")
+    finally:
+        mod._broker_request = real
+    assert _committed(state) == [A, C]
+
+
+def test_a_yes_after_a_silent_lapse_reads_the_rule_back_again(seat):
+    """R8: nothing open, a plain yes, and the person's own rule lapsed: it is
+    proposed again and read back. Never "it lapsed"."""
+    mod, state = seat
+    state["pending"] = []
+    state["reopen"] = {
+        "ok": True,
+        "reopened": True,
+        "proposal_id": B,
+        "readback": TEXT[B],
+        "subject": dict(ROW_SUBJECT),
+    }
+    context = _reply(mod, "Yes.")
+    assert TEXT[B] in context and "Reply yes to confirm." in context
+    assert "laps" not in context.lower() and "expir" not in context.lower()
+    assert B not in context
+
+
+def test_a_yes_after_a_silent_lapse_that_is_not_plain_reopens_nothing(seat):
+    mod, state = seat
+    state["pending"] = []
+    state["reopen"] = {"ok": True, "reopened": True, "proposal_id": B, "readback": TEXT[B]}
+    _reply(mod, "Yes, and when is the Jones hearing?")
+    assert not [r for r in state["requests"] if r["action"] == "establish_reopen_lapsed"]
+
+
+def _propose(mod, text, session="sess-p", **extra):
+    return json.loads(
+        mod._propose(
+            {
+                "scope": "firm_adjust",
+                "subject": dict(ROW_SUBJECT),
+                "text": text,
+                "instructed_by": ATTORNEY,
+                "source_ref": "msg-1",
+                **extra,
+            },
+            session_id=session,
+        )
+    )
+
+
+def test_a_restated_rule_withdraws_the_older_one_from_the_read_back(seat, monkeypatch):
+    mod, state = seat
+    mod.on_pre_llm_call(
+        session_id="sess-p", sender_id=ATTORNEY, user_message=f"{TEXT[A]} {TEXT[B]}"
+    )
+    ids = iter([A, B])
+    real = mod._broker_request
+
+    def broker(payload):
+        if payload.get("action") == "establish_propose":
+            return {**real(payload), "proposal_id": next(ids)}
+        return real(payload)
+
+    monkeypatch.setattr(mod, "_broker_request", broker)
+    _propose(mod, TEXT[A])
+    out = _propose(mod, TEXT[B], restates="1")
+    assert state["restated"] == [
+        {
+            "action": "establish_restated",
+            "sender": ATTORNEY,
+            "old_proposal_id": A,
+            "new_proposal_id": B,
+        }
+    ]
+    assert TEXT[A] not in out["readback"] and out["readback"].startswith(TEXT[B])
+
+
+def test_without_restates_nothing_is_closed(seat):
+    mod, state = seat
+    mod.on_pre_llm_call(session_id="sess-p", sender_id=ATTORNEY, user_message=TEXT[A])
+    _propose(mod, TEXT[A])
+    assert "restated" not in state
+
+
+def test_only_a_sentence_from_the_persons_own_email_is_exempt_from_the_citation_scan(seat):
+    """R2.4 (review): the model's propose argument earns the exemption only when
+    code finds it verbatim in the person's own email this turn."""
+    mod, _state = seat
+    mod.on_pre_llm_call(
+        session_id="sess-v", sender_id=ATTORNEY, user_message="Please make memos shorter."
+    )
+    _propose(mod, TEXT[A], session="sess-v")
+    assert outbound_gate.firm_sentences_for("sess-v") == ()
+
+
+def test_the_turn_read_back_never_carries_last_turns_rules(seat):
+    mod, _state = seat
+    mod._OWN_TURN["sess-p"] = {"ffffffff": "A stale rule sentence from before."}
+    mod.on_pre_llm_call(session_id="sess-p", sender_id=ATTORNEY, user_message="Hello")
+    assert "sess-p" not in mod._OWN_TURN

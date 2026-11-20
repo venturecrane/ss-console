@@ -45,7 +45,9 @@ firm used to be asked about is labelled ``held_firm_cause`` with its class.
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("jobs.daemon")
@@ -112,7 +114,75 @@ def _page_stopped(d: Any, job_id: str, kind: str, row: dict[str, Any], why: str,
     attempt = row.get("attempt") or watch._attempt(d, job_id)
     key = f"{kind}:{job_id}:{attempt}:{state}"  # broker reply_binding.reply_key
     reason = str(row.get("reason") or why)[:REASON_MAX]
-    watch.alert(d, job_id, "job_stopped", f"{state} ({stop_class(row, lane)}): {reason}; {NOT_TOLD}", unit=key)
+    nxt = _drafting_next(d, job_id, row) if lane == "drafting" else ""
+    head, tail = f"{state} ({stop_class(row, lane)}): ", f"; {NOT_TOLD}"
+    if nxt:
+        # The reason first, then what SMD does next, inside what the broker keeps
+        # of an alert (ALERT_MAX); the full detail is in smd-needs.json.
+        tail = f"; next: {nxt}{tail}"
+        reason = reason[: max(60, ALERT_MAX - len(head) - len(tail))]
+    watch.alert(d, job_id, "job_stopped", f"{head}{reason}{tail}", unit=key)
+
+
+def owed_sets(rows: Any) -> list[str]:
+    """What SMD still owes on a delivered response job (``drafting/served.py``
+    rows): each set still being prepared by us, and each set SMD filed whose
+    attorney has not been told (``told: false``, ``drafting/served_deliver.py``)."""
+    out = []
+    for r in rows or []:
+        if not isinstance(r, dict) or not str(r.get("set") or "").strip():
+            continue
+        if r.get("status") != "filed":
+            out.append(str(r["set"]))
+        elif r.get("told") is False:
+            out.append(f'tell the attorney: {r["set"]} filed as "{r.get("document") or ""}"')
+    return out
+
+
+def tell_owed(d: Any, job_id: str, rows: Any) -> bool:
+    """A delivered response job with sets SMD still owes: page SMD once per
+    owed list (``served_owed``), naming each. Work health lists it until SMD
+    records each set and the attorney is told (``drafting/deliver_by_smd.py
+    --set``, ``--told``). Never raises."""
+    import hashlib
+
+    from .proof import watch
+
+    owed = owed_sets(rows)
+    if not owed:
+        return False
+    detail = f"{len(owed)} owed by SMD: " + "; ".join(owed)
+    unit = "owed:" + hashlib.sha256("|".join(owed).encode("utf-8")).hexdigest()[:12]
+    return watch.alert(d, job_id, "served_owed", detail[:ALERT_MAX], unit=unit)
+
+
+#: What the broker keeps of an alert's detail (``workspace_broker.delivery_proof.DETAIL_MAX``).
+ALERT_MAX = 300
+#: A drafting job's stops before spend (``drafting/served.py`` PLAN_STOPS, each
+#: a failed job) and what SMD does next, one short plain line each.
+DRAFTING_NEXT = {
+    "served_unknown": "name the served sets (jobs.drafting.served write), then resume",
+    "served_invalid": "fix the served sets (jobs.drafting.served write), then resume",
+    "served_other_set": "record that set as type other, drafted by smd, then resume",
+    "party_unknown": "name the parties in parties.json, then resume, or draft by hand",
+}
+
+
+def _drafting_next(d: Any, job_id: str, row: dict[str, Any]) -> str:
+    """What SMD does next for a drafting stop before spend, about 80
+    characters with the rule count in the job dir's smd-needs.json; "" for
+    every other stop (a held ``request_incomplete`` is the firm's and keeps its page)."""
+    code = str(row.get("reason") or "").split(":", 1)[0].strip()
+    if row.get("state") != "failed" or code not in DRAFTING_NEXT:
+        return ""
+    line = DRAFTING_NEXT[code]
+    try:
+        note = json.loads((Path(d.job_dir(job_id)) / "smd-needs.json").read_text(encoding="utf-8"))
+        rules = len((note.get("wording_rules") or {}).get("rules") or [])
+        line += f" (smd-needs.json, {rules} rules)"
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
+    return line
 
 
 def _send_delivered(d: Any, job_id: str, kind: str, why: str) -> str:

@@ -18,7 +18,6 @@ import pytest
 from shared import rule_reach
 from tests.test_wording_rules import (  # noqa: F401 - the plugin fixture, used by name
     ADMIN,
-    RULE,
     plugin,
 )
 
@@ -66,7 +65,8 @@ def test_off_the_plugins_readback_is_what_it_was(plugin, tmp_path, monkeypatch):
     _switch(tmp_path, monkeypatch, None)
     mod.on_pre_llm_call(session_id="s1", sender_id=ADMIN, user_message=LAYOUT)
     out = json.loads(mod._propose(_args(LAYOUT), session_id="s1"))
-    assert out["readback"] == f"[rule {RULE}] {LAYOUT}"
+    # No tag, and the answer it takes (R2.2).
+    assert out["readback"] == f"{LAYOUT}\n\nReply yes to confirm."
 
 
 def test_on_a_layout_rules_readback_carries_the_sentence_and_a_wording_rules_does_not(
@@ -78,7 +78,9 @@ def test_on_a_layout_rules_readback_carries_the_sentence_and_a_wording_rules_doe
     _switch(tmp_path, monkeypatch, "enforce")
     mod.on_pre_llm_call(session_id="s1", sender_id=ADMIN, user_message=LAYOUT)
     out = json.loads(mod._propose(_args(LAYOUT), session_id="s1"))
-    assert out["readback"] == f"[rule {RULE}] {LAYOUT} {rule_reach.LATER_EDIT_SENTENCE}"
+    assert out["readback"] == (
+        f"{LAYOUT} {rule_reach.LATER_EDIT_SENTENCE}\n\nReply yes to confirm."
+    )
     mod.on_pre_llm_call(session_id="s2", sender_id=ADMIN, user_message=WORDING)
     out = json.loads(mod._propose(_args(WORDING), session_id="s2"))
     assert rule_reach.LATER_EDIT_SENTENCE not in out["readback"]

@@ -104,6 +104,7 @@ from . import (
     champion_fence,
     enrolled_lines,
     help_guide,
+    help_line,
     help_review,
     help_state,
     help_tools,
@@ -554,7 +555,9 @@ _HELP_NOTE_SCHEMA: dict[str, Any] = {
                 "file or a name instead of a number), wants_specific_document, "
                 "wants_changes (they asked again for changes to a draft), "
                 "not_trained_yet (work you have not been trained on). Note one only "
-                "when you saw it this turn."
+                "when you saw it this turn. not_in_guide = they asked how to work "
+                "with you and the guide does not answer it: do not guess; this "
+                "records it for follow-up and answers with say: " + help_guide.SAY_BLOCK_RULE
             ),
         },
     },
@@ -601,6 +604,20 @@ def _help_signals_handler(
         return json.dumps({"resolved": False})
 
 
+# --------------------------------------------------------------------------- #
+# A question the guide does not answer is handed to SMD (2026-11-19)
+# --------------------------------------------------------------------------- #
+#
+# Until this the model answered every "how do I work with you" question, and a
+# question the guide did not cover was answered by guessing. Now the model notes
+# ``not_in_guide`` and relays the fixed hand-off (``help_guide.NOT_IN_GUIDE_SAY``)
+# as a required block of the reply, in the Operator's own voice. SMD learns of it
+# from the broker's record, written before the sentence is handed over
+# (``help_guide.not_in_guide_answer``, ``shared.smd_owed``): the hourly triage lists
+# it until SMD closes it, and no later note or reply clears it. Without that
+# record the say is ``none``: the reply says nothing about the question.
+
+
 def _help_note_handler(args: dict[str, Any] | None = None, session_id: Any = "", **_: Any) -> str:
     """Record that the turn's own sender was helped. Enum only; never raises.
 
@@ -632,6 +649,8 @@ def _help_note_handler(args: dict[str, Any] | None = None, session_id: Any = "",
         if sender is None or cfg is None or not cfg.sender_on_roster(sender):
             return json.dumps({"recorded": False, "reason": "sender not on the roster"})
         ok = help_state.record(kind, sender)
+        if kind == help_state.KIND_NOT_IN_GUIDE:
+            return json.dumps({"recorded": bool(ok), **help_guide.not_in_guide_answer(origin)})
         return json.dumps({"recorded": bool(ok)})
     except Exception:  # noqa: BLE001
         logger.warning("%s: note failed", TOOL_HELP_NOTE, exc_info=True)
@@ -643,7 +662,8 @@ def _help_note_handler(args: dict[str, Any] | None = None, session_id: Any = "",
 _HELP_SKILL = "operator-help"
 
 #: The block header the reply's line arrives under. Grep-able.
-_HELP_LINE_HEADER = "HELP LINE (platform-decided for this email)"
+_HELP_LINE_HEADER = help_line.HEADER
+_help_line_block = help_line.block
 
 #: Message ids whose pointer was already evaluated in this process. The hook can
 #: fire more than once for one inbound (skill-triggered model calls), and the
@@ -682,18 +702,6 @@ def _first_evaluation(message_id: str) -> bool:
     return True
 
 
-def _help_line_block(line: str) -> str:
-    return (
-        f"{_HELP_LINE_HEADER}: end your reply with this line, exactly as written, "
-        f"as its own last line:\n{line}\n"
-        "Leave it out only if this reply answers how to work with you, delivers a "
-        "draft or confirms work you queued, "
-        "declines an action reserved to administrators, or goes to anyone not on "
-        "your roster; if you leave it out, say nothing about help. It is already "
-        "recorded as offered: do not call operator_help_signals."
-    )
-
-
 def _help_pointer_block(session_id: str, user_message: object, cfg: Any) -> str | None:
     """The help line this email's reply should end with, or ``None``. Never raises.
 
@@ -723,7 +731,7 @@ def _help_pointer_block(session_id: str, user_message: object, cfg: Any) -> str 
         sender = request_index.bare_sender(origin.sender_address)
         if sender is None or not cfg.sender_on_roster(sender):
             return None
-        signals = help_state.sender_signals(sender, origin.message_id)
+        signals = help_state.sender_signals(sender, origin.message_id, record_pointer=False)
         if signals.get("pointer_due") is not True:
             return None
         line = help_state.POINTER_LINE
@@ -732,6 +740,9 @@ def _help_pointer_block(session_id: str, user_message: object, cfg: Any) -> str 
     except Exception:  # noqa: BLE001 — a fault costs the line, never the reply
         logger.warning("hermes-smd-initiation: help pointer failed; no line", exc_info=True)
         return None
+
+
+on_post_tool_call = help_line.on_post_tool_call
 
 
 def _load_config() -> Any | None:
@@ -924,6 +935,7 @@ def register(ctx: Any) -> None:
         emoji="",
     )
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
+    ctx.register_hook("post_tool_call", on_post_tool_call)
     # The omitted-skill read fence (skill_fence.py): a skill this seat does not
     # enable cannot be run by reading its files. The ONE blocking gate here,
     # and it decides on paths and the live config, never on a skill identity.

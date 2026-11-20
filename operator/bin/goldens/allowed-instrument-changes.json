@@ -1,5 +1,13 @@
 {
-  "_why": "What the golden harness itself may stop pinning (bin/goldens/golden_manifest.py): <cases> names a dropped case or cell, or a cell newly declared not applicable, as <set>.<list>:<item> (e.g. host_matrix.cells:medchron/busy); <normaliser> names a normaliser added, changed or removed (e.g. host_matrix_normal._ULID). Each entry is exact, reviewed with the PR, and cleared after it merges. The medchron parallel reading PR (2026-11-19): page reading now sends 8 pages at once (vision.VISION_WORKERS), which shuffles the order its requests are sent in; the frozen reader cell pins send order, so reader_lanes.py runs the medchron cell's page reading with one worker (VISION_WORKERS=1). The requests themselves are unchanged.",
-  "<cases>": [],
-  "<normaliser>": ["reader_frozen.reader_lanes.py"]
+  "_why": "What the golden harness itself may stop pinning (bin/goldens/golden_manifest.py): <cases> names a dropped case or cell, or a cell newly declared not applicable, as <set>.<list>:<item> (e.g. host_matrix.cells:medchron/busy); <normaliser> names a normaliser added, changed or removed (e.g. host_matrix_normal._ULID). Each entry is exact, reviewed with the PR, and cleared after it merges. The lifecycle matrix and run record PR (2026-11-17): every chronology record carries a run block (fields.run on the wire, metadata.run on the audit row, run_pending in the state between a resume and its start); an ending the broker did not take is kept as record_pending and recorded on a later tick, while the firm's message goes as before (medchron__broker_down_mid_run); the new host ending queued_behind_same_lane is not applicable to the note, negotiation and library setup lanes. The relay say check (2026-11-19): the decision corpus gains step 5a, the register read _plugin._TURN_SAYS.get unrecorded (None in every case but the say knob) and _say_held recorded, with two guard cases on a say knob. The citation exemption per session (R2.4, 2026-11-19): the relay passes this session's own rule sentences to the gate only when there are some (outbound_gate.gate_kwargs, unrecorded, {} in every case). Tier 1 of the mechanics check runs on every firm reply (turn_says.mechanics_hold, unrecorded, None in every case but mechanics_named).",
+  "<cases>": [
+    "decisions.relay.not_applicable:_TURN_SAYS.get",
+    "decisions.relay.not_applicable:outbound_gate.gate_kwargs",
+    "decisions.relay.not_applicable:turn_says.mechanics_hold"
+  ],
+  "<normaliser>": [
+    "decisions_frozen.cases.py",
+    "decisions_frozen.drive.py",
+    "decisions_frozen.tables.py"
+  ]
 }

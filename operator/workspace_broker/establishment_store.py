@@ -162,7 +162,7 @@ class EstablishmentStore:
             # still ENFORCED at read and at submit, so a lingering row grants
             # nothing.
             with suppress(sqlite3.Error):
-                self.pending.sweep(now)
+                self.pending.sweep(now, ledger=self._ledger)
 
     def _staging_created_at(self, staging_path: Path) -> float:
         meta_path = staging_path / "meta.json"

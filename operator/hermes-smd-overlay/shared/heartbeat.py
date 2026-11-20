@@ -50,6 +50,7 @@ from typing import NamedTuple
 from urllib.parse import urlsplit
 
 from shared import job_lanes, seat_config
+from shared.reply_hold_reasons import REPLY_HOLD_REASONS
 
 logger = logging.getLogger("hermes-smd-heartbeat")
 
@@ -701,42 +702,6 @@ MATTER_FILES_REVIEW_REJECTED = "matter_files_review_rejected"
 #: through the job.
 RECORDS_LANE_SESSION_PREFIX = "records:"
 
-#: The reply relay's own reasons for holding a reply (``hermes-smd-reply``:
-#: ``_held`` call sites, ``relay.gate_body``, ``relay.RateLimiter``,
-#: ``spec_gate.REASON_OUTPUT_CHECKLIST``). A CLOSED vocabulary: a reason not
-#: listed rides as ``reply_held:other`` rather than as whatever string the row
-#: carries, so nothing a row was given can reach the wire.
-REPLY_HOLD_REASONS = frozenset(
-    {
-        "sender_not_on_roster",
-        "recipient_mismatch",
-        "no_inbox_id",
-        "device_redirect_unsupported",
-        "empty_body",
-        "matter_mismatch",
-        "output_checklist",
-        "advertising_gate",
-        "content_sensitive",
-        "content_floor_error",
-        "outbound_gate_error",
-        "fabrication:tier1_marker",
-        "fabrication:tier2_citation",
-        "fabrication:load_error",
-        "fabrication:blocked",
-        "rate_limited",
-        "rate_limited_per_sender",
-        "rate_limited_global",
-        "rate_limited_backstop",
-        "queued_behind_held",
-        # SMD's review of a records reply (``shared.matter_file_review``): the
-        # reply is waiting for SMD, the wait ran out with no decision, or the
-        # reply could not be held for review on this path at all.
-        "matter_files_review",
-        "matter_files_review_expired",
-        "matter_files_review_unsupported",
-    }
-)
-
 #: Holds that are NOT a person going unanswered. ``duplicate_reply``: a reply
 #: to that message already went out, and this second draft was the extra one.
 #: ``matter_files_review_rejected``: SMD itself rejected the reply in review
@@ -801,7 +766,7 @@ DELIVERY_PROOF_CODES = frozenset(
         "proof_missing readback_unproven readback_mismatch review_missing review_held dry_run_reported "
         "wake_lost reply_unproven reply_not_in_sent_items gate_held update_held upload_held "
         "stage_refused limit_held identity_held repair_unconverged job_stopped library_edit_refused "
-        "layout_rule_unplaced spend_unrecorded ending_unrecorded"
+        "layout_rule_unplaced spend_unrecorded ending_unrecorded served_owed smd_owed"
     ).split()
 )
 
