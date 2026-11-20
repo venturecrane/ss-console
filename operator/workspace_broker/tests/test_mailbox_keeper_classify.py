@@ -272,6 +272,27 @@ def test_code_floors_bound_the_models_value(tmp_path, monkeypatch) -> None:
     assert (rows["t-receipt"]["kind"], rows["t-receipt"]["cents"]) == ("receipt", 1250)
 
 
+def test_a_figure_from_the_date_stamp_is_not_the_senders_word(tmp_path, monkeypatch) -> None:
+    """Every message stamped at minute :40 (merge-group run 44794694425 ran at
+    18:40 UTC): the model's "40%" matched the "HH:40" of the Date line the
+    reader is shown, and passed the figure check. Only the senders' own words
+    count, so it is still could not read, and a "$4,000" a sender wrote still
+    stands."""
+    minute = 60_000
+    at_40 = fk.NOW_MS - fk.NOW_MS % fk.HOUR + 40 * minute + 30_000
+    monkeypatch.setattr(fk, "NOW_MS", at_40 if at_40 <= fk.NOW_MS else at_40 - fk.HOUR)
+    threads = [figure(), person()]
+    broker, _, _, model = _broker(tmp_path, monkeypatch, threads)
+    out = fk.run(broker, mode="dry_run", classify=True)
+    shown = next(
+        r["messages"][0]["content"] for r in model.requests if "SUBJECT: Big sale" in r["messages"][0]["content"]
+    )
+    assert ":40\n" in shown  # the reader is shown the clock
+    rows = {r["thread_id"]: r for r in out["classified"]}
+    assert (rows["t-figure"]["kind"], rows["t-figure"]["reason"]) == ("unread", "unsupported_figure")
+    assert rows["t-person"]["kind"] == "decision" and rows["t-person"]["reason"] == ""
+
+
 def test_a_person_is_never_archived_on_the_models_word(tmp_path, monkeypatch) -> None:
     answers = {**ANSWERS, "Kickoff date": {"kind": "notice", "what": "A note from Lee."}}
     broker, gmail, http, _ = _broker(tmp_path, monkeypatch, [person()], answers=answers)
