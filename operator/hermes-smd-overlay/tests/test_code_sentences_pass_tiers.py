@@ -57,6 +57,7 @@ MODULES = (
     OVERLAY / "plugins/hermes-smd-training/__init__.py",
     OVERLAY / "shared/champion.py",
     OVERLAY / "shared/material_check.py",
+    OVERLAY / "shared/rules_by_hand.py",
     BROKER / "establishment_rules.py",
     BROKER / "act_records_order.py",
     BROKER / "act_event_set.py",
@@ -111,7 +112,9 @@ def test_no_code_authored_text_trips_tier_one(path: Path) -> None:
 def _fixed_sentences() -> list[str]:
     drafting = load_plugin("hermes-smd-lanes").drafting
     help_guide = load_plugin("hermes-smd-initiation").help_guide
-    says: list[str] = [help_guide.NOT_IN_GUIDE_SAY, drafting.MATTER_NUMBER_SAY]
+    from shared import rules_by_hand
+
+    says: list[str] = [help_guide.NOT_IN_GUIDE_SAY, drafting.MATTER_NUMBER_SAY, rules_by_hand.SAY]
     for klass in drafting.DOCUMENT_CLASSES:
         says.append(drafting.acknowledgment(klass, "4417"))
         says.append(drafting.acknowledgment(klass, "4417", revising=True))

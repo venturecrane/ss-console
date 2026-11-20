@@ -404,6 +404,8 @@ SAY_TOOLS = frozenset(
         "drafting_job_submit",
         "drafting_job_add_to_request",
         "operator_help_note",
+        # Only on a rules_by_hand seat does its result carry a say.
+        "establish_propose",
     }
 )
 #: The hold reason a reply with other words is held under, and its notice.

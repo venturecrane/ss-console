@@ -1457,12 +1457,13 @@ LOGIC_IN_CODE_SWITCHES = (
     "library_edit_notice",
     "status_from_events",
     "layout_into_library",
+    "rules_by_hand",
 )
 LOGIC_IN_CODE_MODES = ("observe", "enforce")
 
 
 def _validate_logic_in_code(cfg: dict[str, Any], errors: list[str]) -> None:
-    """``logic_in_code``: optional, a mapping of the nine switches, each
+    """``logic_in_code``: optional, a mapping of the switches, each
     ``observe`` or ``enforce``. An unknown key is refused because a misspelled
     switch would otherwise read as observe, the door left open with the file
     saying it was shut. A key with no value is absent, as the readers treat it."""

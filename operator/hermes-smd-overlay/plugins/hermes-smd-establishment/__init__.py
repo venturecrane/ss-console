@@ -280,6 +280,7 @@ from shared import (
     rule_confirm,
     rule_dispatch,
     rule_reach,
+    rules_by_hand,
     send_anchor,
     send_dispatch,
     wording_rules,
@@ -2247,7 +2248,14 @@ def _propose(args: dict[str, Any], **kwargs: Any) -> str:
     and renders the readback. This returns the broker's verdict unchanged and
     records the readback against the session, so :func:`_containment_gate`
     can hold the reply to it (critique point 1).
+
+    On a ``rules_by_hand`` seat (stopgap, 2026-11-20) nothing is proposed: the
+    result is one fixed sentence and SMD is owed the rule (``shared.rules_by_hand``).
     """
+    if rules_by_hand.on():
+        return json.dumps(
+            rules_by_hand.propose_answer(kwargs.get("session_id")), ensure_ascii=False
+        )
     reach_on = wording_rules.switched_on()
     stash_key = provenance.resolve_session(kwargs.get("session_id"))
     subject = rule_reach.subject_for_broker(
@@ -2706,6 +2714,13 @@ def _dispatch_outcome_letter(
     request as closed, so what settles it is the overlay's
     ``send_outcome_unknown`` page and the broker's intent row with no result.
     """
+    if not _is_ops_row(row) and rules_by_hand.on():
+        # Stopgap, 2026-11-20: a rule is recorded by hand, and the firm gets no
+        # letter about a rule row. Counted as reported so the sweeper stops.
+        logger.info(
+            "hermes-smd-establishment: rules_by_hand, no letter for %s", row.get("proposal_id")
+        )
+        return True
     if _is_ops_row(row):
         notification = rule_dispatch.notify_ops_outcome(
             kind=kind,
@@ -4232,6 +4247,15 @@ def _confirmation_note(
     # fires). "The firm accidentally installed a routine change by saying yes"
     # is the failure worth a refusal at every layer that could pass one through.
     pending = [r for r in rows if str(r.get("state") or "open") == "open" and not _is_ops_row(r)]
+    if rules_by_hand.on():
+        # Stopgap, 2026-11-20: a "yes" or a tag confirms no rule; acts still do.
+        rule_rows = [
+            r for r in pending if str(r.get("kind") or "rule") != act_broker.KIND_TOOL_CALL
+        ]
+        pending = [r for r in pending if r not in rule_rows]
+        act_tagged = bool(rule_confirm.find_tags(user_message, ("act",)))
+        if rule_confirm.find_tags(user_message, ("rule",)) or (rule_rows and not act_tagged):
+            return rules_by_hand.reply_note(session_id)
     ended = [
         r
         for r in rows
@@ -4881,11 +4905,14 @@ def on_pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
             # told firm-level establishment was unlocked for them -- a promise
             # of authority they do not hold, from a ceremony that grants none.
             lines.append(_PERSON_POSSESSION_CONFIRMED_NOTE.format(sender=str(sender_id)))
-        lines.append(_ESTABLISH_NUDGE)
-        if not is_admin:
-            lines.append(_FOR_ADMIN_LINE.format(routed=_routing_names(cfg)))
-        lines.append(_CLASS_CHOICE_LINE)
-        lines.append(_SCHEDULE_LIMIT_LINE)
+        if rules_by_hand.on():
+            lines.append(rules_by_hand.NUDGE)  # stopgap, 2026-11-20
+        else:
+            lines.append(_ESTABLISH_NUDGE)
+            if not is_admin:
+                lines.append(_FOR_ADMIN_LINE.format(routed=_routing_names(cfg)))
+            lines.append(_CLASS_CHOICE_LINE)
+            lines.append(_SCHEDULE_LIMIT_LINE)
         lines.append(_OPERATIONS_NUDGE)
         # ss-console#2546 (the operations half). BEFORE the confirmation
         # matcher, and the order is the point: a message carrying an [ops XXXX]
@@ -5393,6 +5420,13 @@ def on_pre_tool_call(**kwargs: Any) -> dict[str, Any] | None:
         entry = _ADMIN_STASH.get(session_id) if isinstance(session_id, str) else None
         args = kwargs.get("args")
         args = args if isinstance(args, dict) else {}
+        if rules_by_hand.on():
+            # Stopgap, 2026-11-20: propose only records what SMD owes; nothing
+            # about a rule is listed or committed.
+            if tool_name == TOOL_PROPOSE:
+                return None
+            if tool_name == TOOL_PENDING or (tool_name == TOOL_SUBMIT and args.get("proposal_id")):
+                return {"action": "block", "message": rules_by_hand.NOTHING_NOTE}
         if tool_name in (TOOL_PROPOSE, TOOL_PENDING):
             return _rule_gate(session_id, tool_name, args, entry)
         if tool_name == TOOL_SUBMIT:

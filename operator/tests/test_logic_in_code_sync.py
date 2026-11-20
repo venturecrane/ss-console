@@ -37,6 +37,7 @@ _FOUR = (
     "library_edit_notice",
     "status_from_events",
     "layout_into_library",
+    "rules_by_hand",
 )
 
 

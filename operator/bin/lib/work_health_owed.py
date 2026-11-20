@@ -63,6 +63,10 @@ _WHAT = {
         "A firm person asked something the help guide does not answer at {at}, and was told the Operator would "
         "research it and get back to them. Request email {ref}."
     ),
+    "rule_stated": (
+        "A firm person stated a drafting rule or replied about one at {at} ({detail}), and was told it would be "
+        "confirmed in the thread once in place. Request email {ref}."
+    ),
 }
 _TODO = {
     "drafting_addition": (
@@ -78,6 +82,10 @@ _TODO = {
     "help_question": (
         "Answer in that thread through the SMD note lane (it sends from the Operator's mailbox), then close it in "
         "work-health-closed.yaml (job: {owed})."
+    ),
+    "rule_stated": (
+        "Read that email, record the rule with the administrator path, and reply in the thread by note. Then close "
+        "it in work-health-closed.yaml (job: {owed})."
     ),
 }
 
