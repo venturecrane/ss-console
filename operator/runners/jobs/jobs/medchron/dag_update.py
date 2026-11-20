@@ -28,6 +28,7 @@ from ..stages import (
     update_pages as _upages,
     update_select as _uselect,
     update_review as _ureview,
+    update_uncited as _uuncited,
     update_upload as _uupload,
 )
 from .update import outcome as _UO
@@ -84,7 +85,12 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         exit_map={2: _HELD_UPDATE, _UO.EXIT: _CURRENT},
     ),
     _reuse("map", requires=("update_select",)),
-    BY_NAME["repair_truncated"],
+    # Every page the writer read and cited nothing from is accounted for, and
+    # a dated record on one is written again by the writer (``stages/update_uncited``).
+    Stage(
+        "update_uncited", "", _slug_unit, paid=True, requires=("map",), runner=_uuncited.run, exit_map=_uuncited.EXITS
+    ),
+    _reuse("repair_truncated", requires=("update_uncited",)),
     BY_NAME["assemble"],
     BY_NAME["merge"],
     # Before collect: the diagnosis claims the audit reads carry the code the
