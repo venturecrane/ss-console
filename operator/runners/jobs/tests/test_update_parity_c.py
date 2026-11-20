@@ -8,8 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import update_testkit as K
-from jobs.medchron.audit import claims as CL
-from jobs.medchron.update import assemble as A, body as B, collect as C, providers as P, proofs as PR
+from jobs.medchron.update import assemble as A, body as B, collect as C, providers as P
 
 
 def _ent(provider: str, text: str, d: str = "02/10/2026", cite: str = "(Exhibit 2 - p. 1)") -> str:
@@ -56,15 +55,6 @@ def test_a_name_spelled_only_in_delivered_text_or_titles_is_audited_and_respelle
     assert "Angell" not in md  # provider line, text, "Dr." short form and the exhibit title
     assert "Dr. Angeli recommended" in md
     assert rep["new_exhibits_titled"]["2"].startswith("Marcus Angeli, M.D. - ")
-
-    # The respelled sentence keeps the verdict the audit gave it (proof 4).
-    keep = {1, 2}
-    audit_claims = CL.extract_claims(CL.body_of(audit_doc), keep)
-    base_keys = {c["key"] for c in CL.extract_claims(CL.body_of(base), keep)}
-    new = [c for c in CL.extract_claims(CL.body_of(md), keep) if c["key"] not in base_keys]
-    x = SimpleNamespace(respelled=rep["provider_spelling_from_audit"], audit_claims=audit_claims)
-    audit_keys = {c["key"] for c in audit_claims}
-    assert new and all(PR._as_audited(c, x) in audit_keys for c in new)
 
 
 def test_two_clinicians_the_page_shows_distinct_stay_distinct() -> None:

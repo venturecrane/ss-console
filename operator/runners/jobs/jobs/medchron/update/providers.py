@@ -12,10 +12,12 @@ lines, the clinicians its entries' text names, and its Exhibit List titles
 entry states, on its provider line or in its text, that is near a known name
 under the safe rule (one name word one or two edits from a known one with
 the same first letter, every other word shared, the same credential) becomes
-an audited CLAIM: the auditor reads the name off the cited page, and a repair
-writes the spelling the page shows. Only an audited spelling is applied, to
-the provider line and the text, and the exhibit title follows the provider
-line. Every near name is listed in the collect and assemble reports.
+an audited CLAIM. Since 2026-11-20 the entry read reads each claim against
+the pages of every entry naming that person (``entry_read._name_units``) and
+never edits it; a spelling it finds wrong holds the update for SMD
+(``stages/entry_audit_update``). So the claim reaches assemble as composed and
+``respell`` applies nothing; it applied the per-claim audit's repaired
+spelling before. Every near name is listed in the collect and assemble reports.
 """
 
 from __future__ import annotations
@@ -126,7 +128,8 @@ def known_names(base_ents: list[str], titles: list[str] | None = None) -> list[s
     return sorted(got)
 
 
-def _names_in(e: str, name: str) -> bool:
+def names_in(e: str, name: str) -> bool:
+    """True when the entry names `name`: its provider line, or a clinician its text states."""
     return B.provider_of(e) == name or name in names_in_text(e)
 
 
@@ -141,7 +144,7 @@ def claims(entries: list[str], log: list[dict[str, Any]]) -> tuple[list[str], di
         if not row.get("likely_same_person"):
             continue
         name = row["composed"]
-        cite = next((m.group(0) for e in entries if _names_in(e, name) for m in B.CITE.finditer(e)), None)
+        cite = next((m.group(0) for e in entries if names_in(e, name) for m in B.CITE.finditer(e)), None)
         if cite is None or cite[1:-1] in composed:
             continue
         lines.append(f"Provider named on the record: {name}. {cite}")

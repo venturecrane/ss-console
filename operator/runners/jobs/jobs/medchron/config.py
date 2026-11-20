@@ -281,8 +281,9 @@ def _model_tier_checks(data: dict[str, Any]) -> list[str]:
     # models answer a forced tool_choice with HTTP 400, so the audit - the gate
     # every chronology passes - would fail on every claim.
     # `verify` is OPTIONAL: the grader of the update finisher's own sentences
-    # (stages/update_review.py); absent, the audit tier. It is an audit verdict
-    # call, so it carries the audit tier's forced-tool rule.
+    # (the update review, removed 2026-11-20; a firm config may still name the
+    # tier); absent, the audit tier. It is an audit verdict tier, so it carries
+    # the audit tier's forced-tool rule.
     for tier in ("audit", "verify"):
         model = str(tiers.get(tier) or "")
         if any(model.startswith(m) for m in NO_FORCED_TOOL_MODELS):

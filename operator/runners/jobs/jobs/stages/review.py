@@ -73,7 +73,7 @@ from ..medchron import prompts
 from ..medchron.audit.claims import CITE
 from ..medchron.audit.claims import parse_pages as _pages
 from ..proof import checks, review
-from . import review_notes, review_policy, review_settle, update_review_settle
+from . import review_notes, review_policy, review_settle
 from .base import StageRun
 
 HOLD_CHECKS = (1, 2, 3, 4)
@@ -481,8 +481,7 @@ def _notes(sr: StageRun, out: Path, rec: dict[str, Any] | None, rows: list[dict[
     the manifest after the chronology; removed again when there are none."""
     for old in out.glob(f"*{_NOTES_TAG}*.docx"):
         old.unlink()
-    # An update's own review: what its rules settled before delivery (``update_review_settle``).
-    lines = review_notes.lines(rec) + review_policy.gate_drops(out) + update_review_settle.notes(out)
+    lines = review_notes.lines(rec) + review_policy.gate_drops(out)
     if not lines:
         return rows
     from docx import Document

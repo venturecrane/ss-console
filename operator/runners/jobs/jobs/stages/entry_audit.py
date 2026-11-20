@@ -42,10 +42,32 @@ replaced three rounds of token rules), and leaves every decision to code:
 
 Nothing is ever removed from the document here. Answers are saved before use
 and a resume pays for none twice; ``ENTRY_AUDIT_REPLAY=1`` answers at $0
-(``entry_audit_io``). Exits: 0 read and settled; 1 held (an entry not read, or
-the tripwire); 3 the stage crashed outside a model call (a defect, never
-read as a hold); 75 the model could not be reached (the daemon
-retries); 9 answers pending, under the replay switch only.
+(``entry_audit_io``). Exits: 0 read and settled; 1 held (an entry not read,
+the tripwire, or in an update a line found wrong and not corrected); 3 the
+stage crashed outside a model call (a defect, never read as a hold); 75 the
+model could not be reached (the daemon retries); 9 answers pending, under
+the replay switch only.
+
+THE UPDATE LANE (2026-11-20) runs this same stage as its ``audit``
+(``dag_update.py``), on the audit document ``update_collect`` writes to
+``runs/<unit>/final-chronology.md``: the new entries, the prior history they
+add, and the diagnosis and provider-name claims, never a delivered entry.
+There, ``entry_audit_update`` acts on the verdict before anything is written.
+
+REPLAYING A SAVED UPDATE AT $0. In a copy of the job's matter directory
+(``<slug dir>``): (1) rebuild the audit document with
+``medchron/update/collect.audit_document`` (as ``update_collect`` calls it) reading ``runs/<unit>/update/base.md``,
+``update/new_entries.md``, ``update/pmh.md`` when present, the claims in
+``update/icd_claims.json`` and ``update/provider_claims.json``, and the
+plan's folder, written to ``runs/<unit>/final-chronology.md`` (what
+``run_collect`` and ``run_summary`` write); (2) run this stage on a job whose
+``update`` is set, with ``ENTRY_AUDIT_REPLAY=1`` (and
+``ENTRY_READ_UPDATE_PAGES=cited`` to show cited pages only); (3) each missing
+answer's request is dumped as ``runs/<unit>/entry_read/<name>.<kind>.request.json``
+and the stage exits 9; (4) write each answer as ``<name>.<kind>.json`` with the
+request's hash (``entry_audit_io``'s docstring), run again, and repeat until
+the stage exits 0 or 1. The verdict is ``runs/<unit>/entry_read.json`` and
+``runs/<unit>/entry_read/update-verdict.json``.
 """
 
 from __future__ import annotations
@@ -61,10 +83,9 @@ from ..medchron.audit.run import AuditPaths, run_pool
 from ..medchron.config import DEFAULT_AUDIT_WORKERS
 from ..medchron.page_mode import Modes
 from ..medchron.update import entry_confirm as EC, entry_read as ER, review_pages as RV, review_repair as RR
-from . import audit_loop, entry_audit_apply as AP, entry_audit_io as IO
+from . import audit_loop, entry_audit_apply as AP, entry_audit_io as IO, entry_audit_update as EU
 from .base import StageRun
-from .update_review import _client
-from .update_review_io import _image_source
+from .read_inputs import client_line, image_source
 
 EXIT_HELD, EXIT_DEFECT, EXIT_INFRA, EXIT_PENDING = 1, 3, 75, 9
 #: The exits past 1 (``dag.py`` writes exit 1's reason itself: the broker pins it).
@@ -88,6 +109,7 @@ class Ctx:
     client: str
     workers: int
     npages: Callable[[int], int]
+    update: bool = False  # the update lane: ``entry_audit_update`` acts on the verdict
 
 
 def rehearse(sr: StageRun) -> list[str]:
@@ -116,11 +138,14 @@ def _start(sr: StageRun) -> int:
     audit_loop._drop_typed_ntd(sr, AuditPaths(sr.slug_dir, sr.unit.unit))
     doc = rd / "final-chronology.md"
     md = doc.read_text(encoding="utf-8")
-    pl = IO.plan(sr.slug_dir, sr.unit.unit, sr.cfg, md)
+    update = sr.job.update is not None
+    if update:
+        EU.path(sr.slug_dir, sr.unit.unit).unlink(missing_ok=True)  # this run's verdict, never an earlier one's
+    pl = IO.plan(sr.slug_dir, sr.unit.unit, sr.cfg, md, update)
     workers = int(sr.cfg.get("levers", "audit_workers") or DEFAULT_AUDIT_WORKERS)
     modes = Modes.open(sr.slug_dir, sr.unit.unit)
     ask = IO.Asker(sr, IO.model(sr.cfg), rd / IO.DIR, IO.replaying())
-    c = Ctx(sr, ask, _image_source(sr), modes, _client(sr), workers, pl.npages)
+    c = Ctx(sr, ask, image_source(sr), modes, client_line(sr), workers, pl.npages, update)
     try:
         return _run(c, doc, md, pl)
     finally:
@@ -146,14 +171,43 @@ def _run(c: Ctx, doc: Path, md: str, pl: IO.Plan) -> int:
     if c.ask.pending:
         return _pending(c, "verify")
     decisions = AP.decide(proposals, verifies)
-    held, released, broke = AP.apply(sr, doc, md, decisions)
-    AP.record(sr, c.ask, doc, pl, reads, decisions, items, held=held, released=released, broke=broke)
+    v = EU.Verdict()
+
+    def veto() -> str:
+        got = EU.verdict(items, decisions)
+        v.unresolved, v.withheld = got.unresolved, got.withheld
+        return v.hold_line()
+
+    held, released, broke = AP.apply(sr, doc, md, decisions, veto if c.update else None)
+    extra = _update_extra(c, v, items, decisions)
+    AP.record(sr, c.ask, doc, pl, reads, decisions, items, held=held, released=released, broke=broke, extra=extra)
     if held:
         sr.log(f"entry read HELD: {held}; the document is unchanged")
         return EXIT_HELD
     n = sum(1 for d in decisions if d[0] == "apply" and d[1].outcome == "applied")
     sr.log(f"entry read: {len(items)} finding(s), {n} applied, {len(items) - n} recorded; {c.ask.calls} call(s)")
     return 0
+
+
+def _update_extra(c: Ctx, v: EU.Verdict, items: list[AP.Item], decisions: list[EC.Decision]) -> dict[str, Any] | None:
+    """The update lane's verdict, written beside the answers and summed into
+    the record (counts only) on EVERY run that reached a decision, held or
+    not, so a $0 replay reports how often the rule would hold; None on the
+    full chronology. When the tripwire held first, the veto was never asked:
+    the lines that would hold are counted here (no edit applied)."""
+    if not c.update:
+        return None
+    if not (v.unresolved or v.withheld):
+        got = EU.verdict(items, decisions)
+        v.unresolved, v.withheld = got.unresolved, got.withheld
+    EU.write(c.sr.slug_dir, c.sr.unit.unit, v, EU.removed_values(decisions))
+    if v.withheld:
+        c.sr.log(f"entry read: {len(v.withheld)} diagnosis claim(s) found wrong and not corrected get no table row")
+    return {
+        "unresolved": sum(v.unresolved.values()),
+        "unresolved_by_class": dict(v.unresolved),
+        "diagnosis_rows_withheld": len(v.withheld),
+    }
 
 
 def _pool(c: Ctx, items: list[Any], fn: Any) -> list[Any]:

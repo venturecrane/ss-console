@@ -1,10 +1,10 @@
 """The final set WIRED into the update job (2026-11-17): the real driver walks
-the real update DAG, and `update_final_set` runs between `update_review` and
+the real update DAG, and `update_final_set` runs between `audit` (the entry read) and
 `update_assemble`.
 
 Each test drives the update e2e scene (``test_update_e2e``: invented records,
 a fake seat, a fake model) through ``medchron/driver.Driver``. Where a test
-needs a stray citation-only line, it wraps the REAL `update_review` runner and
+needs a stray citation-only line, it wraps the REAL `audit` (the entry read) runner and
 adds one line to what that stage wrote; every stage still runs its own code.
 """
 
@@ -20,7 +20,7 @@ import pytest
 from jobs.medchron import dag, dag_update, driver as driver_mod
 from jobs.medchron.state import RunState, state_path
 from jobs.medchron.update import docx_md, final_set as FS, final_set_io as FIO, proofs_final as PF, uncited as U
-from jobs.stages import update_final_set, update_finish, update_review
+from jobs.stages import entry_audit, update_final_set, update_finish
 from test_update_e2e import _driver, _Model, _upload_pause, scene  # noqa: F401 - `scene` is a fixture
 
 #: The MRI claim the e2e scene composes; the stray line repeats its citation
@@ -34,11 +34,11 @@ def _doc(sd: Path) -> Path:
 
 
 def _with_stray(order: list[str]):
-    """The real update_review, then one citation-only line under the MRI claim."""
+    """The real audit (the entry read), then one citation-only line under the MRI claim."""
 
     def run(sr):
-        rc = update_review.run(sr)
-        order.append("update_review")
+        rc = entry_audit.run(sr)
+        order.append("audit")
         p = _doc(sr.slug_dir)
         md = p.read_text(encoding="utf-8")
         assert MRI in md, "the e2e scene's MRI claim is the line the stray citation sits under"
@@ -67,16 +67,16 @@ def test_the_wired_stage_sits_between_review_and_assemble_and_is_rehearsable() -
     seq = dag.stages(update=True)
     names = [s.name for s in seq]
     i = names.index("update_final_set")
-    assert names[i - 1] == "update_review" and names[i + 1] == "update_assemble"
+    assert names[i - 1] == "audit" and names[i + 1] == "update_assemble"
     by = {s.name: s for s in seq}
     fin = by["update_final_set"]
-    assert fin.requires == ("update_review",) and by["update_assemble"].requires == ("update_final_set",)
+    assert fin.requires == ("audit",) and by["update_assemble"].requires == ("update_final_set",)
     assert fin.runner is update_final_set.run and fin.exit_map == update_final_set.EXITS
     assert not fin.paid and not fin.external  # `jobs rehearse --redo update_final_set` is permitted
-    # A redo of the review reopens the final set and what reads its document; the final set
+    # A redo of the audit reopens the final set and what reads its document; the final set
     # reopens nothing, so its no-op on an update that already sent rebuilds nothing.
     assert {"update_final_set", "update_assemble", "update_render", "update_proofs", "update_manifest"} <= set(
-        by["update_review"].invalidates
+        by["audit"].invalidates
     )
     assert fin.invalidates == ()
     assert dag._validate(seq) == []
@@ -107,14 +107,14 @@ def test_an_update_runs_the_final_set_and_files_no_stray_line(
 
     d = _driver(job_dir, firm_config_path, pricing_path, seat, _Model())
     d._runner_override = {
-        "update_review": _with_stray(order),
+        "audit": _with_stray(order),
         "update_final_set": _traced("update_final_set", update_final_set.run, order),
         "update_assemble": assemble,
     }
     o = d.run()[0]
     sd = data_root / "example-matter"
     assert o.outcome == "delivered" and o.stage is None, o
-    assert order == ["update_review", "update_final_set", "update_assemble"]
+    assert order == ["audit", "update_final_set", "update_assemble"]
     # The final set ran, so assemble did not join stray lines a second time.
     assert ran_at_assemble == [True] and assemble_joins == []
     mark = json.loads((sd / "runs" / "alpha" / "update" / FS.REPORT).read_text())
@@ -206,7 +206,7 @@ def test_a_final_set_refusal_ends_the_update_refused_and_nothing_is_filed(
     assert not list(out.glob("Alpha Example - Medical Chronology*")) if out.is_dir() else True
 
 
-def test_redo_update_review_reruns_the_final_set_and_what_reads_its_document(
+def test_redo_audit_reruns_the_final_set_and_what_reads_its_document(
     scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     job_dir, seat = scene
@@ -220,19 +220,19 @@ def test_redo_update_review_reruns_the_final_set_and_what_reads_its_document(
         log=lambda *_: None,
         seat_factory=lambda: seat,
         client=_Model(),
-        redo=("update_review",),
+        redo=("audit",),
     )
     d._runner_override = {
         n: _traced(n, r, order)
         for n, r in (
-            ("update_review", update_review.run),
+            ("audit", entry_audit.run),
             ("update_final_set", update_final_set.run),
             ("update_assemble", update_finish.run_assemble),
             ("update_render", update_finish.run_render),
         )
     }
     d.run()
-    assert order == ["update_review", "update_final_set", "update_assemble", "update_render"]
+    assert order == ["audit", "update_final_set", "update_assemble", "update_render"]
 
 
 def test_a_crash_in_the_final_proofs_is_recorded_and_the_update_still_delivers(
@@ -256,15 +256,15 @@ def test_a_crash_in_the_final_proofs_is_recorded_and_the_update_still_delivers(
 
 
 def _old_dag() -> tuple[dag.Stage, ...]:
-    """The update's order before this change: no final set, assemble after the review."""
+    """The update's order before this change: no final set, assemble after the audit."""
     out = []
     for s in dag_update.UPDATE_STAGES:
         if s.name == "update_final_set":
             continue
-        if s.name == "update_review":
+        if s.name == "audit":
             s = replace(s, invalidates=())
         if s.name == "update_assemble":
-            s = replace(s, requires=("update_review",))
+            s = replace(s, requires=("audit",))
         out.append(s)
     return tuple(out)
 
@@ -343,3 +343,24 @@ def test_falsifier_a_final_set_that_rebuilds_after_the_send_holds_the_update(
     assert order == ["update_assemble"]  # the send's files were rebuilt
     assert o.outcome == "held" and o.stage == "upload", o
     assert [s["name"] for s in seat.sent] == sent  # never a second copy
+
+
+def test_an_update_the_per_claim_audit_ran_is_read_again_on_resume(
+    scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A job whose ``audit`` is done with no entry-read record (the per-claim
+    loop, before 2026-11-20) never files on the old rule: proof 4 fails it,
+    and the resume reads its new entries again (``claim_audit.stale_update_audit``)."""
+    job_dir, seat = scene
+    _upload_pause(monkeypatch)
+    d = _driver(job_dir, firm_config_path, pricing_path, seat, _Model())
+    d._runner_override = {"audit": lambda _sr: 0}  # done, and no entry_read.json written
+    first = d.run()[0]
+    assert first.outcome == "failed" and first.stage == "update_proofs" and not seat.sent, first
+    calls: list[str] = []
+    d2 = _driver(job_dir, firm_config_path, pricing_path, seat, _Model())
+    d2._runner_override = {"audit": lambda sr: calls.append("audit") or entry_audit.run(sr)}
+    o = d2.run()[0]
+    assert calls == ["audit"] and o.outcome == "delivered", o
+    rec = json.loads((data_root / "example-matter" / "runs" / "alpha" / "entry_read.json").read_text())
+    assert rec["complete"] is True and rec["unresolved"] == 0

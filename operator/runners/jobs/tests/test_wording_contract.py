@@ -25,7 +25,7 @@ from jobs.medchron.update import finisher, handwritten, illegible
 #: turns into it).
 WRITERS = ("map-system", "merge-system", "condense-system", "summarize-system", "update-finish-system")
 #: Prompts that grade that text.
-CHECKERS = ("review-system", "update-review-system")
+CHECKERS = ("review-system",)
 #: Every other prompt is still scanned for mandated phrases.
 OTHERS = ("classify-system", "filter-system")
 

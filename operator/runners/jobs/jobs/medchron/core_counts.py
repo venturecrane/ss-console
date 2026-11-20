@@ -23,8 +23,9 @@ from typing import Any
 from . import graded_proof as GP
 from .update import cite_read as CR
 
-#: The reviewer's class numbers (``prompts/update-review-system.md``): check 2 is
-#: omitted content, check 4 a duplicate entry or exhibit.
+#: The update reviewer's class numbers, as an update reviewed before 2026-11-20
+#: recorded them in ``review_repair.json``: check 2 is omitted content, check 4
+#: a duplicate entry or exhibit.
 OMITTED, DUPLICATE = "2", "4"
 
 

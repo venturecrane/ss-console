@@ -286,7 +286,6 @@ export const TEXT_PIN_POLICY_SCANS: Readonly<Record<string, string>> = {
     'Contract: firm-rule refusal codes agree.',
   'operator/runners/jobs/tests/test_drafting_run.py':
     'Contract: every reason literal leads with a known code; no direct writes in the runner.',
-  'operator/runners/jobs/tests/test_update_decide.py': 'Contract: update hold prefixes agree.',
   'operator/runners/jobs/tests/test_update_illegible.py':
     'Model-read rule: the house note reaches the prompt through its WORDING token.',
   'operator/runners/jobs/tests/test_update_already_current.py':

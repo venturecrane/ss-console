@@ -12,8 +12,7 @@ settles every misread row, was never used.
 K1. Process notes go to the job report, never to the firm's text.
 K2. A date that cannot be settled is shown as written, marked as a
     handwritten date (a fact about the record), and listed for SMD.
-K3. The review's REDATE applies when the cited page's text states the date,
-    and the entry moves to its place in date order.
+K3. (The review's REDATE went with the update review on 2026-11-20.)
 K4. The ledger's row order settles a misread row.
 
 Every value is invented; each test fails on the branch head before parity K.
@@ -28,8 +27,7 @@ from types import SimpleNamespace
 import pytest
 
 import update_testkit as K
-from jobs.stages import update_collect as UC, update_review as UR
-from jobs.medchron.update import body as B
+from jobs.stages import update_collect as UC
 
 PROV = "Sample Chiropractic"
 BANNED = ("unconfirmed", "log row reads", "NTD", "unable to decipher")
@@ -107,81 +105,6 @@ def test_process_notes_never_reach_the_firm_and_an_unsettled_date_is_reported_no
     notes = [r["note"] for r in rep["process_notes"]]
     assert any("log row reads" in n for n in notes) and any("unconfirmed" in n for n in notes)
     assert sum("NTD" in n for n in notes) == 3
-
-
-# ---- K3 -------------------------------------------------------------------------
-def _redate(corrected: str) -> str:
-    f = {
-        "severity": "MUST",
-        "class": "1 dates",
-        "anchor": "N1",
-        "exhibit": 2,
-        "page": 1,
-        "problem": "the visit sheet reads 2/18/26, not 02/13/2026",
-        "action": "redate",
-        "corrected": corrected,
-        "reason": "read off the page",
-    }
-    return json.dumps({"findings": [f], "complete": True})
-
-
-def _review(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reviews: list[str], finishes: list[str]
-) -> tuple[int, SimpleNamespace, str]:
-    """Collect re-dates the 2/18 visit onto the statement's 02/13 (the one
-    statement date, a different visit); the review then corrects it."""
-    stmt = "Sample Chiropractic\nPatient statement\nDate of service 02/13/2026 Spinal manipulation charges 65.00"
-    sr = _matter(tmp_path, ["[handwritten]\nVisit sheet\nAdj C5 2/18/26", stmt])
-    wrong, log = UC._settle_dates(sr, [_entry("02/18/2026")], [{"exhibit": 2, "id": "n2"}])  # type: ignore[arg-type]
-    assert wrong[0].startswith("02/13/2026\n") and log[0]["verdict"] == "redated"
-    later = (
-        "02/15/2026\nSample Imaging | Medical Diagnoses\n\nMedical Diagnoses\n"
-        "Lumbar radiographs showed no fracture and mild disc narrowing. (Exhibit 3 - p. 1)"
-    )
-    md = (
-        "Alpha Example - Medical Chronology\n\n## Treatment Timeline\n\n## Diagnostic Highlights\n\n"
-        f"## Medical Chronology\n\n{wrong[0]}\n\n{later}\n\n## Exhibit List\n"
-    )
-    out = sr.slug_dir / "out" / "alpha"
-    out.mkdir(parents=True)
-    for n in (2, 3):
-        (out / f"Exhibit {n} - Sample.pdf").write_bytes(b"%PDF")
-    ud = sr.slug_dir / "runs" / "alpha" / "update"
-    (ud / "base.md").write_text(K.base_md())
-    (ud / "new_exhibits.final.json").write_text(json.dumps([{"exhibit": 2, "id": "n2"}, {"exhibit": 3, "id": "n3"}]))
-    doc = sr.slug_dir / "runs" / "alpha" / "final-chronology.md"
-    doc.write_text(md)
-    sr.doorway = K.ScriptedDoor(reviews, finishes)
-    sr.cfg = SimpleNamespace(get=lambda *_a: {"review": "m"} if _a[-1] == "tiers" else sorted(K.HEADINGS))
-    sr.log = sr.logged.append
-    monkeypatch.setattr(UR.prompts, "load", lambda name, _cfg: name)
-    monkeypatch.setattr(UR.audit_loop, "run", lambda _sr: 0)
-    rc = UR.run(sr, images=lambda _e, _p: None, verify=lambda _a, _b: [], npages=lambda _x: 1)  # type: ignore[arg-type]
-    return rc, sr, doc.read_text()
-
-
-def test_the_review_corrects_a_wrong_redate_from_the_page_and_the_entry_moves_into_date_order(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    clean = json.dumps({"findings": [], "complete": True})
-    rc, sr, md = _review(tmp_path, monkeypatch, [_redate("02/18/2026"), clean], [K.finish_reply(_redate("02/18/2026"))])
-    _, ents = B.entries_of(md)
-    assert rc == 0, sr.logged
-    assert [B.iso(e) for e in ents] == ["2026-02-15", "2026-02-18"]  # moved after 02/15
-    assert ents[1].startswith("02/18/2026\nSample Chiropractic")
-    rec = json.loads((sr.slug_dir / "runs" / "alpha" / "update" / "review_repair.json").read_text())
-    assert rec["status"] == "clean" and rec["open"] == []
-    assert rec["rounds"][0]["findings"][0]["outcome"] == "applied"
-
-
-def test_a_redate_the_cited_page_does_not_state_is_never_applied(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    rc, sr, md = _review(tmp_path, monkeypatch, [_redate("02/19/2026")], [K.finish_reply(_redate("02/19/2026"))])
-    assert rc == 2  # held for SMD with the finding open, the date unchanged
-    assert "02/19/2026" not in md and B.entries_of(md)[1][0].startswith("02/13/2026")
-    rec = json.loads((sr.slug_dir / "runs" / "alpha" / "update" / "review_repair.json").read_text())
-    assert rec["status"] == "held" and "does not state 02/19/2026" in rec["rounds"][0]["findings"][0]["outcome"]
 
 
 # ---- K4 -------------------------------------------------------------------------

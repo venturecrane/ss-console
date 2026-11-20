@@ -636,11 +636,11 @@
     "claude-sonnet-5": {
       "batch": false,
       "cases": {
-        "__set": ["casefile", "demand", "drafting", "litigation", "medchron", "medchron_update"]
+        "__set": ["casefile", "demand", "drafting", "litigation", "medchron"]
       },
       "max_tokens_max": 128000,
       "tool_choice_types": {
-        "__set": ["tool", null]
+        "__set": [null]
       }
     }
   }

@@ -6,7 +6,8 @@ matters (wrong visit dates the typed statement settles, one-sided findings
 reported as both sides, a positive exam reported negative, truncated entries,
 duplicates, wrong values) and could have corrected every one from the pages.
 The pre-delivery review only HELD; nothing fixed. This module is the $0 half
-of the loop that fixes (``stages/update_review.py`` is the paid half):
+of the loop that fixed (its paid half, the update review, was removed on
+2026-11-20; the entry read reuses the anchors and the reply parser below):
 
 * the ADDED entries of the audit document get anchors (``N<k>`` per entry,
   ``N<k>.c<j>`` per claim, the audit's own claim spans);

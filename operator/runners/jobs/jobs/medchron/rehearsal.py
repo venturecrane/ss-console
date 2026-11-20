@@ -190,24 +190,21 @@ def probe_before_spend(drv: Any, stage: dag.Stage, ctx: dag.Ctx, notes: list[str
         drv.log(f"[before-spend] {line}")
 
 
-#: Paid stages a rehearsal may RUN when their projection is exactly 0.0: the
-#: projection is 0.0 only when the stage reuses what it already settled.
-#: ``update_review``: a record that is clean on this document (``_reuse``), as
-#: ``update_decide`` leaves it (2026-11-16, so the stages behind a decided
-#: hold can be rehearsed). The model and the seat stay refused either way
-#: (``Driver._sdk_client`` / ``_open_seat`` raise in rehearse mode), so a stage
-#: that would have called one fails in the copy instead of spending.
-#: ``update_billing_extract`` (2026-11-17): nothing left to pull or read on this
-#: copy, or no billing record named (``billing_update.settled``).
-SETTLED_RUNNABLE = frozenset({"update_review", "update_billing_extract"})
+#: Paid stages a rehearsal may RUN when they reuse what they already settled.
+#: The model and the seat stay refused either way (``Driver._sdk_client`` /
+#: ``_open_seat`` raise in rehearse mode), so a stage that would have called
+#: one fails in the copy instead of spending. ``update_billing_extract``
+#: (2026-11-17): nothing left to pull or read on this copy, or no billing
+#: record named (``billing_update.settled``). The update review, the other
+#: such stage, was removed on 2026-11-20 (the entry read replaced it); the
+#: audit is not one: its projection counts reads only, never its verifies.
+SETTLED_RUNNABLE = frozenset({"update_billing_extract"})
 
 
-def _settled(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> bool:
-    if stage.name == "update_billing_extract":
-        from ..stages import billing_update
+def _settled(drv: Any, stage: dag.Stage, ctx: dag.Ctx) -> bool:
+    from ..stages import billing_update
 
-        return billing_update.settled(drv._stage_run(ctx.unit, lambda _m: None))
-    return drv._projection(stage, ctx, extracted) == 0.0
+    return stage.name == "update_billing_extract" and billing_update.settled(drv._stage_run(ctx.unit, lambda _m: None))
 
 
 def runs_in_copy(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[str]) -> bool:
@@ -217,7 +214,7 @@ def runs_in_copy(drv: Any, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, note
         return True
     if stage.external or stage.name not in SETTLED_RUNNABLE:
         return False
-    if not _settled(drv, stage, ctx, extracted):
+    if not _settled(drv, stage, ctx):
         return False
     notes.append(f"rehearse {stage.name}: settled on this document (projected 0.00 USD); run in the copy")
     return True

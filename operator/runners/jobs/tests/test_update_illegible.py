@@ -80,13 +80,6 @@ def test_the_note_itself_is_never_raised_as_process_wording():
     assert FN.settled_as_read([_finding("6 process wording", "N1")], plain)[1] == 0
 
 
-def test_the_reviewer_is_told_the_note_is_the_firms_wording():
-    import update_testkit as K
-    from jobs.medchron import prompts
-
-    assert "never a finding" in prompts.load("update-review-system", K.cfg())
-
-
 def test_a_mark_or_process_finding_on_a_noted_entry_is_dropped_without_the_model():
     md, _ = IL.restore(
         [COMPOSED],

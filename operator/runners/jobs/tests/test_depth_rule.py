@@ -45,8 +45,3 @@ def test_the_check_can_fail():
     # The instrument: the line this build removed from the writer prompt.
     old = "Routine repeat visits (serial PT) get two to three one-sentence subsections."
     assert OWN_DEPTH.findall(old)
-
-
-def test_the_reviewer_defers_to_the_rule_on_omissions(firm_config_path):
-    text = prompts.load("update-review-system", _cfg(firm_config_path))
-    assert "Content that rule lets an entry leave out or state briefly is never a finding" in text

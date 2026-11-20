@@ -732,7 +732,7 @@ FINAL_SET = dag.Stage(
     "update_final_set",
     "",
     dag._slug_unit,
-    requires=("update_review",),
+    requires=("audit",),
     runner=update_final_set.run,
     exit_map=update_final_set.EXITS,  # passed as it is: (outcome, reason) per code
 )

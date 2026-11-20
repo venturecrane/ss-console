@@ -53,10 +53,15 @@ from ..medchron.page_mode import Modes
 from ..medchron.update import body as B, entry_confirm as EC, entry_read as ER, index_gaps as IG
 from ..medchron.update import review_pages as RV
 from .base import StageRun, read_json
+from .read_inputs import dollars, page_counts
 from .update_base import headings
-from .update_review_io import page_counts
 
 REPLAY_ENV = "ENTRY_AUDIT_REPLAY"
+#: An UPDATE's pages shown (``entry_read._shown``): unset, or anything but
+#: "cited", is the cited pages with one page either side, as the full lane
+#: reads; "cited" is the cited pages only. A $0 replay sets it to compare
+#: the two on saved updates; a real run never sets it. The full lane ignores it.
+PAGES_ENV = "ENTRY_READ_UPDATE_PAGES"
 DIR = "entry_read"
 RECORD = "entry_read.json"
 RELEASE = "tripwire-release.json"
@@ -227,12 +232,17 @@ class Plan:
     npages: Callable[[int], int]
 
 
-def plan(slug_dir: Path, unit: str, cfg: Any, md: str) -> Plan:
+def neighbours(update: bool) -> bool:
+    """Whether a read is shown the page either side of each cited page."""
+    return not (update and os.environ.get(PAGES_ENV) == "cited")
+
+
+def plan(slug_dir: Path, unit: str, cfg: Any, md: str, update: bool = False) -> Plan:
     """The document's units, and the writer's index gaps counted for the
     record only (never shown to the read: 2026-11-18, round 3)."""
     out = slug_dir / "out" / unit
     keep, heads, npages = set(exhibit_paths(out)), headings(cfg), page_counts(out)
-    units = ER.plan(md, keep, heads, npages)
+    units = ER.plan(md, keep, heads, npages, neighbours=neighbours(update))
     ents = B.entries_of(md)[1]
     gaps: list[IG.Gap] = []
     bad = 0
@@ -258,13 +268,13 @@ def unit_tokens(u: ER.Unit, modes: Modes | None) -> tuple[int, int]:
     return tin, READ_OUT_EXPECTED + VERIFIES_PER_UNIT * VERIFY_OUT_EXPECTED
 
 
-def tokens(slug_dir: Path, unit: str, cfg: Any) -> tuple[int, int, int, int] | None:
+def tokens(slug_dir: Path, unit: str, cfg: Any, update: bool = False) -> tuple[int, int, int, int] | None:
     """(units, units already read, input tokens, output tokens) still to pay
     for; None before the chronology exists."""
     doc = slug_dir / "runs" / unit / "final-chronology.md"
     if not doc.is_file():
         return None
-    units = plan(slug_dir, unit, cfg, doc.read_text(encoding="utf-8")).units
+    units = plan(slug_dir, unit, cfg, doc.read_text(encoding="utf-8"), update).units
     d = slug_dir / "runs" / unit / DIR
     todo = [u for u in units if not any((d / f"{u.key}.read{a}.json").is_file() for a in (1, 2))]
     modes = Modes.open(slug_dir, unit)
@@ -280,20 +290,18 @@ def priced(pricing: budget.Pricing, cfg: Any, tin: int, tout: int) -> float:
     return (tin * rate.input_per_million_cents + tout * rate.output_per_million_cents) / 1e8
 
 
-def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float | None:
+def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing, update: bool = False) -> float | None:
     """What the stage is projected to add, for the driver's limits."""
-    got = tokens(slug_dir, unit, cfg)
+    got = tokens(slug_dir, unit, cfg, update)
     return None if got is None else priced(pricing, cfg, got[2], got[3])
 
 
 def projection_lines(sr: StageRun) -> list[str]:
-    from .update_review import _dollars
-
-    got = tokens(sr.slug_dir, sr.unit.unit, sr.cfg)
+    got = tokens(sr.slug_dir, sr.unit.unit, sr.cfg, sr.job.update is not None)
     if got is None:
         return ["no built chronology yet (build_doc has not run); the entry read is unprojectable"]
     n, done, tin, tout = got
-    usd = _dollars([{"model": model(sr.cfg), "in": tin, "out": tout}])
+    usd = dollars([{"model": model(sr.cfg), "in": tin, "out": tout}])
     if not usd.endswith("USD"):  # no pricing file on this host; the driver's limits price it from their own
         usd = "USD not priced on this host"
     return [

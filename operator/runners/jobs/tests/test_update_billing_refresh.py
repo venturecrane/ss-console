@@ -162,13 +162,32 @@ def _pages_without_billing(sd: Path) -> int:
     return charged.charged_pages(sd, "alpha", budget.pages_read(sd / "extracted.jsonl"))
 
 
+class _Forbidden:
+    """A model client every call of which fails the test (and is counted)."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+        self.messages = self
+
+    def create(self, **_kw):
+        self.calls.append("create")
+        raise AssertionError("a rehearsal called the model")
+
+    def stream(self, **_kw):
+        self.calls.append("stream")
+        raise AssertionError("a rehearsal called the model")
+
+
+def _no_seat():
+    raise AssertionError("a rehearsal opened the seat")
+
+
 # ---- jobs rehearse walks the billing stages on a copy -------------------------------------
 def test_rehearse_reports_what_billing_would_pay_and_walks_the_free_stages_once_settled(
     scene, data_root, firm_config_path, pricing_path, monkeypatch
 ) -> None:
     from jobs.medchron import rehearsal
     from jobs.medchron.state import RunState
-    from test_update_decide_rehearse import _Forbidden, _no_seat
 
     job_dir, seat = _scene(scene, firm_config_path, recorded={})
     _upload_pause(monkeypatch)

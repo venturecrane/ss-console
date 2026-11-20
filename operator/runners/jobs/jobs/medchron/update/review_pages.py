@@ -18,7 +18,7 @@ from .. import page_mode as PM
 #: Opens the block that carries a page's text in place of its picture.
 PAGE_TEXT = "PAGE TEXT (this page's own text layer, shown instead of its image):"
 #: The input tokens one page shown as a PICTURE costs, its label included
-#: (the stage's projection figure, ``stages/update_review_cost.py``).
+#: (the entry read's projection figure, ``stages/entry_audit_io.py``).
 PAGE_TOKENS = 1_800
 #: Characters per input token, for a page shown as TEXT.
 CHARS_PER_TOKEN = 4

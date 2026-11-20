@@ -16,16 +16,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-import pytest
 
 import update_testkit as K
 from jobs.medchron import page_mode as PM
 from jobs.medchron.audit import claims as CL
 from jobs.medchron.audit.run import AuditPaths, Round
-from jobs.medchron.update import review_measure as RM, review_pages as RV, review_parts as RP, review_repair as RR
-from jobs.stages import update_review as UR, update_review_cost as UC
+from jobs.medchron.update import review_pages as RV, review_parts as RP, review_repair as RR
 from test_audit import SUPPORTED, Scripted, _sr, tool_msg
-from test_update_finisher import _edits, _finding as _raised, _review
 
 PROSE = (
     "The patient returned for follow up of neck and low back pain after the collision.\n"
@@ -195,104 +192,7 @@ def test_a_finding_that_names_no_page_still_shows_the_pages_its_entry_cites(tmp_
 
 
 # A5 -------------------------------------------------------------------------------
-def _run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reviews: list[str]) -> tuple[int, Any]:
-    """The stage through the update test kit's scripted doorway: one new
-    12-page exhibit, every page a picture (no page index)."""
-    from types import SimpleNamespace
-
-    sd = tmp_path / "matter"
-    ud = sd / "runs" / "alpha" / "update"
-    ud.mkdir(parents=True)
-    (sd / "out" / "alpha").mkdir(parents=True)
-    (sd / "out" / "alpha" / "Exhibit 2 - Sample.pdf").write_bytes(b"%PDF")
-    (ud / "base.md").write_text(K.base_md())
-    (sd / "runs" / "alpha" / "final-chronology.md").write_text(_doc([ENTRY.replace("p. 6)", "p. 10)")]))
-    sr = SimpleNamespace(
-        slug_dir=sd,
-        unit=SimpleNamespace(unit="alpha", client_name="Alpha Example", dob=None),
-        job=SimpleNamespace(incident_date=K.INCIDENT, path=sd / "job" / "job.json"),
-        cfg=SimpleNamespace(get=lambda *a: {"review": "m"} if a[-1] == "tiers" else sorted(K.HEADINGS)),
-        doorway=K.ScriptedDoor(reviews, [_edits(unresolved=[{"finding": "F1", "why": "the page is too faint"}])]),
-        logged=[],
-    )
-    sr.log = sr.logged.append
-    monkeypatch.setattr(UR.prompts, "load", lambda name, _cfg: name)
-    monkeypatch.setattr(UR.audit_loop, "run", lambda _sr: 0)
-    rc = UR.run(
-        sr,  # type: ignore[arg-type]
-        images=lambda ex, p: _image(ex, p) if p <= 12 else None,
-        evidence=lambda _ex, _p: None,
-        verify=lambda _b, _a: [],
-        npages=lambda ex: 12 if ex == 2 else 0,
-    )
-    return rc, sr
-
-
-def test_the_recheck_reads_only_the_pages_the_open_findings_name(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Fails if a round-2 request carries a page no open finding names
-    (beyond one either side): before, it re-read every page of the exhibit."""
-    reply = _review(_raised("N1", "2 omitted content", "a plan on p. 6 is left out", page=6))
-    rc, sr = _run(tmp_path, monkeypatch, [reply, reply])
-    assert rc == 2  # confirmed and still open after the one more finish: held, as before
-    r1 = [kw for kw in sr.doorway.review_calls if "-r1-" in kw["custom_id"]]
-    r2 = [kw for kw in sr.doorway.review_calls if "-r2-" in kw["custom_id"]]
-    assert sorted(p for kw in r1 for p in _shown(kw["messages"][0]["content"])) == list(range(1, 13))
-    assert sorted(p for kw in r2 for p in _shown(kw["messages"][0]["content"])) == [5, 6, 7]
-    usage = json.loads((sr.slug_dir / "runs" / "alpha" / "update" / "review_repair.json").read_text())["rounds"]
-    assert usage[1]["usage"][0]["image_pages"] == 3 and usage[1]["usage"][0]["text_pages"] == 0  # A7: per-call counts
-
-
-def test_a_recheck_of_a_part_round_one_never_finished_reads_every_page() -> None:
-    rows = [
-        {"finding": {"klass": UR.NOT_REVIEWED, "exhibit": 2, "page": 1}},
-        {"finding": {"klass": "x", "exhibit": 2, "page": 6}},
-    ]
-    assert RP.focus(rows) is None
-    assert RP.focus(rows[1:]) == {2: {5, 6, 7}}
-
-
 # A6 -------------------------------------------------------------------------------
-def test_the_projection_prices_the_pages_as_the_built_requests_show_them(tmp_path: Path) -> None:
-    """Fails if the projection's page input differs from what the built
-    round-one request carries for a mixed set of text and picture pages."""
-    _matter(tmp_path)
-    ents = RR.anchor_entries(_doc([ENTRY]), {2}, K.HEADINGS)
-    modes = PM.Modes.open(tmp_path, "alpha")
-    (part,) = RP.plan(ents, {2}, lambda _x: 6)
-    content = RP.review_content(part, "CLIENT", _image, ents, [], None, modes)
-    reads = RV.page_reads(content)
-    built = reads["image_pages"] * RV.PAGE_TOKENS + sum(
-        RV.LABEL_TOKENS + (len(b["text"]) - len(RV.PAGE_TEXT) - 1) // RV.CHARS_PER_TOKEN
-        for b in content
-        if b.get("text", "").startswith(RV.PAGE_TEXT)
-    )
-    assert built == UC.page_input_tokens([2], lambda _x: 6, modes)
-    assert built < UC.page_input_tokens([2], lambda _x: 6, None) == 6 * RV.PAGE_TOKENS
-    modes.close()
-
-
-def test_the_projection_is_lower_for_text_pages_and_still_zero_once_settled(
-    tmp_path: Path, firm_config_path: Path, pricing_path: Path
-) -> None:
-    from jobs.medchron import config as config_mod
-    from jobs.paid import load_pricing
-
-    _matter(tmp_path)
-    ud = tmp_path / "runs" / "alpha" / "update"
-    ud.mkdir(parents=True)
-    (ud / "new_exhibits.final.json").write_text(json.dumps([{"exhibit": 2, "id": "f2"}]))
-    cfg, pricing = config_mod.load(str(firm_config_path)), load_pricing(pricing_path)
-    mixed = UC.projected_usd(tmp_path, "alpha", cfg, pricing)
-    pictures = UC.projection(tmp_path, "alpha", cfg, pricing, None)
-    assert mixed is not None and pictures is not None and 0 < mixed < pictures
-    doc = tmp_path / "runs" / "alpha" / "final-chronology.md"
-    doc.write_text("settled")
-    (ud / UC.RECORD).write_text(json.dumps({"status": "clean", "doc_sha_out": UC._sha("settled")}))
-    assert UC.projected_usd(tmp_path, "alpha", cfg, pricing) == 0.0  # rehearsal.SETTLED_RUNNABLE reads exactly 0.0
-
-
 # B --------------------------------------------------------------------------------
 def _audit_doc(sr: Any, claims: list[tuple[str, int]]) -> AuditPaths:
     rd = sr.slug_dir / "runs" / "alpha"
@@ -354,34 +254,3 @@ def test_switching_a_job_from_image_to_text_mode_neither_trips_the_guard_nor_reb
 
 
 # the $0 measuring tool ------------------------------------------------------------
-def test_the_measuring_tool_counts_both_rules_without_a_call_or_a_write(
-    tmp_path: Path, firm_config_path: Path, pricing_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    slug = tmp_path / "matter"
-    _matter(slug)
-    ud = slug / "runs" / "alpha" / "update"
-    ud.mkdir(parents=True)
-    (ud / "base.md").write_text(K.base_md())
-    (ud / "new_exhibits.final.json").write_text(json.dumps([{"exhibit": 2, "id": "f2"}]))
-    (slug / "runs" / "alpha" / "final-chronology.md").write_text(_doc([ENTRY]))
-    before = {p: p.stat().st_mtime_ns for p in slug.rglob("*")}
-    assert (
-        RM.main([str(slug), "--unit", "alpha", "--config", str(firm_config_path), "--pricing", str(pricing_path)]) == 0
-    )
-    assert {p: p.stat().st_mtime_ns for p in slug.rglob("*")} == before  # nothing written, nothing rendered
-    out = capsys.readouterr().out
-    row = {ln[:44].strip(): ln[44:].split() for ln in out.splitlines()[2:-1]}
-    assert row["parts"] == ["1", "1"]
-    assert row["pages as text"] == ["1", "0"] and row["pages as pictures"] == ["5", "6"]
-    assert float(row["round 1 input, USD (estimate)"][0]) <= float(row["round 1 input, USD (estimate)"][1])
-    assert "follow up" not in out and "Sample Clinic" not in out  # counts only, no record text
-    assert "grid=1" in out and "result=1" in out and "native=1" in out
-    from jobs.medchron import config as config_mod
-    from jobs.paid import load_pricing
-
-    cfg, pricing = config_mod.load(str(firm_config_path)), load_pricing(pricing_path)
-    modes = PM.Modes.open(slug, "alpha")
-    new = RM.tally(RM.requests(slug, "alpha", cfg, modes), "system", "claude-opus-5", pricing)
-    old = RM.tally(RM.requests(slug, "alpha", cfg, None), "system", "claude-opus-5", pricing)
-    modes.close()
-    assert (new.text_pages, new.image_pages, old.image_pages) == (1, 5, 6) and new.usd < old.usd

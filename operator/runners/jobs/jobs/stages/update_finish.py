@@ -27,13 +27,12 @@ from pathlib import Path
 from typing import Any
 
 from ..medchron import icd_tables
-from ..medchron.audit import claims as CL, coverage as audit_coverage, retired
-from ..medchron.audit.page_text import exhibit_paths
-from ..medchron.audit.run import AuditPaths
+from ..medchron.gates import claim_audit
 from ..medchron.update import assemble as A, body as B, collect as C, docx_md, handwritten as H, proofs as P
-from ..medchron.update import final_set_io as FIO, review_repair as RR, reviewed as RV
+from ..medchron.update import final_set_io as FIO, reviewed as RV
 from ..medchron.update.billing_page import BILLING
 from ..medchron.update.select import ALREADY, BLANK, OVERLAP
+from . import entry_audit_update as EU
 from .base import StageRefusal, StageRun, read_json, read_jsonl
 from .group import Canon
 from .render import chronology_name, render_text
@@ -178,10 +177,15 @@ def run_assemble(sr: StageRun) -> int:
     except icd_tables.TablesMissing as exc:
         sr.log(str(exc))
         return 1
+    # A diagnosis claim the entry read found wrong and could not correct gets
+    # no table row (``entry_audit_update``): it is left out of what assemble reads.
+    audit_md, withheld = EU.strip_withheld(
+        (rd / "final-chronology.md").read_text(encoding="utf-8"), EU.withheld(sr.slug_dir, sr.unit.unit)
+    )
     try:
         md, rep = A.assemble(
             base_md,
-            (rd / "final-chronology.md").read_text(encoding="utf-8"),
+            audit_md,
             describe=lambda code, on, text: icd_tables.resolve(code, tables, on, text),
             canon=Canon(sr.cfg),
             headings=headings(sr.cfg),
@@ -207,6 +211,7 @@ def run_assemble(sr: StageRun) -> int:
     (ud / "new_exhibits.final.json").write_text(json.dumps(keep, indent=1), encoding="utf-8")
     (ud / "updated-chronology.md").write_text(md, encoding="utf-8")
     rep["provider_spelling_flags"] = read_json(ud / "compose_report.json", {}).get("provider_spelling") or []
+    rep["diagnosis_rows_withheld"] = withheld
     (ud / "assemble_report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
     # An added block folded under a delivered entry is no entry of its own, so the sum is told as it adds up.
     standalone = rep["output_entries"] - rep["delivered_entries"]
@@ -275,9 +280,7 @@ def run_proofs(sr: StageRun) -> int:
     p = plan(sr)
     base_md = (ud / "base.md").read_text(encoding="utf-8")
     upd_md = (ud / "updated-chronology.md").read_text(encoding="utf-8")
-    keep_ex = set(exhibit_paths(out))
-    paths = AuditPaths(sr.slug_dir, sr.unit.unit)
-    gate, _ = audit_coverage.check(paths, lambda _m: None)
+    gate, read = claim_audit.check(sr.slug_dir, sr.unit.unit, update=True)
     composed, new_ex = _composed(ud, rd, sr.job.incident_date)
     redate_named, redate_moves = _redates(ud)
     rep = read_json(ud / "assemble_report.json", {})
@@ -286,18 +289,13 @@ def run_proofs(sr: StageRun) -> int:
         updated_lines=docx_md.summary_lines(out / chronology_name(sr)),
         base_md=base_md,
         updated_md=upd_md,
-        base_claims=CL.extract_claims(CL.body_of(base_md), keep_ex),
-        updated_claims=CL.extract_claims(CL.body_of(upd_md), keep_ex),
-        audit_rows=CL.read_rows(paths.results),
         composed=composed,
-        audit_claims=CL.extract_claims(CL.body_of(paths.doc.read_text(encoding="utf-8")), keep_ex),
         new_exhibits=new_ex,
         gate_passed=gate,
+        entry_read=read,
         pre_note_itemized=bool(rep.get("pre_note_itemized")),
-        respelled=dict(rep.get("provider_spelling_from_audit") or {}),
-        review_named=RR.named_values(read_json(ud / "review_repair.json", {})) | redate_named,
+        excused=EU.removed(sr.slug_dir, sr.unit.unit) | redate_named,
         redate_moves=redate_moves,
-        retired_controls=retired.keys(out),
     )
     r = P.run(x)
     # Proofs 11 to 15 (``update/proofs_final``): only 11 can fail the run;

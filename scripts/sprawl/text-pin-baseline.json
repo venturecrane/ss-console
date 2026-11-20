@@ -52,7 +52,6 @@
   "operator/runners/jobs/tests/test_skill_load.py": 1,
   "operator/runners/jobs/tests/test_uncovered_why.py": 1,
   "operator/runners/jobs/tests/test_update_already_current.py": 2,
-  "operator/runners/jobs/tests/test_update_decide.py": 1,
   "operator/runners/jobs/tests/test_update_illegible.py": 1,
   "operator/runners/jobs/tests/test_update_note_heading.py": 1,
   "operator/runners/jobs/tests/test_update_page_context.py": 2,

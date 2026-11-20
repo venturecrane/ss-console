@@ -24,14 +24,12 @@ runs as a subprocess any more; `script` stays on the Stage for the strangler's h
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Callable
 
 from .job import Job, Unit
 from ..stages import (
     assemble as _assemble,
-    audit_loop as _audit,
-    audit_loop_exits as _loop_exits,
     entry_audit as _entry_audit,
     billing as _billing,
     billing_chart as _bchart,
@@ -483,8 +481,8 @@ STAGES: tuple[Stage, ...] = (
     # ---- audit last; render only after it passes ---------------------------
     # 2026-11-18: the full chronology's audit reads each ENTRY against its own
     # cited pages (``stages/entry_audit.py``). The stage keeps the name
-    # ``audit`` so saved state and ``--redo audit`` resolve. The update lane
-    # keeps the per-claim audit loop (``AUDIT_LOOP`` below).
+    # ``audit`` so saved state and ``--redo audit`` resolve. Since 2026-11-20
+    # the update lane reads its new entries the same way (``dag_update``).
     Stage(
         "audit",
         "",
@@ -548,19 +546,9 @@ STAGES: tuple[Stage, ...] = (
     ),
 )
 
-#: The per-claim audit loop: the update lane's ``audit`` (``dag_update`` reuses
-#: ``BY_NAME["audit"]``), unchanged since the full lane moved to the entry read.
-AUDIT_LOOP = replace(
-    next(s for s in STAGES if s.name == "audit"),
-    runner=_audit.run,
-    rehearse=_audit.rehearse,
-    invalidates=(),
-    exit_map=_loop_exits.EXITS,
-)
-
-#: The rows ``dag_update`` reuses by name: the full lane's, except ``audit``,
-#: which is the loop above. The full lane's own rows are ``by_name()``.
-BY_NAME = {**{s.name: s for s in STAGES}, "audit": AUDIT_LOOP}
+#: The rows ``dag_update`` reuses by name, the entry read's ``audit`` included
+#: (since 2026-11-20 the update reads its new entries as the full lane does).
+BY_NAME = {s.name: s for s in STAGES}
 ORDER = [s.name for s in STAGES]
 
 

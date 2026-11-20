@@ -35,7 +35,7 @@ from typing import Any, Callable
 
 from ..audit import claims as CL
 from ..prompts import load
-from . import body as B, entry_lines as EL, review_pages as RV, review_parts as RP, review_repair as RR
+from . import body as B, entry_lines as EL, providers as P, review_pages as RV, review_parts as RP, review_repair as RR
 from .entry_lines import count_sentences as count_sentences  # the tripwire's count, the labels' splitter
 
 PROMPT = "entry-read-system"
@@ -51,6 +51,8 @@ VERDICTS = ("ok", "problem", "unreadable")
 #: Applied edits per sentence of the document above which the run is held.
 EDIT_SHARE = 0.08
 PRE = "PRE"
+#: The anchor prefix of a provider-name claim's unit (``PN1``, ``PN2``...).
+NAME = "PN"
 Images = RV.Images
 
 
@@ -109,47 +111,80 @@ def _cites_of(text: str) -> set[tuple[int, int]]:
     return {(int(m.group(1)), p) for m in CL.CITE.finditer(text) for p in CL.parse_pages(m.group(2)) or [1]}
 
 
-def _shown(cited: list[tuple[int, int]], npages: Callable[[int], int]) -> list[tuple[int, int]]:
-    """The cited pages with one page either side, inside each exhibit's length."""
+def _shown(
+    cited: list[tuple[int, int]], npages: Callable[[int], int], neighbours: bool = True
+) -> list[tuple[int, int]]:
+    """The cited pages, with one page either side unless `neighbours` is
+    off (the update's switch, ``entry_audit_io.PAGES_ENV``), inside each
+    exhibit's length."""
     out: set[tuple[int, int]] = set()
+    near = (-1, 0, 1) if neighbours else (0,)
     for ex, p in cited:
         n = max(npages(ex), 1)
-        out |= {(ex, q) for q in (p - 1, p, p + 1) if 1 <= q <= n}
+        out |= {(ex, p + d) for d in near if 1 <= p + d <= n}
     return sorted(out)
 
 
-def _chunks(ps: list[tuple[int, int]], npages: Callable[[int], int]) -> list[list[tuple[int, int]]]:
+def _chunks(ps: list[tuple[int, int]], npages: Callable[[int], int], neighbours: bool) -> list[list[tuple[int, int]]]:
     """The cited pages in order, cut so no chunk shows more than MAX_SHOWN pages."""
     out: list[list[tuple[int, int]]] = []
     cur: list[tuple[int, int]] = []
     for p in ps:
-        if cur and len(_shown(cur + [p], npages)) > MAX_SHOWN:
+        if cur and len(_shown(cur + [p], npages, neighbours)) > MAX_SHOWN:
             out.append(cur)
             cur = []
         cur.append(p)
     return out + [cur] if cur else out or [[]]
 
 
-def _units(anchor: str, text: str, cited: set[tuple[int, int]], npages: Callable[[int], int], **kw: Any) -> list[Unit]:
-    chunks = _chunks(sorted(cited), npages)
+def _units(
+    anchor: str, text: str, cited: set[tuple[int, int]], npages: Callable[[int], int], neighbours: bool, **kw: Any
+) -> list[Unit]:
+    chunks = _chunks(sorted(cited), npages, neighbours)
     lines = EL.numbered(text, bool(kw.get("record_only")))[1]
     return [
-        Unit(anchor, text, _shown(c, npages), part=i, parts=len(chunks), cited=c, lines=lines, **kw)
+        Unit(anchor, text, _shown(c, npages, neighbours), part=i, parts=len(chunks), cited=c, lines=lines, **kw)
         for i, c in enumerate(chunks, 1)
     ]
 
 
-def plan(md: str, keep: set[int], headings: set[str], npages: Callable[[int], int]) -> list[Unit]:
-    """One unit per dated entry of the built document (split so no unit
-    shows more than MAX_SHOWN pages), and one record-only unit for a cited
-    prior-history block."""
-    pre, _ = B.entries_of(md)
+def _name_units(
+    names: list[str], entries: list[RR.Entry], keep: set[int], npages: Callable[[int], int], neighbours: bool
+) -> list[Unit]:
+    """One record-only unit per provider-name claim an update carries
+    (``providers.CLAIM``), shown the pages of every entry that names that
+    person (the claim's own citation when none does), so the read settles
+    the spelling against the record as the per-claim audit did."""
     out: list[Unit] = []
-    pre_cites = {(x, p) for x, p in _cites_of(pre) if x in keep}
+    for i, para in enumerate(names, 1):
+        name = P.CLAIM.match(para.strip())
+        who = name.group(1).strip() if name else ""
+        pages = {pg for e in entries if who and P.names_in(e.text, who) for pg in e.cites()}
+        pages = {(x, p) for x, p in pages | _cites_of(para) if x in keep}
+        if pages:
+            out += _units(f"{NAME}{i}", para.strip("\n"), pages, npages, neighbours, record_only=True)
+    return out
+
+
+def plan(
+    md: str, keep: set[int], headings: set[str], npages: Callable[[int], int], *, neighbours: bool = True
+) -> list[Unit]:
+    """One unit per dated entry of the built document (split so no unit
+    shows more than MAX_SHOWN pages), one record-only unit for a cited
+    prior-history block, and one record-only unit per provider-name claim
+    (only an update writes them: ``_name_units``)."""
+    pre, _ = B.entries_of(md)
+    paras = [q for q in re.split(r"\n\s*\n", pre) if q.strip()]
+    names = [q for q in paras if P.CLAIM.match(q.strip())]
+    rest = "\n\n".join(q.strip("\n") for q in paras if q not in names) if names else pre.strip("\n")
+    entries = RR.anchor_entries(md, keep, headings)
+    out: list[Unit] = []
+    pre_cites = {(x, p) for x, p in _cites_of(rest) if x in keep}
     if pre_cites:
-        out += _units(PRE, pre.strip("\n"), pre_cites, npages, record_only=True)
-    for e in RR.anchor_entries(md, keep, headings):
-        out += _units(e.anchor, e.text, e.cites(), npages, entry=e)
+        out += _units(PRE, rest, pre_cites, npages, neighbours, record_only=True)
+    out += _name_units(names, entries, keep, npages, neighbours)
+    for e in entries:
+        out += _units(e.anchor, e.text, e.cites(), npages, neighbours, entry=e)
     return out
 
 

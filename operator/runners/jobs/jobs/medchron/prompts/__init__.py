@@ -23,9 +23,9 @@ def raw(name: str) -> str:
 
 
 DEPTH_TOKEN = "{{DEPTH_RULE}}"
-# The prompts that carry the rule: the writer, and the reviewer that can report
-# content as missing. ``tests/test_depth_rule.py`` holds them to it.
-DEPTH_PROMPTS = ("map-system", "update-review-system")
+# The prompts that carry the rule: the writer (the update reviewer that also
+# carried it was removed on 2026-11-20). ``tests/test_depth_rule.py`` holds it to it.
+DEPTH_PROMPTS = ("map-system",)
 
 
 def depth_rule() -> str:

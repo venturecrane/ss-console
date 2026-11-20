@@ -7,7 +7,8 @@ one door to it.
 The pull, extraction, email, vision and composition stages are the run's own;
 what differs is everything that decides what is read and what is filed: the
 delivered document is pulled and proven first, only the new documents'
-uncovered pages are composed, only the new claims are audited, and the filing
+uncovered pages are composed, only the new entries are read against their
+pages (the entry read, as the full chronology's, since 2026-11-20), and the filing
 replaces the delivered document in its own folder. The names that mean the
 same act keep their names (``audit``, ``review``, ``upload``), so the proof-run
 stop, the rehearsal and the paged reasons read an update the same.
@@ -21,13 +22,13 @@ from .dag import BY_NAME, CURRENT, FAILED, HELD, REFUSED, Stage, _slug_unit
 from ..stages import (
     billing_update as _bupd,
     download as _download,
+    entry_audit as _entry_audit,
     update_base as _ubase,
     update_collect as _ucollect,
     update_final_set as _ufinal,
     update_finish as _ufinish,
     update_pages as _upages,
     update_select as _uselect,
-    update_review as _ureview,
     update_upload as _uupload,
 )
 from .update import outcome as _UO
@@ -95,7 +96,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         "",
         _slug_unit,
         requires=("icd_tables",),
-        invalidates=("update_summary", "audit", "update_review"),
+        invalidates=("update_summary", "audit"),
         runner=_ucollect.run_collect,
         exit_map={1: (FAILED, "update_collect: the ICD tables are missing"), 2: _HELD_UPDATE, _UO.EXIT: _CURRENT},
     ),
@@ -105,7 +106,7 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         _slug_unit,
         paid=True,
         requires=("update_collect",),
-        invalidates=("audit", "update_review"),
+        invalidates=("audit",),
         runner=_ucollect.run_summary,
         exit_map={
             1: (
@@ -114,46 +115,38 @@ UPDATE_STAGES: tuple[Stage, ...] = (
             )
         },
     ),
-    _reuse("audit", requires=("update_summary",), invalidates=("update_review",)),
-    # The gate before assemble: an INDEPENDENT review of the added entries
-    # against every page of the documents they cite, then a FINISHER that
-    # corrects each must-fix finding (every new sentence audited, an
-    # unsupported edit undone); round 1's must-fix list is frozen, one narrow
-    # re-check confirms or settles what is still open, and the confirmed get
-    # one more finish (``stages/update_review.py``). The proofs then run on the corrected text,
-    # and the pre-delivery ``review`` below is the final read.
-    Stage(
-        "update_review",
-        "",
-        _slug_unit,
-        paid=True,
-        requires=("audit",),
-        # What reads the reviewed document is reopened HERE, not by the final
-        # set: an update that already sent its files runs the final set as a
-        # no-op on resume (``stages/update_final_set``), and its success must
-        # never rebuild what was sent (the send record would hold other bytes).
+    # The entry read, as the full chronology's (``stages/entry_audit.py``,
+    # 2026-11-20): each new entry read against its own cited pages, a wrong
+    # line corrected from the page, and a line found wrong and not corrected
+    # held for SMD (``stages/entry_audit_update``). It replaced the per-claim
+    # audit and the update review. What reads its document is reopened HERE,
+    # not by the final set: an update that already sent its files runs the
+    # final set as a no-op on resume (``stages/update_final_set``), and its
+    # success must never rebuild what was sent (the send record would hold
+    # other bytes). Exit 1 keeps the "audit coverage:" prefix the broker
+    # resumes a hold by.
+    _reuse(
+        "audit",
+        requires=("update_summary",),
         invalidates=("update_final_set", "update_assemble", "update_render", "update_proofs", "update_manifest"),
-        runner=_ureview.run,
         exit_map={
-            1: (FAILED, "update_review: the grader of the finisher's sentences gave no verdict; a rerun grades again"),
-            2: (
+            1: (
                 HELD,
-                "update_held: the independent review of the update left must-fix findings the finisher could "
-                "not correct against the pages; SMD finishes it",
+                "audit coverage: an entry was not read against its pages, a line found wrong was not corrected, "
+                "or the edit tripwire held",
             ),
-            3: (HELD, "audit coverage: a sentence the update finisher wrote is not finally SUPPORTED"),
-            4: (FAILED, "audit INVALID after the update finisher's corrections: a control failed or no exhibit bytes"),
+            **_entry_audit.EXITS,
         },
     ),
     # The final set of the added entries (``stages/update_final_set``, $0,
     # delete-only): stray citation-only lines joined, a repeat the other entry
     # covers dropped, every heading checked against its pages (recorded only).
-    # It reopens nothing: a redo of the review reopens it and what follows it.
+    # It reopens nothing: a redo of the audit reopens it and what follows it.
     Stage(
         "update_final_set",
         "",
         _slug_unit,
-        requires=("update_review",),
+        requires=("audit",),
         runner=_ufinal.run,
         exit_map=_ufinal.EXITS,
     ),

@@ -48,11 +48,7 @@ def _proof_1(base_md: str, updated_md: str, rendered: bool) -> list[str]:
         updated_lines=_lines(updated_md, rendered),
         base_md=base_md,
         updated_md=updated_md,
-        base_claims=[],
-        updated_claims=[],
-        audit_rows=[],
         composed=[],
-        audit_claims=[],
         new_exhibits={2},
     )
     r = P.Result()

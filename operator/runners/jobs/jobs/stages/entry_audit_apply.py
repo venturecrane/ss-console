@@ -36,7 +36,7 @@ import json
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..medchron.audit import authored, claims as CL
 from ..medchron.update import body as B, entry_confirm as EC, entry_lines as EL, entry_read as ER
@@ -220,10 +220,15 @@ def edit_document(md: str, edits: list[EC.Edit]) -> tuple[str, Counter]:
 BREAKS_STRUCTURE = "breaks_structure"
 
 
-def apply(sr: StageRun, doc: Path, md: str, decisions: list[EC.Decision]) -> tuple[str, dict[str, str] | None, Counter]:
+def apply(
+    sr: StageRun, doc: Path, md: str, decisions: list[EC.Decision], veto: Callable[[], str] | None = None
+) -> tuple[str, dict[str, str] | None, Counter]:
     """('', SMD's release when one was used, invariants broken) when the
     surviving edits were written (or none were due), else (why held, None,
-    ...) with the document untouched. Writes the document once."""
+    ...) with the document untouched. Writes the document once. `veto`
+    (the update lane's, ``entry_audit_update``) is asked once every edit's
+    outcome is known and before anything is written: a reason holds the run
+    as the tripwire does."""
     edits = [d[1] for d in decisions if d[0] == "apply"]
     new, broke = edit_document(md, edits)
     kept = [e for e in edits if e.outcome == "applied"]
@@ -238,6 +243,11 @@ def apply(sr: StageRun, doc: Path, md: str, decisions: list[EC.Decision]) -> tup
                 e.outcome = "not applied: the run held at the tripwire"
             return why, None, broke
         sr.log(f"entry read: {why}; released by {rel['by']} ({rel['why'][:200]})")
+    why = veto() if veto is not None else ""
+    if why:
+        for e in kept:
+            e.outcome = "not applied: the run held on a line found wrong"
+        return why, None, broke
     if new != md:
         doc.write_text(new, encoding="utf-8")
         sync_entries(sr, md, new)
@@ -308,7 +318,7 @@ def _line_counts(parsed: list[ER.Parsed]) -> dict[str, int]:
 
 def record(sr: StageRun, ask: IO.Asker, doc: Path, pl: IO.Plan, reads: list[IO.Read], decisions: list,
            items: Any = (), held: str = "", released: dict[str, str] | None = None,
-           broke: Counter | None = None) -> None:  # fmt: skip
+           broke: Counter | None = None, extra: dict[str, Any] | None = None) -> None:  # fmt: skip
     rows = _rows(reads, list(items), decisions)
     rec = EC.summary(pl.units, [p for r in reads for _n, _u, p in r.got], decisions, pl.gaps)
     rec |= {
@@ -326,5 +336,6 @@ def record(sr: StageRun, ask: IO.Asker, doc: Path, pl: IO.Plan, reads: list[IO.R
     if released is not None:
         rec["tripwire_release"] = released
     rec["breaks_structure_by_invariant"] = dict(broke or {})
+    rec |= extra or {}
     p = sr.slug_dir / "runs" / sr.unit.unit / IO.RECORD
     p.write_text(json.dumps(rec, indent=1), encoding="utf-8")

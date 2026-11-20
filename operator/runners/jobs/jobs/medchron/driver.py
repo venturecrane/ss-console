@@ -38,6 +38,7 @@ from . import (
     unit_proof,
 )
 from .covered import covered_sets, documents_pulled
+from .gates import claim_audit
 from ..deadline import is_transient
 from .update import charged as update_charged, outcome as update_outcome
 from .update.coverage import covered_sets as update_covered
@@ -322,13 +323,9 @@ class Driver:
         still catch a run that already reached a line)."""
         if stage.name == "vision":
             return projection.read_usd(extracted, self.limits.usd_per_scanned_page, self.budget)
-        if stage.name == "audit" and not self.job.update:  # the entries still to read (``stages/entry_audit_io``)
-            return projection.entry_audit_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
-        if stage.name == "audit":  # the claims still to verify (``projection``)
-            n = projection.claims_to_verify(self.slug_dir, ctx.unit.unit)
-            return None if n is None else n * self.limits.usd_per_audit_claim
-        if stage.name == "update_review":
-            return projection.update_review_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing)
+        if stage.name == "audit":  # the entries still to read, either lane (``stages/entry_audit_io``)
+            update = self.job.update is not None
+            return projection.entry_audit_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing, update)
         return None
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:
@@ -388,6 +385,9 @@ class Driver:
         if self.redo:
             st.invalidate(list(self.redo))
         update = self.job.update is not None
+        if update and claim_audit.stale_update_audit(self.slug_dir, unit.unit, st):
+            self.log(f"[{unit.unit}] audit: done by the per-claim audit, which no longer files an update; read again")
+            st.invalidate(["audit"])
         seq = dag.stages_from(self.start, update=update)
         honor_done = self.start is None
         for stage in seq:

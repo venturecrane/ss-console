@@ -18,7 +18,6 @@ from jobs.medchron.audit import claims as CL, coverage, retired
 from jobs.medchron.audit.run import AuditPaths, Round
 from jobs.stages import audit_loop, review_policy
 from jobs.stages.base import StageRun
-from jobs.medchron.update import proofs as P
 from jobs_testkit import make_pdf
 from test_audit import PROSE, SUPPORTED, Scripted, _exhibit_set, _sr, _write_doc, tool_msg
 
@@ -55,14 +54,9 @@ def test_a_supported_control_whose_page_carries_the_claims_values_is_retired_not
     assert retired.keys(paths.out) == {ctl[0]["key"]}
     row = json.loads(retired.path(paths.out).read_text())["retired"][0]
     assert row["by"] == "rule" and "date:2026-01-02" in row["reason"]
-    # The final gate and the update's proof 5 honour it too.
+    # The final gate honours it too (the update's proof 5 went with the per-claim audit, 2026-11-20).
     ok, summary = coverage.check(paths, log.append)
     assert ok and summary["controls_bad"] == 0
-    r = P.Result()
-    x = P.Inputs([], [], "", "", [], [], CL.read_rows(paths.results), [], [], set())
-    x.retired_controls = retired.keys(paths.out)
-    P._audit(x, r)
-    assert not any(f.startswith("5") for f in r.fails), r.fails
 
 
 def test_a_supported_control_whose_page_does_not_carry_the_claim_is_still_a_rubber_stamp(

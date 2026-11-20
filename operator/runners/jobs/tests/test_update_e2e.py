@@ -84,10 +84,14 @@ class _Stream:
         return self.m
 
 
+#: The entry read's answer for any unit: every label a unit can carry is ok.
+ALL_OK = {"D": "ok", "P": "ok", **{f"S{i}": "ok" for i in range(1, 400)}}
+
+
 class _Model:
-    """The compose (a stream), the review (a stream with its own system), the
-    added prior history summary, and audit verdicts (a forced tool): all
-    SUPPORTED. Anything else fails loudly."""
+    """The compose (a stream), the entry read (a stream: every line ok), the
+    pre-delivery review, the added prior history summary, and verdicts of a
+    forced tool: all SUPPORTED. Anything else fails loudly."""
 
     def __init__(self) -> None:
         self.messages = self
@@ -110,7 +114,11 @@ class _Model:
     def stream(self, **kw):
         self.calls.append(kw)
         if "UPDATE REVIEW AND REPAIR" in self._system(kw):
+            # Only the code before 2026-11-20 asks this (the update review); the
+            # goldens job regenerates that tree's behaviour under this harness.
             return _Stream(_text('{"findings": [], "complete": true}'))
+        if "ENTRY READ:" in self._system(kw):  # the update's audit (``stages/entry_audit``): every line ok
+            return _Stream(_text(json.dumps({"lines": ALL_OK, "findings": [], "complete": True})))
         if "INDEPENDENT PRE-DELIVERY REVIEW" in self._system(kw):
             return _Stream(_text("VERDICT: 0 MUST-FIX, 0 SHOULD-FIX, 0 NOTE"))
         return _Stream(_text(MAP))
@@ -197,7 +205,8 @@ def test_an_update_files_one_complete_document_into_the_delivered_folder(
 ) -> None:
     job_dir, seat = scene
     _upload_pause(monkeypatch)
-    o = _driver(job_dir, firm_config_path, pricing_path, seat, _Model()).run()[0]
+    model = _Model()
+    o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
     sd = data_root / "example-matter"
     assert o.outcome == "delivered" and o.stage is None, o
     # Filed INTO the delivered chronology's folder; no new folder.
@@ -247,15 +256,31 @@ def test_an_update_files_one_complete_document_into_the_delivered_folder(
         K.PMH.split("\n", 1)[1],
     ):
         assert ln in lines
-    # Only the NEW claims were audited.
-    rows = [json.loads(x) for x in (sd / "out" / "alpha" / "audit-results.jsonl").read_text().splitlines()]
-    claims = {r["claim"] for r in rows if r.get("kind") == "real"}
-    assert not any("Return to clinic in four weeks" in c for c in claims)
-    assert any("3 mm" in c for c in claims)
-    assert any(c.startswith("Diagnosis code M50.20 recorded on 02/10/2026.") for c in claims)
     assert json.loads((sd / "runs" / "alpha" / "update" / "proofs.json").read_text())["fails"] == []
     # A chronology the seat rendered keeps the exact proof.
     assert json.loads((sd / "runs" / "alpha" / "update" / "update_plan.json").read_text())["renderer"] == "seat"
+
+
+def test_only_the_new_text_is_read_against_its_pages(
+    scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The update's audit is the entry read (2026-11-20): the new entries and
+    the diagnosis claim are read, never a delivered entry. (Apart from the
+    test above, which the paid-call goldens also run on the code before.)"""
+    job_dir, seat = scene
+    _upload_pause(monkeypatch)
+    model = _Model()
+    assert _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0].outcome == "delivered"
+    read = [
+        "\n".join(b.get("text", "") for b in kw["messages"][0]["content"] if b.get("type") == "text")
+        for kw in model.calls
+        if "ENTRY READ:" in model._system(kw)
+    ]
+    assert read and not any("Return to clinic in four weeks" in t for t in read)
+    assert any("3 mm" in t for t in read)
+    assert any("Diagnosis code M50.20 recorded on 02/10/2026." in t for t in read)
+    rec = json.loads((data_root / "example-matter" / "runs" / "alpha" / "entry_read.json").read_text())
+    assert rec["complete"] is True and rec["held"] == "" and rec["unresolved"] == 0
 
 
 def test_a_dropped_value_fails_the_update_and_nothing_is_filed(

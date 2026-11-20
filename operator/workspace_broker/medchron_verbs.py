@@ -48,10 +48,10 @@ Peer gating, per verb:
                            approved overage (``allowance_approved_pages`` +
                            ``allowance_approved_by``, from ``jobs.medchron.allowance
                            approve``), audited on the resume row; and an update
-                           HELD by its independent review (``update_held: the
-                           independent review ...``), after SMD records the
-                           correction with ``jobs.medchron.update_decide``. Every
-                           other hold stays refused.
+                           HELD by its independent review before 2026-11-20
+                           (``update_held: the independent review ...``), whose
+                           resume reads its new entries again. Every other hold
+                           stays refused.
     medchron_allowance_credit
                            uid 0 only, with NO agent tool (2026-10-29). SMD
                            waives pages from the firm's cycle page allowance (a
@@ -133,9 +133,9 @@ VERBS = (
 # as the row's reason. Pinned there by `test_audit_gate_hold_reason_is_the_one_the_broker_resumes`.
 AUDIT_GATE_HOLD_PREFIX = "audit coverage:"
 #: The update's independent review held on a must-fix its finisher could not
-#: correct (``dag_update.py``, the ``update_review`` stage's exit-2 text, and
-#: ``update_review_settle.hold_line``). Pinned by
-#: `test_update_review_hold_reason_is_the_one_the_broker_resumes`.
+#: correct: a reason only a row held before 2026-11-20 carries (the runner's
+#: ``update_review`` stage was removed then). Pinned by
+#: `test_update_review_hold_reason_is_no_longer_written_by_the_runner`.
 UPDATE_REVIEW_HOLD_PREFIX = "update_held: the independent review of the update"
 
 
@@ -156,12 +156,12 @@ def _audit_gate_hold(row: dict[str, Any]) -> bool:
     if reason.startswith((AUDIT_GATE_HOLD_PREFIX, "review_held", "dry_run_reported")):
         return True
     # The update's independent review held on a finding the finisher could not
-    # correct: "SMD finishes it" in its own words. 2026-10-29: Oleksandra's
-    # update held there with the reviewer right and the audit wrong, and this
-    # rule refused the resume, so SMD had no way to finish what the hold says
-    # SMD finishes. The correction is recorded first (``jobs.medchron.update_decide``,
-    # root on the seat, which writes its own marker); a bare resume settles the
-    # held findings again by today's rules at $0 and holds again if any is left.
+    # correct: "SMD finishes it" in its own words (2026-10-29: the resume once
+    # refused it, so SMD had no way to finish what the hold names SMD to
+    # finish). The runner no longer writes this reason: the entry read replaced
+    # the review on 2026-11-20, and its own holds carry ``audit coverage:``. A
+    # row held before that still resumes, and the resume reads the update's new
+    # entries again (the runner's ``claim_audit.stale_update_audit``).
     if reason.startswith(UPDATE_REVIEW_HOLD_PREFIX):
         return True
     # A stage refusal is a pipeline integrity stop the hold classifier already

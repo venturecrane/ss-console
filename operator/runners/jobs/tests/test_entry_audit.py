@@ -20,7 +20,7 @@ from jobs.medchron import core_counts, dag, dag_update
 from jobs.medchron.audit import claims as CL
 from jobs.medchron.gates import claim_audit
 from jobs.medchron.update import entry_confirm as EC, entry_read as ER
-from jobs.stages import audit_loop, entry_audit as EA, entry_audit_apply as AP, entry_audit_io as IO
+from jobs.stages import entry_audit as EA, entry_audit_apply as AP, entry_audit_io as IO
 from test_audit import Usage, _exhibit_set, _sr
 
 PAGE = (
@@ -460,7 +460,7 @@ def test_the_gate_reads_the_record_and_falls_back_to_the_claim_rule(tmp_path: Pa
                                                             "held": ""})  # fmt: skip
 
 
-def test_the_full_lane_reads_entries_and_the_update_lane_keeps_the_claim_loop() -> None:
+def test_both_lanes_read_entries_and_the_update_reopens_what_reads_its_document() -> None:
     full = dag.by_name()["audit"]
     assert full.runner is EA.run and full.rehearse is EA.rehearse and full.paid
     assert set(full.exit_map) == {EA.EXIT_HELD, EA.EXIT_DEFECT, EA.EXIT_INFRA, EA.EXIT_PENDING}
@@ -468,8 +468,16 @@ def test_the_full_lane_reads_entries_and_the_update_lane_keeps_the_claim_loop() 
     assert EA.EXIT_HELD == 1 and full.exit_map[1][1].startswith("audit coverage:")  # the broker resumes by it
     assert full.invalidates == ("render", "manifest", "review")
     upd = next(s for s in dag_update.UPDATE_STAGES if s.name == "audit")
-    assert upd.runner is audit_loop.run and set(upd.exit_map) == {1, 2, 3}
-    assert upd.invalidates == ("update_review",)
+    assert upd.runner is EA.run and upd.rehearse is EA.rehearse and upd.paid
+    assert set(upd.exit_map) == set(full.exit_map) and upd.exit_map[1][1].startswith("audit coverage:")
+    assert upd.invalidates == (
+        "update_final_set",
+        "update_assemble",
+        "update_render",
+        "update_proofs",
+        "update_manifest",
+    )
+    assert "update_review" not in [s.name for s in dag_update.UPDATE_STAGES]
 
 
 def test_a_redone_audit_reopens_render_manifest_and_review(tmp_path: Path) -> None:
@@ -496,20 +504,19 @@ PINNED = {
 
 def test_read_and_verify_requests_are_unchanged_by_round_5(scene) -> None:
     from jobs.medchron.page_mode import Modes
-    from jobs.stages import update_review as UR
-    from jobs.stages.update_review_io import _image_source
+    from jobs.stages.read_inputs import client_line, image_source
 
     sr, _d, _l = scene(None)
     pl = IO.plan(sr.slug_dir, "alpha", sr.cfg, DOC)
     modes = Modes.open(sr.slug_dir, "alpha")
     got = {}
     for u in pl.units:
-        s, c = ER.request(u, sr.cfg, UR._client(sr), _image_source(sr), modes)
+        s, c = ER.request(u, sr.cfg, client_line(sr), image_source(sr), modes)
         got[u.key] = IO.request_hash(IO.model(sr.cfg), s, c)
     modes.close()
     n1 = next(u for u in pl.units if u.anchor == "N1")
     for f in ER.parse(_reply(VALUE, OMITTED), n1).findings:
-        s, c = EC.verify_request(EC.propose(f, n1), sr.cfg, UR._client(sr), _image_source(sr))
+        s, c = EC.verify_request(EC.propose(f, n1), sr.cfg, client_line(sr), image_source(sr))
         got[f"verify-{f.klass}"] = IO.request_hash(IO.model(sr.cfg), s, c)
     assert got == PINNED
 
@@ -595,7 +602,7 @@ def test_two_adds_after_one_paragraph_keep_document_order() -> None:
 
 
 def test_a_verify_with_no_picture_is_never_sent(scene, monkeypatch) -> None:
-    monkeypatch.setattr(EA, "_image_source", lambda _sr: lambda _x, _p: None)
+    monkeypatch.setattr(EA, "image_source", lambda _sr: lambda _x, _p: None)
     client = Client()
     sr, doc, log = scene(client)
     assert EA.run(sr) == 0, log

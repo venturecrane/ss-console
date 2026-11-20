@@ -12,16 +12,8 @@ shaped like the three real pages.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from types import SimpleNamespace
-from typing import Any
 
 from jobs.medchron import flowsheet_grid as G
-from jobs.medchron.audit import claims as CL
-from jobs.medchron.update import review_repair as RR
-from jobs.stages import update_review as UR, update_review_settle as URS
-import update_testkit as K
 
 
 def _t(*times: str) -> str:
@@ -105,88 +97,3 @@ def test_falsifier_a_page_nothing_decides_changes_nothing() -> None:
     assert G.check(WRONG + CITE, _ev({1: flipped, 2: P2, 3: P3}), 2, 2) is None
     plain = "The score was 7 at the last check. (Exhibit 2 - p. 2)"
     assert G.check(plain, _ev(PAGES), 2, 2) is None  # no stated span: nothing to set
-
-
-# ---- in the update review ---------------------------------------------------------------
-HEAD = "07/14/2026\nSample Medical Center | Additional findings\n\nAdditional findings\n"
-LATER = (
-    "09/10/2026\nSample Therapy | All Other Information\n\nAll Other Information\n"
-    "Therapy evaluation recorded lumbar flexion limited to forty degrees. (Exhibit 3 - p. 1)"
-)
-
-
-def _scene(tmp_path: Path, sentence: str) -> tuple[SimpleNamespace, Path]:
-    sd = tmp_path / "matter"
-    ud = sd / "runs" / "alpha" / "update"
-    ud.mkdir(parents=True)
-    out = sd / "out" / "alpha"
-    out.mkdir(parents=True)
-    for n in (2, 3):
-        (out / f"Exhibit {n} - Sample.pdf").write_bytes(b"%PDF")
-    (ud / "base.md").write_text(K.base_md())
-    (ud / "new_exhibits.final.json").write_text(json.dumps([{"exhibit": 2, "id": "doc-2"}]))
-    (sd / "text").mkdir()
-    body = "".join(f"[p.{n}] (machine transcription)\n{t}\n" for n, t in PAGES.items())
-    (sd / "text" / "doc-2.txt").write_text(body)
-    md = (
-        "Alpha Example - Medical Chronology\n\n## Treatment Timeline\n\n## Diagnostic Highlights\n\n"
-        f"## Medical Chronology\n\n{HEAD}{sentence}{CITE}\n\n{LATER}\n\n## Exhibit List\n"
-    )
-    doc = sd / "runs" / "alpha" / "final-chronology.md"
-    doc.write_text(md)
-    logged: list[str] = []
-    sr = SimpleNamespace(
-        slug_dir=sd,
-        unit=SimpleNamespace(unit="alpha", client_name="Alpha Example", dob=None),
-        job=SimpleNamespace(incident_date=K.INCIDENT, path=sd / "job" / "job.json"),
-        cfg=SimpleNamespace(get=lambda *a: {"review": "m"} if a[-1] == "tiers" else sorted(K.HEADINGS)),
-        log=logged.append,
-        logged=logged,
-    )
-    return sr, doc
-
-
-def _finding() -> RR.Finding:
-    problem = "Each time row heads the score row printed beneath it, so the change falls after 1415"
-    return RR.Finding("MUST", "1 wrong value", "N1.c1", 2, 2, problem, "replace", "", "")
-
-
-def _rows(sr: SimpleNamespace) -> list[dict[str, Any]]:
-    return CL.read_rows(sr.slug_dir / "out" / "alpha" / "audit-results.jsonl")
-
-
-def test_a_held_finding_on_a_flowsheet_page_is_corrected_to_the_grid_and_nothing_holds(tmp_path: Path) -> None:
-    sr, doc = _scene(tmp_path, WRONG)
-    ud = sr.slug_dir / "runs" / "alpha" / "update"
-    assert UR._hold(SimpleNamespace(sr=sr), {"rounds": []}, [_finding()], doc, ud) == 0
-    md = doc.read_text()
-    assert RIGHT + CITE in md and WRONG not in md and LATER in md
-    rec = json.loads((ud / UR.RECORD).read_text())
-    assert rec["status"] == "clean" and rec["open"] == []
-    (grid,) = [r for r in rec["rounds"] if r.get("kind") == "flowsheet_grid"]
-    assert grid["findings"][0]["outcome"] == "applied" and {"1145", "1315"} <= set(grid["findings"][0]["removed"])
-    assert RR.named_values(rec) >= {"1145", "1315"}  # proof 10 reads them as named
-    (row,) = _rows(sr)
-    keys = {c["key"] for c in CL.extract_claims(CL.body_of(md), {2, 3}) if c["exhibit"] == 2}
-    assert row["mode"] == "grid" and row["verdict"] == "SUPPORTED" and row["key"] in keys
-    notes = URS.notes(sr.slug_dir / "out" / "alpha")
-    assert "flowsheet whose time rows head the values printed below them" in notes[3]
-
-
-def test_falsifier_a_sentence_already_the_pages_still_holds_on_its_finding(tmp_path: Path) -> None:
-    sr, doc = _scene(tmp_path, RIGHT)
-    before = doc.read_text()
-    f = _finding()
-    assert URS.settle(sr, doc, [f], {}) == [f]
-    assert doc.read_text() == before and _rows(sr) == []
-
-
-def test_the_finisher_keeps_a_sentence_the_grid_confirms_over_the_audits_revert(tmp_path: Path) -> None:
-    sr, doc = _scene(tmp_path, RIGHT)
-    md = doc.read_text()
-    claims = [c for c in CL.extract_claims(CL.body_of(md), {2, 3}) if c["exhibit"] == 2]
-    wrong = {"key": "k-wrong", "exhibit": 2, "page_spec": "2", "claim": WRONG}
-    other = {"key": "k-other", "exhibit": 3, "page_spec": "1", "claim": "an unrelated sentence"}
-    left = URS.grid_confirmed(sr, claims + [wrong, other], md, _ev(PAGES))
-    assert left == [wrong, other]  # only the grid's own span is kept
-    assert [r["key"] for r in _rows(sr)] == [claims[0]["key"]] and _rows(sr)[0]["mode"] == "grid"

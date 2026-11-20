@@ -1,6 +1,7 @@
 """The update review's FROZEN must-fix list: keys, where each sits now, and
 what the narrow re-check says about it. $0, no model
-(``stages/update_review.py`` makes the paid calls).
+(the update review made the paid calls until its removal on 2026-11-20; the
+entry read still imports ``review_parts``, which imports this).
 
 WHY (2026-10-15). The review loop re-reviewed after every finish and held
 until a fresh review found nothing must-fix. On two real matters it never

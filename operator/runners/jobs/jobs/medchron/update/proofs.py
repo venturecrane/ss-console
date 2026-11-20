@@ -9,13 +9,9 @@
  2. the delivered note that pre-incident encounters were reviewed and not
     itemized is in the updated document verbatim, as often as delivered;
     absent only when the update's own entries itemize those encounters;
- 3. ZERO delivered claims were audited: no audit row is on a delivered
-    claim the audit document does not itself carry (an added prior-history
-    sentence may repeat a delivered one word for word, and then the audit
-    read it in the audit document, as new text);
- 4. every claim the update adds is finally audited and SUPPORTED;
- 5. no planted control came back SUPPORTED, and a control was planted when
-    the audit had enough claims to plant one;
+ 4. the entry read read every unit of the update's new text against its
+    pages, did not hold, and left no line it found wrong uncorrected
+    (``gates/claim_audit``, ``stages/entry_audit_update``);
  6. no ADDED line starts with a bare '.' (what a dropped sentence leaves),
     none carries the pipeline's own note about its reading
     ("(text continues beyond the page)", ``meta_markers``), and none is
@@ -27,11 +23,21 @@
     documents; a re-cut of a delivered visit is not new);
  9. no ADDED line carries pipeline language (chunk / excerpt / provided text);
 10. NO VALUE WAS DROPPED: every value an entry composed from a new exhibit
-    states is in the updated document on that entry's date, or was named by
-    the audit as unsupported (or corrected by the update review, which names
-    what each correction removed). A dedupe, a merge or a repair that loses one
-    fails the update; the audit verifies only what remains, so a value that
-    silently disappears is never seen again.
+    states is in the updated document on that entry's date, or was taken out
+    by a correction the entry read applied (it writes the numbers each one
+    removed). A dedupe, a merge or a correction that loses one fails the
+    update; the read checks only what remains, so a value that silently
+    disappears is never seen again.
+
+Proofs 3 and 5 went with the per-claim audit on 2026-11-20. Proof 3 (no
+delivered claim audited) is structural now: the entry read plans its units
+from the audit document, which holds no delivered entry
+(``update/collect.audit_document``), and proof 1 still fails an update that
+loses or changes a delivered line. Proof 5 (planted controls) tested the
+per-claim auditor; the entry read plants none. A correction applies only
+when a second reader, shown the page, finds the line wrong and the new
+sentence on the page, and code checks the edit keeps the document's shape
+(``update/entry_confirm``, ``stages/entry_audit_apply``).
 """
 
 from __future__ import annotations
@@ -42,7 +48,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .. import meta_markers
-from ..audit import controls
 from . import body as B
 from .uncited import cite_only
 from .values import numbers
@@ -50,7 +55,6 @@ from .values import numbers
 NOTE_LINE = re.compile(r"pre-incident encounters?.*not itemized")
 WINDOW = re.compile(r"\b(this|the|a) chunk\b|\bin this excerpt\b|\bnot provided in this\b|\bprovided text\b", re.I)
 CITED = re.compile(r"\(Exhibit \d+(?: - p\. [0-9,\s\-]+)?\)")
-CONTROL_EVERY = 8
 
 
 @dataclass
@@ -61,23 +65,18 @@ class Inputs:
     updated_lines: list[str]  # Medical Summary lines of the updated docx
     base_md: str
     updated_md: str
-    base_claims: list[dict[str, Any]]
-    updated_claims: list[dict[str, Any]]
-    audit_rows: list[dict[str, Any]]
     composed: list[str]  # every entry compose produced, in the final exhibit numbers
-    audit_claims: list[dict[str, Any]]  # the claims of the AUDIT document (the new text)
     new_exhibits: set[int]
-    gate_passed: bool = True
+    gate_passed: bool = True  # ``gates/claim_audit.check`` on the entry read's record
+    #: the gate's summary: units, the unread, and lines found wrong and not corrected
+    entry_read: dict[str, Any] = field(default_factory=dict)
     pre_note_itemized: bool = False  # assemble found the new entries itemize what the note left out
-    respelled: dict[str, str] = field(default_factory=dict)  # {composed: audited} provider spellings applied
-    #: values the update review's applied corrections removed (``review_repair.named_values``)
-    review_named: set[str] = field(default_factory=set)
+    #: values a correction removed: the entry read's applied swaps
+    #: (``entry_audit_update.removed``) and the collect stage's re-dated readings
+    excused: set[str] = field(default_factory=set)
     #: the collect stage's handwritten re-dates, [(from, to, exhibits)] in final
-    #: numbers (``handwritten.moves_of``); their removed readings are in review_named
+    #: numbers (``handwritten.moves_of``); their removed readings are in `excused`
     redate_moves: list[tuple[str, str, set[int]]] = field(default_factory=list)
-    #: control keys retired as badly chosen (``audit/retired.py``, by SMD or by
-    #: rule): proof 5 leaves them out, as the round report and the gate do
-    retired_controls: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -187,41 +186,13 @@ def _delivered_text(x: Inputs, r: Result) -> None:
     r.check("2", ok, f"pre-incident note: {state}")
 
 
-def _as_audited(c: dict[str, Any], x: Inputs) -> str:
-    """The key of a claim as the audit document carried it, before an audited
-    provider spelling was applied to its text (``providers.respell``): the
-    spelling is itself an audited claim, so the sentence keeps its verdict."""
-    if not x.respelled:
-        return c["key"]
-    from .providers import unspell
-
-    want = (c["exhibit"], c["page_spec"], unspell(c["claim"], x.respelled))
-    return next((a["key"] for a in x.audit_claims if (a["exhibit"], a["page_spec"], a["claim"]) == want), c["key"])
-
-
-def _audit(x: Inputs, r: Result) -> None:
-    base_keys = {c["key"] for c in x.base_claims}
-    in_audit_doc = {c["key"] for c in x.audit_claims}
-    aud = [row for row in x.audit_rows if row.get("key") in base_keys - in_audit_doc]
-    r.check("3", not aud, f"delivered claims {len(base_keys)}; audited {len(aud)}")
-    latest: dict[str, Any] = {}
-    for row in x.audit_rows:
-        if row.get("kind") == "real" and row.get("key"):
-            latest[row["key"]] = row.get("verdict")
-    new = [c for c in x.updated_claims if c["key"] not in base_keys]
-    unsup = [c for c in new if latest.get(c["key"]) != "SUPPORTED" and latest.get(_as_audited(c, x)) != "SUPPORTED"]
-    r.check("4", not unsup and x.gate_passed, f"new claims {len(new)}; not finally SUPPORTED {len(unsup)}")
-    # The round's own rule (``audit/controls``, 2026-10-24): a control is bad
-    # only when still SUPPORTED after its re-test on another institution, and
-    # the audit fails only at the rate, or when every control is bad.
-    a = controls.assess_rows(x.audit_rows, x.retired_controls)
-    need = len(new) >= CONTROL_EVERY
+def _read(x: Inputs, r: Result) -> None:
+    e = x.entry_read
+    unread, open_ = len(e.get("unread") or []), int(e.get("unresolved") or 0)
     r.check(
-        "5",
-        not a["invalid"] and (bool(a["controls"]) or not need),
-        f"controls planted {a['controls']}; still SUPPORTED after the re-test {len(a['bad'])} "
-        f"(fails at {a['threshold']}); reverse controls disagreeing {len(a['reverse_bad'])} "
-        f"(fails at {a['reverse_threshold']})",
+        "4",
+        x.gate_passed and not unread and not open_ and not e.get("held"),
+        f"entry read units {e.get('units', 0)}; not read {unread}; lines found wrong and not corrected {open_}",
     )
 
 
@@ -247,10 +218,7 @@ def _added(x: Inputs, r: Result) -> None:
     r.check("8", not stale, f"added entries citing no new exhibit: {len(stale)} {stale[:3]}")
     win = [ln for ln in added_lines(base_lines, md_lines) if WINDOW.search(ln)]
     r.check("9", not win, f"added lines carrying pipeline language: {len(win)}")
-    named: set[str] = set(x.review_named)
-    for row in x.audit_rows:
-        named |= numbers(" ".join((row.get("unsupported_assertions") or []) + (row.get("contradictions") or [])))
-    lost = dropped_values(x.composed, ue, x.new_exhibits, named, x.redate_moves)
+    lost = dropped_values(x.composed, ue, x.new_exhibits, x.excused, x.redate_moves)
     from_new = sum(1 for e in x.composed if B.cited(e) & x.new_exhibits)
     head = f"entries composed from new exhibits {from_new}; with a value the update does not carry: {len(lost)}"
     r.check("10", not lost, head + "".join(f" | {d}: {v[:12]}" for d, v in lost[:10]))
@@ -260,6 +228,6 @@ def run(x: Inputs) -> Result:
     """Every proof, in order; `Result.fails` empty only when all hold."""
     r = Result()
     _delivered_text(x, r)
-    _audit(x, r)
+    _read(x, r)
     _added(x, r)
     return r

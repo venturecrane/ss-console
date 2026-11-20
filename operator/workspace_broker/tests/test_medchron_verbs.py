@@ -656,19 +656,17 @@ def test_audit_gate_hold_reason_is_the_one_the_broker_resumes():
     assert f'1: (HELD, "{AUDIT_GATE_HOLD_PREFIX}' in audit
 
 
-def test_update_review_hold_reason_is_the_one_the_broker_resumes():
-    """The update review's hold text lives in the runner (dag_update.py's
-    exit 2 and update_review_settle.hold_line); read the source so the
-    broker's prefix cannot drift from it."""
-    from workspace_broker.medchron_verbs import UPDATE_REVIEW_HOLD_PREFIX
+def test_update_review_hold_reason_is_no_longer_written_by_the_runner():
+    """The update review was removed from the runner on 2026-11-20 (the entry
+    read replaced it; its holds carry ``audit coverage:``). The broker keeps
+    the prefix only so a row held before resumes; no runner source writes it."""
+    from workspace_broker.medchron_verbs import AUDIT_GATE_HOLD_PREFIX, UPDATE_REVIEW_HOLD_PREFIX
 
     pkg = Path(__file__).resolve().parents[2] / "runners" / "jobs" / "jobs"
+    assert not any(UPDATE_REVIEW_HOLD_PREFIX in p.read_text(encoding="utf-8") for p in pkg.rglob("*.py"))
     dag = (pkg / "medchron" / "dag_update.py").read_text(encoding="utf-8")
-    stage = dag[dag.index('        "update_review",\n') :]
-    stage = stage[: stage.index("    Stage(")]
-    assert f'"{UPDATE_REVIEW_HOLD_PREFIX} ' in stage
-    settle = (pkg / "stages" / "update_review_settle.py").read_text(encoding="utf-8")
-    assert f'f"{UPDATE_REVIEW_HOLD_PREFIX} ' in settle
+    audit = dag[dag.index('        "audit",\n') :]
+    assert f'HELD,\n                "{AUDIT_GATE_HOLD_PREFIX}' in audit[: audit.index("    Stage(")]
 
 
 def test_transitions_are_monotonic_and_each_pins_its_audit_type(verbs):

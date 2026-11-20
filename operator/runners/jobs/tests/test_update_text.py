@@ -177,31 +177,17 @@ def test_assemble_refuses_a_citation_to_an_exhibit_neither_delivered_nor_new() -
 
 
 # ---- proofs --------------------------------------------------------------------
-def _inputs(updated_md: str, composed: list[str], rows: list[dict] | None = None, **kw) -> P.Inputs:
-    from jobs.medchron.audit import claims as CL
-
-    keep = {1, 2}
+def _inputs(updated_md: str, composed: list[str], **kw) -> P.Inputs:
+    """Proofs over a document the entry read settled: every unit read, no line
+    left wrong (``gates/claim_audit.check``'s summary shape)."""
     base = K.base_md()
+    kw.setdefault("entry_read", {"entry_read": True, "units": 2, "unread": [], "held": "", "unresolved": 0})
     return P.Inputs(
         delivered_lines=[ln for ln in B.chronology_lines(base) if ln.strip()],
         updated_lines=[ln for ln in B.chronology_lines(updated_md) if ln.strip()],
         base_md=base,
         updated_md=updated_md,
-        base_claims=CL.extract_claims(CL.body_of(base), keep),
-        updated_claims=CL.extract_claims(CL.body_of(updated_md), keep),
-        audit_rows=rows
-        if rows is not None
-        else [
-            {"key": c["key"], "kind": "real", "verdict": "SUPPORTED"}
-            for c in CL.extract_claims(CL.body_of(updated_md), keep)
-            if c["key"] not in {b["key"] for b in CL.extract_claims(CL.body_of(base), keep)}
-        ],
         composed=composed,
-        audit_claims=[
-            c
-            for c in CL.extract_claims(CL.body_of(updated_md), keep)
-            if c["key"] not in {b["key"] for b in CL.extract_claims(CL.body_of(base), keep)}
-        ],
         new_exhibits={2},
         **kw,
     )
@@ -215,31 +201,22 @@ def test_the_proofs_pass_on_a_clean_update() -> None:
 
 def test_proof_10_fails_when_a_composed_value_is_not_in_the_update() -> None:
     """The 2026-10-09 lesson as a gate: an entry composed from a new record
-    stated 3 mm; the document that would be filed does not, and the audit
-    never named it. The audit cannot see a dropped value, so this fails."""
+    stated 3 mm; the document that would be filed does not, and no applied
+    correction removed it. The read cannot see a dropped value, so this fails."""
     md, _ = _assemble([NEW_PRE, NEW_POST.replace("measuring 3 mm ", "")])
     r = P.run(_inputs(md, [NEW_PRE, NEW_POST]))
     assert "10" in r.fails
-    named = [{"kind": "real", "key": "x", "verdict": "UNSUPPORTED", "unsupported_assertions": ["measuring 3 mm"]}]
-    r2 = P.run(_inputs(md, [NEW_PRE, NEW_POST], rows=_inputs(md, []).audit_rows + named))
-    assert "10" not in r2.fails  # a value the audit named may go
+    r2 = P.run(_inputs(md, [NEW_PRE, NEW_POST], excused={"3"}))
+    assert "10" not in r2.fails  # a value an applied correction removed may go
 
 
-def test_proof_3_fails_when_a_delivered_claim_was_audited() -> None:
-    from jobs.medchron.audit import claims as CL
-
-    md, _ = _assemble([NEW_PRE, NEW_POST])
-    x = _inputs(md, [NEW_PRE, NEW_POST])
-    delivered_key = CL.extract_claims(CL.body_of(K.base_md()), {1})[0]["key"]
-    x.audit_rows.append({"key": delivered_key, "kind": "real", "verdict": "SUPPORTED"})
-    assert "3" in P.run(x).fails
-
-
-def test_proof_1_fails_when_a_delivered_line_is_lost_and_proof_4_on_an_unaudited_claim() -> None:
+def test_proof_1_fails_when_a_delivered_line_is_lost_and_proof_4_on_a_line_left_wrong() -> None:
     md, _ = _assemble([NEW_PRE, NEW_POST])
     broken = md.replace("Return to clinic in four weeks for a recheck of the neck.", "Return to clinic.")
     assert "1" in P.run(_inputs(broken, [NEW_PRE, NEW_POST])).fails
-    assert "4" in P.run(_inputs(md, [NEW_PRE, NEW_POST], rows=[])).fails
+    wrong = {"entry_read": True, "units": 2, "unread": [], "held": "", "unresolved": 1}
+    assert "4" in P.run(_inputs(md, [NEW_PRE, NEW_POST], entry_read=wrong)).fails
+    assert "4" in P.run(_inputs(md, [NEW_PRE, NEW_POST], gate_passed=False)).fails
 
 
 def test_proof_8_fails_on_an_added_entry_that_cites_only_delivered_exhibits() -> None:
@@ -267,9 +244,6 @@ def _noted_inputs(base: str, md: str, composed: list[str], **kw) -> P.Inputs:
     x = _inputs(md, composed, **kw)
     x.base_md = base
     x.delivered_lines = [ln for ln in B.chronology_lines(base) if ln.strip()]
-    from jobs.medchron.audit import claims as CL
-
-    x.base_claims = CL.extract_claims(CL.body_of(base), {1, 2})
     return x
 
 

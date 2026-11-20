@@ -150,8 +150,11 @@ NOT_APPLICABLE: dict[str, str] = {
         "(workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch"
         for ev in ("cap_hold", "deploy_stop", "machine_stop", "upload_readback_mismatch")
     },
-    "running/exit.run.audit.9": "the entry audit's answers-pending exit is reached only under its $0 replay switch "
-    "(ENTRY_AUDIT_REPLAY=1, read only by stages/entry_audit_io.replaying), which no seat run sets",
+    **{
+        f"running/exit.{flavor}.audit.9": "the entry audit's answers-pending exit is reached only under its $0 "
+        "replay switch (ENTRY_AUDIT_REPLAY=1, read only by stages/entry_audit_io.replaying), which no seat run sets"
+        for flavor in ("run", "update")
+    },
 }
 
 
