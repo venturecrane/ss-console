@@ -143,7 +143,7 @@ def read_served_form(
         form_revision=cat.revision,
         checked=list(rec.checked),
         definition_boxes=list(rec.definition_boxes),
-        additions=[],
+        additions=False,
     )
     _write(Path(job_dir) / SERVED, raw)
     log(f"  form read: {len(rec.checked)} boxes checked ({compact(rec.checked, cat)}), three reads agree")

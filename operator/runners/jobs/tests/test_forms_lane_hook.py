@@ -88,6 +88,18 @@ def test_two_agreeing_reads_and_the_pixel_read_give_the_checked_list(tmp_path: P
     assert _read(tmp_path, Door(), None) == WANT  # never read twice
 
 
+def test_what_the_read_writes_is_a_served_set_the_plan_accepts(
+    tmp_path: Path, blank: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(served_mod, "FORM_SETS_BY_OPERATOR", True)
+    doc = json.loads((_job(tmp_path) / "served.json").read_text())
+    doc["sets"][0]["source"] = "f1"  # as the finder writes a form set: its file, no request text
+    (tmp_path / "served.json").write_text(json.dumps(doc))
+    _read(tmp_path, Door(_reply(WANT), _reply(WANT)), _mark(blank, [*WANT, "4(a)(1)"]))
+    (s,) = served_mod.read(tmp_path, ["Pat Example"])
+    assert s.drafted_by == "operator" and list(s.checked) == WANT and s.additions is False
+
+
 def test_a_disagreement_stops_form_unconfirmed_and_records_all_three_reads(tmp_path: Path, blank: Any) -> None:
     door = Door(_reply(WANT), _reply(WANT[:-1]))
     with pytest.raises(DraftingFailed, match=r"^form_unconfirmed: .*8\.1") as e:
