@@ -14,7 +14,8 @@ instead of failing on an ImportError:
 * ``scope``: ``response_scope.scope(data, firm_data, plan, providers) -> dict``
   on a copy of the saved data; each unit's pack is ``response_scope.pack``.
 * ``cost``: ``response_cost.project(rows, cats, plan, firm_data, pricing, *,
-  request_counts) -> dict``.
+  stored_pages, request_counts) -> dict``, ``stored_pages`` from
+  ``response_cost.stored_pages`` (the seat's page store, read-only).
 * ``form-read``: ``forms.read_stage.pixel_read(pdf) -> {"checked",
   "unregistered", "definition_boxes", "form", "form_revision",
   "unreadable_pages"}``, the pixel checkbox read alone (no model).
@@ -113,20 +114,31 @@ def slices(served: Any, matter: Matter) -> dict[tuple[str, int], list[str] | Non
     return out
 
 
-def file_by_sha(matter: Matter, sha: str) -> Path | None:
-    """A saved file by its sha256, from the pull's ``raw_manifest.jsonl``."""
+def _rows(matter: Matter) -> list[dict[str, Any]]:
+    """The saved files' rows: ``corpus.json`` (every lane's pull, the one
+    ``forms.read_stage._source_paths`` reads), then the chronology pull's
+    ``raw_manifest.jsonl``."""
+    corpus = read_json(matter.data / "corpus.json")
+    rows = [r for r in corpus if isinstance(r, dict)] if isinstance(corpus, list) else []
     p = matter.data / "raw_manifest.jsonl"
-    if not sha or not p.is_file():
-        return None
-    for line in p.read_text(encoding="utf-8").splitlines():
+    for line in p.read_text(encoding="utf-8").splitlines() if p.is_file() else []:
         try:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if not isinstance(row, dict) or str(row.get("sha256") or "").lower() != sha or not row.get("path"):
+        rows += [row] if isinstance(row, dict) else []
+    return rows
+
+
+def file_by_sha(matter: Matter, sha: str) -> Path | None:
+    """A saved file by its sha256, through ``corpus.json`` (else ``raw_manifest.jsonl``)."""
+    if not sha:
+        return None
+    for row in _rows(matter):
+        if str(row.get("sha256") or "").lower() != sha.lower() or not row.get("path"):
             continue
         path = Path(str(row["path"]))
-        for cand in (path, matter.data / "raw" / path.name):
+        for cand in (path, matter.data / path, matter.data / "raw" / path.name):
             if cand.is_file():
                 return cand
     return None

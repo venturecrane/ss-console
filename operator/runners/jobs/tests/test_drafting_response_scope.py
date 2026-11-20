@@ -379,3 +379,20 @@ def test_the_three_measured_sizes_project_and_more_pages_never_cost_less(size, p
         got = response_cost.project(more, mcats, plan, fd, card)["usd"]
         assert got >= last
         last = got
+
+
+def _many_files(n: int, size: int = 10) -> list[rs.Doc]:
+    return [rs.Doc({"name": f"f{i}.pdf", "folder": "/Medical"}, "medical_records", [(1, size, 0), (2, size, 0)],
+                   {1: "a" * size, 2: "b" * size}) for i in range(n)]  # fmt: skip
+
+
+def test_a_pack_never_passes_its_cap_by_the_newlines_that_join_its_files() -> None:
+    """L7 (2026-11-20 replay): the cap counted each header and page but not the newline
+    between framed files, so a pack of many small files ran over by up to 45 characters."""
+    docs = _many_files(45)
+    exact = sum(d.head + 20 for d in docs)  # every page and header, without the joins
+    assert not rs._fits(docs, exact), "the joins are part of what the pack holds"
+    for cap in (exact, exact - 7, exact // 2, exact // 3):
+        chosen = None if rs._fits(docs, cap) else rs._choose(docs, cap)
+        assert len(rs._framed(docs, chosen)) <= cap
+    assert len(rs._framed(docs, None)) == exact + 44 and rs._fits(docs, exact + 44)

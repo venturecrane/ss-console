@@ -243,3 +243,115 @@ def test_body_kinds_names_and_layout(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert "form 6.4: kind no_information, answered_from_file in the key" in mm
     assert "form 6.4: subparts (a, b) share one line" in mm and "form 6.4: 2 providers on one line" in mm
     assert "special 1: no response in the body" in mm
+
+
+# ---- the 2026-11-20 workspace replay's tool defects (invented values; the shapes it hit) ----------------
+
+
+def test_the_form_file_is_found_by_its_sha_through_corpus_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R1: the response lane's pull writes corpus.json, not the chronology's raw_manifest.jsonl."""
+    _install(monkeypatch, _served(), ["1.1", "6.4", "8.1"])
+    seen: list[Path] = []
+    monkeypatch.setattr(read_stage, "pixel_read", lambda p: seen.append(p) or {"checked": ["1.1", "6.4", "8.1"]})
+    job = _matter(tmp_path)
+    (job / "data" / "raw_manifest.jsonl").unlink()
+    pdf = job / "data" / "raw" / "form.pdf"
+    (job / "data" / "corpus.json").write_text(json.dumps([{"id": "f1", "sha256": FORM_SHA, "path": str(pdf)}]))
+    key = _key(tmp_path)
+    assert R.main([str(job), "--key", str(key), "--stage", "form-read"]) == 0
+    assert seen == [pdf]
+
+
+def test_a_request_head_compares_trimmed_after_its_cut_and_without_case(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R2: a key copied from the paper's capitals, and a cut landing on a space, are not differences."""
+    long = "x" * 79 + " and the rest of the request."
+    text = SPECIAL_TEXT.replace(SPECIAL[1], long)
+    _install(monkeypatch, _served(text), [])
+    items = [{"n": 1, "kind": "", "request_head": SPECIAL[0].upper()}, {"n": 2, "kind": "", "request_head": "X" * 79}]
+    key = _key(tmp_path, special=items)
+    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "find"]) == 0, _mismatches(key)
+
+
+def test_the_cost_projection_counts_the_pages_the_page_store_holds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R3: the projection is the lane's own figure, which subtracts the pages already stored."""
+    from jobs.drafting import response_cost
+
+    _install(monkeypatch, _served(), [])
+    got: dict[str, Any] = {}
+    real_project = response_cost.project
+
+    def project(*a: Any, **kw: Any) -> Any:
+        got.update(kw)
+        return real_project(*a, **kw)
+
+    monkeypatch.setattr(response_cost, "stored_pages", lambda rows, model, log=print: 7)
+    monkeypatch.setattr(response_cost, "project", project)
+    key = _key(tmp_path)
+    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "cost", *_inputs(tmp_path)]) == 0
+    assert got["stored_pages"] == 7
+    cost = next(s for s in _report(key)["sections"] if s["name"] == "cost")
+    assert any("7 scanned page(s) already in the seat's page store" in n for n in cost["notes"])
+
+
+def _served_paper(title: str, label: str) -> str:
+    return (
+        f"[p.1]\nDEFENDANT SAMPLE TRANSIT CO.'S {title}, SET ONE\nPROPOUNDING PARTY: Defendant {OTHER}\n"
+        f"RESPONDING PARTY: Plaintiff {CLIENT}\nSET NO.: ONE\n{label} NO. 1:\nAll example writings.\n"
+    )
+
+
+def test_find_lists_every_read_it_needs_and_uses_the_recordings_it_has(tmp_path: Path) -> None:
+    """R4: the finder's code half runs in full and every read without a recording is listed at once."""
+    job = _matter(tmp_path)
+    data = job / "data"
+    rows = [json.loads(x) for x in (data / "extracted.jsonl").read_text().splitlines()]
+    for i, (title, label) in enumerate(
+        [("SPECIAL INTERROGATORIES", "SPECIAL INTERROGATORY"), ("REQUESTS FOR PRODUCTION", "REQUEST FOR PRODUCTION")]
+    ):
+        p = data / "text" / f"s{i}.txt"
+        p.write_text(_served_paper(title, label))
+        rows.append({"id": f"s{i}", "name": f"s{i}.pdf", "folder": "Discovery", "ext": ".pdf", "text_path": str(p)})
+    (data / "extracted.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    key = _key(tmp_path)
+    args = [str(job), "--key", str(key), "--stage", "find", "--no-model"]
+    assert R.main(args) == 2
+    rep = _report(key)
+    shas = [n["sha"] for n in rep["needed_calls"]]
+    assert len(shas) == 2 and len(set(shas)) == 2, "both reads listed, not just the first"
+    (sec,) = rep["sections"]
+    assert sec["status"] == "needs_model" and all(s in sec["notes"][0] for s in shas)
+    rec = {"sha": shas[0], "text": "{}", "in": 1, "out": 1}
+    key.with_name(f"{key.stem}.recordings.jsonl").write_text(json.dumps(rec) + "\n")
+    assert R.main(args) == 2
+    assert [n["sha"] for n in _report(key)["needed_calls"]] == [shas[1]], "the recorded read was answered"
+
+
+def test_the_workspace_key_shape_loads_with_its_aliases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The workspace's hand-built keys: type aliases, set, requests, head."""
+    _install(monkeypatch, _served(), ["1.1", "6.4", "8.1"])
+    key = _key(
+        tmp_path,
+        served_sets=[
+            {"type": "si", "set": 1, "sha256": "ab" * 32, "requests": 2},
+            {"type": "frog", "set": 1, "sha256": FORM_SHA, "requests": 4},
+        ],
+        special=[{"n": 1, "kind": "objection_plus_answer", "head": SPECIAL[0]}],
+    )
+    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "find"]) == 0, _mismatches(key)
+    rows = next(s for s in _report(key)["sections"] if s["name"] == "found vs key")["rows"]
+    assert [r["found"] for r in rows if "found" in r] == ["yes", "yes"]
+    assert any(r.get("request_head_equal") for r in rows)
+
+
+def test_a_key_with_no_served_set_fails_loudly_naming_the_missing_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _install(monkeypatch, _served(), [])
+    key = _key(tmp_path, served_sets=[{"type": "si", "sha256": "ab" * 32}])
+    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "find"]) == 2
+    assert "served_sets[0] (no set_number or set)" in capsys.readouterr().err
+    assert not key.with_name(f"{key.stem}.replay.json").exists()

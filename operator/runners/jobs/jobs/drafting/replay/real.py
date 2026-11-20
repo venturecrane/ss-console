@@ -24,7 +24,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from . import stages as S
+from . import recorded, stages as S
 
 #: The finder's model in a replay: the request sha ignores the model, so any name answers.
 REPLAY_MODEL = "replay"
@@ -42,19 +42,34 @@ def find(matter: S.Matter, work: Path, doorway: Any) -> None:
     from .. import served as served_mod, served_find as sf
 
     fn = S.entry("find")
+    replies: dict[str, str] = {}
 
     def ask(text: str) -> str:
-        messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
-        return doorway.call(
-            sf.STAGE, model=REPLAY_MODEL, system=sf.SYSTEM, messages=messages, max_tokens=sf.MAX_TOKENS, effort=""
-        ).text
+        if text not in replies:
+            messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
+            replies[text] = doorway.call(
+                sf.STAGE, model=REPLAY_MODEL, system=sf.SYSTEM, messages=messages, max_tokens=sf.MAX_TOKENS, effort=""
+            ).text
+        return replies[text]
 
+    request, clients = request_text(matter), served_mod.clients_of(matter.data)
+    # The code half first, every read it would make asked of the recordings:
+    # each one without a recording is listed, not just the first, and a stage
+    # with any missing stops before the finder runs (``--no-model``).
+    missing: list[recorded.NeedsModelCall] = []
+    for text in sf.planned_reads(matter.data, request, clients):
+        try:
+            ask(text)
+        except recorded.NeedsModelCall as need:
+            missing.append(need)
+    if missing:
+        raise recorded.NeedsModelCall(missing[0].stage, missing[0].sha, more=[m.sha for m in missing[1:]])
     fn(
         matter.data,
         work,
-        request_text(matter),
+        request,
         sf.Reader(ask, lambda: 0.0, lambda _chars: 0.0),
-        clients=served_mod.clients_of(matter.data),
+        clients=clients,
         other_side=sf.other_side(matter.data),
     )
 
@@ -131,16 +146,22 @@ def scope(matter: S.Matter, work: Path, served_doc: Any, base: Path, firm_data: 
 
 def cost(work: Path, scoped: dict[str, Any], served_doc: Any, firm_data: dict[str, Any], pricing: Any) -> dict:
     """``response_cost.project`` over the scoped copy: dollars, minutes and each line."""
-    from .. import response_scope as rs
+    from .. import response_cost as rc, response_scope as rs
 
     fn = S.entry("cost")
     data = work / "data"
     plan = scoped["plan"]
     sets = served_doc.get("sets") or [] if isinstance(served_doc, dict) else []
     counts = {u["key"]: int(sets[u["served"]]["request_count"]) for u in plan if isinstance(u.get("served"), int)}
-    est = fn(rs.corpus_rows(data), rs.categories(data), plan, firm_data, pricing, request_counts=counts)
+    rows = rs.corpus_rows(data)
+    # The pages the seat's page store already holds, read read-only as the lane
+    # reads them (``response_cost.scope_and_estimate``), so the projection is
+    # the lane's own figure; 0 where no store is configured.
+    model = str((firm_data.get("models") or {}).get("transcription") or "")
+    stored = rc.stored_pages(rows, model, log=lambda _m: None) if model else 0
+    est = fn(rows, rs.categories(data), plan, firm_data, pricing, stored_pages=stored, request_counts=counts)
     lines = [{"item": "transcription", "dollars": est["parts"]["transcription"],
-              "minutes": est["minutes"]["transcription"]}]  # fmt: skip
+              "minutes": est["minutes"]["transcription"], "stored_pages": stored}]  # fmt: skip
     lines += [{"item": f"{k} {u['set_type']}", "dollars": u["usd"], "minutes": u["minutes"]}
               for k, u in est["units"].items()]  # fmt: skip
     lines.append({"item": "notes and review", "dollars": est["parts"]["notes_and_review"],

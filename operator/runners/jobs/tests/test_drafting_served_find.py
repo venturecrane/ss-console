@@ -78,9 +78,12 @@ def matter(tmp_path: Path, docs: list[dict], facts: dict | None = None) -> tuple
     ext, corpus, listing = [], [], []
     for d in docs:
         tp = data / "text" / f"{d['id']}.txt"
-        tp.write_text("\n".join(f"[p.{i}]\n{t}" for i, t in enumerate(d["pages"], 1)), encoding="utf-8")
-        ext.append({"id": d["id"], "name": d["name"], "folder": d.get("folder", "/Discovery"), "kind": "file",
-                    "ext": ".pdf", "text_path": str(tp), "pages": len(d["pages"]), "transcribe": []})  # fmt: skip
+        # A Word file's text carries no page marks (``stages/extract``): "text" is written as is.
+        body = d["text"] if "text" in d else "\n".join(f"[p.{i}]\n{t}" for i, t in enumerate(d["pages"], 1))
+        tp.write_text(body, encoding="utf-8")
+        ext.append({"id": d["id"], "name": d["name"], "folder": d.get("folder", "/Discovery"),
+                    "kind": d.get("kind", "file"), "ext": d.get("ext", ".pdf"), "text_path": str(tp),
+                    "pages": len(d.get("pages", [1])), "transcribe": []})  # fmt: skip
         corpus.append({"id": d["id"], "sha256": d.get("sha", d["id"])})
         listing.append({"id": d["id"], "name": d["name"], "created": d.get("created", "2026-10-02T09:00:00")})
     (data / "extracted.jsonl").write_text("".join(json.dumps(r) + "\n" for r in ext), encoding="utf-8")
@@ -332,7 +335,8 @@ def test_a_count_off_the_numbered_requests_stops_served_unnumbered(tmp_path):
 
 
 def test_more_than_the_finder_reads_stops_served_many_before_any_read(tmp_path):
-    docs = [{"id": f"s{i}", "name": f"{i}.pdf", "pages": srog(2)} for i in range(served_find.FIND_MAX + 1)]
+    # Thirteen DIFFERENT papers (each its own request count): copies alike would fold into one.
+    docs = [{"id": f"s{i}", "name": f"{i}.pdf", "pages": srog(2 + i)} for i in range(served_find.FIND_MAX + 1)]
     data, jd = matter(tmp_path, docs)
     fake = Fake({"SPECIAL": values("special_interrogatories", 2)})
     assert stop_of(lambda: run(data, jd, fake)) == "served_many" and fake.seen == []
@@ -357,3 +361,87 @@ def test_every_finder_stop_is_a_reason_code_and_a_plan_stop_with_a_next_step():
 
     assert set(served.FIND_STOPS) <= set(outcome.REASON_CODES) and set(served.FIND_STOPS) <= set(served.PLAN_STOPS)
     assert set(served.FIND_STOPS) <= set(job_notes.DRAFTING_NEXT)
+
+
+# ---- the 2026-11-20 replay's shapes (every value invented; each shape as the real papers print it) --------
+
+
+def test_a_request_number_alone_on_its_line_with_the_text_below_slices_and_numbers(tmp_path):
+    """L1: "15." alone, the text on the next line; a split citation ("4.1.") never counts."""
+    items = "".join(
+        f"{i}.\nState example fact {i}"
+        + ("\nunder paragraph\n4.1.\nof the example agreement" if i == 2 else "")
+        + ".\n"
+        for i in range(1, 6)
+    )
+    pages = [head("SPECIAL INTERROGATORIES"), "DEFINITIONS\n1. YOU means the responding party.\n"
+             f"SPECIAL INTERROGATORIES\n{items}", END]  # fmt: skip
+    data, jd = matter(tmp_path, [{"id": "s1", "name": "s.pdf", "pages": pages}])
+    run(data, jd, Fake({"SPECIAL": values("special_interrogatories", 5)}))
+    (s,) = served.read(jd, [CLIENT])
+    assert served.numbering(s.request_text) == [1, 2, 3, 4, 5]
+    assert "under paragraph 4.1. of the example agreement" in served.numbered(s.request_text)[2]
+
+
+def _below(pages: list[str]) -> list[str]:
+    """The SET line's value one and two lines BELOW its label (the real text sets)."""
+    return [p.replace("SET NO.: ONE\n", "SET NO.:\n\nONE\n") for p in pages]
+
+
+def test_a_set_number_printed_below_its_label_is_read_for_the_check_and_the_pairing(tmp_path):
+    """L2: "SET NO.:" with ONE on a line below, on the served set and on our response paper."""
+    resp = _below(response("SPECIAL INTERROGATORIES"))
+    assert "SET NO.:\n\nONE" in resp[0]
+    docs = [{"id": "s1", "name": "s.pdf", "pages": _below(srog(3))},
+            {"id": "p1", "name": "p.pdf", "pages": _below(rfp(2))},
+            {"id": "r1", "name": "r.pdf", "pages": resp, "created": "2026-10-30T09:00:00"}]  # fmt: skip
+    data, jd = matter(tmp_path, docs)
+    fake = Fake({"SPECIAL INTERROGATORIES, SET": values("special_interrogatories", 3),
+                 "DEMAND FOR PRODUCTION": values("requests_for_production", 2)})  # fmt: skip
+    run(data, jd, fake)
+    assert [s.set_type for s in served.read(jd, [CLIENT])] == ["requests_for_production"]
+    assert served_find.set_numbers("SET NUMBER:\n  2\n") == [2]
+
+
+def test_our_word_response_paper_with_its_caption_table_last_is_a_response_not_a_served_set(tmp_path):
+    """L3: Word text puts the caption table (and its title) AFTER the body paragraphs."""
+    body = (f"PROPOUNDING PARTY: | Defendant {DEF}\nRESPONDING PARTY: | Plaintiff GAMMA EXAMPLE\nSET NO.: | ONE\n"
+            "PRELIMINARY STATEMENT\nRESPONSE TO SPECIAL INTERROGATORY NO. 1:\nGamma Example.\n"
+            "ALPHA EXAMPLE (SBN 000001) | \nGAMMA EXAMPLE, Plaintiff, v. DELTA EXAMPLE CORPORATION | Case No. 30-0001\n"
+            "PLAINTIFF GAMMA EXAMPLE'S RESPONSES TO SPECIAL INTERROGATORIES, SET ONE")  # fmt: skip
+    word = {"id": "w1", "name": "Resp SROGs.docx", "ext": ".docx", "text": body, "created": "2026-10-30T09:00:00"}
+    data, jd = matter(tmp_path, [*three_docs(), word])
+    fake = Fake(THREE)
+    run(data, jd, fake)
+    assert [s.set_type for s in served.read(jd, [CLIENT])] == ["requests_for_production", "form_interrogatories"]
+    assert len(fake.seen) == 3  # the Word response paper was never read as a served set
+    row = next(r for r in json.loads((jd / served_find.REPORT).read_text())["candidates"] if r["id"] == "w1")
+    assert row["kept"] and "answers Responses to Special Interrogatories, Set One" in row["why"]
+
+
+def test_an_emailed_copy_with_other_bytes_folds_into_the_filed_set_before_any_read(tmp_path):
+    """L4: same type, set and asking party, different sha256: one candidate, the discovery folder's kept."""
+    docs = [{"id": "a1", "name": "Def SROGs.pdf", "pages": srog(4), "sha": "emailed", "kind": "attachment",
+             "folder": "/Correspondence"},
+            {"id": "s1", "name": "Def SROGs Set One.pdf", "pages": srog(4), "sha": "filed",
+             "folder": "/DISCOVERY/DEF"}]  # fmt: skip
+    data, jd = matter(tmp_path, docs)
+    fake = Fake({"SPECIAL": values("special_interrogatories", 4)})
+    run(data, jd, fake)
+    assert len(fake.seen) == 1
+    assert json.loads((jd / served.FILE).read_text())["sets"][0]["source"] == "s1"
+    rows = {r["id"]: r for r in json.loads((jd / served_find.REPORT).read_text())["candidates"]}
+    assert rows["s1"]["copies"] == ["/Correspondence/Def SROGs.pdf"] and "a copy of" in rows["a1"]["why"]
+
+
+def test_the_running_footer_on_every_page_is_not_inside_a_request_that_crosses_a_page(tmp_path):
+    """L6: the paper's title in capitals repeats at each page foot."""
+    foot = "DEFENDANT DELTA EXAMPLE CORPORATION'S SPECIAL INTERROGATORIES TO PLAINTIFF\n"
+    pages = [head("SPECIAL INTERROGATORIES") + "SPECIAL INTERROGATORIES\n1. State example fact 1.\n2. State example\n",
+             "fact 2 in full.\n3. State example\n", "fact 3 in full.\n4. State example fact 4.\n", END]  # fmt: skip
+    data, jd = matter(tmp_path, [{"id": "s1", "name": "s.pdf", "pages": [p + foot for p in pages]}])
+    run(data, jd, Fake({"SPECIAL": values("special_interrogatories", 4)}))
+    (s,) = served.read(jd, [CLIENT])
+    got = served.numbered(s.request_text)
+    assert got[2] == "State example fact 2 in full." and got[3] == "State example fact 3 in full."
+    assert "TO PLAINTIFF" not in s.request_text

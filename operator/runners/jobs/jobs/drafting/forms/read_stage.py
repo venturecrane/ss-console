@@ -53,8 +53,10 @@ def png(image: Any) -> bytes:
 
 
 def revision_of(texts: list[str]) -> str | None:
-    found = {m.group(1) for t in texts for m in _REVISION.finditer(t)}
-    return " ".join(next(iter(found)).split()) if len(found) == 1 else None
+    # Whitespace is collapsed BEFORE the dedupe: one revision printed with two
+    # spaces on one page is still one revision (2026-11-20 replay: every real form).
+    found = {" ".join(m.group(1).split()) for t in texts for m in _REVISION.finditer(t)}
+    return next(iter(found)) if len(found) == 1 else None
 
 
 def _stop(job_dir: Path, record: dict[str, Any], code: str, why: str) -> DraftingFailed:

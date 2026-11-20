@@ -318,7 +318,9 @@ def _choose(docs: list[Doc], cap: int) -> set[tuple[int, int]]:
     for di, n, size in order:
         if (di, n) in chosen:
             continue
-        cost = size + (0 if di in headed else docs[di].head)
+        # A file's first page also pays its header and, after the first file,
+        # the newline ``_framed`` joins files with.
+        cost = size + (0 if di in headed else docs[di].head + (1 if headed else 0))
         if used + cost > cap:
             continue
         chosen.add((di, n))
@@ -328,7 +330,8 @@ def _choose(docs: list[Doc], cap: int) -> set[tuple[int, int]]:
 
 
 def _fits(docs: list[Doc], cap: int) -> bool:
-    return sum(d.head + sum(s for _, s, _ in d.pages) for d in docs) <= cap
+    joins = max(0, sum(1 for d in docs if d.pages) - 1)  # the newline between framed files
+    return sum(d.head + sum(s for _, s, _ in d.pages) for d in docs) + joins <= cap
 
 
 def corpus_rows(data: Path) -> list[dict[str, Any]]:
