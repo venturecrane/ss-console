@@ -171,7 +171,7 @@ def write(slug_dir: Path, unit: str, o: Outcome, src: str) -> None:
     mark = {
         "counts": dict(o.counts),
         "ops": o.ops,
-        "values_dropped": {k: sorted(v) for k, v in sorted(o.values_dropped.items())},
+        "values_dropped": sorted(o.values_dropped),
         "in_sha": _sha(src),
         "out_sha": _sha(o.md),
     }
@@ -196,16 +196,14 @@ def ran(ud: Path) -> bool:
     return now is not None and mark.get("out_sha") == now
 
 
-def values_dropped(ud: Path) -> dict[str, set[str]]:
-    """Per entry (``repeat_paras.excuse_key``), the true times of day the
-    final set's paragraph drops removed on purpose, from its marker, only
-    while the document is still its output (``ran``): what proof 10 excuses
-    on that entry alone."""
+def values_dropped(ud: Path) -> set[str]:
+    """The values the final set's paragraph drops removed on purpose (times
+    of day and bare years their keepers do not state), from its marker, only
+    when the document is still its output (``ran``): what proof 10 excuses."""
     mark = _json(ud / REPORT, None)
-    got = mark.get("values_dropped") if isinstance(mark, dict) and ran(ud) else None
-    if not isinstance(got, dict):
-        return {}
-    return {str(k): {str(v) for v in vs} for k, vs in got.items() if isinstance(vs, list)}
+    if not ran(ud) or not isinstance(mark, dict):
+        return set()
+    return {str(v) for v in mark.get("values_dropped") or []}
 
 
 def read_rows(ud: Path) -> list[dict[str, Any]]:

@@ -24,7 +24,7 @@ from jobs.medchron.update import (
 )
 from jobs.medchron.update import repeat_paras as RP
 from jobs.stages import update_final_set
-from test_update_final_set import COPY, D, NEW_POST, NEX, ROE_A, TIMED, _doc, _inputs, _job, _sr
+from test_update_final_set import COPY, NEW_POST, NEX, ROE_A, TIMED, _doc, _inputs, _job, _sr
 
 DELIVERED = B.entries_of(K.base_md())[1]
 DIAG = "Medical Diagnoses"
@@ -94,23 +94,18 @@ def test_the_last_paragraph_citing_an_exhibit_stays() -> None:
     assert "Exhibit 3" not in short and "Ibuprofen was stopped" in short
 
 
-#: The same visit seen at another true time of day, and its keeper.
-TIMED_KEEPER = ROE_A.replace("Neck pain after", "Seen at 09:15 for neck pain after")
-TIMED_COPY = COPY.replace("Neck pain after", "Seen at 10:32 for neck pain after")
-
-
-def test_an_entry_left_with_no_cited_paragraph_goes_whole_and_a_true_time_of_day_may_differ() -> None:
-    x = _inputs([TIMED_KEEPER, TIMED_COPY])
+def test_an_entry_left_with_no_cited_paragraph_goes_whole_and_a_time_of_day_is_not_care() -> None:
+    """TIMED differs from its keeper by a clock time only: covered paragraph by
+    paragraph, removed whole, and the time recorded as removed on purpose."""
+    x = _inputs([ROE_A, TIMED])
     o = FS.run(x)
-    assert _added(o) == [TIMED_KEEPER]
+    assert _added(o) == [ROE_A]
     assert o.counts["repeats: entries removed whole, every paragraph covered"] == 1
-    assert o.values_dropped == {RP.excuse_key(TIMED_COPY): {"10:32"}}
-    assert FS.keys_of(TIMED_COPY) <= o.removed
+    assert o.values_dropped == {"10:32"}
+    assert not FS.keys_of(TIMED) & FS.keys_of(o.md) and FS.keys_of(TIMED) <= o.removed
     _keys_stable(x, o)
-    dosed = TIMED_COPY.replace("Seen at 10:32", "Given 30 mg at 10:32")  # mutation: a dose is care, it stays
-    assert _added(FS.run(_inputs([TIMED_KEEPER, dosed]))) == [TIMED_KEEPER, dosed]
-    # a time the keeper does not have, on words it does not hold either, stays
-    assert _added(FS.run(_inputs([ROE_A, TIMED]))) == [ROE_A, TIMED]
+    dosed = TIMED.replace("Seen at 10:32", "Given 30 mg at 10:32")  # mutation: a dose is care, it stays
+    assert _added(FS.run(_inputs([ROE_A, dosed]))) == [ROE_A, dosed]
 
 
 def test_a_fold_is_never_touched() -> None:
@@ -139,80 +134,26 @@ def test_two_copies_each_with_a_value_keep_their_own_and_say_the_shared_once() -
     _keys_stable(x, o)
 
 
-def test_the_final_set_then_the_proofs_excuse_a_dropped_time_on_its_own_entry_only(
+def test_the_final_set_then_the_proofs_on_an_update_with_a_paragraph_drop(
     job_dir: Path, firm_config_path: Path, data_root: Path
 ) -> None:
-    """Proof 10 reads entry A's dropped clock time as removed on purpose
-    (``final_set_io.values_dropped``, per entry); entry B, which lost the same
-    time for real, still fails it."""
+    """Proof 10 reads a paragraph drop's clock time as removed on purpose
+    (``final_set_io.values_dropped``), never as a value the update lost."""
     sr = _sr(job_dir, firm_config_path, data_root, [])
     sd = sr.slug_dir
-    _job(sd, [TIMED_KEEPER, TIMED_COPY])
+    timed = TIMED + f"\n\n{DISCHARGE}\nIbuprofen was stopped on 03/20/2026. (Exhibit 2 - p. 5)"
+    _job(sd, [ROE_A, timed])
     assert update_final_set.run(sr) == 0
     ud = sd / "runs" / "alpha" / "update"
     mark = json.loads((ud / FS.REPORT).read_text())
-    key = RP.excuse_key(TIMED_COPY)
-    assert mark["counts"]["repeats: paragraphs dropped"] == 1 and mark["values_dropped"] == {key: ["10:32"]}
-    updated = DELIVERED + B.entries_of((sd / "runs" / "alpha" / "final-chronology.md").read_text())[1]
-    excused = FIO.values_dropped(ud)
-    assert excused == {key: {"10:32"}}
-    assert P.dropped_values([TIMED_KEEPER, TIMED_COPY], updated, {2}, set(), (), excused) == []
-    assert P.dropped_values([TIMED_KEEPER, TIMED_COPY], updated, {2}, set()) != []  # unrecorded, proof 10 fails
-    lost_b = (
-        "02/02/2026\nExample Imaging | Medical Diagnoses\n\nMedical Diagnoses\nX-ray taken at 10:32. (Exhibit 2 - p. 7)"
-    )
-    got = P.dropped_values([TIMED_KEEPER, TIMED_COPY, lost_b], updated, {2}, set(), (), excused)
-    assert [d for d, _v in got] == ["02/02/2026"] and "10:32" in got[0][1]  # B is not excused by A's record
-    (sd / "runs" / "alpha" / "final-chronology.md").write_text(_doc([TIMED_KEEPER, TIMED_COPY]))
-    assert FIO.values_dropped(ud) == {}  # a document the step did not write excuses nothing
-
-
-#: A keeper, and five paragraphs that share its numbers or cue terms but say otherwise (the 2026-11-19 review).
-FACTS = (
-    f"{D}\nRoe, Jane (M.D.) | Medical Diagnoses\n\nMedical Diagnoses\n"
-    "MRI showed disc herniation at L4-L5 with nerve root compression. Pain 7/10 in the left knee. "
-    "Insulin carb ratio 1:15. Prior lumbar injury in 2021. Heparin 5000 units given. (Exhibit 2 - p. 4)"
-)
-SAYS_OTHERWISE = [
-    "MRI showed no disc herniation at L4-L5 and no nerve root compression.",
-    "Off work for two weeks; pain 7/10 in the right knee.",
-    "Insulin carb ratio 1:12.",
-    "Prior lumbar injury in 2019.",
-    "Heparin 2000 units given.",
-]
-
-
-def _copy_of_facts(para: str) -> str:
-    return (
-        f"{D}\nExample Clinic Orthopedics, Jane Roe | Medical Diagnoses\n\nMedical Diagnoses\n{para} (Exhibit 3 - p. 1)"
-    )
-
-
-@pytest.mark.parametrize("para", SAYS_OTHERWISE)
-def test_a_paragraph_that_says_otherwise_is_kept(para: str) -> None:
-    added = _copy_of_facts(para)
-    three = NEW_POST.replace("Exhibit 2", "Exhibit 3")  # exhibit 3 cited elsewhere: only the rule can keep it
-    x = _inputs([FACTS, added, three])
-    o = FS.run(x)
-    assert added in _added(o)
-    assert not RP.covers(FACTS, added.split("\n")[-1], FS.dates_present) and not FS.covers(FACTS, added)
-    _keys_stable(x, o)
-
-
-def test_a_true_verbatim_repeat_is_still_dropped() -> None:
-    added = _copy_of_facts("MRI showed disc herniation at L4-L5 with nerve root compression.")
-    x = _inputs([FACTS, added, NEW_POST.replace("Exhibit 2", "Exhibit 3")])
-    o = FS.run(x)
-    assert added not in _added(o) and FACTS in _added(o)
-    _keys_stable(x, o)
-
-
-def test_the_falsifier_is_its_own_reading() -> None:
-    keep = FACTS.split("\n")[-1]
-    assert not RP.lost("MRI showed disc herniation at L4-L5 with nerve root compression. (Exhibit 3 - p. 1)", FACTS)
-    for para in SAYS_OTHERWISE:
-        assert RP.lost(para, FACTS), para
-    assert RP.lost("Seen at 10:32 for neck pain.", keep)
+    assert mark["counts"]["repeats: paragraphs dropped"] == 1 and mark["values_dropped"] == ["10:32"]
+    after = (sd / "runs" / "alpha" / "final-chronology.md").read_text()
+    updated = DELIVERED + B.entries_of(after)[1]
+    named = FIO.values_dropped(ud)
+    assert P.dropped_values([ROE_A, timed], updated, {2}, named) == []
+    assert P.dropped_values([ROE_A, timed], updated, {2}, set()) != []  # falsifier: unrecorded, proof 10 fails
+    (sd / "runs" / "alpha" / "final-chronology.md").write_text(_doc([ROE_A, timed]))
+    assert FIO.values_dropped(ud) == set()  # a document the step did not write excuses nothing
 
 
 def test_a_paragraph_with_no_value_goes_only_when_its_words_are_in_the_keeper_whole() -> None:

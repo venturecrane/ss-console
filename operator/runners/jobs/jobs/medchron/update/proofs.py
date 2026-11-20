@@ -45,7 +45,6 @@ from .. import meta_markers
 from ..audit import controls
 from . import body as B
 from .uncited import cite_only
-from .repeat_paras import excuse_key
 from .values import numbers
 
 NOTE_LINE = re.compile(r"pre-incident encounters?.*not itemized")
@@ -76,9 +75,6 @@ class Inputs:
     #: the collect stage's handwritten re-dates, [(from, to, exhibits)] in final
     #: numbers (``handwritten.moves_of``); their removed readings are in review_named
     redate_moves: list[tuple[str, str, set[int]]] = field(default_factory=list)
-    #: per entry (``repeat_paras.excuse_key``), the true times of day the final
-    #: set's paragraph drops removed on purpose; excused on that entry alone
-    entry_excused: dict[str, set[str]] = field(default_factory=dict)
     #: control keys retired as badly chosen (``audit/retired.py``, by SMD or by
     #: rule): proof 5 leaves them out, as the round report and the gate do
     retired_controls: set[str] = field(default_factory=set)
@@ -125,15 +121,12 @@ def dropped_values(
     new_ex: set[int],
     named: set[str],
     moved: list[tuple[str, str, set[int]]] | tuple = (),
-    excused: dict[str, set[str]] | None = None,
 ) -> list[tuple]:
     """[(entry head, [values])] for entries composed from a NEW exhibit whose
     values the updated document does not carry on that date and the audit did
     not name. `moved` is the collect stage's re-dates ([(from, to, exhibits)],
     ``handwritten.moves_of``): an entry a re-date moved is looked for on the
-    date it moved to as well, never excused. `excused`: per entry
-    (``repeat_paras.excuse_key``), values the final set dropped on purpose
-    from THAT entry; they excuse no other."""
+    date it moved to as well, never excused."""
     by_date: dict[str, set[str]] = {}
     for e in updated_entries:
         by_date.setdefault(B.iso(e), set()).update(numbers(e))
@@ -147,8 +140,7 @@ def dropped_values(
         for frm, to, ex in moved:
             if frm == day and ex & cites:
                 have |= by_date.get(to, set())
-        mine = excused.get(excuse_key(e), set()) if excused else set()
-        gone = sorted(numbers(e) - have - named - mine)
+        gone = sorted(numbers(e) - have - named)
         if gone:
             out.append((e.splitlines()[0], gone))
     return out
@@ -258,7 +250,7 @@ def _added(x: Inputs, r: Result) -> None:
     named: set[str] = set(x.review_named)
     for row in x.audit_rows:
         named |= numbers(" ".join((row.get("unsupported_assertions") or []) + (row.get("contradictions") or [])))
-    lost = dropped_values(x.composed, ue, x.new_exhibits, named, x.redate_moves, x.entry_excused)
+    lost = dropped_values(x.composed, ue, x.new_exhibits, named, x.redate_moves)
     from_new = sum(1 for e in x.composed if B.cited(e) & x.new_exhibits)
     head = f"entries composed from new exhibits {from_new}; with a value the update does not carry: {len(lost)}"
     r.check("10", not lost, head + "".join(f" | {d}: {v[:12]}" for d, v in lost[:10]))

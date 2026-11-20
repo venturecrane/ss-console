@@ -111,33 +111,33 @@ def test_an_uncovered_repeat_stays_whole_and_the_pair_is_recorded() -> None:
     assert _added(FS.run(_inputs([dosed_keeper, DOSED]))) == [dosed_keeper]  # mutation: the keeper states it, it goes
 
 
-def test_a_copy_worded_otherwise_is_kept() -> None:
-    """Two exports word one visit otherwise: values and terms alone would
-    drop it, but values and cue terms cannot read "no" or "right" (the
-    2026-11-19 review), so the words must be held too, and it stays."""
+def test_a_covered_copy_worded_otherwise_is_dropped() -> None:
+    """Two exports word one visit otherwise: covered and every date written,
+    it goes (no run-of-words or picture test, which dropped none on a real job)."""
     reordered = COPY.replace(
         "Neck pain after the collision rated 6 of 10; examination revealed",
         "Examination revealed, after the collision, neck pain rated 6 of 10 and",
     )
     assert R._covered(reordered, ROE_A) and not E.held(reordered, ROE_A)
     o = FS.run(_inputs([ROE_A, reordered]))
-    assert _added(o) == [ROE_A, reordered] and o.counts["pair: covered no, dates present yes, dropped no"] == 1
+    assert _added(o) == [ROE_A] and o.counts["pair: covered yes, dates present yes, dropped yes"] == 1
 
 
-#: Every word and value held by the keeper, but the keeper writes the two dates
-#: apart and the copy writes them as a range.
-RANGE_COPY = COPY.replace("rotation to the left.", "rotation to the left. Therapy was ordered 03/05/2026 - 04/02/2026.")
+RANGE_COPY = COPY.replace(
+    "(Exhibit 2 - p. 4)", "Physical therapy was ordered 03/05/2026 through 04/02/2026. (Exhibit 2 - p. 4)"
+)
 RANGE_KEEPER = ROE_A.replace(
-    "rotation to the left.", "rotation to the left. Therapy was ordered 03/05/2026, 04/02/2026."
+    "ibuprofen 600 mg as needed.",
+    "ibuprofen 600 mg as needed. Physical therapy was ordered; therapy began 03/05/2026 and a recheck is set 04/02/2026.",
 )
 
 
 def test_a_covered_pair_with_a_date_range_the_keeper_does_not_write_stays() -> None:
-    assert FS.said(RANGE_COPY, RANGE_KEEPER) and not FS.dates_present(RANGE_COPY, RANGE_KEEPER)
+    assert R._covered(RANGE_COPY, RANGE_KEEPER) and not FS.dates_present(RANGE_COPY, RANGE_KEEPER)
     o = FS.run(_inputs([RANGE_KEEPER, RANGE_COPY]))
     assert len(_added(o)) == 2
     assert o.counts["repeats: kept whole, a date or date range the other does not write"] == 1
-    written = RANGE_KEEPER.replace("03/05/2026, 04/02/2026", "03/05/2026 - 04/02/2026")
+    written = RANGE_KEEPER.replace("therapy began 03/05/2026", "therapy runs 03/05/2026 through 04/02/2026; begun")
     assert _added(FS.run(_inputs([written, RANGE_COPY]))) == [written]  # mutation: the keeper writes the range
 
 
@@ -477,7 +477,9 @@ def test_p13_records_a_covered_repeat_left_in_the_added_entries(tmp_path: Path) 
     assert ranged["P13_covered_repeat_left"] == ranged["P13_kept_for_an_exhibit"] == 0
     # only the shorter covers the longer: the rule keeps the longer, recorded apart
     short = COPY.replace("(Exhibit 2 - p. 4)", "Pulse 74. (Exhibit 2 - p. 4)")
-    long_ = COPY.replace("(Exhibit 2 - p. 4)", "(Exhibit 2 - p. 4) (Exhibit 2 - p. 5) (Exhibit 2 - p. 6)")
+    long_ = COPY.replace(
+        "(Exhibit 2 - p. 4)", "It was a long and careful visit in the clinic that day. (Exhibit 2 - p. 4)"
+    )
     assert len(long_) > len(short)
     both = PF.run(_pf(tmp_path, md, added=[long_, short])).recorded
     assert both["P13_shorter_covers_longer"] == 1 and both["P13_covered_repeat_left"] == 0

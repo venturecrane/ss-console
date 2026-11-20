@@ -8,16 +8,11 @@ encounter with another entry, and is not covered whole, loses each CITED
 PARAGRAPH (a body line carrying a citation) that ONE of the entries it matches
 covers on its own, and keeps every other paragraph verbatim:
 
-* covered: the keeper holds every run of four words of the paragraph's body
-  (``encounter.held``, the run test of the whole-entry rule) AND every number,
-  finding term, date and date range it writes. Only a TRUE time of day may
-  differ (``TIME``: "at 10:32", "10:32 am", "10:32:05"); "1:12" alone is a
-  ratio, kept as a value. In doubt the paragraph stays: a kept repeat is a
-  nuisance, a dropped fact is a wrong document. (2026-11-19 review: comparing
-  values and cue terms only dropped "NO disc herniation" against "disc
-  herniation", a right knee against a left, a carb ratio and a year.)
-* a drop is made only when ``lost``, computed by its own tokenizer, finds
-  every number, word and four-word run of the paragraph in the keeper;
+* covered: every content value (``values.content_numbers``: a time of day and
+  a bare year are not care), every finding term (``values.terms`` against
+  ``values.words``) and every date and date range the paragraph writes; a
+  paragraph with no value and no term goes only when its words are, in order,
+  inside the keeper's (``repeats._restates``'s normal form);
 * a drop that creates a claim key is not made (the paragraph directly above
   another under one heading closes that heading's span: removing it changes
   the next claim's text), and is counted;
@@ -26,9 +21,9 @@ covers on its own, and keeps every other paragraph verbatim:
 * a subsection heading left with nothing under it goes with its paragraph.
 
 The keeper is never edited. A delivered entry is never edited (it is only
-ever a keeper). Each drop records, for its entry (``encounter.key``), the
-times of day its paragraph wrote that the keeper did not, so proof 10 excuses
-them on that entry alone, never on another.
+ever a keeper). Each drop records the values its paragraph states that its
+keeper does not (``numbers`` less the keeper's: times and years only, by the
+rule), so proof 10 reads them as removed on purpose, never as lost.
 """
 
 from __future__ import annotations
@@ -37,17 +32,8 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from . import body as B, encounter as E, uncited as U
-from .values import numbers, terms, words
-
-#: A TRUE time of day: after "at"/"@", or with am/pm, or with seconds. A bare
-#: "1:12" is not one (it can be a ratio or a dose), so it stays a value.
-TIME = re.compile(
-    r"(?i)(?:\b(?:at|@)\s*(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:\s*[ap]\.?m\b\.?)?"
-    r"|\b(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?\s*[ap]\.?m\b\.?"
-    r"|\b(?:[01]?\d|2[0-3]):[0-5]\d:[0-5]\d\b)"
-)
-_TOK = re.compile(r"[a-z]+|\d+(?:[.:/,-]\d+)*")
+from . import body as B, repeats as R, uncited as U
+from .values import content_numbers, numbers, terms, words
 
 Keys = Callable[[str], set[str]]
 Dated = Callable[[str, str], bool]
@@ -61,14 +47,7 @@ class Shortened:
     left_uncited: int = 0
     lost_keys: set[str] = field(default_factory=set)
     values: set[str] = field(default_factory=set)
-    refused: int = 0  # covered paragraphs the independent falsifier kept
-
-
-def excuse_key(e: str) -> str:
-    """Which entry an excused value belongs to: its encounter key and the
-    exhibits it cites (final numbers), read alike off the final set's entry
-    and off compose's (``proofs.dropped_values``)."""
-    return f"{E.key(e)}|{','.join(str(n) for n in sorted(B.cited(e)))}"
+    merged: int = 0  # paragraphs whose drop the independent falsifier says lost something
 
 
 def cited_paragraphs(e: str) -> list[str]:
@@ -81,35 +60,17 @@ def as_entry(p: str) -> str:
     return "\n\n" + p
 
 
-def untimed(text: str) -> str:
-    """`text` with its true times of day blanked."""
-    return TIME.sub(" ", text)
-
-
-def times(text: str) -> set[str]:
-    """The numbers of `text`'s true times of day."""
-    return set().union(*(numbers(m.group(0)) for m in TIME.finditer(text))) if TIME.search(text) else set()
-
-
 def covers(keeper: str, p: str, dated: Dated) -> bool:
-    """`keeper` states everything paragraph `p` states, on its own: every
-    four-word run, every number but a true time of day, every term and date."""
-    q, k = untimed(p), untimed(keeper)
-    return E.held(as_entry(q), k) and numbers(q) <= numbers(k) and terms(q) <= words(k) and dated(as_entry(p), keeper)
-
-
-def _tokens(text: str) -> list[str]:
-    return _TOK.findall(B.CITE.sub(" ", untimed(text)).lower())
+    """`keeper` states everything paragraph `p` states, on its own."""
+    if not content_numbers(p) and not terms(p):
+        body = R._body(as_entry(p))
+        return bool(body) and f" {body} " in f" {R._body(keeper)} "  # whole words, in order
+    return content_numbers(p) <= content_numbers(keeper) and terms(p) <= words(keeper) and dated(as_entry(p), keeper)
 
 
 def lost(p: str, keeper: str) -> bool:
-    """The falsifier, by its own tokenizer and apart from ``covers``: a word,
-    number or four-word run of `p` (its true times aside) not in the keeper."""
-    mine, have = _tokens(p), _tokens("\n".join(keeper.split("\n")[2:]))
-    runs = {tuple(have[i : i + 4]) for i in range(len(have) - 3)}
-    if len(mine) < 4 or not set(mine) <= set(have):
-        return True
-    return any(tuple(mine[i : i + 4]) not in runs for i in range(len(mine) - 3))
+    """The falsifier, read apart from ``covers``: a content value or term of `p` the keeper lacks."""
+    return bool(content_numbers(p) - content_numbers(keeper)) or bool(terms(p) - words(keeper))
 
 
 def without(e: str, k: int, headings: set[str]) -> str:
@@ -140,9 +101,6 @@ def shorten(
         lines = s.text.split("\n")
         if by is None or p not in lines:
             continue
-        if lost(p, by):
-            s.refused += 1
-            continue
         cand = without(s.text, lines.index(p), headings)
         before, after = keys(s.text), keys(cand)
         if after - before:
@@ -153,6 +111,7 @@ def shorten(
             continue
         s.dropped += 1
         s.lost_keys |= before - after
-        s.values |= (numbers(p) - numbers(by)) & times(p)
+        s.values |= numbers(p) - numbers(by)
+        s.merged += int(lost(p, by))
         s.text = cand
     return s
