@@ -35,10 +35,14 @@ only go with an entry the step drops on purpose. In order:
    a delivered entry or another added entry is DROPPED WHOLE only when the
    other covers it: every value and finding term (``repeats._covered``) and
    either every run of four words of its body (``encounter.held``) or every
-   page it cites, by picture (``encounter.page_identical``). Otherwise both
-   stay whole and the pair is recorded. A drop that would leave an exhibit
-   uncited is not made (assemble refuses a gap). Nothing is recut: recut
-   text is ungraded.
+   page it cites, by picture (``encounter.page_identical``). A drop that
+   would leave an exhibit uncited is not made (assemble refuses a gap).
+   Nothing is recut: recut text is ungraded. An added entry so matched but
+   NOT covered whole loses each cited paragraph one of those entries covers
+   on its own (``update/repeat_paras``, 2026-11-19: all-or-nothing kept 24 of
+   31 real repeats whole for one clock time or one number); every other
+   paragraph stays verbatim, the other entry is never edited, an entry left
+   with no cited paragraph goes whole, and the pair is recorded.
 
 Outputs, besides the document: ``update/final_rows.jsonl``, one row per
 added claim (or per added entry that has none) with its entry's date, raw
@@ -64,7 +68,16 @@ from pathlib import Path
 from typing import Any
 
 from ..audit import claims as CL
-from . import body as B, encounter as E, entry_edits as EE, heading as HD, repeats as R, uncited as U
+from . import (
+    body as B,
+    encounter as E,
+    entry_edits as EE,
+    heading as HD,
+    repeat_paras as RP,
+    repeats as R,
+    uncited as U,
+)
+from .repeat_dates import dates_present as dates_present, dates_written as dates_written
 from .values import content_numbers, terms, words
 
 ROWS, CORRECTIONS, REPORT = "final_rows.jsonl", "corrections.json", "final_set.json"
@@ -97,6 +110,10 @@ class Outcome:
     ops: list[dict[str, Any]] = field(default_factory=list)
     #: claim keys this step removed on purpose: those of the entries it dropped
     removed: set[str] = field(default_factory=set)
+    #: values the paragraphs this step dropped state that their keepers do not
+    #: (times of day and bare years only, by ``repeat_paras.covers``): proof 10
+    #: reads them as removed on purpose
+    values_dropped: set[str] = field(default_factory=set)
 
 
 def _sha(text: str) -> str:
@@ -206,48 +223,6 @@ def headings_check(ents: list[str], x: Inputs, o: Outcome) -> dict[str, HD.Check
 # ---- 3. repeats -------------------------------------------------------------------------------
 
 
-_MONTHS: tuple[str, ...] = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
-_NUM_DATE = re.compile(r"(?<![\d/.-])(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?!\d|[/.-]\d)")
-_ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
-_WORD_DATE = re.compile(r"(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b")
-_RANGE = re.compile(r"\s*(?:-|–|to|through|thru|until)\s*", re.I)
-
-
-def _dates_at(text: str) -> list[tuple[int, int, str]]:
-    """(start, end, normalised YYYY-MM-DD) of every date written in `text`."""
-    out = []
-    for m in _NUM_DATE.finditer(text):
-        mo, d, y = int(m.group(1)), int(m.group(2)), m.group(3)
-        out.append((m.start(), m.end(), f"{2000 + int(y) if len(y) == 2 else int(y):04d}-{mo:02d}-{d:02d}"))
-    for m in _ISO_DATE.finditer(text):
-        out.append((m.start(), m.end(), m.group(0)))
-    for m in _WORD_DATE.finditer(text):
-        mo = _MONTHS.index(str(m.group(1)).lower()[:3]) + 1
-        out.append((m.start(), m.end(), f"{int(m.group(3)):04d}-{mo:02d}-{int(m.group(2)):02d}"))
-    return sorted(out)
-
-
-def dates_written(e: str) -> tuple[set[str], set[tuple[str, str]]]:
-    """(every date, every date range) written in an entry's BODY (its date
-    line aside), citations aside."""
-    body = B.CITE.sub(" ", "\n".join(e.split("\n")[2:]))
-    at = _dates_at(body)
-    ranges = {(a[2], b[2]) for a, b in zip(at, at[1:]) if _RANGE.fullmatch(body[a[1] : b[0]])}
-    return {d for _s, _e, d in at}, ranges
-
-
-def dates_present(e: str, keeper: str) -> bool:
-    """THE SECOND CONDITION of a safe drop, in its one place: every date and
-    every date range written in `e`'s body is written in `keeper`'s body too.
-    2026-11-17, on a real update: of 9 covered pairs of two exports, 2 held an
-    order date range the kept entry only implied through other dates; this
-    keeps them whole. (A run-of-words or a pixel-identity test dropped none:
-    two exports are different prints, worded differently.)"""
-    mine, my_ranges = dates_written(e)
-    have, have_ranges = dates_written(keeper)
-    return mine <= have and my_ranges <= have_ranges
-
-
 def covers(keeper: str, e: str, page_id: E.PageId | None = None) -> bool:
     """`keeper` says everything `e` says: every value and finding term
     (``repeats._covered``) and every date and range (``dates_present``).
@@ -274,8 +249,67 @@ def _lost(e: str, keeper: str) -> bool:
     return bool(content_numbers(e) - content_numbers(keeper)) or bool(terms(e) - words(keeper))
 
 
+def _keep_by(i: int, ents: list[str], base_ents: list[str], order: list[int], dropped: set[int], x: Inputs) -> list:
+    """(kind, entry) of every entry `ents[i]` is one encounter with that may keep it."""
+    e = ents[i]
+    out = [("delivered", d) for d in base_ents if E.same_encounter(d, e, x.canon, x.page_id)]
+    out += [
+        ("added", ents[j])
+        for j in order
+        if j != i and j not in dropped and not EE.is_fold(ents[j]) and len(ents[j]) >= len(e)
+        if E.same_encounter(ents[j], e, x.canon, x.page_id) and (len(ents[j]) > len(e) or j < i)
+    ]
+    return out
+
+
+def _cited_with(ents: list[str], dropped: set[int], i: int, text: str | None) -> set[int]:
+    """The exhibits the added entries cite with `ents[i]` as `text` (None: dropped)."""
+    rest = [text if j == i else ents[j] for j in range(len(ents)) if j not in dropped and (j != i or text is not None)]
+    return set().union(*(B.cited(r) for r in rest if r)) if rest else set()
+
+
+def _unmatched_same_date(e: str, ents: list[str], base_ents: list[str]) -> bool:
+    """`e` shares its date with another entry (and matched none by key): a
+    repeat under another provider heading is among these, never tested."""
+    return any(B.iso(d) == B.iso(e) for d in base_ents) or any(a is not e and B.iso(a) == B.iso(e) for a in ents)
+
+
+def _shorten(i: int, ents: list[str], dropped: set[int], keepers: list[str], cited0: set[int], x: Inputs, o: Outcome):
+    """Rule 3, paragraph by paragraph (``repeat_paras``): `ents[i]` less every
+    cited paragraph one keeper covers. True when it changed."""
+    s = RP.shorten(
+        ents[i],
+        keepers,
+        x.headings,
+        keys_of,
+        dates_present,
+        lambda t: not cited0 - _cited_with(ents, dropped, i, t),
+    )
+    o.counts["repeats: paragraphs left, removing them would change a claim"] += s.left_key
+    o.counts["repeats: paragraphs left, an exhibit would be uncited"] += s.left_uncited
+    o.counts["distinct visits merged"] += s.merged
+    if not s.dropped:
+        return False
+    o.counts["repeats: paragraphs dropped"] += s.dropped
+    o.removed |= s.lost_keys
+    o.values_dropped |= s.values
+    applied = {"op": "repeat paragraphs", "entry": E.key(ents[i]), "applied": True, "dropped": s.dropped}
+    if not RP.cited_paragraphs(s.text):
+        dropped.add(i)
+        o.removed |= keys_of(ents[i])
+        o.counts["repeats: entries removed whole, every paragraph covered"] += 1
+        o.ops.append(applied | {"whole": True})
+        return True
+    ents[i] = s.text
+    o.counts["repeats: entries shortened"] += 1
+    o.ops.append(applied)
+    return True
+
+
 def repeats(ents: list[str], base_ents: list[str], x: Inputs, o: Outcome) -> list[str]:
-    """Rule 3. Longer entries are kept first; a fold is never dropped."""
+    """Rule 3. Longer entries are kept first; a fold is never dropped. An
+    entry not covered whole loses the paragraphs a keeper covers (``_shorten``)."""
+    ents = list(ents)
     order = sorted(range(len(ents)), key=lambda i: -len(ents[i]))
     dropped: set[int] = set()
     cited_before = set().union(*(B.cited(e) for e in ents)) if ents else set()
@@ -283,14 +317,11 @@ def repeats(ents: list[str], base_ents: list[str], x: Inputs, o: Outcome) -> lis
         e = ents[i]
         if EE.is_fold(e):
             continue
-        keep_by = [("delivered", d) for d in base_ents if E.same_encounter(d, e, x.canon, x.page_id)]
-        keep_by += [
-            ("added", ents[j])
-            for j in order
-            if j != i and j not in dropped and not EE.is_fold(ents[j]) and len(ents[j]) >= len(e)
-            if E.same_encounter(ents[j], e, x.canon, x.page_id) and (len(ents[j]) > len(e) or j < i)
-        ]
+        keep_by = _keep_by(i, ents, base_ents, order, dropped, x)
         if not keep_by:
+            o.counts["repeats: same date as another entry, provider differs (not tested)"] += int(
+                _unmatched_same_date(e, ents, base_ents)
+            )
             continue
         cond = [(kind, k, R._covered(e, k), dates_present(e, k)) for kind, k in keep_by]
         for kind, _k, _c, _d in cond:
@@ -298,15 +329,14 @@ def repeats(ents: list[str], base_ents: list[str], x: Inputs, o: Outcome) -> lis
         hit = next(((kind, k) for kind, k, c, d in cond if c and d and len(k) >= len(e)), None)
         why = "" if hit else _kept_why(e, cond)
         if hit is not None:
-            rest = [ents[j] for j in range(len(ents)) if j != i and j not in dropped]
-            still = set().union(*(B.cited(r) for r in rest)) if rest else set()
-            why = "an exhibit would be uncited" if cited_before - still else ""
+            why = "an exhibit would be uncited" if cited_before - _cited_with(ents, dropped, i, None) else ""
         for kind, k, c, d in cond:
             gone = not why and hit is not None and k is hit[1]
             o.counts[f"pair: covered {_yn(c)}, dates present {_yn(d)}, dropped {_yn(gone)}"] += 1
         if why:
-            o.counts[f"repeats: kept whole, {why}"] += 1
-            o.ops.append({"op": "repeat", "entry": E.key(e), "applied": False, "why": why})
+            if not _shorten(i, ents, dropped, [k for _kind, k in keep_by], cited_before, x, o):
+                o.counts[f"repeats: kept whole, {why}"] += 1
+                o.ops.append({"op": "repeat", "entry": E.key(e), "applied": False, "why": why})
             continue
         assert hit is not None
         dropped.add(i)

@@ -43,8 +43,11 @@ COPY = (
     "Neck pain after the collision rated 6 of 10; examination revealed paraspinal tenderness and reduced "
     "rotation to the left. (Exhibit 2 - p. 4)"
 )
-#: The same visit, adding a time of day and nothing else: not covered (the time is a value).
+#: The same visit, adding a time of day and nothing else: not covered whole (the
+#: time is a value), but its one paragraph is (a time of day is not care), so it goes.
 TIMED = COPY.replace("Neck pain after", "Seen at 10:32 for neck pain after")
+#: The same visit, adding a value of care: not covered, kept whole.
+DOSED = COPY.replace("Neck pain after", "Given ketorolac 30 mg for neck pain after")
 NEW_POST = (
     "02/10/2026\nExample Imaging | Medical Diagnoses\n\nMedical Diagnoses\n"
     "MRI showed a disc protrusion measuring 3 mm at the fifth and sixth level. (Exhibit 2 - p. 2)"
@@ -98,14 +101,14 @@ def test_a_covered_repeat_under_another_heading_is_dropped_whole() -> None:
 
 
 def test_an_uncovered_repeat_stays_whole_and_the_pair_is_recorded() -> None:
-    """The shorter copy states a value (a time of day) the longer lacks."""
-    o = FS.run(_inputs([ROE_A, TIMED]))
-    assert _added(o) == [ROE_A, TIMED] and o.md == _doc([ROE_A, TIMED])
+    """The shorter copy's one paragraph states a value (a dose) the longer lacks."""
+    o = FS.run(_inputs([ROE_A, DOSED]))
+    assert _added(o) == [ROE_A, DOSED] and o.md == _doc([ROE_A, DOSED])
     assert o.counts["repeats: kept whole, not covered (it states a value or finding the other lacks)"] == 1
     assert o.counts["pair: covered no, dates present yes, dropped no"] == 1
     assert any(op["op"] == "repeat" and not op["applied"] for op in o.ops)
-    timed_keeper = ROE_A.replace("Neck pain after", "Seen at 10:32 for neck pain after")
-    assert _added(FS.run(_inputs([timed_keeper, TIMED]))) == [timed_keeper]  # mutation: the keeper states it, it goes
+    dosed_keeper = ROE_A.replace("Neck pain after", "Given ketorolac 30 mg for neck pain after")
+    assert _added(FS.run(_inputs([dosed_keeper, DOSED]))) == [dosed_keeper]  # mutation: the keeper states it, it goes
 
 
 def test_a_covered_copy_worded_otherwise_is_dropped() -> None:
@@ -164,18 +167,21 @@ def test_a_covered_copy_of_a_delivered_visit_is_dropped() -> None:
 
 
 def test_a_delivered_row_is_never_dropped() -> None:
-    """A longer added entry covering a delivered row drops nothing: the
+    """A longer added entry covering a delivered row drops no entry: the
     delivered row is not the final set's to drop, and the added one is not
-    covered by the shorter delivered row."""
+    covered whole by the shorter delivered row. It keeps only the paragraph
+    the delivered row lacks (``repeat_paras``)."""
     longer = K.ENTRY_POST.replace("Exhibit 1", "Exhibit 2").replace(
         "at intake.", "at intake; cyclobenzaprine 7.5 mg was prescribed."
     )
     o = FS.run(_inputs([longer]))
-    assert _added(o) == [longer] and B.entries_of(o.md)[1] == [longer]
+    kept = longer.split("\n\nAll Other Information")[0]
+    assert _added(o) == [kept]
     assert sum(v for k, v in o.counts.items() if k.startswith("repeats: safe drops")) == 0
+    assert o.counts["repeats: entries shortened"] == 1
     assert B.entries_of(K.base_md())[1][1] == K.ENTRY_POST  # the delivered row is where it was
     shorter = K.ENTRY_POST.replace("Exhibit 1", "Exhibit 2")
-    assert _added(FS.run(_inputs([longer, shorter, NEW_POST]))) == [longer, NEW_POST]  # mutation: added, it goes
+    assert _added(FS.run(_inputs([longer, shorter, NEW_POST]))) == [kept, NEW_POST]  # mutation: added, it goes
 
 
 def _main_dedupe_new(kept: list[str], canon) -> tuple[list[str], int]:
