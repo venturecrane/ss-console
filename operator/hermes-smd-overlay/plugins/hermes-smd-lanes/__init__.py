@@ -345,9 +345,9 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         "what the delivered chronologies covered, in listing order), count (documents, not "
         "pages: the record holds no page counts) and previously_uncovered (those on the matter "
         "at delivery that went unread). coverage_record false means no record exists for that "
-        "client, and nothing was computed. coverage_complete false (a joint matter where an older "
-        "delivery recorded no client) means the set cannot be trusted: name the client's records "
-        "from the listing instead.",
+        "client, and nothing was computed. coverage_complete false (a delivery on the matter "
+        "recorded no client, so it is never subtracted) means the set cannot be trusted: name the "
+        "client's records from the listing instead.",
         _schema(
             {
                 "matter_id": {

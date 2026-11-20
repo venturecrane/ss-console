@@ -106,15 +106,14 @@ def dob_sources(envelope: dict[str, Any]) -> list[str]:
     return list(ids)
 
 
-def _person(unit: dict[str, Any]) -> tuple[str, str, str] | None:
-    """(first given name, surname, dob), case and spaces folded: a middle
-    name, a double space or a capital never makes one person two, and twins
-    (one surname, one birth date) are two people by their first names."""
+def _person(unit: dict[str, Any]) -> tuple[str, str] | None:
+    """(surname, dob), case and spaces folded: a middle name, a nickname, a
+    title, "Surname, First" or a double space never makes one person two.
+    Twins share the key, so the refusal never claims the live job is this
+    client's: it names the job's own clients (``person_cover``)."""
     sur = "".join(str(unit.get("surname") or "").split()).casefold()
     dob = str(unit.get("dob") or "").strip()
-    words = str(unit.get("client_name") or "").split()
-    first = words[0].casefold() if words else ""
-    return (first, sur, dob) if first and sur and dob else None
+    return (sur, dob) if sur and dob else None
 
 
 def _units(raw: Any) -> list[dict[str, Any]]:
@@ -141,9 +140,11 @@ _ACTIVE_ON_MATTER_SQL = (
 
 def person_cover(ledger: Any, envelope: dict[str, Any], stale_before: str) -> list[dict[str, Any]]:
     """Per client of the envelope, in its order: ``client_name`` and the
-    active job on this matter, of this kind, already for that person
-    (first name, surname, date of birth), as ``job_id`` / ``job_state``, or
-    None for both when no active job covers them.
+    active job on this matter, of this kind, for a client with the same
+    surname and date of birth, as ``job_id`` / ``job_state`` with
+    ``job_clients``, the names that job was submitted for (None for all three
+    when no active job matches). The match is by surname and birth date, so
+    whose the job is is said from ``job_clients``, never assumed.
 
     A row with no recorded kind (written before 2026-11-19) never matches:
     the work-digest rule still covers it, and guessing its kind could refuse
@@ -158,12 +159,20 @@ def person_cover(ledger: Any, envelope: dict[str, Any], stale_before: str) -> li
     finally:
         conn.close()
     kind = kind_of(envelope)
-    live = [(str(j), str(s), {p for p in map(_person, _units(raw)) if p}) for j, s, k, raw in rows if k == kind]
+    live = [(str(j), str(s), _units(raw)) for j, s, k, raw in rows if k == kind]
     out = []
     for u in units:
         me = _person(u)
-        hit = next(((j, s) for j, s, people in live if me is not None and me in people), (None, None))
-        out.append({"client_name": str(u.get("client_name") or ""), "job_id": hit[0], "job_state": hit[1]})
+        hit = next((x for x in live if me is not None and me in {_person(v) for v in x[2]}), None)
+        names = [str(v.get("client_name") or "") for v in hit[2]] if hit else None
+        out.append(
+            {
+                "client_name": str(u.get("client_name") or ""),
+                "job_id": hit[0] if hit else None,
+                "job_state": hit[1] if hit else None,
+                "job_clients": names,
+            }
+        )
     return out
 
 
@@ -198,24 +207,27 @@ def duplicate_refusal(twin: tuple[str, str] | None, cover: list[dict[str, Any]])
     uncovered client's is not until it is submitted."""
     covered = [c for c in cover if c["job_id"]]
     uncovered = [c["client_name"] for c in cover if not c["job_id"]]
-    each = "; ".join(f"for {c['client_name']} it is {_where(c['job_id'], c['job_state'])}" for c in covered)
+    # Matched by surname and birth date only, so the job is named with the
+    # clients IT was submitted for, never asserted to be this request's client.
+    each = "; ".join(
+        f"a chronology for a client with the surname and date of birth of {c['client_name']} is "
+        f"{_where(c['job_id'], c['job_state'])} (submitted for {', '.join(c['job_clients'] or ['a client not recorded'])})"
+        for c in covered
+    )
     if twin is None:
         if not covered:
             return None
         return {
             "ok": True,
             "accepted": False,
-            "reason": f"a chronology on this matter is already in flight {each}; nothing was queued and nothing "
+            "reason": f"on this matter {each}; nothing was queued and nothing "
             f"was charged. Not covered by any job: {', '.join(uncovered)}. Resubmit with only "
             f"{'that client' if len(uncovered) == 1 else 'those clients'}",
             "clients": cover,
             "uncovered_clients": uncovered,
         }
     twin_id, twin_state = twin
-    distinct = {c["job_id"] for c in covered}
-    reason = (
-        f"this chronology package is {each}" if len(distinct) > 1 else f"this chronology package is {_where(*twin)}"
-    )
+    reason = f"on this matter {each}" if covered else f"this chronology package is {_where(*twin)}"
     out: dict[str, Any] = {
         "ok": True,
         "accepted": False,
@@ -282,29 +294,28 @@ def update_files(ledger: Any, request: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("medchron_update_files requires matter_id and client_name")
     if not isinstance(listing, list) or not all(isinstance(x, str) and x.strip() for x in listing):
         raise ValueError("medchron_update_files requires listing_ids: the matter's document ids, paged to the end")
+    from . import medchron_identity
+
     conn = ledger._connect()
     try:
-        rows = [
-            dict(r)
-            for r in conn.execute(
-                "SELECT * FROM medchron_jobs WHERE matter_id=? AND state='delivered' ORDER BY created_at ASC",
-                (matter_id,),
-            ).fetchall()
-        ]
-        named = {k for (raw,) in conn.execute(_KEYS_ON_MATTER_SQL, (matter_id,)).fetchall() for k in _keys(raw)}
+        medchron_identity.ensure(conn)
+        rows = [dict(r) for r in conn.execute(_DELIVERED_WITH_UNITS_SQL, (matter_id,)).fetchall()]
     finally:
         conn.close()
-    # A row that recorded no client (written before 2026-10-17) counts for
-    # this client only on a one-client matter. On a joint matter it may be the
-    # other client's delivery, and its coverage would drop documents from this
-    # client's update unread, so it is left out and the answer says so.
-    joint = len(named | {client}) > 1
-    unknown = [r for r in rows if r.get("client_keys") is None]
-    mine = [r for r in rows if client in _keys(r.get("client_keys")) or (r.get("client_keys") is None and not joint)]
-    out: dict[str, Any] = {"ok": True, "coverage_complete": not (joint and unknown)}
-    if joint and unknown:
+    # A delivered row is this client's when its recorded clients, or its kept
+    # units, name them. A row that names no client at all (written before
+    # 2026-10-17) is NEVER subtracted: it may be another client's delivery,
+    # and its coverage would drop this client's documents from the update
+    # unread. Whenever such a row exists the answer says so.
+    for r in rows:
+        kept = {" ".join(str(u.get("client_name") or "").split()).lower() for u in _units(r.get("units_json"))}
+        r["_names"] = (set(_keys(r.get("client_keys"))) | kept) - {""}
+    unknown = [r for r in rows if not r["_names"]]
+    mine = [r for r in rows if client in r["_names"]]
+    out: dict[str, Any] = {"ok": True, "coverage_complete": not unknown}
+    if unknown:
         out["coverage_note"] = (
-            f"{len(unknown)} delivered chronology record(s) on this joint matter name no client, so what they "
+            f"{len(unknown)} delivered chronology record(s) on this matter name no client, so what they "
             "covered is not subtracted; name this client's medical records from the listing"
         )
     record = union_coverage(mine)
@@ -322,5 +333,8 @@ def update_files(ledger: Any, request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-#: Every client any job on the matter recorded, for the joint-matter rule above.
-_KEYS_ON_MATTER_SQL = "SELECT client_keys FROM medchron_jobs WHERE matter_id=? AND client_keys IS NOT NULL"
+#: The matter's delivered rows, oldest first, with the units each kept.
+_DELIVERED_WITH_UNITS_SQL = (
+    "SELECT j.*, u.units_json FROM medchron_jobs j LEFT JOIN medchron_job_units u ON u.job_id = j.id "
+    "WHERE j.matter_id=? AND j.state='delivered' ORDER BY j.created_at ASC"
+)

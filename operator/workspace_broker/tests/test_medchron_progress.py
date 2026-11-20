@@ -144,12 +144,17 @@ def test_a_stage_note_never_moves_a_held_row_back_to_running(verbs):
     assert row["state"] == "held" and row["stage"] == "compose" and row["expected_finish"] is None
 
 
-def test_twins_on_one_matter_are_two_people(verbs):
-    """One surname, one birth date, two first names: both accepted."""
+def test_twins_are_refused_and_the_refusal_never_claims_the_job_is_the_requesters_client(verbs):
+    """The match is surname and birth date, so twins match. The refusal says
+    a chronology for a client with that surname and birth date is in flight
+    and names whom the job was submitted for, never that it is this client's."""
     v, _, _ = verbs
-    a = _submit(v, units=[{"client_name": "Alpha Example", "surname": "Example", "dob": "01/02/1980"}])
+    a = _submit(v, units=[{"client_name": "Alpha Example", "surname": "Example", "dob": "01/02/1980"}])["job_id"]
     b = _submit(v, units=[{"client_name": "Beta Example", "surname": "Example", "dob": "01/02/1980"}])
-    assert a["accepted"] and b["accepted"]
+    assert b["accepted"] is False and b["job_id"] == a
+    assert "a client with the surname and date of birth of Beta Example" in b["reason"]
+    assert "(submitted for Alpha Example)" in b["reason"]
+    assert b["clients"][0]["job_clients"] == ["Alpha Example"]
 
 
 def test_a_stage_name_outside_the_dags_spelling_is_refused(verbs):
@@ -175,9 +180,18 @@ def _delivered(v, covered, uncovered):
     )
 
 
+def _named(v, client_key):
+    """The backfilled delivery's row records which client it was for."""
+    conn = sqlite3.connect(v.ledger._db_path)
+    conn.execute("UPDATE medchron_jobs SET client_keys = ? WHERE state = 'delivered'", (json.dumps([client_key]),))
+    conn.commit()
+    conn.close()
+
+
 def test_an_updates_new_documents_are_the_listing_minus_what_was_covered(verbs):
     v, _, _ = verbs
     _delivered(v, ["d-1", "d-2"], ["d-3"])
+    _named(v, "alpha example")
     got = call(
         v,
         "medchron_update_files",
@@ -192,21 +206,28 @@ def test_an_updates_new_documents_are_the_listing_minus_what_was_covered(verbs):
     assert got["previously_uncovered"] == ["d-3"]
 
 
-def test_on_a_joint_matter_a_delivery_that_names_no_client_is_not_subtracted(verbs):
-    """A delivered row with no recorded client may be the OTHER client's
-    delivery: its coverage must never drop documents from this client's
-    update unread. MUTATION: count NULL-client rows for every client again
-    and d-1 and d-2 leave the answer."""
+def test_a_delivery_that_names_no_client_is_never_subtracted(verbs):
+    """A matter whose only delivered row recorded no client: it may be any
+    client's delivery, so nothing is subtracted and the answer says the set
+    is not complete, on every matter, joint or not. MUTATION: count a
+    NULL-client row for the asking client and d-1 and d-2 leave the answer."""
     v, _, _ = verbs
     _delivered(v, ["d-1", "d-2"], ["d-3"])
-    v.ledger.submit(
-        envelope(units=[{"client_name": "Beta Sample", "surname": "Sample", "dob": "05/06/1990"}]), remaining=1
-    )
     got = call(
         v, "medchron_update_files", matter_id="m-1", client_name="Alpha Example", listing_ids=["d-1", "d-2", "d-4"]
     )
     assert got["coverage_complete"] is False and "name no client" in got["coverage_note"]
     assert got["coverage_record"] is False and got["new_document_ids"] is None
+
+
+def test_a_delivery_with_a_recorded_client_subtracts_for_that_client_only(verbs):
+    v, _, _ = verbs
+    _delivered(v, ["d-1", "d-2"], ["d-3"])
+    _named(v, "beta sample")
+    beta = call(v, "medchron_update_files", matter_id="m-1", client_name="Beta Sample", listing_ids=["d-1", "d-4"])
+    alpha = call(v, "medchron_update_files", matter_id="m-1", client_name="Alpha Example", listing_ids=["d-1", "d-4"])
+    assert beta["new_document_ids"] == ["d-4"] and beta["coverage_complete"] is True
+    assert alpha["coverage_record"] is False and alpha["coverage_complete"] is True
 
 
 def test_with_no_coverage_record_nothing_is_computed(verbs):
@@ -235,7 +256,7 @@ def test_two_clients_one_live_names_the_live_one_and_leaves_the_other_to_submit(
         ("Alpha Example", live),
         ("Beta Sample", None),
     ]
-    assert f"for Alpha Example it is already queued as job {live}" in both["reason"]
+    assert f"of Alpha Example is already queued as job {live}" in both["reason"]
     assert "Not covered by any job: Beta Sample" in both["reason"]
     assert _submit(v, units=[BETA])["accepted"], "the uncovered client is accepted on its own"
 
