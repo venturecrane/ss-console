@@ -263,6 +263,20 @@ def _ours(i: int, responding: str, clients: list[str] | None, problems: list[str
         )
 
 
+def _values(i: int, raw: dict[str, Any], problems: list[str]) -> None:
+    """The plain values' shapes: counts, parties, the drafter and the source."""
+    for k in ("set_number", "request_count"):
+        if k in raw and not _whole(raw[k]):
+            problems.append(f"set {i}: {k} must be a whole number, 1 or more")
+    for k in ("propounding_party", "responding_party"):
+        if k in raw and (not isinstance(raw[k], str) or not raw[k].strip()):
+            problems.append(f"set {i}: {k} must name the party")
+    if "drafted_by" in raw and raw["drafted_by"] not in DRAFTERS:
+        problems.append(f"set {i}: drafted_by must be one of {list(DRAFTERS)}")
+    if "source" in raw and (not isinstance(raw["source"], str) or not raw["source"].strip()):
+        problems.append(f"set {i}: source must name the matter file's document")
+
+
 def _one(
     job_dir: Path, i: int, raw: Any, problems: list[str], other: list[str], clients: list[str] | None = None
 ) -> ServedSet | None:
@@ -275,16 +289,7 @@ def _one(
     st = _kind(i, raw, problems, other)
     if st is None and len(problems) == before:
         return None
-    for k in ("set_number", "request_count"):
-        if k in raw and not _whole(raw[k]):
-            problems.append(f"set {i}: {k} must be a whole number, 1 or more")
-    for k in ("propounding_party", "responding_party"):
-        if k in raw and (not isinstance(raw[k], str) or not raw[k].strip()):
-            problems.append(f"set {i}: {k} must name the party")
-    if "drafted_by" in raw and raw["drafted_by"] not in DRAFTERS:
-        problems.append(f"set {i}: drafted_by must be one of {list(DRAFTERS)}")
-    if "source" in raw and (not isinstance(raw["source"], str) or not raw["source"].strip()):
-        problems.append(f"set {i}: source must name the matter file's document")
+    _values(i, raw, problems)
     text = _text(job_dir, i, raw, problems)
     if problems or st is None:
         return None
