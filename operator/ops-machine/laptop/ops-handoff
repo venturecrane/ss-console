@@ -72,49 +72,66 @@ if [ "$task" = "--results" ]; then
   exit 0
 fi
 if [ "$task" = "--say" ]; then
-  # ops-handoff <client> --say <session> "<message>": type a message into a
+  # ops-handoff <client> --say <session> "<message>": hand a message to a
   # running workspace session, as if the Captain had typed it there. This is the
   # laptop-to-workspace channel. SendMessage over Remote Control never reached a
   # workspace session (2026-10-27: ops-ashton-price-61703 was live with
   # --remote-control and absent from the laptop's ListAgents, so two sends
   # bounced and the Captain was handed the job of relaying). The session is
-  # found by the --name ops-start gave it, the text is typed literally (newlines
-  # flattened, since Enter submits), and delivery is read back from the pane by
-  # its id, so "sent" means it is on that session's screen. Only the id count
-  # comes back here; the pane can show client text and none of it leaves.
+  # found by the --name ops-start gave it. Only a one-word answer comes back
+  # here; the pane can show client text and none of it leaves.
   OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" >/dev/null || exit 1
+  # The message itself is written to ~/inbox/say-<id>.md on the workspace, and
+  # what is typed into the session is one short line that carries the id and
+  # tells it to read that file. Until 2026-11-20 the whole message was typed,
+  # with the id at its head, and delivery was proven by finding the id on the
+  # screen. Claude Code shows a long paste collapsed ("[Pasted text #1 ...]"),
+  # so the id never appeared, and a long message that the session had already
+  # acted on was reported "lost, send it again" twice; the resend was a second
+  # run of five live steps, stopped only by the downstream tool. A short line
+  # is never collapsed, so its id can be read back whatever the message's
+  # length, and the message keeps its own line breaks in the file. The file
+  # sits beside the task files (only pending*.md is ever claimed from ~/inbox)
+  # and ops-sweep removes it with the other old inbox notes. The message moves
+  # base64-encoded on the script's stdin, never in a command line.
+  #
   # Read-back matches the short id alone, with all whitespace stripped from the
-  # captured screen. On 2026-11-19 sends that HAD arrived were reported as not
-  # delivered: Claude Code word-wraps the echoed prompt itself, so the full tag
-  # was split across two screen lines, and capture-pane -J joins only tmux's
-  # own wraps. The screen is looked at up to OPS_HANDOFF_SAY_TRIES times,
-  # OPS_HANDOFF_SAY_PAUSE seconds apart. Three answers, three exit codes: 0 seen
-  # (delivered), 1 typed but nowhere in the last 400 lines (lost: send again),
-  # 3 no screen came back (delivery unknown: look before resending).
+  # captured screen, because Claude Code word-wraps the echoed prompt itself and
+  # capture-pane -J joins only tmux's own wraps (2026-11-19). The screen is
+  # looked at up to OPS_HANDOFF_SAY_TRIES times, OPS_HANDOFF_SAY_PAUSE seconds
+  # apart. Three answers, three exit codes, and "not delivered" only on proof:
+  # 0 the id was read back (delivered); 1 no such session, or the message file
+  # or the typing failed (not delivered: nothing reached the session); 3
+  # anything else, including an id not seen because a busy session scrolled it
+  # away (delivery unknown: look at the session before sending again).
   id="$(date -u +%H%M%S)-$$"
-  tag="[from the laptop, msg $id]"
   tries="${OPS_HANDOFF_SAY_TRIES:-3}" pause="${OPS_HANDOFF_SAY_PAUSE:-2}"
   [[ "$tries" =~ ^[1-9][0-9]?$ ]] || tries=3
   [[ "$pause" =~ ^[0-9]+$ ]] || pause=2
-  msg=$(printf '%s %s' "$tag" "$say_text" | tr '\r\n' '  ' | base64 | tr -d '\n')
+  msg=$(printf '%s\n' "$say_text" | base64 | tr -d '\n')
   got=$(printf '%s\n' \
-    "s='$say_to'; m=\$(printf %s '$msg' | base64 -d); id='$id'; w=" \
+    "s='$say_to'; id='$id'; f=\"\$HOME/inbox/say-$id.md\"; w=" \
     'for p in $(tmux list-panes -s -t main -F "#{window_index}:#{pane_pid}" 2>/dev/null); do' \
     '  ps -o args= -p "${p#*:}" --ppid "${p#*:}" 2>/dev/null | grep -q -- "--name $s " && w=${p%%:*}' \
     'done' \
     '[ -n "$w" ] || { echo none; exit 0; }' \
-    'tmux send-keys -t "main:$w" -l "$m" && sleep 1 && tmux send-keys -t "main:$w" Enter' \
+    "mkdir -p \"\$HOME/inbox\" && printf %s '$msg' | base64 -d > \"\$f\" && [ -s \"\$f\" ] || { echo nofile; exit 0; }" \
+    'line="[from the laptop, msg $id] Read ~/inbox/say-$id.md and act on it as if typed here."' \
+    'tmux send-keys -t "main:$w" -l "$line" || { echo notsent; exit 0; }' \
+    'sleep 1; tmux send-keys -t "main:$w" Enter || { echo noenter; exit 0; }' \
     "n=; for _ in \$(seq 1 $tries); do sleep $pause" \
-    '  n=$({ tmux capture-pane -p -J -t "main:$w" -S -400 2>/dev/null | tr -d "[:space:]"; echo; } | grep -cF "$id")' \
+    '  n=$({ tmux capture-pane -p -J -t "main:$w" -S -2000 2>/dev/null | tr -d "[:space:]"; echo; } | grep -cF "$id")' \
     '  [ "${n:-0}" -gt 0 ] 2>/dev/null && break' \
     'done' \
     'echo "$n"' |
     fly ssh console -a "$app" -u ops --pty=false -C "sh -s" 2>/dev/null | tr -d '\r' | tail -1)
+  where="say-$id.md in the ~/inbox of $app"
   case "$got" in
-    none) echo "no running workspace session named $say_to on $app; nothing was sent" >&2; exit 1 ;;
-    0) echo "not delivered: typed into $say_to, but message $id is nowhere in the last 400 lines of its screen after $tries looks; it was lost, send it again" >&2; exit 1 ;;
-    [1-9]*) echo "delivered to $say_to (message $id read back on its screen). Its outcome lands in its outbox: ops-handoff $client --results"; exit 0 ;;
-    *) echo "typed into $say_to but no screen came back from $app to read message $id on; delivery unknown, check its screen before sending again" >&2; exit 3 ;;
+    none) echo "not delivered: no running workspace session named $say_to on $app; nothing was sent" >&2; exit 1 ;;
+    nofile) echo "not delivered: message $id could not be written to $where; nothing was typed into $say_to, send it again" >&2; exit 1 ;;
+    notsent) echo "not delivered: message $id is in $where but typing into $say_to failed; it does not know of it, send it again" >&2; exit 1 ;;
+    [1-9]*) echo "delivered to $say_to (message $id read back on its screen; the text is in $where). Its outcome lands in its outbox: ops-handoff $client --results"; exit 0 ;;
+    *) echo "delivery unknown: told $say_to to read message $id ($where), but it was not read back on its screen (a busy session can scroll it away, or no screen came back). It may well have arrived: check its screen or ops-handoff $client --results before sending again" >&2; exit 3 ;;
   esac
 fi
 OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" || exit 1
