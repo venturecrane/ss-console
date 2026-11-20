@@ -61,10 +61,13 @@ exit 0
 /**
  * The workspace side, for tests that run the script ops-handoff sends over
  * `sh -s` (REMOTE_EXEC=1): a fake tmux with one window whose ps shows the
- * session, that records what was typed and prints it back as the pane. With
- * PANE_MODE=wrap (the default) the pane word-wraps the echoed prompt at 25
- * columns and indents the rest, as Claude Code does, which splits the tag
- * mid-id; PANE_MODE=lost prints a screen the message never reached.
+ * session (none with NO_SESSION=1), that records what was typed (or fails the
+ * typing with SENDKEYS_FAIL=1) and prints it back as the pane, keeping only the
+ * last -S lines as tmux does. As Claude Code does, the pane shows typed text
+ * over 200 characters collapsed to "[Pasted text #1 +N lines]", and word-wraps
+ * the rest at 25 columns with an indent, which splits the tag mid-id.
+ * PANE_MODE=lost prints a screen the message never reached; PANE_MODE=scroll
+ * prints it and then SCROLL_LINES lines of a busy session's output.
  */
 function stubWorkspace(dir: string): void {
   const bin = path.join(dir, 'remotebin')
@@ -75,11 +78,19 @@ function stubWorkspace(dir: string): void {
     `#!/bin/bash
 case "$1" in
   list-panes) echo "1:4242" ;;
-  send-keys) [ "$4" = -l ] && printf '%s' "$5" > "$HOME/typed" ;;
+  send-keys) [ "\${SENDKEYS_FAIL:-0}" = 1 ] && exit 1
+    [ "$4" = -l ] && printf '%s' "$5" > "$HOME/typed" ;;
   capture-pane)
-    echo "> an earlier prompt"
-    if [ "\${PANE_MODE:-wrap}" = wrap ]; then fold -w 25 "$HOME/typed" | sed '2,$s/^/  /'; echo; fi
-    echo "  working..." ;;
+    keep=$(echo "$*" | grep -o -- '-S -[0-9]*' | grep -o '[0-9]*$')
+    {
+      echo "> an earlier prompt"
+      if [ "\${PANE_MODE:-wrap}" != lost ]; then
+        if [ "$(wc -c < "$HOME/typed")" -gt 200 ]; then echo "> [Pasted text #1 +37 lines]"
+        else fold -w 25 "$HOME/typed" | sed '2,$s/^/  /'; echo; fi
+      fi
+      [ "\${PANE_MODE:-wrap}" = scroll ] && seq 1 "\${SCROLL_LINES:-500}" | sed 's/^/  working on step /'
+      echo "  working..."
+    } | tail -n "\${keep:-50}" ;;
 esac
 exit 0
 `,
@@ -87,7 +98,7 @@ exit 0
   )
   fs.writeFileSync(
     path.join(bin, 'ps'),
-    '#!/bin/sh\necho "claude --name ops-ashton-price-61703 --resume x"\n',
+    '#!/bin/sh\n[ "${NO_SESSION:-0}" = 1 ] && echo "claude --name ops-other-1 x" || echo "claude --name ops-ashton-price-61703 --resume x"\n',
     { mode: 0o755 }
   )
 }
@@ -245,31 +256,46 @@ describe('ops-handoff', () => {
     const say = (env: Record<string, string> = {}, text = 'hold the filing') =>
       handoff(['ap', '--say', 'ops-ashton-price-61703', text], env)
 
-    it('types the message into the window running that session name, then submits it', () => {
+    it('writes the message to a file and types one short line naming it and the id', () => {
       expect(say()).toContain('delivered to ops-ashton-price-61703')
       const script = fs.readFileSync(path.join(home, 'say.sh'), 'utf8')
       expect(script).toContain("s='ops-ashton-price-61703'")
       expect(script).toContain('grep -q -- "--name $s "')
-      expect(script).toMatch(/send-keys -t "main:\$w" -l "\$m".*send-keys -t "main:\$w" Enter/)
-      // The message travels base64-encoded and carries the read-back tag.
+      expect(script).toMatch(
+        /send-keys -t "main:\$w" -l "\$line"[\s\S]*send-keys -t "main:\$w" Enter/
+      )
+      expect(script).toContain('line="[from the laptop, msg $id] Read ~/inbox/say-$id.md and act')
+      // The message travels base64-encoded on stdin, never typed and never in argv.
       const b64 = script.match(/printf %s '([A-Za-z0-9+/=]+)'/)?.[1] ?? ''
-      const msg = Buffer.from(b64, 'base64').toString('utf8')
-      expect(msg).toMatch(/^\[from the laptop, msg \d{6}-\d+\] hold the filing/)
+      expect(Buffer.from(b64, 'base64').toString('utf8')).toBe('hold the filing\n')
     })
 
-    it('flattens newlines so a multi-line message is one submission', () => {
-      say({}, 'line one\nline two')
-      const script = fs.readFileSync(path.join(home, 'say.sh'), 'utf8')
-      const b64 = script.match(/printf %s '([A-Za-z0-9+/=]+)'/)?.[1] ?? ''
-      expect(Buffer.from(b64, 'base64').toString('utf8')).not.toContain('\n')
+    it('keeps a multi-line message whole in the file and types a single line', () => {
+      const got = handoff(['ap', '--say', 'ops-ashton-price-61703', 'line one\nline two'], {
+        REMOTE_EXEC: '1',
+      })
+      const id = got.match(/message (\d{6}-\d+) read back/)?.[1] ?? ''
+      const ws = path.join(home, 'ws')
+      expect(fs.readFileSync(path.join(ws, 'inbox', `say-${id}.md`), 'utf8')).toBe(
+        'line one\nline two\n'
+      )
+      const typed = fs.readFileSync(path.join(ws, 'typed'), 'utf8')
+      expect(typed).not.toContain('\n')
+      expect(typed).not.toContain('line one')
+      // One short line, so no UI collapses it and the id stays readable.
+      expect(typed).toBe(
+        `[from the laptop, msg ${id}] Read ~/inbox/say-${id}.md and act on it as if typed here.`
+      )
+      expect(typed.length).toBeLessThan(120)
     })
 
     it('fails, and says nothing was sent, when no window runs that session', () => {
       expect(() => say({ SAY_RESULT: 'none' })).toThrow(/nothing was sent/)
     })
 
-    it('fails when the message cannot be read back on the screen', () => {
-      expect(() => say({ SAY_RESULT: '0' })).toThrow(/not delivered/)
+    it('an id not read back on the screen is delivery unknown, never not delivered', () => {
+      expect(() => say({ SAY_RESULT: '0' })).toThrow(/delivery unknown/)
+      expect(() => say({ SAY_RESULT: '0' })).not.toThrow(/not delivered|lost/)
     })
 
     it('refuses a session name that is not an ops session, sending nothing', () => {
@@ -369,23 +395,73 @@ describe('ops-handoff', () => {
       const got = sayStatus({ REMOTE_EXEC: '1' })
       expect(got.status).toBe(0)
       expect(got.out).toContain('delivered to ops-ashton-price-61703')
-      // The pane really did split it: no single screen line holds the whole id.
+      // The pane really did split the tag: no single screen line holds "msg <id>".
       const id = got.out.match(/message (\d{6}-\d+) read back/)?.[1] ?? ''
       expect(id).not.toBe('')
       const pane = execFileSync(path.join(home, 'remotebin', 'tmux'), ['capture-pane'], {
         env: { ...process.env, HOME: path.join(home, 'ws') },
         encoding: 'utf8',
       })
-      expect(pane.split('\n').some((l) => l.includes(id))).toBe(false)
-      expect(pane.replace(/\s+/g, '')).toContain(id)
+      expect(pane.split('\n').some((l) => l.includes(`msg ${id}`))).toBe(false)
+      expect(pane.replace(/\s+/g, '')).toContain(`msg${id}]`)
     })
 
-    it('says not delivered, exit 1, when the id is nowhere in the scrollback', () => {
+    // 2026-11-20: a long multi-line message was reported "lost, send it again"
+    // twice although the session had acted on it, because Claude Code showed
+    // the paste collapsed and the id at its head never reached the screen.
+    it('reports a long multi-line message delivered although the UI collapses long pastes', () => {
+      const long = Array.from({ length: 37 }, (_, i) => `step ${i + 1}: run the next live step`)
+      let out: string
+      try {
+        out = handoff(['ap', '--say', 'ops-ashton-price-61703', long.join('\n')], {
+          REMOTE_EXEC: '1',
+        })
+      } catch (e) {
+        out = `FAILED ${(e as { stderr: string }).stderr}`
+      }
+      expect(out).toContain('delivered to ops-ashton-price-61703')
+      const id = out.match(/message (\d{6}-\d+) read back/)?.[1] ?? ''
+      const inboxFile = path.join(home, 'ws', 'inbox', `say-${id}.md`)
+      expect(fs.readFileSync(inboxFile, 'utf8')).toBe(`${long.join('\n')}\n`)
+    })
+
+    it('never says lost when the message landed and a busy session scrolled it away', () => {
+      const got = sayStatus({
+        REMOTE_EXEC: '1',
+        PANE_MODE: 'scroll',
+        SCROLL_LINES: '2500',
+        OPS_HANDOFF_SAY_TRIES: '2',
+      })
+      expect(got.status).toBe(3)
+      expect(got.err).toContain('delivery unknown')
+      expect(got.err).toContain('before sending again')
+      expect(got.err).not.toMatch(/lost|not delivered/)
+    })
+
+    it('reads back an id that 500 lines of output pushed past the old 400-line window', () => {
+      const got = sayStatus({ REMOTE_EXEC: '1', PANE_MODE: 'scroll', SCROLL_LINES: '500' })
+      expect(got.status).toBe(0)
+      expect(got.out).toContain('delivered to ops-ashton-price-61703')
+    })
+
+    it('says delivery unknown, exit 3, never lost, when the id is nowhere on the screen', () => {
       const got = sayStatus({ REMOTE_EXEC: '1', PANE_MODE: 'lost', OPS_HANDOFF_SAY_TRIES: '2' })
+      expect(got.status).toBe(3)
+      expect(got.err).toContain('delivery unknown')
+      expect(got.err).not.toMatch(/lost|not delivered/)
+    })
+
+    it('says not delivered, exit 1, when no running session has that name', () => {
+      const got = sayStatus({ REMOTE_EXEC: '1', NO_SESSION: '1' })
       expect(got.status).toBe(1)
-      expect(got.err).toMatch(
-        /not delivered: .*nowhere in the last 400 lines .* after 2 looks; it was lost/
-      )
+      expect(got.err).toMatch(/^not delivered: no running workspace session named/)
+      expect(fs.existsSync(path.join(home, 'ws', 'typed'))).toBe(false)
+    })
+
+    it('says not delivered, exit 1, when typing into the session fails', () => {
+      const got = sayStatus({ REMOTE_EXEC: '1', SENDKEYS_FAIL: '1' })
+      expect(got.status).toBe(1)
+      expect(got.err).toMatch(/^not delivered: .*typing into ops-ashton-price-61703 failed/)
     })
 
     it('says delivery unknown, exit 3, when no screen comes back', () => {
