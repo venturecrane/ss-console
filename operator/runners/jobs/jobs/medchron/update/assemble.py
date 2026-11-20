@@ -316,7 +316,7 @@ def assemble(
     pre, added, notes_kept, notes_itemized = _preamble(pre, addition, new_ents)
     body = (pre.rstrip("\n") + "\n\n" if pre.strip() else "\n") + "\n\n".join(entries) + "\n\n"
     lane = delivered_lanes(delivered_rows[1:], base_ents, canon, name_of)
-    final_rows = update_rows(delivered_rows[1:], base_ents, added_ents, lane)
+    final_rows, timeline_notes = update_rows(delivered_rows[1:], base_ents, added_ents, lane, canon, name_of)
     filed = [r for r in new_exhibits if not r.get("reused") and not r.get("refiled")]
     retitled, uncited = exhibit_titles_for(filed, new_ents, name_of, by_pages=final_set_ran)
     firm = folder_rows(base_md, folder or [], taken)
@@ -335,6 +335,7 @@ def assemble(
         "output_entries": len(out_ents),
         "delivered_table_vs_its_own_entries": lane_diff(delivered_rows[1:], provider_rows(base_ents, str, lane)),
         "timeline_changes": lane_diff(delivered_rows[1:], final_rows),
+        "timeline_rows_not_extended": timeline_notes,
         "lanes_named_for_heading_slots": name_log,
         "icd_rows_added_or_moved": changed,
         "icd_codes_not_legible": illegible,

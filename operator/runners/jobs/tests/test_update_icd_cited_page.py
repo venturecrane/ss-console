@@ -63,20 +63,42 @@ def test_two_pages_holding_it_cite_the_first_in_citation_order(
     assert _claims(pt)[0] == ["Diagnosis code M50.20 recorded on 07/21/2026. (Exhibit 3 - p. 26)"]
 
 
-def test_no_page_holds_it_no_claim_and_the_log_says_so(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+def test_every_page_has_a_text_layer_and_none_prints_it_no_claim(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
     sr = _sr(job_dir, firm_config_path, data_root)
-    # p. 25 prints it only in a machine transcription (a picture has no text layer)
-    pt = _text(sr, {25: ("Assessment: M50.20", True), 26: ("Neck pain.", False)})
+    pt = _text(sr, {25: ("Assessment: cervical disc displacement", False), 26: ("Neck pain.", False)})
     lines, log = _claims(pt)
     assert lines == [] and log == [{"code": "M50.20", "first": "2026-07-21", "skipped": icd.NOT_LOCATED}]
-
-
-def test_a_bare_three_character_code_is_not_matched(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
-    sr = _sr(job_dir, firm_config_path, data_root)
-    pt = _text(sr, {25: ("Assessment: M54 neck pain", False), 26: ("M54", False)})
-    lines, log = _claims(pt, "2026-07-21 | Example Clinic | M54 | clinic.pdf")
-    assert lines == [] and log[0]["skipped"] == icd.NOT_LOCATED
-    assert icd.dotted("M54") is None and icd.dotted("M5020") == "M50.20"
     # a longer code is never matched inside another one
     pt = _text(sr, {25: ("M50.201", False), 26: ("x", False)})
     assert _claims(pt)[0] == []
+
+
+def test_a_picture_page_is_cited_when_no_text_layer_prints_it(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    """A scanned page has no text layer: the claim goes to the audit, which
+    reads the picture, as before the text-layer lookup existed."""
+    sr = _sr(job_dir, firm_config_path, data_root)
+    # p. 26 (first cited) has a text layer without the code; p. 25 is a picture
+    pt = _text(sr, {25: ("Assessment: M50.20", True), 26: ("Neck pain.", False)})
+    lines, log = _claims(pt)
+    assert lines == ["Diagnosis code M50.20 recorded on 07/21/2026. (Exhibit 3 - p. 25)"]
+    assert log[0]["page"] == "no text layer"
+    # a text layer that prints it wins over an earlier picture page
+    pt = _text(sr, {25: ("Dx M50.20", False), 26: ("scan", True)})
+    lines, log = _claims(pt)
+    assert lines == ["Diagnosis code M50.20 recorded on 07/21/2026. (Exhibit 3 - p. 25)"]
+    assert log[0]["page"] == "text layer"
+
+
+def test_a_bare_code_and_an_undotted_print_are_matched(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    sr = _sr(job_dir, firm_config_path, data_root)
+    pt = _text(sr, {25: ("Assessment: I10 essential hypertension", False), 26: ("Neck pain.", False)})
+    lines, _ = _claims(pt, "2026-07-21 | Example Clinic | I10 | clinic.pdf")
+    assert lines == ["Diagnosis code I10 recorded on 07/21/2026. (Exhibit 3 - p. 25)"]
+    # the page prints the dotted code without its dot
+    pt = _text(sr, {25: ("Dx: M5020 cervical disc", False), 26: ("Neck pain.", False)})
+    assert _claims(pt)[0] == ["Diagnosis code M50.20 recorded on 07/21/2026. (Exhibit 3 - p. 25)"]
+    assert icd.dotted("I10") is None and icd.dotted("M5020") == "M50.20"

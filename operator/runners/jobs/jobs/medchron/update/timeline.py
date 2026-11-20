@@ -17,6 +17,7 @@ its own entries is still reported (``assemble``'s
 from __future__ import annotations
 
 import difflib
+import re
 from collections import defaultdict
 from typing import Any, Callable
 
@@ -126,43 +127,76 @@ def _first_iso(row: str) -> str:
     return _iso(_cells(row)[1].split(" - ")[0])
 
 
-def update_rows(
-    delivered_rows: list[str], base_ents: list[str], new_ents: list[str], lane: Callable[[str], str]
-) -> list[str]:
-    """The update's Treatment Timeline rows. A delivered row is kept as
-    delivered (its lane, count and reference; its text byte for byte when no
-    new entry joins it); it gains only the distinct service days of the NEW
-    entries assigned to it that its own delivered entries do not already
-    have, and its period widens to them. Delivered entries are never
-    re-laned or recounted. A new entry no delivered row takes starts a lane
-    of its own, counted in distinct days, placed by its first day."""
-    kept = [r.strip() for r in delivered_rows if len(_cells(r)) >= 4 and _cells(r)[0]]
-    had: dict[str, set[str]] = defaultdict(set)
-    for e in base_ents:
-        if B.is_service(e):
-            had[lane(e)].add(B.iso(e))
-    gain: dict[str, set[str]] = defaultdict(set)
-    fresh: dict[str, list[str]] = defaultdict(list)
-    labels = {_cells(r)[0] for r in kept}
+#: A reference cell new references may be appended to: empty, or citations
+#: (``Exhibit N - p. x``) separated by "; ".
+REF_CELL = re.compile(r"(?:Exhibit \d+(?: - p\. [0-9,\s\-]+)?(?:; Exhibit \d+(?: - p\. [0-9,\s\-]+)?)*)?")
+PERIOD_CELL = re.compile(r"\d{2}/\d{2}/\d{4}(?: - \d{2}/\d{2}/\d{4})?")
+
+
+def _gains(
+    base_ents: list[str],
+    new_ents: list[str],
+    lane: Callable[[str], str],
+    canon: Callable[[str], str],
+    name_of: Callable[[str], str],
+) -> dict[str, list[str]]:
+    """{lane: the new service entries on a day it gains}. A new entry on a
+    day a DELIVERED service entry of the same canonical provider already has
+    adds no day, whichever lane today's grouping gives that delivered entry
+    (2026-11-20 review: a delivered visit today's alias order moves to
+    another lane made the same day count again)."""
+    seen = {(B.iso(e), canon(name_of(e))) for e in base_ents if B.is_service(e)}
+    out: dict[str, list[str]] = defaultdict(list)
     for e in new_ents:
-        if B.is_service(e) and B.iso(e) not in had[lane(e)]:
-            gain[lane(e)].add(B.iso(e))
-            fresh[lane(e)].append(e)
-    out = []
-    for r in kept:
-        c = _cells(r)
-        if not gain.get(c[0]):
-            out.append(r)
-            continue
-        ends = c[1].split(" - ")
-        ds = sorted({_iso(ends[0]), _iso(ends[-1]), *gain[c[0]]})
-        n = str(int(c[2]) + len(gain[c[0]])) if c[2].isdigit() else c[2]
-        out.append(f"| {c[0]} | {_period(ds)} | {n} | {c[3]} |")
-    new_lanes = [e for lb, es in fresh.items() if lb not in labels for e in es]
+        if B.is_service(e) and (B.iso(e), canon(name_of(e))) not in seen:
+            out[lane(e)].append(e)
+    return out
+
+
+def _grown(row: str, ents: list[str], notes: list[str]) -> str:
+    """A delivered row with its new days: count, period and reference. A cell
+    in a shape this cannot extend keeps the whole row as delivered, noted."""
+    c = _cells(row)
+    if not c[2].isdigit() or not PERIOD_CELL.fullmatch(c[1]):
+        notes.append(f"kept as delivered (visits {c[2]!r}, period {c[1]!r} not extendable): {c[0]}")
+        return row
+    days = {B.iso(e) for e in ents}
+    ends = c[1].split(" - ")
+    ds = sorted({_iso(ends[0]), _iso(ends[-1]), *days})
+    ref, add = c[3], lane_references({c[0]: sorted(ents, key=B.iso)})[c[0]]
+    if add and not REF_CELL.fullmatch(ref):
+        notes.append(f"reference {ref!r} not extendable; {add} not added: {c[0]}")
+    elif add and f"Exhibit {add.split()[1]}" not in re.findall(r"Exhibit \d+", ref):
+        ref = f"{ref}; {add}" if ref else add
+    return f"| {c[0]} | {_period(ds)} | {int(c[2]) + len(days)} | {ref} |"
+
+
+def update_rows(
+    delivered_rows: list[str],
+    base_ents: list[str],
+    new_ents: list[str],
+    lane: Callable[[str], str],
+    canon: Callable[[str], str] = str,
+    name_of: Callable[[str], str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """(the update's Treatment Timeline rows, notes for SMD). A delivered row
+    is kept as delivered (its lane, count and reference; byte for byte when no
+    new entry joins it); it gains only the distinct service days of the NEW
+    entries assigned to it on which no delivered visit of the same provider
+    falls, its period widens to them, and its reference names the new
+    exhibit. Delivered entries are never re-laned or recounted. A new entry no
+    delivered row takes starts a lane of its own, counted in distinct days,
+    placed by its first day."""
+    kept = [r.strip() for r in delivered_rows if len(_cells(r)) >= 4 and _cells(r)[0]]
+    gain = _gains(base_ents, new_ents, lane, canon, name_of or B.provider_of)
+    labels = {_cells(r)[0] for r in kept}
+    notes: list[str] = []
+    out = [_grown(r, gain[_cells(r)[0]], notes) if gain.get(_cells(r)[0]) else r for r in kept]
+    new_lanes = [e for lb, es in gain.items() if lb not in labels for e in es]
     for row in provider_rows(new_lanes, str, lane, days=True):
         k = next((i for i, r in enumerate(out) if _first_iso(r) > _first_iso(row)), len(out))
         out.insert(k, row)
-    return out
+    return out, notes
 
 
 def lane_diff(before: list[str], after: list[str]) -> list[dict[str, Any]]:

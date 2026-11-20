@@ -108,3 +108,34 @@ def test_only_an_exact_sentence_matches() -> None:
     assert PF.drop_restated(near, [PRE]) == (near, 0)
     two = f"{SAME} {OTHER}"
     assert PF.drop_restated(two, [PRE]) == (OTHER, 1)
+
+
+#: A citation before the sentence's period (the shape a summary writes too).
+INNER = "01/02/2026\nExample Clinic | Medical Diagnoses\n\nMedical Diagnoses\n" + (
+    "Neck pain was reported (Exhibit 2 - p. 4). A radiograph was normal (Exhibit 2 - p. 5)."
+)
+
+
+def _proofs_pass(lines: list[str], *codes: str) -> bool:
+    md = K.base_md()
+    fails = PF.run(PF.Inputs([], lines, md, md, [], [], [], [], [], set())).fails
+    return not set(codes) & set(fails)
+
+
+def test_a_citation_before_the_period_leaves_no_stray_period() -> None:
+    text = "Neck pain was reported (Exhibit 2 - p. 4). Migraines were noted (Exhibit 2 - p. 6)."
+    got, n = PF.drop_restated(text, [INNER])
+    assert (got, n) == ("Migraines were noted (Exhibit 2 - p. 6).", 1)
+    assert _proofs_pass(INNER.splitlines() + [got], "6", "7")
+    # removed in the middle: the period before the next sentence stays where it was
+    mid = (
+        "Migraines were noted (Exhibit 2 - p. 6). Neck pain was reported (Exhibit 2 - p. 4). Falls (Exhibit 2 - p. 7)."
+    )
+    assert PF.drop_restated(mid, [INNER])[0] == "Migraines were noted (Exhibit 2 - p. 6). Falls (Exhibit 2 - p. 7)."
+
+
+def test_a_line_whose_every_sentence_is_removed_leaves_nothing() -> None:
+    text = "Neck pain was reported (Exhibit 2 - p. 4). A radiograph was normal (Exhibit 2 - p. 5)."
+    assert PF.drop_restated(text, [INNER]) == ("", 2)
+    two = text + "\nMigraines were noted. (Exhibit 2 - p. 6)"
+    assert PF.drop_restated(two, [INNER]) == ("Migraines were noted. (Exhibit 2 - p. 6)", 2)

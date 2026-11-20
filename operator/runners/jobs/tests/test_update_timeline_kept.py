@@ -42,10 +42,13 @@ def _base() -> str:
     return md.replace("| Example Clinic | 12/01/2025 - 01/20/2026 | 2 | Exhibit 1 - p. 1 |", "\n".join(ROWS))
 
 
-def _assemble(new: list[str]) -> tuple[str, dict]:
-    data = {**FIRM_CONFIG, "providers": {**FIRM_CONFIG["providers"], "aliases": ALIASES}}
+def _assemble(new: list[str], base: str | None = None, aliases: list | None = None) -> tuple[str, dict]:
+    data = {
+        **FIRM_CONFIG,
+        "providers": {**FIRM_CONFIG["providers"], "aliases": ALIASES if aliases is None else aliases},
+    }
     canon = Canon(config_mod.FirmConfig(path=Path("<test>"), data=data))
-    base = _base()
+    base = base or _base()
     return A.assemble(
         base,
         C.audit_document(base, new, NEX),
@@ -77,4 +80,31 @@ def test_two_new_entries_on_one_day_add_one_visit() -> None:
         _ent("02/10/2026", CLINIC, "Home exercises reviewed.", "(Exhibit 2 - p. 2)"),
     ]
     rows = _timeline(_assemble(new)[0])
-    assert rows == [ROWS[0], f"| {CLINIC} | 02/01/2026 - 02/10/2026 | 4 | Exhibit 1 - p. 4 |"]
+    # the row also references the new exhibit, so its pages are reachable from the table
+    assert rows == [ROWS[0], f"| {CLINIC} | 02/01/2026 - 02/10/2026 | 4 | Exhibit 1 - p. 4; Exhibit 2 - p. 1 |"]
+
+
+ORTHO = "| Example Orthopedics | 02/05/2026 | 1 | Exhibit 1 - p. 1 |"
+
+
+def _ortho_base(row: str = ORTHO) -> str:
+    # The delivered visit's provider line reads unlike any alias: today's grouping
+    # takes it to the delivered row only by likeness, and a new entry of the
+    # same provider would start a lane of its own.
+    ents = (_ent("02/05/2026", "Example Orthopedic Group", "Knee exam.", "(Exhibit 1 - p. 1)"),)
+    md = K.base_md(entries=ents)
+    return md.replace("| Example Clinic | 12/01/2025 - 01/20/2026 | 2 | Exhibit 1 - p. 1 |", row)
+
+
+def test_a_new_entry_on_a_delivered_visits_day_and_provider_adds_nothing() -> None:
+    new = [_ent("02/05/2026", "Example Orthopedic Group", "Knee brace fitted.", "(Exhibit 2 - p. 1)")]
+    md, _rep = _assemble(new, _ortho_base(), aliases=[])
+    assert _timeline(md) == [ORTHO]
+
+
+def test_a_visits_cell_that_is_not_a_number_keeps_the_row_whole() -> None:
+    row = "| Example Orthopedics | 02/05/2026 | 1 visit | Exhibit 1 - p. 1 |"
+    new = [_ent("03/01/2026", "Example Orthopedics", "Recheck.", "(Exhibit 2 - p. 1)")]
+    md, rep = _assemble(new, _ortho_base(row), aliases=[])
+    assert _timeline(md) == [row]
+    assert len(rep["timeline_rows_not_extended"]) == 1 and "Example Orthopedics" in rep["timeline_rows_not_extended"][0]

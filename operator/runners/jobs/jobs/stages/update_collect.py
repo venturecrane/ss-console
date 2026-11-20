@@ -225,7 +225,9 @@ def _icd_claims(
     )
     gone = [r for r in log if r.get("skipped") == icd.NOT_LOCATED]
     if gone:
-        sr.log(f"{len(gone)} diagnosis code(s) not claimed: no cited page prints it in its text layer {gone[:5]}")
+        sr.log(
+            f"{len(gone)} diagnosis code(s) not claimed: every cited page has a text layer and none prints it {gone[:5]}"
+        )
     (ud / "icd_claims.json").write_text(json.dumps({"claims": claims, "log": log}, indent=1), encoding="utf-8")
     return claims
 
