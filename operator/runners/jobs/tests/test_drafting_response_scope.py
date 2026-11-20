@@ -90,13 +90,13 @@ def test_a_firm_pattern_list_replaces_the_default_and_is_a_closed_shape():
     assert rs.validate({"patterns": {"billing": ["("]}})[0].startswith("response_scope.patterns.billing: invalid")
     assert rs.validate({"patterns": {"receipts": ["x"]}})
     assert rs.validate({"categories": {}})
-    data = firm_data(**{rs.KEY: {"patterns": {"nonsense": ["x"]}}})
+    data = firm_data(inputs={}, **{rs.KEY: {"patterns": {"nonsense": ["x"]}}})
     from jobs.drafting import firm
 
     assert any(p.startswith("response_scope.patterns.nonsense") for p in firm.validate(data))
     assert not any(
         p.startswith("response_scope")
-        for p in firm.validate(firm_data(**{rs.KEY: {"patterns": {"billing": ["BILL"]}}}))
+        for p in firm.validate(firm_data(inputs={}, **{rs.KEY: {"patterns": {"billing": ["BILL"]}}}))
     )
 
 
