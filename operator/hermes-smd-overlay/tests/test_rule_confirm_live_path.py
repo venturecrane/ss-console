@@ -580,10 +580,8 @@ def test_after_the_hand_off_a_restated_rule_is_never_read_back_a_third_time(
         )
     )
     assert answer == {"say": "Got it. I'll confirm in this thread once that's in place."}
-    checks = next(
-        m for n, m in sys.modules.items() if n.endswith("relay_checks") and hasattr(m, "_TURN_SAYS")
-    )
-    says = checks._TURN_SAYS.get("r3", "AAMkR3=") or ()
+    says = _required_says(reply, "r3", "AAMkR3=")
+    assert says, "the turn registers the stopgap sentence"
     assert not any("Reply yes" in say for say in says)
     _send_reply(reply, "r3", "AAMkR3=", "<CAlive3@mail.firm.example>")
     _turn(est, broker, f"Yes\n\n{REAL_BLOCK}", "AAMkR4=", "<CAlive3@mail.firm.example>", "r4")
@@ -620,3 +618,86 @@ def test_a_lapsed_rule_reopens_on_his_signed_yes(loop, monkeypatch) -> None:
     bound_turn("s9", PAT, REPLY)
     note = est.own_rules.reopen_note("s9", PAT, _prompt(f"Yes.\n\n{REAL_BLOCK}", REPLY, bare=True))
     assert note is not None and "Reply yes to confirm." in note
+
+
+RULE_B = "In memos, put the answer in the first line."
+
+
+def _two_rules_one_at_the_cap(broker: Any) -> tuple[str, str]:
+    """Rule A fresh, rule B read back twice already, and one sent read-back
+    carrying both (the broker's own records, as two earlier rounds leave them)."""
+    from workspace_broker import readback_bindings as rb
+
+    a = broker_kit._propose(broker, RULE)
+    b = broker_kit._propose(broker, RULE_B)
+    for n in (1, 2):
+        assert broker_kit._owe(broker, [b], f"AAMkEarlier{n}=")["ok"] is True
+    rb.ReadbackBindings(broker.establishment._require_pending()).record(
+        rb.normalize_message_id(SENT), PAT, [a, b], False
+    )
+    return a, b
+
+
+def _required_says(reply: Any, session: str, inbound_id: str) -> tuple[str, ...]:
+    """What the relay requires of this turn's reply: the loaded reply plugin's own register."""
+    return tuple(reply.relay_checks._TURN_SAYS.get(session, inbound_id) or ())
+
+
+def test_a_restatement_with_one_rule_at_the_cap_hands_off_only_that_one(loop, monkeypatch) -> None:
+    """Review 2026-11-20: a reply that is not a plain yes, to a read-back of a
+    fresh rule and one already read back twice. Only the capped rule goes to
+    SMD; the fresh one is read back again; the note asks for both, and the
+    relay requires exactly both, so the reply is not held. FALSIFIER: return at
+    the first capped rule (or hand off every rule in the reply) and the fresh
+    rule's read-back is missing from the note, or the relay requires a
+    read-back the note forbids."""
+    from workspace_broker import readback_rounds
+
+    reply, est, broker = loop
+    _seeded(broker, monkeypatch)
+    a, b = _two_rules_one_at_the_cap(broker)
+    context = _turn(est, broker, f"Yes\nletters only\n\n{REAL_BLOCK}", REPLY, SENT, "m1")
+    assert "once that's in place" in context
+    assert RULE in context and "Reply yes to confirm." in context and RULE_B not in context
+    says = _required_says(reply, "m1", REPLY)
+    assert len(says) == 2
+    assert any("once that's in place" in s for s in says)
+    assert any(RULE in s and "Reply yes to confirm." in s and RULE_B not in s for s in says)
+    rounds = readback_rounds.rounds_for(broker.establishment._require_pending(), PAT)
+    assert rounds["handed_off"] == [b]
+    assert a in _ids(broker) and b in _ids(broker)
+
+
+def test_a_read_back_the_broker_could_not_owe_is_never_sent(loop, monkeypatch) -> None:
+    """Review 2026-11-20: the broker refuses the owe for a reason that is not
+    the cap (here, a lost socket). Nothing is owed, so nothing asks for a yes:
+    the proposal answers say-none and no read-back is the reply's required
+    words. FALSIFIER: send the read-back whenever the owe is not capped and the
+    reply carries "Reply yes to confirm." that no send will ever bind."""
+    reply, est, broker = loop
+    real = est._broker_request
+
+    def lost_owe(payload: dict) -> dict:
+        if payload.get("action") == est.readback_confirm.VERB_OWED:
+            raise OSError("broker socket closed")
+        return real(payload)
+
+    monkeypatch.setattr(est, "_broker_request", lost_owe)
+    bound_turn("s1", PAT, FIRST)
+    est.on_pre_llm_call(
+        session_id="s1", sender_id=PAT, user_message=_prompt(f"From now on: {RULE}", FIRST)
+    )
+    answer = json.loads(
+        est._propose(
+            {
+                "scope": "person",
+                "subject": {"person": PAT},
+                "text": RULE,
+                "instructed_by": PAT,
+                "source_ref": FIRST,
+            },
+            session_id="s1",
+        )
+    )
+    assert answer["say"] == "none" and "Reply yes" not in json.dumps(answer)
+    assert not any("Reply yes" in s for s in _required_says(reply, "s1", FIRST))

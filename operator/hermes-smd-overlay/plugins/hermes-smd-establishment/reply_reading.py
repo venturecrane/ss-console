@@ -43,8 +43,8 @@ HANDED_OFF_NOTE = (
     "This email answered a rule that has already been read back twice without a plain yes. "
     "It is handed to SMD, who will confirm it with the person in this thread. Your reply must "
     f'contain this sentence exactly, as its own paragraph: "{rules_by_hand.SAY}" Say nothing '
-    "else about the rule: no read-back, no list, no request to confirm. Answer anything else "
-    "the email asked."
+    "else about that rule: no read-back of it, no list, no request to confirm it. Answer "
+    "anything else the email asked."
 )
 
 
@@ -72,7 +72,10 @@ def turn_readback(
     """``(text, handed)``: the turn's whole read-back once this rule joins it,
     owed and registered; or, when the broker refuses this rule's read-back
     (read back twice already, or handed to SMD), ``(stopgap sentence, True)``:
-    it is handed to SMD and never read back again.
+    it is handed to SMD and never read back again; or, when the broker refused
+    the owe for any other reason, ``("", True)``: nothing is owed, so nothing
+    about this rule is said (a read-back asking for a yes that no send would
+    bind is never sent).
 
     It replaces the block an earlier proposal on this turn owed: the reply is
     one read-back of every rule, word for word (the relay holds any other
@@ -87,6 +90,11 @@ def turn_readback(
     turn[proposal_id] = sentence
     whole = readback_confirm.own_readbacks(list(turn.values()))
     capped = owe_and_say(session_id, sender, list(turn), False, whole)
+    if capped is None:  # refused, not at the cap: the turn's earlier read-back stands
+        turn.pop(proposal_id, None)
+        if before:
+            plug._remember_readback(session_id, before)
+        return "", True
     if not capped:
         return whole, False
     for gone in capped:
@@ -105,12 +113,14 @@ def turn_readback(
 
 def owe_and_say(
     session_id: str, sender: str, ids: list[str], listed: bool, say: str
-) -> tuple[str, ...]:
+) -> tuple[str, ...] | None:
     """Owe the read-back ``say`` FIRST, and register it as the reply's required
     words only once the broker owed it: a read-back the broker refused never
     goes out asking for a yes (review 2026-11-20). Nothing is owed unless the
-    relay can hold the reply to these exact words. Returns the rules the broker
-    refused at the read-back cap."""
+    relay can hold the reply to these exact words. Returns ``()`` when owed (or
+    when the relay cannot hold this turn, as before), the rules the broker
+    refused at the read-back cap, or ``None`` when it refused for any other
+    reason (a broker error, a lost socket)."""
     if not readback_confirm.can_register(session_id):
         return ()
     owed, capped = readback_confirm.owe(
@@ -123,7 +133,14 @@ def owe_and_say(
     )
     if owed:
         readback_confirm.register_say(session_id, say)
-    return capped
+        return ()
+    return capped or None
+
+
+def joined(*notes: str | None) -> str | None:
+    """The turn's notes in order, one paragraph each; ``None`` when there are none."""
+    kept = [n for n in notes if n]
+    return "\n\n".join(dict.fromkeys(kept)) if kept else None
 
 
 def over_cap(rounds: dict[str, int], ids: tuple[str, ...]) -> bool:
@@ -179,6 +196,7 @@ __all__ = [
     "HANDOFF_SLOT",
     "hand_off",
     "handed_to_smd",
+    "joined",
     "over_cap",
     "owe_and_say",
     "turn_readback",

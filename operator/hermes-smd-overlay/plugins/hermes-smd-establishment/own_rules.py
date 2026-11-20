@@ -140,16 +140,24 @@ def own_ask_note(
     own = tuple(
         c for c in verdict.candidates if rule_confirm_reply.is_own_rule(by_id.get(c, {}), sender)
     )
-    if own and reply_reading.over_cap(reply_reading.ROUNDS.get(session_id, {}), own):
-        # Two read-backs and no plain yes: no third. SMD confirms it by hand.
-        return reply_reading.hand_off(
-            session_id, sender, own, readback_confirm.inbound_message_id(session_id)
+    rounds = reply_reading.ROUNDS.get(session_id, {})
+    capped = tuple(c for c in own if reply_reading.over_cap(rounds, (c,)))
+    # Two read-backs and no plain yes: no third. SMD confirms THOSE by hand; the
+    # rest of the reply's rules are listed or read back as before.
+    handed = (
+        reply_reading.hand_off(
+            session_id, sender, capped, readback_confirm.inbound_message_id(session_id)
         )
-    if verdict.reason == rule_confirm.ASK_PICK:
-        return _pick_note(session_id, sender, is_admin, pending, verdict.candidates)
-    if verdict.reason == rule_confirm.ASK_QUALIFIED:
-        return restate_note(session_id, sender, pending, verdict.candidates)
-    return None
+        if capped
+        else ""
+    )
+    rest = tuple(c for c in verdict.candidates if c not in capped)
+    note = None
+    if verdict.reason == rule_confirm.ASK_PICK and rest:
+        note = _pick_note(session_id, sender, is_admin, pending, rest)
+    elif verdict.reason == rule_confirm.ASK_QUALIFIED and rest:
+        note = restate_note(session_id, sender, pending, rest)
+    return reply_reading.joined(handed, note)
 
 
 def restate_note(
@@ -165,20 +173,26 @@ def restate_note(
         if c in by_id and rule_confirm_reply.is_own_rule(by_id[c], sender)
     ]
     reach_on = wording_rules.switched_on()
-    block = ""
+    block, handed_note = "", None
     for row in rows:
         sentence = readback_confirm.rule_sentence(row, reach_on)
-        if sentence:
-            block, handed = reply_reading.turn_readback(
-                session_id, sender, str(row["proposal_id"]), sentence
-            )
-            if handed:
-                return reply_reading.HANDED_OFF_NOTE if block else rules_by_hand.REPLY_NONE_NOTE
-    if not block:
-        return None
-    _plugin()._remember_readback(session_id, block)
-    _note_verified(session_id, rows)
-    return _RESTATE_NOTE.format(block=block)
+        if not sentence:
+            continue
+        text, handed = reply_reading.turn_readback(
+            session_id, sender, str(row["proposal_id"]), sentence
+        )
+        if not handed:
+            block = text
+        elif text:
+            handed_note = reply_reading.HANDED_OFF_NOTE
+        else:
+            handed_note = handed_note or rules_by_hand.REPLY_NONE_NOTE
+    restated = None
+    if block:  # the rules that remain are read back, owed and registered
+        _plugin()._remember_readback(session_id, block)
+        _note_verified(session_id, rows)
+        restated = _RESTATE_NOTE.format(block=block)
+    return reply_reading.joined(handed_note, restated)
 
 
 def _note_verified(session_id: str, rows: list[dict[str, Any]]) -> None:
@@ -353,10 +367,13 @@ def _pick_note(
         plug._remember_readback(session_id, block)
     # Owed first; the list is the reply's required words only once owed.
     capped = reply_reading.owe_and_say(session_id, sender, list(ids), len(ids) > 1, block)
-    if capped:
-        return reply_reading.hand_off(
-            session_id, sender, capped, readback_confirm.inbound_message_id(session_id)
-        )
+    if capped is None:  # refused, not at the cap: no list that no send would bind
+        return rules_by_hand.REPLY_NONE_NOTE
+    if capped:  # those to SMD; the rest listed again without them
+        ref = readback_confirm.inbound_message_id(session_id)
+        rest = tuple(c for c in candidates if c not in capped)
+        again = _pick_note(session_id, sender, is_admin, pending, rest) if rest else None
+        return reply_reading.joined(reply_reading.hand_off(session_id, sender, capped, ref), again)
     return _PICK_NOTE.format(block=block)
 
 
