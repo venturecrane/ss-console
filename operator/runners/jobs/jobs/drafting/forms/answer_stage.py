@@ -132,9 +132,9 @@ def _user(inp: Inputs, group: WorkUnit, nums: tuple[str, ...], cat: Catalogue, p
     )
 
 
-def _call(doorway: Any, model: str, user: str) -> Any:
+def _call(doorway: Any, model: str, user: str, system: str = SYSTEM, stage: str = STAGE) -> Any:
     res = doorway.call(
-        STAGE, model=model, system=SYSTEM, messages=[{"role": "user", "content": user}], max_tokens=MAX_TOKENS
+        stage, model=model, system=system, messages=[{"role": "user", "content": user}], max_tokens=MAX_TOKENS
     )
     text = _FENCE.sub("", str(getattr(res, "text", "") or "")).strip()
     try:
@@ -143,19 +143,25 @@ def _call(doorway: Any, model: str, user: str) -> Any:
         return {"unparsed": text[:200]}
 
 
-def _parsed(doorway: Any, model: str, user: str, nums: tuple[str, ...], cat: Catalogue) -> tuple[list[Answer], int]:
+def _parsed_with(
+    doorway: Any, model: str, system: str, user: str, nums: tuple[str, ...], cat: Catalogue, stage: str = STAGE
+) -> tuple[list[Answer], int]:
     """One call, and one retry told every problem when the reply is not in the shape."""
-    raw = _call(doorway, model, user)
+    raw = _call(doorway, model, user, system, stage)
     try:
         return parse_section(raw, nums, cat), 1
     except AnswerError as exc:
         fix = "YOUR LAST REPLY WAS NOT USED, for these problems; reply again in the shape: " + "; ".join(exc.problems)
         try:
-            return parse_section(_call(doorway, model, user + "\n\n" + fix), nums, cat), 2
+            return parse_section(_call(doorway, model, user + "\n\n" + fix, system, stage), nums, cat), 2
         except AnswerError as again:
             from ..compose import DraftingError
 
-            raise DraftingError(f"the {STAGE} reply was not in the shape after one retry: {again}") from None
+            raise DraftingError(f"the {stage} reply was not in the shape after one retry: {again}") from None
+
+
+def _parsed(doorway: Any, model: str, user: str, nums: tuple[str, ...], cat: Catalogue) -> tuple[list[Answer], int]:
+    return _parsed_with(doorway, model, SYSTEM, user, nums, cat)
 
 
 def cite_ok(c: Cite, corpus: Mapping[str, DocPages]) -> bool:
@@ -253,11 +259,16 @@ def answer(
         calls, failed = calls + c, failed + f
         log(f"  form answers: section {group.section}, {len(rest)} number(s), {c} call(s), {f} value(s) unverified")
     ordered = tuple(out[n] for n in sorted(out, key=cat.position))
-    cites = tuple(
+    return Result(ordered, calls, failed, cites_of(ordered))
+
+
+def cites_of(answers: tuple[Answer, ...]) -> tuple[tuple[str, str, str, int], ...]:
+    """(number, subpart, file, page) of every verified value, in order, once each."""
+    cites = (
         (a.number, k, c.file, c.page)
-        for a in ordered
+        for a in answers
         for it in a.items
         for k, v in it.parts.items()
         for c in dict.fromkeys(v.cites)
     )
-    return Result(ordered, calls, failed, tuple(dict.fromkeys(cites)))
+    return tuple(dict.fromkeys(cites))

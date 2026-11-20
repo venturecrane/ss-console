@@ -32,7 +32,7 @@ from ... import firm_wording, wording_rules_store
 from .. import review_first, served as served_mod
 from ..evidence import extract
 from ..outcome import DraftingFailed
-from . import answer_render, answer_stage
+from . import answer_render, answer_stage, saved
 from .catalog import CatalogueError, DISC_001, CURRENT, load
 from .policy import BODY_SLOT, PolicyMissing, ResponsePolicy, load_policy, unplaced
 
@@ -46,7 +46,6 @@ FORM_SETS_DEFAULT = False
 FORM_REVIEW_FIRST = 1
 FINAL = "draft-final.md"
 CITES = "form-cites.md"
-ANSWERS = "form-answers.json"
 
 
 def enabled() -> bool:
@@ -163,8 +162,18 @@ def draft(run: Any, u: Any, corpus: Any = None) -> str:
         raise DraftingFailed(f"format_check: the form response body failed its checks: {exc}") from None
     cp = run.data / "caption.json"
     cap = json.loads(cp.read_text(encoding="utf-8")) if cp.is_file() else None
-    md = answer_render.paper(_shell(run, pol), cap, pol, body)
-    _atomic(u.data / ANSWERS, json.dumps({"calls": res.calls, "unverified_values": res.failed_values}, indent=1))
+    template = answer_render.paper(_shell(run, pol), cap, pol, BODY_SLOT)
+    md = template.replace(BODY_SLOT, body.strip())
+    rec = saved.unit_record(
+        label=u.label,
+        draft_name=str(run._names(u)["draft"]) if hasattr(run, "_names") else u.label,
+        form=cat.form,
+        revision=cat.revision,
+        inputs=inp,
+        answers=res.answers,
+        stats={"calls": res.calls, "unverified_values": res.failed_values, "paper_template": template},
+    )
+    _atomic(u.data / saved.UNIT_FILE, json.dumps(rec, indent=1))  # what a change request revises (saved.py)
     _atomic(u.data / CITES, answer_render.cite_table(u.label, res.cites))
     _atomic(u.data / "final-pass.json", json.dumps({"version": 0, "settled": [], "drifts": []}))
     _atomic(out, md)
@@ -187,7 +196,7 @@ def with_cite_tables(run: Any, notes_md: str) -> str:
 
 def first_set_gate(run: Any, manifest: list[dict[str, Any]]) -> bool:
     """The first form set a seat files is held for SMD (``review_first``); True on SMD's release."""
-    if not any(takes(run, u) for u in run.units()):
+    if not enabled() or not any(takes(run, u) for u in run.units()):  # off: no plan is read
         return False
     return review_first.gate(
         FORM_REVIEW_FIRST,

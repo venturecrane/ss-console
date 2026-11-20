@@ -42,7 +42,13 @@ def _slots(a: Answer, cat: Catalogue) -> list[Value | None]:
     return [it.parts.get(k) for it in a.items for k in (letters or ("",))]
 
 
+#: A value cited to the attorney's own request (a revise, ``revise_stage``): his statement, not the file's.
+PER_ATTORNEY = "ATTORNEY"
+
+
 def _single_page(v: Value) -> bool:
+    if all(c.file == PER_ATTORNEY for c in v.cites):
+        return False  # the attorney stated it: the notes say "per attorney", no client marker
     return len({(c.file, c.page) for c in v.cites}) == 1
 
 
@@ -91,7 +97,11 @@ def cite_table(label: str, cites: tuple[tuple[str, str, str, int], ...]) -> str:
     """The attorney's table of where each answer came from (never in the served paper)."""
     if not cites:
         return ""
-    rows = [f"| {n} | {('(' + k + ')') if k else ''} | {f.replace('|', '/')} | {p} |" for n, k, f, p in cites]
+    rows = [
+        f"| {n} | {('(' + k + ')') if k else ''} | "
+        + ("per attorney | |" if f == PER_ATTORNEY else f"{f.replace('|', '/')} | {p} |")
+        for n, k, f, p in cites
+    ]
     return "\n".join(
         [
             f"### Where each answer comes from: {label}",

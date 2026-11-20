@@ -57,6 +57,7 @@ from . import (
 )
 from .broker_client import BrokerClient, BrokerError
 from .drafting import firm_rules, layout_into_library, repair_budget
+from .drafting.forms import saved as form_saved
 from .firm_inputs import pin_env
 from .matter import store as page_store_mod
 from .library_edit import handoff as library_edit_handoff
@@ -179,6 +180,9 @@ class DraftingLane(Daemon):
         if forms:  # absent counts as none released (``drafting/job.py``); a seat with none writes what it always did
             doc["form_releases"] = forms
         (jd / "data").mkdir(exist_ok=True)
+        prior = (env.get("revise") or {}).get("prior_job_id") if isinstance(env.get("revise"), dict) else None
+        if prior:
+            form_saved.hand_to(self.run_dir, str(prior), jd / "data")  # a form set's saved values (forms/saved.py)
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
         self._chown_child(jd)
         return jd
@@ -320,6 +324,7 @@ class DraftingLane(Daemon):
             with (Path(self.run_dir) / RELEASES).open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(row) + "\n")
         if state == "delivered":
+            form_saved.keep(self.run_dir, job_id, self.job_dir(job_id) / "data")  # what a change revises
             fields["folder_id"] = str(v.get("folder_id") or "")
             fields["delivery"] = {"files": list(v.get("files") or []), "cents": cents}
             if v.get("served_sets"):
