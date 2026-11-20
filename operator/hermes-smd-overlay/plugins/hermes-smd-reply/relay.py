@@ -330,6 +330,7 @@ def gate_body(
     internal_recipient: bool = False,
     allowed_case_names: Iterable[str] | None = None,
     allowed_money: Iterable[str] | None = None,
+    firm_sentences: Iterable[str] = (),
 ) -> GateResult:
     """Re-run the content-sensitivity floor + fabrication gate on the draft body.
 
@@ -392,6 +393,7 @@ def gate_body(
             vertical,
             allowed_case_names=allowed_case_names,
             allowed_money=allowed_money,
+            firm_sentences=firm_sentences,
         )
     except Exception:  # noqa: BLE001 — fail closed on a raising gate
         logger.exception("reply-channel: outbound gate raised; refusing to reply")

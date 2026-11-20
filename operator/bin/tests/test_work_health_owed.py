@@ -92,7 +92,11 @@ def test_smd_closing_it_or_a_hand_delivery_drops_it() -> None:
 
 
 def test_a_help_question_is_listed_in_its_own_words() -> None:
-    for kind, words in (("help_question", "help guide does not answer"),):
+    for kind, words in (
+        ("help_question", "help guide does not answer"),
+        ("rule_not_recorded", "not recorded"),
+        ("rule_install_failed", "did not install"),
+    ):
         (it,) = owed_wh.smd_owed_items(SEAT, [_owed(NOW - timedelta(hours=1), kind)], CFG, NOW)
         assert words in it.what and "note lane" in it.todo
 

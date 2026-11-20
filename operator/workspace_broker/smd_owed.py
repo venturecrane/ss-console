@@ -30,8 +30,9 @@ the requester added to a draft whose job had ended failed, so the addition
 could not reach it; he is given the revise acknowledgment and SMD makes the
 change by hand; the ended job is kept as ``{"job_id": ...}`` in
 ``envelope_json``, never shown to the firm, and delivering that job closes the
-item) and ``help_question`` (the agent's, through ``smd_owed_record``, keyed on
-the email that asked).
+item), ``rule_install_failed`` (the broker's own, from ``own_rule_verbs``),
+and ``help_question`` / ``rule_not_recorded`` (the agent's, through
+``smd_owed_record``, keyed on the email that asked).
 """
 
 from __future__ import annotations
@@ -60,9 +61,20 @@ KIND_ADDITION = "drafting_addition"
 #: told "Got it. I'll confirm in this thread once that's in place." and SMD
 #: records the rule by hand.
 KIND_RULE = "rule_stated"
-#: The kinds the agent may record (the drafting kinds are the broker's own).
-AGENT_KINDS = frozenset({KIND_HELP, KIND_RULE})
-_LANE = {KIND_DRAFTING: "drafting", KIND_ADDITION: "drafting", KIND_HELP: "operator", KIND_RULE: "operator"}
+#: A rule a person confirmed that the seat could not record (the agent's).
+KIND_NOT_RECORDED = "rule_not_recorded"
+#: A rule the person was told is recorded whose install then failed (the broker's).
+KIND_INSTALL = "rule_install_failed"
+#: The kinds the agent may record (the others are the broker's own).
+AGENT_KINDS = frozenset({KIND_HELP, KIND_RULE, KIND_NOT_RECORDED})
+_LANE = {
+    KIND_DRAFTING: "drafting",
+    KIND_ADDITION: "drafting",
+    KIND_HELP: "operator",
+    KIND_RULE: "operator",
+    KIND_INSTALL: "operator",
+    KIND_NOT_RECORDED: "operator",
+}
 DETAIL_MAX = 300
 _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")
 
@@ -363,8 +375,8 @@ def _owes_a_set(row: sqlite3.Row) -> bool:
 def record_verb(
     broker: BrokerContext, _action: str, request: dict[str, Any], _pid: int, _uid: int | None
 ) -> dict[str, Any]:
-    """``smd_owed_record``: the agent records a help question, keyed on the
-    email that asked. ``smd_told`` says whether it was."""
+    """``smd_owed_record``: the agent records a help question or a rule not
+    recorded, keyed on the email that asked. ``smd_told`` says whether it was."""
     kind = str(request.get("kind") or "")
     if kind not in AGENT_KINDS:
         raise ValueError(f"kind must be one of {sorted(AGENT_KINDS)}")

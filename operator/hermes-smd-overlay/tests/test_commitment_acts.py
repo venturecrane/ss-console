@@ -628,7 +628,11 @@ def test_a_bare_yes_with_a_rule_and_an_act_open_asks_which(establishment):
     PENDING_ACTS.note_proposed(SESSION, PROPOSAL, TOOL, READBACK)
     _admin_turn()
     context = _turn(mod, ADMIN, "yes")["context"]
-    assert "Ask which" in context
+    # REWORKED for confirm-by-reply: the own rule is read back again with no id, and the
+    # act keeps its tag, so one reply covers both things the yes could mean.
+    assert "In client letters, be more formal and shorter.\n\nReply yes to confirm." in context
+    assert "[rule " not in context
+    assert f"[act {PROPOSAL}]" in context and f"`[act {PROPOSAL}] yes`" in context
     assert PENDING_ACTS.peek_confirmed(SESSION, TOOL) is None
     assert SESSION not in mod._CONFIRMED_STASH
 
@@ -765,8 +769,11 @@ def test_two_items_open_still_ask_which_using_the_rows_own_tag(establishment):
     state["pending"] = [_act_row(), _rule_row()]
     _admin_turn()
     context = _turn(mod, ADMIN, "Yes place it.")["context"]
-    assert "more than one thing outstanding" in context
-    assert f"`[act {PROPOSAL}] yes`" in context
+    # REWORKED for confirm-by-reply: "Yes place it." is not a plain yes, so the
+    # person's own rule is left alone (no list), and the one act is restated
+    # with its own tag, as the one outstanding thing it can answer.
+    assert f"[act {PROPOSAL}]" in context and "exactly one thing" in context
+    assert "[rule " not in context
     assert PENDING_ACTS.peek_confirmed(SESSION, TOOL) is None
     assert SESSION not in mod._CONFIRMED_STASH
 
@@ -777,8 +784,10 @@ def test_a_bare_yes_with_one_rule_open_restates_it_as_a_rule(establishment):
     state["pending"] = [row]
     _admin_turn()
     context = _turn(mod, ADMIN, "yes")["context"]
-    assert "[rule 0b91ee42]" in context
-    assert row["readback"] in context
+    # REWORKED (R2.2): restated as its sentence and "Reply yes to
+    # confirm.", with no tag; the reply to that message binds by its header.
+    assert "0b91ee42" not in context
+    assert row["text"] + "\n\nReply yes to confirm." in context
     assert "[act " not in context
     assert SESSION not in mod._CONFIRMED_STASH
 

@@ -48,7 +48,9 @@ class TurnSays:
     reply carrying all of them a refusal whose retry quoted one, so the firm
     heard about one document. Now every sentence is kept, de-duplicated, and the
     expected reply is all of them in call order, one paragraph each
-    (:meth:`get`).
+    (:meth:`get`). A ``slot`` (a hook's sentence rewritten as the turn goes:
+    the establishment plugin's read-back of a person's own rules) is replaced
+    in place rather than added again.
 
     ``"none"`` adds nothing: no block, no hold (``SAY_NONE``). A ``FORBID``
     entry is a phrase the reply must not carry outside a block."""
@@ -59,12 +61,14 @@ class TurnSays:
         self._lock = threading.Lock()
         self._says: OrderedDict[tuple[str, str], list[tuple[str, str]]] = OrderedDict()
 
-    def note(self, session_id: str, message_id: str, say: str) -> None:
+    def note(self, session_id: str, message_id: str, say: str, slot: str = "") -> None:
         with self._lock:
             key = (session_id, message_id)
             entries = self._says.pop(key, [])
-            if say not in entries:
-                entries.append(say)
+            if slot and any(s == slot for s, _ in entries):
+                entries = [(s, say if s == slot else said) for s, said in entries]
+            elif not any(said == say for _, said in entries):
+                entries.append((slot, say))
             self._says[key] = entries
             while len(self._says) > self._MAX:
                 self._says.popitem(last=False)
@@ -77,7 +81,70 @@ class TurnSays:
             entries = self._says.get((session_id, message_id))
         if not entries:
             return None
-        return tuple(said for said in entries if said != SAY_NONE)
+        return tuple(said for _, said in entries if said != SAY_NONE)
+
+
+#: ``(session_id, message_id, say, slot="") -> bool``, set by the reply plugin
+#: at load (``plugins/hermes-smd-reply/relay_checks.note_turn_say``). A HOOK's
+#: sentence (the establishment plugin's read-back, its numbered list, its reply
+#: to a confirmation) has no tool result to carry it, so the hook calls
+#: :func:`note`, which writes the SAME register step 5a reads.
+_NOTE: Callable[..., bool] | None = None
+
+
+#: The longest hook paragraph taken: a read-back of several rules with their reach.
+HOOK_SAY_MAX = 6000
+
+
+def writer_for(register: TurnSays) -> Callable[..., bool]:
+    """The writer the reply plugin publishes for its own ``register``: a hook's
+    required paragraph for one email, ``slot`` replacing an earlier version in
+    place. True when recorded. Never raises."""
+
+    def note_turn_say(session_id: str, message_id: str, say: str, slot: str = "") -> bool:
+        if not (
+            isinstance(session_id, str)
+            and session_id
+            and isinstance(message_id, str)
+            and message_id
+        ):
+            return False
+        if not isinstance(say, str) or not say.strip() or len(say) > HOOK_SAY_MAX:
+            return False
+        try:
+            register.note(session_id, message_id, say.strip(), slot=slot)
+        except Exception:  # noqa: BLE001 - noting never breaks the caller
+            logger.warning("turn_says: noting a hook's fixed sentence failed", exc_info=True)
+            return False
+        return True
+
+    return note_turn_say
+
+
+def publish(note_turn_say: Callable[..., bool]) -> None:
+    """The reply plugin's own writer into its register. The latest load wins."""
+    global _NOTE
+    _NOTE = note_turn_say
+
+
+def published() -> bool:
+    """Has the reply plugin published its register (so :func:`note` can hold)?"""
+    return _NOTE is not None
+
+
+def note(session_id: str, message_id: str, say: str, slot: str = "") -> bool:
+    """Register ``say`` as a required block of the reply to email ``message_id``.
+
+    True when the relay will hold a body without it. With the reply plugin not
+    loaded nothing is recorded and this returns False. Never raises."""
+    writer = _NOTE
+    if writer is None:
+        return False
+    try:
+        return bool(writer(session_id, message_id, say, slot=slot))
+    except Exception:  # noqa: BLE001 - an unregistered sentence costs the check, never the turn
+        logger.warning("turn_says: the relay did not take the sentence", exc_info=True)
+        return False
 
 
 def norm(text: str) -> str:
@@ -106,9 +173,11 @@ def from_html(markup: str) -> str:
 #: (the drafting lane's own status and tool text, which the model reads and may
 #: relay; it stays in the say-turn tier); "this turn" and
 #: "an email turn" (refusal reasons the records lane relays as they come back:
-#: "nothing was queued on this turn", "submitted from an email turn"); and every
-#: form of "[rule" and "rule id", which the establishment plugin's read-backs
-#: and ask-notes carry by design until rule confirmation ships without ids.
+#: "nothing was queued on this turn", "submitted from an email turn"); and
+#: "[rule", which the administrators' request email and its ask-notes still
+#: carry (a rule waiting on an administrator, and an act, keep their tags). A
+#: person's OWN rule is read back with no id since 2026-11-20, so "rule id"
+#: is back in this tier.
 TIER1_PHRASES: tuple[str, ...] = (
     "this system refused",
     "automated drafting",
@@ -117,6 +186,7 @@ TIER1_PHRASES: tuple[str, ...] = (
     "my email tool",
     "install check",
     "submitted for installation",
+    "rule id",
 )
 _TIER1 = re.compile(
     r"(?<![\w\[])(" + "|".join(re.escape(p) for p in TIER1_PHRASES) + r")(?!\w)",
@@ -327,6 +397,9 @@ __all__ = [
     "from_html",
     "html_lines",
     "norm",
+    "note",
+    "publish",
+    "published",
     "refusal",
     "send_problem",
     "MECHANICS_REDRAFT",

@@ -27,6 +27,8 @@ _TIMEOUT_SECONDS = 10
 VERB = "smd_owed_record"
 KIND_HELP = "help_question"
 KIND_RULE = "rule_stated"  # rules_by_hand, the stopgap of 2026-11-20
+#: A confirmed own rule the seat could not record (rule confirmation by reply).
+KIND_NOT_RECORDED = "rule_not_recorded"
 
 
 def _request(payload: dict[str, Any]) -> dict[str, Any]:
@@ -79,4 +81,4 @@ def open_page(send: Any = None) -> dict[str, Any]:
     }
 
 
-__all__ = ["KIND_HELP", "KIND_RULE", "VERB", "open_page", "record"]
+__all__ = ["KIND_HELP", "KIND_NOT_RECORDED", "KIND_RULE", "VERB", "open_page", "record"]

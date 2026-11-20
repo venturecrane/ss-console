@@ -199,12 +199,38 @@ def lane_truth(
     return None
 
 
+def lane_reads(output_class: Any, doc_kinds: Any, on: bool | None = None) -> tuple[str, ...]:
+    """The kinds whose NEXT draft on this seat reads a rule just committed, in
+    the registry's order; ``()`` when none will (2026-11-19).
+
+    Pure, from the committed row and the switch, and deliberately NOT from the
+    installed file: the reply to a person who just said yes is written before the
+    root applier has polled, so reading ``wording.json`` here would answer "not
+    yet" every time (critic issue 8). A later install that fails is the applier's
+    to page. ``on`` is the seat's switch (:func:`switched_on` when ``None``).
+    A rule outside ``work_product``, one recording no kinds, or one whose kinds
+    no queued job makes (a letter) reads as none, which is the same line
+    :func:`lane_truth` draws on the installed file.
+    """
+    if str(output_class or "").strip().lower() != RULE_CLASS:
+        return ()
+    kinds = doc_kinds if isinstance(doc_kinds, (list, tuple)) else ()
+    if not kinds:
+        return ()
+    if not (switched_on() if on is None else on):
+        return ()
+    return tuple(
+        k for k in wording_rules_store.KINDS if k in kinds and k in wording_rules_store.LANE_KINDS
+    )
+
+
 __all__ = [
     "MAX_ATTORNEY_CHARS",
     "PROPERTIES",
     "RULE_CLASS",
     "SWITCH",
     "compile_adjustments",
+    "lane_reads",
     "lane_truth",
     "reach_fields",
     "reach_required",

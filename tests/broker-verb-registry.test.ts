@@ -122,6 +122,16 @@ const EXPECTED_VERBS = [
   'establish_notify_release',
   'establish_pending',
   'establish_propose',
+  // Confirm-by-reply: which own rules a sent read-back carried, and which
+  // read-back an inbound reply answers (readback_bindings.py).
+  'establish_install_check',
+  'establish_install_watch',
+  'establish_readback_for',
+  'establish_readback_owed',
+  'establish_readback_sent',
+  'establish_reopen_lapsed',
+  'establish_restated',
+  'establish_signature_record',
   'establish_stage_document',
   'establish_status',
   'establish_submit',

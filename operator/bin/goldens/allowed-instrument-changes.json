@@ -1,5 +1,8 @@
 {
-  "_why": "What the golden harness itself may stop pinning (bin/goldens/golden_manifest.py): <cases> names a dropped case or cell, or a cell newly declared not applicable, as <set>.<list>:<item> (e.g. host_matrix.cells:medchron/busy); <normaliser> names a normaliser added, changed or removed (e.g. host_matrix_normal._ULID). Each entry is exact, reviewed with the PR, and cleared after it merges. The medchron parallel reading PR (2026-11-19): page reading now sends 8 pages at once (vision.VISION_WORKERS), which shuffles the order its requests are sent in; the frozen reader cell pins send order, so reader_lanes.py runs the medchron cell's page reading with one worker (VISION_WORKERS=1). The requests themselves are unchanged.",
-  "<cases>": [],
-  "<normaliser>": []
+  "_why": "What the golden harness itself may stop pinning (bin/goldens/golden_manifest.py): <cases> names a dropped case or cell, or a cell newly declared not applicable, as <set>.<list>:<item> (e.g. host_matrix.cells:medchron/busy); <normaliser> names a normaliser added, changed or removed (e.g. host_matrix_normal._ULID). Each entry is exact, reviewed with the PR, and cleared after it merges. The medchron parallel reading PR (2026-11-19): page reading now sends 8 pages at once (vision.VISION_WORKERS), which shuffles the order its requests are sent in; the frozen reader cell pins send order, so reader_lanes.py runs the medchron cell's page reading with one worker (VISION_WORKERS=1). The requests themselves are unchanged. Rules that bind (2026-11-20): the relay passes this session's own verified rule sentences to the citation gate only when there are some (outbound_gate.gate_kwargs, unrecorded, {} in every case), declared in the relay decision's table; and the live send record now tells shared.reply_sent (reply_sent.notify, unrecorded: it returns nothing and decides nothing the relay does).",
+  "<cases>": [
+    "decisions.relay.not_applicable:outbound_gate.gate_kwargs",
+    "decisions.relay.not_applicable:reply_sent.notify"
+  ],
+  "<normaliser>": ["decisions_frozen.tables.py"]
 }

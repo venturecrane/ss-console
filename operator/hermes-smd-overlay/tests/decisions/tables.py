@@ -207,6 +207,19 @@ RELAY = Decision(
             "recorded _held",
         ),
         (
+            "reply_sent.notify",
+            "after a reply is on the wire, binds the read-back it carried and marks the "
+            "help line offered (2026-11-20); never raises and returns nothing, so it "
+            "decides nothing the relay does; proven through the real send record in "
+            "tests/test_rule_confirm_live_path.py",
+        ),
+        (
+            "outbound_gate.gate_kwargs",
+            "reads this session's own verified rule sentences for the citation exemption "
+            "(R2.4, 2026-11-19); {} in every case, and its effect reaches the recorded "
+            "relay.gate_body as its firm_sentences argument",
+        ),
+        (
             "champion.walls",
             "reads the enrolled list and the seat's product-guide audience setting; "
             "non-empty only for a client champion recipient (the champion knob) or an "

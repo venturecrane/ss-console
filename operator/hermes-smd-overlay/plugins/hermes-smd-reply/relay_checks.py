@@ -38,6 +38,7 @@ from shared import (
     matter_file_facts,
     matter_file_reply,
     matter_gate,
+    outbound_gate,
     provenance,
     report_render,
     result_unwrap,
@@ -466,6 +467,13 @@ def note_say(kwargs: dict[str, Any]) -> None:
         logger.warning("hermes-smd-reply: noting the turn's fixed sentence failed", exc_info=True)
 
 
+# A hook's required paragraph (the establishment plugin's read-back) reaches this
+# register through shared.turn_says. Published at import: the reply plugin imports
+# a fresh copy of this module per load, so a hook always writes the loaded one.
+note_turn_say = turn_says.writer_for(_TURN_SAYS)
+turn_says.publish(note_turn_say)
+
+
 def say_held(say: Any, origin: Any, send_text: str, send_html: str, reply_to: Any = None) -> bool:
     """Step 5a: hold a body that breaks the block rule (``shared.turn_says``).
 
@@ -618,6 +626,9 @@ def _content_floor(
         internal_recipient=internal,
         allowed_case_names=allowed_captions,
         allowed_money=allowed_money,
+        # This session's own verified rule sentences only (R2.4); passed only
+        # when there are some, so a turn with none calls the gate as before.
+        **outbound_gate.gate_kwargs(session_id),
     )
     if not gate.allowed:
         _plugin._held(gate.reason, origin, categories=list(gate.categories))
