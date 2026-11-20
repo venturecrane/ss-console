@@ -17,9 +17,10 @@ Never raises.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
-from shared import inbound, logic_in_code, provenance, smd_owed
+from shared import inbound, logic_in_code, provenance, rule_confirm, smd_owed
 
 logger = logging.getLogger(__name__)
 
@@ -101,4 +102,33 @@ def reply_note(session_id: Any, send: Any = None) -> str:
     return REPLY_NOTE if record(session_id, "reply about a rule", send=send) else REPLY_NONE_NOTE
 
 
-__all__ = ["NUDGE", "NOTHING_NOTE", "SAY", "on", "propose_answer", "record", "reply_note"]
+def reply_for(
+    session_id: Any, message: Any, open_rows: Callable[[], list[dict[str, Any]]]
+) -> str | None:
+    """The pre-turn note when the switch is on and the email is about a rule: it
+    carries a rule tag, or it is a bare "yes" (no act tag) while a rule of this
+    person's is open (``open_rows``, the broker's open rows). It confirms
+    nothing. None otherwise, and always None with the switch off."""
+    if not on() or not isinstance(message, str):
+        return None
+    if not rule_confirm.find_tags(message, ("rule",)):
+        if (
+            rule_confirm.find_tags(message, ("act",))
+            or not rule_confirm.read_own_text(message).affirmative
+        ):
+            return None
+        if not any(str(r.get("kind") or "rule") == "rule" for r in open_rows()):
+            return None
+    return reply_note(session_id)
+
+
+__all__ = [
+    "NUDGE",
+    "NOTHING_NOTE",
+    "SAY",
+    "on",
+    "propose_answer",
+    "record",
+    "reply_for",
+    "reply_note",
+]

@@ -4151,15 +4151,6 @@ def _confirmation_note(
     # fires). "The firm accidentally installed a routine change by saying yes"
     # is the failure worth a refusal at every layer that could pass one through.
     pending = [r for r in rows if str(r.get("state") or "open") == "open" and not _is_ops_row(r)]
-    if rules_by_hand.on():
-        # Stopgap, 2026-11-20: a "yes" or a tag confirms no rule; acts still do.
-        rule_rows = [
-            r for r in pending if str(r.get("kind") or "rule") != act_broker.KIND_TOOL_CALL
-        ]
-        pending = [r for r in pending if r not in rule_rows]
-        act_tagged = bool(rule_confirm.find_tags(user_message, ("act",)))
-        if rule_confirm.find_tags(user_message, ("rule",)) or (rule_rows and not act_tagged):
-            return rules_by_hand.reply_note(session_id)
     ended = [
         r
         for r in rows
@@ -4843,7 +4834,9 @@ def on_pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
             # instruction about THIS message rather than a standing capability
             # note: when the person just answered a readback, what to do about it
             # is the most specific thing the model needs to know this turn.
-            note = _confirmation_note(session_id, sender_id, is_admin, kwargs.get("user_message"))
+            note = rules_by_hand.reply_for(
+                session_id, kwargs.get("user_message"), lambda: _fetch_pending(sender_id, is_admin)
+            ) or _confirmation_note(session_id, sender_id, is_admin, kwargs.get("user_message"))
             if note:
                 lines.append(note)
         pointer = _person_pref_pointer(sender_id)
@@ -5062,6 +5055,10 @@ def _rule_gate(
 ) -> dict[str, Any] | None:
     """Gate ``establish_propose`` and ``establish_pending`` (ss-console#2529).
 
+    On a ``rules_by_hand`` seat (stopgap, 2026-11-20) propose only records what
+    SMD owes, and nothing is listed. A rule's submit is refused there by the
+    confirmation check, because nothing is ever confirmed.
+
     Four conditions, and every one of them refuses rather than repairs, because
     a hook cannot rewrite arguments (docs/hook-surface.md) and an exact-match
     refusal pins the wire value to the attribution just as a stamp would:
@@ -5078,6 +5075,12 @@ def _rule_gate(
     4. **A personal rule's subject is that same person**, and ``for_admin`` is
        an admin-only question to ask.
     """
+    if rules_by_hand.on():
+        return (
+            None
+            if tool_name == TOOL_PROPOSE
+            else {"action": "block", "message": rules_by_hand.NOTHING_NOTE}
+        )
     sender = _normalize_address(entry.get("sender")) if entry else ""
     if not sender:
         return {"action": "block", "message": _PROPOSE_NO_SENDER_MESSAGE}
@@ -5317,13 +5320,6 @@ def on_pre_tool_call(**kwargs: Any) -> dict[str, Any] | None:
         entry = _ADMIN_STASH.get(session_id) if isinstance(session_id, str) else None
         args = kwargs.get("args")
         args = args if isinstance(args, dict) else {}
-        if rules_by_hand.on():
-            # Stopgap, 2026-11-20: propose only records what SMD owes; nothing
-            # about a rule is listed or committed.
-            if tool_name == TOOL_PROPOSE:
-                return None
-            if tool_name == TOOL_PENDING or (tool_name == TOOL_SUBMIT and args.get("proposal_id")):
-                return {"action": "block", "message": rules_by_hand.NOTHING_NOTE}
         if tool_name in (TOOL_PROPOSE, TOOL_PENDING):
             return _rule_gate(session_id, tool_name, args, entry)
         if tool_name == TOOL_SUBMIT:

@@ -115,7 +115,7 @@
     "hermes-smd-overlay/plugins/hermes-smd-escalation/__init__.py::_escalation_append": 23,
     "hermes-smd-overlay/plugins/hermes-smd-escalation/casework_reply.py::reply_verdicts": 21,
     "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::_confirmation_note": 17,
-    "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::on_pre_llm_call": 17,
+    "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::on_pre_llm_call": 16,
     "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::on_pre_tool_call": 27,
     "hermes-smd-overlay/plugins/hermes-smd-initiation/seat_facts.py::_routine_items": 23,
     "hermes-smd-overlay/plugins/hermes-smd-initiation/seat_facts.py::build_facts": 22,

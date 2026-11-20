@@ -1,8 +1,8 @@
 """Close a stated rule with no letter to anyone, as SMD (2026-11-20).
 
-    PYTHONPATH=/opt/workspace-broker /opt/workspace-broker/.venv/bin/python \\
-      -m workspace_broker.rule_close <proposal_id> --by <smd address> \\
-      --reason "<why>" [--dry-run]
+    python -m workspace_broker.rule_close <proposal_id> --by <smd address> --reason "<why>" [--dry-run]
+
+Run the way ``ops_close`` is run (its docstring names the seat's interpreter).
 
 Root only, on the seat (the broker refuses ``rule_close_by_smd`` from any other
 uid). The rules-by-hand stopgap (``logic_in_code.rules_by_hand``): SMD records
@@ -43,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         "--reason", required=True, help="why it closes with no letter (kept on the row, never in the ledger)"
     )
     ap.add_argument("--dry-run", action="store_true", help="validate and print what would change; write nothing")
-    ap.add_argument("--socket", default=os.environ.get("SMD_WORKSPACE_BROKER_SOCKET", ops_close.DEFAULT_SOCKET))
+    ap.add_argument("--socket", default=os.environ.get(ops_close.SOCKET_ENV, ops_close.DEFAULT_SOCKET))
     a = ap.parse_args(argv)
     request = build_request(a.proposal_id.strip().lower(), closed_by=a.closed_by, reason=a.reason, dry_run=a.dry_run)
     try:
