@@ -34,8 +34,9 @@ only go with an entry the step drops on purpose. In order:
 3. REPEATS (``update/encounter``). An added entry that is one encounter with
    a delivered entry or another added entry is DROPPED WHOLE only when the
    other covers it: every value and finding term (``repeats._covered``) and
-   either every run of four words of its body (``encounter.held``) or every
-   page it cites, by picture (``encounter.page_identical``). A drop that
+   every run of four words of its body (``encounter.held``, ``said``; it
+   was written here and not checked until the 2026-11-19 review found a
+   negation and a laterality dropped). A drop that
    would leave an exhibit uncited is not made (assemble refuses a gap).
    Nothing is recut: recut text is ungraded. An added entry so matched but
    NOT covered whole loses each cited paragraph one of those entries covers
@@ -110,10 +111,10 @@ class Outcome:
     ops: list[dict[str, Any]] = field(default_factory=list)
     #: claim keys this step removed on purpose: those of the entries it dropped
     removed: set[str] = field(default_factory=set)
-    #: values the paragraphs this step dropped state that their keepers do not
-    #: (times of day and bare years only, by ``repeat_paras.covers``): proof 10
-    #: reads them as removed on purpose
-    values_dropped: set[str] = field(default_factory=set)
+    #: per entry (``repeat_paras.excuse_key``), the true times of day its
+    #: dropped paragraphs wrote that their keepers do not: proof 10 excuses
+    #: them on that entry alone
+    values_dropped: dict[str, set[str]] = field(default_factory=dict)
 
 
 def _sha(text: str) -> str:
@@ -223,11 +224,19 @@ def headings_check(ents: list[str], x: Inputs, o: Outcome) -> dict[str, HD.Check
 # ---- 3. repeats -------------------------------------------------------------------------------
 
 
+def said(e: str, keeper: str) -> bool:
+    """`keeper` holds `e`'s values and finding terms (``repeats._covered``)
+    AND every run of four words of its body (``encounter.held``). Values and
+    cue terms alone dropped "NO disc herniation" against "disc herniation"
+    and a right knee against a left (2026-11-19 review): the words count."""
+    return R._covered(e, keeper) and E.held(e, keeper)
+
+
 def covers(keeper: str, e: str, page_id: E.PageId | None = None) -> bool:
-    """`keeper` says everything `e` says: every value and finding term
-    (``repeats._covered``) and every date and range (``dates_present``).
-    `e`, an added entry no longer than `keeper`, may then go whole."""
-    return R._covered(e, keeper) and dates_present(e, keeper)
+    """`keeper` says everything `e` says (``said``) and writes every date and
+    range it does (``dates_present``). `e`, an added entry no longer than
+    `keeper`, may then go whole."""
+    return said(e, keeper) and dates_present(e, keeper)
 
 
 def _yn(b: bool) -> str:
@@ -287,12 +296,13 @@ def _shorten(i: int, ents: list[str], dropped: set[int], keepers: list[str], cit
     )
     o.counts["repeats: paragraphs left, removing them would change a claim"] += s.left_key
     o.counts["repeats: paragraphs left, an exhibit would be uncited"] += s.left_uncited
-    o.counts["distinct visits merged"] += s.merged
+    o.counts["repeats: paragraphs left, the independent check refused the drop"] += s.refused
     if not s.dropped:
         return False
     o.counts["repeats: paragraphs dropped"] += s.dropped
     o.removed |= s.lost_keys
-    o.values_dropped |= s.values
+    if s.values:
+        o.values_dropped.setdefault(RP.excuse_key(ents[i]), set()).update(s.values)
     applied = {"op": "repeat paragraphs", "entry": E.key(ents[i]), "applied": True, "dropped": s.dropped}
     if not RP.cited_paragraphs(s.text):
         dropped.add(i)
@@ -323,7 +333,7 @@ def repeats(ents: list[str], base_ents: list[str], x: Inputs, o: Outcome) -> lis
                 _unmatched_same_date(e, ents, base_ents)
             )
             continue
-        cond = [(kind, k, R._covered(e, k), dates_present(e, k)) for kind, k in keep_by]
+        cond = [(kind, k, said(e, k), dates_present(e, k)) for kind, k in keep_by]
         for kind, _k, _c, _d in cond:
             o.counts[f"repeats: key matches ({kind})"] += 1
         hit = next(((kind, k) for kind, k, c, d in cond if c and d and len(k) >= len(e)), None)
