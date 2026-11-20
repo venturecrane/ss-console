@@ -1476,8 +1476,7 @@ def _validate_logic_in_code(cfg: dict[str, Any], errors: list[str]) -> None:
     for key, raw in block.items():
         if key not in LOGIC_IN_CODE_SWITCHES:
             _err(
-                f"logic_in_code.{key}: unknown switch; expected one of "
-                f"{list(LOGIC_IN_CODE_SWITCHES)}",
+                f"logic_in_code.{key}: unknown switch; expected one of {list(LOGIC_IN_CODE_SWITCHES)}",
                 errors,
             )
         elif raw is not None and raw not in LOGIC_IN_CODE_MODES:

@@ -48,6 +48,7 @@ MODULES = (
     OVERLAY / "plugins/hermes-smd-initiation/help_guide.py",
     OVERLAY / "plugins/hermes-smd-initiation/help_line.py",
     OVERLAY / "plugins/hermes-smd-establishment/__init__.py",
+    OVERLAY / "plugins/hermes-smd-establishment/nudges.py",
     OVERLAY / "plugins/hermes-smd-escalation/digest_reply.py",
     OVERLAY / "plugins/hermes-smd-escalation/casework_reply.py",
     OVERLAY / "plugins/hermes-smd-escalation/reply_items.py",

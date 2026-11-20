@@ -61,7 +61,6 @@
       "ops_resolve",
       "pending_rules",
       "propose",
-      "rule_close_by_smd",
       "stage_document",
       "status",
       "submit",
