@@ -142,7 +142,9 @@ def own_ask_note(
     )
     if own and reply_reading.over_cap(reply_reading.ROUNDS.get(session_id, {}), own):
         # Two read-backs and no plain yes: no third. SMD confirms it by hand.
-        return reply_reading.hand_off(session_id, sender, own, _inbound_message_id(session_id))
+        return reply_reading.hand_off(
+            session_id, sender, own, readback_confirm.inbound_message_id(session_id)
+        )
     if verdict.reason == rule_confirm.ASK_PICK:
         return _pick_note(session_id, sender, is_admin, pending, verdict.candidates)
     if verdict.reason == rule_confirm.ASK_QUALIFIED:
@@ -167,47 +169,16 @@ def restate_note(
     for row in rows:
         sentence = readback_confirm.rule_sentence(row, reach_on)
         if sentence:
-            block = _own_turn_readback(session_id, sender, str(row["proposal_id"]), sentence)
+            block, handed = reply_reading.turn_readback(
+                session_id, sender, str(row["proposal_id"]), sentence
+            )
+            if handed:
+                return reply_reading.HANDED_OFF_NOTE if block else rules_by_hand.REPLY_NONE_NOTE
     if not block:
         return None
     _plugin()._remember_readback(session_id, block)
     _note_verified(session_id, rows)
     return _RESTATE_NOTE.format(block=block)
-
-
-def _own_turn_readback(session_id: str, sender: str, proposal_id: str, sentence: str) -> str:
-    """The turn's whole read-back once this rule joins it, owed and registered.
-
-    It replaces the block an earlier proposal on this turn owed: the reply is
-    one read-back of every rule, word for word (the relay holds any other
-    words, ``shared.turn_says``). Each proposal is bound on its own to the sent
-    message, which carries its sentence and the line asking for the answer."""
-    plug = _plugin()
-    turn = plug._OWN_TURN.setdefault(session_id, {})
-    owed = plug._READBACK_OWED.get(session_id) or []
-    before = readback_confirm.own_readbacks(list(turn.values()))
-    if before in owed:
-        owed.remove(before)
-    turn[proposal_id] = sentence
-    whole = readback_confirm.own_readbacks(list(turn.values()))
-    # Owed (and so bound at the send) ONLY when the relay holds the reply to
-    # these exact words: a yes may never confirm a paraphrase (review 2026-11-20).
-    if readback_confirm.register_say(session_id, whole):
-        _owe(session_id, sender, list(turn), listed=False)
-    return whole
-
-
-def _owe(session_id: str, sender: str, ids: list[str], listed: bool) -> None:
-    """Record with the broker, now, the read-back this turn owes the person for
-    this email; the relay's send binds it to the sent message (R2.1)."""
-    readback_confirm.owe(
-        _plugin()._broker_request,
-        _inbound_message_id(session_id),
-        sender,
-        ids,
-        listed,
-        sorted(_plugin()._VERIFIED.get(session_id) or ()),
-    )
 
 
 def _note_verified(session_id: str, rows: list[dict[str, Any]]) -> None:
@@ -220,21 +191,15 @@ def _note_verified(session_id: str, rows: list[dict[str, Any]]) -> None:
     )
 
 
-def _could_answer(user_message: str, sender: str = "", session_id: str = "") -> bool:
-    """Could this message be an answer at all? Skip the broker when not.
-
-    A message that cannot be an answer is one no rule decision rides on, so its
-    end is handed to the broker to learn his signature block from (reply_reading)."""
+def _could_answer(user_message: str) -> bool:
+    """Could this message be an answer at all? Skip the broker when not."""
     who = reply_shape.people(user_message)
-    could = bool(
+    return bool(
         rule_confirm.find_tags(user_message)
         or rule_confirm.read_own_text(user_message).affirmative
         # "1 and 3", "both", "one", "none" answer a numbered list with no yes in them.
         or reply_shape.looks_like_pick(user_message, who)
     )
-    if not could:
-        reply_reading.observe(sender, _inbound_message_id(session_id), user_message)
-    return could
 
 
 def _resolve_reply(
@@ -259,7 +224,7 @@ def _resolve_reply(
     if any(rule_confirm_reply.is_own_rule(p, sender) for p in pending):
         # Only the reply's own headers bind it (no fallback to an earlier list).
         binding, extras = readback_confirm.fetch_binding(
-            plug._broker_request, _inbound_message_id(session_id), sender
+            plug._broker_request, readback_confirm.inbound_message_id(session_id), sender
         )
         # Unreadable, or handed to SMD after two read-backs: his rule does not move here.
         gone = None if extras is None else set(extras["handed_off"])
@@ -275,13 +240,9 @@ def _resolve_reply(
             plug._VERIFIED.setdefault(session_id, set()).update(extras["verified"])
             reply_reading.ROUNDS[session_id] = extras["rounds"]
     who = reply_reading.who(user_message, (extras or {}).get("block", ()), sender)
-    verdict = rule_confirm.resolve(
+    return rule_confirm.resolve(
         user_message, pending, sender, is_admin, extra_open=extra_open, binding=binding, who=who
     )
-    reply_reading.observe(
-        sender, _inbound_message_id(session_id), user_message
-    )  # after: never self-vouching
-    return verdict
 
 
 def _confirmed_note(
@@ -326,16 +287,6 @@ def _name_candidates(
         else:
             names.append(proposal_id)
     return ", ".join(names)
-
-
-def _inbound_message_id(session_id: str) -> str:
-    """The id of the email this turn answers, from the verified origin."""
-    try:
-        # The email THIS turn's own prompt bound, never a sticky earlier one.
-        origin = SESSION_INBOUND_ORIGIN.bound_this_turn(session_id)
-    except Exception:  # noqa: BLE001 - no origin: not bound, the seat asks with a list
-        return ""
-    return str(getattr(origin, "message_id", "") or "") if origin is not None else ""
 
 
 def _owed_recorded(session_id: str, refused: list[dict[str, Any]]) -> bool:
@@ -400,9 +351,12 @@ def _pick_note(
     if others:
         block = block + "\n\n" + "\n\n".join(others)
         plug._remember_readback(session_id, block)
-    # Owed (bound at the send) only when the relay holds the reply to the list.
-    if readback_confirm.register_say(session_id, block):
-        _owe(session_id, sender, list(ids), listed=len(ids) > 1)
+    # Owed first; the list is the reply's required words only once owed.
+    capped = reply_reading.owe_and_say(session_id, sender, list(ids), len(ids) > 1, block)
+    if capped:
+        return reply_reading.hand_off(
+            session_id, sender, capped, readback_confirm.inbound_message_id(session_id)
+        )
     return _PICK_NOTE.format(block=block)
 
 
@@ -458,7 +412,7 @@ def _commit_own_rules(
             "hermes-smd-establishment: a confirmation arrived on a turn that cannot say it"
         )
         return _NOTHING_TO_SAY_NOTE
-    source_ref = (_inbound_message_id(session_id) or "reply-confirmation")[:200]
+    source_ref = (readback_confirm.inbound_message_id(session_id) or "reply-confirmation")[:200]
     committed: list[dict[str, Any]] = []
     refused: list[dict[str, Any]] = []
     notes: list[str] = []
@@ -518,8 +472,11 @@ def _commit_own_rules(
 
 def own_readback_for(
     session_id: str, args: dict[str, Any], response: dict[str, Any], readback: str
-) -> tuple[bool, str]:
-    """``(own, readback)`` for a proposal the broker accepted.
+) -> tuple[bool, str, dict[str, str] | None]:
+    """``(own, readback, handed)`` for a proposal the broker accepted. ``handed``
+    is the whole tool result when the rule was read back twice already (the
+    broker returns that same open rule for a restatement of it): the stopgap
+    sentence, or say nothing when SMD could not be told; never a read-back.
 
     A person's OWN rule (not waiting on an administrator) is shown its sentence,
     its reach and how to answer, with no tag and no id; the turn's read-back of
@@ -538,8 +495,13 @@ def own_readback_for(
     if own and readback:
         sender = plug._normalize_address(args.get("instructed_by"))
         _restate(session_id, sender, args, proposal_id)
-        readback = _own_turn_readback(session_id, sender, proposal_id, readback)
-    return own, readback
+        readback, handed = reply_reading.turn_readback(session_id, sender, proposal_id, readback)
+        if handed:
+            return own, readback, ({"say": readback} if readback else _SAY_NONE)
+    return own, readback, None
+
+
+_SAY_NONE = {"say": "none", "instruction": rules_by_hand.NONE_INSTRUCTION}
 
 
 def _said_by_them(session_id: str, text: str) -> bool:
@@ -590,19 +552,23 @@ def reopen_note(session_id: str, sender: str, user_message: Any) -> str | None:
     is proposed again and read back (R8). Never says it lapsed."""
     if rules_by_hand.on():
         return None  # the stopgap owns rules: nothing is re-opened or read back
+    plug = _plugin()
+    _binding, extras = readback_confirm.fetch_binding(
+        plug._broker_request, readback_confirm.inbound_message_id(session_id), sender
+    )
+    block = (extras or {}).get("block", ())
     if not rule_confirm_reply.pure_affirmative(
-        user_message, None, reply_reading.who(user_message, (), sender)
+        user_message, None, reply_reading.who(user_message, block, sender)
     ):
         return None
-    plug = _plugin()
     try:
         answer = plug._broker_request(
             {
                 "action": "establish_reopen_lapsed",
                 "sender": sender,
                 # The broker reopens only a rule the read-back THIS email replies to.
-                "inbound_message_id": _inbound_message_id(session_id),
-                "source_ref": _inbound_message_id(session_id) or "reopened",
+                "inbound_message_id": readback_confirm.inbound_message_id(session_id),
+                "source_ref": readback_confirm.inbound_message_id(session_id) or "reopened",
             }
         )
     except Exception:  # noqa: BLE001 - nothing reopened: the model answers as before
@@ -612,7 +578,11 @@ def reopen_note(session_id: str, sender: str, user_message: Any) -> str | None:
         return None
     row = {"text": answer.get("readback") or "", "subject": answer.get("subject")}
     sentence = readback_confirm.rule_sentence(row, wording_rules.switched_on())
-    block = _own_turn_readback(session_id, sender, str(answer.get("proposal_id") or ""), sentence)
+    block, handed = reply_reading.turn_readback(
+        session_id, sender, str(answer.get("proposal_id") or ""), sentence
+    )
+    if handed:
+        return reply_reading.HANDED_OFF_NOTE if block else rules_by_hand.REPLY_NONE_NOTE
     plug._remember_readback(session_id, block)
     return _PICK_NOTE.format(block=block)
 

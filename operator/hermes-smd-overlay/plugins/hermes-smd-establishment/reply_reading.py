@@ -6,12 +6,13 @@ them read from the body of the reply being judged:
 * :func:`who`: the sender's name from the firm's authored roster
   (``users[].full_name``, matched by exact address; on the Graph lane the
   ``from:`` line is the bare address), the Operator's persona names, and his
-  learned signature block (``workspace_broker/sender_block``, as the broker's
-  ``establish_readback_for`` returned it);
-* :func:`observe`: hand the broker the last lines of an email of his own, so his
-  block is learned and kept current. Called only after this reply was judged
-  (or on an email no rule decision rides on), so a reply never vouches for
-  itself;
+  signature block as SMD's root seed stored it from his own past emails
+  (``workspace_broker/sender_block``, returned by ``establish_readback_for``).
+  Nothing is learned from a reply at runtime, so no email can teach the seat
+  what a plain yes looks like;
+* :func:`turn_readback` and :func:`owe_and_say`: the turn's read-back is owed
+  FIRST and registered as the reply's required words only once the broker owed
+  it;
 * :func:`over_cap` and :func:`hand_off`: a rule read back twice
   (``workspace_broker/readback_rounds``) is not read back a third time; it is
   handed to SMD, and the person is told the stopgap sentence.
@@ -21,7 +22,6 @@ from __future__ import annotations
 
 import logging
 import sys
-from collections import OrderedDict
 from types import ModuleType
 from typing import Any
 
@@ -31,14 +31,12 @@ from . import readback_confirm
 
 logger = logging.getLogger(__name__.rpartition(".")[0])
 
-#: The emails already handed to the broker this process (it keeps them; this
-#: only spares the round trip).
-_OBSERVED: OrderedDict[str, None] = OrderedDict()
 #: session -> read-backs each of the sender's open own rules has had (this turn's answer).
 ROUNDS: dict[str, dict[str, int]] = {}
-_MAX_OBSERVED = 2048
-#: The most lines of an email's end the broker is sent (its own cap).
-_TAIL = 24
+
+#: The stopgap sentence's own slot among the reply's required paragraphs, so
+#: it stands beside a read-back of another rule on the same turn.
+HANDOFF_SLOT = "establishment-handoff"
 
 #: The note when a rule has had its two read-backs and is handed to SMD.
 HANDED_OFF_NOTE = (
@@ -68,29 +66,64 @@ def who(user_message: Any, block: Any = (), sender: str = "") -> reply_shape.Peo
     return reply_shape.people(user_message, addressed=addressed, block=block, full_name=full_name)
 
 
-def observe(sender: str, message_id: str, user_message: Any) -> None:
-    """Give the broker the end of this email of his (``establish_block_observe``).
-    Never raises; a missed one costs nothing but a slower learning."""
-    if not sender or not message_id or message_id in _OBSERVED:
-        return
-    lines = reply_shape.own_normal(user_message)[-_TAIL:]
-    if not lines:
-        return
-    try:
-        _plugin()._broker_request(
-            {
-                "action": readback_confirm.VERB_OBSERVE,
-                "sender": sender,
-                "message_id": message_id,
-                "lines": lines,
-            }
-        )
-    except Exception:  # noqa: BLE001 - the block is learned from the next one
-        logger.debug("hermes-smd-establishment: block observe failed", exc_info=True)
-        return
-    _OBSERVED[message_id] = None
-    while len(_OBSERVED) > _MAX_OBSERVED:
-        _OBSERVED.popitem(last=False)
+def turn_readback(
+    session_id: str, sender: str, proposal_id: str, sentence: str
+) -> tuple[str, bool]:
+    """``(text, handed)``: the turn's whole read-back once this rule joins it,
+    owed and registered; or, when the broker refuses this rule's read-back
+    (read back twice already, or handed to SMD), ``(stopgap sentence, True)``:
+    it is handed to SMD and never read back again.
+
+    It replaces the block an earlier proposal on this turn owed: the reply is
+    one read-back of every rule, word for word (the relay holds any other
+    words, ``shared.turn_says``). Each proposal is bound on its own to the sent
+    message, which carries its sentence and the line asking for the answer."""
+    plug = _plugin()
+    turn = plug._OWN_TURN.setdefault(session_id, {})
+    owed = plug._READBACK_OWED.get(session_id) or []
+    before = readback_confirm.own_readbacks(list(turn.values()))
+    if before in owed:
+        owed.remove(before)
+    turn[proposal_id] = sentence
+    whole = readback_confirm.own_readbacks(list(turn.values()))
+    capped = owe_and_say(session_id, sender, list(turn), False, whole)
+    if not capped:
+        return whole, False
+    for gone in capped:
+        turn.pop(gone, None)
+    told = handed_to_smd(
+        session_id, sender, capped, readback_confirm.inbound_message_id(session_id)
+    )
+    whole = readback_confirm.own_readbacks(list(turn.values())) if turn else ""
+    if whole:  # the turn's other rules are still read back, without it
+        plug._remember_readback(session_id, whole)
+        owe_and_say(session_id, sender, list(turn), False, whole)
+    if proposal_id in capped:
+        return (rules_by_hand.SAY if told else ""), True
+    return whole, False
+
+
+def owe_and_say(
+    session_id: str, sender: str, ids: list[str], listed: bool, say: str
+) -> tuple[str, ...]:
+    """Owe the read-back ``say`` FIRST, and register it as the reply's required
+    words only once the broker owed it: a read-back the broker refused never
+    goes out asking for a yes (review 2026-11-20). Nothing is owed unless the
+    relay can hold the reply to these exact words. Returns the rules the broker
+    refused at the read-back cap."""
+    if not readback_confirm.can_register(session_id):
+        return ()
+    owed, capped = readback_confirm.owe(
+        _plugin()._broker_request,
+        readback_confirm.inbound_message_id(session_id),
+        sender,
+        ids,
+        listed,
+        sorted(_plugin()._VERIFIED.get(session_id) or ()),
+    )
+    if owed:
+        readback_confirm.register_say(session_id, say)
+    return capped
 
 
 def over_cap(rounds: dict[str, int], ids: tuple[str, ...]) -> bool:
@@ -100,10 +133,10 @@ def over_cap(rounds: dict[str, int], ids: tuple[str, ...]) -> bool:
     return any(int(rounds.get(i, 0)) >= MAX_READBACKS for i in ids)
 
 
-def hand_off(session_id: str, sender: str, ids: tuple[str, ...], request_ref: str) -> str:
-    """Hand ``ids`` to SMD (``establish_readback_handoff``) and return the turn's
-    note: the stopgap sentence, registered as the reply's required paragraph,
-    or, when the broker did not record it, say nothing about the rule."""
+def handed_to_smd(session_id: str, sender: str, ids: tuple[str, ...], request_ref: str) -> bool:
+    """Hand ``ids`` to SMD (``establish_readback_handoff``) and register the
+    stopgap sentence as the reply's required paragraph. True only when both
+    held: the person is promised a follow-up only when SMD was told."""
     try:
         answer = _plugin()._broker_request(
             {
@@ -121,16 +154,33 @@ def hand_off(session_id: str, sender: str, ids: tuple[str, ...], request_ref: st
     if (
         isinstance(answer, dict)
         and answer.get("smd_told")
-        and readback_confirm.register_say(session_id, rules_by_hand.SAY)
+        and readback_confirm.register_say(session_id, rules_by_hand.SAY, slot=HANDOFF_SLOT)
     ):
         logger.info(
             "hermes-smd-establishment: rules %s handed to SMD after two read-backs", ",".join(ids)
         )
-        return HANDED_OFF_NOTE
+        return True
     logger.error(
         "hermes-smd-establishment: rules %s reached the read-back cap, not recorded", ",".join(ids)
     )
+    return False
+
+
+def hand_off(session_id: str, sender: str, ids: tuple[str, ...], request_ref: str) -> str:
+    """The turn's note once ``ids`` are handed to SMD: the stopgap sentence, or,
+    when the broker did not record it, say nothing about the rule."""
+    if handed_to_smd(session_id, sender, ids, request_ref):
+        return HANDED_OFF_NOTE
     return rules_by_hand.REPLY_NONE_NOTE
 
 
-__all__ = ["HANDED_OFF_NOTE", "hand_off", "observe", "over_cap", "who"]
+__all__ = [
+    "HANDED_OFF_NOTE",
+    "HANDOFF_SLOT",
+    "hand_off",
+    "handed_to_smd",
+    "over_cap",
+    "owe_and_say",
+    "turn_readback",
+    "who",
+]

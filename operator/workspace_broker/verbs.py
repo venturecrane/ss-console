@@ -193,7 +193,6 @@ VERBS: tuple[Verb, ...] = (
     Verb("establish_readback_sent", _only(AGENT), establish_verbs.readback),
     Verb("establish_readback_for", _only(AGENT), establish_verbs.readback),
     Verb("establish_readback_owed", _only(AGENT), establish_verbs.readback),
-    Verb("establish_block_observe", _only(AGENT), establish_verbs.readback),
     Verb("establish_block_seed", _only(ROOT), establish_verbs.readback),
     Verb("establish_readback_handoff", _only(AGENT), establish_verbs.readback),
     Verb("establish_reopen_lapsed", _only(AGENT), establish_verbs.readback),

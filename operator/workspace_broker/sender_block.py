@@ -9,17 +9,21 @@ is the same lines a person ends every email with (the firm's attorney: 34 emails
 one identical block). So the block is learned, not recognised:
 
 * it is the longest run of lines (at least :data:`MIN_LINES`) that ends his own
-  text identically in at least two of his emails AND in a majority of the ones
-  read (:func:`learn`);
-* it is seeded at deploy by a root command reading the seat mailbox (``python
-  -m workspace_broker.sender_block seed``, re-runnable and idempotent, printing
-  per address only the block's line count and how many emails it matched,
-  never the text);
-* after deploy each email of his is observed (``establish_block_observe``): only
-  hashes of his own text's last lines are kept, never the lines, and a newer
-  block replaces the old only when the newest email and one other end with it
-  identically, and it is not the old block with lines added on top (so a line
-  written twice above his signature never joins it).
+  text identically in at least :data:`MIN_EMAILS` of his emails AND in a
+  majority of the ones read (:func:`learn`);
+* it comes ONLY from a root command SMD runs, at deploy and again on demand,
+  reading his newest :data:`MAX_EMAILS` emails in the seat mailbox (``python -m
+  workspace_broker.sender_block seed``, idempotent, printing per address only
+  the block's line count and how many emails it matched, never the text);
+* nothing is ever learned from a reply at runtime (review 2026-11-20: any
+  learning from live mail let two emails teach the seat that a qualifier is
+  part of his signature), and a new seed never takes the current block with
+  lines added above or below it: a line he wrote under or over his signature in
+  most recent emails is a line, not his signature.
+
+HTML bodies are read as text by ``mail_text.html_to_text``, a byte copy of the
+function the seat reads the same emails with (``shared/mail_text``), so his
+signature gives the same lines in the seed and in his reply.
 
 Pure learning (:func:`learn`, :func:`learn_from_texts`) is importable on its own,
 for the replay of a saved mailbox copy. Lines are compared in one normal form
@@ -29,8 +33,6 @@ for the replay of a saved mailbox copy. Lines are compared in one normal form
 from __future__ import annotations
 
 import argparse
-import hashlib
-import html as html_lib
 import json
 import os
 import re
@@ -39,23 +41,22 @@ import time
 from collections import Counter
 from typing import Any
 
+from . import mail_text
 from .broker_context import BrokerContext
 from .establishment_validation import EstablishmentValidationError, require_address
 
 MIN_LINES = 3
-#: How many of an email's last lines are kept (as hashes) and compared.
+#: The fewest of his emails a block must end.
+MIN_EMAILS = 3
+#: How many of an email's last lines are compared.
 MAX_TAIL = 24
-#: How many of a sender's emails the seed reads, and the observer keeps.
+#: How many of a sender's newest emails the seed reads.
 MAX_EMAILS = 50
 
-VERB_OBSERVE = "establish_block_observe"
 VERB_SEED = "establish_block_seed"
-VERBS: tuple[str, ...] = (VERB_OBSERVE, VERB_SEED)
+VERBS: tuple[str, ...] = (VERB_SEED,)
 
 _CREATE = (
-    """CREATE TABLE IF NOT EXISTS sender_tails (
-  sender TEXT NOT NULL, message_id TEXT NOT NULL, hashes TEXT NOT NULL, created_at REAL NOT NULL,
-  PRIMARY KEY (sender, message_id))""",
     """CREATE TABLE IF NOT EXISTS sender_block (
   sender TEXT PRIMARY KEY, lines TEXT NOT NULL, matched INTEGER NOT NULL, learned_at REAL NOT NULL)""",
 )
@@ -72,39 +73,24 @@ def lines_of(text: str) -> list[str]:
     return [n for n in (norm_line(raw) for raw in str(text or "").splitlines()) if n]
 
 
-_BLOCK_TAGS = re.compile(r"<\s*(?:br|/p|/div|/tr|/li|/h[1-6])\b[^>]*>", re.IGNORECASE)
-
-
-def text_of_html(markup: str) -> str:
-    """An HTML body as lines of text (Graph's ``uniqueBody``)."""
-    return html_lib.unescape(re.sub(r"<[^>]*>", "", _BLOCK_TAGS.sub("\n", str(markup or ""))))
-
-
 def learn(tails: list[list[str]]) -> tuple[list[str], int]:
     """``(block, emails it ends)``: the longest run of at least :data:`MIN_LINES`
-    lines ending at least two AND a majority of ``tails``; ``([], 0)`` when none."""
+    lines ending at least :data:`MIN_EMAILS` AND a majority of ``tails``;
+    ``([], 0)`` when none."""
     tails = [t[-MAX_TAIL:] for t in tails if t]
     for k in range(MAX_TAIL, MIN_LINES - 1, -1):
         counts = Counter(tuple(t[-k:]) for t in tails if len(t) >= k)
         if not counts:
             continue
         block, count = counts.most_common(1)[0]
-        if count >= 2 and 2 * count > len(tails):
+        if count >= MIN_EMAILS and 2 * count > len(tails):
             return list(block), count
     return [], 0
 
 
 def learn_from_texts(texts: list[str], html: bool = False) -> tuple[list[str], int]:
     """:func:`learn` over each email's own text (quoted history already removed)."""
-    return learn([lines_of(text_of_html(t) if html else t) for t in texts])
-
-
-def _hashes(lines: list[str]) -> dict[str, str]:
-    tail = lines[-MAX_TAIL:]
-    return {
-        str(k): hashlib.sha256("\n".join(tail[-k:]).encode("utf-8")).hexdigest()
-        for k in range(MIN_LINES, len(tail) + 1)
-    }
+    return learn([lines_of(mail_text.html_to_text(t) if html else t) for t in texts])
 
 
 def _connect(pending: Any) -> Any:
@@ -131,67 +117,6 @@ def _store_block(conn: Any, sender: str, block: list[str], matched: int) -> None
     )
 
 
-def _store_tail(conn: Any, sender: str, message_id: str, lines: list[str]) -> None:
-    conn.execute(
-        "INSERT OR REPLACE INTO sender_tails (sender, message_id, hashes, created_at) VALUES (?, ?, ?, ?)",
-        (sender, message_id, json.dumps(_hashes(lines)), time.time()),
-    )
-    conn.execute(
-        "DELETE FROM sender_tails WHERE sender = ? AND message_id NOT IN "
-        "(SELECT message_id FROM sender_tails WHERE sender = ? ORDER BY created_at DESC LIMIT ?)",
-        (sender, sender, MAX_EMAILS),
-    )
-
-
-def observe_lines(pending: Any, sender: str, message_id: str, lines: list[str]) -> bool:
-    """Keep this email's tail hashes; learn or replace the block when the rule
-    allows. True when the stored block changed."""
-    conn = _connect(pending)
-    try:
-        with conn:
-            _store_tail(conn, sender, message_id, lines)
-            rows = conn.execute("SELECT hashes FROM sender_tails WHERE sender = ?", (sender,)).fetchall()
-            others = [json.loads(r[0]) for r in rows]
-            row = conn.execute("SELECT lines FROM sender_block WHERE sender = ?", (sender,)).fetchone()
-            current = json.loads(row[0]) if row else []
-            candidate = _candidate(lines, others, bool(current))
-            if not candidate or candidate[0] == current:
-                return False
-            if current and candidate[0][-len(current) :] == current:
-                return False  # the old block with lines added on top: never
-            _store_block(conn, sender, candidate[0], candidate[1])
-            return True
-    finally:
-        conn.close()
-
-
-def _candidate(lines: list[str], tails: list[dict[str, str]], replacing: bool) -> tuple[list[str], int] | None:
-    """The longest suffix of THIS email shared by another (and, when nothing is
-    learned yet, by a majority of the stored emails)."""
-    mine = _hashes(lines)
-    tail = lines[-MAX_TAIL:]
-    for k in range(len(tail), MIN_LINES - 1, -1):
-        count = sum(1 for t in tails if t.get(str(k)) == mine[str(k)])
-        if count >= 2 and (replacing or 2 * count > len(tails)):
-            return tail[-k:], count
-    return None
-
-
-def observe(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
-    """``establish_block_observe``: one email of the sender's, his own text's last
-    lines (the overlay's own-text cut). Only hashes are kept, and the block."""
-    from .readback_bindings import _pending_store
-
-    sender = require_address(request.get("sender"), "sender")
-    message_id = str(request.get("message_id") or "").strip()
-    raw = request.get("lines")
-    if not message_id or len(message_id) > 512 or not isinstance(raw, list) or len(raw) > MAX_TAIL:
-        raise EstablishmentValidationError(f"message_id and up to {MAX_TAIL} lines are required")
-    lines = [n for n in (norm_line(s) for s in raw if isinstance(s, str)) if n]
-    changed = observe_lines(_pending_store(broker), sender, message_id, lines)
-    return {"ok": True, "changed": changed}
-
-
 def _graph_own_texts(ops: Any, sender: str, limit: int) -> list[tuple[str, str]]:
     """``(message id, own text)`` of the sender's newest ``limit`` emails in this
     mailbox: Graph's ``uniqueBody`` is the part of a message not quoted."""
@@ -209,14 +134,17 @@ def _graph_own_texts(ops: Any, sender: str, limit: int) -> list[tuple[str, str]]
         body = item.get("uniqueBody") if isinstance(item, dict) else None
         if isinstance(body, dict) and item.get("id"):
             content = str(body.get("content") or "")
-            out.append((str(item["id"]), text_of_html(content) if body.get("contentType") == "html" else content))
+            html = body.get("contentType") == "html"
+            out.append((str(item["id"]), mail_text.html_to_text(content) if html else content))
     return out
 
 
 def seed(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     """``establish_block_seed`` (root): learn each sender's block from the seat
     mailbox. Re-runnable and idempotent: the same mail gives the same block. Per
-    sender, the block's line count, the emails it matched, the emails read."""
+    sender, the block's line count, the emails it matched, the emails read, and
+    ``kept`` when a candidate holding the current block with lines added above
+    or below it was refused (the current block stays)."""
     from .readback_bindings import _pending_store
 
     pending = _pending_store(broker)
@@ -228,22 +156,29 @@ def seed(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     report: dict[str, dict[str, int]] = {}
     for sender in senders:
         emails = _graph_own_texts(ops, sender, limit)
-        tails = [lines_of(text)[-MAX_TAIL:] for _id, text in emails]
-        block, matched = learn(tails)
-        conn = _connect(pending)
-        try:
-            with conn:
-                for (message_id, _text), lines in zip(emails, tails, strict=True):
-                    _store_tail(conn, sender, message_id, lines)
-                if block:
+        block, matched = learn([lines_of(text)[-MAX_TAIL:] for _id, text in emails])
+        current = block_for(pending, sender)
+        kept = bool(block) and _widens(current, block)
+        if block and not kept:
+            conn = _connect(pending)
+            try:
+                with conn:
                     _store_block(conn, sender, block, matched)
-        finally:
-            conn.close()
-        report[sender] = {"lines": len(block), "matched": matched, "read": len(emails)}
+            finally:
+                conn.close()
+        report[sender] = {"lines": len(block), "matched": matched, "read": len(emails), "kept": kept}
     return {"ok": True, "senders": report}
 
 
-HANDLERS = {VERB_OBSERVE: observe, VERB_SEED: seed}
+def _widens(current: list[str], candidate: list[str]) -> bool:
+    """Is ``candidate`` the current block with lines on either side of it?"""
+    k = len(current)
+    if not current or len(candidate) <= k:
+        return False
+    return any(candidate[i : i + k] == current for i in range(len(candidate) - k + 1))
+
+
+HANDLERS = {VERB_SEED: seed}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -271,7 +206,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"sender_block: refused: {answer.get('error') if isinstance(answer, dict) else answer}", file=sys.stderr)
         return 2
     for sender, row in sorted((answer.get("senders") or {}).items()):
-        print(f"{sender}: block {row['lines']} lines, matched {row['matched']} of {row['read']} emails")
+        kept = "; kept the current block, the candidate only adds lines to it" if row.get("kept") else ""
+        print(f"{sender}: block {row['lines']} lines, matched {row['matched']} of {row['read']} emails{kept}")
     return 0
 
 
@@ -282,6 +218,7 @@ __all__ = [
     "HANDLERS",
     "MAX_EMAILS",
     "MAX_TAIL",
+    "MIN_EMAILS",
     "MIN_LINES",
     "VERBS",
     "block_for",
@@ -290,8 +227,5 @@ __all__ = [
     "lines_of",
     "main",
     "norm_line",
-    "observe",
-    "observe_lines",
     "seed",
-    "text_of_html",
 ]

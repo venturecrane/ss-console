@@ -299,8 +299,11 @@ def readback_owed(broker: BrokerContext, request: dict[str, Any]) -> dict[str, A
     verified = [str(v) for v in request.get("verified_ids") or [] if isinstance(v, str) and v in ids]
     from . import readback_rounds
 
-    # At most two read-backs per rule (readback_rounds): refused past the cap.
-    readback_rounds.note_owed(pending, ids, _inbound(request))
+    # At most two read-backs per rule (readback_rounds): past the cap nothing is
+    # owed, and the seat hands those rules to SMD instead.
+    capped = readback_rounds.note_owed(pending, ids, _inbound(request))
+    if capped:
+        return {"ok": False, "capped": capped}
     ReadbackBindings(pending).owe(_inbound(request), recipient, ids, listed, verified)
     return {"ok": True, "owed": ids}
 

@@ -54,28 +54,24 @@ def _counts(conn: Any, ids: list[str]) -> dict[str, int]:
     return out
 
 
-def note_owed(pending: Any, ids: list[str], inbound: str) -> None:
-    """Count this email's read-back of ``ids``; refuse any already at the cap
-    (a second owe from the SAME email is the same round, not a new one)."""
+def note_owed(pending: Any, ids: list[str], inbound: str) -> list[str]:
+    """Count this email's read-back of ``ids`` and return ``[]``; or, when any
+    is already handed to SMD or at the cap (a second owe from the SAME email is
+    the same round, not a new one), count nothing and return those ids."""
     conn = _connect(pending)
     try:
         with conn:
-            handed = {
-                proposal_id
-                for proposal_id in ids
-                if conn.execute("SELECT 1 FROM readback_handed_off WHERE proposal_id = ?", (proposal_id,)).fetchone()
-            }
-            if handed:
-                raise EstablishmentValidationError(f"{sorted(handed)[0]} was handed to SMD; no further read-back")
+            capped = [p for p in ids if _handed(conn, p)]
             for proposal_id in ids:
                 seen = conn.execute(
                     "SELECT 1 FROM readback_rounds WHERE proposal_id = ? AND inbound_message_id = ?",
                     (proposal_id, inbound),
                 ).fetchone()
-                if seen is None and _counts(conn, [proposal_id])[proposal_id] >= MAX_READBACKS:
-                    raise EstablishmentValidationError(
-                        f"{proposal_id} has had {MAX_READBACKS} read-backs; hand it to SMD instead"
-                    )
+                at_cap = _counts(conn, [proposal_id])[proposal_id] >= MAX_READBACKS
+                if seen is None and at_cap and proposal_id not in capped:
+                    capped.append(proposal_id)
+            if capped:
+                return capped
             for proposal_id in ids:
                 conn.execute(
                     "INSERT OR IGNORE INTO readback_rounds (proposal_id, inbound_message_id, created_at) VALUES (?, ?, ?)",
@@ -83,6 +79,13 @@ def note_owed(pending: Any, ids: list[str], inbound: str) -> None:
                 )
     finally:
         conn.close()
+    return []
+
+
+def _handed(conn: Any, proposal_id: str) -> bool:
+    return (
+        conn.execute("SELECT 1 FROM readback_handed_off WHERE proposal_id = ?", (proposal_id,)).fetchone() is not None
+    )
 
 
 def rounds_for(pending: Any, sender: str) -> dict[str, Any]:
@@ -124,9 +127,11 @@ def handoff(broker: BrokerContext, request: dict[str, Any]) -> dict[str, Any]:
     ref = str(request.get("request_ref") or "")
     append = broker.ledger.append if broker.ledger is not None else None
     detail = f"rules {', '.join(ids)}: two read-backs, no plain yes; confirm with the person by hand"
-    told = smd_owed.record(broker.audit_db_path, append, smd_owed.KIND_NEEDS_PERSON, ref, detail)
     conn = _connect(pending)
     try:
+        fresh = [p for p in ids if not _handed(conn, p)]
+        # Already handed off (a re-proposal of the same rule): SMD was told once.
+        told = smd_owed.record(broker.audit_db_path, append, smd_owed.KIND_NEEDS_PERSON, ref, detail) if fresh else True
         with conn:
             for proposal_id in ids:
                 conn.execute(

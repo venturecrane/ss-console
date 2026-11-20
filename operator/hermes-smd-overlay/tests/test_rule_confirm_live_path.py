@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -230,18 +231,20 @@ def _two_earlier_emails(est: Any) -> None:
         )
 
 
-def test_two_earlier_emails_teach_his_block_and_a_signed_yes_then_confirms(loop) -> None:
-    """FALSIFIER: drop reply_reading.observe from _could_answer and nothing is
-    learned, so the signed yes is read back again."""
+def test_his_live_emails_teach_the_seat_nothing(loop) -> None:
+    """Review 2026-11-20 (MUST-FIX 2): his block comes ONLY from SMD's root
+    seed. Emails arriving at runtime, however alike they end, store nothing, so
+    no two emails can teach the seat that a qualifier is part of his signature.
+    FALSIFIER: learn from the emails a turn reads, and the block appears and
+    the signed yes below confirms."""
     reply, est, broker = loop
-    est.own_rules.reply_reading._OBSERVED.clear()
     _two_earlier_emails(est)
-    block = sender_block.block_for(broker.establishment._require_pending(), PAT)
-    assert "patrick q. doe" in block and "doe & roe llp" in block
+    _two_earlier_emails(est)
+    assert sender_block.block_for(broker.establishment._require_pending(), PAT) == []
     proposal_id = _yes_signed(reply, est, broker)
-    assert est._CONFIRMED_SAY["s2"] == "Got it. That is recorded."
+    assert "s2" not in est._CONFIRMED_SAY
     still_open = broker_kit._call(broker, action="establish_pending", sender=PAT)["pending"]
-    assert proposal_id not in [r["proposal_id"] for r in still_open]
+    assert proposal_id in [r["proposal_id"] for r in still_open]
 
 
 def test_a_turn_the_relay_cannot_hold_owes_nothing_and_commits_nothing(loop, monkeypatch) -> None:
@@ -373,16 +376,6 @@ def test_with_rules_by_hand_on_a_lapsed_rule_is_not_reopened(loop, monkeypatch, 
     assert est.own_rules.reopen_note("s2", PAT, _prompt("Yes.", REPLY)) is None
 
 
-def test_with_rules_by_hand_on_the_block_is_still_learned(loop, monkeypatch, tmp_path) -> None:
-    """Harmless while the switch is on: it decides nothing, and his block is
-    ready when the switch comes off."""
-    _reply_plugin, est, broker = loop
-    _by_hand(monkeypatch, tmp_path)
-    est.own_rules.reply_reading._OBSERVED.clear()
-    _two_earlier_emails(est)
-    assert "patrick q. doe" in sender_block.block_for(broker.establishment._require_pending(), PAT)
-
-
 # ---------------------------------------------------------------------------
 # The FIRST rule after a deploy (the replay of the firm's real emails,
 # 2026-11-20): his block is seeded from the seat mailbox by the root command,
@@ -420,7 +413,7 @@ def _seeded(broker: Any, monkeypatch: Any) -> None:
     seed = broker.handle(
         {"action": "establish_block_seed", "senders": [PAT]}, peer_pid=1, peer_uid=0
     )
-    assert seed["senders"][PAT] == {"lines": 7, "matched": 34, "read": 34}
+    assert seed["senders"][PAT] == {"lines": 7, "matched": 34, "read": 34, "kept": False}
 
 
 def _answer_read_back(reply: Any, est: Any, broker: Any, answer: str) -> str:
@@ -516,3 +509,114 @@ def test_a_rule_whose_replies_are_never_plain_is_read_back_twice_then_handed_to_
     finally:
         conn.close()
     assert rounds == 2 and proposal_id in _ids(broker)
+
+
+def _turn(est: Any, broker: Any, body: str, inbound_id: str, sent: str, session: str) -> str:
+    broker.msgraph = _Mailbox([{"name": "In-Reply-To", "value": sent}])
+    broker.msgraph.message["id"] = inbound_id
+    bound_turn(session, PAT, inbound_id)
+    out = est.on_pre_llm_call(
+        session_id=session, sender_id=PAT, user_message=_prompt(body, inbound_id, bare=True)
+    )
+    return (out or {}).get("context", "")
+
+
+def _send_reply(reply: Any, session: str, inbound_id: str, sent: str) -> None:
+    origin = inbound.InboundOrigin(sender_address=PAT, message_id=inbound_id, inbox_id="op@x")
+    reply._relay_sent(
+        session,
+        origin,
+        "k" + session,
+        PAT,
+        "x",
+        ("x", ""),
+        (None, None),
+        sent,
+        "msgraph",
+        None,
+        False,
+    )
+
+
+def test_after_the_hand_off_a_restated_rule_is_never_read_back_a_third_time(
+    loop, monkeypatch
+) -> None:
+    """Review 2026-11-20 (MUST-FIX 1): after two read-backs and the hand-off,
+    he states the same rule again. The broker returns the same open rule, and
+    its proposal answers the stopgap sentence: no read-back is said, none is
+    owed, and his plain yes to the reply confirms nothing. FALSIFIER: register
+    the read-back before the broker owes it, and the reply must carry "Reply yes
+    to confirm." again."""
+    reply, est, broker = loop
+    _seeded(broker, monkeypatch)
+    proposal_id, _ = _propose_and_send(reply, est, broker, bare=True)
+    _turn(est, broker, f"Yes\nletters only\n\n{REAL_BLOCK}", "AAMkR1=", SENT, "r1")
+    _send_reply(reply, "r1", "AAMkR1=", "<CAlive2@mail.firm.example>")
+    handed = _turn(
+        est,
+        broker,
+        f"Yes\nletters only\n\n{REAL_BLOCK}",
+        "AAMkR2=",
+        "<CAlive2@mail.firm.example>",
+        "r2",
+    )
+    assert "once that's in place" in handed
+    bound_turn("r3", PAT, "AAMkR3=")
+    est.on_pre_llm_call(
+        session_id="r3",
+        sender_id=PAT,
+        user_message=_prompt(f"From now on: {RULE}", "AAMkR3=", bare=True),
+    )
+    answer = json.loads(
+        est._propose(
+            {
+                "scope": "person",
+                "subject": {"person": PAT},
+                "text": RULE,
+                "instructed_by": PAT,
+                "source_ref": "AAMkR3=",
+            },
+            session_id="r3",
+        )
+    )
+    assert answer == {"say": "Got it. I'll confirm in this thread once that's in place."}
+    checks = next(
+        m for n, m in sys.modules.items() if n.endswith("relay_checks") and hasattr(m, "_TURN_SAYS")
+    )
+    says = checks._TURN_SAYS.get("r3", "AAMkR3=") or ()
+    assert not any("Reply yes" in say for say in says)
+    _send_reply(reply, "r3", "AAMkR3=", "<CAlive3@mail.firm.example>")
+    _turn(est, broker, f"Yes\n\n{REAL_BLOCK}", "AAMkR4=", "<CAlive3@mail.firm.example>", "r4")
+    assert "r4" not in est._CONFIRMED_SAY
+    assert proposal_id in _ids(broker)
+    owed = [r["kind"] for r in smd_owed_items(broker)]
+    assert owed == ["rule_needs_person"]  # SMD told once, not again
+
+
+def smd_owed_items(broker: Any) -> list[dict]:
+    from workspace_broker import smd_owed
+
+    return smd_owed.open_items(broker.audit_db_path)["owed"]
+
+
+def test_a_lapsed_rule_reopens_on_his_signed_yes(loop, monkeypatch) -> None:
+    """Review 2026-11-20 (SHOULD-FIX 5): the reopen gate reads his plain yes
+    with his seeded block, as every other answer is read. FALSIFIER: judge it
+    with no block and his signed yes reopens nothing."""
+    reply, est, broker = loop
+    _seeded(broker, monkeypatch)
+    proposal_id, _ = _propose_and_send(reply, est, broker, bare=True)
+    pending = broker.establishment._require_pending()
+    conn = pending._connect()
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE pending_rules SET expires_at = 1, lapsed_at = ? WHERE proposal_id = ?",
+                (time.time(), proposal_id),
+            )
+    finally:
+        conn.close()
+    broker.msgraph = _Mailbox([{"name": "In-Reply-To", "value": SENT}])
+    bound_turn("s9", PAT, REPLY)
+    note = est.own_rules.reopen_note("s9", PAT, _prompt(f"Yes.\n\n{REAL_BLOCK}", REPLY, bare=True))
+    assert note is not None and "Reply yes to confirm." in note

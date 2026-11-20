@@ -63,6 +63,9 @@ LONG_BLOCK = (
 )
 LEARNED = tuple(line for line in REAL_BLOCK.splitlines() if line.strip())
 LONG_LEARNED = tuple(line for line in LONG_BLOCK.splitlines() if line.strip())
+#: A block that starts with his name, as many firms' do.
+NAME_BLOCK = "Patrick Q. Doe\nPartner\nDoe & Roe LLP\n100 N. Central Ave.\nPhoenix, AZ 85004"
+NAME_LEARNED = tuple(NAME_BLOCK.splitlines())
 #: The plain yeses the replay found confirming nothing (S08 S10 S12 S14 S20 S23
 #: S30 S31 S33 S35 S38 S39 by shape; the client workspace holds the texts).
 REAL_YESES = (
@@ -118,6 +121,25 @@ ROWS: tuple[Row, ...] = (
     ),
     _yes(
         "real: from: with a display name too", f"Yes\n\n{REAL_BLOCK}", bare_from=False, full_name=""
+    ),
+    # ---- a block that starts with his name, after a closing (review 2026-11-20):
+    # read as C B, never as C N and then a block missing its first line ---------
+    _yes("name-first block after a closing", f"Yes\n\nThanks,\n{NAME_BLOCK}", block=NAME_LEARNED),
+    _yes(
+        "name-first block after a closing and his first name",
+        f"Yes\n\nThanks,\nPatrick\n{NAME_BLOCK}",
+        block=NAME_LEARNED,
+    ),
+    _yes("name-first block alone", f"Yes\n\n{NAME_BLOCK}", block=NAME_LEARNED),
+    _restate(
+        "name-first block after a closing, then a line",
+        f"Yes\n\nThanks,\n{NAME_BLOCK}\nOnly for Craig",
+        block=NAME_LEARNED,
+    ),
+    _restate(
+        "name-first block missing its name after a closing and his name",
+        "Yes\n\nThanks,\nPatrick Q. Doe\n" + "\n".join(NAME_LEARNED[1:-1]),
+        block=NAME_LEARNED,
     ),
     # ---- a plain yes with no block -------------------------------------------
     _yes("yes", "yes"),

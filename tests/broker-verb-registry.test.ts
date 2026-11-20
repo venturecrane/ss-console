@@ -124,7 +124,6 @@ const EXPECTED_VERBS = [
   'establish_propose',
   // Confirm-by-reply: which own rules a sent read-back carried, and which
   // read-back an inbound reply answers (readback_bindings.py).
-  'establish_block_observe',
   'establish_block_seed',
   'establish_install_check',
   'establish_install_watch',

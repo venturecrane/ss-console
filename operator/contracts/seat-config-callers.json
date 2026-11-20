@@ -36,7 +36,8 @@
     "operator/skills/records-order-chase/pre_run.py",
     "operator/skills/statute-watch/pre_run.py",
     "operator/templates/pre_run_gate.py",
-    "operator/workspace_broker/ops_close.py"
+    "operator/workspace_broker/ops_close.py",
+    "operator/workspace_broker/sender_block.py"
    ],
    "files_without_sites": [],
    "rows": [
@@ -2216,6 +2217,37 @@
        }
       ]
      }
+    },
+    {
+     "behaviour": {
+      "empty-reply/ascii": "exit 2",
+      "fault-after-send/ascii": "exit 2",
+      "no-socket/ascii": "exit 2",
+      "non-json/ascii": "exit 2",
+      "not-ok/ascii": "exit 2",
+      "ok/ascii": "exit 2",
+      "ok/non-ascii": "exit 2",
+      "refused/ascii": "exit 2"
+     },
+     "calls": [
+      "operator/workspace_broker/sender_block.py:200 broker_socket.request(args.socket, request, timeout=300.0, separators=(\",\", \":\"))"
+     ],
+     "file": "operator/workspace_broker/sender_block.py",
+     "kind": "function",
+     "modes": [
+      "exits-2-on-empty-reply",
+      "exits-2-on-fault-after-send",
+      "exits-2-on-no-socket",
+      "exits-2-on-non-json",
+      "exits-2-on-not-ok",
+      "exits-2-on-refused",
+      "no-unix-connect",
+      "wire-empty"
+     ],
+     "status": "executable",
+     "symbol": "main",
+     "tree": "broker",
+     "wire": {}
     }
    ]
   },
@@ -9377,11 +9409,11 @@
  "summary": {
   "broker-socket": {
    "by_status": {
-    "executable": 33
+    "executable": 34
    },
    "by_tree": {
     "bin": 1,
-    "broker": 1,
+    "broker": 2,
     "connector": 1,
     "overlay": 15,
     "runner": 1,
@@ -9390,8 +9422,8 @@
     "templates": 1
    },
    "fail_open": 0,
-   "files": 32,
-   "sites": 33
+   "files": 33,
+   "sites": 34
   },
   "customer-yaml": {
    "by_status": {

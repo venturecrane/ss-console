@@ -300,22 +300,24 @@ def _greeting_line(line: str, who: People) -> bool:
 
 
 def _tail_ok(lines: list[str], who: People) -> bool:
-    """``[C [N]] [B] [F]`` covers ``lines`` exactly."""
-    i = 0
-    if i < len(lines) and lines[i] in DEVICE_FOOTERS and i == len(lines) - 1:
-        return True
-    block = list(who.block)
+    """``[C [N]] [B] [F]`` covers ``lines`` exactly. Every reading is tried, so
+    a block that starts with his name after a closing is read as C B, not as
+    C N and then a block missing its first line (review 2026-11-20)."""
+    starts = [0]
+    if lines and _closing_line(lines[0], who):
+        starts.append(1)
+        if len(lines) > 1 and _name_line(lines[1], who):
+            starts.append(2)
+    return any(_block_footer_ok(lines, i, list(who.block)) for i in starts)
+
+
+def _block_footer_ok(lines: list[str], i: int, block: list[str]) -> bool:
+    """``[B] [F]`` covers ``lines[i:]`` exactly."""
+    ends = [i]
     if block and lines[i : i + len(block)] == block:
-        i += len(block)
-    elif i < len(lines) and _closing_line(lines[i], who):
-        i += 1
-        if i < len(lines) and _name_line(lines[i], who):
-            i += 1
-        if block and lines[i : i + len(block)] == block:
-            i += len(block)
-    if i < len(lines) and lines[i] in DEVICE_FOOTERS:
-        i += 1
-    return i == len(lines)
+        ends.append(i + len(block))
+    n = len(lines)
+    return any(j == n or (j == n - 1 and lines[j] in DEVICE_FOOTERS) for j in ends)
 
 
 def _parse(message: Any, who: People, head_ok: Callable[[list[str]], bool]) -> list[str] | None:

@@ -2214,7 +2214,9 @@ def _propose(args: dict[str, Any], **kwargs: Any) -> str:
         )
         readback = rule_reach.readback_with_precedence(readback, args, rule_reach.precedence_on())
         # 2026-11-19 (R2.1, R2.2): a person's own rule is read back with no id.
-        own, readback = own_rules.own_readback_for(session_id, args, response, readback)
+        own, readback, handed = own_rules.own_readback_for(session_id, args, response, readback)
+        if handed is not None:  # read back twice already: the stopgap, never a third
+            return json.dumps(handed, ensure_ascii=False)
         if readback and readback != response.get("readback"):
             response = {**response, "readback": readback}
         _remember_readback(session_id, readback)
@@ -4171,11 +4173,9 @@ def _confirmation_note(
     not leave the previous turn's permission standing.
     """
     _clear_confirmation_stash(session_id)
-    if not isinstance(user_message, str) or not user_message.strip():
-        return None
-    if not own_rules._could_answer(user_message, sender, session_id):
-        # Nothing that could be an answer. Skip the broker round trip entirely —
-        # this runs on every attributed turn.
+    if not (isinstance(user_message, str) and own_rules._could_answer(user_message)):
+        # Nothing that could be an answer (a blank one included). Skip the broker
+        # round trip entirely: this runs on every attributed turn.
         return None
     # ss-console#2546. The SAME round trip now answers two questions: what can
     # this person still confirm, and has anything of theirs ended without them

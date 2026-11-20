@@ -45,7 +45,6 @@ logger = logging.getLogger(__name__)
 #: The broker verbs (``workspace_broker/readback_bindings.py``).
 VERB_OWED = "establish_readback_owed"
 VERB_FOR = "establish_readback_for"
-VERB_OBSERVE = "establish_block_observe"
 VERB_HANDOFF = "establish_readback_handoff"
 
 #: The last line of a single rule's read-back.
@@ -129,7 +128,17 @@ PICK_END = "Reply all to confirm every one, or the numbers of the ones you want.
 SAY_SLOT = "establishment"
 
 
-def register_say(session_id: str, say: str) -> bool:
+def inbound_message_id(session_id: str) -> str:
+    """The id of the email this turn answers, from the verified origin."""
+    try:
+        # The email THIS turn's own prompt bound, never a sticky earlier one.
+        origin = SESSION_INBOUND_ORIGIN.bound_this_turn(session_id)
+    except Exception:  # noqa: BLE001 - no origin: not bound, the seat asks with a list
+        return ""
+    return str(getattr(origin, "message_id", "") or "") if origin is not None else ""
+
+
+def register_say(session_id: str, say: str, slot: str = SAY_SLOT) -> bool:
     """Hand the reply relay this turn's fixed sentence (``shared.turn_says``), so a
     body with any other words is held with the sentence quoted back. Keyed on
     the email this turn's own trusted prompt bound, as the relay keys it."""
@@ -140,7 +149,7 @@ def register_say(session_id: str, say: str) -> bool:
     except Exception:  # noqa: BLE001 - no bound email: nothing the relay could key on
         return False
     message_id = str(getattr(origin, "message_id", "") or "") if origin is not None else ""
-    return turn_says.note(session_id, message_id, say, slot=SAY_SLOT) if message_id else False
+    return turn_says.note(session_id, message_id, say, slot=slot) if message_id else False
 
 
 def can_register(session_id: str) -> bool:
@@ -184,15 +193,17 @@ def owe(
     ids: list[str],
     listed: bool,
     verified: list[str],
-) -> bool:
+) -> tuple[bool, tuple[str, ...]]:
     """Record with the broker the read-back this turn owes ``recipient`` for the
     email ``inbound``: durable from now, bound to the sent message by the relay's
-    send. Logged at WARNING when it cannot be."""
+    send. ``(owed, capped)``: ``capped`` names the rules the broker refused
+    because they were read back twice already (or handed to SMD); the seat
+    hands those to SMD and reads nothing back. Logged at WARNING otherwise."""
     if not inbound or not recipient or not ids:
         logger.warning(
             "readback_confirm: no email or person to owe a read-back of %s to", ",".join(ids)
         )
-        return False
+        return False, ()
     try:
         answer = broker(
             {
@@ -208,11 +219,14 @@ def owe(
         logger.warning(
             "readback_confirm: read-back of %s not recorded", ",".join(ids), exc_info=True
         )
-        return False
-    if not (isinstance(answer, dict) and answer.get("ok")):
-        logger.warning("readback_confirm: broker refused the read-back of %s", ",".join(ids))
-        return False
-    return True
+        return False, ()
+    if isinstance(answer, dict) and answer.get("ok"):
+        return True, ()
+    capped = answer.get("capped") if isinstance(answer, dict) else None
+    if isinstance(capped, list) and capped:
+        return False, tuple(str(c) for c in capped if str(c) in ids)
+    logger.warning("readback_confirm: broker refused the read-back of %s", ",".join(ids))
+    return False, ()
 
 
 def watch_install(broker: BrokerFn, proposal_id: str, run_id: str) -> None:
