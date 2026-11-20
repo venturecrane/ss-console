@@ -59,6 +59,9 @@ The schema (the engagements author writes to exactly this)::
                  requests_for_admission, ...]}   OPTIONAL, the sets a propounded
                  discovery request that names no kind of set drafts (sets.py);
                  or asks for "the usual"; absent, it drafts as it always did
+    response_scope: {patterns: {<category>: [regex, ...]}}   OPTIONAL, how a
+                 response job sorts the file's folders and names into categories
+                 (response_scope.py); absent, its generic default list
 
 ``delivery`` is the one optional section: the matter numbers a job may file to
 when they are not the matter it read (the firm's Operator library matter, for
@@ -77,7 +80,7 @@ from .. import seat_layout
 from ..firm_config import FirmConfigError, FirmFile
 
 from . import attorneys as attorneys_mod, citations, evidence_config, opening_demand, page_limits
-from . import sets as sets_mod
+from . import response_scope, sets as sets_mod
 from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
@@ -296,7 +299,7 @@ def _shape(data: Any) -> list[str]:
         if s not in SCHEMA
         and s not in OPTIONAL
         and s not in (attorneys_mod.KEY, evidence_config.KEY, verify_config.KEY, citations.KEY, opening_demand.KEY)
-        and s != sets_mod.DEFAULTS_KEY
+        and s not in (sets_mod.DEFAULTS_KEY, response_scope.KEY)
     ]
     if sets_mod.DEFAULTS_KEY in data:
         out += sets_mod.validate_defaults(data[sets_mod.DEFAULTS_KEY])
@@ -527,7 +530,12 @@ def _store_pins(data: dict[str, Any]) -> list[str]:
 
 def validate(data: Any) -> list[str]:
     """Every problem as ``section.key: message``; empty means valid."""
-    return _shape(data) or _semantics(data) or _store_pins(data)
+    return _shape(data) or _scope_shape(data) or _semantics(data) or _store_pins(data)
+
+
+def _scope_shape(data: dict[str, Any]) -> list[str]:
+    """The optional ``response_scope`` section (response_scope.py)."""
+    return response_scope.validate(data[response_scope.KEY]) if response_scope.KEY in data else []
 
 
 @dataclass(frozen=True)
