@@ -168,6 +168,22 @@ def split_claims(pre: str) -> tuple[str, list[tuple[str, str, str]]]:
     return "\n\n".join(keep), got
 
 
+def cites_page(entry: str, ref: str) -> bool:
+    """True when `entry` cites what `ref` ("Exhibit N - p. P") names, a page
+    inside a range or list ("p. 3, 4", "p. 2-5") or in any of its citation
+    groups included (2026-11-20 review: a claim cites one page, and the exact
+    string never matched an entry citing several, so the code was described
+    from no text and a numeric code read as not legible)."""
+    m = B.CITE.fullmatch(f"({ref})")
+    if not m:
+        return False
+    want = set(CL.parse_pages(m.group(2)))
+    for c in B.CITE.finditer(entry):
+        if c.group(1) == m.group(1) and (not want or want & set(CL.parse_pages(c.group(2)))):
+            return True
+    return False
+
+
 def rows(
     base_rows: list[str], audited: list[tuple[str, str, str]], entries: list[str], resolve: Resolve
 ) -> tuple[list[str], list[dict[str, Any]], list[str]]:
@@ -179,7 +195,7 @@ def rows(
     illegible: list[str] = []
     for code, first, ref in audited:
         # The entry the claim's citation points into: the one carrying the code.
-        text = next((e for e in entries if B.iso(e) == first and f"({ref})" in e), "")
+        text = next((e for e in entries if B.iso(e) == first and cites_page(e, ref)), "")
         shown, desc, _how = resolve(code, first, text)
         key = shown.replace(".", "")
         if key in table and table[key][0] <= first:

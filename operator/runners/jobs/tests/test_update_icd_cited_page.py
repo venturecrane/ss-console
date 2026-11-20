@@ -102,3 +102,46 @@ def test_a_bare_code_and_an_undotted_print_are_matched(job_dir: Path, firm_confi
     pt = _text(sr, {25: ("Dx: M5020 cervical disc", False), 26: ("Neck pain.", False)})
     assert _claims(pt)[0] == ["Diagnosis code M50.20 recorded on 07/21/2026. (Exhibit 3 - p. 25)"]
     assert icd.dotted("I10") is None and icd.dotted("M5020") == "M50.20"
+
+
+# ---- the table row finds the entry its one-page claim came from (2026-11-20 review) ----
+LUMBAGO = "07/21/2026\nExample Clinic | Medical Diagnoses\n\nMedical Diagnoses\nLumbago was assessed after the fall. "
+
+
+def _row(job_dir: Path, firm: Path, data_root: Path, entry: str, pages: dict[int, tuple[str, bool]]) -> list[str]:
+    """A numeric ICD-9 code on a 2026 record, through the stage's text-layer
+    reader, `claims`, the audit document's claim line and `rows`, with the
+    real tables (described only when its entry names the description)."""
+    from jobs.medchron import icd_tables
+
+    d = data_root / "controls" / "icd"
+    d.mkdir(parents=True)
+    (d / "icd10cm_order.txt").write_text("{:<5} {:<7} {} {:<60} {}\n".format("00001", "M542", "1", "Cx", "Cervicalgia"))
+    (d / "CMS32_DESC_LONG_DX.txt").write_text("7242 Lumbago\n")
+    t = icd_tables.load(data_root)
+
+    def res(c: str, on: str, text: str) -> tuple[str, str | None, str]:
+        return icd_tables.resolve(c, t, on, text)
+
+    pt = _text(_sr(job_dir, firm, data_root), pages)
+    lines, _ = icd.claims(["2026-07-21 | Example Clinic | 724.2 | clinic.pdf"], [entry], [], res, pt)
+    _, audited = icd.split_claims("\n\n".join(lines))
+    return icd.rows([], audited, [entry], res)[0][1:]
+
+
+def test_a_page_inside_a_list_citation_finds_its_entry(job_dir: Path, firm_config_path: Path, data_root: Path) -> None:
+    entry = LUMBAGO + "(Exhibit 3 - p. 3, 4)"
+    pages = {3: ("Low back pain.", False), 4: ("Dx 724.2 lumbago", False)}
+    rows = _row(job_dir, firm_config_path, data_root, entry, pages)
+    assert rows == ["| 724.2 | Lumbago (ICD-9-CM) | 07/21/2026 | Exhibit 3 - p. 4 |"]
+
+
+def test_the_code_in_a_second_citation_group_finds_its_entry(
+    job_dir: Path, firm_config_path: Path, data_root: Path
+) -> None:
+    entry = LUMBAGO + "(Exhibit 3 - p. 3)\n\nAssessment\nBack strain. (Exhibit 3 - p. 5-6)"
+    pages = {3: ("Low back pain.", False), 5: ("x", False), 6: ("724.2 lumbago", False)}
+    rows = _row(job_dir, firm_config_path, data_root, entry, pages)
+    assert rows == ["| 724.2 | Lumbago (ICD-9-CM) | 07/21/2026 | Exhibit 3 - p. 6 |"]
+    assert icd.cites_page(entry, "Exhibit 3 - p. 6") and not icd.cites_page(entry, "Exhibit 3 - p. 7")
+    assert not icd.cites_page(entry, "Exhibit 4 - p. 3")
