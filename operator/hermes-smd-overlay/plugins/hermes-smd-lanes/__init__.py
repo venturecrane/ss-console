@@ -12,6 +12,8 @@ Three thin verbs over the capability broker's ``medchron_*`` surface
   agent relays that sentence; it never sees a path or a file.
 * ``medchron_job_status``: one job's state and counts, or the last twenty.
 * ``medchron_allowance``: the cycle's page allowance, what is used, what remains.
+* ``medchron_update_files``: the documents an update for one client reads,
+  computed by the broker from this turn's listing and the coverage record.
 
 The runner itself is a root daemon the agent cannot reach; every transition it
 reports is a broker-written audit row. Nothing here returns document content:
@@ -90,6 +92,9 @@ def _medchron_job_submit(args: dict[str, Any], session_id: str = "", **_: Any) -
     for key in ("injuries", "requested_by", "request_ref"):
         if args.get(key):
             envelope[key] = str(args[key])
+    if args.get("dob_sources"):
+        # The broker refuses anything but two distinct document ids, in prose.
+        envelope["dob_sources"] = [str(x) for x in args["dob_sources"]]
     # Who asked comes from the verified email that opened this turn whenever
     # there is one, never the model's arguments (2026-10-07): the completion
     # reply binds on request_ref and requested_by, and a model-written value
@@ -185,6 +190,19 @@ def _medchron_job_status(args: dict[str, Any], **_: Any) -> str:
     return json.dumps({"jobs": resp.get("jobs") or []}, ensure_ascii=False)
 
 
+def _medchron_update_files(args: dict[str, Any], **_: Any) -> str:
+    """The documents an update for one client reads, computed by the broker
+    from this turn's listing and the matter's coverage record."""
+    listing = [str(x).strip() for x in args.get("listing_ids") or [] if str(x).strip()]
+    resp = JobsBrokerClient().update_files(
+        str(args.get("matter_id") or "").strip(),
+        str(args.get("client_name") or "").strip(),
+        listing,
+    )
+    keys = ("coverage_record", "new_document_ids", "count", "previously_uncovered")
+    return json.dumps({k: resp.get(k) for k in keys}, ensure_ascii=False)
+
+
 def _medchron_allowance(args: dict[str, Any], **_: Any) -> str:
     client = JobsBrokerClient()
     resp = client.allowance()
@@ -234,6 +252,14 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
                     "type": "string",
                     "description": "Who asked (an address or a name).",
                 },
+                "dob_sources": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "When a date of birth was read from the matter's documents: the ids of the "
+                        "two labelled documents that state it, exactly two."
+                    ),
+                },
                 "request_ref": {
                     "type": "string",
                     "description": "The thread or message this request came from.",
@@ -277,7 +303,8 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         _medchron_job_submit,
     ),
     "medchron_job_status": (
-        "Check a chronology package job by id (state, documents, pages, spend, delivery folder); "
+        "Check a chronology package job by id (state, documents, pages, spend, delivery folder, "
+        "the clients it is for, its kind: run or update, and the stage it has reached); "
         "or pass matter_id for that matter's cumulative delivered coverage, which is what an "
         "update measures its delta against; or list the last twenty when neither is given. "
         "Pass one or the other, never both.",
@@ -297,6 +324,31 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
             }
         ),
         _medchron_job_status,
+    ),
+    "medchron_update_files": (
+        "The documents an UPDATE for one client reads: pass the matter id, the client's name as "
+        "the delivered chronology ran on, and listing_ids, every document id of the matter's file "
+        "listing read this turn, paged to the end. Returns new_document_ids (the listing minus "
+        "what the delivered chronologies covered, in listing order), count (documents, not "
+        "pages: the record holds no page counts) and previously_uncovered (those on the matter "
+        "at delivery that went unread). coverage_record false means no record exists for that "
+        "client, and nothing was computed.",
+        _schema(
+            {
+                "matter_id": {
+                    "type": "string",
+                    "description": "The practice-management matter id.",
+                },
+                "client_name": {"type": "string", "description": "The client the update is for."},
+                "listing_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Every document id on the matter, from get_files_on_matter paged to the end.",
+                },
+            },
+            ["matter_id", "client_name", "listing_ids"],
+        ),
+        _medchron_update_files,
     ),
     "medchron_allowance": (
         "The firm's chronology page allowance for the current billing cycle: authored, used so far "

@@ -191,6 +191,9 @@ VERBS: tuple[Verb, ...] = (
     Verb("medchron_job_status", GATEWAY_ROOT_OR_AGENT, _medchron_status),
     Verb("medchron_allowance", GATEWAY_ROOT_OR_AGENT, _medchron),
     Verb("medchron_job_list", ROOT_OR_AGENT, _medchron),
+    # An update's new documents, computed from the listing and the coverage
+    # record (medchron_progress.update_files). Read-only.
+    Verb("medchron_update_files", GATEWAY_ROOT_OR_AGENT, _medchron),
     # The help review's job outcomes (ss-console#3423 increment 3): lane, state,
     # hold class and request ref per held/failed job, read-only, no matter content.
     # The agent uid (the initiation plugin's review tool) and root may read it.

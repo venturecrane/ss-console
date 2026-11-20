@@ -156,9 +156,11 @@
         "documents": 0,
         "folder_id": null,
         "id": "01KTJ0BX000000000000000001",
+        "kind": "run",
         "matter_number": "2026-PI-101",
         "pages": 0,
         "reason": null,
+        "stage": null,
         "state": "submitted",
         "uncovered_count": null,
         "updated_at": "2026-10-20T17:00:00.000Z",
@@ -177,9 +179,11 @@
         "documents": 0,
         "folder_id": null,
         "id": "01KTJ0BX000000000000000001",
+        "kind": "run",
         "matter_number": "2026-PI-101",
         "pages": 0,
         "reason": null,
+        "stage": null,
         "state": "submitted",
         "uncovered_count": null,
         "updated_at": "2026-10-20T17:00:00.000Z",
@@ -232,14 +236,17 @@
     "jobs": [
       {
         "cents": 0,
+        "clients": ["alpha example"],
         "covered_count": null,
         "created_at": "2026-10-20T17:00:00.000Z",
         "documents": 0,
         "folder_id": null,
         "id": "01KTJ0BX000000000000000001",
+        "kind": "run",
         "matter_number": "2026-PI-101",
         "pages": 0,
         "reason": null,
+        "stage": null,
         "state": "submitted",
         "uncovered_count": null,
         "updated_at": "2026-10-20T17:00:00.000Z",
@@ -251,16 +258,19 @@
   "medchron_job_status | gateway | known job": {
     "job": {
       "cents": 0,
+      "clients": ["alpha example"],
       "covered_document_ids": null,
       "covered_json": null,
       "created_at": "2026-10-20T17:00:00.000Z",
       "documents": 0,
       "folder_id": null,
       "id": "01KTJ0BX000000000000000001",
+      "kind": "run",
       "matter_number": "2026-PI-101",
       "pages": 0,
       "reason": null,
       "smd_page_credit_pages": 0,
+      "stage": null,
       "state": "submitted",
       "uncovered_document_ids": null,
       "uncovered_reasons": null,
@@ -273,14 +283,17 @@
     "jobs": [
       {
         "cents": 0,
+        "clients": ["alpha example"],
         "covered_count": null,
         "created_at": "2026-10-20T17:00:00.000Z",
         "documents": 0,
         "folder_id": null,
         "id": "01KTJ0BX000000000000000001",
+        "kind": "run",
         "matter_number": "2026-PI-101",
         "pages": 0,
         "reason": null,
+        "stage": null,
         "state": "submitted",
         "uncovered_count": null,
         "updated_at": "2026-10-20T17:00:00.000Z",
@@ -292,16 +305,19 @@
   "medchron_job_status | root | known job": {
     "job": {
       "cents": 0,
+      "clients": ["alpha example"],
       "covered_document_ids": null,
       "covered_json": null,
       "created_at": "2026-10-20T17:00:00.000Z",
       "documents": 0,
       "folder_id": null,
       "id": "01KTJ0BX000000000000000001",
+      "kind": "run",
       "matter_number": "2026-PI-101",
       "pages": 0,
       "reason": null,
       "smd_page_credit_pages": 0,
+      "stage": null,
       "state": "submitted",
       "uncovered_document_ids": null,
       "uncovered_reasons": null,
@@ -350,5 +366,25 @@
     "job_id": "01KTJ0BX000000000000000001",
     "ok": true,
     "outcome": "no_dob"
+  },
+  "medchron_update_files | gateway | empty": {
+    "error": "ValueError",
+    "message": "medchron_update_files requires matter_id and client_name",
+    "ok": false
+  },
+  "medchron_update_files | gateway | known job": {
+    "error": "ValueError",
+    "message": "medchron_update_files requires matter_id and client_name",
+    "ok": false
+  },
+  "medchron_update_files | root | empty": {
+    "error": "ValueError",
+    "message": "medchron_update_files requires matter_id and client_name",
+    "ok": false
+  },
+  "medchron_update_files | root | known job": {
+    "error": "ValueError",
+    "message": "medchron_update_files requires matter_id and client_name",
+    "ok": false
   }
 }

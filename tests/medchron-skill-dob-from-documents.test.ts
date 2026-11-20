@@ -12,8 +12,9 @@
  *   2. The search is bounded (four documents per client, stop at two agreeing).
  *   3. Dates are quoted as written; scans are labeled, illegible or two-digit
  *      years are not used.
- *   4. Nothing is submitted on a document-read date until the requester
- *      confirms; a date the requester writes is used when it matches the
+ *   4. Two labelled documents that agree are submitted on, naming the two
+ *      documents (2026-11-19); one document, or two that disagree, is asked
+ *      about; a date the requester writes is used when it matches the
  *      documents, and one the records contradict is asked about, not run.
  *   5. A thread that already promised the dates gets them, not a question.
  */
@@ -53,8 +54,8 @@ describe('medical-chronology-maintainer: a missing contact DOB is read from the 
     expect(flat).toContain('an `[illegible]` digit, or a two-digit year, is not used')
   })
 
-  it('submits only after the requester confirms, and asks when her date contradicts the records', () => {
-    expect(flat).toContain('Never submit on a date read from a document alone.')
+  it("submits when two documents agree, and asks when the requester's date contradicts the records", () => {
+    expect(flat).toContain('submit on that date with `dob_sources` set to those two document ids')
     expect(flat).toContain('your own earlier email is not a source')
     expect(flat).toContain('submitted without a second confirmation when it matches the documents')
     expect(flat).toContain(

@@ -52,7 +52,7 @@ from . import medchron_credits
 from .lane_ledger import ReplyOnce, StateRecord
 from .medchron_update import ADDED_COLUMNS, client_keys, update_block
 from .medchron_coverage import parse_covered, parse_why, union_coverage, validate_covered
-from . import seat_config
+from . import medchron_progress, seat_config
 
 # Re-exported: `validate_covered` moved to medchron_coverage at ss#2834 when this
 # module crossed the size ceiling, and the runner, the verbs and the tests all
@@ -247,6 +247,11 @@ PROJECTION = (
     # key reaches the SKILL through the broker socket and does not widen the
     # console seam.
     "covered_json",
+    # 2026-11-19 (``medchron_progress``): run or update, and the stage the
+    # runner last reported. The expected finish is stored and NOT projected:
+    # no reader shows it until its wording is decided.
+    "kind",
+    "stage",
 )
 
 
@@ -600,7 +605,7 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
         try:
             conn.execute(
                 "INSERT INTO medchron_jobs (id, created_at, updated_at, state, matter_id, matter_number, requester, "
-                "request_ref, envelope_digest, work_digest, client_keys) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "request_ref, envelope_digest, work_digest, client_keys, kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     now,
@@ -613,6 +618,7 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
                     digest(envelope),
                     work_digest(envelope),
                     json.dumps(client_keys(envelope)),
+                    medchron_progress.kind_of(envelope),
                 ),
             )
             conn.commit()
@@ -733,9 +739,13 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
         conn = self._connect()
         try:
             row = conn.execute(_ACTIVE_TWIN_SQL, (want, *_TERMINAL_ORDERED, stale_before)).fetchone()
-            return (str(row["id"]), str(row["state"])) if row is not None else None
         finally:
             conn.close()
+        if row is not None:
+            return (str(row["id"]), str(row["state"]))
+        # 2026-11-19: the same person (surname and date of birth) and kind on
+        # this matter is the same request, whatever files it names.
+        return medchron_progress.same_person(self, envelope, stale_before)
 
     def work_twin(self, job_id: str) -> dict[str, Any] | None:
         """Another job carrying THIS job's work that is delivered or still live.
@@ -855,6 +865,10 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
             # stays where it belongs: on the earlier state's audit row.
             sets.append("reason=?")
             vals.append(None)
+        for col in ("stage", "expected_finish"):
+            if col in fields:
+                sets.append(f"{col}=?")
+                vals.append(medchron_progress.check_note(col, fields[col]))
         if "folder_id" in fields:
             sets.append("folder_id=?")
             vals.append(str(fields["folder_id"] or "") or None)
@@ -866,6 +880,14 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
             vals.append(json.dumps(fields["delivery"], sort_keys=True))
         vals.append(job_id)
         conn.execute(f"UPDATE medchron_jobs SET {', '.join(sets)} WHERE id=?", vals)  # noqa: S608 - sets holds only the literal 'col=?' fragments built above; values are bound
+
+    def _guard(self, job_id: str, cur: sqlite3.Row, state: str, fields: dict[str, Any]) -> None:
+        """A stage note lands only on a running row. The runner's heartbeat
+        sends it while the child runs, and one in flight as the job ends
+        would otherwise move a HELD row back to running (held -> running is a
+        legal edge, for a resume)."""
+        if medchron_progress.is_stage_note(state, fields) and cur["state"] != "running":
+            raise ValueError(f"job {job_id} is {cur['state']}; a stage note lands only on a running job")
 
     def _result(self, row: dict[str, Any], cur: sqlite3.Row, state: str, extra: Any) -> dict[str, Any]:
         """The row after, as it is: this lane's record never carried ``prev_state``."""

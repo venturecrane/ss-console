@@ -78,6 +78,7 @@ from . import (
     medchron_coverage,
     medchron_credits,
     medchron_identity,
+    medchron_progress,
     page_store_meta,
     run_meta,
 )
@@ -119,6 +120,7 @@ VERBS = (
     "medchron_covered_recompute",
     "medchron_job_resume",
     "medchron_allowance_credit",
+    "medchron_update_files",
 )
 
 #: The coverage arrays, replaced by counts on the LIST paths. A matter can carry
@@ -325,6 +327,8 @@ class MedchronVerbs:
             "medchron_job_resume": is_root,
             # ROOT only, no agent tool: a credit lowers what the firm is billed.
             "medchron_allowance_credit": is_root,
+            # Read-only: the documents an update reads (``medchron_progress``).
+            "medchron_update_files": is_gateway or is_root or self._is_agent(peer_uid),
         }.get(action, False)
         if not ok:
             raise PermissionError(f"{action} is not permitted for this caller")
@@ -392,6 +396,8 @@ class MedchronVerbs:
             return self._covered_recompute(request)
         if action == "medchron_job_resume":
             return self._resume(request)
+        if action == "medchron_update_files":
+            return medchron_progress.update_files(self._db, request)
         raise ValueError(f"unsupported medchron action: {action}")
 
     def _credit(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -434,7 +440,7 @@ class MedchronVerbs:
             row = self._db.read(job_id)
             if row is None:
                 return {"ok": True, "job": None}
-            job = _with_hold_class(self._db.project(row), "medchron")
+            job = _with_hold_class(medchron_progress.with_clients(self._db, [self._db.project(row)])[0], "medchron")
             # 2026-10-29: the pages SMD waived on this job's work
             # (`jobs.medchron.allowance credit --job`), 0 when none. The
             # Operator says the waiver sentence only when this is > 0.
@@ -445,7 +451,8 @@ class MedchronVerbs:
             if matter is not None:
                 matter["delivered_clients"] = medchron_identity.delivered_clients(self._db, matter_id)
             return {"ok": True, "matter": matter}
-        return {"ok": True, "jobs": [_counted(self._db.project(r)) for r in self._db.list_recent(20)]}
+        jobs = [_counted(self._db.project(r)) for r in self._db.list_recent(20)]
+        return {"ok": True, "jobs": medchron_progress.with_clients(self._db, jobs)}
 
     def _resume(self, request: dict[str, Any]) -> dict[str, Any]:
         """Ask the runner daemon to re-run a FAILED job, one HELD at the final
@@ -526,7 +533,9 @@ class MedchronVerbs:
         try:
             # An update names the client and takes the date of birth from the
             # delivered job's own units (medchron_identity, 2026-10-29).
-            envelope = validate_envelope(medchron_identity.fill_update_dobs(self._db, request.get("envelope") or {}))
+            raw = request.get("envelope") or {}
+            envelope = validate_envelope(medchron_identity.fill_update_dobs(self._db, raw))
+            dob_sources = medchron_progress.dob_sources(raw)
         except EnvelopeError as exc:
             return {"ok": True, "accepted": False, "reason": str(exc)}
         try:
@@ -592,7 +601,7 @@ class MedchronVerbs:
         earlier = self._earlier_attempt(envelope)
         job_id = self._db.submit(envelope, remaining=state["remaining"])
         medchron_identity.remember(self._db, job_id, envelope)
-        self._audit_submitted(job_id, envelope, state["remaining"], earlier)
+        self._audit_submitted(job_id, envelope, state["remaining"], earlier, dob_sources)
         return {
             "ok": True,
             "accepted": True,
@@ -605,11 +614,16 @@ class MedchronVerbs:
             "allowance_remaining_documents": state["remaining"],
         }
 
-    def _audit_submitted(self, job_id: str, envelope: dict[str, Any], remaining: int, earlier: str | None) -> None:
+    def _audit_submitted(
+        self, job_id: str, envelope: dict[str, Any], remaining: int, earlier: str | None, dob_sources: list[str]
+    ) -> None:
         """The SUBMITTED row. A resubmission of the same work replaces the earlier
-        job: its run record says so, so neither job is counted as needing nobody."""
+        job: its run record says so, so neither job is counted as needing nobody.
+        ``dob_sources``: the document ids a date of birth was read from, when the
+        Operator submitted on two documents that agree (never the date)."""
         replaces = run_meta.check({"event": "replaces", "by": "firm", "replaces": earlier}) if earlier else None
-        meta = {
+        meta: dict[str, Any] = {"dob_sources": dob_sources} if dob_sources else {}
+        meta |= {
             "job_id": job_id,
             "matter_number": envelope["matter"]["number"],
             "units": len(envelope["units"]),
@@ -688,6 +702,10 @@ class MedchronVerbs:
         store = page_store_meta.take(fields)  # audit-only: the job's page-store counts
         run = run_meta.take(fields)  # audit-only: the run record (run_meta.py)
         row = self._db.record(job_id, state, fields)
+        if medchron_progress.is_stage_note(state, fields):
+            # Progress, not a transition: the row's stage moves, and the audit
+            # chain keeps one RUNNING row per start, as it always has.
+            return {"ok": True, "job": self._db.project(row)}
         meta = {
             "job_id": job_id,
             "state": state,

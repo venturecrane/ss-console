@@ -284,3 +284,41 @@ def test_a_check1_tie_the_cited_page_does_not_break_names_no_entry():
     assert review_evidence.entry_for(both, TIED_FINDING) is None
     neither = TIED_FINDING.replace("p. 5)", "p. 40)")
     assert review_evidence.entry_for(TIED, neither) is None
+
+
+# ---- check 1 on a date with many entries: decided on its own named page (2026-11-19) ----
+MANY = DOC.replace(
+    "03/30/2026\nExample Clinic | Treatment Recommendations\n\nContinue therapy. (Exhibit 1 - p. 3)\n",
+    "03/30/2026\nExample Clinic | Treatment Recommendations\n\nContinue therapy. (Exhibit 1 - p. 3)\n\n"
+    "03/30/2026\nExample Clinic | Medical Diagnoses\n\nCervicalgia. (Exhibit 1 - p. 3)\n\n"
+    "03/30/2026\nExample Clinic | Plan\n\nReturn in four weeks. (Exhibit 1 - p. 3)\n",
+)
+
+
+def test_a_check1_on_a_date_with_many_entries_is_decided_on_its_named_page(job_dir, firm_config_path, data_root):
+    """A client seat: one date carried several entries from one provider, all
+    citing the page, so no single entry matched and the finding held the job
+    although the page it names is the client's own record. The page decides;
+    the entry is looked up only to leave it out.
+
+    MUTATION: return before the page read when ``entry_for`` is None in
+    ``review_policy._identity`` and this review holds (2)."""
+    assert MANY != DOC
+    sr, log = _package(job_dir, firm_config_path, data_root, MANY)
+    _pages(sr, "Patient: Alpha Example DOB: 01/01/1970. Mother has diabetes. Continue therapy.")
+    assert review_evidence.entry_for(_md(sr), CHECK1) is None, "the date names no single entry"
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 0, log
+    rec = proof_review.load(sr.slug_dir / "runs" / "alpha")
+    assert rec["must_fix"] == 0
+    assert rec["findings"][0]["finding"].startswith("checked against the cited page, which is the client's")
+    assert _md(sr).count("03/30/2026\nExample Clinic") == 3, "every entry is kept"
+
+
+def test_a_check1_on_another_persons_page_with_no_single_entry_still_holds(job_dir, firm_config_path, data_root):
+    """Another person's page and no single entry to leave out: nothing is
+    removed on a guess, and the finding stays a must-fix."""
+    sr, log = _package(job_dir, firm_config_path, data_root, MANY)
+    _pages(sr, "Patient: Beta Roe DOB: 02/02/1980. Continue therapy.")
+    assert _settle_review(sr, FakeDoorway(_verdict(CHECK1))) == 2, log
+    assert _md(sr).count("03/30/2026\nExample Clinic") == 3
+    assert not (sr.slug_dir / "out" / "alpha" / review_evidence.LEFT_OUT).exists()

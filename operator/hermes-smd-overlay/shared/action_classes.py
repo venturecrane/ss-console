@@ -1141,6 +1141,8 @@ _RAW_TOOL_ACTION_CLASS_MAP: dict[str, ActionClass] = {
     "medchron_job_submit": ActionClass.INTERNAL_WRITE,
     "medchron_job_status": ActionClass.READ,
     "medchron_allowance": ActionClass.READ,
+    # Document ids and counts the broker computes from the listing passed in.
+    "medchron_update_files": ActionClass.READ,
     # The verified reply binding (hermes-smd-reply/binding.py, ss-console
     # workspace_broker/reply_binding.py). It names an email, never a person;
     # the broker resolves the sender from the mailbox and the reply that

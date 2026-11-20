@@ -54,6 +54,10 @@ def _ensure(conn: Any) -> None:
     conn.execute(CREATE_SQL)
 
 
+#: The table, created when absent, for a reader outside this module (``medchron_progress``).
+ensure = _ensure
+
+
 def remember(ledger: Any, job_id: str, envelope: dict[str, Any]) -> None:
     """Keep the queued envelope's units against its job id."""
     units = [{k: u[k] for k in _KEPT if k in u} for u in envelope.get("units") or [] if isinstance(u, dict)]

@@ -245,37 +245,53 @@ def on_record(sr: StageRun, doc: Path, out: Outcome, pages: Any, stats: dict[str
                 )
                 stats["system_words_on_record"] += 1
         elif n == 1 and f.by == "model":
-            block = EV.entry_for(md, _text(f))
-            if block is None:
-                continue
-            cited = EV.cited_pages(block[2], _text(f))
-            kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
-            if kind != "other":
-                # The client's page, or a page naming no one: the entry is a
-                # record the map read, and suspicion alone never drops it.
-                whom = "which is the client's" if kind == "client" else "which names no other person; the entry is kept"
-                out.findings[k] = replace(
-                    f, grade=review.NOTE, finding=f"checked against the cited page, {whom}: {f.finding}"
-                )
-                stats["identity_client" if kind == "client" else "identity_unnamed"] += 1
-                continue
-            reason = EV.LEFT_OUT_REASON
-            EV.leave_out(sr, doc, block, cited, reason)
-            md = doc.read_text(encoding="utf-8")
-            out.changed = True
-            date_line = block[2].split("\n", 1)[0].strip()
-            out.findings[k] = replace(
-                f, grade=review.NOTE, finding=f"left out before delivery by rule: the entry dated {date_line} {reason}"
-            )
-            stats["identity_left_out"] += 1
-            out.left_out += 1
-            sr.log(f"review: the {date_line} entry left out by rule (its cited page: {kind})")
+            md = _identity(sr, doc, md, out, k, pages, stats)
     if stats["identity_left_out"]:
         # The summary tables count the entries: computed again from those left.
         from . import review_tables
 
         doc.write_text(review_tables.rederive(sr, before, md), encoding="utf-8")
         sr.log("review: Treatment Timeline and Diagnostic Highlights re-derived from the remaining entries")
+
+
+def _identity(sr: StageRun, doc: Path, md: str, out: Outcome, k: int, pages: Any, stats: dict[str, int]) -> str:
+    """Step 0b for one model check 1 MUST-FIX; returns the chronology after.
+
+    Decided on the finding's OWN named pages first (2026-11-19). The entry is
+    looked up only to leave it out: on a date with several entries the
+    lookup often names no single one, and the finding then stayed a must-fix
+    and held the job although its page was the client's own record. Only a
+    finding that names no page needs its entry to find the pages it cites."""
+    from . import review_evidence as EV
+
+    f = out.findings[k]
+    text = _text(f)
+    block = EV.entry_for(md, text)
+    cited = EV.cited_pages(block[2] if block else "", text)
+    if not cited:
+        return md
+    kind = EV.whose(sr, [pages.text(ex, pg) for ex, pg in cited])
+    if kind != "other":
+        # The client's page, or a page naming no one: the entry is a record
+        # the map read, and suspicion alone never drops it.
+        whom = "which is the client's" if kind == "client" else "which names no other person; the entry is kept"
+        out.findings[k] = replace(f, grade=review.NOTE, finding=f"checked against the cited page, {whom}: {f.finding}")
+        stats["identity_client" if kind == "client" else "identity_unnamed"] += 1
+        return md
+    if block is None:
+        # Another person's page, and no single entry to leave out: it holds.
+        return md
+    reason = EV.LEFT_OUT_REASON
+    EV.leave_out(sr, doc, block, cited, reason)
+    out.changed = True
+    date_line = block[2].split("\n", 1)[0].strip()
+    out.findings[k] = replace(
+        f, grade=review.NOTE, finding=f"left out before delivery by rule: the entry dated {date_line} {reason}"
+    )
+    stats["identity_left_out"] += 1
+    out.left_out += 1
+    sr.log(f"review: the {date_line} entry left out by rule (its cited page: {kind})")
+    return doc.read_text(encoding="utf-8")
 
 
 def _repairable(f: review.Finding) -> bool:

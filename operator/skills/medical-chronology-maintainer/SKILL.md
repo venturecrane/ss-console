@@ -298,10 +298,11 @@ seat does not queue a second full run on a delivered matter.
    (`list_folders`); unclear, ask.
 
    **A contact with no date of birth is not a question for the firm yet: the
-   date is almost always in the file.** Find it there, then have the requester
-   confirm it (2026-10-27: a chronology was held asking a paralegal for two
-   dates that the police report, the intake sheets and every page header of the
-   records carried).
+   date is almost always in the file.** Find it there, and when two documents
+   agree, submit on it (2026-10-27: a chronology was held asking a paralegal for
+   two dates that the police report, the intake sheets and every page header of
+   the records carried; 2026-11-19: a request waited a day on a confirmation of
+   a date two of the client's records already stated).
    - **Where to read.** Use `read_document` on the matter's own documents. A
      date counts only when it is LABELED as a date of birth ("DOB", "D.O.B.",
      "Date of Birth", "Birth Date", "Birthdate") on a page that names that client
@@ -317,23 +318,31 @@ seat does not queue a second full run on a delivered matter.
      (`extraction` is `vision`) is labeled a machine transcription. A date with
      an `[illegible]` digit, or a two-digit year, is not used. Two documents
      that disagree, or one document only: say so.
-   - **Confirm, then submit.** Never submit on a date read from a document
-     alone. Reply with each client's date and its documents, ask the requester
-     to confirm, and stop. On the turn where they confirm, read the date again
-     from a document you named (your own earlier email is not a source) and
-     submit. A date the requester writes in their own reply is submitted
-     without a second confirmation when it matches the documents, or when no
-     document carried one. When it differs from a date the client's own
-     records carry, do not submit: the runner checks every page against the
-     date it is given, so a date the records contradict sets the client's own
-     records aside as someone else's. Reply with both dates and the documents,
-     ask which is right, and stop.
+   - **Two documents agree: submit.** When two labelled documents on the
+     matter state the same date of birth for the client, submit on that date
+     with `dob_sources` set to those two document ids, and say in the reply
+     which two documents the date was read from. No confirmation is asked
+     for. Never submit on a date read from a document alone. One document, or
+     two that disagree, is not enough.
+   - **One document, or two that disagree: ask.** Reply with each date
+     exactly as written, the documents it came from, and every record you
+     checked; ask the requester which date is right, and stop. On the turn
+     where they answer, read the date again from a document you named (your
+     own earlier email is not a source) and submit. A date the requester
+     writes in their own reply is submitted without a second confirmation
+     when it matches the documents, or when no document carried one. When it
+     differs from a date the client's own records carry, do not submit: the
+     runner checks every page against the date it is given, so a date the
+     records contradict sets the client's own records aside as someone
+     else's. Reply with both dates and the documents, ask which is right, and
+     stop.
    - **A promise in the thread is a request.** When the thread already says
      the dates are in the file and that you will send them (your own reply or
      an SMD note), the requester's next reply, quoted or not, whatever it says,
-     asks for those dates: send them as above. Do not ask them for the dates.
+     asks for those dates: read them as above, and submit when two documents
+     agree. Do not ask them for the dates.
    - **Ask the requester only when no document carries a usable date** after
-     the bounded search, and say which documents you read.
+     the bounded search, and say which records you checked.
 
 3. **Report the selection as prose before submitting.** From
    `get_files_on_matter` (paged to the end -- see Inputs; a capped page is not
@@ -369,7 +378,10 @@ seat does not queue a second full run on a delivered matter.
    `operations_request`: that tool is for SMD changes to routines, schedules,
    channels and settings (ADR 0085), and a chronology the firm asked for is
    client work on this lane, not a change to the seat. A duplicate refusal that
-   names a job (`job_id`, `job_state`) means that job IS the work in flight:
+   names a job (`job_id`, `job_state`) means that job IS the work in flight,
+   including when the new request named the same client another way or
+   asked for other files (the broker matches the person, by surname and date
+   of birth, and the kind):
    call `medchron_job_status` with that `job_id` and tell the requester what
    its record shows (submitted, running or held: "The chronology for matter
    <number> is under way. Nothing is needed from you; the next message you get
@@ -424,10 +436,17 @@ reported, never read.
    accumulates every delivered chronology on the matter, so a matter updated twice
    does not re-read what the first chronology already covered. Pass `matter_id` or
    `job_id`, never both -- the broker refuses both rather than choosing.
-   The set to submit is **the matter's current listing (paged to the end) minus
-   `covered_document_ids`**, which therefore includes every previously uncovered
-   document as well as everything that has landed since. A scan that arrived
-   without a text layer is NOT covered, and an update reads it again.
+   **The set is computed in code, never by you.** Call `medchron_update_files`
+   with the matter id, the client's name as the delivered chronology ran on,
+   and `listing_ids`: every document id of the matter's current listing
+   (paged to the end). Its `new_document_ids` is the listing minus what the
+   delivered chronologies covered, which therefore includes every previously
+   uncovered document (`previously_uncovered`) as well as everything that has
+   landed since; `count` is how many documents that is. Never work this set
+   out yourself, and never state a page count for it from memory: the answer
+   carries documents, not pages. A scan that arrived without a text layer is
+   NOT covered, and an update reads it again. `coverage_record: false` is the
+   "no coverage record" case below.
    **Name medical records only.** The named ids override the runner's folder
    rules, so this list IS the selection: keep medical records and medical
    bills (files in the matter's medical folders, or plainly records by their
@@ -461,7 +480,7 @@ in the reply that the coverage record was missing and that the update was
 measured against the delivered exhibits. A matter whose files hold no delivered
 chronology document is not an update: it is a RUN.
 
-**Nothing left to read:** when the listing minus the covered set is empty, say that
+**Nothing left to read:** when `new_document_ids` is empty, say that
 the delivered chronology already covers every document on the matter, submit
 nothing, and stop.
 
@@ -511,6 +530,14 @@ never a list of choices. When the requester names no particular records, the
 update reads every medical record the delivery did not cover, as above, and
 there is no offer line.
 
+**A date range is honoured only by naming files.** The job has no date
+cutoff: it reads every page of every file it is given. When the requester asks
+for a range ("records from March on", "the last six months"), name only the
+files whose names or folders place them in that range, and say in the reply
+which files those are. Never promise that the chronology stops at a date,
+that visits outside the range are left out, or that only part of a file is
+read.
+
 **Records that were already on the matter.** When the requester asks to add
 records that were on the matter when the delivered chronology was filed (ids
 in `uncovered_document_ids`, or absent from `covered_document_ids`), the reply
@@ -525,6 +552,13 @@ that sentence: "There's no charge to your allowance for this." The field
 missing, 0, or anything that is not a number above 0: no billing sentence at
 all. SMD writes credits after a submission, so this sentence usually does not
 appear at request time, and that is correct.
+
+**Counts come from the record, never from memory.** Every number of visits,
+pages, documents or files in any reply, in any mode, is read on this turn from
+the job's record (`medchron_job_status`, `medchron_update_files`), the wake's
+lines, or a file read on this turn. A number no read on this turn gave is not
+stated: say the document's name without it. Which client a live job is for
+is the `clients` its record names, never a guess from the thread.
 
 **The reply: any question first, then the detail.** One reply per request.
 When the reply carries a question for the requester (something waiting on

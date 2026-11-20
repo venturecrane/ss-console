@@ -59,6 +59,20 @@ class JobsBrokerClient:
     def allowance(self) -> dict[str, Any]:
         return self._request({"action": "medchron_allowance"})
 
+    def update_files(
+        self, matter_id: str, client_name: str, listing_ids: list[str]
+    ) -> dict[str, Any]:
+        """An update's new documents: the listing minus what every delivered
+        chronology for this client covered, computed by the broker."""
+        return self._request(
+            {
+                "action": "medchron_update_files",
+                "matter_id": matter_id,
+                "client_name": client_name,
+                "listing_ids": listing_ids,
+            }
+        )
+
     # -- the demand job (ss-console operator/workspace_broker/demand_verbs.py) --
     def demand_submit(self, envelope: dict[str, Any]) -> dict[str, Any]:
         """``accepted`` with a ``job_id``, or ``accepted: False`` with a ``reason``."""

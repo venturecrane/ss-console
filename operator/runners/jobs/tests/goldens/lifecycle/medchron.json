@@ -377,6 +377,28 @@
       "way_out": ["done"],
       "wiped": false
     },
+    "delivered/resubmit_same_person": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["reply_unproven"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
     "delivered/resubmit_while_running": {
       "code": "medchron_job_submit",
       "ended_while_away": false,
@@ -416,6 +438,31 @@
         "v": 1
       },
       "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "delivered/second_client_same_matter": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["reply_unproven"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
@@ -914,6 +961,30 @@
       "way_out": ["medchron_job_resume", "medchron_job_submit"],
       "wiped": false
     },
+    "failed/resubmit_same_person": {
+      "code": "extract",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
+    },
     "failed/resubmit_while_running": {
       "code": "extract",
       "ended_while_away": false,
@@ -958,6 +1029,33 @@
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
+      "wiped": false
+    },
+    "failed/second_client_same_matter": {
+      "code": "extract",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
       "wiped": false
     },
     "failed/update_decide": {
@@ -1469,6 +1567,30 @@
       "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
       "wiped": false
     },
+    "held/resubmit_same_person": {
+      "code": "medchron_job_submit",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "firm",
+      "paged": ["gate_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
     "held/resubmit_while_running": {
       "code": "medchron_job_submit",
       "ended_while_away": false,
@@ -1513,6 +1635,33 @@
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
+      "wiped": false
+    },
+    "held/second_client_same_matter": {
+      "code": "audit",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
       "wiped": false
     },
     "held/update_decide": {
@@ -2006,6 +2155,28 @@
       "way_out": ["done"],
       "wiped": false
     },
+    "parked/resubmit_same_person": {
+      "code": "medchron_job_submit",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
     "parked/resubmit_while_running": {
       "code": "medchron_job_submit",
       "ended_while_away": false,
@@ -2045,6 +2216,31 @@
         "v": 1
       },
       "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "parked/second_client_same_matter": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
@@ -2539,6 +2735,28 @@
       "way_out": ["done"],
       "wiped": false
     },
+    "requeued_waiting/resubmit_same_person": {
+      "code": "medchron_job_submit",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
     "requeued_waiting/resubmit_while_running": {
       "code": "medchron_job_submit",
       "ended_while_away": false,
@@ -2578,6 +2796,31 @@
         "v": 1
       },
       "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "requeued_waiting/second_client_same_matter": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
@@ -5452,6 +5695,28 @@
       "way_out": ["jobs rewake"],
       "wiped": false
     },
+    "running/resubmit_same_person": {
+      "code": "medchron_job_submit",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
     "running/resubmit_while_running": {
       "code": "medchron_job_submit",
       "ended_while_away": false,
@@ -5491,6 +5756,31 @@
         "v": 1
       },
       "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "running/second_client_same_matter": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
@@ -5985,6 +6275,28 @@
       "way_out": ["jobs rewake"],
       "wiped": false
     },
+    "submitted/resubmit_same_person": {
+      "code": "medchron_job_submit",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
     "submitted/resubmit_while_running": {
       "code": "medchron_job_submit",
       "ended_while_away": false,
@@ -6029,6 +6341,31 @@
       "way_out": ["done"],
       "wiped": false
     },
+    "submitted/second_client_same_matter": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": {
+        "firm_messages": 1,
+        "state": "delivered"
+      },
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
     "submitted/update_decide": {
       "code": null,
       "ended_while_away": false,
@@ -6052,7 +6389,7 @@
       "wiped": false
     }
   },
-  "count": 265,
+  "count": 279,
   "not_applicable": {
     "delivered/cap_hold": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
     "delivered/deploy_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",

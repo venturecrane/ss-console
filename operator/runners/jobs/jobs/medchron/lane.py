@@ -33,7 +33,7 @@ import json
 import logging
 import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -52,6 +52,7 @@ from ..proof import holds as proof_holds, watch as proof_watch
 from ..skill_load import load_line
 from ..stages import vision_seed
 from . import allowance as allowance_mod, config as config_mod, core_counts, job as job_mod, unrecorded
+from . import progress as progress_mod
 from .covered import delivery_fields, wake_folder_lines
 
 logger = logging.getLogger("jobs.daemon")
@@ -86,6 +87,8 @@ class MedchronLane(Daemon):
     proof_recorded: bool | None = None
     #: When ``poll_requests`` next tries an ending the broker could not take.
     record_retry_at: float = 0.0
+    #: The stage last reported per job (``progress.report``); a restart reports once more.
+    stage_sent: dict[str, str] = field(default_factory=dict)
     HEARTBEAT = "heartbeat"
     TICK = "tick"
     CHILD_ARGS = ("--json",)
@@ -93,6 +96,13 @@ class MedchronLane(Daemon):
         "could not read the month's allowance for %s, deferring: %s",
         "could not record running for %s: %s",
     )
+
+    def heartbeat(self, *, running: str | None) -> None:
+        """The beat, and while a child runs, the stage it has reached reported
+        to the broker (``progress.py``) so the status read can say where it is."""
+        super().heartbeat(running=running)
+        if running:
+            progress_mod.report(self, running, self.stage_sent)
 
     # -- one job (the host runs it: ``Daemon.run_job``) ---------------------------
     def _before_start(self, job_id: str) -> str | None:
