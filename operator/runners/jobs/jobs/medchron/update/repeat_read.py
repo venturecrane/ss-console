@@ -119,6 +119,7 @@ class Plan:
     asked: list[Candidate]  # those with at least one keeper and one paragraph, and the in-entry ones
     parts: list[Part]
     within: int = 0  # added entries citing two or more exhibits, read against themselves
+    unparsed: list[str] = field(default_factory=list)  # requests whose reply never parsed (the stage's)
 
 
 def paragraphs(entry: str, headings: set[str]) -> list[Para]:

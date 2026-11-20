@@ -166,7 +166,7 @@ def test_no_disc_herniation_is_kept_against_a_keeper_stating_a_herniation(scene)
     keeper = "Lumbar MRI showed a disc herniation at L4-5."
     delivered = _entry("Example Imaging", _dx(f"{keeper} (Exhibit 1 - p. 2)"))
     added = _entry("Example Imaging Center", _dx("No disc herniation at L4-5. (Exhibit 2 - p. 1)"), ADDS)
-    _kept_by_code(scene, delivered, added, "No disc herniation", keeper, "polarity")
+    _kept_by_code(scene, delivered, added, "No disc herniation", keeper, "words")
 
 
 def test_a_discontinued_drug_is_kept_against_it_continued_and_another_discontinued(scene) -> None:
@@ -175,7 +175,7 @@ def test_a_discontinued_drug_is_kept_against_it_continued_and_another_discontinu
     added = _entry(
         "Example Clinic East", _other("Gabapentin 300 mg three times daily was discontinued. (Exhibit 2 - p. 2)"), ADDS
     )
-    _kept_by_code(scene, delivered, added, "was discontinued", keeper, "polarity")
+    _kept_by_code(scene, delivered, added, "was discontinued", keeper, "sentence")
 
 
 def test_a_one_to_fifteen_dilution_is_kept_against_one_to_ten(scene) -> None:
@@ -189,7 +189,7 @@ def test_pain_in_the_right_knee_is_kept_against_the_left(scene) -> None:
     keeper = "Pain in the left knee rated 5 of 10."
     delivered = _entry("Example Clinic", _dx(f"{keeper} (Exhibit 1 - p. 2)"))
     added = _entry("Example Clinic East", _dx("Pain in the right knee rated 5 of 10. (Exhibit 2 - p. 2)"), ADDS)
-    _kept_by_code(scene, delivered, added, "right knee", keeper, "polarity")
+    _kept_by_code(scene, delivered, added, "right knee", keeper, "words")
 
 
 VISIT = "Neck pain rated 6 of 10 with reduced rotation; assessment cervical strain."
@@ -241,7 +241,7 @@ def test_a_second_read_that_disagrees_keeps_the_paragraph(scene) -> None:
 
 def test_a_repeat_whose_exhibit_is_cited_nowhere_else_is_kept(scene) -> None:
     delivered = _entry("Example Clinic", _dx(f"{VISIT} (Exhibit 1 - p. 2)"))
-    added = _entry("Example Clinic East", _dx(f"{VISIT} (Exhibit 2 - p. 1)"))
+    added = _entry("Example Clinic", _dx(f"{VISIT} (Exhibit 2 - p. 1)"))  # its provider line: the keeper's
     sr, rd, log = scene([added], (delivered,), Client([(VISIT, VISIT)]))
     before = (rd / "final-chronology.md").read_bytes()
     assert UR.run(sr) == 0, log
@@ -298,7 +298,7 @@ def test_an_in_entry_pair_that_differs_by_a_negation_stays(scene) -> None:
     sr, rd, log = scene([twice], (), client)
     before = (rd / "final-chronology.md").read_bytes()
     assert UR.run(sr) == 0, log
-    assert (rd / "final-chronology.md").read_bytes() == before and _record(rd)["kept_by"]["polarity"] == 1
+    assert (rd / "final-chronology.md").read_bytes() == before and _record(rd)["kept_by"]["words"] == 1
 
 
 def test_an_in_entry_later_paragraph_is_never_a_keeper(scene) -> None:
@@ -345,13 +345,17 @@ def test_a_resume_pays_for_nothing_answered_and_reads_its_own_input(scene) -> No
     assert again.calls == [] and (rd / "final-chronology.md").read_bytes() == after
 
 
-def test_a_reply_unreadable_twice_holds_with_the_document_unchanged(scene) -> None:
+def test_a_reply_unreadable_twice_keeps_everything_and_is_never_paid_for_again(scene) -> None:
     client = Client([], garbage=True)
     sr, rd, log = _repeat_scene(scene, client)
     before = (rd / "final-chronology.md").read_bytes()
-    assert UR.run(sr) == UR.EXIT_HELD, log
+    assert UR.run(sr) == 0, log
     assert client.calls == ["read", "read"] and (rd / "final-chronology.md").read_bytes() == before
-    assert _record(rd)["held"]
+    assert _record(rd)["reads_unparsed"] == 1 and _record(rd)["dropped"] == 0
+    again = Client([], garbage=True)
+    sr2, _rd, log2 = _repeat_scene(scene, again, fresh=False)
+    assert UR.run(sr2) == 0, log2
+    assert again.calls == []  # the saved retry is the answer: a rerun pays for nothing
 
 
 def test_the_network_is_exit_75(scene) -> None:
@@ -411,3 +415,165 @@ def test_a_conflict_found_by_either_read_keeps_the_paragraph(scene) -> None:
     assert UR.run(sr) == 0, log
     assert (rd / "final-chronology.md").read_bytes() == before
     assert _record(rd)["kept_by"]["conflict_elsewhere"] == 1
+
+
+# ---- the bug review's cases (2026-11-20): both reads say repeats, the CODE keeps --------------
+def _drop_case(scene: Any, keeper: str, para: str, trigger: str, quote: str | None = None) -> tuple[bool, dict]:
+    delivered = _entry("Example Clinic", _dx(f"{keeper} (Exhibit 1 - p. 2)"))
+    added = _entry("Example Clinic East", _dx(f"{para} (Exhibit 2 - p. 1)"), ADDS)
+    sr, rd, log = scene([added], (delivered,), Client([(trigger, quote or keeper)]))
+    assert UR.run(sr) == 0, log
+    (left,) = _added(rd)
+    return para in left, _record(rd)
+
+
+@pytest.mark.parametrize(
+    ("keeper", "para", "trigger"),
+    [
+        ("MRI of the lumbar spine was ordered.", "MRI of the cervical spine was ordered.", "cervical"),
+        ("Patient continues gabapentin nightly.", "Patient discontinues gabapentin nightly.", "discontinues"),
+        ("The knee is tender to palpation.", "The knee is non-tender to palpation.", "non-tender"),
+        ("Gave 5 mg of the drug, three doses.", "Gave 5 mcg of the drug, two doses.", "mcg"),
+        ("Gave 5 mg of the drug daily.", "Gave 5 mcg of the drug daily.", "mcg"),  # the unit alone differs
+    ],
+)
+def test_a_word_the_keeper_does_not_say_keeps_the_paragraph(scene, keeper: str, para: str, trigger: str) -> None:
+    kept, rec = _drop_case(scene, keeper, para, trigger)
+    assert kept and rec["dropped"] == 0 and rec["kept_by"]["words"] == 1, rec
+
+
+def test_a_one_word_quote_is_refused(scene) -> None:
+    para = "Referred to orthopedics and scheduled for surgical repair of the rotator cuff."
+    kept, rec = _drop_case(scene, "Referred to orthopedics.", para, "surgical repair", quote="Referred")
+    assert kept and rec["kept_by"]["quote_short"] == 1, rec
+
+
+def test_a_quote_that_is_only_part_of_a_sentence_is_refused(scene) -> None:
+    keeper = "Referred to orthopedics for the shoulder and to therapy for the knee."
+    kept, rec = _drop_case(
+        scene, keeper, "Referred to orthopedics for the shoulder.", "Referred", "Referred to orthopedics"
+    )
+    assert kept and rec["kept_by"]["quote_not_found"] == 1, rec
+
+
+def test_the_last_two_citations_of_one_exhibit_are_never_both_dropped(scene) -> None:
+    v1, v2 = "Neck pain rated 6 of 10.", "Plan ibuprofen 600 mg as needed."
+    delivered = _entry("Example Clinic", _dx(f"{v1} (Exhibit 1 - p. 2)"), _other(f"{v2} (Exhibit 1 - p. 3)"))
+    a = _entry("Example Clinic East", _dx(f"{v1} (Exhibit 3 - p. 1)"), ADDS)
+    b = _entry(
+        "Example Clinic West Annex", _other(f"{v2} (Exhibit 3 - p. 2)"), _other("Ice was advised. (Exhibit 2 - p. 5)")
+    )
+    sr, rd, log = scene([a, b], (delivered,), Client([(v1, v1), (v2, v2)]))
+    assert UR.run(sr) == 0, log
+    assert 3 in B.cited((rd / "final-chronology.md").read_text(encoding="utf-8"))
+
+
+def test_in_an_entry_a_discharge_result_is_kept_against_the_arrival_result_and_nothing_merges(scene) -> None:
+    p1, p2 = "Glucose 110 mg/dl on arrival.", "Glucose 110 mg/dl at discharge after insulin."
+    e = _entry("Example Clinic", _dx(f"{p1} (Exhibit 2 - p. 1)"), _dx(f"{p2} (Exhibit 3 - p. 1)"))
+    sr, rd, log = scene([e], (), Client([("at discharge", p1)]))
+    before = (rd / "final-chronology.md").read_bytes()
+    assert UR.run(sr) == 0, log
+    assert (rd / "final-chronology.md").read_bytes() == before
+    rec = _record(rd)
+    assert rec["kept_by"]["words"] == 1 and rec["citations_merged"] == 0, rec
+
+
+def test_a_chain_never_removes_the_last_copy_of_a_fact(scene) -> None:
+    c_text = "Shoulder strain; sling given."
+    delivered = _entry("Example Clinic", _dx(f"{c_text} (Exhibit 1 - p. 2)"))
+    b_para = "Shoulder strain; sling given; follow up booked."
+    big = _entry(
+        "Example Clinic East Campus",
+        _dx(f"{b_para} (Exhibit 2 - p. 1)"),
+        ADDS,
+        _other("Long filler text here. (Exhibit 2 - p. 9)"),
+    )
+    a = _entry("Example Clinic North", _dx(f"{b_para} (Exhibit 3 - p. 1)"), _other("Ice advised. (Exhibit 3 - p. 2)"))
+    sr, rd, log = scene([big, a], (delivered,), Client([("follow up booked", b_para), (b_para, c_text)]))
+    assert UR.run(sr) == 0, log
+    assert "follow up booked" in (rd / "final-chronology.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("para", "quote"),
+    [
+        ("No herniation at L4-5.", "Herniation at L4-5."),
+        ("Patient discontinues gabapentin.", "Patient continues gabapentin."),
+        ("Gabapentin was stopped.", "Gabapentin was started."),
+        ("Pain worsened.", "Pain improved."),
+        ("Knee is non-tender.", "Knee is tender."),
+        ("Lungs unremarkable.", "Lungs remarkable for wheeze."),
+        ("Fracture ruled out.", "Fracture confirmed."),
+        ("Afebrile.", "Febrile."),
+        ("Abnormal EKG.", "Normal EKG."),
+        ("Dose was decreasing.", "Dose was increasing."),
+        ("Neither nausea nor vomiting.", "Nausea and vomiting."),
+        ("Two injections given.", "Three injections given."),
+        ("Ratio 1:10.", "Ratio 1:100."),
+        ("Given 5 mcg.", "Given 5 mg."),
+        ("Seen at 10:30.", "Seen at 10:35."),
+        ("MRI of the cervical spine.", "MRI of the lumbar spine."),
+        ("Pain in the left knee.", "Pain in the right knee."),
+        ("Pain in the upper back.", "Pain in the lower back."),
+        ("Prescribed meloxicam.", "Prescribed naproxen."),
+        ("Seen by Dr. Alpha.", "Seen by Dr. Beta."),
+        ("Diagnosed with sprain.", "Diagnosed with fracture."),
+        ("Severe pain.", "Mild pain."),
+        ("Acute injury.", "Chronic injury."),
+        ("Elevated glucose.", "Low glucose."),
+        ("Symptoms resolved.", "Symptoms persist."),
+        ("Pain level 2.5.", "Pain level 2."),
+        ("Seen 03/04/2026.", "Seen March 4, 2026."),
+        ("No left knee pain; right knee pain.", "Left knee pain; no right knee pain."),
+        ("Prescribed gabapentin and referred to surgery.", "Prescribed"),
+        ("Patient denies chest pain.", "Patient reports chest pain."),
+        ("Negative for fracture.", "Positive for fracture."),
+        ("Range 5-10 mg.", "Range 5 mg."),
+        ("5 mg.", "5-10 mg."),
+    ],
+)
+def test_the_code_keeps_every_reviewed_difference(para: str, quote: str) -> None:
+    p = RR.Para("P1", 1, para, para, 0)
+    k = RR.Keeper("K1", RR.DELIVERED, 0, f"{D}\nExample Clinic | Medical Diagnoses\n\n{quote}")
+    assert V.code_legs(p, k, RR.Verdict("repeats", "K1", [quote])), (para, quote)
+
+
+def test_a_quote_differing_in_case_or_absent_is_refused() -> None:
+    p = RR.Para("P1", 1, "Herniation at L4-5.", "Herniation at L4-5.", 0)
+    k = RR.Keeper("K1", RR.DELIVERED, 0, f"{D}\nExample Clinic | Medical Diagnoses\n\nHERNIATION   at l4-5.")
+    assert V.code_legs(p, k, RR.Verdict("repeats", "K1", ["herniation at L4-5."]))
+    assert V.code_legs(p, k, RR.Verdict("repeats", "K1", []))
+
+
+def test_a_whole_entry_is_kept_when_its_provider_is_not_the_keepers(scene) -> None:
+    delivered = _entry("Example Clinic", _dx(f"{VISIT} (Exhibit 1 - p. 2)"))
+    added = _entry("Example Clinic", _dx(f"{VISIT} (Exhibit 2 - p. 1)"), _dx("Ice advised. (Exhibit 2 - p. 2)"))
+    other = _entry("Sample Orthopedics", _dx(f"{VISIT} (Exhibit 2 - p. 3)"))  # every paragraph a repeat
+    sr, rd, log = scene([added, other], (delivered,), Client([(VISIT, VISIT)]))
+    assert UR.run(sr) == 0, log
+    got = _added(rd)
+    assert any(e.startswith(f"{D}\nSample Orthopedics") and VISIT in e for e in got), got
+    assert _record(rd)["kept_by"]["header"] == 1
+
+
+# ---- what must still go ---------------------------------------------------------------------
+def test_a_copy_with_its_sentences_in_another_order_is_dropped(scene) -> None:
+    s1, s2 = "Neck pain rated 6 of 10 at the visit.", "Physical therapy twice weekly was ordered."
+    delivered = _entry("Example Clinic", _dx(f"{s1} {s2} (Exhibit 1 - p. 2)"))
+    added = _entry("Example Clinic East", _dx(f"{s2} {s1} (Exhibit 2 - p. 1)"), ADDS)
+
+    class Both(Client):
+        def _read(self, texts: list[str], within: bool) -> str:
+            paras = _LABELLED.findall(texts[0])
+            out = {lb: {"verdict": "adds"} for lb, _t in paras}
+            out[paras[0][0]] = {"verdict": "repeats", "keeper": "K1", "quotes": [s1, s2]}
+            return json.dumps({"paragraphs": out, "complete": True})
+
+        def _confirm(self, texts: list[str]) -> str:
+            return json.dumps({"states_all": True, "quotes": [s1, s2], "complete": True})
+
+    sr, rd, log = scene([added], (delivered,), Both([]))
+    assert UR.run(sr) == 0, log
+    (left,) = _added(rd)
+    assert s1 not in left and s2 not in left and ADDS in left and _record(rd)["dropped"] == 1

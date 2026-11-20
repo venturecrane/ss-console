@@ -6,14 +6,18 @@ A paragraph of an added entry is dropped only when ALL hold:
 (a) the first read and a second read not shown the first's answer both say
     it repeats, naming the same keeper (the second read is only shown that
     keeper);
-(b) every sentence either read quotes is found, whitespace aside, inside
-    one paragraph of that keeper;
+(b) every sentence either read quotes is a WHOLE sentence (or a run of
+    whole sentences) of one paragraph of that keeper, of at least
+    ``repeat_words.MIN_QUOTE`` tokens;
 (c) every number of the paragraph (``values.numbers``, the one proof 10
     reads: a time of day, a ratio and a year are numbers too) is among the
     first read's quoted sentences' numbers, and every date it writes
     (``final_set.dates_in``) among theirs;
-(d) no word of POLARITY is in the paragraph and not in the quoted sentences,
-    or in them and not in the paragraph;
+(d) every WORD of the paragraph but a short list of function words is among
+    the quoted sentences' words, each sentence of it within one quoted
+    sentence, and a sentence holding a negation equal to one token for token
+    (``repeat_words``: a list of the words that matter let every word it did
+    not name through, 2026-11-20);
 (e) no sentence it is dropped against lies in a paragraph also being
     dropped in this run (keepers are a fixed set, ``repeat_read``; this keeps
     a chain of drops from removing the last copy of a fact);
@@ -32,41 +36,33 @@ document). A paragraph that
 opens a subsection heading the next paragraph shares is kept (the next
 paragraph would lose its heading, and its claim key with it). A subsection
 heading left with nothing under it goes with what was under it. An added
-entry left with no paragraph is removed whole; one left with content but no
-citation keeps its paragraphs, and so does one whose provider line carries a
-number its keepers do not.
+entry left with no paragraph is removed whole only when every word of its
+provider line is in each keeper's provider line; one left with content but
+no citation keeps its paragraphs.
 """
 
 from __future__ import annotations
 
 import hashlib
-import re
 from collections import Counter
 from dataclasses import dataclass, field
 
 from . import body as B
 from .final_set import dates_in, exhibits_uncited, with_entries
 from .repeat_read import DELIVERED, WITHIN, Candidate, Keeper, Para, Verdict
+from .repeat_words import short, tokens, whole_sentence, word_legs
 from .values import numbers
 
-#: The negation, status and side words a repeat must carry on both sides, or
-#: neither (the one place this list lives).
-POLARITY = frozenset(
-    {
-        "no", "not", "never", "without", "none", "absent", "unable", "negative", "positive",
-        "deny", "denies", "denied", "decline", "declined", "refuse", "refused",
-        "discontinue", "discontinued", "stop", "stopped", "hold", "held",
-        "continue", "continued", "resume", "resumed", "start", "started",
-        "increase", "increased", "decrease", "decreased", "left", "right", "bilateral",
-    }
-)  # fmt: skip
 #: Why a paragraph the first read called a repeat was kept, one name per veto leg.
 LEGS = (
     "keeper_unknown",
     "quote_not_found",
     "number",
     "date",
-    "polarity",
+    "quote_short",
+    "words",
+    "sentence",
+    "unit",
     "second_read",
     "conflict_elsewhere",
     "keeper_dropped",
@@ -96,32 +92,25 @@ def drop(cand: Candidate, para: Para, keeper: Keeper, quotes: list[str]) -> Drop
     return Drop(cand, para, keeper, quotes, blocks)
 
 
-def _norm(s: str) -> str:
-    return " ".join(s.split())
-
-
 def blocks_of(keeper: str, quotes: list[str]) -> set[int] | None:
-    """The keeper's paragraphs holding each quote, or None when a quote is in none."""
-    paras = [_norm(b) for b in keeper.split("\n\n")]
+    """The keeper's paragraphs each quote is a whole sentence of, or None when a quote is in none."""
+    paras = keeper.split("\n\n")
     out: set[int] = set()
     for q in quotes:
-        hit = next((i for i, p in enumerate(paras) if _norm(q) in p), None)
+        hit = next((i for i, p in enumerate(paras) if whole_sentence(q, p)), None)
         if hit is None:
             return None
         out.add(hit)
     return out
 
 
-def polar(text: str) -> set[str]:
-    words = re.findall(r"[a-z]+", B.CITE.sub(" ", text).lower().replace("n't", " not"))
-    return {w for w in words if w in POLARITY}
-
-
 def code_legs(para: Para, keeper: Keeper | None, v: Verdict) -> list[str]:
     """The legs (b), (c) and (d) the first read's repeat fails; [] passes."""
     if keeper is None:
         return ["keeper_unknown"]
-    if not v.quotes or blocks_of(keeper.text, v.quotes) is None:
+    if not v.quotes or short(v.quotes):
+        return ["quote_short"]
+    if blocks_of(keeper.text, v.quotes) is None:
         return ["quote_not_found"]
     said = " ".join(v.quotes)
     out = []
@@ -129,14 +118,12 @@ def code_legs(para: Para, keeper: Keeper | None, v: Verdict) -> list[str]:
         out.append("number")
     if dates_in(para.body) - dates_in(said):
         out.append("date")
-    if polar(para.body) != polar(said):
-        out.append("polarity")
-    return out
+    return out + word_legs(para.body, v.quotes)
 
 
 def agrees(keeper: Keeper, states_all: bool, quotes: list[str]) -> bool:
     """Leg (a) and (b) of the second read: it says so and quotes the keeper."""
-    return states_all and bool(quotes) and blocks_of(keeper.text, quotes) is not None
+    return states_all and bool(quotes) and not short(quotes) and blocks_of(keeper.text, quotes) is not None
 
 
 # ---- the removal ------------------------------------------------------------------------
@@ -195,8 +182,8 @@ def _entry_veto(e: str, mine: list[Drop], headings: set[str]) -> str:
         return ""
     if _content(e, headings):
         return "rest_uncited"
-    header = numbers("\n".join(mine[0].cand.entry.split("\n")[1:2]))
-    return "header" if header - numbers(" ".join(d.keeper.text for d in mine)) else ""
+    words = set(tokens(B.provider_of(mine[0].cand.entry)))
+    return "header" if any(words - set(tokens(B.provider_of(d.keeper.text))) for d in mine) else ""
 
 
 def _with_cites(entry: str, adds: dict[int, list[str]]) -> str:

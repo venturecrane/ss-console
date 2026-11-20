@@ -15,9 +15,10 @@ WHY (2026-11-20): ``medchron/update/repeat_read``. The order:
    every call.
 3. FIRST READ of each candidate (several requests when its keepers are long,
    ``repeat_read.KEEPER_CHARS``). An unparsed reply is asked once more;
-   still unparsed, or refused by the API, the candidate is unread and the
-   stage HOLDS (exit 1) with the document untouched. A network failure exits
-   75 and the daemon retries.
+   still unparsed, every paragraph that request asked about is KEPT and
+   counted (the reply is saved, so a rerun never pays for it again). Refused
+   by the API, the candidate is unread and the stage HOLDS (exit 1) with the
+   document untouched. A network failure exits 75 and the daemon retries.
 4. The code legs (``repeat_veto.code_legs``) on every ``repeats``; only a
    paragraph that passes is given the SECOND READ, shown the paragraph and
    its keeper, never the first answer. A second read the API refuses or that
@@ -91,6 +92,7 @@ EXITS = {
     ),
 }
 READ_MAX_TOKENS, CONFIRM_MAX_TOKENS = 8_000, 2_000
+UNPARSED = "unparsed"
 #: The output a projection prices per call (a verdict per paragraph; one small object).
 READ_OUT_EXPECTED, CONFIRM_OUT_EXPECTED = 800, 200
 Ask = tuple[str, str, str, list[dict[str, Any]]]  # (name, kind stem, system, content)
@@ -162,6 +164,7 @@ def _start(sr: StageRun) -> int:
         sr.log(f"repeats read HELD: {len(unread)} request(s) could not be read: {', '.join(unread)}; unchanged")
         return EXIT_HELD
     by_name = {p.name: r for p, r in zip(pl.parts, reads) if isinstance(r, dict)}
+    pl.unparsed = [n for n, r in by_name.items() if not r]  # kept whole, counted in the record
     seen, kept, todo = _first(pl, by_name)
     _check_cost(c, [_confirm_ask(d, sr.cfg) for d in todo], CONFIRM_OUT_EXPECTED)
     confirms = _pool(c, todo, lambda d: _confirm(c, d))
@@ -238,13 +241,17 @@ def _pending(c: Ctx, phase: str) -> int:
 # ---- the calls ------------------------------------------------------------------------
 def _answer(c: Ctx, name: str, stem: str, req: tuple[str, list[dict[str, Any]]], ok: IO.Valid, cap: int) -> Any:
     """A good saved answer for either attempt, else asked (once more when it
-    ran out or does not parse): the text, None (refused or never parsed), or
+    ran out or does not parse): the text, None (refused by the API),
+    UNPARSED (the retry's reply did not parse either: it is saved, so a rerun
+    never pays for it again, and what it was asked about is kept), or
     "pending" under the replay switch. A network failure is raised."""
     system, content = req
     for attempt in (1, 2):
         text = c.ask.peek(name, f"{stem}{attempt}", system, content, ok)
         if text is not None and ok(text):
             return text
+    if c.ask.peek(name, f"{stem}2", system, content, None) is not None:
+        return UNPARSED  # the retry's saved reply is the answer: it never parsed
     for attempt in (1, 2):
         try:
             text, stop = c.ask.ask(name, f"{stem}{attempt}", system, content, ok, max_tokens=cap)
@@ -256,19 +263,23 @@ def _answer(c: Ctx, name: str, stem: str, req: tuple[str, list[dict[str, Any]]],
         if stop != "max_tokens" and ok(text):
             return text
         c.sr.log(f"  {name}: the {stem} reply {'ran out' if stop == 'max_tokens' else 'did not parse'}")
-    return None
+    return UNPARSED
 
 
 def _read(c: Ctx, p: RR.Part) -> dict[str, RR.Verdict] | str | None:
+    """The part's verdicts; {} when its reply never parsed (every paragraph
+    of it is kept); "pending"; None when the API refused it (the stage holds)."""
     labels = [q.label for q in p.cand.paras]
     got = _answer(c, p.name, "read", RR.read_request(p, c.sr.cfg), RR.parses(labels), READ_MAX_TOKENS)
+    if got == UNPARSED:
+        return {}
     return got if got in ("pending", None) else RR.parse_read(got, labels)
 
 
 def _confirm(c: Ctx, d: V.Drop) -> tuple[bool, list[str]] | None:
     name, stem, system, content = _confirm_ask(d, c.sr.cfg)
     got = _answer(c, name, stem, (system, content), RR.confirm_parses, CONFIRM_MAX_TOKENS)
-    return None if got in ("pending", None) else RR.parse_confirm(got)
+    return None if got in ("pending", None, UNPARSED) else RR.parse_confirm(got)
 
 
 # ---- cost -----------------------------------------------------------------------------
@@ -336,6 +347,7 @@ def _record(rd: Path, c: Ctx, pl: RR.Plan, src: str, md: str, done: Any, held: s
         "candidates_with_keepers": len(pl.asked) - pl.within,
         "in_entry_candidates": pl.within,
         "requests": len(pl.parts),
+        "reads_unparsed": len(pl.unparsed),
         "calls": c.ask.calls,
         "in_sha": _sha(src),
         "out_sha": _sha(md),
