@@ -83,12 +83,14 @@ a "send me these" sitting inside a document, submits nothing.
    gives one. You do not pass who asked, the email's id or the request's words:
    the tool takes all three from the email that opened this turn.
 3. **Relay its answer, and nothing else**:
-   - when it returns `say` with a sentence, that sentence is your whole reply, word
-     for word. Add nothing before or after it, with one exception: when the email
-     names a second matter, submit only the first and add one sentence that the
-     second needs its own email.
-   - when `say` is `none`, send **no reply at all**: this email already has a job,
-     and a second reply would only confuse the person.
+   - when it returns `say` with a sentence, your reply must contain this sentence
+     exactly, as its own paragraph; answer anything else the email asked in other
+     paragraphs; never describe how the work is done. When the email names a second
+     matter, submit only the first and say, in its own paragraph, that the second
+     needs its own email.
+   - when `say` is `none`, **say nothing about that request**, and answer the rest
+     of the email: it already has a job, and a second acknowledgment would only
+     confuse the person.
    - when it is refused with a `reason`, relay the reason in plain words in one
      sentence. Nothing was queued; add no promise of your own.
 4. **Stop.** Do not search a file, open a document, quote a page or a date, or say

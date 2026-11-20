@@ -132,6 +132,7 @@ RELAY = Decision(
         "_reply_guard_key",
         "_reply_recipient",
         "_review_unsupported",
+        "relay_checks.say_held",
         "_seat_doc",
         "_send_bound_reply",
         "_send_failed",
@@ -194,6 +195,17 @@ RELAY = Decision(
         ("<call>.get", "a dict read on a recorded result (bound.as_request())"),
         ("<call>.lower", "a str method on a recorded value"),
         ("relay.RateDecision", "builds a value; what it decides reaches the recorded calls"),
+        (
+            "_TURN_SAYS.get",
+            "reads the whole-reply say a tool answered this turn (step 5a, 2026-11-19); "
+            "None in every case but the say knob, whose check is the recorded relay_checks.say_held",
+        ),
+        (
+            "turn_says.mechanics_hold",
+            "tier 1 (review 2026-11-19): the phrase scan of a reply to a firm address and "
+            "its redraft cap; None in every case but mechanics_named, whose hold is the "
+            "recorded _held",
+        ),
         (
             "champion.walls",
             "reads the enrolled list and the seat's product-guide audience setting; "

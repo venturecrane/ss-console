@@ -196,6 +196,7 @@ def run_cli(
     confirm: str | None = None,
     use_digest: bool = False,
     partial: tuple[type[BaseException], ...] = (),
+    applier: Callable[[Any, dict[str, Any]], None] | None = None,
 ) -> int:
     """Plan on the built lane ``d``, print, and (not a dry run) apply. Exit 0
     done or dry run, 2 refused (nothing written). With ``use_digest`` a live
@@ -223,7 +224,7 @@ def run_cli(
         )
         return 2
     try:
-        apply(d, p)
+        (applier or apply)(d, p)
     except partial as exc:
         print(
             f"FAILED PARTWAY: {exc}. Some writes may have landed; dry-run again and confirm to finish.", file=sys.stderr

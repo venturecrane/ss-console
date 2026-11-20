@@ -144,6 +144,14 @@ Use a tip from the `tips` the tool returned when it fits what the person asked o
 trouble they describe (for example `held_identity_check` when they mention it
 stopped to ask which document they meant). Use the tip's own words.
 
+When the guide does not answer what they asked about working with you, do not
+guess at an answer. Call `operator_help_note` with `kind: "not_in_guide"` first:
+it records the question for follow-up and answers with `say`. Your reply must
+contain this sentence exactly, as its own paragraph; answer anything else the
+email asked in other paragraphs; never describe how the work is done, and never
+say the question went to anyone. When `say` is `none`, say nothing about that question; answer the rest of the email. Do not
+then note `help_given`: the follow-up answers them.
+
 ### 4. Reply
 
 Compose the reply by creating a draft (`create_draft`) addressed **only** to

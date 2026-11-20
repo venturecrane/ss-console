@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Optional
 
 from bin.lib import cron_slots
-from bin.lib.work_health import Config, Item, Page, hhmm, item, meta, parse_ts, span, stamped
+from bin.lib.work_health import Config, Item, Page, card_id, hhmm, item, meta, parse_ts, span, stamped
 from bin.lib.work_health_proof import job_holds
 
 _BIN = Path(__file__).resolve().parents[1]
@@ -36,9 +36,11 @@ _BIN = Path(__file__).resolve().parents[1]
 #: DELIVERY_PROOF_FAILED row (overlay ``shared/heartbeat.py`` count_shortfalls),
 #: which ``delivery_proof_items`` reads from the ledger itself, with its job:
 #: one SMD-rejected reply was a proof line AND a "drafting job call failed"
-#: line (triage, 2026-11-04).
+#: line (triage, 2026-11-04). ``reply_could_not:`` is a reply that told the
+#: person the Operator could not do it, which ``could_not_items`` reads from
+#: the ledger itself and keeps listed (2026-11-19).
 _ECHO_CODE_SUFFIXES = ("_job_failed", "_job_held")
-_ECHO_CODE_PREFIXES = ("reply_held:", "proof:")
+_ECHO_CODE_PREFIXES = ("reply_held:", "proof:", "reply_could_not:")
 
 _CLASS_WORDS = {
     "not_allowed": "was refused by a safety rule",
@@ -533,6 +535,67 @@ def answered_after(ledger: Optional[list[dict]], ts: datetime) -> bool:
         if when and when > ts and (action == "REPLY_SENT" or action.endswith("_JOB_DELIVERED")):
             return True
     return False
+
+
+def _is_smd_address(value: object) -> bool:
+    """``shared.heartbeat._is_smd_address``, the one test of SMD's own addresses
+    (its domains live in ``shared.customer_config``), read from the overlay in
+    this repo when the overlay is not installed in this interpreter."""
+    overlay = str(Path(__file__).resolve().parents[2] / "hermes-smd-overlay")
+    if overlay not in sys.path:
+        sys.path.append(overlay)  # appended: an installed overlay still wins
+    from shared.heartbeat import _is_smd_address as test
+
+    return test(value)
+
+
+def could_not_items(
+    seat: str, rows: list[dict], cfg: Config, now: datetime, closed: Optional[set[tuple[str, str]]] = None
+) -> list[Item]:
+    """A firm person's request whose reply told them the Operator could not do
+    it (REPLY_SENT stamped ``could_not``, overlay ``shared/reply_could_not``):
+    SMD owes the answer, so it stays listed until SMD closes its card in
+    ``work-health-closed.yaml`` or it passes the request horizon. A LATER REPLY
+    DOES NOT CLEAR IT (2026-11-19): the could-not reply is itself a reply, and
+    the seat's next answer to anyone says nothing about this person. Work SMD
+    owes after an our-side stop is NOT this line: the broker records it, and
+    ``work_health_owed.smd_owed_items`` lists it (owner's ruling, 2026-11-19)."""
+    first_seen: dict[str, datetime] = {}
+    declined: dict[str, tuple[datetime, str]] = {}
+    for ts, row in stamped(rows):
+        md = meta(row)
+        vid = md.get("vendor_message_id") if row.get("action_type") == "INBOUND_RECEIVED" else None
+        if isinstance(vid, str) and vid and md.get("trust_class") == "internal":
+            first_seen.setdefault(vid, ts)
+        to = md.get("in_reply_to")
+        code = md.get("could_not")
+        if row.get("action_type") == "REPLY_SENT" and isinstance(to, str) and isinstance(code, str) and code:
+            # A reply to SMD's own address is SMD writing in, not a firm
+            # person owed an answer (the heartbeat's own test of the address).
+            if not _is_smd_address(md.get("recipient")):
+                declined.setdefault(to, (ts, code))
+    horizon = now - timedelta(hours=cfg.request_horizon_hours)
+    out: list[Item] = []
+    for vid, (said_at, code) in declined.items():
+        received = first_seen.get(vid)
+        if received is None or received < horizon:
+            continue
+        card = card_id(vid)
+        if closed and (seat, card) in closed:
+            continue
+        out.append(
+            item(
+                seat,
+                "could_not",
+                card,
+                said_at,
+                f"A request received {hhmm(received)} (card {card}) was told at {hhmm(said_at)} that it could not "
+                f"be done ({code}), and SMD owes the answer.",
+                f"Answer the requester in that thread, then close card {card} in "
+                "operator/contracts/work-health-closed.yaml.",
+            )
+        )
+    return out
 
 
 def shortfall_items(

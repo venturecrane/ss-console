@@ -3,6 +3,7 @@
 The graph, per class::
 
     facts -> destination -> pull (privilege wall) -> preflight -> estimate
+      -> [discovery responses: the served sets SMD named, served.py; its stops end the job here]
       -> transcribe -> digest (cited)
       -> [mediation brief: howell table] -> [court classes: caption read, record diff + corrections]
       -> per document (finish.py; one per set a discovery request names):
@@ -74,9 +75,11 @@ from . import (
     repair_guard,
     review as review_mod,
     review_first,
+    served as served_mod,
 )
 from .evidence_lane import CHARGES_LINE, EvidenceLane
 from .placing import Placing
+from .served_plan import DiscoveryPlan
 from .outcome import REASON, DraftingFailed, DraftingHold, Verdict
 
 
@@ -135,7 +138,7 @@ def rules_for_job(run: Any) -> dict[str, Any]:
     return {} if run.job.revise else firm_rules.start(run)
 
 
-class DraftingRun(EvidenceLane, Placing):
+class DraftingRun(EvidenceLane, Placing, DiscoveryPlan):
     def __init__(
         self,
         job_dir: Path,
@@ -441,6 +444,11 @@ class DraftingRun(EvidenceLane, Placing):
             raise DraftingFailed(SHORT) from None
         rv = review_mod.load(self.data) or {}
         proof.update(review="released" if rv.get("released") else "passed", review_model=str(rv.get("model") or ""))
+        rows = self.served_outcomes()
+        if rows is not None:
+            # Every served set, filed or being prepared by us: what the
+            # delivered reply lists (served.py).
+            served_mod.write_outcomes(self.data, rows)
         return Verdict(
             "delivered",
             stage="file",
@@ -448,6 +456,7 @@ class DraftingRun(EvidenceLane, Placing):
             files=[{"name": m["name"], "size": m["bytes"], "role": m.get("role")} for m in manifest],
             proof=proof,
             smd_released=released,
+            served_sets=rows or [],
         )
 
     def _walk(self) -> Verdict:
@@ -476,6 +485,8 @@ class DraftingRun(EvidenceLane, Placing):
             self._place_finish()
             return self._file()
         self._estimate()
+        # A response job's served sets, before anything is paid (served_plan.py).
+        self._plan_before_spend()
         transcribing = not self._is_done("transcribe")
         self._stage(
             "transcribe",
@@ -561,7 +572,19 @@ class DraftingRun(EvidenceLane, Placing):
 
     def _current(self) -> str:
         mid = ("evidence-extract", "evidence-verify", "evidence-images", "index") if self.evidence.ledger else ()
-        head = ("facts", "destination", "pull", "preflight", "transcribe", *mid, "summarize", "howell", "caption")
+        plan = ("plan",) if self.cls in served_mod.PLANNED_CLASSES else ()
+        head = (
+            "facts",
+            "destination",
+            "pull",
+            "preflight",
+            *plan,
+            "transcribe",
+            *mid,
+            "summarize",
+            "howell",
+            "caption",
+        )
         st = self._state()
         skip = {"howell"} if self.cls not in CHARGES_CLASSES else set()
         skip |= {"caption"} if self.cls not in COURT_CLASSES else set()

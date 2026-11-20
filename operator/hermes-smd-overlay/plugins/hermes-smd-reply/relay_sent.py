@@ -21,7 +21,7 @@ import sys
 from types import ModuleType
 from typing import Any
 
-from shared import inbound, matter_file_reply, reply_could_not, request_index
+from shared import inbound, matter_file_reply, reply_could_not, reply_sent, request_index
 
 from . import notice, relay
 
@@ -149,6 +149,9 @@ def audit_sent(
             prepared, origin, session_id=session_id, matter_ref=cited_matter_ref
         )
     request_index.record_reply_opening(origin.message_id, wire[0], sent_message_id=sent_id)
+    # The reply is out: what keys off a SENT reply runs now (shared/reply_sent.py):
+    # the help line's offered mark.
+    reply_sent.notify(origin, sent_id, wire[0])
 
 
 def sent_metadata(

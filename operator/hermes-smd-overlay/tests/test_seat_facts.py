@@ -255,8 +255,9 @@ def test_register_still_wires_pre_llm_call_and_adds_no_hook():
     plugin = load_plugin("hermes-smd-initiation")
     ctx = _RecordingCtx()
     plugin.register(ctx)
-    # pre_tool_call is the omitted-skill read fence (skill_fence.py), not the tool.
-    assert set(ctx.hooks) == {"pre_llm_call", "pre_tool_call"}
+    # pre_tool_call is the omitted-skill read fence (skill_fence.py), not the tool;
+    # post_tool_call records the help line once a draft carries it (2026-11-19).
+    assert set(ctx.hooks) == {"pre_llm_call", "pre_tool_call", "post_tool_call"}
 
 
 def test_tool_description_carries_both_trigger_phrasings_and_the_prohibitions():

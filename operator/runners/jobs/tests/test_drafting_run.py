@@ -30,11 +30,14 @@ def pricing(tmp_path: Path) -> Path:
     return p
 
 
-def _run(tmp_path: Path, pricing: Path, seat, client, **job_kw):
+def _run(tmp_path: Path, pricing: Path, seat, client, request: str | None = None, **job_kw):
     inputs = tmp_path / "inputs"
     if not inputs.is_dir():
         make_inputs(inputs)
     jd = make_job(tmp_path / "job", **job_kw)
+    if request is not None:
+        doc = json.loads((jd / "job.json").read_text())
+        (jd / "job.json").write_text(json.dumps({**doc, "request_text": request}))
     log: list[str] = []
     r = DraftingRun(
         jd,
@@ -182,7 +185,10 @@ def test_a_discovery_set_ends_at_the_signature_and_the_job_appends_the_proof_of_
     from jobs.demand import deliver
 
     seat = seat_with(standard_docs())
-    r, v, _log = _run(tmp_path, pricing, seat, ScriptedClient(draft=DISCOVERY_DRAFT), cls="discovery_set")
+    # The request names its set: a request naming no kind of set now takes the
+    # firm's default sets or stops before spend (test_drafting_served.py).
+    request = "Please draft special interrogatories, set one."
+    r, v, _log = _run(tmp_path, pricing, seat, ScriptedClient(draft=DISCOVERY_DRAFT), request, cls="discovery_set")
     assert v.outcome == "delivered", (v.stage, v.reason)
     path = deliver.out_dir(r.data) / v.files[0]["name"]
     text = [p.text for p in docx.Document(str(path)).paragraphs if p.text.strip()]

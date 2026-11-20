@@ -59,6 +59,10 @@
    ],
    [
     "post_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_tool_call",
     "hermes-smd-peer-memory"
    ],
    [
@@ -489,6 +493,10 @@
    ],
    [
     "post_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_tool_call",
     "hermes-smd-peer-memory"
    ],
    [
@@ -916,6 +924,10 @@
    [
     "post_tool_call",
     "hermes-smd-hook-probe"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-initiation"
    ],
    [
     "post_tool_call",
@@ -1667,6 +1679,10 @@
    ],
    [
     "post_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_tool_call",
     "hermes-smd-peer-memory"
    ],
    [
@@ -2077,6 +2093,10 @@
    ],
    [
     "post_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_tool_call",
     "hermes-smd-peer-memory"
    ],
    [
@@ -2436,6 +2456,10 @@
    [
     "post_tool_call",
     "hermes-smd-hook-probe"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-initiation"
    ],
    [
     "post_tool_call",
@@ -2806,6 +2830,10 @@
    [
     "post_tool_call",
     "hermes-smd-hook-probe"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-initiation"
    ],
    [
     "post_tool_call",

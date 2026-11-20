@@ -23,7 +23,9 @@ argued with: a declaration present without a proven cumulative count over 35
 (``render.decl_decision``, the same rule the attach used) or with a count that
 is not the set's own; a served paper without exactly one proof of service; one
 file carrying two kinds of set; a requested set with no file; pleading paper
-asked for and not delivered. **A model review** with its own adversarial
+asked for and not delivered; a response set whose responses are not 1..N, one
+each, N the served set's count, one document per set the Operator drafts
+(``response_findings``, ``served.py``). **A model review** with its own adversarial
 prompt (not the drafter's, not the auditor's) reads the request, the matter
 record, the record digest and the served discovery papers in the file, the
 documents and the notes, and grades the rest with a citation for every
@@ -310,6 +312,127 @@ def _asked_findings(asked: list[Any], papers: list[Paper]) -> list[Finding]:
     ]
 
 
+#: A served set's request label, as a response restates it (``served.SET_TYPES``).
+_RESPONSE_LABELS = {
+    "special_interrogatories": r"SPECIAL(?:LY\s+PREPARED)?\s+INTERROGATOR(?:Y|IES)",
+    "form_interrogatories": r"FORM\s+INTERROGATOR(?:Y|IES)",
+    "requests_for_production": r"(?:REQUEST\s+FOR\s+PRODUCTION(?:\s+OF\s+DOCUMENTS)?|DEMAND\s+FOR\s+(?:PRODUCTION|INSPECTION))",
+    "requests_for_admission": r"REQUEST\s+FOR\s+ADMISSION",
+}
+_NO = r"\s+NO\.?\s*(\d+(?:\.\d+)?)"
+#: A response HEADING, not a sentence: a line that starts "RESPONSE" and is
+#: either numbered ("RESPONSE TO SPECIAL INTERROGATORY NO. 3:", "Response No.
+#: 3.", "RESPONSE TO ... NO. 12(a):") or exactly "RESPONSE" with optional
+#: closing punctuation. At most ``_HEADING_WORDS`` words; after its number only
+#: a lettered subpart and closing punctuation. "Response to this interrogatory
+#: will be supplemented." is a sentence, never a response.
+_RESPONSE_HEAD = re.compile(
+    r"(?i)^[\W_]*RESPONSE(?:\s+TO\b[^\n.:]{0,80}?)?\s+NO\.?\s*(?P<n>\d+(?:\.\d+)?)\s*(?P<sub>\(\s*[a-z0-9]{1,3}\s*\))?"
+    r"\s*[:.]?[\s*_]*$"
+)
+_RESPONSE_BARE = re.compile(r"(?i)^[\W_]*RESPONSE\s*[:.]?[\s*_]*$")
+_HEADING_WORDS = 12
+
+
+def _heading(ln: str) -> tuple[str, bool] | None:
+    """(number or "", is a subpart) for a response heading line, else None."""
+    if len(ln.split()) > _HEADING_WORDS:
+        return None
+    m = _RESPONSE_HEAD.match(ln)
+    if m:
+        return m.group("n"), bool(m.group("sub"))
+    return ("", False) if _RESPONSE_BARE.match(ln) else None
+
+
+def _scan(text: str, label: str) -> tuple[list[str], list[str], dict[str, str]]:
+    """(restated request numbers, response numbers, restated text by number),
+    in document order. Tolerant of how a firm words its labels, strict on the
+    numbers: a response heading (``_heading``) takes its own number, or the
+    number of the request restated just above it ("RESPONSE:"); a restated
+    request is a line starting with the set's own label and its number, its
+    text the lines up to the next heading. A lettered subpart (12(a)) belongs
+    to its number and is never a second response."""
+    requests: list[str] = []
+    responses: list[str] = []
+    restated: dict[str, list[str]] = {}
+    req = re.compile(rf"(?i)^[\W_]*(?:{label}){_NO}\s*(?:\(\s*[a-z0-9]{{1,3}}\s*\))?\s*[:.]?[\s*_]*")
+    current: str | None = None
+    for ln in text.splitlines():
+        h = _heading(ln)
+        if h is not None:
+            current = None
+            n, sub = h
+            n = n or (requests[-1] if requests else "")
+            if n and not (sub and responses and responses[-1] == n):
+                responses.append(n)
+            continue
+        r = req.match(ln)
+        if r:
+            n = r.group(1)
+            if not (requests and requests[-1] == n):
+                requests.append(n)
+            current = n
+            restated.setdefault(n, []).append(ln[r.end() :])
+            continue
+        if current is not None:
+            restated[current].append(ln)
+    return requests, responses, {k: " ".join(" ".join(v).split()) for k, v in restated.items()}
+
+
+def _sequence_problems(got: list[str], n: int, form: bool, what: str) -> list[str]:
+    """``got`` is 1..n in order, each once (a form set's dotted numbers: n of
+    them, each once, ascending)."""
+    out: list[str] = []
+    dup = sorted({x for x in got if got.count(x) > 1}, key=_num_key)
+    out += [f"two or more {what}s to number {x}" for x in dup]
+    if form:
+        if len(set(got)) != n:
+            out.append(f"{len(set(got))} {what}s, but the served set has {n}")
+        if got != sorted(got, key=_num_key):
+            out.append(f"the {what}s are out of order")
+        return out
+    want = [str(i) for i in range(1, n + 1)]
+    missing = [x for x in want if x not in got]
+    extra = sorted({x for x in got if x not in want}, key=_num_key)
+    out += [f"no {what} to number {x}" for x in missing[:12]]
+    if len(missing) > 12:
+        out.append(f"and {len(missing) - 12} more numbers with no {what}")
+    out += [f"a {what} numbered {x}, past the served set's {n}" for x in extra[:12]]
+    if not dup and not missing and not extra and got != want:
+        out.append(f"the {what}s are out of order")
+    return out
+
+
+def _num_key(x: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in x.split("."))
+
+
+def response_findings(papers: list[Paper], served: Mapping[str, Mapping[str, Any]]) -> list[Finding]:
+    """A response set, in code, before anything is filed: the served requests
+    restated 1..N with no gap and in order (when the document restates them),
+    each restated word for word as served (whitespace aside), exactly one
+    response to each, and N the served set's request count (``served.py``).
+    Each failure is a MUST-FIX: the job holds for SMD. (One document per
+    served set is the plan's own shape, ``served.plan_units``: no check here.)"""
+    out: list[Finding] = []
+    for p in papers:
+        s = served.get(p.key)
+        if s is None:
+            out.append(_f(MUST, "2 the served sets", f"{p.label} answers no served set", p.label))
+            continue
+        label, n, form = _RESPONSE_LABELS[s["set_type"]], int(s["count"]), s["set_type"] == "form_interrogatories"
+        requests, responses, restated = _scan(p.text, label)
+        problems = _sequence_problems(responses, n, form, "response")
+        if requests:
+            problems += _sequence_problems(requests, n, form, "restated request")
+        given = {str(k): " ".join(str(v).split()) for k, v in (s.get("requests") or {}).items()}
+        problems += [
+            f"request {k} is not restated as served" for k, t in restated.items() if k in given and t != given[k]
+        ]
+        out += [_f(MUST, "1 response numbering", f"{p.label}: {x}", p.label) for x in problems]
+    return out
+
+
 def code_findings(
     cls: str,
     papers: list[Paper],
@@ -319,15 +442,20 @@ def code_findings(
     pleading_authored: bool,
     theirs: bool = False,
     notes_md: str = "",
+    served: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[Finding]:
     """What code can settle, graded. ``theirs``: the documents are the
     attorney's own (place.py): what they SAY (a declaration, a defined term) is
-    his and is reported as a NOTE; what the job did to them is graded as ever."""
+    his and is reported as a NOTE; what the job did to them is graded as ever.
+    ``served``: a response job's served sets by unit key (``served.review_map``),
+    whose numbering is checked (``response_findings``)."""
     wants = pleading.wants_pleading(request)
     out: list[Finding] = []
     for p in papers:
         out += _paper_findings(cls, p, wants, pleading_authored, digest, corpus)
     out += _artifact_findings(cls, papers, notes_md)
+    if cls == "discovery_response" and served is not None:
+        out += response_findings(papers, served)
     if theirs:
         for f in out:
             if f.check[:2] in ("1 ", "4 "):

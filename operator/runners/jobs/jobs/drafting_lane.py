@@ -313,6 +313,9 @@ class DraftingLane(Daemon):
         if state == "delivered":
             fields["folder_id"] = str(v.get("folder_id") or "")
             fields["delivery"] = {"files": list(v.get("files") or []), "cents": cents}
+            if v.get("served_sets"):
+                # A response job's served sets, filed or being prepared by us (drafting/served.py).
+                fields["delivery"]["served_sets"] = list(v["served_sets"])
             edit = library_edit_handoff.delivery_note(self.job_dir(job_id) / "data")
             if edit is not None:
                 fields["delivery"]["library_edit"] = edit
@@ -327,6 +330,10 @@ class DraftingLane(Daemon):
             # A held or failed job pages SMD; the firm is told nothing
             # (job_notes, Captain 2026-11-06).
             job_notes.tell(self, job_id, why=f"the job ended {state}")
+        elif v.get("served_sets"):
+            # A response job's sets SMD still owes: paged, and listed by work
+            # health until SMD records each (drafting/deliver_by_smd.py --set).
+            job_notes.tell_owed(self, job_id, v["served_sets"])
         task = self._compose_wake(job_id, state, {**fields, "files": v.get("files") or []}, stage=v.get("stage"))
         self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
         return state

@@ -868,7 +868,8 @@ def on_post_tool_call(**kwargs: Any) -> None:
     transform never fired) or when the call carries no id. See
     :class:`relay.DecidedOnce`.
     """
-    _note_turn_send(kwargs.get("tool_name"), kwargs.get("session_id"))
+    # A send attempt, and a tool whose ``say`` is a required block (step 5a).
+    relay_checks.note_turn(kwargs)
     if (kwargs.get("tool_name") or "") == binding.TOOL_NAME:
         _record_binding(kwargs)
         return
