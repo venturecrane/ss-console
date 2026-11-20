@@ -187,6 +187,8 @@ VERBS: tuple[Verb, ...] = (
     # SMD closes an ops request quietly: the requester was already answered
     # elsewhere, so no letter may follow. Root only (a person on the seat).
     Verb("ops_close_by_smd", _only(ROOT), establish_verbs.establish),
+    # SMD ends a stated rule quietly (rules-by-hand stopgap). Root only.
+    Verb("rule_close_by_smd", _only(ROOT), establish_verbs.establish),
     # Work SMD owes a person (a help question), recorded now.
     Verb("smd_owed_record", _only(AGENT), smd_owed.record_verb),
     # The open owed items, no lookback: the seat's smd_owed runtime read (triage).

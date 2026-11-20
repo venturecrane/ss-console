@@ -26,6 +26,7 @@ _SOCKET_ENV = act_broker.SOCKET_ENV  # the overlay's one home for the name
 _TIMEOUT_SECONDS = 10
 VERB = "smd_owed_record"
 KIND_HELP = "help_question"
+KIND_RULE = "rule_stated"  # rules_by_hand, the stopgap of 2026-11-20
 
 
 def _request(payload: dict[str, Any]) -> dict[str, Any]:
@@ -78,4 +79,4 @@ def open_page(send: Any = None) -> dict[str, Any]:
     }
 
 
-__all__ = ["KIND_HELP", "VERB", "open_page", "record"]
+__all__ = ["KIND_HELP", "KIND_RULE", "VERB", "open_page", "record"]

@@ -280,6 +280,7 @@ from shared import (
     rule_confirm,
     rule_dispatch,
     rule_reach,
+    rules_by_hand,
     send_anchor,
     send_dispatch,
     wording_rules,
@@ -307,7 +308,9 @@ from shared.tool_registration import register_wrapped_tool
 from shared.wording_rules_store import KINDS as WORDING_KINDS
 from shared.wording_rules_store import READERS as WORDING_READERS
 
+from . import nudges
 from . import sweeper as lapse_sweeper
+from .nudges import _CLASS_CHOICE_MAP, _ESTABLISH_NUDGE  # noqa: F401 - tests read the nudge here
 
 logger = logging.getLogger(__name__)
 
@@ -727,22 +730,6 @@ _STAGE_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
-#: The class map in plain words, for the places the model chooses one. Written
-#: as "the kind of output -> the class" rather than "the class -> its
-#: definition", because that is the direction the model reads it in: it has a
-#: sentence from a person and needs a slug, and a glossary ordered the other way
-#: is one it has to search (ss-console#2546 follow-up).
-_CLASS_CHOICE_MAP = (
-    "internal email or a note to firm staff -> staff; a document drafted for the "
-    "firm and filed to a matter -> work_product; an internal record such as a "
-    "chronology row or a ledger line -> record; letters and emails to the firm's "
-    "own clients -> outbound_client; to records vendors, providers or "
-    "lienholders -> outbound_vendor; to opposing counsel, carriers, courts or "
-    "any other outside party -> outbound_external. WHO READS IT decides, never "
-    "what the document is called: 'demand letter', 'letter' and 'email' are not "
-    "classes and a rule attached to one binds to nothing."
-)
-
 #: The reach of a firm rule about the firm's documents (shared/rule_reach.py).
 _DOC_KINDS_HELP = (
     "For a work_product rule: the kinds of document it covers, ONLY the kinds the "
@@ -1062,88 +1049,6 @@ _ADMIN_DOCUMENTS_LINE = (
     "named documents and ask you to establish or update the firm's voice or an "
     f"output's shape from them, read the documents, stage them with {TOOL_STAGE}, "
     f"and run {TOOL_SUBMIT}; your reply must name any demoted rules."
-)
-
-#: THE ONE NUDGE (ss-console#2529). It replaced two — an admin-only line about
-#: documents and a person-only line about preferences — because the split was
-#: not the one the firm experiences. What a person says is either about their
-#: own work or about a kind of the firm's work, and neither of those is "do you
-#: have documents for me". The old pair had no route at all for the ordinary
-#: case: a partner writing one sentence about how letters should read.
-#:
-#: WHY THE READBACK SHAPE IS SPELLED OUT HERE. It is the whole control. The
-#: person is agreeing to a specific sentence, so they have to be shown that
-#: sentence, told what it attaches to, and given something unambiguous to
-#: answer. A readback that paraphrases, or that omits the tag, produces a "yes"
-#: that means something the seat cannot act on.
-#:
-#: AND WHY IT FORBIDS ONE SENTENCE BY NAME. On 2026-08-21 two rehearsal turns
-#: spoken by an Operator admin were both answered "captured and queued for
-#: review, not in effect until a person acts" — which was true of the code and
-#: false of the promise (ADR 0085 §3). Telling a partner their own instruction
-#: needs somebody else's permission is the failure this path exists to end.
-_ESTABLISH_NUDGE = (
-    "When someone tells you how work should read from now on — not just this "
-    "one message — that is a standing rule, and you have a way to make it real. "
-    "Two kinds, and the difference is who the work is for:\n"
-    "- about work produced FOR THEM (their drafts, what you send them, length, "
-    f"tone, what to lead with): {TOOL_PROPOSE} with scope 'person' and subject "
-    "{{person: their exact address}}.\n"
-    "- about how a KIND OF FIRM OUTPUT reads (every client letter, every memo): "
-    f"{TOOL_PROPOSE} with scope 'firm_adjust' and subject {{output_class, "
-    "property}} — 'voice' for how it sounds, 'format' for how it is shaped.\n"
-    "Then reply with, in this order: the rule in one plain sentence; what it "
-    "attaches to, in words the firm would use ('That will attach to every "
-    "letter we send clients, how it sounds.'); the tag the call returned, "
-    "exactly as returned; and 'Reply yes to confirm.' Include the returned "
-    "block word for word — they are agreeing to that sentence, not to your "
-    "summary of it.\n"
-    "Never tell someone their own rule is queued for review, or not in effect "
-    "until a person acts, when they are the person. Say what it will do and ask "
-    "them to confirm. And do not say it IS in effect until you have called "
-    f"{TOOL_STATUS} and seen it installed."
-)
-
-#: Appended when a non-admin states a FIRM rule: it is recorded, it waits, and
-#: the reply names who can release it and the exact words that do it.
-#:
-#: IT NAMES THE ROUTING LIST, NOT ``scope.admins`` (ss-console#2546 follow-up).
-#: Live on the pilot, 2026-08-22: the Operator told a paralegal it had "flagged
-#: it to scott@smd.services and ss-probe-admin" -- the administrators -- while
-#: the request had gone to ``rule_requests_to``, which is a different list by
-#: design (a partner is not paged for every request). The dispatch was right and
-#: the sentence was wrong, which is the worse half: the person is told to chase
-#: an answer from somebody who was never asked, and the two lists diverge
-#: silently because nothing renders both.
-_FOR_ADMIN_LINE = (
-    "This person is not one of the firm's Operator admins, so a rule about the "
-    "firm's own output is recorded and waits for one. Propose it with "
-    "for_admin true, then tell them plainly that it is recorded and that {routed} "
-    "can put it in force by replying 'apply that' on this thread. Do not tell "
-    "them it is in effect."
-)
-
-#: Appended to every attributed turn, because choosing the class is the step
-#: that went wrong silently (ss-console#2546 follow-up): four rules on the pilot
-#: were attached to 'letter' and 'demand_letter', installed into directories
-#: nothing reads, and reported in force. The gate refuses those now, but a gate
-#: the model keeps hitting is a worse instrument than a map it reads first.
-_CLASS_CHOICE_LINE = (
-    "A firm rule attaches to an OUTPUT CLASS, and the class is decided by who "
-    f"reads the output: {_CLASS_CHOICE_MAP} When you propose one, tell the "
-    "person in plain words which kind of output the rule will apply to, so they "
-    "can correct you before it is in force."
-)
-
-#: Appended when the stated rule is about a scheduled routine rather than about
-#: how something reads. Two different things, and confirming both as one is the
-#: over-confirmation card 11 was written against.
-_SCHEDULE_LIMIT_LINE = (
-    "If part of what they asked for is WHEN something runs or WHICH channel it "
-    "arrives on, that is seat configuration and this does not change it: a "
-    "scheduled turn has no sender, so it never sees a personal rule at all. "
-    "Record the shape half, and say plainly which half you could not record and "
-    "that an Operator admin changes it."
 )
 
 _REFUSAL_MESSAGE = (
@@ -2247,7 +2152,14 @@ def _propose(args: dict[str, Any], **kwargs: Any) -> str:
     and renders the readback. This returns the broker's verdict unchanged and
     records the readback against the session, so :func:`_containment_gate`
     can hold the reply to it (critique point 1).
+
+    On a ``rules_by_hand`` seat (stopgap, 2026-11-20) nothing is proposed: the
+    result is one fixed sentence and SMD is owed the rule (``shared.rules_by_hand``).
     """
+    if rules_by_hand.on():
+        return json.dumps(
+            rules_by_hand.propose_answer(kwargs.get("session_id")), ensure_ascii=False
+        )
     reach_on = wording_rules.switched_on()
     stash_key = provenance.resolve_session(kwargs.get("session_id"))
     subject = rule_reach.subject_for_broker(
@@ -2706,6 +2618,13 @@ def _dispatch_outcome_letter(
     request as closed, so what settles it is the overlay's
     ``send_outcome_unknown`` page and the broker's intent row with no result.
     """
+    if not _is_ops_row(row) and rules_by_hand.on():
+        # Stopgap, 2026-11-20: a rule is recorded by hand, and the firm gets no
+        # letter about a rule row. Counted as reported so the sweeper stops.
+        logger.info(
+            "hermes-smd-establishment: rules_by_hand, no letter for %s", row.get("proposal_id")
+        )
+        return True
     if _is_ops_row(row):
         notification = rule_dispatch.notify_ops_outcome(
             kind=kind,
@@ -4881,11 +4800,7 @@ def on_pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
             # told firm-level establishment was unlocked for them -- a promise
             # of authority they do not hold, from a ceremony that grants none.
             lines.append(_PERSON_POSSESSION_CONFIRMED_NOTE.format(sender=str(sender_id)))
-        lines.append(_ESTABLISH_NUDGE)
-        if not is_admin:
-            lines.append(_FOR_ADMIN_LINE.format(routed=_routing_names(cfg)))
-        lines.append(_CLASS_CHOICE_LINE)
-        lines.append(_SCHEDULE_LIMIT_LINE)
+        lines.extend(nudges.turn_nudges(is_admin, lambda: _routing_names(cfg)))
         lines.append(_OPERATIONS_NUDGE)
         # ss-console#2546 (the operations half). BEFORE the confirmation
         # matcher, and the order is the point: a message carrying an [ops XXXX]
@@ -4919,7 +4834,9 @@ def on_pre_llm_call(**kwargs: Any) -> dict[str, str] | None:
             # instruction about THIS message rather than a standing capability
             # note: when the person just answered a readback, what to do about it
             # is the most specific thing the model needs to know this turn.
-            note = _confirmation_note(session_id, sender_id, is_admin, kwargs.get("user_message"))
+            note = rules_by_hand.reply_for(
+                session_id, kwargs.get("user_message"), lambda: _fetch_pending(sender_id, is_admin)
+            ) or _confirmation_note(session_id, sender_id, is_admin, kwargs.get("user_message"))
             if note:
                 lines.append(note)
         pointer = _person_pref_pointer(sender_id)
@@ -5138,6 +5055,10 @@ def _rule_gate(
 ) -> dict[str, Any] | None:
     """Gate ``establish_propose`` and ``establish_pending`` (ss-console#2529).
 
+    On a ``rules_by_hand`` seat (stopgap, 2026-11-20) propose only records what
+    SMD owes, and nothing is listed. A rule's submit is refused there by the
+    confirmation check, because nothing is ever confirmed.
+
     Four conditions, and every one of them refuses rather than repairs, because
     a hook cannot rewrite arguments (docs/hook-surface.md) and an exact-match
     refusal pins the wire value to the attribution just as a stamp would:
@@ -5154,6 +5075,12 @@ def _rule_gate(
     4. **A personal rule's subject is that same person**, and ``for_admin`` is
        an admin-only question to ask.
     """
+    if rules_by_hand.on():
+        return (
+            None
+            if tool_name == TOOL_PROPOSE
+            else {"action": "block", "message": rules_by_hand.NOTHING_NOTE}
+        )
     sender = _normalize_address(entry.get("sender")) if entry else ""
     if not sender:
         return {"action": "block", "message": _PROPOSE_NO_SENDER_MESSAGE}

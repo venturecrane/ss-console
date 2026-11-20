@@ -11,6 +11,7 @@ customer.yaml on every call (ADR 0104).
       library_edit_notice: observe    # or enforce
       status_from_events: observe     # or enforce
       layout_into_library: observe    # or enforce
+      rules_by_hand: observe          # or enforce
 
 WHY THE SWITCH EXISTS. A merge reaches a client seat without a person, in the
 ring before the pilot. Anything that can refuse an act or change what a firm
@@ -85,6 +86,13 @@ STATUS_FROM_EVENTS = "status_from_events"
 #: would apply and writes nothing; the rule is laid onto each document as
 #: before. A value that cannot be read writes nothing.
 LAYOUT_INTO_LIBRARY = "layout_into_library"
+#: A stopgap of 2026-11-20 for one seat: a firm's drafting rule, or a reply about
+#: one, gets one fixed sentence and SMD is owed the rule to record by hand
+#: (``plugins/hermes-smd-establishment``). Nothing about rules is created, listed,
+#: confirmed or read back. Only an exact ``enforce`` turns it on; observe, absent
+#: or unreadable is the behavior before it existed. Removed when rule
+#: confirmation by reply ships.
+RULES_BY_HAND = "rules_by_hand"
 KEYS = (
     PRINTED_SOURCE_CHECK,
     POST_RECORD_DERIVATION,
@@ -95,6 +103,7 @@ KEYS = (
     LIBRARY_EDIT_NOTICE,
     STATUS_FROM_EVENTS,
     LAYOUT_INTO_LIBRARY,
+    RULES_BY_HAND,
 )
 
 #: The same file by either name: the entrypoint exports both, the gateway and
@@ -182,6 +191,7 @@ __all__ = [
     "PATH_ENVS",
     "POST_RECORD_DERIVATION",
     "PRINTED_SOURCE_CHECK",
+    "RULES_BY_HAND",
     "STATUS_FROM_EVENTS",
     "Switch",
     "WORDING_RULES",

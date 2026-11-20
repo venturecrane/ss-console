@@ -55,9 +55,14 @@ CODE = "smd_owed"
 KIND_DRAFTING = "drafting_refused"
 KIND_HELP = "help_question"
 KIND_ADDITION = "drafting_addition"
+#: A firm person stated a drafting rule, or replied about one, on a seat whose
+#: ``logic_in_code.rules_by_hand`` is ``enforce`` (stopgap of 2026-11-20): he was
+#: told "Got it. I'll confirm in this thread once that's in place." and SMD
+#: records the rule by hand.
+KIND_RULE = "rule_stated"
 #: The kinds the agent may record (the drafting kinds are the broker's own).
-AGENT_KINDS = frozenset({KIND_HELP})
-_LANE = {KIND_DRAFTING: "drafting", KIND_ADDITION: "drafting", KIND_HELP: "operator"}
+AGENT_KINDS = frozenset({KIND_HELP, KIND_RULE})
+_LANE = {KIND_DRAFTING: "drafting", KIND_ADDITION: "drafting", KIND_HELP: "operator", KIND_RULE: "operator"}
 DETAIL_MAX = 300
 _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")
 

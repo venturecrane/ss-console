@@ -45,6 +45,7 @@ timer.
 
 from __future__ import annotations
 
+from operator import attrgetter
 from typing import Any
 
 from .broker_context import BrokerContext
@@ -69,6 +70,8 @@ _METHODS: dict[str, str] = {
     # Root only (verbs.py): SMD closes an operations request whose requester
     # was already answered elsewhere, so no sweeper path ever writes to them.
     "ops_close_by_smd": "ops_close_by_smd",
+    # Root only: SMD ends a stated rule quietly (rules-by-hand stopgap, 2026-11-20).
+    "rule_close_by_smd": "_ops.rule_close_by_smd",
 }
 
 VERBS: tuple[str, ...] = tuple(_METHODS)
@@ -81,7 +84,7 @@ def establish(
         raise ValueError("audit ledger not configured on this broker")
     if broker.establishment is None:
         raise ValueError("establishment spool not configured on this broker")
-    method = getattr(broker.establishment, _METHODS[action])
+    method = attrgetter(_METHODS[action])(broker.establishment)
     with broker._establish_lock:
         broker.establishment.sweep()
         return method(request)
