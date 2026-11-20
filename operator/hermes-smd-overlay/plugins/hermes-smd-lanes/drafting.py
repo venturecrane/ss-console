@@ -37,6 +37,11 @@ model relayed mechanics, or promised what the job would do. The sentences:
   nothing is said about this request, the rest of the email is answered, and
   the relay refuses a reply that mentions the request anyway. An email that
   asked only this gets no reply and is listed as unanswered.
+* an addition (``drafting_job_add_to_request``) to a draft whose job has
+  failed or was stopped (owner's ruling, 2026-11-20): the same rule. The
+  revise sentence only when the broker answered ``smd_told: true`` (it
+  recorded the addition as work SMD owes, ``drafting_addition``), else
+  ``none``; never a word that anything broke.
 
 No job id reaches the model from these tools; the id stays in the logs and the
 broker's rows.
@@ -294,10 +299,12 @@ def _say(result: str, resp: dict[str, Any]) -> str:
             "reply in this thread explains. To go ahead with it, please send the full request again."
         )
     if result == "job_ended" and state == "failed":
-        return (
-            f"Received. What you wrote was not added to the {doc}, because that draft has stopped on our side. "
-            "We are looking at it and will reply in this thread."
-        )
+        # Our failure is not the attorney's problem (owner's ruling, 2026-11-20):
+        # the revise acknowledgment, true because the broker recorded the
+        # addition as work SMD owes in the same step; else nothing is said.
+        if resp.get("smd_told") is not True:
+            return SAY_NONE
+        return acknowledgment(str(resp.get("document_class")), number, revising=True)
     if result == "not_requester":
         return (
             f"Received. What you wrote was not added to the {doc}, because changes to a draft in progress come "
@@ -318,6 +325,13 @@ def _added_result(result: str, resp: dict[str, Any]) -> str:
         out["next"] = "drafting_job_submit"
         return json.dumps(out, ensure_ascii=False)
     out["say"] = _say(result, resp)
+    if out["say"] == SAY_NONE:
+        # Nothing is said about this addition; the relay refuses a reply that
+        # mentions the document anyway, and the rest of the email is answered.
+        number = _number(resp.get("matter_number"))
+        out.update(
+            instruction=NONE_INSTRUCTION, forbid=_forbid(str(resp.get("document_class")), number)
+        )
     if result == "job_ended" and resp.get("state") == "failed":
         # The shape the audit plugin records as a shortfall, as the status read's is.
         out.update({"status": "refused", "reason": "drafting_job_failed"})

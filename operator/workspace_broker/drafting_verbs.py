@@ -292,7 +292,7 @@ class DraftingVerbs:
             return self._resume(request)
         if action == "drafting_job_add_to_request":
             return drafting_additions.add_to_request(
-                self._db, self._audit, request, wait=self.add_wait_seconds, now=_iso_utc
+                self._db, self._audit, request, wait=self.add_wait_seconds, now=_iso_utc, owe=self._owe_addition
             )
         raise ValueError(f"unsupported drafting action: {action}")
 
@@ -397,6 +397,19 @@ class DraftingVerbs:
                 "prior_unidentified",
             )
         return {"prior_job_id": prior["id"], "folder_id": prior["folder_id"], "files": files}
+
+    def _owe_addition(self, row: dict[str, Any], request_ref: str, state: str) -> bool:
+        """An addition to a draft whose job had ended: work SMD owes, recorded
+        in the same step (``smd_owed``); the requester is never told of it."""
+        return smd_owed.owe_addition(
+            self._db._db_path,
+            self._audit_append,
+            job_id=str(row["id"]),
+            request_ref=request_ref,
+            document_class=str(row["document_class"]),
+            matter_number=str(row["matter_number"]),
+            state=state,
+        )
 
     def _refused(self, raw: Any, reason: str, code: str, **extra: Any) -> dict[str, Any]:
         """A refusal. An our-side cause is recorded as work SMD owes in this same

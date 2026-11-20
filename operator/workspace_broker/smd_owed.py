@@ -24,9 +24,14 @@ The caller is told whether the record was written (``smd_told``). When it was
 not, the overlay says nothing about that point, and the unanswered request is
 listed as no reply.
 
-Kinds: ``drafting_refused`` (the broker's own, from ``drafting_job_submit``)
-and ``help_question`` (the agent's, through ``smd_owed_record``, keyed on the
-email that asked).
+Kinds: ``drafting_refused`` (the broker's own, from ``drafting_job_submit``),
+``drafting_addition`` (the broker's own, from ``drafting_job_add_to_request``:
+the requester added to a draft whose job had ended failed, so the addition
+could not reach it; he is given the revise acknowledgment and SMD makes the
+change by hand; the ended job is kept as ``{"job_id": ...}`` in
+``envelope_json``, never shown to the firm, and delivering that job closes the
+item) and ``help_question`` (the agent's, through ``smd_owed_record``, keyed on
+the email that asked).
 """
 
 from __future__ import annotations
@@ -49,9 +54,10 @@ AUDIT_TYPE = "DELIVERY_PROOF_FAILED"
 CODE = "smd_owed"
 KIND_DRAFTING = "drafting_refused"
 KIND_HELP = "help_question"
-#: The kinds the agent may record (the drafting kind is the broker's own).
+KIND_ADDITION = "drafting_addition"
+#: The kinds the agent may record (the drafting kinds are the broker's own).
 AGENT_KINDS = frozenset({KIND_HELP})
-_LANE = {KIND_DRAFTING: "drafting", KIND_HELP: "operator"}
+_LANE = {KIND_DRAFTING: "drafting", KIND_ADDITION: "drafting", KIND_HELP: "operator"}
 DETAIL_MAX = 300
 _MESSAGE_ID = re.compile(r"^<?[^\s<>]{3,500}@[^\s<>]{1,250}>?$")
 
@@ -175,6 +181,54 @@ def owe_drafting(db_path: str | None, append: Callable[[dict[str, Any]], Any] | 
     )
 
 
+def owe_addition(
+    db_path: str | None,
+    append: Callable[[dict[str, Any]], Any] | None,
+    *,
+    job_id: str,
+    request_ref: str,
+    document_class: str,
+    matter_number: str,
+    state: str,
+) -> bool:
+    """Record an addition that could not reach its draft (the job had ended
+    ``state``), naming the job for SMD. The same email to the same job is one
+    item: a repeat answers True while that item is open. Never raises."""
+    ref = _text(request_ref, 600)
+    klass, number = _text(document_class), _text(matter_number)
+    if db_path and ref and _open_addition(db_path, ref, job_id):
+        return True
+    detail = (
+        f"addition to the {klass or 'document'} for matter {number or '(none named)'}; job {job_id} had ended {state}"
+    )
+    return record(
+        db_path,
+        append,
+        KIND_ADDITION,
+        ref,
+        detail,
+        document_class=klass,
+        matter_number=number,
+        envelope={"job_id": job_id},
+    )
+
+
+def _open_addition(db_path: str, ref: str, job_id: str) -> bool:
+    try:
+        conn = _connect(db_path)
+        try:
+            rows = conn.execute(
+                "SELECT envelope_json FROM smd_owed WHERE kind=? AND request_ref=? AND closed_at IS NULL",
+                (KIND_ADDITION, ref),
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        logger.exception("smd_owed: the open addition items could not be read")
+        return False  # recorded again rather than lost
+    return any(_ended_job(r[0]) == job_id for r in rows)
+
+
 def first_invalid(db_path: str | None, request_ref: str) -> bool:
     """True the first time this email's envelope fails validation (the model
     corrects its own call; nothing is owed yet). Never raises: unreadable is
@@ -215,12 +269,13 @@ def close_for_job(db_path: str | None, request_ref: str, document_class: str, ma
         try:
             with conn:
                 return conn.execute(
-                    "UPDATE smd_owed SET closed_at=?, closed_why=? WHERE kind=? AND request_ref=? "
+                    "UPDATE smd_owed SET closed_at=?, closed_why=? WHERE kind IN (?, ?) AND request_ref=? "
                     "AND document_class=? AND matter_number=? AND closed_at IS NULL",
                     (
                         _iso_utc(),
                         f"job {job_id} accepted for the same request",
                         KIND_DRAFTING,
+                        KIND_ADDITION,
                         request_ref,
                         document_class,
                         matter_number,
@@ -244,6 +299,8 @@ def open_items(db_path: str) -> dict[str, Any]:
             r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='drafting_jobs'")
         }
         owed = conn.execute(_OPEN_SQL if jobs else _OPEN_SQL_NO_JOBS).fetchall()
+        if jobs:
+            owed = _without_delivered_additions(conn, owed)
         delivered = (
             conn.execute(
                 "SELECT id, state, matter_number, request_ref, delivery_json FROM drafting_jobs "
@@ -255,6 +312,29 @@ def open_items(db_path: str) -> dict[str, Any]:
     finally:
         conn.close()
     return {"owed": [dict(r) for r in owed], "owed_jobs": [_job(r) for r in delivered if _owes_a_set(r)]}
+
+
+def _without_delivered_additions(conn: sqlite3.Connection, owed: list[sqlite3.Row]) -> list[sqlite3.Row]:
+    """An addition item whose ended job has since been delivered (by hand,
+    ``deliver_by_smd``) is answered: dropped from the open read."""
+    ended = {
+        r[0]: r[1]
+        for r in conn.execute(
+            "SELECT id, envelope_json FROM smd_owed WHERE kind=? AND closed_at IS NULL", (KIND_ADDITION,)
+        )
+    }
+    if not ended:
+        return owed
+    delivered = {r[0] for r in conn.execute("SELECT id FROM drafting_jobs WHERE state='delivered'")}
+    return [r for r in owed if not (r["kind"] == KIND_ADDITION and _ended_job(ended.get(r["id"])) in delivered)]
+
+
+def _ended_job(envelope_json: Any) -> str:
+    try:
+        found = json.loads(envelope_json or "{}")
+    except ValueError:
+        return ""  # unreadable: never taken as delivered, so it stays listed
+    return str(found.get("job_id") or "") if isinstance(found, dict) else ""
 
 
 def _job(row: sqlite3.Row) -> dict[str, Any]:
