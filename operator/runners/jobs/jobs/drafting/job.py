@@ -63,6 +63,8 @@ class DraftingJob:
     #: from its release record (``drafting_lane.RELEASES``); None when the lane
     #: did not stamp it, which counts as none released.
     ledger_releases: int | None = None
+    #: Form interrogatory sets SMD has released for this firm (``forms/lane_hook``), counted the same way.
+    form_releases: int | None = None
     #: Revise mode (``drafting/revise``): the prior delivered job and its filed
     #: files by id, as the BROKER resolved them from its delivery proof. None
     #: for a fresh draft.
@@ -124,6 +126,7 @@ def parse(data: Any, job_dir: Path) -> DraftingJob:
         allowance_remaining=remaining if isinstance(remaining, int) and not isinstance(remaining, bool) else None,
         attachments=_attachments(data.get("attachments")),
         ledger_releases=_count(data.get("ledger_releases")),
+        form_releases=_count(data.get("form_releases")),
         revise=_revise(data.get("revise")),
     )
 

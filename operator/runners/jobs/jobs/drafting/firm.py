@@ -78,6 +78,7 @@ from ..firm_config import FirmConfigError, FirmFile
 
 from . import attorneys as attorneys_mod, citations, evidence_config, opening_demand, page_limits
 from . import sets as sets_mod
+from .forms import policy as form_policy
 from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
@@ -295,7 +296,15 @@ def _shape(data: Any) -> list[str]:
         for s in data
         if s not in SCHEMA
         and s not in OPTIONAL
-        and s not in (attorneys_mod.KEY, evidence_config.KEY, verify_config.KEY, citations.KEY, opening_demand.KEY)
+        and s
+        not in (
+            attorneys_mod.KEY,
+            evidence_config.KEY,
+            verify_config.KEY,
+            citations.KEY,
+            opening_demand.KEY,
+            form_policy.KEY,
+        )
         and s != sets_mod.DEFAULTS_KEY
     ]
     if sets_mod.DEFAULTS_KEY in data:
@@ -431,7 +440,7 @@ def referenced_paths(data: dict[str, Any]) -> list[tuple[str, str]]:
         refs += [(f"classes.{cls}.exemplars[{i}]", v) for i, v in enumerate(entry["exemplars"])]
     bases = data["format"].get("firm_bases") or {}
     refs += [(f"format.firm_bases.{c}", b["path"]) for c, b in bases.items()]
-    return refs + evidence_config.referenced_paths(data)
+    return refs + evidence_config.referenced_paths(data) + form_policy.referenced_paths(data)
 
 
 def _format(fmt: dict[str, Any]) -> list[str]:
@@ -527,7 +536,7 @@ def _store_pins(data: dict[str, Any]) -> list[str]:
 
 def validate(data: Any) -> list[str]:
     """Every problem as ``section.key: message``; empty means valid."""
-    return _shape(data) or _semantics(data) or _store_pins(data)
+    return (_shape(data) + form_policy.validate_in(data)) or _semantics(data) or _store_pins(data)
 
 
 @dataclass(frozen=True)

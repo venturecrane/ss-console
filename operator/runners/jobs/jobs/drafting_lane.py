@@ -81,20 +81,24 @@ DEMAND_BUSY_RETRY_SECONDS = 30.0
 #: one JSON line per filed release, under the run dir (never wiped with a job):
 #: the count ``evidence.review_first`` is read against, stamped into job.json.
 RELEASES = "drafting-ledger-releases.jsonl"
+#: A released form interrogatory set's line names its class (``drafting/forms/lane_hook.FORM_SET``).
+FORM_RELEASES = "form_interrogatories"
 
 
-def releases(run_dir: Path) -> list[str]:
-    """The job ids of every released ledger brief that filed, once each."""
+def releases(run_dir: Path, cls: str = "") -> list[str]:
+    """The job ids of every released held job of ``cls`` that filed, once each:
+    ``""`` a ledger brief (a line with no class), else the set type it names."""
     p = Path(run_dir) / RELEASES
     if not p.is_file():
         return []
     out: list[str] = []
     for ln in p.read_text(encoding="utf-8").splitlines():
         try:
-            jid = str(json.loads(ln).get("job_id") or "")
-        except ValueError:
+            row = json.loads(ln)
+            jid, kind = str(row.get("job_id") or ""), str(row.get("class") or "")
+        except (ValueError, AttributeError):
             continue
-        if jid and jid not in out:
+        if jid and kind == cls and jid not in out:
             out.append(jid)
     return out
 
@@ -171,6 +175,9 @@ class DraftingLane(Daemon):
             "allowance_remaining": remaining,
             "ledger_releases": len(releases(self.run_dir)),
         }
+        forms = len(releases(self.run_dir, FORM_RELEASES))
+        if forms:  # absent counts as none released (``drafting/job.py``); a seat with none writes what it always did
+            doc["form_releases"] = forms
         (jd / "data").mkdir(exist_ok=True)
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
         self._chown_child(jd)
@@ -306,10 +313,12 @@ class DraftingLane(Daemon):
             logger.error("drafting job %s left a caption correction not fully put back", job_id)
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
-        if state == "delivered" and v.get("smd_released") and job_id not in releases(self.run_dir):
-            # A held ledger brief SMD released has filed: it counts toward review_first.
+        kind = str(v.get("smd_released_class") or "")
+        if state == "delivered" and v.get("smd_released") and job_id not in releases(self.run_dir, kind):
+            # A held job SMD released has filed: it counts toward its class's review_first.
+            row = {"job_id": job_id, "at": self.clock(), **({"class": kind} if kind else {})}
             with (Path(self.run_dir) / RELEASES).open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps({"job_id": job_id, "at": self.clock()}) + "\n")
+                fh.write(json.dumps(row) + "\n")
         if state == "delivered":
             fields["folder_id"] = str(v.get("folder_id") or "")
             fields["delivery"] = {"files": list(v.get("files") or []), "cents": cents}

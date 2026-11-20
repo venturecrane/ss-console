@@ -165,6 +165,10 @@ DRAFTING_NEXT = {
     "served_invalid": "fix the served sets (jobs.drafting.served write), then resume",
     "served_other_set": "record that set as type other, drafted by smd, then resume",
     "party_unknown": "name the parties in parties.json, then resume, or draft by hand",
+    "form_incomplete": "the served form lacks a page: find the whole form, or draft the set by hand",
+    "form_unconfirmed": "confirm the checked boxes (form-read.json; jobs.drafting.served write), then resume",
+    "policy_missing": "author the firm's form_responses policy in drafting-firm.yaml, then resume",
+    "rule_unplaced": "place the wording rule in form_responses.rules (apply or not), then resume",
 }
 
 

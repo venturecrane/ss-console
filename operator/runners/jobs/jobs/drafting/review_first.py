@@ -42,7 +42,14 @@ def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def gate(review_first: int, released: int | None, job_dir: Path, data: Path, manifest: list[dict[str, Any]]) -> bool:
+def gate(
+    review_first: int,
+    released: int | None,
+    job_dir: Path,
+    data: Path,
+    manifest: list[dict[str, Any]],
+    what: str = "evidence-path brief",
+) -> bool:
     """True when this filing is an SMD release (the caller marks its verdict);
     False when no hold applies. Raises ``held_for_smd`` to stop before upload,
     or when a released job's files are not the bytes that were held."""
@@ -60,7 +67,7 @@ def gate(review_first: int, released: int | None, job_dir: Path, data: Path, man
         (data / f".{HELD}.tmp").write_text(json.dumps(body, indent=1), encoding="utf-8")
         (data / f".{HELD}.tmp").replace(held)
     raise DraftingFailed(
-        f"held_for_smd: review_first: SMD reads this evidence-path brief before it files ({released or 0} of "
+        f"held_for_smd: review_first: SMD reads this {what} before it files ({released or 0} of "
         f"{review_first} released so far); nothing was filed and no reply was sent"
     )
 

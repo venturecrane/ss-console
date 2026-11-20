@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from . import parties, sets
+from .forms import lane_hook
 from .outcome import DraftingFailed
 from .served import PLAN_STOPS, PLANNED_CLASSES, frozen, has_plan, outcomes, plan_units, review_map, stop_note
 
@@ -47,10 +48,11 @@ class DiscoveryPlan:
             return
         try:
             self._stage("plan", self.units)
+            lane_hook.before_spend(self)  # a served form set's policy, rules and boxes (forms/lane_hook.py)
         except DraftingFailed as exc:
             code = str(exc).split(":", 1)[0]
-            if code in PLAN_STOPS:
-                stop_note(self.job.job_dir, self.data, str(exc), served_shape=True)
+            if code in PLAN_STOPS or code in lane_hook.STOPS:
+                stop_note(self.job.job_dir, self.data, str(exc), served_shape=code not in lane_hook.POLICY_STOPS)
             raise
 
     def _freeze_plan(self, plan: list[dict[str, Any]]) -> None:
