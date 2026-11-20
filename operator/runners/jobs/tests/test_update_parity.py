@@ -112,6 +112,7 @@ def test_a_new_diagnosis_code_is_audited_as_a_claim_cited_to_its_page() -> None:
         [new],
         B.table_rows(B.sections(K.base_md())["## Diagnostic Highlights"]),
         lambda code, on, text: (code, "Other cervical disc displacement", "table"),
+        lambda ex, page: {(2, 2): "Assessment: M50.20 cervical disc displacement"}.get((ex, page)),
     )
     assert lines == ["Diagnosis code M50.20 recorded on 02/10/2026. (Exhibit 2 - p. 2)"]
     nex = [{"exhibit": 2, "title": "Exhibit 2 - Example Imaging (Medical Records)", "pages": 2}]

@@ -33,7 +33,8 @@ NEW_PAGES = [
     "Example Imaging. Cervical radiographs dated 11/03/2025 showed straightening of the lordosis at 11:40 in the "
     "morning. No fracture was seen and the alignment was otherwise normal on the lateral and oblique views.",
     "Example Imaging. MRI of the cervical spine dated 02/10/2026 showed a disc protrusion measuring 3 mm at the "
-    "fifth and sixth level without cord compression. Impression was mild degenerative change at that level.",
+    "fifth and sixth level without cord compression. Impression was mild degenerative change at that level. "
+    "Diagnosis: M50.20.",
 ]
 NEW_TITLE = "Exhibit 2 - Example Imaging records (Medical Records).pdf"
 MAP = (

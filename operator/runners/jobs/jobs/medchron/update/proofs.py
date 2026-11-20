@@ -115,6 +115,34 @@ def cited_sentences(lines: list[str]) -> list[str]:
     return out
 
 
+def drop_restated(text: str, entries: list[str]) -> tuple[str, int]:
+    """`text` without each cited sentence (as ``cited_sentences`` cuts them,
+    the comparison proof 7 makes) that is exactly one an added entry already
+    carries, and how many went. A line keeping every sentence is unchanged;
+    a line left with nothing is dropped (2026-11-20: the added prior history
+    restated a new dated entry's sentence word for word, and proof 7 failed
+    the update after every paid stage)."""
+    carried = set(cited_sentences([ln for e in entries for ln in e.splitlines()]))
+    out, n = [], 0
+    for ln in text.split("\n"):
+        prev, kept, gone = 0, [], 0
+        for m in CITED.finditer(ln):
+            seg = ln[prev : m.end()].strip()
+            if len(seg) > len(m.group(0)) and seg in carried:
+                gone += 1
+            else:
+                kept.append(seg)
+            prev = m.end()
+        if not gone:
+            out.append(ln)
+            continue
+        n += gone
+        rest = " ".join([*kept, ln[prev:].strip()]).strip()
+        if rest:
+            out.append(rest)
+    return "\n".join(out), n
+
+
 def dropped_values(
     composed: list[str],
     updated_entries: list[str],

@@ -7,7 +7,8 @@ code that had lost its letter. Now:
 
 * `claims` (at collect) turns each code a kept new entry records first into a
   CLAIM, "Diagnosis code <code> recorded on MM/DD/YYYY. (Exhibit N - p. P)",
-  cited to the page of the entry that records it, and the claim goes into the
+  cited to the page of the entry that records it whose text layer prints the
+  code (a code no cited page prints is logged, never claimed), and the claim goes into the
   AUDIT document like every other new sentence. The code is the one
   ``icd_tables.resolve`` reads for the record's date.
 * `rows` (at assemble) builds a table row ONLY from a claim the audit kept, in
@@ -21,6 +22,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
+from ..audit import claims as CL
 from . import body as B
 
 ICD_SHAPE = re.compile(r"[A-Z]\d{2}(\.[0-9A-Z]{1,4}|[0-9A-Z]{0,4})|\d{3}(\.\d{1,2})?|[VE]\d{2,3}(\.\d)?")
@@ -31,6 +33,9 @@ NOT_LEGIBLE = "code as recorded not legible"
 HEAD = "| ICD Code | Description | First Diagnosed | Reference |"
 #: (code, record date ISO, entry text) -> (code shown, description or None, how)
 Resolve = Callable[[str, str, str], tuple[str, str | None, str]]
+#: (final exhibit, page) -> that page's own text layer, or None (a picture page, or not on file)
+PageText = Callable[[int, int], str | None]
+NOT_LOCATED = "no page the entry cites prints the code in its dotted form in its text layer"
 
 
 def index_codes(index_rows: list[str], kept_dates: set[str]) -> dict[str, tuple[str, str, str]]:
@@ -69,10 +74,38 @@ def _toks(s: str) -> set[str]:
     return set(re.findall(r"[a-z]{4,}", (s or "").lower()))
 
 
+def dotted(code: str) -> str | None:
+    """The code as a page prints it with its dot ("M50.20"), or None for a
+    bare three-character code, which no lookup matches (too short to place)."""
+    c = (code or "").strip().upper()
+    if "." in c:
+        return c
+    return f"{c[:3]}.{c[3:]}" if len(c) > 3 else None
+
+
+def holding_page(entry: str, codes: list[str], page_text: PageText) -> tuple[int, int] | None:
+    """The first page, in the entry's citation order, whose text layer prints
+    one of `codes` in its dotted form; None when no cited page does."""
+    forms = [d for d in dict.fromkeys(dotted(c) for c in codes) if d]
+    if not forms:
+        return None
+    rx = re.compile(r"(?<![0-9A-Za-z.])(?:" + "|".join(re.escape(f) for f in forms) + r")(?![0-9A-Za-z])")
+    for m in B.CITE.finditer(entry):
+        for p in CL.parse_pages(m.group(2)):
+            if rx.search(page_text(int(m.group(1)), p) or ""):
+                return int(m.group(1)), p
+    return None
+
+
 def claims(
-    index_rows: list[str], entries: list[str], base_rows: list[str], resolve: Resolve
+    index_rows: list[str], entries: list[str], base_rows: list[str], resolve: Resolve, page_text: PageText
 ) -> tuple[list[str], list[dict[str, Any]]]:
-    """(claim lines for the audit document, a log row per code)."""
+    """(claim lines for the audit document, a log row per code). A claim is
+    cited to the page whose TEXT LAYER prints the code (`page_text`: None for
+    a picture page), never to the entry's first citation: 2026-11-20 a code
+    on an entry's second cited page was cited to its first, graded
+    unsupported and dropped, so the firm's table lost the row. No cited page
+    holds it: no claim, and the log says so."""
     have = delivered_firsts(base_rows)
     out: list[str] = []
     log: list[dict[str, Any]] = []
@@ -84,11 +117,15 @@ def claims(
         k = shown.replace(".", "")
         if k in have and have[k][0] <= first:
             continue
-        cite = B.CITE.search(best)
-        if not cite:
+        if not B.CITE.search(best):
             log.append({"code": code, "first": first, "skipped": "no entry of that date carries a citation"})
             continue
-        out.append(f"Diagnosis code {shown} recorded on {first[5:7]}/{first[8:10]}/{first[:4]}. {cite.group(0)}")
+        at = holding_page(best, [code, shown], page_text)
+        if at is None:
+            log.append({"code": code, "first": first, "skipped": NOT_LOCATED})
+            continue
+        cite = f"(Exhibit {at[0]} - p. {at[1]})"
+        out.append(f"Diagnosis code {shown} recorded on {first[5:7]}/{first[8:10]}/{first[:4]}. {cite}")
         log.append({"code": code, "shown": shown, "first": first, "how": how, "described": desc is not None})
     return out, log
 

@@ -301,5 +301,15 @@ def test_the_update_holds_with_the_named_reason_and_reads_nothing(
     o = _driver(job_dir, firm_config_path, pricing_path, seat, model).run()[0]
     assert o.outcome == "held" and o.stage == "update_billing_docs", o
     assert o.reason == BP.UNKNOWN_REASON
-    assert not any(c.get("billing") for c in model.calls)
+    # The hold comes before any paid stage (2026-11-20: it came after every
+    # one): no model call at all, no row in the usage ledger, no vision or map.
+    assert model.calls == []
+    ledger = data_root / "example-matter" / "runs" / "alpha" / "usage-ledger.jsonl"
+    assert not ledger.is_file() or not ledger.read_text().strip()
+    from jobs.medchron.state import RunState
+
+    st = RunState.load_or_new(
+        data_root / "example-matter" / "runs" / "alpha" / "state.json", slug="example-matter", unit="alpha"
+    )
+    assert all(st.stages[n].status == "pending" for n in ("vision", "map", "update_summary") if n in st.stages)
     assert not {"og", "sh", "lg", "bs"} & {i for batch in seat.mints for i in batch}
