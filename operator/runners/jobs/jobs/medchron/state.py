@@ -64,6 +64,8 @@ class RunState:
     outcome: str | None = None  # one of TERMINAL_OUTCOMES when the run ends
     outcome_reason: str | None = None
     stages: dict[str, StageRecord] = field(default_factory=dict)
+    #: {at, computed_at, basis, minutes}: written once after extract (``eta.stamp``); SMD's, never the firm's.
+    expected_finish: dict[str, Any] | None = None
 
     # ---- persistence ------------------------------------------------------
     @classmethod
@@ -78,6 +80,7 @@ class RunState:
             st.outcome = data.get("outcome")
             st.outcome_reason = data.get("outcome_reason")
             st.stages = {k: StageRecord.from_dict(v) for k, v in (data.get("stages") or {}).items()}
+            st.expected_finish = data.get("expected_finish")
             return st
         return cls(path=path, slug=slug, unit=unit)
 
@@ -93,6 +96,7 @@ class RunState:
             "outcome": self.outcome,
             "outcome_reason": self.outcome_reason,
             "stages": {k: v.to_dict() for k, v in self.stages.items()},
+            "expected_finish": self.expected_finish,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".json.tmp")

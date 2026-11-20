@@ -403,12 +403,12 @@ class Driver:
                 out = self._decide(stage, unit, st, notes)
             else:
                 out = self._execute(stage, ctx, st, extracted, notes)
+                projection.expected_finish(self, st, extracted)
             if stage.scope == "slug" and out is None:
                 slug_done.add(stage.name)
             if out is not None:
                 return rehearsal.summary(self, ctx, out) if self.rehearse else out
-            if self.rehearse:
-                notes.append(f"rehearse {stage.name}: ok")
+            notes += [f"rehearse {stage.name}: ok"] if self.rehearse else []
         pages = self._pages(unit, extracted)
         notes += update_charged.cap_notes(self.slug_dir, unit.unit) if update else []
         if self.dry_run or self.rehearse:

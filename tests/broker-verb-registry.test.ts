@@ -190,6 +190,9 @@ const EXPECTED_VERBS = [
   // 2026-10-29: keeps the units of a job submitted before the broker kept
   // them, read from the job dir on the seat. Root only, no agent tool.
   'medchron_units_backfill',
+  // 2026-11-19: an update's new documents, the listing minus the coverage
+  // record, computed in code. Read-only; gateway, agent or root.
+  'medchron_update_files',
   // The relay's working draft, deleted once its reply is out (msgraph_drafts.py).
   'msgraph_discard_draft',
   'msgraph_reply',

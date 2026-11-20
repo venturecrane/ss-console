@@ -31,6 +31,13 @@ ADDED_COLUMNS = (
     # could go out twice. NULL on an older row reads "not yet replied".
     ("reply_sent_at", "ALTER TABLE medchron_jobs ADD COLUMN reply_sent_at TEXT"),
     ("reply_key", "ALTER TABLE medchron_jobs ADD COLUMN reply_key TEXT"),
+    # 2026-11-19 (``medchron_progress``): the job's kind (run or update), kept
+    # at submit, and the stage the runner last reported with the finish time
+    # it expects. NULL on an older row: no kind (the person duplicate rule
+    # then leaves it to the work-digest rule), no stage reported yet.
+    ("kind", "ALTER TABLE medchron_jobs ADD COLUMN kind TEXT"),
+    ("stage", "ALTER TABLE medchron_jobs ADD COLUMN stage TEXT"),
+    ("expected_finish", "ALTER TABLE medchron_jobs ADD COLUMN expected_finish TEXT"),
 )
 
 

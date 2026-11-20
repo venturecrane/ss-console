@@ -97,6 +97,10 @@ FIXED_EVENTS = (
     "expiry",
     "resubmit_while_running",
     "queue_behind_same_lane",
+    # 2026-11-19 (``workspace_broker/medchron_progress.py``): the same person
+    # asked again in other words and spelling, and another client on the matter.
+    "resubmit_same_person",
+    "second_client_same_matter",
     # The broker answers the ending's record internal_error once, then takes it.
     "broker_errors_once",
     # The bounds (2026-11-17, the reviews of #4110): each ends with the job dir wiped.
@@ -556,8 +560,45 @@ def _act(life: Life, jid: str, event: str) -> Callable[[], Any] | None:
         "expiry": lambda: _expire(life),
         "resubmit_while_running": lambda: _resubmit(life, jid),
         "queue_behind_same_lane": lambda: life.acts.append(("second_job", life.submit("2026-PI-205", "m-2"))),
+        "resubmit_same_person": lambda: _resubmit_person(life, jid),
+        "second_client_same_matter": lambda: _second_client(life, jid),
     }
     return acts.get(event)
+
+
+def _kept_units(life: Life, jid: str) -> None:
+    """The units the submit verb keeps (``medchron_identity.remember``):
+    ``Life.submit`` writes the row straight to the ledger, which skips it."""
+    from workspace_broker import medchron_identity
+
+    medchron_identity.remember(life.run.broker.medchron._db, jid, _envelope("2026-PI-102", "m-1"))
+
+
+def _resubmit_person(life: Life, jid: str) -> None:
+    """The same person, spelled another way and asked with other words, through
+    the real submit verb: refused naming the live job while it is active."""
+    _kept_units(life, jid)
+    env = _envelope("2026-PI-102", "m-1")
+    env["units"] = [{**env["units"][0], "client_name": "Alpha  B. Example", "surname": "EXAMPLE"}]
+    env["injuries"] = "neck and back, as asked again"
+    reply = life.client()._request({"action": "medchron_job_submit", "envelope": env})
+    if not reply.get("accepted") and reply.get("job_id") not in (None, jid):
+        raise AssertionError(f"the refusal named job {reply.get('job_id')}, not the live job {jid}")
+    life.acts.append(("medchron_job_submit", "accepted" if reply.get("accepted") else "refused"))
+
+
+def _second_client(life: Life, jid: str) -> None:
+    """Another client on the same matter, through the real submit verb: its
+    own job, whatever state the first client's is in."""
+    _kept_units(life, jid)
+    env = _envelope("2026-PI-102", "m-1")
+    unit = {"unit": "beta", "client_name": "Beta Sample", "name_token": "Sample", "surname": "Sample"}
+    env["units"] = [{**unit, "dob": "05/06/1990"}]
+    reply = life.client()._request({"action": "medchron_job_submit", "envelope": env})
+    if reply.get("accepted"):
+        life.acts.append(("second_job", str(reply["job_id"])))
+    else:
+        life.acts.append(("medchron_job_submit", "refused"))
 
 
 def _expire(life: Life) -> None:
@@ -848,6 +889,15 @@ def problems(cell: str, got: dict[str, Any]) -> list[str]:
     # and leaves the run unaided (``jobs/medchron/unrecorded.py``)
     if cell.rpartition("/")[2] == "broker_errors_once" and ("ending_unrecorded" in got["paged"] or got["record_late"]):
         out.append("(h) one broker error inside the bound paged SMD or graded the run aided")
+    # (i) the same person asked again while a job is active is refused by
+    # that job (the act raises when the refusal names another); another
+    # client on the matter is its own job, accepted
+    event = cell.rpartition("/")[2]
+    if event == "resubmit_same_person" and got["state"] in ("submitted", "running", "held"):
+        if got["ending"] != "refused":
+            out.append("(i) the same person was queued twice while a job was active")
+    if event == "second_client_same_matter" and got.get("second") is None:
+        out.append("(i) another client on the matter was refused")
     # (e) the row that put the job in its state carries a run block
     if got["state"] not in ("submitted", "gone") and not isinstance(got["run"], dict):
         out.append("(e) the row that ended the job carries no run block")

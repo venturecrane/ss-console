@@ -240,6 +240,10 @@ def medchron(tmp: Path, mp: Any) -> dict[str, Any]:
     from jobs.stages import extract as extract_stage, vision as vision_stage
 
     rk.Sleeps(mp)
+    # Pages are read eight at once since 2026-11-19 (``vision.VISION_WORKERS``);
+    # one at a time keeps the send order this cell pins (``test_vision_pool``
+    # proves eight write what one writes). raising=False: the base tree has none.
+    mp.setattr(vision_stage, "VISION_WORKERS", 1, raising=False)
     model = rk.Model()
     sr = _stage_run(tmp / "mc", model, rk.Seat([], {}))
     sd = sr.slug_dir

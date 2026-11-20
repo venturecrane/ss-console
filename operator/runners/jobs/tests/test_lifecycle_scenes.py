@@ -25,6 +25,7 @@ from lifecycle_matrix import (
     AUDIT_HOLD,
     Life,
     _hand,
+    _kept_units,
     _resume,
     build,
     delivered,
@@ -259,3 +260,42 @@ def test_a_hand_delivery_whose_second_record_failed_can_be_run_again(tmp_path, m
     assert half["state"] == "running"
     assert (got["state"], got["firm_messages"]) == ("delivered", 1)
     assert got["run"]["event"] == "hand_delivery" and got["run"]["by"] == "smd"
+
+
+def test_a_running_rows_status_names_its_client_kind_and_stage(tmp_path, monkeypatch, real_lane_gate):
+    """2026-11-19: a running row read 0/0/0 for hours and the status read
+    could not say whose job it was or how far it had got. The driver records
+    each stage's start in its run state file; the lane's heartbeat reports
+    the stage to the broker, and the status read names the client, the kind
+    and the stage, never the expected finish. A stage note that arrives after
+    the job held never moves the row back to running."""
+    from jobs.medchron.state import RunState, state_path
+
+    def body(life: Life) -> tuple[dict[str, Any], dict[str, Any]]:
+        jid = life.submit()
+        _kept_units(life, jid)
+        seen: dict[str, Any] = {}
+
+        def during() -> None:
+            st = RunState.load_or_new(
+                state_path(life.lane.job_dir(jid) / "data", life.lane.customer_slug, "alpha"),
+                slug=life.lane.customer_slug,
+                unit="alpha",
+            )
+            st.expected_finish = {"at": "2026-11-20T03:00:00Z"}
+            st.start("compose", input_sha=None)
+            life.lane.heartbeat(running=jid)
+            seen.update(life.client()._request({"action": "medchron_job_status", "job_id": jid})["job"])
+            st.start("review", input_sha=None)
+
+        life.during.append(during)
+        life.children.append(ended("held", "review", "review_held: the pre-delivery review found a claim to check"))
+        life.tick()
+        life.lane.heartbeat(running=jid)  # a late beat: "review" runs in the file, the row is held
+        return seen, life.client()._request({"action": "medchron_job_status", "job_id": jid})["job"]
+
+    during, after = _scene(tmp_path, monkeypatch, body)
+    assert during["state"] == "running" and during["stage"] == "compose"
+    assert during["clients"] == ["Alpha Example"] and during["kind"] == "run"
+    assert "expected_finish" not in during
+    assert after["state"] == "held" and after["stage"] == "compose"

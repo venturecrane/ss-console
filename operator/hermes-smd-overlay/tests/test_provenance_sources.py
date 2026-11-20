@@ -400,6 +400,8 @@ _EXPECTED_NON_SEEDING: frozenset[str] = frozenset(
         # record the agent could quote from; nothing here seeds a claim.
         "medchron_job_status",
         "medchron_allowance",
+        # 2026-11-19: document ids and a count the broker computed.
+        "medchron_update_files",
         "demand_job_status",
         "demand_allowance",
         "drafting_job_status",

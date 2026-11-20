@@ -287,6 +287,10 @@
     "plugin": "hermes-smd-lanes",
     "toolset": "lanes"
    },
+   "medchron_update_files": {
+    "plugin": "hermes-smd-lanes",
+    "toolset": "lanes"
+   },
    "negotiation_job_status": {
     "plugin": "hermes-smd-lanes",
     "toolset": "lanes"
@@ -710,6 +714,10 @@
     "toolset": "lanes"
    },
    "medchron_job_submit": {
+    "plugin": "hermes-smd-lanes",
+    "toolset": "lanes"
+   },
+   "medchron_update_files": {
     "plugin": "hermes-smd-lanes",
     "toolset": "lanes"
    },

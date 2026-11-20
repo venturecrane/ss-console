@@ -97,7 +97,7 @@ def test_a_part_whose_batch_is_still_processing_is_resumed_not_skipped(
 def test_a_runner_killed_between_parts_composes_the_missing_part_on_rerun(
     job_dir: Path, data_root: Path, firm_config_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
 
     def reply(p, n):
         if n == 1:
