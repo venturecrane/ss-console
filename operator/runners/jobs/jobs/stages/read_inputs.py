@@ -22,8 +22,12 @@ Images = Callable[[int, int], dict[str, Any] | None]
 
 
 def client_line(sr: StageRun) -> str:
-    u = sr.unit
-    return f"CLIENT: {u.client_name}; date of birth {u.dob or 'not known'}; incident {sr.job.incident_date}"
+    return client_text(sr.unit, sr.job)
+
+
+def client_text(u: Any, job: Any) -> str:
+    """The client line every read opens with (``client_line`` off a stage run)."""
+    return f"CLIENT: {u.client_name}; date of birth {u.dob or 'not known'}; incident {job.incident_date}"
 
 
 def kept_exhibits(sr: StageRun) -> set[int]:

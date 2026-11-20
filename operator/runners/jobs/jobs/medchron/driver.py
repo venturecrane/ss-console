@@ -237,7 +237,10 @@ class Driver:
         # exclusive. `redo` reopens named $0 stages in the (copied) state so a
         # fix can be seen without editing the real state by hand.
         self.rehearse = rehearse
-        self.redo = tuple(redo)
+        # A stage removed from the update's order is redone as the stage that
+        # replaced it (2026-11-20: the update review, by the entry read's
+        # ``audit``), so a resume naming it never fails the job at start.
+        self.redo = tuple(dict.fromkeys(dag.RENAMED.get(n, n) for n in redo))
         if rehearse and start:
             raise DriverError("rehearse walks from the top; --from would re-run every done stage")
         for name in self.redo:
@@ -324,8 +327,10 @@ class Driver:
         if stage.name == "vision":
             return projection.read_usd(extracted, self.limits.usd_per_scanned_page, self.budget)
         if stage.name == "audit":  # the entries still to read, either lane (``stages/entry_audit_io``)
-            update = self.job.update is not None
-            return projection.entry_audit_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing, update)
+            from ..stages.read_inputs import client_text
+
+            update, client = self.job.update is not None, client_text(ctx.unit, self.job)
+            return projection.entry_audit_usd(self.slug_dir, ctx.unit.unit, self.cfg, self.pricing, update, client)
         return None
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path) -> None:
@@ -385,9 +390,8 @@ class Driver:
         if self.redo:
             st.invalidate(list(self.redo))
         update = self.job.update is not None
-        if update and claim_audit.stale_update_audit(self.slug_dir, unit.unit, st):
-            self.log(f"[{unit.unit}] audit: done by the per-claim audit, which no longer files an update; read again")
-            st.invalidate(["audit"])
+        if update:  # an update the per-claim audit ran, not yet filed, is read again
+            claim_audit.reopen_stale(self.slug_dir, unit.unit, st, self.log)
         seq = dag.stages_from(self.start, update=update)
         honor_done = self.start is None
         for stage in seq:

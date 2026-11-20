@@ -38,6 +38,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
+from ..matter.store import write_atomic
 from ..medchron.audit import authored, claims as CL
 from ..medchron.update import body as B, entry_confirm as EC, entry_lines as EL, entry_read as ER
 from . import entry_audit_io as IO
@@ -249,7 +250,7 @@ def apply(
             e.outcome = "not applied: the run held on a line found wrong"
         return why, None, broke
     if new != md:
-        doc.write_text(new, encoding="utf-8")
+        write_atomic(doc, new)  # a crash never leaves half a document
         sync_entries(sr, md, new)
     return "", rel, broke
 
@@ -266,7 +267,7 @@ def sync_entries(sr: StageRun, md: str, new: str) -> None:
     for was, now in zip(B.entries_of(md)[1], B.entries_of(new)[1]):
         if now != was and text.count(was) == 1:
             text = text.replace(was, now, 1)
-    p.write_text(text, encoding="utf-8")
+    write_atomic(p, text)
 
 
 def _rows(reads: list[IO.Read], items: list[Item], decisions: list[EC.Decision]) -> list[dict[str, Any]]:

@@ -18,12 +18,15 @@ def read_usd(extracted: Path, usd_per_scanned_page: float, meter: budget.Budget)
     return budget.scanned_pages(extracted) * usd_per_scanned_page + meter.projection(budget.extracted_chars(extracted))
 
 
-def entry_audit_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing, update: bool = False) -> float | None:
+def entry_audit_usd(
+    slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing, update: bool = False, client: str = ""
+) -> float | None:
     """The entry read (``stages/entry_audit``), either lane's: the entries
-    not yet read, each read and confirmed, priced at the judgment tier."""
+    not yet read for their request as it now stands (`client`: the client
+    line the reads open with), each read and confirmed, at the judgment tier."""
     from ..stages import entry_audit_io
 
-    return entry_audit_io.projected_usd(slug_dir, unit, cfg, pricing, update)
+    return entry_audit_io.projected_usd(slug_dir, unit, cfg, pricing, update, client)
 
 
 def expected_finish(drv: Any, st: Any, extracted: Path) -> None:

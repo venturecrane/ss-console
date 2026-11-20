@@ -15,8 +15,7 @@ written the sentence. A second reading by the model is not a check on that:
 it is the reading SMD's edit corrected.
 
 So every claim of the live document whose text SMD wrote gets one audit row,
-``SUPPORTED``, attested by SMD (``mode: "smd"``), as ``update_decide`` writes
-for an update SMD corrected (#3615). The audit's resume skips a key with a
+``SUPPORTED``, attested by SMD (``mode: "smd"``). The audit's resume skips a key with a
 row, the repair settles only claims whose last verdict is not SUPPORTED, and
 the gate reads the row like any other, so the loop never rewrites SMD's
 text, and the row says whose verdict it is.

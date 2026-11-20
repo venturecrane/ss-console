@@ -41,9 +41,24 @@ def stale_update_audit(slug_dir: Path, unit: str, st: Any) -> bool:
     """True for an update whose ``audit`` is done with no entry-read record
     (the per-claim loop ran it, before 2026-11-20) and nothing yet filed: the
     driver reopens the audit so the entry read runs, never the old rule. A
-    job that already filed (``upload`` done) is left alone: a re-read after
-    the send would rebuild what the firm already has."""
-    return st.is_done("audit") and not st.is_done("upload") and entry_read(slug_dir, unit) is None
+    job that already filed (``upload`` done, or a send record with a row sent
+    or started: cut mid-upload) is left alone: a re-read after the send would
+    rebuild what the firm already has."""
+    if not st.is_done("audit") or st.is_done("upload") or entry_read(slug_dir, unit) is not None:
+        return False
+    # A job cut mid-upload has sent rows in its send record: it is filed in
+    # part, and a re-read would rebuild what the firm already holds.
+    from ...filing import SendRecord
+
+    rec = SendRecord.load(slug_dir / "runs" / unit / "delivery.json")
+    return not (rec.recorded() or rec.doc.get("sent") or rec.doc.get("pending"))
+
+
+def reopen_stale(slug_dir: Path, unit: str, st: Any, log: Callable[[str], None]) -> None:
+    """Reopen a stale update audit (``stale_update_audit``) so the entry read runs."""
+    if stale_update_audit(slug_dir, unit, st):
+        log(f"[{unit}] audit: done by the per-claim audit, which no longer files an update; read again")
+        st.invalidate(["audit"])
 
 
 def check(

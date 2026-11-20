@@ -200,6 +200,52 @@ def verify_request(p: Proposal, cfg: Any, client: str, images: Images) -> tuple[
     return load(PROMPT, cfg), out
 
 
+# ---- the confirm: a finding with no edit to verify (the update lane) -------------
+CONFIRM_PROMPT = "entry-confirm-system"
+
+
+def confirm_pages(f: ReadFinding, unit: Unit) -> list[tuple[int, int]]:
+    """The pages a confirm shows: the line's own cited pages and the
+    finding's page, each with one page either side, inside what the read was
+    shown; at most VERIFY_PAGES, the nearest the finding's page kept. A line
+    with no page of its own shows the unit's cited pages."""
+    line = unit.lines.get(f.line, "")
+    base = (_line_pages(line, unit) if line else set()) | {(f.exhibit, f.page)}
+    near = {(x, q) for x, pg in base | set(unit.cited) for q in (pg - 1, pg, pg + 1)} & set(unit.pages)
+    ranked = sorted(near, key=lambda xp: (xp[0] != f.exhibit, abs(xp[1] - f.page), xp))
+    return sorted(ranked[:VERIFY_PAGES])
+
+
+def confirm_request(
+    f: ReadFinding, unit: Unit, cfg: Any, client: str, images: Images
+) -> tuple[str, list[dict[str, Any]], list[tuple[int, int]]]:
+    """(system prompt, user content, the pages shown as pictures): the line
+    as it stands, the first reader's class and reason, and the pages."""
+    asked = (
+        f"CLASS: {f.klass}\nTHE FIRST READER SAYS: {f.problem or '(no reason given)'}\n\n"
+        f"ENTRY LINE AS IT STANDS:\n{unit.lines.get(f.line, '')}"
+    )
+    out: list[dict[str, Any]] = [{"type": "text", "text": client}, {"type": "text", "text": asked}]
+    shown: list[tuple[int, int]] = []
+    for ex, pg in confirm_pages(f, unit):
+        blocks = RV.page_blocks(ex, pg, "", images, None)
+        if any(b.get("type") == "image" for b in blocks):
+            shown.append((ex, pg))
+        out += blocks
+    return load(CONFIRM_PROMPT, cfg), out, shown
+
+
+def parse_confirm(reply: str) -> bool | None:
+    """The confirm's answer (is the line wrong), or None when it is not one
+    JSON object carrying the flag."""
+    a, b = reply.find("{"), reply.rfind("}")
+    try:
+        obj = json.loads(reply[a : b + 1]) if 0 <= a < b else None
+    except json.JSONDecodeError:
+        return None
+    return _flag(obj.get("original_wrong")) if isinstance(obj, dict) else None
+
+
 def cited_pages(p: Proposal) -> set[tuple[int, int]]:
     """The pages a verify may settle a proposal on: those the swapped line
     cites (its paragraph's when it has no citation of its own), or those the

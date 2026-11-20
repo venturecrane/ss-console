@@ -66,3 +66,27 @@ lane-neutral half in `operator/runners/jobs/jobs/hand_delivery.py`, shared with
 `operator/runners/jobs/tests/test_deliver_by_smd.py`). The reply binds when
 the job's request reference is a mailbox Graph id as well as an RFC Message-ID
 (`operator/workspace_broker/reply_binding.py`, 2026-10-14).
+
+## Before filing by hand: an update held by its entry read
+
+An update holds at `audit` (`audit coverage: ... a line found wrong was not
+corrected ...`) when two readers found a line wrong and no correction applied
+(`operator/runners/jobs/jobs/stages/entry_audit_update.py`). Most such holds
+are finished on the seat, without filing by hand. As root, in the runner
+daemon's environment, with the jobs venv's python:
+
+1. List the held lines: `python -m jobs.medchron.update_settle <job_id> --list`
+   prints each held line's sha, class and text. Read each against its page.
+2. **The readers are right:** correct the line (or delete the held entry whole)
+   in the job's `runs/<unit>/final-chronology.md`, then resume the job
+   (`medchron_job_resume`, no redo). Only the changed entry is read again;
+   every other answer is reused at no cost, and what the correction took out
+   is named for the value proof (`operator/runners/jobs/jobs/stages/entry_audit_held.py`).
+3. **The readers are wrong:** keep the line as written with
+   `python -m jobs.medchron.update_settle <job_id> --line <sha> [<sha> ...] --by <who decided> --source <the vfy_ id of the pages read> --dry-run`,
+   then the same without `--dry-run`. It records who, where and when beside
+   the job's answers and queues the resume; the line is still read and its
+   finding recorded, and it is never held or edited by the reader again
+   (`operator/runners/jobs/jobs/medchron/update_settle.py`).
+
+A resume with no edit and no settled line holds again and pays for nothing new.

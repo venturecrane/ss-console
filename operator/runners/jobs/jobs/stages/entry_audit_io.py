@@ -53,7 +53,7 @@ from ..medchron.page_mode import Modes
 from ..medchron.update import body as B, entry_confirm as EC, entry_read as ER, index_gaps as IG
 from ..medchron.update import review_pages as RV
 from .base import StageRun, read_json
-from .read_inputs import dollars, page_counts
+from .read_inputs import client_line, dollars, page_counts
 from .update_base import headings
 
 REPLAY_ENV = "ENTRY_AUDIT_REPLAY"
@@ -268,17 +268,35 @@ def unit_tokens(u: ER.Unit, modes: Modes | None) -> tuple[int, int]:
     return tin, READ_OUT_EXPECTED + VERIFIES_PER_UNIT * VERIFY_OUT_EXPECTED
 
 
-def tokens(slug_dir: Path, unit: str, cfg: Any, update: bool = False) -> tuple[int, int, int, int] | None:
+def _answered(d: Path, u: ER.Unit, cfg: Any, client: str, modes: Modes | None) -> bool:
+    """A read answer is on file FOR THIS REQUEST: its hash matches the request
+    the stage would send (a picture named by its page, as ``serial`` hashes
+    it, so nothing is rendered). An answer to the entry as it read before a
+    hand edit is not this entry's, and is projected as the re-read it is."""
+    system, content = ER.request(u, cfg, client, lambda _x, _p: {"type": "image"}, modes)
+    h = request_hash(model(cfg), system, content)
+    for a in (1, 2):
+        f = d / f"{u.key}.read{a}.json"
+        got = read_json(f, {}) if f.is_file() else {}
+        if isinstance(got, dict) and got.get("hash") == h:
+            return True
+    return False
+
+
+def tokens(
+    slug_dir: Path, unit: str, cfg: Any, update: bool = False, client: str = ""
+) -> tuple[int, int, int, int] | None:
     """(units, units already read, input tokens, output tokens) still to pay
-    for; None before the chronology exists."""
+    for; None before the chronology exists. `client`: the client line the
+    reads open with (``read_inputs.client_text``)."""
     doc = slug_dir / "runs" / unit / "final-chronology.md"
     if not doc.is_file():
         return None
     units = plan(slug_dir, unit, cfg, doc.read_text(encoding="utf-8"), update).units
     d = slug_dir / "runs" / unit / DIR
-    todo = [u for u in units if not any((d / f"{u.key}.read{a}.json").is_file() for a in (1, 2))]
     modes = Modes.open(slug_dir, unit)
     try:
+        todo = [u for u in units if not _answered(d, u, cfg, client, modes)]
         got = [unit_tokens(u, modes) for u in todo]
     finally:
         modes.close()
@@ -290,14 +308,16 @@ def priced(pricing: budget.Pricing, cfg: Any, tin: int, tout: int) -> float:
     return (tin * rate.input_per_million_cents + tout * rate.output_per_million_cents) / 1e8
 
 
-def projected_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing, update: bool = False) -> float | None:
+def projected_usd(
+    slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing, update: bool = False, client: str = ""
+) -> float | None:
     """What the stage is projected to add, for the driver's limits."""
-    got = tokens(slug_dir, unit, cfg, update)
+    got = tokens(slug_dir, unit, cfg, update, client)
     return None if got is None else priced(pricing, cfg, got[2], got[3])
 
 
 def projection_lines(sr: StageRun) -> list[str]:
-    got = tokens(sr.slug_dir, sr.unit.unit, sr.cfg, sr.job.update is not None)
+    got = tokens(sr.slug_dir, sr.unit.unit, sr.cfg, sr.job.update is not None, client_line(sr))
     if got is None:
         return ["no built chronology yet (build_doc has not run); the entry read is unprojectable"]
     n, done, tin, tout = got
@@ -310,15 +330,17 @@ def projection_lines(sr: StageRun) -> list[str]:
     ]
 
 
-def verify_usd(sr: StageRun, proposals: list[EC.Proposal]) -> float | None:
+def verify_usd(sr: StageRun, proposals: list[EC.Proposal], confirms: int = 0) -> float | None:
     """The verify phase priced from the real proposals and the pictures each
-    verify shows; None when no rate card can be read."""
+    verify shows, and `confirms` confirms (an update's) at the most pictures
+    one shows; None when no rate card can be read."""
     try:
         pricing = paid.load_pricing()
     except (OSError, ValueError, KeyError, budget.BudgetError):
         return None
     tin = sum(SYSTEM_TOKENS + RV.PAGE_TOKENS * len(EC.verify_pages(p)) for p in proposals)
-    return priced(pricing, sr.cfg, tin, len(proposals) * VERIFY_OUT_EXPECTED)
+    tin += confirms * (SYSTEM_TOKENS + RV.PAGE_TOKENS * EC.VERIFY_PAGES)
+    return priced(pricing, sr.cfg, tin, (len(proposals) + confirms) * VERIFY_OUT_EXPECTED)
 
 
 def check_limits(sr: StageRun, projected_usd: float) -> None:

@@ -91,7 +91,7 @@ FIXED_EVENTS = (
     "audit_decide",
     "coverage_decide",
     "identity_decide",
-    "update_decide",
+    "update_settle",
     "redo_doc",
     "hand_delivery",
     "expiry",
@@ -557,7 +557,7 @@ def _act(life: Life, jid: str, event: str) -> Callable[[], Any] | None:
         "audit_decide": lambda: _marker(life, jid, "decide_audit", []),
         "coverage_decide": lambda: _marker(life, jid, "decide_coverage", []),
         "identity_decide": lambda: _marker(life, jid, "decide_identity", ["build_units"]),
-        "update_decide": lambda: _marker(life, jid, "decide_update", []),
+        "update_settle": lambda: _marker(life, jid, "decide_update", []),
         "redo_doc": lambda: _marker(life, jid, "redo_doc", ["build_doc"]),
         "hand_delivery": lambda: _hand(life, jid),
         "expiry": lambda: _expire(life),
@@ -726,9 +726,11 @@ ACTOR = {"medchron_job_resume": "smd", "medchron_job_submit": "firm", "deliver_b
 #: The ``*_decide`` tool that answers each hold's page code (``proof/holds.py``),
 #: read from each tool's own docstring and refusals.
 DECIDE_FOR: dict[str, tuple[str, ...]] = {
-    "gate_held": ("audit_decide", "coverage_decide"),
+    "gate_held": ("audit_decide", "coverage_decide", "update_settle"),
     "identity_held": ("identity_decide",),
-    "update_held": ("update_decide",),
+    # An update that cannot go on as asked: SMD files it by hand (the update
+    # review's own tool, update_decide, went with that stage on 2026-11-20).
+    "update_held": ("deliver_by_smd",),
     "limit_held": ("allowance approve",),
     "upload_held": ("deliver_by_smd",),
     "stage_refused": ("redo_doc",),

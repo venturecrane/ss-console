@@ -30,7 +30,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
 from ..audit import claims as CL
@@ -105,6 +105,11 @@ class Parsed:
     lines: dict[str, str] = field(default_factory=dict)  # label -> ok | problem | unreadable
     omitted_over_cap: int = 0
     problem_without_finding: int = 0
+    #: label -> class of each line the read marked a problem (or could not
+    #: read, when a finding named it) with no finding kept: one dropped for its quote, its
+    #: page or an unreadable page, one over the cap, or none at all
+    #: (``UNCLASSIFIED``). The update lane has a second reader confirm each.
+    open_lines: dict[str, str] = field(default_factory=dict)
 
 
 def _cites_of(text: str) -> set[tuple[int, int]]:
@@ -161,8 +166,9 @@ def _name_units(
         who = name.group(1).strip() if name else ""
         pages = {pg for e in entries if who and P.names_in(e.text, who) for pg in e.cites()}
         pages = {(x, p) for x, p in pages | _cites_of(para) if x in keep}
-        if pages:
-            out += _units(f"{NAME}{i}", para.strip("\n"), pages, npages, neighbours, record_only=True)
+        if pages:  # one part only, its first MAX_SHOWN pages: a spelling needs no more, and no more is paid for
+            first = _units(f"{NAME}{i}", para.strip("\n"), pages, npages, neighbours, record_only=True)[0]
+            out.append(replace(first, part=1, parts=1))
     return out
 
 
@@ -299,19 +305,41 @@ def parse(reply: str, unit: Unit, *, lenient: bool = False) -> Parsed:
     verdicts = {lb: str(obj["lines"][lb]) for lb in unit.labels}
     out = Parsed([], lines=verdicts)
     dark = _dark(obj)
+    left: dict[str, str] = {}
     for item in list(obj.get("findings") or []):
         got = _one(item, unit, verdicts, dark)
         if isinstance(got, str):
             out.dropped[got] += 1
+            _left(item, unit, left)
         elif got.klass == "omitted" and sum(f.klass == "omitted" for f in out.findings) >= MAX_OMITTED:
             out.omitted_over_cap += 1
+            left.setdefault(got.line, got.klass)
         elif len(out.findings) >= MAX_FINDINGS:
             out.over_cap += 1
+            left.setdefault(got.line, got.klass)
         else:
             out.findings.append(got)
     on = {f.line for f in out.findings}
     out.problem_without_finding = sum(1 for lb, v in verdicts.items() if v == "problem" and lb not in on)
+    for lb, v in verdicts.items():
+        if v == "problem" and lb not in on:
+            left.setdefault(lb, UNCLASSIFIED)
+    out.open_lines = {lb: k for lb, k in left.items() if lb not in on and (lb in unit.lines)}
     return out
+
+
+#: The class of an open line no kept finding names.
+UNCLASSIFIED = "unclassified"
+
+
+def _left(item: object, unit: Unit, left: dict[str, str]) -> None:
+    """A dropped finding that names a line of the unit leaves that line open, with its class."""
+    if not isinstance(item, dict):
+        return
+    line = str(item.get("line") or "").strip().strip("[]")
+    klass = str(item.get("class") or "").strip().lower()
+    if line in unit.lines:
+        left.setdefault(line, klass if klass in CLASSES else UNCLASSIFIED)
 
 
 # ---- the tripwire -----------------------------------------------------------------

@@ -364,3 +364,25 @@ def test_an_update_the_per_claim_audit_ran_is_read_again_on_resume(
     assert calls == ["audit"] and o.outcome == "delivered", o
     rec = json.loads((data_root / "example-matter" / "runs" / "alpha" / "entry_read.json").read_text())
     assert rec["complete"] is True and rec["unresolved"] == 0
+
+
+def test_a_redo_naming_the_removed_update_review_redoes_the_audit(
+    scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A resume written before 2026-11-20 (``redo=["update_review"]``) never
+    fails the job at start: the stage it names is redone as the audit."""
+    job_dir, seat = scene
+    _upload_pause(monkeypatch)
+    order: list[str] = []
+    d = driver_mod.Driver(
+        job_dir,
+        firm_config=str(firm_config_path),
+        pricing=str(pricing_path),
+        log=lambda *_: None,
+        seat_factory=lambda: seat,
+        client=_Model(),
+        redo=("update_review",),
+    )
+    assert d.redo == ("audit",)
+    d._runner_override = {"audit": _traced("audit", entry_audit.run, order)}
+    assert d.run()[0].outcome == "delivered" and order == ["audit"]

@@ -182,6 +182,9 @@ def run_assemble(sr: StageRun) -> int:
     audit_md, withheld = EU.strip_withheld(
         (rd / "final-chronology.md").read_text(encoding="utf-8"), EU.withheld(sr.slug_dir, sr.unit.unit)
     )
+    # A name the read found spelled as the delivered chronology spells it is
+    # applied by assemble's ``providers.respell`` from its claim.
+    audit_md, _respelled = EU.respell_claims(audit_md, EU.spellings(sr.slug_dir, sr.unit.unit))
     try:
         md, rep = A.assemble(
             base_md,

@@ -80,6 +80,13 @@ def _record(sr: Any) -> dict[str, Any]:
     return json.loads((sr.slug_dir / "runs" / "alpha" / IO.RECORD).read_text(encoding="utf-8"))
 
 
+def _forget(sr: Any) -> None:
+    """A new scene in the same job dir: no answer of the last one is reused."""
+    import shutil
+
+    shutil.rmtree(sr.slug_dir / "runs" / "alpha" / IO.DIR, ignore_errors=True)
+
+
 def _audit_row() -> dag.Stage:
     return dag.by_name(update=True)["audit"]
 
@@ -95,7 +102,7 @@ def test_an_unsupported_line_with_no_correction_holds_and_nothing_is_written(sce
     assert doc.read_text(encoding="utf-8") == DOC  # held with the document untouched
     rec = _record(sr)
     assert rec["unresolved"] == 1 and rec["unresolved_by_class"] == {"unsupported": 1}
-    assert rec["held"] == "1 line(s) found wrong with no correction applied (unsupported 1)"
+    assert rec["held"] == "1 line(s) found wrong by two readers with no correction applied (unsupported 1)"
     assert "pulse" not in json.dumps(rec).lower()  # counts by class, never text
     assert not claim_audit.check(sr.slug_dir, "alpha", update=True)[0]
 
@@ -124,11 +131,15 @@ def test_a_line_the_second_reader_finds_not_wrong_is_settled(scene) -> None:
     assert _record(sr)["recorded_by_reason"] == {EC.NOT_WRONG: 1} and _record(sr)["unresolved"] == 0
 
 
-def test_another_persons_line_is_record_only_and_so_holds(scene) -> None:
+def test_another_persons_line_holds_only_when_the_second_reader_confirms_it(scene) -> None:
     other = {**VALUE, "class": "another_person", "problem": "this visit is another patient's"}
-    sr, doc, log = scene(Client(_on("N1", other)))
+    sr, doc, log = scene(Client(_on("N1", other)))  # the confirm answers wrong
     assert EA.run(sr) == EA.EXIT_HELD
     assert _record(sr)["unresolved_by_class"] == {"another_person": 1} and doc.read_text(encoding="utf-8") == DOC
+    _forget(sr)
+    sr2, doc2, log2 = scene(Client(_on("N1", other), {**YES, "original_wrong": False}))
+    assert EA.run(sr2) == 0, log2  # one reader's word alone never holds
+    assert _record(sr2)["confirmed_not_wrong_by_class"] == {"another_person": 1}
 
 
 def test_falsifier_the_full_chronology_records_the_same_line_and_files(scene) -> None:
@@ -189,19 +200,58 @@ def test_a_provider_name_claim_is_its_own_unit_shown_the_pages_of_the_entries_na
     assert [u.key for u in _units(full)] == ["PRE", "N1", "N2", "N3"] and _units(full)[0].text == DX
 
 
-def test_a_provider_finding_on_a_name_claim_holds(scene) -> None:
-    spelled = {"line": "S1", "class": "provider", "exhibit": 1, "page": 5, "quote": "Exampel", "action": "replace",
-               "replacement": "Example", "problem": "the page spells the name otherwise"}  # fmt: skip
-    sr, doc, log = scene(Client(_on("PN1", spelled)))
-    assert EA.run(sr) == EA.EXIT_HELD
-    assert _record(sr)["unresolved_by_class"] == {"provider": 1} and doc.read_text(encoding="utf-8") == DOC
+SPELLED = {"line": "S1", "class": "provider", "exhibit": 1, "page": 5, "quote": "Exampel", "action": "replace",
+           "replacement": "Example", "problem": "the page spells the name otherwise"}  # fmt: skip
 
 
-def test_falsifier_a_provider_finding_on_an_entry_is_recorded_as_before(scene) -> None:
-    prov = {"line": "P", "class": "provider", "exhibit": 1, "page": 2, "quote": "Example Clinic", "action": "none"}
-    sr, doc, log = scene(Client(_on("N1", prov)))
+def _delivered(sr: Any, names: list[str]) -> None:
+    ud = sr.slug_dir / "runs" / "alpha" / "update"
+    ud.mkdir(parents=True, exist_ok=True)
+    rows = [{"composed": "Jane Exampel, MD", "likely_same_person": names}]
+    (ud / "compose_report.json").write_text(json.dumps({"provider_spelling": rows}))
+
+
+def test_a_name_claim_is_record_only_and_never_holds_or_asks_a_second_reader(scene) -> None:
+    client = Client(_on("PN1", SPELLED))
+    sr, doc, log = scene(client)
+    _delivered(sr, ["Jane Exemplar, MD"])  # the read's spelling is not the delivered one
     assert EA.run(sr) == 0, log
-    assert _record(sr)["recorded_by_reason"] == {EC.RECORD_ONLY_CLASS: 1}
+    assert client.calls.count("verify") == 0 and EU.spellings(sr.slug_dir, "alpha") == {}
+
+
+def test_a_name_spelled_as_delivered_is_applied_through_respell_at_assemble(scene) -> None:
+    from jobs.medchron.update import providers as PV
+
+    sr, doc, log = scene(Client(_on("PN1", SPELLED)))
+    _delivered(sr, ["Jane Example, MD"])
+    assert EA.run(sr) == 0, log
+    md, n = EU.respell_claims(doc.read_text(encoding="utf-8"), EU.spellings(sr.slug_dir, "alpha"))
+    assert n == 1 and "Provider named on the record: Jane Example, MD. (Exhibit 1 - p. 5)" in md
+    names = PV.split_claims(B.entries_of(md)[0])[1]
+    ents, change = PV.respell([E2], names, {"Exhibit 1 - p. 5": "Jane Exampel, MD"})
+    assert change == {"Jane Exampel, MD": "Jane Example, MD"} and "Jane Example, MD reviewed" in ents[0]
+
+
+def test_a_name_unit_is_capped_at_one_part() -> None:
+    many = "\n\n".join(
+        f"0{(k % 9) + 1}/1{k % 10}/2025\nSample Therapy | All Other Information\n\nAll Other Information\n"
+        f"Jane Exampel, MD saw the patient. (Exhibit 1 - p. {k + 1})"
+        for k in range(40)
+    )
+    doc = DOC.replace(E3, many)
+    units = ER.plan(doc, {1}, {"All Other Information", "Medical Diagnoses"}, lambda _x: 60)
+    pn = [u for u in units if u.anchor == "PN1"]
+    assert len(pn) == 1 and pn[0].parts == 1 and len(pn[0].pages) <= ER.MAX_SHOWN
+
+
+def test_a_provider_finding_on_an_entry_holds_only_once_confirmed(scene) -> None:
+    prov = {"line": "P", "class": "provider", "exhibit": 1, "page": 2, "quote": "Example Clinic", "action": "none"}
+    sr, doc, log = scene(Client(_on("N1", prov), {**YES, "original_wrong": False}))
+    assert EA.run(sr) == 0, log
+    assert _record(sr)["confirmed_not_wrong_by_class"] == {"provider": 1}
+    _forget(sr)
+    sr2, _d, log2 = scene(Client(_on("N1", prov)))
+    assert EA.run(sr2) == EA.EXIT_HELD and _record(sr2)["unresolved_by_class"] == {"provider": 1}
 
 
 # ---- delivered entries are never read ------------------------------------------------
@@ -307,4 +357,5 @@ def test_the_hold_classes_are_one_constant_a_replay_can_narrow(scene, monkeypatc
     monkeypatch.setattr(EU, "HOLD_CLASSES", ("another_person",))
     sr, doc, log = scene(Client(_on("N1", UNSUPPORTED), NOT_SUPPORTED))
     assert EA.run(sr) == 0, log  # unsupported no longer holds once narrowed
-    assert _record(sr)["unresolved_by_class"] == {}
+    rec = _record(sr)
+    assert rec["unresolved"] == 0 and rec["unresolved_by_class"] == {"unsupported": 1}  # still counted

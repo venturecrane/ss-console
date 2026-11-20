@@ -520,7 +520,7 @@
    ],
    "wiped": false
   },
-  "delivered/update_decide": {
+  "delivered/update_settle": {
    "code": null,
    "ended_while_away": false,
    "ending": "delivered",
@@ -1219,7 +1219,7 @@
    ],
    "wiped": false
   },
-  "failed/update_decide": {
+  "failed/update_settle": {
    "code": null,
    "ended_while_away": false,
    "ending": "delivered",
@@ -1352,7 +1352,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1382,7 +1383,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_submit"
+    "medchron_job_submit",
+    "update_settle"
    ],
    "wiped": true
   },
@@ -1412,7 +1414,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1442,7 +1445,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1472,7 +1476,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1528,7 +1533,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1636,7 +1642,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1721,7 +1728,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1803,7 +1811,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1833,7 +1842,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1863,7 +1873,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1893,7 +1904,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -1952,11 +1964,12 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
-  "held/update_decide": {
+  "held/update_settle": {
    "code": null,
    "ended_while_away": false,
    "ending": "delivered",
@@ -2008,7 +2021,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -2257,7 +2271,8 @@
     "audit_decide",
     "coverage_decide",
     "medchron_job_submit",
-    "sticky_release"
+    "sticky_release",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -2607,7 +2622,7 @@
    ],
    "wiped": false
   },
-  "parked/update_decide": {
+  "parked/update_settle": {
    "code": null,
    "ended_while_away": false,
    "ending": "delivered",
@@ -3250,7 +3265,7 @@
    ],
    "wiped": false
   },
-  "requeued_waiting/update_decide": {
+  "requeued_waiting/update_settle": {
    "code": null,
    "ended_while_away": false,
    "ending": "delivered",
@@ -3580,7 +3595,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -3836,7 +3852,8 @@
    "told_while_away": 0,
    "way_out": [
     "audit_decide",
-    "coverage_decide"
+    "coverage_decide",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -3865,7 +3882,8 @@
    "told_while_away": 0,
    "way_out": [
     "audit_decide",
-    "coverage_decide"
+    "coverage_decide",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -3952,7 +3970,8 @@
    "told_while_away": 0,
    "way_out": [
     "audit_decide",
-    "coverage_decide"
+    "coverage_decide",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -3981,7 +4000,8 @@
    "told_while_away": 0,
    "way_out": [
     "audit_decide",
-    "coverage_decide"
+    "coverage_decide",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -5082,7 +5102,8 @@
    "way_out": [
     "audit_decide",
     "coverage_decide",
-    "medchron_job_resume"
+    "medchron_job_resume",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -5193,7 +5214,8 @@
    "told_while_away": 0,
    "way_out": [
     "audit_decide",
-    "coverage_decide"
+    "coverage_decide",
+    "update_settle"
    ],
    "wiped": false
   },
@@ -5708,7 +5730,7 @@
    "state": "held",
    "told_while_away": 0,
    "way_out": [
-    "update_decide"
+    "deliver_by_smd"
    ],
    "wiped": false
   },
@@ -5734,7 +5756,7 @@
    "state": "held",
    "told_while_away": 0,
    "way_out": [
-    "update_decide"
+    "deliver_by_smd"
    ],
    "wiped": false
   },
@@ -5841,7 +5863,7 @@
    "state": "held",
    "told_while_away": 0,
    "way_out": [
-    "update_decide"
+    "deliver_by_smd"
    ],
    "wiped": false
   },
@@ -6053,7 +6075,7 @@
    "state": "held",
    "told_while_away": 0,
    "way_out": [
-    "update_decide"
+    "deliver_by_smd"
    ],
    "wiped": false
   },
@@ -6213,7 +6235,7 @@
    "state": "held",
    "told_while_away": 0,
    "way_out": [
-    "update_decide"
+    "deliver_by_smd"
    ],
    "wiped": false
   },
@@ -6620,7 +6642,7 @@
    ],
    "wiped": false
   },
-  "running/update_decide": {
+  "running/update_settle": {
    "code": null,
    "ended_while_away": false,
    "ending": "delivered",
@@ -7265,7 +7287,7 @@
    ],
    "wiped": false
   },
-  "submitted/update_decide": {
+  "submitted/update_settle": {
    "code": null,
    "ended_while_away": false,
    "ending": "delivered",

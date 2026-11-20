@@ -128,14 +128,14 @@ def test_a_wrong_value_is_corrected_on_a_yes_yes_verify_with_one_write(scene, mo
     client = Client()
     sr, doc, log = scene(client)
     writes: list[str] = []
-    real = Path.write_text
+    real = AP.write_atomic
 
-    def counted(self: Path, data: str, *a: Any, **kw: Any) -> int:
-        if self == doc:
+    def counted(path: Path, data: str) -> None:
+        if path == doc:
             writes.append(data)
-        return real(self, data, *a, **kw)
+        real(path, data)
 
-    monkeypatch.setattr(Path, "write_text", counted)
+    monkeypatch.setattr(AP, "write_atomic", counted)  # the one write, atomic (temp file and rename)
     assert EA.run(sr) == 0, log
     out = doc.read_text(encoding="utf-8")
     assert "The pulse was 78 at triage during the visit. (Exhibit 1 - p. 2)" in out and "pulse was 72" not in out

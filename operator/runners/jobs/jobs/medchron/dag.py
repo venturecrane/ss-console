@@ -549,6 +549,10 @@ STAGES: tuple[Stage, ...] = (
 #: The rows ``dag_update`` reuses by name, the entry read's ``audit`` included
 #: (since 2026-11-20 the update reads its new entries as the full lane does).
 BY_NAME = {s.name: s for s in STAGES}
+#: A removed stage -> the stage that does its work now, for a ``--redo`` (or a
+#: broker resume) naming it: the update review went on 2026-11-20 and the
+#: entry read's ``audit`` replaced it.
+RENAMED = {"update_review": "audit"}
 ORDER = [s.name for s in STAGES]
 
 

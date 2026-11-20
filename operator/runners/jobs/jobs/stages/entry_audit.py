@@ -83,8 +83,10 @@ from ..medchron.audit.run import AuditPaths, run_pool
 from ..medchron.config import DEFAULT_AUDIT_WORKERS
 from ..medchron.page_mode import Modes
 from ..medchron.update import entry_confirm as EC, entry_read as ER, review_pages as RV, review_repair as RR
-from . import audit_loop, entry_audit_apply as AP, entry_audit_io as IO, entry_audit_update as EU
-from .base import StageRun
+from . import audit_loop, entry_audit_apply as AP, entry_audit_confirm as CF, entry_audit_held as HELD
+from . import entry_audit_io as IO, entry_audit_update as EU
+from .update_base import update_dir
+from .base import StageRun, read_json
 from .read_inputs import client_line, image_source
 
 EXIT_HELD, EXIT_DEFECT, EXIT_INFRA, EXIT_PENDING = 1, 3, 75, 9
@@ -141,6 +143,8 @@ def _start(sr: StageRun) -> int:
     update = sr.job.update is not None
     if update:
         EU.path(sr.slug_dir, sr.unit.unit).unlink(missing_ok=True)  # this run's verdict, never an earlier one's
+        if HELD.consume(sr.slug_dir, sr.unit.unit, md):
+            sr.log("entry read: SMD changed the held document; what the held lines lost is named for proof 10")
     pl = IO.plan(sr.slug_dir, sr.unit.unit, sr.cfg, md, update)
     workers = int(sr.cfg.get("levers", "audit_workers") or DEFAULT_AUDIT_WORKERS)
     modes = Modes.open(sr.slug_dir, sr.unit.unit)
@@ -165,23 +169,35 @@ def _run(c: Ctx, doc: Path, md: str, pl: IO.Plan) -> int:
         sr.log(f"entry read HELD: {len(unread)} entr(ies) could not be read against their pages: {named}")
         return EXIT_HELD
     items = [(f"{name}.f{i}", u, f) for r in reads for name, u, p in r.got for i, f in enumerate(p.findings)]
+    items += CF.open_items(reads) if c.update else []
     proposals = AP.propose(sr, items)
-    _check_cost(c, [p for p in proposals if isinstance(p, EC.Proposal)])
-    verifies = _pool(c, list(zip(items, proposals)), lambda ip: _verify(c, ip[0][0], ip[1]))
+    if c.update:  # a line SMD kept on a held job is never held or edited again
+        proposals = CF.smd_settled(sr, items, proposals)
+    confirms = sum(1 for (_n, u, _f), p in zip(items, proposals) if c.update and CF.needs_confirm(u, p))
+    _check_cost(c, [p for p in proposals if isinstance(p, EC.Proposal)], confirms)
+    seconds = _pool(c, list(zip(items, proposals)), lambda ip: _second(c, ip[0], ip[1]))
     if c.ask.pending:
         return _pending(c, "verify")
-    decisions = AP.decide(proposals, verifies)
+    decisions = AP.decide(proposals, seconds)
     v = EU.Verdict()
 
     def veto() -> str:
-        got = EU.verdict(items, decisions)
-        v.unresolved, v.withheld = got.unresolved, got.withheld
+        wrong = [CF.wrong(u, p, s) for (_n, u, _f), p, s in zip(items, proposals, seconds)]
+        got = EU.verdict(items, decisions, wrong)
+        got.spellings = CF.spellings(
+            items, EU.delivered_spellings(read_json(update_dir(sr) / "compose_report.json", {}))
+        )
+        v.__dict__.update(got.__dict__)
         return v.hold_line()
 
     held, released, broke = AP.apply(sr, doc, md, decisions, veto if c.update else None)
-    extra = _update_extra(c, v, items, decisions)
+    if c.update and not v.held and not v.not_wrong and not v.unresolved:
+        veto()  # the tripwire held first: count what would hold
+    extra = _update_extra(c, v, decisions)
     AP.record(sr, c.ask, doc, pl, reads, decisions, items, held=held, released=released, broke=broke, extra=extra)
     if held:
+        if c.update and held == v.hold_line():
+            HELD.save(sr.slug_dir, sr.unit.unit, md, v.held_lines)
         sr.log(f"entry read HELD: {held}; the document is unchanged")
         return EXIT_HELD
     n = sum(1 for d in decisions if d[0] == "apply" and d[1].outcome == "applied")
@@ -189,25 +205,36 @@ def _run(c: Ctx, doc: Path, md: str, pl: IO.Plan) -> int:
     return 0
 
 
-def _update_extra(c: Ctx, v: EU.Verdict, items: list[AP.Item], decisions: list[EC.Decision]) -> dict[str, Any] | None:
+def _update_extra(c: Ctx, v: EU.Verdict, decisions: list[EC.Decision]) -> dict[str, Any] | None:
     """The update lane's verdict, written beside the answers and summed into
     the record (counts only) on EVERY run that reached a decision, held or
     not, so a $0 replay reports how often the rule would hold; None on the
-    full chronology. When the tripwire held first, the veto was never asked:
-    the lines that would hold are counted here (no edit applied)."""
+    full chronology."""
     if not c.update:
         return None
-    if not (v.unresolved or v.withheld):
-        got = EU.verdict(items, decisions)
-        v.unresolved, v.withheld = got.unresolved, got.withheld
     EU.write(c.sr.slug_dir, c.sr.unit.unit, v, EU.removed_values(decisions))
     if v.withheld:
         c.sr.log(f"entry read: {len(v.withheld)} diagnosis claim(s) found wrong and not corrected get no table row")
     return {
-        "unresolved": sum(v.unresolved.values()),
+        "unresolved": sum(v.held.values()),
         "unresolved_by_class": dict(v.unresolved),
+        "confirmed_not_wrong_by_class": dict(v.not_wrong),
+        "unconfirmed": v.unconfirmed,
         "diagnosis_rows_withheld": len(v.withheld),
+        "provider_spellings_settled": len(v.spellings),
     }
+
+
+def _second(c: Ctx, item: AP.Item, p: EC.Proposal | str) -> Any:
+    """The second reader on one finding: the verify of a proposed edit; in
+    the update lane, a confirm of any other finding (``entry_audit_confirm``)."""
+    name, unit, f = item
+    if isinstance(p, EC.Proposal) or not (c.update and CF.needs_confirm(unit, p)):
+        return _verify(c, name, p)
+    try:
+        return CF.confirm(c.ask, name, unit, f, c.sr.cfg, c.client, c.images)
+    except IO.Pending:
+        return None
 
 
 def _pool(c: Ctx, items: list[Any], fn: Any) -> list[Any]:
@@ -228,16 +255,17 @@ def _pending(c: Ctx, phase: str) -> int:
     return EXIT_PENDING
 
 
-def _check_cost(c: Ctx, proposals: list[EC.Proposal]) -> None:
+def _check_cost(c: Ctx, proposals: list[EC.Proposal], confirms: int = 0) -> None:
     """The verify phase, priced from the real proposals and the pictures each
-    verify shows, through the driver's own limits: past the job's cap it
-    raises the same ``LimitHold`` (the firm's cap hold) as any paid stage.
-    Not under the $0 replay."""
-    if c.ask.replay or not proposals:
+    verify shows (and, in an update, its confirms at the most pictures one
+    shows), through the driver's own limits: past the job's cap it raises the
+    same ``LimitHold`` (the firm's cap hold) as any paid stage. Not under the
+    $0 replay."""
+    if c.ask.replay or not (proposals or confirms):
         return
-    usd = IO.verify_usd(c.sr, proposals)
+    usd = IO.verify_usd(c.sr, proposals, confirms)
     if usd is not None:
-        c.sr.log(f"entry read: the verify phase is {len(proposals)} verif(ies), ~{usd:.2f} USD")
+        c.sr.log(f"entry read: the verify phase is {len(proposals)} verif(ies), {confirms} confirm(s), ~{usd:.2f} USD")
         IO.check_limits(c.sr, usd)
 
 
