@@ -43,7 +43,11 @@ redraft in the firm's terms.
   it's filed." or "Received. The propounded discovery for matter 900201 was already
   being written when your email arrived, so what you wrote is not in this draft. We'll
   say so again when we reply with the filed document, and you can ask for the change
-  then."
+  then." A follow-up on a draft that stopped on our side gets the revise
+  acknowledgment ("Received. We'll make those changes to the memo for matter
+  900201 and reply in this thread when the new version is filed."), because the
+  addition is recorded as work we owe; the firm is never told of our failure.
+  When the `say` is `none`, say nothing about that draft; answer the rest.
 - **Matter or class unclear.** One question, naming the candidate matters by
   number or the two classes the words could mean.
 

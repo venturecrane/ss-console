@@ -20,7 +20,9 @@ THE NO-LOOKBACK READ (shared with ``work_health_proof``'s owed served sets):
 The broker records the work in the step it arises (``workspace_broker/smd_owed.py``):
 a drafting request refused on our side (the attorney was given the normal
 acknowledgment), or a question the help guide does not answer (he was told the
-Operator would research it and get back to him). Each is listed here until SMD closes it
+Operator would research it and get back to him), or an addition to a draft whose
+job had stopped (he was given the revise acknowledgment; the item names the
+job, and delivering it by hand closes the item). Each is listed here until SMD closes it
 in ``work-health-closed.yaml`` (``job: <owed id>``), or, for a drafting request
 opened as a job and delivered by hand, until that job is delivered (the broker
 stops returning it) or a job for the same request is accepted (the broker
@@ -36,6 +38,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import inspect
+import re
 from typing import Any, Callable, Optional
 
 from bin.lib import seam_pull
@@ -43,11 +46,18 @@ from bin.lib.work_health import Config, Item, hhmm, item, meta, parse_ts, reason
 
 CODE = "smd_owed"
 KIND = "job_hand_step"
+#: The ended job a ``drafting_addition`` item's detail names
+#: (``workspace_broker.smd_owed.owe_addition``: "...; job <id> had ended failed").
+_ENDED_JOB = re.compile(r"\bjob (\S+) had ended\b")
 
 _WHAT = {
     "drafting_refused": (
         "A drafting request was refused on our side at {at} ({detail}); the attorney was given the normal "
         "acknowledgment, so the draft is owed. Request email {ref}."
+    ),
+    "drafting_addition": (
+        "The requester added to a draft whose job had stopped, at {at} ({detail}); they were told we'll make those "
+        "changes and reply when the new version is filed, so the change is owed. Addition email {ref}."
     ),
     "help_question": (
         "A firm person asked something the help guide does not answer at {at}, and was told the Operator would "
@@ -55,6 +65,11 @@ _WHAT = {
     ),
 }
 _TODO = {
+    "drafting_addition": (
+        "Make the change by hand: draft job {job} with what that email asks, file the new version in the matter, "
+        "then record it with jobs.drafting.deliver_by_smd {job} (runbook drafting-deliver-by-smd); recording that "
+        "delivery closes this. Close it in work-health-closed.yaml (job: {owed}) if it is answered another way."
+    ),
     "drafting_refused": (
         "Fix the cause, or draft and file it by hand: open it as a job (workspace_broker.smd_owed open-job {owed}, "
         "runbook drafting-deliver-by-smd), then record it with jobs.drafting.deliver_by_smd {owed}. Close it in "
@@ -100,11 +115,14 @@ def _line(seat: str, owed_id: str, ts: datetime, md: dict) -> Item:
     todo = _TODO.get(
         kind, "Answer it through the SMD note lane, then close it in work-health-closed.yaml (job: {owed})."
     )
+    detail = str(md.get("detail") or "no detail").rstrip(".")
+    ended = _ENDED_JOB.search(detail)
     fill = {
         "at": hhmm(ts),
-        "detail": str(md.get("detail") or "no detail").rstrip("."),
+        "detail": detail,
         "ref": str(md.get("request_ref") or "(none recorded)"),
         "owed": owed_id,
+        "job": ended.group(1) if ended else "(the job named in the detail)",
     }
     return item(seat, KIND, f"owed:{owed_id}", ts, what.format(**fill), todo.format(**fill), job=owed_id)
 

@@ -133,7 +133,13 @@ def _fixed_sentences() -> list[str]:
     ):
         says.append(
             drafting._say(
-                result, {"matter_number": "4417", "document_class": "memo", "state": state}
+                result,
+                {
+                    "matter_number": "4417",
+                    "document_class": "memo",
+                    "state": state,
+                    "smd_told": True,
+                },
             )
         )
     return says

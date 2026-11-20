@@ -97,6 +97,26 @@ def test_a_help_question_is_listed_in_its_own_words() -> None:
         assert words in it.what and "note lane" in it.todo
 
 
+def test_an_addition_to_a_stopped_draft_tells_staff_to_make_it_by_hand() -> None:
+    """Owner's ruling, 2026-11-20: the requester was given the revise
+    acknowledgment, so the line names the ended job and how to deliver it."""
+    job = "01JENDEDJOBAAAAAAAAAAAAAAA"
+    row = {
+        "id": OWED,
+        "created_at": (NOW - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+        "kind": "drafting_addition",
+        "request_ref": REF,
+        "document_class": "memo",
+        "matter_number": "4417",
+        "refusal_code": "",
+        "detail": f"addition to the memo for matter 4417; job {job} had ended failed",
+    }
+    (it,) = owed_wh.smd_owed_items(SEAT, [], CFG, NOW, open_owed={"owed": [row], "owed_jobs": []})
+    assert "added to a draft whose job had stopped" in it.what and REF in it.what
+    assert f"jobs.drafting.deliver_by_smd {job}" in it.todo and "file the new version" in it.todo
+    assert it.job == OWED
+
+
 def test_with_nothing_recorded_the_unsent_request_is_listed_unanswered() -> None:
     """Broker down: the overlay sends nothing (say none), the relay holds any
     draft, and the request shows as held, or as no reply when nothing was drafted."""

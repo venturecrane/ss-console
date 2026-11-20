@@ -125,7 +125,11 @@ def add_to_request(
     *,
     wait: float = WAIT_SECONDS,
     now: Callable[[], str],
+    owe: Callable[[dict[str, Any], str, str], bool] | None = None,
 ) -> dict[str, Any]:
+    """The result decides what the requester is told. A job that had ended
+    ``failed`` answers ``smd_told``: whether ``owe(row, request_ref, state)``
+    recorded the addition as work SMD owes (``smd_owed.owe_addition``)."""
     job_id = str(request.get("job_id") or "").strip()
     ref = str(request.get("request_ref") or "").strip()
     by = str(request.get("requested_by") or "").strip().lower()
@@ -149,8 +153,16 @@ def add_to_request(
         return out("no_words", **named)
     if len(words) > MAX_WORDS:
         return out("too_long", **named)
+
+    def ended(state: Any, **extra: Any) -> dict[str, Any]:
+        if state == "failed":
+            # The addition cannot reach a failed draft. It is work SMD owes,
+            # recorded in this step, and the answer says whether it was.
+            extra["smd_told"] = bool(owe is not None and owe(row, ref, "failed"))
+        return out("job_ended", state=state, **extra, **named)
+
     if row["state"] not in IN_FLIGHT:
-        return out("job_ended", state=row["state"], **named)
+        return ended(row["state"])
     key, at = _key(ref), now()
     marker = {"job_id": job_id, "key": key, "by": by, "at": at, "words": words}
     answer = ask_runner(db.queue_dir, job_id, key, marker, wait) or {"result": "not_confirmed"}
@@ -164,8 +176,9 @@ def add_to_request(
         {"job_id": job_id, "result": result, "request_ref": ref, "envelope_digest": digest},
         row["matter_id"],
     )
-    extra = {"state": (db.read(job_id) or {}).get("state")} if result == "job_ended" else {}
-    return out(result, repeat=bool(answer.get("repeat")), **extra, **named)
+    if result == "job_ended":
+        return ended((db.read(job_id) or {}).get("state"), repeat=bool(answer.get("repeat")))
+    return out(result, repeat=bool(answer.get("repeat")), **named)
 
 
 def carried_words(row: dict[str, Any] | None) -> list[dict[str, Any]]:
