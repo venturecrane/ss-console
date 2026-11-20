@@ -241,6 +241,9 @@ const EXPECTED_VERBS = [
   // an administrator's code request. Gateway-only; each writes its own row.
   'sender_enrollment_issue',
   'sender_enrollment_redeem',
+  // Work SMD owes a firm person, recorded in the step it arose (smd_owed.py).
+  'smd_owed_open',
+  'smd_owed_record',
   // Every write to a firm's Smokeball, recorded before it is sent (the
   // connector's write_record.py refuses a write whose row did not land).
   'smokeball_write_append',

@@ -620,7 +620,7 @@
     "RULE_LAPSED": {
       "side": "ss-console",
       "producerFile": "operator/workspace_broker/establishment_constants.py",
-      "reason": "ss#2546. The broker appends this when the person who asked for a rule has been TOLD it lapsed unanswered, not when the sweep marks it. That ordering is the point: the mark is bookkeeping, the row is the moment the firm learned something. A lapse has no other row anywhere - nothing was committed and nobody decided - so this is the only record that a request died, which is why the sweep now marks an expired row instead of deleting it. Reporting a DECLINE writes nothing here: RULE_DECLINED already recorded that decision."
+      "reason": "ss#2546. The broker appends this when the person who asked for a rule has been TOLD it lapsed unanswered, not when the sweep marks it. That ordering is the point: the mark is bookkeeping, the row is the moment the firm learned something. A lapse has no other row anywhere - nothing was committed and nobody decided - so this is the only record that a request died, which is why the sweep now marks an expired row instead of deleting it. Reporting a DECLINE writes nothing here: RULE_DECLINED already recorded that decision. 2026-11-19: a person's own rule (no administrator involved) that they never confirmed lapses with no letter owed, so the broker's sweep writes this row at the lapse itself, with notified false and reason own_rule_unconfirmed: still the record that the rule died, and nobody is told."
     },
     "OPS_REQUEST_RECORDED": {
       "side": "ss-console",

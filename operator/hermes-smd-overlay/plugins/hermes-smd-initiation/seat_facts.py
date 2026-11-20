@@ -852,7 +852,7 @@ def _help_section(
         "read": True,
         "sender": who,
         "requests": requests,
-        **help_guide.guide_fields(bound=bound, roots=roots, unreadable=unreadable),
+        **help_guide.guide_fields(bound, roots, unreadable, requests),
         "note": (
             "Offer only requests whose sender_may_ask is true, worded like their "
             "example. Never offer, describe or promise a request this list does not "

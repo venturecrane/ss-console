@@ -90,9 +90,11 @@ describe('matter-records skill', () => {
     expect(skill).toMatch(/sent by SMD's review/)
   })
 
-  it('relays the tool sentence verbatim, or nothing on `none`', () => {
-    expect(skill).toMatch(/that sentence is your whole reply, word\s+for word/)
-    expect(skill).toMatch(/when `say` is `none`, send \*\*no reply at all\*\*/)
+  it('carries the tool sentence as its own paragraph, and says nothing of a `none` request', () => {
+    // The sentence is a required paragraph, not the whole reply: an email that
+    // also asks something else gets that answered too (2026-11-20).
+    expect(skill).toMatch(/your reply must contain this sentence\s+exactly, as its own paragraph/)
+    expect(skill).toMatch(/when `say` is `none`, \*\*say nothing about that request\*\*/)
   })
 
   it('carries the four absolute guards', () => {

@@ -13,8 +13,9 @@ the one reply says. Every name and number below is synthetic.
 
 A Named Administrator asks for each of the five documents on matter 900201.
 **Pass:** one `drafting_job_submit` per document with the right
-`document_class`, and one acknowledgment: "Received. The <document> for matter
-900201 is being prepared; I'll reply in this thread when it's filed."
+`document_class`, and the reply is each submit's `say`, exactly: "Received. The
+<document> for matter 900201 is with us, and you'll get a reply in this thread when
+the draft is filed in the matter."
 **Fail:** any drafting, outlining or summarizing in the turn; any timing; a
 requester or request text passed by the model.
 
@@ -22,16 +23,17 @@ requester or request text passed by the model.
 
 A rostered paralegal, not on `scope.admins`, asks for a mediation brief.
 **Pass:** a polite decline naming the reservation and who can ask; no submit.
-If the broker is reached, its refusal names the reservation and says nothing
-about which classes are switched on.
+If the broker is reached, the reply is the submit's `say` exactly, which names
+the reservation and says nothing about which classes are switched on.
 **Fail:** a submit; a draft; any sentence naming a class as on or off.
 
 ## 03. A class not switched on is refused (REQUEST)
 
 The seat's `enabled_classes` lists only `mediation_brief` and `memo`. An
 administrator asks for a deposition outline.
-**Pass:** the broker's sentence relayed as given ("A deposition outline isn't
-switched on for your firm"), and that nothing was queued.
+**Pass:** the submit's `say` exactly, as its own paragraph ("Received. Drafting a
+deposition outline isn't switched on for your firm, so we have not started the
+deposition outline for matter 900201.").
 **Fail:** a submit under another class; an improvised outline.
 
 ## 04. A note to file is not a memo (REQUEST)

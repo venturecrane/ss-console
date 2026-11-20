@@ -45,13 +45,14 @@ Audit rows carry ids, counts, classes and states, never the request text.
 
 from __future__ import annotations
 
+import functools
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from . import delivery_proof, drafting_additions, library_setup_verbs, page_store_meta
+from . import delivery_proof, drafting_additions, library_setup_verbs, page_store_meta, smd_owed
 from .audit_ledger import _iso_utc
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
@@ -137,6 +138,62 @@ def enabled_classes_of(settings: dict[str, Any] | None) -> frozenset[str]:
     if not isinstance(value, list):
         return frozenset()
     return frozenset(c.strip() for c in value if isinstance(c, str) and c.strip() in DOCUMENT_CLASSES)
+
+
+#: The closed ``code`` each submit refusal carries beside its ``reason``, so the
+#: overlay answers the firm from a code, never from the reason's prose. The
+#: firm's own causes (the overlay words each one plainly for the requester):
+REFUSAL_FIRM_CODES = frozenset({"not_admin", "class_not_enabled", "allowance_spent", "underway"})
+#: SMD's side: the request is with SMD to put right. ``_refused`` records it as
+#: work SMD owes in the same step (``smd_owed``; the shortfall pipe pages and the
+#: hourly triage lists it until closed) and says so (``smd_told``); only then is
+#: the requester given the normal acknowledgment, never told of our failure.
+REFUSAL_OUR_CODES = frozenset(
+    {
+        "envelope_invalid",
+        "lane_not_enabled",
+        "cycle_unreadable",
+        "allowance_unauthored",
+        "admins_unreadable",
+        "filing_target",
+        "revise_of_root_only",
+        "revise_of_unknown",
+        "mailbox_unanswered",
+        "prior_unidentified",
+        "request_graph_unresolved",
+    }
+)
+#: The same request email already queued a job: not a refusal of the request.
+REFUSAL_DUPLICATE_CODE = "already_queued"
+REFUSAL_CODES = REFUSAL_FIRM_CODES | REFUSAL_OUR_CODES | {REFUSAL_DUPLICATE_CODE}
+
+
+def _queued_facts(db: Any, job_id: str) -> dict[str, str]:
+    """The job an email already queued, as the overlay words its reply from:
+    its matter, where it stands, and whether it revises a filed draft (review
+    2026-11-19: the sentence must be true for that job). Never its id."""
+    queued = db.read(job_id) or {}
+    conn = db._connect()
+    try:
+        row = conn.execute("SELECT revise_of FROM drafting_jobs WHERE id = ?", (job_id,)).fetchone()
+    finally:
+        conn.close()
+    return {
+        "queued_matter_number": str(queued.get("matter_number") or ""),
+        "queued_state": str(queued.get("state") or ""),
+        "queued_mode": "revise" if row and row[0] else "draft",
+    }
+
+
+class RouteRefused(str):
+    """A ``_route`` refusal: its sentence, and the closed code it carries."""
+
+    code: str
+
+    def __new__(cls, reason: str, code: str) -> RouteRefused:
+        out = super().__new__(cls, reason)
+        out.code = code
+        return out
 
 
 class ThreadUnknown(RuntimeError):
@@ -295,7 +352,9 @@ class DraftingVerbs:
             library and library_id and file_to["number"] == library and file_to["id"].strip().lower() == library_id
         )
 
-    def _route(self, envelope: dict[str, Any], revise_of: str, peer_uid: int | None) -> dict[str, Any] | str | None:
+    def _route(
+        self, envelope: dict[str, Any], revise_of: str, peer_uid: int | None
+    ) -> dict[str, Any] | RouteRefused | None:
         """REVISE OR DRAFT, decided here from the job store, never by the model.
 
         A request is a revision when a brief of its class was DELIVERED on its
@@ -308,10 +367,13 @@ class DraftingVerbs:
         delivered = self._db.delivered_on_matter(envelope["matter"]["id"], envelope["document_class"])
         if revise_of:
             if peer_uid != 0:
-                return "revise_of is accepted from root only; nothing was queued"
+                return RouteRefused("revise_of is accepted from root only; nothing was queued", "revise_of_root_only")
             prior = next((r for r in delivered if r["id"] == revise_of), None)
             if prior is None:
-                return f"job {revise_of} is not a delivered draft of this class on this matter; nothing was queued"
+                return RouteRefused(
+                    f"job {revise_of} is not a delivered draft of this class on this matter; nothing was queued",
+                    "revise_of_unknown",
+                )
         else:
             if not delivered or self.thread_of is None:
                 return None
@@ -319,68 +381,92 @@ class DraftingVerbs:
                 here = self.thread_of(envelope["request_ref"])
                 prior = next((r for r in delivered if here and self.thread_of(r["request_ref"]) == here), None)
             except ThreadUnknown:
-                return (
+                return RouteRefused(
                     "this email could not be matched to the email thread of the draft already filed on the matter "
                     "(the mailbox did not answer), so it is not known whether it asks to revise that draft; "
-                    "nothing was queued"
+                    "nothing was queued",
+                    "mailbox_unanswered",
                 )
             if prior is None:
                 return None
         files = self._db.proven_files(prior["id"])
         if not files or not prior.get("folder_id"):
-            return (
+            return RouteRefused(
                 f"the draft filed as job {prior['id']} cannot be identified on the matter by file id, so it cannot be "
-                "revised in place; nothing was queued"
+                "revised in place; nothing was queued",
+                "prior_unidentified",
             )
         return {"prior_job_id": prior["id"], "folder_id": prior["folder_id"], "files": files}
 
-    def _submit(self, request: dict[str, Any], peer_uid: int | None = None) -> dict[str, Any]:
-        def refused(reason: str, **extra: Any) -> dict[str, Any]:
-            return {"ok": True, "accepted": False, "reason": reason, **extra}
+    def _refused(self, raw: Any, reason: str, code: str, **extra: Any) -> dict[str, Any]:
+        """A refusal. An our-side cause is recorded as work SMD owes in this same
+        step (``smd_owed``), and the answer says whether it was (``smd_told``):
+        the overlay answers it with the normal acknowledgment only then."""
+        db_path = self.ledger._db_path if self.ledger is not None else None
+        ref = str(raw.get("request_ref") or "") if isinstance(raw, dict) else ""
+        if code == "envelope_invalid" and smd_owed.first_invalid(db_path, ref):
+            # The model's own call was malformed: it is told what is wrong and
+            # corrects it. Owed only when the same email fails validation again.
+            extra["correct_call"] = True
+        elif code in REFUSAL_OUR_CODES:
+            extra["smd_told"] = smd_owed.owe_drafting(db_path, self._audit_append, raw, code)
+        return {"ok": True, "accepted": False, "reason": reason, "code": code, **extra}
 
+    def _submit(self, request: dict[str, Any], peer_uid: int | None = None) -> dict[str, Any]:
         raw = request.get("envelope") or {}
+        refused = functools.partial(self._refused, raw)
         try:
             envelope = validate_envelope(raw)
         except EnvelopeError as exc:
-            return refused(str(exc))
+            return refused(str(exc), "envelope_invalid")
         revise_of = str(raw.get("revise_of") or "") if isinstance(raw, dict) else ""
         settings = drafting_skill_settings(self.customer_yaml)
         if settings is None:
             return refused(
-                "the drafting lane is not enabled on this seat (document-drafter is not listed); nothing was queued"
+                "the drafting lane is not enabled on this seat (document-drafter is not listed); nothing was queued",
+                "lane_not_enabled",
             )
         klass = envelope["document_class"]
         try:
             anchor, effective_from = cycle_from_customer_yaml(self.customer_yaml)
         except AnchorInvalid as exc:
-            return refused(str(exc))
+            return refused(str(exc), "cycle_unreadable")
         state = self._db.allowance(allowance_of(settings), anchor_day=anchor, effective_from=effective_from)
         if not state["authored"]:
-            return refused(f"no drafting allowance is authored for this seat ({ALLOWANCE_KEY}); nothing was queued")
+            return refused(
+                f"no drafting allowance is authored for this seat ({ALLOWANCE_KEY}); nothing was queued",
+                "allowance_unauthored",
+            )
         admins = admins_from_customer_yaml(self.customer_yaml)
         if not admins:
             return refused(
                 "the seat's administrator list (scope.admins) is empty or could not be read, so who may "
-                "request a draft cannot be established; nothing was queued"
+                "request a draft cannot be established; nothing was queued",
+                "admins_unreadable",
             )
         if envelope["requested_by"] not in admins:
             return refused(
                 "a draft may only be requested by one of the firm's Named Administrators, and the "
-                "requester on this submission is not one of them; nothing was queued"
+                "requester on this submission is not one of them; nothing was queued",
+                "not_admin",
             )
         # After the requester check, so someone who may not ask never learns
         # which classes the firm has switched on.
         if klass not in enabled_classes_of(settings):
             label = CLASS_LABEL[klass]
-            return refused(f"{label[0].upper()}{label[1:]} isn't switched on for your firm; nothing was queued")
+            return refused(
+                f"{label[0].upper()}{label[1:]} isn't switched on for your firm; nothing was queued",
+                "class_not_enabled",
+            )
         if not self._filing_target_ok(envelope, settings):
             return refused(
                 "a draft is filed on the matter it reads, or on the firm's own authored "
-                "library matter for a rehearsal; that filing target is neither, so nothing was queued"
+                "library matter for a rehearsal; that filing target is neither, so nothing was queued",
+                "filing_target",
             )
         revise = self._route(envelope, revise_of, peer_uid)
-        if isinstance(revise, str):
-            return refused(revise)
+        if isinstance(revise, RouteRefused):
+            return refused(str(revise), revise.code)
         if revise is not None:
             envelope = drafting_additions.with_carried_words(envelope, self._db.read(revise["prior_job_id"]))
         # A revision is the delivered draft finished as asked: no draft is
@@ -388,16 +474,34 @@ class DraftingVerbs:
         if revise is None and state["remaining"] <= 0:
             return refused(
                 f"this cycle's drafting allowance is spent ({state['used']} of {state['allowance']} in "
-                f"{state['cycle']}); nothing was queued"
+                f"{state['cycle']}); nothing was queued",
+                "allowance_spent",
             )
         try:
             job_id = self._db.submit(
                 envelope, allowance=state["allowance"], anchor_day=anchor, effective_from=effective_from, revise=revise
             )
         except SubmitRefused as exc:
-            extra = {"job_id": exc.job_id} if exc.job_id else {}
-            return refused(f"{exc}; nothing new was queued", **extra, **({"underway": True} if exc.underway else {}))
+            return self._ledger_refused(refused, exc)
+        # A job for the same email and class answers an owed item recorded for it.
+        smd_owed.close_for_job(self._db._db_path, envelope["request_ref"], klass, envelope["matter"]["number"], job_id)
         return self._accepted(job_id, envelope, state["remaining"], revise)
+
+    def _ledger_refused(self, refused: Callable[..., dict[str, Any]], exc: SubmitRefused) -> dict[str, Any]:
+        """The ledger's own refusal, decided in its write transaction."""
+        extra: dict[str, Any] = {"job_id": exc.job_id} if exc.job_id else {}
+        if exc.underway:
+            code = "underway"
+            extra["underway"] = True
+        elif exc.job_id:
+            code = REFUSAL_DUPLICATE_CODE
+            # The matter that email's draft is queued on: the same matter is
+            # the same request, another is a second request one email cannot
+            # start (the overlay says which; the ledger's rule is unchanged).
+            extra.update(_queued_facts(self._db, exc.job_id))
+        else:
+            code = "allowance_spent"  # the ledger's own re-check
+        return refused(f"{exc}; nothing new was queued", code, **extra)
 
     def _accepted(
         self, job_id: str, envelope: dict[str, Any], remaining: int, revise: dict[str, Any] | None
@@ -425,6 +529,9 @@ class DraftingVerbs:
             "job_id": job_id,
             "state": "submitted",
             "document_class": klass,
+            # The number the envelope validated, echoed so the overlay's
+            # acknowledgment names the matter the job was queued on.
+            "matter_number": envelope["matter"]["number"],
             "allowance_remaining": remaining,
             **mode,
         }
@@ -538,12 +645,16 @@ def drafting_dispatch(
         # Root only; the drafting lane's copy of the demand lane's resolution.
         resolved = resolve_request_graph_id(broker, envelope, peer_uid)
         if "refused" in resolved:
-            return {"ok": True, "accepted": False, "reason": resolved["refused"]}
+            return verbs._refused(envelope, resolved["refused"], "request_graph_unresolved")
         request = {**request, "envelope": resolved["envelope"]}
     return verbs.handle(action, request, peer_uid)
 
 
 __all__ = [
+    "REFUSAL_CODES",
+    "REFUSAL_DUPLICATE_CODE",
+    "REFUSAL_FIRM_CODES",
+    "REFUSAL_OUR_CODES",
     "VERBS",
     "DraftingVerbs",
     "allowance_of",

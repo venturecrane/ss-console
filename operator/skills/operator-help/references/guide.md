@@ -24,6 +24,16 @@
 - Matter numbers in examples stay as [number]. Never put a real matter, client or
   party name into an example.
 - Nothing here promises a time. Never add one.
+- "Asking for a draft" is true only on a seat that drafts. You are handed it
+  only when your seat facts' help section offers this reader a
+  `document-drafter` request; without it, say nothing about drafts.
+- When the guide does not answer what the reader asked about working with you,
+  do not guess: note `not_in_guide`. The reply must contain its sentence
+  exactly, as its own paragraph ("Let me research that and get back to you in
+  this thread."); answer anything else the email asked in other paragraphs;
+  never describe how the work is done, and never say the question went to
+  anyone. When its `say` is `none`, say nothing about that
+  question; answer the rest of the email.
 
 ## The guide
 
@@ -78,12 +88,24 @@ Every reply lands in the same email thread, so you can just keep talking to it:
 
 ### A few things that help
 
-- One matter per email.
+- One matter per email, with the matter number in the subject or the first
+  line: "On matter [number], ..."
 - Anything the file doesn't support, it leaves marked for you rather than
   guessing. Settlement figures and anything that calls for your judgment are
   always left to you.
 - If you've already written discovery in Word, attach it with the matter number
   and ask it to put it on pleading paper with the caption.
+
+### Asking for a draft
+
+- Ask for one document per email. Several related sets of the same kind of
+  discovery, like the form and special interrogatories served together, can go
+  in one request.
+- To change a draft, reply in that draft's own email thread with what to
+  change. A new email starts a new request.
+- To make a preference stick, state it as a rule in one line, like "In my
+  discovery responses, always put the objections first." It reads the rule
+  back to you, and your reply confirming it is what makes it stick.
 
 ### When to train it
 

@@ -160,6 +160,7 @@ RANK = {
     "monitor_gap": -1,
     "unreadable": 0,
     "no_reply": 10,
+    "could_not": 11,
     "reply_held": 12,
     "job_stuck": 20,
     "job_held": 22,

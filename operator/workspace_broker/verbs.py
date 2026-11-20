@@ -68,6 +68,7 @@ from . import (
     note_verbs,
     records_order_acts,
     records_verbs,
+    smd_owed,
 )
 from .medchron_verbs import medchron_dispatch
 from .reply_text import with_reply_text
@@ -186,6 +187,10 @@ VERBS: tuple[Verb, ...] = (
     # SMD closes an ops request quietly: the requester was already answered
     # elsewhere, so no letter may follow. Root only (a person on the seat).
     Verb("ops_close_by_smd", _only(ROOT), establish_verbs.establish),
+    # Work SMD owes a person (a help question), recorded now.
+    Verb("smd_owed_record", _only(AGENT), smd_owed.record_verb),
+    # The open owed items, no lookback: the seat's smd_owed runtime read (triage).
+    Verb("smd_owed_open", ROOT_OR_AGENT, smd_owed.open_verb),
     # ss#2614 routine 11; compound gates per medchron_verbs.py.
     Verb("medchron_job_submit", GATEWAY_OR_ROOT, _medchron),
     Verb("medchron_job_status", GATEWAY_ROOT_OR_AGENT, _medchron_status),

@@ -76,6 +76,12 @@ REASON_CODES = (
     "attorney_not_rostered",
     # The firm's attorney roster is installed and cannot be read: failed, SMD alerted.
     "roster_unreadable",
+    # A response job's served sets (served.py), each before anything is paid, failed and
+    # resumable, SMD paged with smd-needs.json: no served.json yet, a set type outside the
+    # closed list, or a file outside the closed shape.
+    "served_unknown",
+    "served_other_set",
+    "served_invalid",
 )
 REASON = re.compile(r"^(" + "|".join(REASON_CODES) + r"): ")
 
@@ -160,7 +166,14 @@ class Verdict:
     #: This filing is a held ledger brief SMD released (``evidence_lane``):
     #: the lane counts it toward ``evidence.review_first``.
     smd_released: bool = False
+    #: A response job's served sets, each filed (with its document's name) or
+    #: being prepared by us (``served.outcomes``); on a delivered verdict only.
+    served_sets: list[dict[str, Any]] = field(default_factory=list)
 
     def to_list(self) -> list[dict[str, Any]]:
-        d = {k: v for k, v in self.__dict__.items() if not (k == "proof" and v is None)}
+        d = {
+            k: v
+            for k, v in self.__dict__.items()
+            if not (k == "proof" and v is None) and not (k == "served_sets" and not v)
+        }
         return [{**d, "unit": "drafting", "kind": "drafting"}]

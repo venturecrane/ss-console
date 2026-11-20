@@ -55,6 +55,10 @@ The schema (the engagements author writes to exactly this)::
                  files a document may cite (citations.py)
     opening_demand: {<class>: {marker, chart, column, sentence}}   OPTIONAL, the
                  demand code computes from the damages chart (opening_demand.py)
+    discovery_defaults: {sets: [special_interrogatories | requests_for_production |
+                 requests_for_admission, ...]}   OPTIONAL, the sets a propounded
+                 discovery request that names no kind of set drafts (sets.py);
+                 or asks for "the usual"; absent, it drafts as it always did
 
 ``delivery`` is the one optional section: the matter numbers a job may file to
 when they are not the matter it read (the firm's Operator library matter, for
@@ -73,6 +77,7 @@ from .. import seat_layout
 from ..firm_config import FirmConfigError, FirmFile
 
 from . import attorneys as attorneys_mod, citations, evidence_config, opening_demand, page_limits
+from . import sets as sets_mod
 from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
@@ -291,7 +296,10 @@ def _shape(data: Any) -> list[str]:
         if s not in SCHEMA
         and s not in OPTIONAL
         and s not in (attorneys_mod.KEY, evidence_config.KEY, verify_config.KEY, citations.KEY, opening_demand.KEY)
+        and s != sets_mod.DEFAULTS_KEY
     ]
+    if sets_mod.DEFAULTS_KEY in data:
+        out += sets_mod.validate_defaults(data[sets_mod.DEFAULTS_KEY])
     if opening_demand.KEY in data:
         out += opening_demand.validate(data[opening_demand.KEY], CLASSES)
     if citations.KEY in data:

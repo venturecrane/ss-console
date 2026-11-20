@@ -9,6 +9,10 @@ provides_hooks:
   # search_files, skill_view, terminal and execute_code may not read a skill
   # the live customer.yaml does not enable.
   - pre_tool_call
+  # The help line counts as offered only once a drafted reply carries it
+  # (2026-11-19): observes create_draft, blocks nothing.
+  - post_tool_call
 hooks:
   - pre_llm_call
   - pre_tool_call
+  - post_tool_call

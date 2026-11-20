@@ -76,6 +76,15 @@ CODES = frozenset(
         # (jobs/medchron/unrecorded.py); the page says which ending, whether a
         # wake was owed and whether it went. SMD only; it is not a proof failure.
         "ending_unrecorded",
+        # 2026-11-19: a response job delivered its Operator-drafted sets while
+        # SMD still owes the others (drafting/served.py); open until SMD records
+        # each with jobs.drafting.deliver_by_smd --set. SMD only.
+        "served_owed",
+        # 2026-11-19 (owner's ruling): work SMD owes a firm person, recorded by
+        # the broker itself in the step it arose (workspace_broker/smd_owed.py):
+        # an our-side drafting refusal or a help question.
+        # Never written by a job; listed here so the vocabularies stay one.
+        "smd_owed",
     }
 )
 

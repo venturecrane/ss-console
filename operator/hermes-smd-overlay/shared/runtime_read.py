@@ -65,6 +65,7 @@ SUPPORTED_KINDS: frozenset[str] = frozenset(
         "entitlements",
         "usage_export",
         "medchron_jobs",
+        "smd_owed",
     }
 )
 _REAL_KINDS: frozenset[str] = frozenset(
@@ -77,6 +78,7 @@ _REAL_KINDS: frozenset[str] = frozenset(
         "entitlements",
         "usage_export",
         "medchron_jobs",
+        "smd_owed",
     }
 )
 
@@ -302,19 +304,15 @@ def read_runtime(
             return {"entries": [], "cursor": None, "error": "unknown section"}
         return _read_config_export(section, customer_yaml_path)
 
-    if kind == "jobs":
-        # The job ledger is broker-owned (gateway-PID-gated verbs), not a
-        # sqlite file the gate can open mode=ro — so this read goes over the
-        # broker socket, not ``db_path``. Fail-safe: a broker that is down or
-        # has no job ledger configured returns an honest empty page (same
-        # posture as a missing audit DB), never a 500.
-        return _read_jobs()
-
-    if kind == "medchron_jobs":
-        # Same posture as ``jobs``: broker-owned, read over the socket through
-        # the agent-uid-gated ``medchron_job_list`` verb (this gate process is
-        # the agent uid on a non-gateway PID), honest empty when unreachable.
-        return _read_medchron_jobs()
+    if kind in _SOCKET_READS:
+        # Broker-owned, read over the broker socket, not ``db_path``:
+        # ``jobs`` (the job ledger; gateway-PID-gated verbs), ``medchron_jobs``
+        # (the agent-uid-gated ``medchron_job_list``, this gate process being
+        # the agent uid on a non-gateway PID), and ``smd_owed`` (work SMD owes a
+        # firm person, open until closed, NO lookback: the hourly triage's read,
+        # ``workspace_broker/smd_owed.py``). A broker that is down: an honest
+        # empty page for the first two, ``unavailable`` for ``smd_owed``.
+        return _SOCKET_READS[kind]()
 
     if kind == "entitlements":
         # Live runtime exposure overrides (ss#2003 Q7 — the entitlement dial).
@@ -423,6 +421,19 @@ def _read_medchron_jobs() -> dict[str, Any]:
     entries = [{col: row.get(col) for col in _MEDCHRON_JOBS_COLUMNS} for row in rows]
     credits = [{col: row.get(col) for col in _MEDCHRON_CREDIT_COLUMNS} for row in credit_rows]
     return {"entries": entries, "cursor": None, "credits": credits}
+
+
+def _read_smd_owed() -> dict[str, Any]:
+    from shared import smd_owed
+
+    return smd_owed.open_page()
+
+
+_SOCKET_READS = {
+    "jobs": _read_jobs,
+    "medchron_jobs": _read_medchron_jobs,
+    "smd_owed": _read_smd_owed,
+}
 
 
 # audit_log columns (per-customer D1) → the console wire shape consumed by

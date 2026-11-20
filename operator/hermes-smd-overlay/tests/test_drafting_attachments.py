@@ -82,7 +82,10 @@ def test_attachments_that_cannot_be_read_queue_nothing(drafting, monkeypatch) ->
     _graph(monkeypatch, mod, graph)
     _email()
     out = json.loads(mod.drafting_job_submit({**MATTER, "document_class": "discovery_set"}))
-    assert out["accepted"] is False and "could not be read" in out["reason"]
+    # SMD's side, and the overlay's own refusal: nothing reached the broker, so
+    # nothing records it as owed, and nothing is said (owner's ruling, 2026-11-19).
+    assert out["accepted"] is False and out["code"] == "attachment_unreadable"
+    assert out["say"] == "none"
     assert client.envelopes == []
 
 
@@ -94,7 +97,11 @@ def test_too_many_word_documents_queue_nothing(drafting, monkeypatch) -> None:  
     _graph(monkeypatch, mod, graph)
     _email()
     out = json.loads(mod.drafting_job_submit({**MATTER, "document_class": "discovery_set"}))
-    assert out["accepted"] is False and "at most 6" in out["reason"]
+    assert out["accepted"] is False and out["code"] == "too_many_attachments"
+    # Nothing was queued, so sending the request again starts clean.
+    assert out["say"].endswith(
+        "Please send the request again with at most 6 Word documents attached."
+    )
 
 
 def test_a_request_with_no_word_documents_queues_as_before(drafting, monkeypatch) -> None:  # noqa: F811

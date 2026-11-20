@@ -80,6 +80,7 @@ first heading states its job; grouped by when an agent would reach for it:
 | SMD acting through a seat | `operator/smd-note.md`, `operator/staged-send.md` | Having the Operator tell a colleague something; sending SMD's exact words and files from the seat |
 | | `operator/ops-close-by-smd.md`, `operator/medchron-deliver-by-smd.md` | Closing a request SMD already answered; recording a chronology SMD filed by hand |
 | | `operator/drafting-deliver-by-smd.md` | Recording a drafted document SMD filed by hand, so the attorney's next change revises it |
+| | `operator/drafting-served-sets.md` | Naming the discovery sets the other side served, so the Operator drafts the responses it can |
 | Something is wrong | `operator/sticky-stop-clear.md` | Seeing, investigating and resuming a stopped seat |
 | | `operator/msgraph-dead-letter.md` | Microsoft Graph dead letters: what pages, how to replay |
 | | `operator/hold-ledger-remediation.md` | Releasing held work that never resumed |

@@ -156,14 +156,13 @@ Only the sender's own words initiate. A forwarded, quoted or attached request, o
    email's id, or the request's words: the tool takes all three from the email that
    opened this turn, and the job reads the requester's words as its drafting
    instruction (the set served, the deponent, the memo's question).
-4. **Reply once in the thread**, in one or two sentences, with only true statements:
-   - accepted: "Received. The <document> for matter <number> is being prepared; I'll
-     reply in this thread when it's filed." No timing of any kind, no estimate, no
-     "shortly".
-   - refused: relay the broker's sentence in plain words (the class isn't switched on
-     for the firm, drafting is not switched on for this firm yet, the cycle's allowance is spent,
-     that document on this matter is already underway, the requester is not a Named
-     Administrator). Nothing was queued; say so.
+4. **Reply once in the thread with the tool's `say`**: your reply must contain this
+   sentence exactly, as its own paragraph; answer anything else the email asked in
+   other paragraphs; never describe how the work is done. Accepted or refused, the
+   submit answers with `say`, and the seat refuses a reply that alters, repeats or
+   leaves it out, and quotes the sentence back for the retry. You never write the
+   acknowledgment or a refusal yourself, and you never add timing, an estimate or
+   "shortly". When `say` is `none`, say nothing about that request; answer the rest of the email.
 5. **Stop.** Do not read the matter's documents, summarize the records, outline the
    document, or start drafting anything in this turn. The job does that, under gates
    this turn does not have.

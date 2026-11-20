@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import pytest
 
-from shared import request_index
+from shared import reply_sent, request_index
 from shared.inbound import SESSION_INBOUND_ORIGIN, InboundOrigin
 from tests.conftest import load_plugin
 
@@ -123,6 +123,11 @@ def _offered(plugin) -> bool:
     return plugin.help_state.read_sender(_SENDER, None)["pointer_offered"]
 
 
+def _origin(message_id: str) -> InboundOrigin:
+    """The email a sent reply answered, as the relay's send record has it."""
+    return InboundOrigin(sender_address=_SENDER.lower(), message_id=message_id, inbox_id="op@x")
+
+
 # --------------------------------------------------------------------------- #
 # The observed defect, closed
 # --------------------------------------------------------------------------- #
@@ -147,7 +152,31 @@ def test_a_first_email_gets_the_exact_line_and_it_is_recorded(plugin, paths, mon
     assert "do not call operator_help_signals" in ctx
     # The authority statement still rides the same return.
     assert "INITIATION AUTHORITY" in ctx
+    # Offered means it was SENT (review 2026-11-19): not when it was handed over,
+    # and not when a draft carried it (the relay may hold that draft).
+    assert _offered(plugin) is False
+    plugin.on_post_tool_call(
+        tool_name="mcp_msgraph_mail_create_draft",
+        session_id="s-1",
+        args={"body_text": f"Here you go.\n\n{plugin.help_state.POINTER_LINE}"},
+    )
+    assert _offered(plugin) is False
+    reply_sent.notify(
+        _origin("m-1"), "<CAsent1@x>", f"Here you go.\n\n{plugin.help_state.POINTER_LINE}"
+    )
     assert _offered(plugin) is True
+
+
+def test_a_sent_reply_without_the_line_records_nothing(plugin, paths, monkeypatch):
+    """FALSIFIER: record at hand-over or at draft, and the line counts as
+    offered though it never went out."""
+    _seat(plugin, monkeypatch)
+    _arrive("m-1")
+    _hook(plugin, "s-1", "m-1")
+    reply_sent.notify(
+        _origin("m-1"), "<CAsent2@x>", "Received. The memo for matter 4417 is with us."
+    )
+    assert _offered(plugin) is False
 
 
 def test_the_line_text_is_the_single_constant_with_no_em_dash(plugin):

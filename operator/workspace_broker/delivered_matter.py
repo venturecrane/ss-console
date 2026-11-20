@@ -112,6 +112,9 @@ SENTENCES: dict[str, dict[str, str]] = {
         "not_in_record": "Not in the file, marked in the draft: {items}.",
         "client": "Only the client knows, marked in the draft: {items}.",
         "verification": "The verification is left for the client to sign.",
+        "served_lead": "The responses to each set of discovery served on this matter:",
+        "served_filed": '{set}: filed as "{document}".',
+        "served_ours": "{set}: being prepared by us.",
         "discrepancies": "Where the court paper and the practice-management record differ:",
         "discrepancy": '{field}: the court paper says "{document}"; the practice-management record says "{record}".',
         "corrections": "Record fields corrected from the court's own paper:",
@@ -401,6 +404,23 @@ def _not_covered(delivery: dict[str, Any], key: str = "addition_not_covered") ->
     return lines(*(_s("drafting", key, words=a.get("words")) for a in items if isinstance(a, dict)))
 
 
+def _served_sets(delivery: dict[str, Any]) -> str:
+    """A response job's served sets, one line each: filed by its document's
+    name, or being prepared by us (the runner's ``served.outcomes``). Nothing
+    for a job without them, so every other reply is unchanged."""
+    rows = [r for r in delivery.get("served_sets") or [] if isinstance(r, dict) and _text(r.get("set"))]
+    if not rows:
+        return ""
+    out = []
+    for r in rows:
+        name = _text(r.get("document")) if r.get("status") == "filed" else None
+        if name:
+            out.append(_s("drafting", "served_filed", set=_text(r["set"]), document=name))
+        else:
+            out.append(_s("drafting", "served_ours", set=_text(r["set"])))
+    return lines(_s("drafting", "served_lead"), *out)
+
+
 def drafting(row: dict[str, Any]) -> str:
     """A drafted document's reply: delivered or held. A "set up our ..." job's
     row (``library_setup_ledger``) is worded by ``library_setup_wording``."""
@@ -425,6 +445,7 @@ def drafting(row: dict[str, Any]) -> str:
             ),
             _s("drafting", "notes", notes=and_list(notes) or None),
         ),
+        _served_sets(delivery),
         lines(
             _markers(delivery),
             _s("drafting", "verification") if row.get("document_class") == "discovery_response" else None,

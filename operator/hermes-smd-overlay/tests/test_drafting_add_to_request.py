@@ -248,7 +248,7 @@ def test_a_submit_that_collides_with_a_running_draft_carries_the_words_there(sea
     _indexed()
     _email()
     out = json.loads(mod.drafting_job_submit(MATTER, session_id=SESSION))
-    assert out["accepted"] is False and out["job_id"] == JOB and out["applied"] is True
+    assert out["accepted"] is False and out["applied"] is True and "job_id" not in out
     assert client.calls[0]["words"] == WORDS and "We added" in out["say"]
 
 

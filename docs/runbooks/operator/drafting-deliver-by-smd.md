@@ -96,6 +96,65 @@ the attorney hears only the acknowledgment. SMD then either proves the lane
 ([lane-proof](lane-proof.md)), or revises by hand, withdraws the waiting revise
 job, and records the revised files on it with this tool.
 
+**A served set SMD owed on a delivered response job.** When a response job
+delivers the sets the Operator drafted, the attorney's reply lists the others
+as "being prepared by us", SMD is paged `served_owed`, and the hourly
+work-health triage lists each owed set, from the job's own ledger row with no
+time limit, until it is filed AND the attorney has been told. Three steps, in
+this order, on the same job:
+
+1. Draft the set and file it on the matter.
+2. Record it (dry run first; `record.json` holds only that set's filed
+   documents, role `draft`):
+
+   ```bash
+   fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.drafting.deliver_by_smd <job_id> /tmp/record.json --set '<set as the reply names it>' --dry-run"
+   fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.drafting.deliver_by_smd <job_id> /tmp/record.json --set '<set>' --confirm <digest>"
+   ```
+
+   It writes the proof row first (every file of the job, this one added), adds
+   the files to the job's delivery, marks the set filed, and prints the one
+   line to tell the attorney (`<set>: filed as "<name>".`). It refuses a job
+   that is not delivered, a set the job does not owe, a file id already on the
+   job, and a job whose filed files cannot be paired with their proof. A run
+   that stopped part way is finished by running it again.
+
+3. Tell the attorney: send that line as an SMD note in his request's thread
+   ([smd-note](smd-note.md)), then mark it told:
+
+   ```bash
+   fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.drafting.deliver_by_smd <job_id> --set '<set>' --told --dry-run"
+   fly ssh console -a hermes-<slug> --pty=false -C "env -i PATH=/usr/bin:/bin /opt/jobs/.venv/bin/python -m jobs.drafting.deliver_by_smd <job_id> --set '<set>' --told --confirm <digest>"
+   ```
+
+   Until then the set stays listed ("tell the attorney: <set> filed as
+   <name>"), unless a reply in his request's thread went out after the set was
+   recorded.
+
+**A request refused on our side, which never became a job.** When the broker
+refuses a drafting request for a cause on SMD's side (`filing_target`,
+`lane_not_enabled`, `admins_unreadable` and the rest of
+`REFUSAL_OUR_CODES`), it records the request as work SMD owes in the same step,
+and the attorney gets the normal acknowledgment. The hourly work-health triage
+lists it (the broker's `smd_owed` row, by its owed id) until it is closed. There
+is no job, so this tool has nothing to record on until one is opened from that
+record: as root on the seat, open it, then record the hand delivery as above.
+
+```bash
+PYTHONPATH=/opt/workspace-broker /opt/workspace-broker/.venv/bin/python \
+  -m workspace_broker.smd_owed open-job <owed id> \
+  --db /run/smd-audit/audit.db --jobs-dir /run/smd-jobs/drafting-jobs
+```
+
+It writes the broker's database directly, as root (the ledger row, `failed`,
+under the owed id), then the job dir's envelope and a daemon state of `failed`.
+A run that stops part way is finished by running it again; it refuses an id
+with no record, or one whose job has already moved past `failed`. The triage
+line closes when the job is delivered; a request answered another way is
+closed in `work-health-closed.yaml` (`job: <owed id>`). A job accepted later for
+the same request email and class closes the owed item by itself. Code:
+`operator/workspace_broker/smd_owed.py`.
+
 Code: `operator/runners/jobs/jobs/drafting/deliver_by_smd.py`, sharing
 `operator/runners/jobs/jobs/hand_delivery.py` with the chronology's
 [medchron-deliver-by-smd](medchron-deliver-by-smd.md) (tests:

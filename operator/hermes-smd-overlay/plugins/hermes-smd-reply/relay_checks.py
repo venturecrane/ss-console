@@ -40,10 +40,12 @@ from shared import (
     matter_gate,
     provenance,
     report_render,
+    result_unwrap,
     spec_gate,
+    turn_says,
 )
 
-from . import binding, held_notice, job_reply, relay, working_drafts
+from . import binding, held_notice, job_reply, notice, relay, working_drafts
 
 _PACKAGE = __name__.rpartition(".")[0]
 #: The plugin module this copy of the steps serves. The plugin drops any earlier
@@ -352,6 +354,12 @@ def body_and_facts(
     facts, facts_hold, model_words, args = _facts(session_id, origin, args)
 
     scan_text, send_text, send_html = relay.draft_body(args)
+    # 5a. A tool wrote a fixed sentence this turn: the body must carry it, as a block.
+    say = _TURN_SAYS.get(session_id, origin.message_id)
+    if say is not None and say_held(say, origin, send_text, send_html, reply_to):
+        return None
+    if mechanics_held(origin, reply_to, send_text, send_html):
+        return None
     if facts is not None and not facts_hold:
         # The invariant, checked on the body that would go: no marker, and
         # the facts block present whenever there is one.
@@ -365,6 +373,141 @@ def body_and_facts(
     recipient_class, internal = floor
     text = (scan_text, send_text, send_html)
     return facts, facts_hold, model_words, text, recipient_class, internal
+
+
+# --------------------------------------------------------------------------
+# 5a. The turn's fixed sentence (2026-11-19)
+# --------------------------------------------------------------------------
+#
+# A tool that answers with ``say`` has written a required block: the records
+# lane's acknowledgment, the drafting lane's acknowledgment and refusals, the
+# help guide's hand-off. Until this check the skill text asked the model to
+# relay it "exactly", and nothing compared: a drafting acknowledgment could
+# leave with "shortly" added, or with the job's mechanics. Now every sentence the
+# turn noted must appear in the reply exactly, each as its own paragraph, once
+# and in order; other paragraphs may answer the rest of the email, and on such a
+# turn may not describe how the work is done (``shared.turn_says``). Otherwise
+# the reply is held with the sentence quoted back, the broker's fixed-wording
+# retry, so the redraft goes in one step. ``say: "none"`` alone means this email
+# gets no reply.
+#
+# Only the tools listed here: other tools' ``say`` (training, calendar, the
+# library-setup lane) is a sentence for the reply to include, not the reply.
+# The send path appends nothing to a body (no signature: ``relay.draft_body``
+# and the Graph ``/reply`` body are the model's words exactly), so the body is
+# compared as drafted.
+
+#: The tools whose ``say`` is a required block of the reply, by their own contract.
+SAY_TOOLS = frozenset(
+    {
+        "records_job_submit",
+        "drafting_job_submit",
+        "drafting_job_add_to_request",
+        "operator_help_note",
+    }
+)
+#: The hold reason a reply with other words is held under, and its notice.
+SAY_HOLD_REASON = "fixed_wording"
+#: A reply naming the Operator's machinery (tier 1), counted apart from it.
+MECHANICS_HOLD_REASON = "mechanics_named"
+_SAY_MAX = 1024
+
+
+#: The broker's comparison and its HTML reading, kept where the register is.
+_norm = turn_says.norm
+_from_html = turn_says.from_html
+
+
+#: The register (``shared.turn_says``), one per load of this module, which is
+#: one per load of the plugin.
+TurnSays = turn_says.TurnSays
+_TURN_SAYS = TurnSays()
+#: How many times each email's reply was held for other words (step 5a's own
+#: redraft cap, on EVERY seat: ``held_notice``'s cap is only on a seat that
+#: authors it, and a model that keeps adding a greeting loops until the turn
+#: runs out). Past ``SAY_MAX_REDRAFTS`` redrafts the model is told to stop; the
+#: hold stays ``fixed_wording``, which pages SMD as ``reply_held:fixed_wording``.
+_SAY_HOLDS = held_notice.HoldCounter()
+SAY_MAX_REDRAFTS = 2
+SAY_STOP_DETAIL = notice.FIXED_WORDING_STOP
+
+
+def note_turn(kwargs: dict[str, Any]) -> None:
+    """A tool call ended: note it as a send attempt (``_note_turn_send``) and
+    keep its whole-reply ``say``. The reply plugin's ``post_tool_call``, which
+    fires for the say tool before the model drafts. Never raises."""
+    _plugin._note_turn_send(kwargs.get("tool_name"), kwargs.get("session_id"))
+    note_say(kwargs)
+
+
+def note_say(kwargs: dict[str, Any]) -> None:
+    """Keep a whole-reply tool's ``say`` for this turn's email. Never raises."""
+    try:
+        session_id = kwargs.get("session_id") or ""
+        if (kwargs.get("tool_name") or "") not in SAY_TOOLS or not isinstance(session_id, str):
+            return
+        parsed = result_unwrap.parse_tool_result(kwargs.get("result"))
+        say = parsed.get("say") if isinstance(parsed, dict) else None
+        if not isinstance(say, str) or not say.strip() or len(say) > _SAY_MAX:
+            return
+        origin = inbound.SESSION_INBOUND_ORIGIN.bound_this_turn(session_id) if session_id else None
+        if origin is None or not origin.message_id:
+            return
+        _TURN_SAYS.note(session_id, origin.message_id, say.strip())
+        forbid = parsed.get("forbid")
+        if isinstance(forbid, dict):
+            entry = turn_says.forbid_entry(
+                str(forbid.get("matter") or ""), list(forbid.get("words") or [])
+            )
+            _TURN_SAYS.note(session_id, origin.message_id, entry)
+    except Exception:  # noqa: BLE001 - noting never breaks the hook
+        logger.warning("hermes-smd-reply: noting the turn's fixed sentence failed", exc_info=True)
+
+
+def say_held(say: Any, origin: Any, send_text: str, send_html: str, reply_to: Any = None) -> bool:
+    """Step 5a: hold a body that breaks the block rule (``shared.turn_says``).
+
+    ``say`` is the turn's required blocks in order (a lone string is one block).
+    False to go on. Otherwise the reply is held (``_held``), with the missing
+    or altered sentence, or the mechanics phrase, quoted for the redraft."""
+    blocks = (say,) if isinstance(say, str) else tuple(say)
+    # Every part the send carries must hold the blocks (the broker's rule,
+    # ``workspace_broker/fixed_wording``): a draft with the sentence in its text
+    # and other words in its HTML would send the other words.
+    problem = turn_says.send_problem(blocks, send_text, send_html, reply_to)
+    if not problem:
+        return False
+    # The first draft and SAY_MAX_REDRAFTS redrafts are told the exact text;
+    # every draft after them is told to stop.
+    capped = _SAY_HOLDS.note(origin.message_id) > SAY_MAX_REDRAFTS
+    _plugin._held(
+        SAY_HOLD_REASON,
+        origin,
+        rule="turn_say_cap" if capped else "turn_say",
+        _detail=SAY_STOP_DETAIL if capped else turn_says.refusal(problem),
+    )
+    return True
+
+
+def mechanics_held(origin: Any, reply_to: Any, send_text: str, send_html: str) -> bool:
+    """Tier 1 (review 2026-11-19): a reply to a firm address that names the
+    Operator's machinery is held on every turn, with the redraft cap of 5a."""
+    hold = turn_says.mechanics_hold(
+        reply_to,
+        send_text,
+        send_html,
+        lambda: _SAY_HOLDS.note(origin.message_id),
+        notice.MECHANICS_STOP,
+    )
+    if hold is not None:
+        _plugin._held(MECHANICS_HOLD_REASON, origin, rule=hold[0], _detail=hold[1])
+    return hold is not None
+
+
+def turn_say(session_id: str, origin: Any, send_text: str, send_html: str) -> bool:
+    """Step 5a as one predicate (the tests' entry): True to go on."""
+    say = _TURN_SAYS.get(session_id, origin.message_id)
+    return say is None or not say_held(say, origin, send_text, send_html)
 
 
 def _champion_walled(cfg: Any, session_id: str, origin: Any, reply_to: Any, scan_text: str) -> bool:
