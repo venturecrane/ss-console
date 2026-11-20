@@ -128,6 +128,15 @@ FORM_NEEDS: dict[str, frozenset[str]] = {
     "injuries_treatment": frozenset({"medical_records", "billing", "prior_discovery"}),
     "income": frozenset({"employment_wage", "billing", "prior_discovery"}),
 }
+#: Each DISC-001 section's group (the section numbers of ``forms/catalog``). A
+#: section not named here (15 denials, 16 contentions, 17 admissions, 50
+#: contract) reads every group's categories.
+SECTION_GROUP: dict[str, str] = {
+    **{s: "background" for s in ("1.0", "2.0", "3.0", "4.0", "11.0")},
+    **{s: "incident" for s in ("7.0", "12.0", "13.0", "14.0", "20.0")},
+    **{s: "injuries_treatment" for s in ("6.0", "9.0", "10.0")},
+    "8.0": "income",
+}
 #: A set answered from an inventory of the file, with no page text.
 INVENTORY_ONLY = frozenset({"requests_for_production"})
 #: Characters a unit's pack may hold (the house style, skeleton, exemplar and
@@ -225,6 +234,11 @@ def text_needs(set_type: str | None, group: str | None = None) -> frozenset[str]
             return FORM_NEEDS[group]
         return frozenset().union(*FORM_NEEDS.values())
     return NEEDS.get(str(set_type), frozenset(CATEGORIES))
+
+
+def group_of_section(section: str) -> str | None:
+    """A form section's group (``SECTION_GROUP``); None reads every group's categories."""
+    return SECTION_GROUP.get(section)
 
 
 def readers(plan: Iterable[dict[str, Any]]) -> list[tuple[str, str | None]]:

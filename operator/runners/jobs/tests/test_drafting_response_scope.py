@@ -148,6 +148,27 @@ def test_a_unit_reads_only_its_categories(tmp_path):
     assert rs.text_needs("requests_for_production") == frozenset()
 
 
+def test_a_form_section_answers_from_its_groups_pack(tmp_path):
+    """The form answer stage's source text is the scope's pack for the section's group."""
+    from jobs.drafting.finish import Unit
+    from jobs.drafting.forms.answer_stage import pack_for
+    from jobs.drafting.forms.answers import WorkUnit
+
+    data = _data(
+        tmp_path,
+        [
+            ("m", "ER record.pdf", "/Medical", ["Seen for neck pain."], []),
+            ("w", "Paystubs.pdf", "/Wage", ["Hourly rate 20.00."], []),
+        ],
+    )
+    rs.scope(data, None, _plan(rs.FORM))
+    unit = Unit("set-1", "Form set", rs.FORM, None, data / "set-1")
+    income = pack_for(unit, WorkUnit("8.0", "Loss of Income", ("8.1",)), {})
+    assert "Hourly rate" in income and "neck pain" not in income
+    assert "neck pain" in pack_for(unit, WorkUnit("6.0", "Injuries", ("6.1",)), {})
+    assert rs.group_of_section("17.0") is None and rs.group_of_section("1.0") == "background"
+
+
 def test_an_income_group_with_no_wage_file_is_a_small_pack_not_an_error(tmp_path):
     data = _data(tmp_path, [("m", "ER record.pdf", "/Medical", ["Seen."], [])])
     rs.scope(data, None, _plan(rs.FORM))

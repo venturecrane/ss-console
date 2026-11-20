@@ -148,3 +148,65 @@ def read_served_form(
     _write(Path(job_dir) / SERVED, raw)
     log(f"  form read: {len(rec.checked)} boxes checked ({compact(rec.checked, cat)}), three reads agree")
     return list(rec.checked)
+
+
+def pixel_read(pdf: Path) -> dict[str, Any]:
+    """The $0 pixel read alone of one served DISC-001 file: no model, nothing
+    written (the replay's form-read stage). Its revision must be one the
+    catalogue carries (``CatalogueError`` otherwise)."""
+    texts = [str(t) for t in pdf_mod.page_texts(pdf)]
+    cat = load(DISC_001, revision_of(texts) or "")
+    px = checkbox.pixel_read(checkbox.form_pages(Path(pdf).read_bytes()), cat=cat)
+    on = px.checked()
+    boxes = set(cat.definition_boxes)
+    return {
+        "checked": sorted((k for k in on if k not in boxes), key=cat.position),
+        "unregistered": [],
+        "definition_boxes": sorted(k for k in on if k in boxes),
+        "form": cat.form,
+        "form_revision": cat.revision,
+        "unreadable_pages": [p + 1 for p in px.unreadable_pages],
+    }
+
+
+def _source_paths(data: Path) -> dict[str, Path]:
+    """Each matter document's file on disk, by its id (the pull's ``corpus.json``)."""
+    p = Path(data) / "corpus.json"
+    rows = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else []
+    return {str(r["id"]): Path(str(r["path"])) for r in rows if isinstance(r, dict) and r.get("id") and r.get("path")}
+
+
+def _unread_operator_form(s: Any) -> bool:
+    return (
+        isinstance(s, dict)
+        and s.get("set_type") == "form_interrogatories"
+        and s.get("drafted_by") == "operator"
+        and bool(s.get("source"))
+        and not s.get("checked")
+    )
+
+
+def read_found(
+    data: Path, job_dir: Path, doorway: Any, model: str, *, by_operator: bool, log: Callable[[str], None]
+) -> list[int]:
+    """The ``find`` stage's form read: every served form set the Operator drafts
+    (``drafted_by`` operator, which needs ``served.FORM_SETS_BY_OPERATOR``) and
+    that names its matter document (``source``) but no ``checked`` yet is read
+    by ``read_served_form``, so ``served.json`` carries ``form``,
+    ``form_revision`` and ``checked`` before the plan. Off (``by_operator``
+    False): nothing is read and nothing is spent; a form set stays SMD's.
+    Returns the indexes read, in order."""
+    p = Path(job_dir) / SERVED
+    if not by_operator or not p.is_file():
+        return []
+    sets = json.loads(p.read_text(encoding="utf-8")).get("sets") or []
+    paths, done = _source_paths(data), []
+    for i, s in enumerate(sets):
+        if not _unread_operator_form(s):
+            continue
+        pdf = paths.get(str(s["source"]))
+        if pdf is None or not pdf.is_file():
+            raise _stop(job_dir, {"set": i}, "form_incomplete", f"the served form's file {s['source']} is not on disk")
+        read_served_form(pdf, job_dir, i, doorway, model, log=log)
+        done.append(i)
+    return done

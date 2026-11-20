@@ -14,7 +14,7 @@ import pytest
 
 from jobs import drafting_lane
 from jobs.drafting import finish as finish_mod, served as served_mod
-from jobs.drafting.forms import catalog, checkbox, lane_hook, policy, read_stage
+from jobs.drafting.forms import checkbox, lane_hook, policy, read_stage
 from jobs.drafting.outcome import REASON, DraftingFailed
 
 import forms_tool
@@ -259,6 +259,20 @@ def test_the_release_record_counts_each_class_apart(tmp_path: Path) -> None:
     assert drafting_lane.releases(tmp_path, drafting_lane.FORM_RELEASES) == ["j2"]
 
 
+def _scoped(data: Path, corpus: dict[str, Any]) -> None:
+    """The job's extracted corpus and the scope step over it: what a form section's pack reads."""
+    from jobs.drafting import response_scope
+
+    rows = []
+    for i, (name, doc) in enumerate(corpus.items()):
+        p = data / f"text-{i}.txt"
+        p.write_text("".join(f"[p.{n}]\n{doc.pages[n]}\n" for n in sorted(doc.pages)), encoding="utf-8")
+        rows.append({"id": f"d{i}", "name": name, "folder": "/Medical", "ext": ".pdf", "pages": len(doc.pages),
+                     "transcribe": [], "text_path": str(p), "chars": len(p.read_text())})  # fmt: skip
+    (data / "extracted.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    response_scope.scope(data, None, [{"key": "set-1", "variant": "form_interrogatories", "served": 0}])
+
+
 def test_draft_writes_the_paper_the_cite_table_and_no_compose(tmp_path: Path, on: None) -> None:
     from test_forms_answer_stage import CORPUS, Door as AnswerDoor, _v
 
@@ -270,6 +284,7 @@ def test_draft_writes_the_paper_the_cite_table_and_no_compose(tmp_path: Path, on
     }
     done: list[str] = []
     run.doorway = AnswerDoor(reply)
+    _scoped(run.data, CORPUS)
     run.log = lambda _m: None
     run._json = lambda _n: {"medicals": []}
     run._context = lambda: ["- client: Pat Example"]

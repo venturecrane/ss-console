@@ -15,8 +15,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
-from . import parties, served_find, sets
-from .forms import lane_hook
+from . import parties, served as served_mod, served_find, sets
+from .forms import lane_hook, read_stage
 from .outcome import DraftingFailed
 from .served import PLAN_STOPS, PLANNED_CLASSES, clients_of, frozen, has_plan, outcomes, plan_units, review_map
 from .served import stop_note
@@ -36,6 +36,7 @@ class DiscoveryPlan:
         budget: Any
         pricing: Any
         _title: str
+        log: Callable[[str], None]
 
         def _state(self) -> dict[str, Any]: ...
         def _put(self, key: str, value: Any) -> None: ...
@@ -95,6 +96,12 @@ class DiscoveryPlan:
             other_side=other_side(self.data),
             title=self._title,
         )
+        # Each served form set the Operator drafts: its boxes read before the plan
+        # (forms/read_stage.py); with the switch off nothing is read or spent.
+        read_stage.read_found(
+            self.data, self.job.job_dir, self.doorway, model,
+            by_operator=served_mod.FORM_SETS_BY_OPERATOR, log=self.log,
+        )  # fmt: skip
 
     def _freeze_plan(self, plan: list[dict[str, Any]]) -> None:
         self._put("units", plan)

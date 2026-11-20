@@ -113,6 +113,8 @@ def form_drafted_by() -> str:
 def found_drafted_by(kind: str) -> str:
     """Who drafts a set of this kind the finder found."""
     return form_drafted_by() if kind == "form_interrogatories" else FOUND_DRAFTED_BY[kind]
+
+
 BEING_PREPARED = "being prepared by us"
 FILED = "filed"
 KEYS = (

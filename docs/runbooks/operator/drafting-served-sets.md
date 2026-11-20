@@ -54,6 +54,29 @@ hears nothing more. Read `found-report.json` in the job directory first.
 | `served_prior_draft` | An Operator draft of a set still owed is already on the matter                                                               | It is a revision: draft the change by hand                                                      |
 | `served_other_set`   | A served set of a kind outside the list                                                                                      | Record it as type `other`, drafted by `smd`, with `write`; resume                               |
 
+## A served form interrogatory set
+
+Form sets are SMD's until the lead turns on the one switch,
+`FORM_SETS_BY_OPERATOR` in `operator/runners/jobs/jobs/drafting/served.py`
+(off). With it on, the finder marks a found form set `operator`, and the same
+`find` stage reads its checked boxes three ways (two model reads and the
+pixel read, `forms/read_stage.py`), writing `form`, `form_revision` and
+`checked` into `served.json` and every read into `form-read.json`. Each stop
+below is a failed job before the transcription is paid, resumable; the
+attorney hears nothing more.
+
+| Code               | What it means                                                                                       | What staff do                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `form_incomplete`  | The served form lacks one of its eight pages, or its file is not on disk                            | Find the whole form and resume, or draft the set by hand                             |
+| `form_unconfirmed` | The reads disagree, an addition is attached, the revision is not carried, or the count does not fit | Read `form-read.json`, confirm the boxes with the form keys and `write`, then resume |
+| `policy_missing`   | The firm authored no form-response policy, or its shell lacks the body slot                         | Author `form_responses` in `drafting-firm.yaml`, then resume                         |
+| `rule_unplaced`    | A frozen wording rule the policy neither applies to form sets nor excludes                          | Place it in `form_responses.rules`, then resume                                      |
+
+A delivered form set's answers are kept in the lane's store,
+`<run dir>/drafting-form-answers/<job id>.json`, so a change request revises
+them. They are text from the matter file. Remove a job's or a matter's with
+`python -m jobs.drafting.forms.saved purge --job <id>` or `--matter <id>`.
+
 ## SMD names the sets by hand
 
 Until the finder ran, the Operator drafted only the sets SMD named. The command

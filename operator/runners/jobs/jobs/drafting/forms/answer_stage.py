@@ -18,9 +18,8 @@ values only (``answers.parse_section``). Code then:
   applicable for its role, and 17.1 (the policy's sentence when no requests
   for admission were served in the plan, an attorney marker when they were).
 
-``pack_for`` is the seam for the response scope (``drafting/response_scope.
-pack``): its default is the whole extracted file, capped. Replace the function
-body with a call to the scope's pack and nothing else changes.
+``pack_for`` is the response scope's pack for the section's group
+(``drafting/response_scope.pack``, ``group_of_section``).
 """
 
 from __future__ import annotations
@@ -29,8 +28,10 @@ import dataclasses
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from .. import response_scope
 from ..evidence import verify
 from ..evidence.shapes import DocPages
 from .answers import Answer, AnswerError, Cite, Item, Value, WorkUnit, parse_section, work_units
@@ -72,8 +73,27 @@ class Result:
 
 
 def pack_for(unit: Any, group: WorkUnit, corpus: Mapping[str, DocPages]) -> str:
-    """The source text for one section group. SEAM: ``response_scope.pack``
-    replaces this body. Default: every extracted page, file by file, capped."""
+    """The source text for one section group: the response scope's pack for
+    the section's group (``response_scope.pack``) from the job's data directory
+    (the unit's parent), ranked by the matter's providers. A call with no unit
+    (no job around it) reads the whole extracted file, capped."""
+    if unit is None:
+        return _whole_file(corpus)
+    data = Path(unit.data).parent if getattr(unit, "key", "") else Path(unit.data)
+    fp = data / "facts.json"
+    facts = json.loads(fp.read_text(encoding="utf-8")) if fp.is_file() else {}
+    got = response_scope.pack(
+        data,
+        response_scope.FORM,
+        response_scope.group_of_section(group.section),
+        providers=response_scope.providers_of(facts),
+        terms=(),
+    )
+    return got.text
+
+
+def _whole_file(corpus: Mapping[str, DocPages]) -> str:
+    """Every extracted page, file by file, capped at ``PACK_MAX_CHARS``."""
     parts: list[str] = []
     size = 0
     for name, doc in corpus.items():

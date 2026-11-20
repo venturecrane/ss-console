@@ -7,9 +7,8 @@ paper from ``answer_stage`` and ``answer_render``, and the lane's gate, render,
 format check, notes, review and filing run on it as on any unit. Every other
 unit is untouched: ``takes`` is False for it.
 
-The switch: the Operator drafts form sets only when ``enabled()``. It reads
-``served.FORM_SETS_BY_OPERATOR`` when the served schema defines it (the one
-place the lead flips), else ``FORM_SETS_DEFAULT`` here, which is OFF.
+The switch: the Operator drafts form sets only when ``enabled()``, which reads
+``served.FORM_SETS_BY_OPERATOR`` (the one place the lead flips; OFF).
 
 Before anything is paid (``before_spend``, from ``served_plan``): the firm's
 policy (``policy_missing``), its shell's body slot (``policy_missing``), the
@@ -41,7 +40,6 @@ FORM_SET = "form_interrogatories"
 STOPS = ("form_incomplete", "form_unconfirmed", "policy_missing", "rule_unplaced")
 #: The two SMD resolves in the firm's inputs, not in ``served.json``.
 POLICY_STOPS = ("policy_missing", "rule_unplaced")
-FORM_SETS_DEFAULT = False
 #: Form sets SMD reads before one files on its own (the lane's per-class counter).
 FORM_REVIEW_FIRST = 1
 FINAL = "draft-final.md"
@@ -49,7 +47,8 @@ CITES = "form-cites.md"
 
 
 def enabled() -> bool:
-    return bool(getattr(served_mod, "FORM_SETS_BY_OPERATOR", FORM_SETS_DEFAULT))
+    """The one switch, ``served.FORM_SETS_BY_OPERATOR``, read at call time."""
+    return served_mod.FORM_SETS_BY_OPERATOR
 
 
 def plan_of(run: Any, u: Any) -> dict[str, Any]:

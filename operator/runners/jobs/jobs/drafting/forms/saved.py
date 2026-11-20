@@ -89,6 +89,16 @@ def unit_record(
 STORE = "drafting-form-answers"
 
 
+def _matter_of(data: Path) -> str:
+    """The job's matter id, from its ``job.json`` beside the data dir; "" when unread."""
+    p = Path(data).parent / "job.json"
+    try:
+        doc = json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+    except ValueError:
+        doc = {}
+    return str(doc.get("matter_id") or "") if isinstance(doc, dict) else ""
+
+
 def keep(run_dir: Path, job_id: str, data: Path) -> bool:
     """A delivered job's form records into the lane's store (root, ``drafting_lane._report``)."""
     recs = job_records(data)
@@ -97,9 +107,52 @@ def keep(run_dir: Path, job_id: str, data: Path) -> bool:
     d = Path(run_dir) / STORE
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / f".{job_id}.json.tmp"
-    tmp.write_text(json.dumps({"job_id": job_id, "units": recs}, indent=1), encoding="utf-8")
+    doc = {"job_id": job_id, "matter_id": _matter_of(data), "units": recs}
+    tmp.write_text(json.dumps(doc, indent=1), encoding="utf-8")
     tmp.replace(d / f"{job_id}.json")
     return True
+
+
+def purge(run_dir: Path, *, job: str | None = None, matter: str | None = None) -> list[str]:
+    """Remove the store's records for one job or one matter; the names removed."""
+    d = Path(run_dir) / STORE
+    gone: list[str] = []
+    for p in sorted(d.glob("*.json")) if d.is_dir() else []:
+        try:
+            doc = json.loads(p.read_text(encoding="utf-8"))
+        except ValueError:
+            doc = {}
+        doc = doc if isinstance(doc, dict) else {}
+        if (job and (p.stem == job or doc.get("job_id") == job)) or (matter and doc.get("matter_id") == matter):
+            p.unlink()
+            gone.append(p.name)
+    return gone
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m jobs.drafting.forms.saved purge --job <id> | --matter <id> [--run-dir <dir>]``."""
+    import argparse
+    import os
+
+    from ...daemon import DEFAULT_RUN_DIR, RUN_DIR_ENV
+
+    ap = argparse.ArgumentParser(prog="python -m jobs.drafting.forms.saved")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    pp = sub.add_parser("purge", help="remove a job's or a matter's saved form answers from the lane's store")
+    who = pp.add_mutually_exclusive_group(required=True)
+    who.add_argument("--job")
+    who.add_argument("--matter")
+    pp.add_argument("--run-dir", default=os.environ.get(RUN_DIR_ENV) or DEFAULT_RUN_DIR)
+    a = ap.parse_args(argv)
+    gone = purge(Path(a.run_dir), job=a.job, matter=a.matter)
+    print(f"removed {len(gone)} record(s) from {Path(a.run_dir) / STORE}" + "".join(f"\n  {n}" for n in gone))
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main())
 
 
 def hand_to(run_dir: Path, prior_job_id: str, data: Path) -> bool:
