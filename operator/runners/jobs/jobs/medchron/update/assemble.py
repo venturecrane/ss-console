@@ -14,9 +14,12 @@ Output, in build_doc's shape:
   MM-DD-YY" paragraph (the newest added document's filing date, or "since
   the prior chronology" when none is on record) when the update adds one, then its note that pre-incident
   encounters were not itemized (unless the new entries itemize them);
-* the Treatment Timeline computed from the whole entry set (build_doc's
-  arithmetic; a delivered row that disagreed with its own entries is reported
-  lane by lane, never kept);
+* the Treatment Timeline: each delivered row kept with its delivered lane and
+  count, gaining only the distinct new service days of the new entries
+  assigned to it; a new lane counted in days (``update/timeline.py``,
+  2026-11-20). Delivered entries are never re-laned or recounted; a delivered
+  row that disagrees with its own entries is still reported lane by lane, so
+  SMD sees it;
 * Diagnostic Highlights: the delivered rows, plus a row for each diagnosis
   claim the audit kept (``update/icd.py``; descriptors from the vendored CMS
   tables, never a model, and never blank);
@@ -32,24 +35,16 @@ exhibit that is neither delivered nor new.
 
 from __future__ import annotations
 
-import difflib
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from typing import Any, Callable
 
-from ..lane_ref import lane_references
 from . import body as B, entry_edits as EE, icd, providers as P, uncited as U
+from .timeline import LANE_LIKENESS, period_has, delivered_lanes, lane_diff, provider_rows, update_rows
+
+__all__ = ["LANE_LIKENESS", "delivered_lanes", "lane_diff", "provider_rows", "update_rows"]
 
 TIMELINE_HEAD = "| Medical Provider | Treatment Period | Visits | Reference |"
-
-
-def _period_has(period: str, mmddyyyy: str) -> bool:
-    ds = [p.strip() for p in period.split(" - ")]
-
-    def k(d: str) -> str:
-        return d[6:10] + d[0:2] + d[3:5]
-
-    return k(ds[0]) <= k(mmddyyyy) <= k(ds[-1])
 
 
 def exhibit_providers(exhibit_section: str) -> dict[int, str]:
@@ -85,12 +80,10 @@ def lane_namer(
         c = B.CITE.search(e)
         ref = c.group(0)[1:-1] if c else ""
         exprov = exhibit_titles.get(int(c.group(1)), "") if c else ""
-        hit = next((r["lane"] for r in rows if r["ref"] == ref and _period_has(r["period"], d)), None)
+        hit = next((r["lane"] for r in rows if r["ref"] == ref and period_has(r["period"], d)), None)
         src = "delivered row citing the same page"
         if hit is None:
-            hit = next(
-                (r["lane"] for r in rows if exprov and r["lane"] == exprov and _period_has(r["period"], d)), None
-            )
+            hit = next((r["lane"] for r in rows if exprov and r["lane"] == exprov and period_has(r["period"], d)), None)
             src = "delivered lane of the cited exhibit's provider"
         if hit is None and exprov:
             hit, src = exprov, "cited exhibit's provider (Exhibit List)"
@@ -114,99 +107,6 @@ def lane_namer(
         return seen[e]
 
     return name_of, log
-
-
-#: How alike a delivered entry's provider must read to a delivered row's
-#: label, among the rows whose period covers its date, to be that row's visit.
-LANE_LIKENESS = 0.6
-
-
-def delivered_lanes(
-    delivered_rows: list[str], base_ents: list[str], canon: Callable[[str], str], name_of: Callable[[str], str]
-) -> Callable[[str], str]:
-    """lane(entry) -> its Treatment Timeline label. Delivered lanes stay as
-    delivered: a row's label is never re-derived, so its credentials stay
-    ("Jane Roe, RN") and it is never absorbed into another lane that the
-    grouping now collapses it into (2026-10-13: an eye clinic's delivered row
-    was absorbed into its health system's, and nurses lost "RN").
-
-    An entry takes the delivered row its provider names exactly; else the one
-    row whose label groups with it (``canon``), the likeliest when several
-    do; else, for a DELIVERED entry, the row covering its date whose label
-    reads most alike (the delivered label came from a grouping of its own
-    day); else its own grouped name, a new lane."""
-    rows = []
-    for r in delivered_rows:
-        c = [x.strip() for x in r.strip().strip("|").split("|")]
-        if len(c) >= 4 and c[0]:
-            rows.append((c[0], c[1]))
-    labels = [lb for lb, _ in rows]
-    delivered = set(base_ents)
-
-    def alike(a: str, b: str) -> float:
-        return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
-
-    def lane(e: str) -> str:
-        name = name_of(e)
-        if name in labels:
-            return name
-        d = e.splitlines()[0][:10]
-        covering = [lb for lb, per in rows if _period_has(per, d)]
-        same = [lb for lb in labels if canon(lb) == canon(name)]
-        if same:
-            pool = [lb for lb in same if lb in covering] or same
-            return max(pool, key=lambda lb: alike(lb, name))
-        if e in delivered:
-            near = [lb for lb in covering if alike(lb, name) >= LANE_LIKENESS]
-            if near:
-                return max(near, key=lambda lb: alike(lb, name))
-        return canon(name)
-
-    return lane
-
-
-def provider_rows(entries: list[str], canon: Callable[[str], str], name_of: Callable[[str], str]) -> list[str]:
-    """Treatment Timeline rows exactly as build_doc computes them, from dates
-    of service only: an entry dated by a records date (printed, released,
-    faxed, received) is no visit."""
-    es = [{"iso": B.iso(e), "provider": name_of(e), "text": e} for e in entries if B.is_service(e)]
-    es.sort(key=lambda x: x["iso"])
-    agg: dict[str, dict[str, Any]] = defaultdict(lambda: {"dates": [], "texts": []})
-    for e in es:
-        a = agg[canon(e["provider"])]
-        a["dates"].append(e["iso"])
-        a["texts"].append(e["text"])
-    refs = lane_references({prov: a["texts"] for prov, a in agg.items()})
-    for prov, a in agg.items():
-        a["ref"] = refs[prov]
-    rows = []
-    for prov, a in agg.items():
-        ds = sorted(a["dates"])
-        period = f"{ds[0][5:7]}/{ds[0][8:10]}/{ds[0][:4]}" + (
-            f" - {ds[-1][5:7]}/{ds[-1][8:10]}/{ds[-1][:4]}" if ds[-1] != ds[0] else ""
-        )
-        rows.append((ds[0], prov, period, len(ds), a["ref"]))
-    rows.sort()
-    return [f"| {p} | {per} | {n} | {ref} |" for _, p, per, n, ref in rows]
-
-
-def lane_diff(before: list[str], after: list[str]) -> list[dict[str, Any]]:
-    """[{lane, before, after}] for every Treatment Timeline lane that differs."""
-
-    def lanes(rows: list[str]) -> dict[str, dict[str, Any]]:
-        out = {}
-        for r in rows:
-            c = [x.strip() for x in r.strip().strip("|").split("|")]
-            if len(c) >= 4:
-                out[c[0]] = {"period": c[1], "visits": c[2], "reference": c[3]}
-        return out
-
-    b, a = lanes(before), lanes(after)
-    return [
-        {"lane": k, "before": b.get(k), "after": a.get(k)}
-        for k in [*b, *[k for k in a if k not in b]]
-        if b.get(k) != a.get(k)
-    ]
 
 
 def _mdY(isod: str) -> str:
@@ -410,12 +310,13 @@ def assemble(
     bad = sorted({n for e in new_ents for n in B.cited(e)} - known)
     if bad:
         raise ValueError(f"REFUSED: new entries cite exhibit(s) {bad} that are neither delivered nor new")
-    entries = B.merge_entries(*EE.fold_into_delivered(base_ents, new_ents))  # a fold goes under its delivered visit
+    carried, added_ents = EE.fold_into_delivered(base_ents, new_ents)  # a fold goes under its delivered visit
+    entries = B.merge_entries(carried, added_ents)
     table, changed, illegible = icd.rows(B.table_rows(b["## Diagnostic Highlights"]), icd_claims, new_ents, describe)
     pre, added, notes_kept, notes_itemized = _preamble(pre, addition, new_ents)
     body = (pre.rstrip("\n") + "\n\n" if pre.strip() else "\n") + "\n\n".join(entries) + "\n\n"
     lane = delivered_lanes(delivered_rows[1:], base_ents, canon, name_of)
-    final_rows = provider_rows(entries, str, lane)
+    final_rows, timeline_notes = update_rows(delivered_rows[1:], base_ents, added_ents, lane, canon, name_of)
     filed = [r for r in new_exhibits if not r.get("reused") and not r.get("refiled")]
     retitled, uncited = exhibit_titles_for(filed, new_ents, name_of, by_pages=final_set_ran)
     firm = folder_rows(base_md, folder or [], taken)
@@ -434,6 +335,7 @@ def assemble(
         "output_entries": len(out_ents),
         "delivered_table_vs_its_own_entries": lane_diff(delivered_rows[1:], provider_rows(base_ents, str, lane)),
         "timeline_changes": lane_diff(delivered_rows[1:], final_rows),
+        "timeline_rows_not_extended": timeline_notes,
         "lanes_named_for_heading_slots": name_log,
         "icd_rows_added_or_moved": changed,
         "icd_codes_not_legible": illegible,

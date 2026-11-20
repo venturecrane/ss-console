@@ -115,6 +115,50 @@ def cited_sentences(lines: list[str]) -> list[str]:
     return out
 
 
+def drop_restated(text: str, entries: list[str]) -> tuple[str, int]:
+    """`text` without each cited sentence (as ``cited_sentences`` cuts them,
+    the comparison proof 7 makes) that is exactly one an added entry already
+    carries, and how many went. A line keeping every sentence is unchanged;
+    a line left with nothing is dropped (2026-11-20: the added prior history
+    restated a new dated entry's sentence word for word, and proof 7 failed
+    the update after every paid stage)."""
+    # A sentence after another's in-line citation opens with that sentence's
+    # period ("). Next"); it is the same sentence without it.
+    carried = {s.lstrip(".;,: ") for s in cited_sentences([ln for e in entries for ln in e.splitlines()])}
+    out, n = [], 0
+    for ln in text.split("\n"):
+        prev, kept, gone = 0, [], 0
+        for m in CITED.finditer(ln):
+            seg = ln[prev : m.end()].strip()
+            if len(seg.lstrip(".;,: ")) > len(m.group(0)) and seg.lstrip(".;,: ") in carried:
+                gone += 1
+            else:
+                kept.append(seg)
+            prev = m.end()
+        if not gone:
+            out.append(ln)
+            continue
+        n += gone
+        rest = _rejoin([*kept, ln[prev:].strip()])
+        if not STRAY.fullmatch(rest):  # a line left with only "." or ", " is no line (proof 6)
+            out.append(rest)
+    return "\n".join(out), n
+
+
+#: What a removed sentence can leave: punctuation and space only.
+STRAY = re.compile(r"[\s.;,:]*")
+
+
+def _rejoin(pieces: list[str]) -> str:
+    """The kept pieces of a line as one line: a piece opening with the
+    period of the sentence before it ("(Exhibit 3 - p. 4). Next") closes up
+    to what precedes it, and the line never opens with that punctuation."""
+    out = ""
+    for p in (x for x in pieces if x):
+        out += p if (not out or p[0] in ".;,:") else " " + p
+    return out.lstrip(".;,: \t")
+
+
 def dropped_values(
     composed: list[str],
     updated_entries: list[str],

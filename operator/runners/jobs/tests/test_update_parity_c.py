@@ -267,7 +267,11 @@ def test_a_delivered_timeline_row_is_never_relabelled_or_absorbed() -> None:
         new_exhibits=nex,
     )
     rows = B.table_rows(B.sections(md)["## Treatment Timeline"])
-    assert "| Example Health, Example Eye Institute | 12/05/2025 - 02/10/2026 | 2 | Exhibit 1 - p. 1 |" in rows
+    # The new visit's exhibit is referenced too (2026-11-20 review), after the delivered reference.
+    assert (
+        "| Example Health, Example Eye Institute | 12/05/2025 - 02/10/2026 | 2 | Exhibit 1 - p. 1; Exhibit 2 - p. 1 |"
+        in rows
+    )
     assert "| Example Medical Center | 12/07/2025 | 1 | Exhibit 1 - p. 3 |" in rows
     assert "| Example On-Call, Mary Poe, RN, EXTCARE | 12/10/2025 | 1 | Exhibit 1 - p. 2 |" in rows
     assert len(rows) == 4 and rep["delivered_table_vs_its_own_entries"] == []

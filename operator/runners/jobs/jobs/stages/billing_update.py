@@ -9,12 +9,16 @@ reached no filed document, while the firm had been told they "will show as
 billing only".
 
 WHAT. Only when the request names at least one file the firm's billing
-patterns (``billing.name_patterns``) match, after the proofs and before the
-manifest:
+patterns (``billing.name_patterns``) match:
 
-* ``update_billing_docs`` ($0): every billing-named PDF or image on the matter
-  outside the delivered chronology's folder, the delivered ones included, so
-  the refreshed worksheet is complete. Written to ``billing/plan.json``.
+* ``update_billing_docs`` ($0), right after ``decide_selection`` and before
+  any paid stage, so a hold on another client's unknown folder costs nothing
+  (2026-11-20): every billing-named PDF or image on the matter outside the
+  delivered chronology's folder, the delivered ones included, so the
+  refreshed worksheet is complete. Written to ``billing/plan.json``.
+
+The rest run after the proofs and before the manifest:
+
 * ``update_billing_extract`` (paid, the transcription tier, nothing else):
   each planned file pulled into ``billing/raw/`` (never ``raw/``: a billing
   file is never a chronology source and never goes to vision), then the full

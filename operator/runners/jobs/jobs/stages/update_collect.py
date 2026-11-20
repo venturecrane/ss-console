@@ -39,10 +39,10 @@ from typing import Any
 
 from ..medchron import icd_tables, meta_markers, pages_record as PR, prompts
 from .. import llm
-from ..medchron.audit import claims as CL
+from ..medchron.audit import claims as CL, page_text as PT
 from ..medchron.update import body as B, cite_read as CR, collect as C, handwritten as H, icd, legend as LG
 from ..medchron.update import providers as P
-from ..medchron.update import outcome as UO, records_dates as RD, select as S, uncited as U
+from ..medchron.update import outcome as UO, proofs as PF, records_dates as RD, select as S, uncited as U
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
 from .summarize import beyond_source
@@ -198,7 +198,21 @@ def _settle_dates(
     return sorted(out, key=B.iso), log
 
 
-def _icd_claims(sr: StageRun, ud: Path, rd: Path, base_md: str, entries: list[str]) -> list[str]:
+def _text_layer(sr: StageRun, keep: list[dict[str, Any]]) -> icd.PageText:
+    """(final exhibit, page) -> the page's own text layer, from text/<id>.txt;
+    None for a page the vision pass transcribed (a picture has no layer)."""
+    cache: dict[int, dict[int, str]] = {}
+    for r in keep:
+        tp = sr.slug_dir / "text" / f"{r['id']}.txt"
+        if tp.is_file():
+            segs = PT.parse_segments(tp.read_text(encoding="utf-8", errors="replace"))
+            cache[int(r["exhibit"])] = {p: t for p, (t, machine) in segs.items() if not machine}
+    return lambda ex, page: cache.get(ex, {}).get(page)
+
+
+def _icd_claims(
+    sr: StageRun, ud: Path, rd: Path, base_md: str, entries: list[str], keep: list[dict[str, Any]]
+) -> list[str]:
     tables = icd_tables.load(sr.job.install_root)
     rows = C.index_rows(rd)
     (ud / "new_index.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
@@ -207,7 +221,13 @@ def _icd_claims(sr: StageRun, ud: Path, rd: Path, base_md: str, entries: list[st
         entries,
         B.table_rows(B.sections(base_md)["## Diagnostic Highlights"]),
         lambda code, on, text: icd_tables.resolve(code, tables, on, text),
+        _text_layer(sr, keep),
     )
+    gone = [r for r in log if r.get("skipped") == icd.NOT_LOCATED]
+    if gone:
+        sr.log(
+            f"{len(gone)} diagnosis code(s) not claimed: every cited page has a text layer and none prints it {gone[:5]}"
+        )
     (ud / "icd_claims.json").write_text(json.dumps({"claims": claims, "log": log}, indent=1), encoding="utf-8")
     return claims
 
@@ -309,7 +329,7 @@ def run_collect(sr: StageRun) -> int:
         )
         return UO.EXIT
     try:
-        claims = _icd_claims(sr, ud, rd, base_md, entries)
+        claims = _icd_claims(sr, ud, rd, base_md, entries, keep)
     except icd_tables.TablesMissing as exc:
         sr.log(str(exc))
         return 1
@@ -390,12 +410,24 @@ def run_summary(sr: StageRun) -> int:
     if why:
         sr.log(f"REJECTED: the added prior history {why}")
         return 1
+    # A sentence a new dated entry already carries is said once, in the entry
+    # (proof 7 counts cited sentences; 2026-11-20 it failed a job on one).
+    text, restated = PF.drop_restated(text.strip("\n"), new_ents)
+    (ud / "summary_report.json").write_text(json.dumps({"restated_removed": restated}), encoding="utf-8")
     keep = read_json(ud / "new_exhibits.final.json", [])
-    added = added_history_line(sr, keep) + "\n" + text.strip("\n")
-    (ud / "pmh.md").write_text(added + "\n", encoding="utf-8")
+    added = added_history_line(sr, keep) + "\n" + text if text.strip() else None
+    if added is None:
+        (ud / "pmh.md").unlink(missing_ok=True)
+    else:
+        (ud / "pmh.md").write_text(added + "\n", encoding="utf-8")
     claims = read_json(ud / "icd_claims.json", {}).get("claims") or []
     claims += read_json(ud / "provider_claims.json", {}).get("claims") or []
     doc = C.audit_document(base_md, new_ents, keep, added, icd_claims=claims, folder=plan(sr).get("exhibits") or [])
     (rd / "final-chronology.md").write_text(doc, encoding="utf-8")
+    if restated:
+        sr.log(f"removed {restated} sentence(s) of the added prior history that a new dated entry already carries")
+    if added is None:
+        sr.log("every sentence of the added prior history is a new entry's own; the delivered one stands alone")
+        return 0
     sr.log(f"prior history added from {len(added_pre)} pre-incident entr(y/ies), under the delivered one")
     return 0
