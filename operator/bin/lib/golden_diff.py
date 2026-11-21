@@ -15,11 +15,20 @@ appear or go. An edit to it is a reviewed change: the PR that changes a
 behaviour names each path it changes. Every entry names one exact path: a
 wildcard is refused, because an entry that covers a subtree lets a later
 change inside it through unreviewed.
+
+An entry excuses a difference only in the change that adds it. A golden test
+reads its list through ``reviewed``, which drops every entry the merge-base
+tree already carried (another change's leftover, reviewed for that change):
+a later change at the same path, made without rewriting the golden, then
+fails instead of passing on the old entry.
 """
 
 from __future__ import annotations
 
+import functools
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
@@ -178,35 +187,115 @@ def inherited(allowed: dict[str, list[str]], base_allowed: dict[str, list[str]])
     return out
 
 
-def compare_dirs(want_dir: Path, got_dir: Path, skip: tuple[str, ...] = ()) -> dict[str, list[str]]:
-    """Golden dir against a regenerated one (top-level files): per file, the
-    differences that ``want_dir/allowed-changes.json`` (or, for a ledger lane
-    dir, the set's one level up) does not allow. A file present on one side
-    only is reported as ``<file>``. ``skip`` names input fixtures that are not
-    regenerated."""
-    allowed = load_allowed(want_dir)
-    if not allowed and (Path(want_dir).parent / ALLOWED).is_file():
-        lane = Path(want_dir).name
-        allowed = {
-            k.split("/", 1)[1]: v for k, v in load_allowed(Path(want_dir).parent).items() if k.startswith(f"{lane}/")
-        }
-    found = tree_diffs(goldens(want_dir, "*", skip), goldens(got_dir, "*", skip))
-    return unallowed(found, allowed)
+#: A commit (or ref) to take as the merge-base instead of
+#: ``git merge-base origin/main HEAD``.
+BASE_ENV = "GOLDENS_BASE"
+
+
+class BaseUnknownError(RuntimeError):
+    """An allowed list names a path and the merge-base cannot be found, so
+    which entries this change added cannot be told."""
+
+
+def this_change(allowed: dict[str, list[str]], base_allowed: dict[str, list[str]]) -> dict[str, list[str]]:
+    """``allowed`` less every entry ``base_allowed`` already carried
+    (``inherited``), every key kept: what this change itself names."""
+    old = inherited(allowed, base_allowed)
+    return {name: [p for p in paths if p not in set(old.get(name, []))] for name, paths in allowed.items()}
+
+
+def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """``git`` in ``cwd``'s checkout. A hook's ``GIT_DIR``/``GIT_INDEX_FILE``
+    are dropped so the checkout is found from ``cwd``, never inherited."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=False)  # noqa: S603 - a fixed git argv over this repo
+
+
+def _unknown(why: str) -> BaseUnknownError:
+    return BaseUnknownError(
+        f"{why}. An allowed list names a path, and only the merge-base tells this change's entries from "
+        f"another's leftover. Fetch main with history (git fetch origin main; git fetch --unshallow if the clone "
+        f"is shallow) or set {BASE_ENV}=<merge-base sha>."
+    )
+
+
+@functools.cache
+def _base(top: str) -> str:
+    """The merge-base commit for the checkout at ``top``, once per process."""
+    want = os.environ.get(BASE_ENV) or ""
+    if not want:
+        got = _git(Path(top), "merge-base", "origin/main", "HEAD")
+        if got.returncode != 0 or not got.stdout.strip():
+            raise _unknown(f"git merge-base origin/main HEAD failed in {top}: {got.stderr.strip()}")
+        want = got.stdout.strip()
+    got = _git(Path(top), "rev-parse", "--verify", "--quiet", f"{want}^{{commit}}")
+    if got.returncode != 0:
+        raise _unknown(f"{BASE_ENV}={want} is not a commit in {top}")
+    return got.stdout.strip()
+
+
+@functools.cache
+def _reviewed(path: str) -> dict[str, list[str]]:
+    p = Path(path)
+    allowed = load_allowed(p.parent)
+    if not any(allowed.values()):
+        return allowed  # nothing to excuse: no base needed
+    top = _git(p.parent, "rev-parse", "--show-toplevel")
+    if top.returncode != 0:
+        raise _unknown(f"{p.parent} is not in a git checkout")
+    root = Path(top.stdout.strip()).resolve()
+    return this_change(allowed, _base_allowed(root, _base(str(root)), p.resolve().relative_to(root).as_posix()))
+
+
+def _base_allowed(root: Path, base: str, rel: str) -> dict[str, list[str]]:
+    """The list at ``rel`` in ``base``: ``{}`` only when the base tree has no
+    such path. A path the base has but cannot be read (a missing or corrupt
+    object, a partial clone) raises: read as absent, every leftover entry
+    would count as this change's."""
+    listed = _git(root, "ls-tree", "--name-only", base, "--", rel)
+    if listed.returncode != 0:
+        raise _unknown(f"git ls-tree {base} -- {rel} failed: {listed.stderr.strip()}")
+    if not listed.stdout.strip():
+        return {}
+    shown = _git(root, "show", f"{base}:{rel}")
+    if shown.returncode != 0:
+        raise _unknown(f"the merge-base has {rel} but git show cannot read it: {shown.stderr.strip()}")
+    return parse_allowed(json.loads(shown.stdout), f"merge-base {rel}")
+
+
+def reviewed(golden_dir: Path) -> dict[str, list[str]]:
+    """``golden_dir``'s allowed list as a golden test must read it: only the
+    entries this change added (``this_change`` against the merge-base's copy;
+    a list the base has no copy of is all this change's). The base is
+    ``$GOLDENS_BASE`` or ``git merge-base origin/main HEAD``; when a list names
+    a path and the base cannot be found, ``BaseUnknownError`` (never every
+    entry taken as new). Cached per process: one ``git show`` per list."""
+    return {k: list(v) for k, v in _reviewed(str(Path(golden_dir).resolve() / ALLOWED)).items()}
+
+
+def forget_base() -> None:
+    """Drop the cached merge-base and lists (a test that changes the base)."""
+    _reviewed.cache_clear()
+    _base.cache_clear()
 
 
 __all__ = [
     "ALLOWED",
     "FILE",
     "AllowedListError",
-    "compare_dirs",
+    "BASE_ENV",
+    "BaseUnknownError",
     "diffs",
+    "forget_base",
     "goldens",
     "inherited",
     "load_allowed",
     "losses",
     "parse_allowed",
     "read_golden",
+    "reviewed",
     "stale",
+    "this_change",
     "tree_diffs",
     "unallowed",
     "unexplained",

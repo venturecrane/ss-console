@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+import goldens_kit as gk
 import pytest
 
 GOLDENS = Path(__file__).resolve().parent / "goldens" / "lane_endings"
@@ -146,4 +147,6 @@ def test_an_ordinary_job_records_what_the_golden_holds(tmp_path, monkeypatch, ca
     if os.environ.get("JOBS_WRITE_LANE_GOLDENS"):
         path.write_text(json.dumps(got, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     want = _normal(tmp_path, json.loads(path.read_text(encoding="utf-8")))
-    assert [d for d in _diffs(want, got) if d not in ALLOWED[case]] == []
+    # Only this change's own entries: one the merge-base carried excuses nothing.
+    allowed = ALLOWED[case] if os.environ.get("JOBS_WRITE_LANE_GOLDENS") else gk.reviewed_allowed("lane_endings")[case]
+    assert [d for d in _diffs(want, got) if d not in allowed] == []

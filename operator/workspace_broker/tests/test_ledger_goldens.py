@@ -5,7 +5,8 @@ verb's reply.
 
 A change to a ledger must leave each golden equal, except the dotted paths
 ``goldens/ledgers/allowed-changes.json`` names (key ``<lane>/<golden>``), a
-reviewed change made in the PR that changes the behaviour.
+reviewed change made in the PR that changes the behaviour (an entry the
+merge-base already carried excuses nothing, ``golden_diff.reviewed``).
 
 ``JOBS_WRITE_LEDGER_GOLDENS=1`` rewrites them (read the diff).
 ``JOBS_GOLDENS_OUT=<dir>`` writes them under ``<dir>/ledgers`` instead of
@@ -25,7 +26,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ledger_golden_capture import ALL, CAPTURES
-from ledger_golden_kit import GOLDENS, diffs, load_allowed, unexplained
+from ledger_golden_kit import GOLDENS, diffs, reviewed, unexplained
 
 CASES = [
     (lane, golden) for lane in ALL for golden in CAPTURES if not (lane == "note" and golden in ("transitions", "month"))
@@ -52,5 +53,6 @@ def test_a_ledger_matches_its_golden(tmp_path, monkeypatch, lane, golden):
         if out:
             return
     want = json.loads((GOLDENS / lane / f"{golden}.json").read_text(encoding="utf-8"))
-    allowed = load_allowed(GOLDENS).get(f"{lane}/{golden}", [])
+    # Only this change's own entries: one the merge-base carried excuses nothing.
+    allowed = reviewed(GOLDENS).get(f"{lane}/{golden}", [])
     assert unexplained(diffs(want, got), allowed) == []
