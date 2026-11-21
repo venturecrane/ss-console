@@ -7,8 +7,8 @@ diagnoses, plan, causation opinion and signature pages were EXCLUDED as
 across every delivered page. Compose never saw them, and the entry lost its
 exam, diagnoses, plan, causation opinion and its provider's name.
 
-A page is already read only when ONE delivered page covers it and states
-every word and clinical value it states. A re-printed copy that differs only
+A page is already read only when it says exactly what ONE delivered page
+says (``select.same_text``, 2026-11-21). A re-printed copy that differs only
 in its print date is still excluded. Synthetic text only.
 """
 
@@ -44,8 +44,8 @@ OPINION = (
 )
 #: One page that the delivered pages cover only when POOLED (exam + plan).
 POOLED = EXAM + " " + PLAN_A + OPINION
-#: One page a single delivered page covers past COVERED_FRAC, but whose
-#: opinion and signer that page never states.
+#: One page that is a delivered page plus an opinion and signer that page
+#: never states (the shingle rule this guarded was removed, 2026-11-21).
 COVERED = EXAM + OPINION
 PRINTED_A = "Printed on 01/02/2026\n" + EXAM
 PRINTED_B = "Printed on 09/15/2026\n" + EXAM
@@ -65,15 +65,11 @@ def _pdf(tmp_path: Path, pages: list[str]) -> Path:
 
 def test_a_later_report_pooled_across_delivered_pages_is_read(tmp_path: Path) -> None:
     seen = S.seen_shingles([_pdf(tmp_path, [EXAM, PLAN_A, PLAN_B])])
-    sh = S.shingles(POOLED)
-    assert len(sh & S.shingles(EXAM)) < S.COVERED_FRAC * len(sh)  # no ONE delivered page covers it
     assert S.classify_new({1: POOLED}, 1, seen)[1][0] == S.READ
 
 
 def test_a_template_page_with_a_causation_opinion_and_signer_is_read(tmp_path: Path) -> None:
     seen = S.seen_shingles([_pdf(tmp_path, [EXAM, PLAN_A])])
-    sh = S.shingles(COVERED)
-    assert len(sh & S.shingles(EXAM)) >= S.COVERED_FRAC * len(sh)  # the template page covers it by shingles
     assert S.classify_new({1: COVERED}, 1, seen)[1][0] == S.READ
 
 

@@ -9,7 +9,15 @@ columns in another order (so its 8-word shingles barely overlapped). Those
 pages were composed again, the copy became a new exhibit and an Exhibit List
 line, and one of them produced a duplicate entry. Every test here fails on the
 branch head before the fix (b3adda24) and passes after. Every record is
-invented."""
+invented.
+
+2026-11-21: a near picture no longer excludes a page, whatever its words, and
+a page is a repeat by its text only when it says EXACTLY what the delivered
+page says (``select.same_text``): three readers ruled 18 near pages whose
+words had "confirmed" them different from the page they matched. A re-print
+whose only change is its print stamp is still re-filed to the delivered
+exhibit; one whose columns flow in another order is READ, and its visits are
+matched after compose (``repeats.keep_decision``, ``final_set.repeats``)."""
 
 from __future__ import annotations
 
@@ -88,22 +96,20 @@ def _seed(tmp: Path, delivered: list[list[str]], docs: dict[str, list[list[str]]
     )
 
 
-def test_a_reprint_with_a_new_print_date_and_reflowed_columns_is_confirmed() -> None:
-    from jobs.medchron.update import pageid_io as PG
+def test_a_reprint_with_only_a_new_print_date_is_the_same_page_and_a_reflowed_one_is_not() -> None:
     from jobs.medchron.update import select as S
 
     original = "\n".join(_page(1))
-    copy = "\n".join(_reprint(_page(1)))
-    assert len(S.shingles(copy) & S.shingles(original)) < 0.8 * len(S.shingles(copy))  # the text rule misses it
-    assert PG.confirmed(copy, original)
+    assert S.same_text("\n".join(_page(1, stamp="9/15/26 10:33 AM"))) == S.same_text(original)
+    assert S.same_text("\n".join(_reprint(_page(1)))) != S.same_text(original)  # read since 2026-11-21
 
 
-def test_a_near_picture_that_states_another_date_or_value_is_never_confirmed() -> None:
-    from jobs.medchron.update import pageid_io as PG
+def test_a_page_that_states_another_date_or_value_is_never_the_same_page() -> None:
+    from jobs.medchron.update import select as S
 
-    original = "\n".join(_page(1))
-    assert not PG.confirmed("\n".join(_reprint(_page(1, date="11/10/2025"))), original)  # another visit
-    assert not PG.confirmed("\n".join(_reprint(_page(1, bp="142/90"))), original)  # another reading
+    original = S.same_text("\n".join(_page(1)))
+    assert S.same_text("\n".join(_page(1, date="11/10/2025"))) != original  # another visit
+    assert S.same_text("\n".join(_page(1, bp="142/90"))) != original  # another reading
 
 
 def test_a_reprinted_copy_of_delivered_pages_is_cited_to_the_delivered_exhibit(tmp_path: Path) -> None:
@@ -114,8 +120,8 @@ def test_a_reprinted_copy_of_delivered_pages_is_cited_to_the_delivered_exhibit(t
     from jobs.stages import update_select as US
 
     delivered = [_page(i) for i in range(1, 4)]
-    reprint = [_reprint(p) for p in delivered]
-    other_visit = _reprint(_page(2, date="11/24/2025", bp="136/88"))
+    reprint = [_page(i, stamp="9/15/26 10:33 AM") for i in range(1, 4)]  # the same flow, a new print date
+    other_visit = _page(2, date="11/24/2025", bp="136/88", stamp="9/15/26 10:33 AM")
     near = {str(n): ["already", "exhibit:1", n, "near"] for n in (1, 2, 3)}
     sr = _seed(
         tmp_path,
@@ -150,3 +156,20 @@ def test_a_document_with_a_page_left_to_read_or_a_bill_is_never_refiled_whole() 
     assert S.delivered_home({**whole, "read": [2]}, pages, by_ex, {}) is None
     assert S.delivered_home({**whole, "excluded": {ALREADY: 1, "a claim form": 1}}, pages, by_ex, {}) is None
     assert S.delivered_home({**whole, "excluded": {S.BLANK: 2}}, pages, by_ex, {}) is None
+
+
+def test_a_reflowed_reprint_of_delivered_pages_is_read(tmp_path: Path) -> None:
+    """2026-11-21: a re-print whose columns flow in another order says the
+    same words in another order, so no page of it says exactly what a
+    delivered page says. Its near pictures no longer exclude it: every page
+    is read, and a visit it restates is matched after compose."""
+    from jobs.stages import update_select as US
+
+    delivered = [_page(i) for i in range(1, 4)]
+    near = {str(n): ["already", "exhibit:1", n, "near"] for n in (1, 2, 3)}
+    sr = _seed(tmp_path, delivered, {"reprint": [_reprint(p) for p in delivered]}, {"reprint": near})
+    assert US.run(sr) == 0, sr.logged  # type: ignore[arg-type]
+    sel = json.loads((tmp_path / "runs" / "alpha" / "update" / "selection.json").read_text())
+    (rec,) = sel["exhibits"]
+    assert rec["id"] == "reprint" and rec["read"] == [1, 2, 3] and rec["excluded"] == {}
+    assert sel["subsets"] == []

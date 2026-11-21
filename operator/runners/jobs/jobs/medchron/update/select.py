@@ -6,30 +6,23 @@ delivered exhibit PDFs are what the firm holds, and they are the page truth.
 
 * A new document byte-identical to a delivered exhibit (or to another new
   document) is not an exhibit: it is skipped by sha256 before this module.
-* A TEXT page (at least MIN_CHARS of text) is EXCLUDED when ONE delivered
-  page covers COVERED_FRAC of its 8-word shingles (digits stripped: a
-  re-filed copy differs in its fax stamp and print date, not in its words)
-  and states every word and clinical value it states (``Delivered``): a
-  re-filed copy of a record the delivery read. A later report on the same
-  template is read.
-* A TEXT page that is a REFILED COPY of a page of an EARLIER new document
-  (``Earlier.copy_of``: COVERED_FRAC of its shingles, and every date, word and
-  clinical value it states, fax and print lines aside) is EXCLUDED: the second
-  copy costs a compose read and yields a duplicate entry. Template visits
-  differ in a date or a word and are both read; pages within one document are
-  never compared.
-* A TEXT page that a run of 1 to 3 consecutive pages of ONE delivered
-  exhibit, or of ONE earlier new document, holds whole (every date, clinical
-  value, number and word token of it, with repeats; export stamps aside and
-  no token missing: ``update/contained``) is EXCLUDED the same way: a second export of one
-  clinic's records breaks its pages elsewhere (2026-11-17).
-* Every comparison here reads a page with its fax, print and export stamps
-  aside (``strip_stamps``, ``without_furniture``): a stamp line is known only
-  by an anchored pattern, never a clinical date line.
-* Before any of that, a page whose PICTURE is a delivered page or a page of an
-  earlier new document (``update/pageid``, computed before the vision pass so
-  a re-filed scan is never transcribed) is EXCLUDED as already read or as a
-  repeat: a scanned page has no words for the rules above to compare.
+* A page is set aside as a REPEAT only when it IS the same page, by one of
+  two tests (2026-11-21):
+  - its PICTURE is pixel-equal to a delivered page or to a page of an
+    earlier new document (``update/pageid`` EXACT, computed before the vision
+    pass so a re-filed scan is never transcribed); or
+  - its TEXT (at least MIN_CHARS) says EXACTLY what one delivered page, or
+    one page of an EARLIER new document, says, export and print stamps and
+    edge fax lines aside (``same_text``): a re-filed copy. Pages within one
+    document are never compared.
+  Nothing else is a repeat. A page that shares a template, most of its
+  words, a run of pages, or a near picture with a covered page, and differs
+  in one date or value, is READ: on three real updates three readers ruled
+  21 pages the older similarity rules set aside different from the page they
+  matched, and at least 10 of their facts were never delivered. A visit read
+  twice is matched after compose by its date and provider, whatever page it
+  cites (``repeats.keep_decision`` at collect, ``final_set.repeats``), and
+  kept only for what it adds.
 * A page with no text after the vision pass is excluded as blank and counted.
 * A BILLING page (``update/billing_page``: a claim form, or an itemized
   statement or ledger with no clinical narrative) is excluded: the base lane
@@ -43,20 +36,18 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from ...stages.chunking import context_block
-from . import contained as CT, noteheading as NH
+from . import noteheading as NH
 from .billing_page import BILLING, is_billing
 from .pageid import DELIVERED, SKIPPED
 from .records_dates import SERVICE_LINE
-from .values import clinical_values
 
 MIN_CHARS = 80
-COVERED_FRAC = 0.8
 SHINGLE = 8
 PAGE_MARK = re.compile(r"^\[p\.(\d+)\][^\n]*$", re.M)
 #: A page the vision pass failed on, refused, or skipped by its picture
@@ -108,7 +99,8 @@ def shingles_by_exhibit(delivered_pdfs: dict[int, Path]) -> dict[int, set[str]]:
 
 
 #: A fax, print or page-count line: the furniture two copies of one record
-#: differ in. Its dates and words never tell two visits apart. "Generated on"
+#: differ in (``same_text`` sets one aside only among a page's first or last
+#: EDGE inked lines: "received" or "sent" in the body is clinical). "Generated on"
 #: is an EMR print stamp: a record re-printed for a second request carries
 #: the new print date on every page (2026-10-14).
 #: An export or print STAMP opens its line (2026-11-17: two overlapping
@@ -160,12 +152,6 @@ def stamp_lines(text: str) -> list[tuple[str, bool]]:
     ]
 
 
-def without_furniture(text: str) -> str:
-    """`text` with every fax, print and page-count line removed
-    (``_FURNITURE``) and its stamps (``strip_stamps``)."""
-    return _FURNITURE.sub("", strip_stamps(text))
-
-
 def _dates(text: str) -> set[str]:
     out = set()
     for m, d, y in _DATE.findall(text):
@@ -173,34 +159,9 @@ def _dates(text: str) -> set[str]:
     return out
 
 
-@dataclass(frozen=True)
-class _Page:
-    doc: int
-    shingles: frozenset[str]
-    dates: frozenset[str]
-    words: frozenset[str]
-    values: frozenset[str]
-    #: (document label, page) of this page: a delivered exhibit ("exhibit:N")
-    #: or a new document's id. ("", 0) when nobody named it.
-    home: tuple[str, int] = ("", 0)
-
-
-def _page(doc: int, text: str, home: tuple[str, int] = ("", 0)) -> _Page:
-    body = without_furniture(text)
-    return _Page(
-        doc,
-        frozenset(shingles(body)),
-        frozenset(_dates(body)),
-        frozenset(re.findall(r"[a-z]{4,}", body.lower())),
-        frozenset(clinical_values(body)),
-        home,
-    )
-
-
-#: How a page was found covered: by its 8-word shingles on one page, held by
-#: a run of pages (``update/contained``), or as the twin reading of one page
-#: in another new document that adds nothing (``update/twins``).
-BY_TEXT, BY_RUN, BY_TWIN, BY_PICTURE = "text", "contained", "twin", "picture"
+#: How a page was found covered: its picture (``update/pageid``, pixel-equal)
+#: or its text, the same text as one page (``same_text``).
+BY_TEXT, BY_PICTURE = "text", "picture"
 
 
 @dataclass(frozen=True)
@@ -210,13 +171,12 @@ class Cover:
     src: str  # DELIVERED_SRC | EARLIER_SRC
     doc: str  # "exhibit:N" or a new document's id
     page: int
-    kind: str  # BY_TEXT | BY_RUN
-    last: int = 0  # the run's last page (BY_RUN), when it is not `page`
+    kind: str  # BY_TEXT | BY_PICTURE
 
     def as_dict(self) -> dict[str, Any]:
         n = self.doc[len(DELIVERED) :] if self.doc.startswith(DELIVERED) else ""
         where: dict[str, Any] = {"exhibit": int(n)} if n.isdigit() else {"doc": self.doc}
-        return {**where, "page": self.page, **({"last": self.last} if self.last else {}), "exact": False}
+        return {**where, "page": self.page, "exact": False}
 
 
 def service_dates(text: str) -> set[str]:
@@ -224,49 +184,34 @@ def service_dates(text: str) -> set[str]:
     return {d for ln in (text or "").splitlines() if SERVICE_LINE.search(ln) for d in _dates(ln)}
 
 
-class _Homes:
-    """Where each page of a pool came from, and each document's dates."""
-
-    def __init__(self) -> None:
-        self.homes: list[tuple[str, int]] = []
-        self.doc_dates: dict[str, set[str]] = {}
-
-    def note(self, home: tuple[str, int], text: str) -> None:
-        self.homes.append(home)
-        self.doc_dates.setdefault(home[0], set()).update(_dates(text or ""))
-
-    def cover(self, src: str, old: _Page | None, at: tuple[int, int] | None) -> Cover | None:
-        if old is not None and old.home[0]:
-            return Cover(src, old.home[0], old.home[1], BY_TEXT)
-        if at is not None and 0 <= at[0] < at[1] <= len(self.homes) and self.homes[at[0]][0]:
-            (d, p), last = self.homes[at[0]], self.homes[at[1] - 1][1]
-            return Cover(src, d, p, BY_RUN, last if last != p else 0)
-        return None
-
-    def lacks_service_date(self, text: str, c: Cover) -> bool:
-        """The page dates care on a day its cover's document never states."""
-        return bool(service_dates(text) - self.doc_dates.get(c.doc, set()))
+def same_text(text: str | None) -> str:
+    """What a page SAYS, for the one text test of a repeat: its text without
+    its export and print stamps (``strip_stamps``) and without a fax, print
+    or page-count line (``_FURNITURE``) among its first or last EDGE inked
+    lines, its whitespace collapsed. Two pages are the same page by their
+    words only when these are EXACTLY equal. A furniture word in the BODY
+    ("received", "sent") is on a clinical line and stays: two pages that
+    differ only there say different things (2026-11-21)."""
+    lines = strip_stamps(text or "").split("\n")
+    inked = [i for i, ln in enumerate(lines) if ln.strip()]
+    edge = set(inked[:EDGE] + inked[-EDGE:])
+    kept = [ln for i, ln in enumerate(lines) if not (i in edge and _FURNITURE.fullmatch(ln))]
+    return " ".join(" ".join(kept).split())
 
 
 @dataclass
 class Delivered:
-    """The delivered exhibits' pages, each kept whole.
+    """The delivered exhibits' pages, each by what it says (``same_text``).
 
-    A new page is ALREADY READ only when ONE delivered page covers
-    COVERED_FRAC of its shingles AND states every word and clinical value it
-    states. Coverage pooled across all delivered pages is not enough: a
-    practice's later follow-up shares its template with the earlier ones the
-    delivery read, so its exam, diagnoses, plan, causation opinion and
-    signature page were dropped before compose (2026-10-14: a four-page report
-    and a signature lost). Dates are left out: a re-printed copy carries a new
-    print date and is still the record the delivery read.
+    A new page is ALREADY READ by its words only when it says EXACTLY what
+    one delivered page says (stamps and edge furniture aside). A page that
+    shares a template, most of its words, or a run of pages with a delivered
+    page, and differs in one date or value, is read: three readers ruled 21
+    of 387 pages the old shingle, run, twin and picture-confirmed rules set
+    aside DIFFERENT from the page they were matched to, and at least 10 of
+    their facts were missing from the delivered documents (2026-11-21)."""
 
-    Or when a run of pages of ONE delivered exhibit holds it across a
-    pagination shift, dates included (``update/contained``)."""
-
-    pages: list[_Page] = field(default_factory=list)
-    pool: CT.Pool = field(default_factory=CT.Pool)
-    at: _Homes = field(default_factory=_Homes)
+    texts: dict[str, tuple[str, int]] = field(default_factory=dict)
 
     @classmethod
     def of(cls, texts: Iterable[str]) -> Delivered:
@@ -280,68 +225,34 @@ class Delivered:
         for k, texts in enumerate(docs):
             label = labels[k] if labels is not None and k < len(labels) else f"{DELIVERED}{k + 1}"
             for i, t in enumerate(texts, 1):
-                out.pages.append(_page(-1, t, (label, i)))
-                out.pool.add(CT.facts(-1 - k, t))
-                out.at.note((label, i), t)
+                key = same_text(t)
+                if key:
+                    out.texts.setdefault(key, (label, i))
         return out
 
     def __or__(self, other: Delivered) -> Delivered:
-        out = Delivered(self.pages + other.pages)
-        top = min((f.doc for f in self.pool.items), default=0)
-        for f in self.pool.items:
-            out.pool.add(f)
-        for f in other.pool.items:
-            out.pool.add(replace(f, doc=f.doc + top))
-        for side in (self.at, other.at):
-            out.at.homes += side.homes
-            for d, ds in side.doc_dates.items():
-                out.at.doc_dates.setdefault(d, set()).update(ds)
-        return out
+        return Delivered({**other.texts, **self.texts})
 
-    def by_shingles(self, text: str) -> _Page | None:
-        """The ONE delivered page that covers `text`, or None."""
-        me = _page(-1, text)
-        if not me.shingles:
-            return None
-        need = COVERED_FRAC * len(me.shingles)
-        return next(
-            (
-                e
-                for e in self.pages
-                if len(me.shingles & e.shingles) >= need and me.words <= e.words and me.values <= e.values
-            ),
-            None,
-        )
-
-    def contained(self, text: str, near: int | None = None) -> tuple[int, int] | None:
-        """(start, end) of the run of delivered pages holding the page (``update/contained``), or None."""
-        return self.pool.find(CT.facts(0, text), near=near)
-
-    def covers(self, text: str) -> bool:
-        return self.by_shingles(text) is not None or self.contained(text) is not None
+    def same_page(self, text: str) -> tuple[str, int] | None:
+        """(exhibit, page) of the delivered page that says exactly what `text` says, or None."""
+        key = same_text(text)
+        return self.texts.get(key) if key else None
 
 
 @dataclass
 class Earlier:
     """The pages of the new documents read so far, in exhibit order.
 
-    A page is a REFILED COPY of an earlier one only when that one page, from
-    an EARLIER DOCUMENT, covers COVERED_FRAC of its shingles and states every
-    date, every word and every clinical value it states (fax and print lines
-    aside). Two visits written on one template differ in a date or a word, so
-    both are read; pages of the same document are never compared, so a run of
-    template notes inside one record is read whole. When in doubt a page is
-    read: collect drops a true repeat after compose, while a page skipped here
-    is never seen again.
+    A page is a REFILED COPY of an earlier one only when it says EXACTLY what
+    one page of an EARLIER DOCUMENT says (``same_text``). Pages of the same
+    document are never compared, so a run of template notes inside one record
+    is read whole. When in doubt a page is read: collect drops a true repeat
+    after compose, while a page set aside here is never seen again."""
 
-    Or when a run of pages of ONE earlier document holds it across a
-    pagination shift (``update/contained``): two overlapping exports of one
-    clinic's records."""
-
-    pages: list[_Page] = field(default_factory=list)
+    #: {what a page says: (its document's number, its home)}: the first page
+    #: to say it, which is from the earliest document that does.
+    texts: dict[str, tuple[int, tuple[str, int]]] = field(default_factory=dict)
     doc: int = 0
-    pool: CT.Pool = field(default_factory=CT.Pool)
-    at: _Homes = field(default_factory=_Homes)
     name: str = ""  # the current document's id, when the caller names it
 
     def next_document(self, name: str | None = None) -> None:
@@ -349,46 +260,24 @@ class Earlier:
         self.name = name or f"new:{self.doc}"
 
     def add(self, text: str, page: int = 0) -> None:
-        home = (self.name or f"new:{self.doc}", page)
-        self.pages.append(_page(self.doc, text, home))
-        self.pool.add(CT.facts(self.doc, text))
-        self.at.note(home, text)
+        key = same_text(text)
+        if key:
+            self.texts.setdefault(key, (self.doc, (self.name or f"new:{self.doc}", page)))
 
-    def by_shingles(self, text: str) -> _Page | None:
-        """The ONE page of an earlier document `text` is a refiled copy of, or None."""
-        me = _page(self.doc, text)
-        if not me.shingles:
-            return None
-        for e in self.pages:
-            if e.doc == self.doc or len(me.shingles & e.shingles) < COVERED_FRAC * len(me.shingles):
-                continue
-            if me.dates <= e.dates and me.words <= e.words and me.values <= e.values:
-                return e
-        return None
-
-    def contained(self, text: str, near: int | None = None) -> tuple[int, int] | None:
-        return self.pool.find(CT.facts(self.doc, text), skip=self.doc, near=near)
-
-    def copy_of(self, text: str) -> bool:
-        return self.by_shingles(text) is not None or self.contained(text) is not None
+    def same_page(self, text: str) -> tuple[str, int] | None:
+        """(document, page) of the page of an EARLIER document that says exactly what `text` says, or None."""
+        key = same_text(text)
+        got = self.texts.get(key) if key else None
+        return got[1] if got is not None and got[0] != self.doc else None
 
 
-#: {page: ("delivered" | "earlier", window start, window end, held by
-#: ``update/contained`` alone)}: where each page it held sits in its pool,
-#: for the undated-neighbour pass and the measuring command.
-_Held = dict[int, tuple[str, int, int, bool]]
 DELIVERED_SRC, EARLIER_SRC = "delivered", "earlier"
-
-
-#: Why a page a text rule matched is read after all (``_decide``).
-SERVICE_DATE_UNCOVERED = "read: it dates care on a day the covering document never states"
 
 
 def _decide(
     t: str,
     seen: Delivered,
     earlier: Earlier | None,
-    held: _Held,
     page: int,
     tally: Counter[str] | None,
     covers: dict[int, Cover] | None = None,
@@ -400,68 +289,15 @@ def _decide(
     if is_billing(t):
         return EXCLUDED, BILLING
     for src, pool, why in ((DELIVERED_SRC, seen, ALREADY), (EARLIER_SRC, earlier, OVERLAP)):
-        if pool is None:
+        home = pool.same_page(t) if pool is not None else None
+        if home is None:
             continue
-        old, at = pool.by_shingles(t), pool.contained(t)
-        if old is None and at is None:
-            continue
-        # The page that covers it is RECORDED (``covers``); a page that dates
-        # care on a day the covering document never states is read (a later
-        # visit on the same template, 2026-11-17).
-        cov = pool.at.cover(src, old, at)
-        if cov is not None and pool.at.lacks_service_date(t, cov):
-            _count(tally, SERVICE_DATE_UNCOVERED)
-            continue
-        if at is not None:
-            held[page] = (src, at[0], at[1], old is None)  # where it sits, for an undated neighbour
-        if old is None:
-            _count(tally, f"held by a run of {src} pages")
-        if covers is not None and cov is not None:
-            covers[page] = cov
+        if tally is not None:
+            tally[f"the same text as a {src} page"] += 1
+        if covers is not None and home[0]:
+            covers[page] = Cover(src, home[0], home[1], BY_TEXT)
         return EXCLUDED, why
     return READ, "new document"
-
-
-def _count(tally: Counter[str] | None, key: str) -> None:
-    if tally is not None:
-        tally[key] += 1
-
-
-def _undated_neighbours(
-    out: dict[int, tuple[str, str]],
-    pages: dict[int, str],
-    seen: Delivered,
-    earlier: Earlier | None,
-    held: _Held,
-    tally: Counter[str] | None,
-    covers: dict[int, Cover] | None = None,
-) -> None:
-    """A read page that states no date, beside a page ``update/contained``
-    held, is held when the same document's pages near that window hold it."""
-    changed = True
-    while changed:
-        changed = False
-        for p, (d, _) in sorted(out.items()):
-            t = (pages.get(p) or "").strip()
-            if d != READ or p in held or CT.facts(0, t).dates:
-                continue
-            for q in (p - 1, p + 1):
-                if q not in held:
-                    continue
-                src, at = held[q][:2]
-                got = seen.contained(t, near=at) if src == DELIVERED_SRC else None
-                if src == EARLIER_SRC and earlier is not None:
-                    got = earlier.contained(t, near=at)
-                pool: Delivered | Earlier | None = seen if src == DELIVERED_SRC else earlier
-                cov = pool.at.cover(src, None, got) if pool is not None and got is not None else None
-                if got is not None:
-                    if covers is not None and cov is not None:  # recorded, never a condition
-                        covers[p] = cov
-                    held[p] = (src, got[0], got[1], True)
-                    out[p] = (EXCLUDED, ALREADY if src == DELIVERED_SRC else OVERLAP)
-                    _count(tally, f"held beside a held page ({src})")
-                    changed = True
-                    break
 
 
 def classify_new(
@@ -471,7 +307,6 @@ def classify_new(
     earlier: Earlier | None = None,
     image: dict[int, str] | None = None,
     tally: Counter[str] | None = None,
-    held_out: _Held | None = None,
     covers_out: dict[int, Cover] | None = None,
     doc_id: str | None = None,
 ) -> dict[int, tuple[str, str]]:
@@ -480,27 +315,21 @@ def classify_new(
     silently, the stage holds on it. `earlier`, when given, holds the pages of
     the new documents before this one; this document's pages join it.
     `image`: {page: ALREADY | OVERLAP} for the pages ``update/pageid`` found
-    by their picture; those were never transcribed and are excluded first.
-    `tally`, when given, counts the pages ``update/contained`` held;
-    `held_out`, when given, receives where each of them sits (``_Held``);
-    `covers_out`, when given, receives the page that covers each page a text
-    rule excluded (``Cover``); `doc_id` names this document in that record."""
+    pixel-equal; those were never transcribed and are excluded first.
+    `tally`, when given, counts the pages excluded by their text;
+    `covers_out`, when given, receives the page that covers each page the
+    text test excluded (``Cover``); `doc_id` names this document in that record."""
     if earlier is not None:
         earlier.next_document(doc_id)
     out: dict[int, tuple[str, str]] = {}
-    held: _Held = {}
     for i in range(1, npages + 1):
         t = (pages.get(i) or "").strip()
         if image and i in image:
             out[i] = (EXCLUDED, image[i])
             continue
-        out[i] = _decide(t, seen, earlier, held, i, tally, covers_out)
+        out[i] = _decide(t, seen, earlier, i, tally, covers_out)
         if earlier is not None and out[i][0] != UNREAD and len(t) >= MIN_CHARS:
             earlier.add(t, i)
-    if held:
-        _undated_neighbours(out, pages, seen, earlier, held, tally, covers_out)
-    if held_out is not None:
-        held_out.update(held)
     return out
 
 

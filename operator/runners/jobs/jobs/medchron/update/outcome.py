@@ -258,7 +258,7 @@ def write(slug_dir: Path, unit: str, stage: str) -> dict[str, Any]:
     ud = slug_dir / "runs" / unit / "update"
     ud.mkdir(parents=True, exist_ok=True)
     if stage == "download":
-        sel = {"exhibits": [], "skipped": {}, "subsets": [], "readings": []}
+        sel = {"exhibits": [], "skipped": {}, "subsets": []}
         sel["excluded_named"] = list(read_json(slug_dir / "named_excluded.json", []) or [])
         (ud / "selection.json").write_text(json.dumps(sel, indent=1), encoding="utf-8")
     requested = _requested(slug_dir)

@@ -125,11 +125,12 @@ def _decided_row(rid: str, sha: str, p: int, d: str, why: str, cover: S.Cover | 
         return PR.row(rid, sha, p, PR.READ, "new", PR.NONE, BY_SELECT)
     if d == S.UNREAD:
         return PR.row(rid, sha, p, PR.UNREAD, "transcription_failed", PR.NONE, BY_SELECT)
-    if h is not None and why == h.reason and (cover is None or cover.kind == S.BY_PICTURE):
+    # Only a pixel-equal picture excludes a page by picture (2026-11-21); a
+    # near page excluded here was excluded by its text.
+    if h is not None and h.exact and why == h.reason and (cover is None or cover.kind == S.BY_PICTURE):
         return PR.row(rid, sha, p, PR.EXCLUDED, klass(why), PR.picture_kind(h), BY_SELECT, PR.picture_cover(h))
     if cover is not None:
-        kind = PR.CONTAINED if cover.kind == S.BY_RUN else PR.TEXT
-        return PR.row(rid, sha, p, PR.EXCLUDED, klass(why), kind, BY_SELECT, cover.as_dict())
+        return PR.row(rid, sha, p, PR.EXCLUDED, klass(why), PR.TEXT, BY_SELECT, cover.as_dict())
     return PR.row(rid, sha, p, PR.EXCLUDED, klass(why), _kind(why), BY_SELECT)
 
 

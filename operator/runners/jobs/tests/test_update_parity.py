@@ -29,6 +29,7 @@ def test_a_page_repeating_an_earlier_new_page_is_skipped_unless_it_adds_a_clinic
     composed. Now the second is skipped, unless it carries a lab, vital or
     dose no earlier page stated."""
     from jobs.medchron.update import select as S
+    from jobs.medchron.update.values import clinical_values
 
     earlier = S.Earlier()
     first = S.classify_new({1: FAX_A + "\n" + RECORD}, 1, S.Delivered(), earlier)
@@ -42,7 +43,7 @@ def test_a_page_repeating_an_earlier_new_page_is_skipped_unless_it_adds_a_clinic
     assert again[1] == (S.EXCLUDED, S.OVERLAP)
     assert again[2][0] == S.READ  # a new lab value is read even on a repeated page
     # Fax, page and time digits are not clinical values.
-    assert S.clinical_values(FAX_A) == set() and "hemo 11.2" in S.clinical_values("Hemoglobin 11.2 g/dL")
+    assert clinical_values(FAX_A) == set() and "hemo 11.2" in clinical_values("Hemoglobin 11.2 g/dL")
 
 
 # ---- change 2: diagnosis codes ----------------------------------------------------

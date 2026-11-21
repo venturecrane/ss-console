@@ -4,7 +4,15 @@ records whose pages differed only in print stamps and pagination, so the
 shared pages were composed twice, and the update left 64 lines that were
 only a citation. Each test here fails on the code before the fix unless it
 says it pins behaviour that must not change. Every name and value is
-invented."""
+invented.
+
+2026-11-21: the text-window rule (a page held by a run of 1 to 3 pages of
+another document) and its undated-neighbour spread were REMOVED. A page is a
+repeat only when it says exactly what one page says (``select.same_text``)
+or is pixel-equal: three readers ruled pages the older rules set aside
+different from what they were matched to. A second export paginated
+otherwise is now READ, and its repeated visits are matched after compose
+(``repeats.keep_decision``, ``final_set.repeats``)."""
 
 from __future__ import annotations
 
@@ -18,7 +26,6 @@ from jobs.medchron.update import (
     body as B,
     entry_edits as EE,
     measure_repeats as M,
-    pageid_io as PG,
     proofs as P,
     select as S,
     uncited as U,
@@ -52,16 +59,16 @@ def _stamped(stamp: str, note: str = NOTE) -> str:
     ],
 )
 def test_a_page_differing_only_in_its_export_stamp_is_the_same_page(a: str, b: str) -> None:
-    assert PG.confirmed(_stamped(a), _stamped(b))
+    assert S.same_text(_stamped(a)) == S.same_text(_stamped(b))
 
 
 def test_a_real_clinical_date_difference_is_never_a_stamp() -> None:
     other = NOTE.replace("Date of service: 03/04/2026", "Date of service: 03/11/2026")
-    assert not PG.confirmed(_stamped("Run Date: 11/02/2026"), _stamped("Run Date: 11/02/2026", other))
+    assert S.same_text(_stamped("Run Date: 11/02/2026")) != S.same_text(_stamped("Run Date: 11/02/2026", other))
     # a bare date-time line in the BODY is when something happened, not a print header
     mid_a = NOTE.replace("Blood pressure", "03/04/2026 10:15\nBlood pressure")
     mid_b = NOTE.replace("Blood pressure", "03/05/2026 10:15\nBlood pressure")
-    assert not PG.confirmed(_stamped("Exported 11/02/2026", mid_a), _stamped("Exported 11/09/2026", mid_b))
+    assert S.same_text(_stamped("Exported 11/02/2026", mid_a)) != S.same_text(_stamped("Exported 11/09/2026", mid_b))
     # a clinical "report" line is not a stamp
     assert S.strip_stamps("Report: MRI of the lumbar spine 03/04/2026") == "Report: MRI of the lumbar spine 03/04/2026"
 
@@ -110,19 +117,21 @@ def _decide(pages: list[str], seen: S.Delivered, earlier: S.Earlier | None = Non
     return S.classify_new(dict(enumerate(pages, 1)), len(pages), seen, earlier)
 
 
-def test_a_second_export_of_delivered_pages_paginated_otherwise_is_already_read() -> None:
+def test_a_second_export_of_delivered_pages_paginated_otherwise_is_read() -> None:
+    """2026-11-21: no page of it says exactly what one delivered page says."""
     seen = S.Delivered.of_docs([_export_a()])
     got = _decide(_export_b(), seen)
-    assert {p: d for p, (d, _) in got.items()} == {1: S.EXCLUDED, 2: S.EXCLUDED, 3: S.EXCLUDED}
-    assert {why for _, why in got.values()} == {S.ALREADY}
+    assert {p: d for p, (d, _) in got.items()} == {1: S.READ, 2: S.READ, 3: S.READ}
 
 
-def test_a_second_export_overlapping_an_earlier_new_one_is_a_repeat_not_read_twice() -> None:
+def test_a_second_export_overlapping_an_earlier_new_one_is_read() -> None:
     earlier = S.Earlier()
     first = _decide(_export_a(), S.Delivered(), earlier)
     assert all(d == S.READ for d, _ in first.values())
     second = _decide(_export_b(), S.Delivered(), earlier)
-    assert all(d == S.EXCLUDED and why == S.OVERLAP for d, why in second.values())
+    assert all(d == S.READ for d, _ in second.values())
+    again = _decide(_export_a(), S.Delivered(), earlier)  # the first export filed again, stamps aside
+    assert all(d == S.EXCLUDED and why == S.OVERLAP for d, why in again.values())
 
 
 @pytest.mark.parametrize(
@@ -140,13 +149,6 @@ def test_a_page_that_says_one_other_thing_is_read(change: tuple[str, str]) -> No
     assert changed != VISIT_1
     got = _decide(_export_b(changed), seen)
     assert got[1][0] == S.READ or got[2][0] == S.READ
-
-
-def test_the_text_window_never_holds_a_page_of_another_visit_date() -> None:
-    seen = S.Delivered.of_docs([_export_a()])
-    page = _export_b()[1]
-    assert seen.contained(page) is not None
-    assert seen.contained(page.replace("04/01/2026", "04/02/2026")) is None
 
 
 def test_pages_of_one_document_are_never_held_by_each_other() -> None:
@@ -181,8 +183,16 @@ def _mri_window() -> S.Delivered:
 
 
 def test_a_page_identical_but_for_its_print_stamp_is_held() -> None:
-    got = _decide([f"Printed 11/09/2026 4:02 PM by records\n{MRI}\nPage 1 of 1"], _mri_window())
+    delivered = S.Delivered.of_docs([[f"{MRI}\nPage 1 of 1"]])
+    got = _decide([f"Printed 11/09/2026 4:02 PM by records\n{MRI}\nPage 1 of 1"], delivered)
     assert got == {1: (S.EXCLUDED, S.ALREADY)}
+
+
+def test_a_page_a_delivered_run_of_pages_holds_is_read() -> None:
+    """2026-11-21: the report broken across two delivered pages, filed whole
+    on one page, is read (the run rule was removed)."""
+    got = _decide([f"Printed 11/09/2026 4:02 PM by records\n{MRI}\nPage 1 of 1"], _mri_window())
+    assert got == {1: (S.READ, "new document")}
 
 
 def test_a_page_identical_but_for_one_added_negative_finding_is_read() -> None:
@@ -195,10 +205,11 @@ def test_a_page_identical_but_for_one_added_negative_finding_is_read() -> None:
     assert _decide([one_word], _mri_window())[1][0] == S.READ
 
 
-def test_two_deliveries_joined_keep_each_exhibit_its_own_document() -> None:
-    both = S.Delivered.of_docs([_export_a()[:1]]) | S.Delivered.of_docs([_export_a()[1:]])
-    assert both.contained(_export_b()[1]) is None  # its window would span two exhibits
-    assert S.Delivered.of_docs([_export_a()]).contained(_export_b()[1]) is not None
+def test_two_deliveries_joined_keep_each_page_its_own_home() -> None:
+    both = S.Delivered.of_docs([_export_a()[:1]], ["exhibit:1"]) | S.Delivered.of_docs([_export_a()[1:]], ["exhibit:2"])
+    assert both.same_page(_export_a()[0]) == ("exhibit:1", 1)
+    assert both.same_page(_export_a()[1]) == ("exhibit:2", 1)
+    assert both.same_page(_export_b()[1]) is None
 
 
 SIGNED = (
@@ -211,16 +222,6 @@ OTHER_NOTE = (
     "Example Clinic Orthopedics\nTelephone note dated 03/11/2026: the patient called to confirm the therapy schedule.\n"
     "The schedule was confirmed and the patient was told to call with any questions."
 )
-
-
-def test_a_page_whose_tokens_are_all_in_the_window_but_not_its_sentence_is_read() -> None:
-    """(a) The real shape: the window says "signed on <date B>" on one page
-    and has date A in another note on the next; the page says "signed on
-    <date A>". Every token and the date are in the window; the sentence is not."""
-    seen = S.Delivered.of_docs([[SIGNED, OTHER_NOTE]])
-    page = SIGNED.replace("signed on 03/04/2026", "signed on 03/11/2026")
-    assert seen.contained(page) is None  # the text-window rule; the shingle rule is main's, unchanged
-    assert seen.contained(SIGNED) is not None
 
 
 def test_a_negative_finding_whose_words_are_scattered_in_the_window_is_read() -> None:
@@ -240,7 +241,8 @@ def test_a_page_differing_only_by_its_print_stamp_and_line_wraps_is_held() -> No
     words = MRI.split()
     rewrapped = "\n".join(" ".join(words[i : i + 9]) for i in range(0, len(words), 9))
     assert rewrapped.split() == MRI.split() and rewrapped != MRI
-    got = _decide([f"Report Date/Time: 11/09/2026 08:01\n{rewrapped}\nPage 1 of 1"], _mri_window())
+    delivered = S.Delivered.of_docs([[f"Run Date: 11/02/2026\n{MRI}"]])
+    got = _decide([f"Report Date/Time: 11/09/2026 08:01\n{rewrapped}\nPage 1 of 1"], delivered)
     assert got == {1: (S.EXCLUDED, S.ALREADY)}
 
 
@@ -255,16 +257,16 @@ def test_a_stamp_inside_a_page_breaks_its_runs() -> None:
     assert CT.stream_of("Run Date: 11/02/2026\none two\nPage 1 of 2") == ("one", "two")
 
 
-def test_an_undated_page_is_held_only_beside_a_held_page() -> None:
-    """The delivered export broke the visit's body across two pages; the new
-    export holds its header on one page and its whole undated body on the
-    next, which no single delivered page covers."""
+def test_an_undated_page_is_never_held_by_its_neighbour() -> None:
+    """2026-11-21: the undated-neighbour spread was removed with the run rule.
+    The delivered export broke the visit's body across two pages; the new
+    export's header and undated body pages say what no single delivered page
+    says, so both are read."""
     lines = VISIT_1.split("\n")
     head, body = "\n".join(lines[:4]), "\n".join(lines[4:])
     seen = S.Delivered.of_docs([[f"{head}\n{lines[4]}", "\n".join(lines[5:]) + "\n" + VISIT_2]])
-    assert _decide([body], seen)[1][0] == S.READ  # no date, no held neighbour: read
     got = _decide([head, body], seen)
-    assert got[1] == (S.EXCLUDED, S.ALREADY) and got[2] == (S.EXCLUDED, S.ALREADY)
+    assert got == {1: (S.READ, "new document"), 2: (S.READ, "new document")}
 
 
 D = "03/04/2026"
@@ -345,16 +347,14 @@ def _job(tmp_path: Path) -> Path:
     return job
 
 
-def test_the_measuring_command_reports_held_pages_and_stray_lines(
+def test_the_measuring_command_reports_page_decisions_and_stray_lines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     job = _job(tmp_path)
     assert M.main([str(job)]) == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["pages"]["decisions"] == {f"{S.EXCLUDED}: {S.ALREADY}": 3}
-    assert out["pages"]["held_by_text"] == {"held by a run of delivered pages": 1}  # the page broken mid-visit
-    assert out["pages"]["held_by_text_tokens_absent_from_window"] == {"d2 p.2": 0}
-    assert out["pages"]["held_by_text_runs_absent_from_window"] == {"d2 p.2": 0}
+    assert out["pages"]["decisions"] == {f"{S.READ}: new document": 3}  # another export: read (2026-11-21)
+    assert out["pages"]["excluded_by_text"] == {}
     assert out["stray_citations"] == {
         "entries": 1,
         "citation_only_lines_before": 4,

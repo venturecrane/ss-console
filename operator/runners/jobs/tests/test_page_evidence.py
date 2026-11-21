@@ -66,25 +66,6 @@ def test_a_refiled_copy_of_an_earlier_new_document_names_that_document() -> None
     assert (covers[1].doc, covers[1].page) == ("first", 1)
 
 
-def test_a_twin_reading_excluded_records_the_page_it_repeats() -> None:
-    """2026-11-17 rehearsal: two "repeat" pages named no cover; both were twins
-    (``update/twins``), settled with no record of the page they repeat."""
-    from jobs.medchron.update import twins as TW
-    from jobs.stages.update_select import _Read, _settle_twins
-
-    got = {
-        "small": _Read(Path("s.pdf"), {1: NOTE}, {1: (S.READ, "new document")}, False, None),
-        "large": _Read(Path("l.pdf"), {5: NOTE + " Reviewed."}, {p: (S.READ, "") for p in range(1, 6)}, False, None),
-    }
-    got["large"].pages.update({p: f"other page {p} " * 20 for p in range(1, 5)})
-    _settle_twins(got, PG.Loaded(pages={"small": {1: PG.Page(S.OVERLAP, "large", 5, False)}}))
-    assert got["small"].decisions[1] == (S.EXCLUDED, S.OVERLAP)  # as main decides it
-    assert got["small"].covers[1] == S.Cover(S.EARLIER_SRC, "large", 5, S.BY_TWIN)
-    mine: dict[int, int] = {}
-    TW.settle(({1: NOTE}, {1: (S.READ, "")}), ({5: NOTE + " x"}, {5: (S.READ, "")}), {1: 5}, mine)
-    assert mine == {1: 5}
-
-
 #: the cover document's state in each case the review named
 COVER_CASES = {
     "billing": ("Example Clinic Records", ["Itemized statement. Charges 120.00 payment 0.00 balance 120.00 " * 3]),
@@ -120,7 +101,7 @@ def test_a_picture_copy_keeps_mains_decision_whatever_its_cover_became(case, job
         )
         rows.append({"id": rid, "name": label, "ext": ".pdf", "path": str(path)})
     ident = PG.Loaded(pages={"small": {1: PG.Page(S.OVERLAP, "big", 1, True)}})
-    got = US._classify(sr, rows, S.Delivered(), ident, lambda _o, _p: "", {})
+    got = US._classify(sr, rows, S.Delivered(), ident, {})
     assert got["small"].decisions[1] == (S.EXCLUDED, S.OVERLAP)
     assert S.row(9, "", got["small"].decisions, got["small"].pages)["unread"] == []
 
