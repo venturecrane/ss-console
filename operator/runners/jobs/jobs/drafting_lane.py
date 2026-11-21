@@ -183,6 +183,8 @@ class DraftingLane(Daemon):
         prior = (env.get("revise") or {}).get("prior_job_id") if isinstance(env.get("revise"), dict) else None
         if prior:
             form_saved.hand_to(self.run_dir, str(prior), jd / "data")  # a form set's saved values (forms/saved.py)
+            units = env["revise"].get("units") or []  # a set revision: every prior job's served sets
+            form_saved.hand_all(self.run_dir, [str(u.get("prior_job_id")) for u in units], jd / "data")
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
         self._chown_child(jd)
         return jd

@@ -11,6 +11,9 @@ The envelope (the broker's ``drafting_job_submit`` writes exactly this)::
      "revise"?: {"prior_job_id": <ULID>, "folder_id": str,
                  "files": [{"role", "file_id", "name", "size", "sha256"}]}}
                  (revise mode: the broker named the filed files from its delivery proof)
+     or "revise"?: {"prior_job_id", "folder_id", "units": [{"file_id", "name", "size", "sha256",
+                    "set_type", "prior_job_id", "folder_id"}]}
+                 (a discovery response's revision: every filed draft of the request, by file id)
 
 Re-validated here rather than imported from the broker, whose package is not on
 the runner's venv: the runner refuses an envelope it cannot read the same way
@@ -159,6 +162,8 @@ def _revise(raw: Any) -> dict[str, Any] | None:
     by id, size and sha256."""
     if raw is None:
         return None
+    if isinstance(raw, dict) and "units" in raw:
+        return _revise_units(raw)
     if not isinstance(raw, dict) or set(raw) != {"prior_job_id", "folder_id", "files"}:
         raise DraftingJobError("revise carries exactly prior_job_id, folder_id and files")
     if not (isinstance(raw["prior_job_id"], str) and _ULID.match(raw["prior_job_id"])):
@@ -174,6 +179,51 @@ def _revise(raw: Any) -> dict[str, Any] | None:
     if "draft" not in roles:
         raise DraftingJobError("revise.files must name the filed draft")
     return {"prior_job_id": raw["prior_job_id"], "folder_id": raw["folder_id"], "files": [dict(f) for f in files]}
+
+
+#: The set types a unit may carry ("" when the broker could not tell; the
+#: file's own headings then say, ``revise/responses.py``).
+_UNIT_SET_TYPES = (
+    "",
+    "special_interrogatories",
+    "requests_for_production",
+    "form_interrogatories",
+    "requests_for_admission",
+)
+_UNIT_KEYS = {"file_id", "name", "size", "sha256", "set_type", "prior_job_id", "folder_id"}
+MAX_UNITS = 20
+
+
+def _unit_ok(u: Any) -> bool:
+    return (
+        isinstance(u, dict)
+        and set(u) == _UNIT_KEYS
+        and _revise_file_ok({"role": "draft", **{k: u[k] for k in ("file_id", "name", "size", "sha256")}})
+        and u["set_type"] in _UNIT_SET_TYPES
+        and isinstance(u["prior_job_id"], str)
+        and bool(_ULID.match(u["prior_job_id"]))
+        and isinstance(u["folder_id"], str)
+        and bool(_FILE_ID.match(u["folder_id"]))
+    )
+
+
+def _revise_units(raw: dict[str, Any]) -> dict[str, Any]:
+    """A discovery set's revision (``revise/set_run.py``): every filed draft of
+    the request, one unit per file id, each from the newest delivery proof."""
+    if set(raw) != {"prior_job_id", "folder_id", "units"}:
+        raise DraftingJobError("revise carries exactly prior_job_id, folder_id and units")
+    if not (isinstance(raw["prior_job_id"], str) and _ULID.match(raw["prior_job_id"])):
+        raise DraftingJobError("revise.prior_job_id must be the prior job's ULID")
+    if not (isinstance(raw["folder_id"], str) and _FILE_ID.match(raw["folder_id"])):
+        raise DraftingJobError("revise.folder_id must be the delivery folder's id")
+    units = raw["units"]
+    if not isinstance(units, list) or not 1 <= len(units) <= MAX_UNITS or not all(_unit_ok(u) for u in units):
+        raise DraftingJobError(
+            f"revise.units is 1 to {MAX_UNITS} filed drafts, each {{{', '.join(sorted(_UNIT_KEYS))}}}"
+        )
+    if len({u["file_id"] for u in units}) != len(units):
+        raise DraftingJobError("revise.units names each file once")
+    return {"prior_job_id": raw["prior_job_id"], "folder_id": raw["folder_id"], "units": [dict(u) for u in units]}
 
 
 def _count(v: Any) -> int | None:

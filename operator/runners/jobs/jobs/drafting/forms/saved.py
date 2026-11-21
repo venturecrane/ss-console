@@ -10,6 +10,12 @@ when the job is delivered, and into a revise job's data dir as
 ``prior-form-answers.json`` when the broker queues a revision of that job
 (``revise_stage``). The values are text read from the matter file; the store
 goes with the run dir.
+
+A response job's record also carries its frozen served sets (the requests as
+served, verbatim) and what each was filed as (``SERVED_FILES``), and is kept
+for those alone when it filed no form set: a revision of every filed response
+(``revise/set_run.py``) pins each file's responses to the request numbers
+served, long after the job dir is gone. The same purge removes them.
 """
 
 from __future__ import annotations
@@ -99,15 +105,35 @@ def _matter_of(data: Path) -> str:
     return str(doc.get("matter_id") or "") if isinstance(doc, dict) else ""
 
 
+#: A response job's frozen served sets and what each was filed as
+#: (``served.PLAN``, ``served.OUTCOMES``), kept beside its form records so a
+#: revision pins each filed response to its request numbers (``revise/set_run``).
+SERVED_FILES = {"served": "served-plan.json", "served_outcomes": "served-outcomes.json"}
+
+
+def _served_of(data: Path) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, name in SERVED_FILES.items():
+        p = Path(data) / name
+        try:
+            sets = json.loads(p.read_text(encoding="utf-8")).get("sets") if p.is_file() else None
+        except (ValueError, AttributeError):
+            sets = None
+        if isinstance(sets, list):
+            out[key] = sets
+    return out
+
+
 def keep(run_dir: Path, job_id: str, data: Path) -> bool:
-    """A delivered job's form records into the lane's store (root, ``drafting_lane._report``)."""
-    recs = job_records(data)
-    if not recs:
+    """A delivered job's form records and served sets into the lane's store
+    (root, ``drafting_lane._report``)."""
+    recs, served = job_records(data), _served_of(data)
+    if not recs and not served:
         return False
     d = Path(run_dir) / STORE
     d.mkdir(parents=True, exist_ok=True)
     tmp = d / f".{job_id}.json.tmp"
-    doc = {"job_id": job_id, "matter_id": _matter_of(data), "units": recs}
+    doc = {"job_id": job_id, "matter_id": _matter_of(data), "units": recs, **served}
     tmp.write_text(json.dumps(doc, indent=1), encoding="utf-8")
     tmp.replace(d / f"{job_id}.json")
     return True
@@ -163,6 +189,24 @@ def hand_to(run_dir: Path, prior_job_id: str, data: Path) -> bool:
     Path(data).mkdir(parents=True, exist_ok=True)
     (Path(data) / PRIOR).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
     return True
+
+
+#: In a set revision's data dir: each prior job's stored record, by job id.
+PRIOR_RECORDS = "prior-records"
+
+
+def hand_all(run_dir: Path, prior_job_ids: list[str], data: Path) -> list[str]:
+    """A set revision's copies of every prior job's record it names (root,
+    ``drafting_lane._write_job``); the ids copied."""
+    out = []
+    for jid in dict.fromkeys(prior_job_ids):
+        src = Path(run_dir) / STORE / f"{jid}.json"
+        if src.is_file():
+            dest = Path(data) / PRIOR_RECORDS
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / f"{jid}.json").write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+            out.append(jid)
+    return out
 
 
 def job_records(data: Path) -> list[dict[str, Any]]:
