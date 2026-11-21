@@ -528,6 +528,24 @@ def read_sender_requests(sender: str, since: float, *, path: str | None = None) 
     ]
 
 
+def read_request_ids(*, path: str | None = None) -> frozenset[str]:
+    """Every request id the index still holds a row for (both the provider's
+    and the internet message id), whatever its age up to
+    :data:`ROW_RETENTION_DAYS`: ids only, no text. Lets a reader tell "this
+    request aged out of the text window" from "no request was ever indexed".
+    Same contract as :func:`read_requests`: empty when the file or table does
+    not exist, raises on a file that exists and cannot be read."""
+    target = path or db_path()
+    if not os.path.exists(target):
+        return frozenset()
+    rows = _read_rows(
+        target, ("vendor_message_id", "internet_message_id"), "received_at >= ?", (0.0,)
+    )
+    return frozenset(
+        str(v) for r in rows for v in (r["vendor_message_id"], r["internet_message_id"]) if v
+    )
+
+
 def read_reply_openings(since: float, *, path: str | None = None) -> dict[str, str | None]:
     """sent_message_id -> the opening of that reply, for replies sent at or
     after ``since``. READ-ONLY, same contract as :func:`read_requests`: ``{}``

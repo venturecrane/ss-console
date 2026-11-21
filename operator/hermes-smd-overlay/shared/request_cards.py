@@ -638,8 +638,13 @@ def decide(
     openings: dict[str, str | None] | None = None,
     texts: dict[str, str | None] | None = None,
     name_of: Callable[[str], str | None] | None = None,
+    indexed: frozenset[str] = frozenset(),
 ) -> list[dict]:
     """The cards due now, oldest event first, as wire-shaped dicts.
+
+    ``indexed`` (:func:`shared.request_index.read_request_ids`) is every
+    request id the index holds a row for, past the text window too; a reply
+    to one of them is never carded as answering no request.
 
     ``texts`` (sent message id -> that reply's whole text,
     :func:`shared.request_index.read_reply_texts`) is what a ``followup`` card
@@ -669,14 +674,6 @@ def decide(
     held = _hold_cards(requests, audit_conn, proofs, done, now) if proofs is not None else []
     horizon = _iso(now - LOOKBACK - timedelta(days=1))[:19]
     replies = _reply_rows(audit_conn, horizon)
-    if not requests:
-        return _named(
-            sorted(
-                held + _followup_cards(requests, replies, done, done_at or {}, openings, texts),
-                key=lambda c: (c["event_at"], c["card_key"]),
-            ),
-            name_of,
-        )
     sent_by_vid: dict[str, list[dict]] = {}
     held_vids: set[str] = set()
     for row in replies:
@@ -767,7 +764,7 @@ def decide(
                 }
             )
     cards.extend(_held_reply_cards(requests, jobs, done))
-    cards.extend(_followup_cards(requests, replies, done, done_at or {}, openings, texts))
+    cards.extend(_followup_cards(requests, replies, done, done_at or {}, openings, texts, indexed))
     if proofs is not None:
         cards.extend(held)
         cards.extend(_in_turn_cards(requests, sent_by_vid, calls_by_session, proofs, done, now))
@@ -805,6 +802,7 @@ def _followup_cards(
     done_at: dict[str, float],
     openings: dict[str, str | None] | None,
     texts: dict[str, str | None] | None = None,
+    indexed: frozenset[str] = frozenset(),
 ) -> list[dict]:
     """One card per reply SENT that no ``replied`` card counted (2026-10-26).
 
@@ -823,6 +821,13 @@ def _followup_cards(
     A reply to an indexed request whose replied card has not landed is that
     card's to count, and so is one whose card landed before landing times were
     kept (no ``done_at``): never carded twice.
+
+    ``indexed`` holds every request id the index still has a ROW for, text
+    or not. A reply to one of those whose request is older than
+    :data:`LOOKBACK` is not "no request on record": the request aged out of
+    the text window before its reply did (2026-11-19: smd-guide mailed SMD
+    "later reply, no request on record" for a reply sent two minutes after a
+    request that had left the window two minutes earlier, seven days on).
     """
     if openings is None:
         return []
@@ -856,6 +861,11 @@ def _followup_cards(
             received = datetime.fromtimestamp(float(req["received_at"]), tz=timezone.utc)
             base = _base(req)
         else:
+            if in_reply_to in indexed:
+                # The request is still on record past the text window
+                # (ROW_RETENTION_DAYS): its own cards went out when it was
+                # live, and this reply is not a stray.
+                continue
             received = sent_at
             base = {
                 "received_at": _iso(sent_at),
@@ -1102,21 +1112,19 @@ def send_due_cards(
     try:
         now_s = now_fn()
         now = datetime.fromtimestamp(now_s, tz=timezone.utc)
-        requests = request_index.read_requests(
-            now_s - LOOKBACK.total_seconds(), path=requests_db_path
-        )
-        # No early return on an empty index: a held scheduled run has no
-        # request and still pages (the lane-proof gate).
+        since = now_s - LOOKBACK.total_seconds()
+        requests = request_index.read_requests(since, path=requests_db_path)
+        # No early return on an empty index: a held scheduled run still pages.
         try:
             openings: dict[str, str | None] | None = request_index.read_reply_openings(
-                now_s - LOOKBACK.total_seconds(), path=requests_db_path
+                since, path=requests_db_path
             )
         except Exception:  # noqa: BLE001 — "could not look" decides no follow-ups, never "none"
             logger.error("request_cards: cannot read the reply openings", exc_info=True)
             openings = None
         try:
             texts: dict[str, str | None] | None = request_index.read_reply_texts(
-                now_s - LOOKBACK.total_seconds(), path=requests_db_path
+                since, path=requests_db_path
             )
         except Exception:  # noqa: BLE001 — a follow-up card without its text is still a card
             logger.warning("request_cards: cannot read the reply texts", exc_info=True)
@@ -1144,6 +1152,7 @@ def send_due_cards(
                 openings=openings,
                 texts=texts,
                 name_of=name_of if name_of is not None else _authored_names(),
+                indexed=request_index.read_request_ids(path=requests_db_path),
             )
         finally:
             conn.close()
