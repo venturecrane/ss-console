@@ -551,6 +551,18 @@ def chunk_set(d: Path, files: list[dict[str, Any]], chunk: int) -> tuple[list[st
     return windows, f"windows of at most {WN.WINDOW_PAGES} pages"
 
 
+def writer_system(sr: StageRun) -> str:
+    """The writer's system prompt for this job. An UPDATE always writes the
+    full form: every chronology delivered before `chronology.entry_detail`
+    existed is in it, and the update's repeat and finish steps match new
+    entries to delivered ones by provider and split a document out as its own
+    entry, so standard-form entries in an update repeat delivered visits
+    (bug review of the setting, 2026-11-21). The update lane is the job whose
+    `update_base` wrote `runs/<unit>/update/update_plan.json`."""
+    update = (sr.slug_dir / "runs" / sr.unit.unit / "update" / "update_plan.json").is_file()
+    return prompts.load("map-system", sr.cfg, entry_detail="full" if update else None)
+
+
 def run(sr: StageRun) -> int:
     d = sr.slug_dir / "runs" / sr.unit.unit
     d.mkdir(parents=True, exist_ok=True)
@@ -561,7 +573,7 @@ def run(sr: StageRun) -> int:
         sr.log(f"compose-skipped: {len(skipped)}")
     max_tokens = int(sr.cfg.get("levers", "compose_max_tokens", 128000))
     chunk = chunk_size(max_tokens)
-    system = prompts.load("map-system", sr.cfg)
+    system = writer_system(sr)
     chunks, rule = chunk_set(d, files, chunk)
     sr.log(f"compose window: max_tokens={max_tokens}; CHUNK={chunk:,} chars; cut by {rule}")
     sr.log(f"{sr.unit.unit}: {len(files)} files -> {len(chunks)} chunks ({[len(c) for c in chunks]} chars)")

@@ -46,9 +46,9 @@ def entry_grain(detail: str) -> dict[str, str]:
     return out
 
 
-def load(name: str, cfg: FirmConfig) -> str:
+def load(name: str, cfg: FirmConfig, *, entry_detail: str | None = None) -> str:
     menu = " / ".join(str(h) for h in (cfg.get("format", "subsections") or []))
     text = raw(name).replace(DEPTH_TOKEN, depth_rule())
-    for token, value in entry_grain(cfg.entry_detail).items():
+    for token, value in entry_grain(entry_detail or cfg.entry_detail).items():
         text = text.replace(token, value)
     return wording.fill(text.replace("{{HEADING_MENU}}", menu))

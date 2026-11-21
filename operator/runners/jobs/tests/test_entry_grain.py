@@ -61,6 +61,27 @@ def test_standard_writes_one_entry_per_facility_and_keeps_every_date(firm_config
     assert prompts.depth_rule() in text
 
 
+def test_an_update_always_writes_the_full_form(firm_config_path, tmp_path):
+    """Every delivered chronology is full form, and the update's repeat and
+    finish steps match by provider; a standard-form update would repeat
+    delivered visits. The writer and its repair both go through
+    ``compose.writer_system``."""
+    from types import SimpleNamespace
+
+    from jobs.stages.compose import writer_system
+
+    cfg = _cfg(firm_config_path, tmp_path, "standard")
+    sr = SimpleNamespace(slug_dir=tmp_path / "slug", unit=SimpleNamespace(unit="u1"), cfg=cfg)
+    run = sr.slug_dir / "runs" / "u1"
+    run.mkdir(parents=True)
+    assert "One entry per facility or practice per date of service" in writer_system(sr)
+    (run / "update").mkdir()
+    (run / "update" / "update_plan.json").write_text("{}", encoding="utf-8")
+    text = writer_system(sr)
+    assert FULL_GRAIN in text and FULL_PROVIDER in text
+    assert "One entry per facility or practice" not in text
+
+
 def test_a_value_outside_the_two_is_refused(firm_config_path, tmp_path):
     data = yaml.safe_load(firm_config_path.read_text(encoding="utf-8"))
     data["chronology"]["entry_detail"] = "short"
