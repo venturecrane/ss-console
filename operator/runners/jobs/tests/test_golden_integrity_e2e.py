@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -57,6 +58,20 @@ def _move(src: Path, dst: Path) -> None:
     shutil.move(str(src), str(dst))
 
 
+def _empty_allowed_lists(op: Path) -> None:
+    """The scratch base stands for main, whose allowed lists are empty once
+    every golden change has merged. This tree is a PR's, and a PR that changes
+    a golden names the path in its family's list; carried into the scratch base,
+    that entry needs a merge-base the scratch repo cannot give
+    (``bin/lib/golden_diff._base``), and every family's manifest fails."""
+    for p in op.rglob("allowed-changes.json"):
+        data = json.loads(p.read_text(encoding="utf-8"))
+        p.write_text(
+            json.dumps({k: (v if k.startswith("_") or not isinstance(v, list) else []) for k, v in data.items()}),
+            encoding="utf-8",
+        )
+
+
 def _scratch(tmp: Path) -> tuple[Path, str]:
     """A repo whose first commit is this tree WITHOUT the text-rule set (kept aside in ``tmp/aside``)."""
     root = tmp / "repo"
@@ -65,6 +80,7 @@ def _scratch(tmp: Path) -> tuple[Path, str]:
     subprocess.run(["tar", "-x", "-C", str(root)], input=raw, check=True)  # noqa: S603 - this repo's own archive
     for rel in TEXT_RULES:
         _move(root / "operator" / rel, tmp / "aside" / rel)
+    _empty_allowed_lists(root / "operator")
     _git(root, "init", "--quiet", "-b", "main")
     return root, _commit(root, "base without the text-rule set")
 
