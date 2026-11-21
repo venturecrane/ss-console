@@ -1910,6 +1910,3 @@ matter_file_delivery:
 # every boot, so this merges only after the image carrying that code is on the seat.
 logic_in_code:
   library_setup: enforce
-  # Stopgap of 2026-11-20: a drafting rule gets one sentence and SMD records it
-  # by hand. Removed when rule confirmation by reply ships.
-  rules_by_hand: enforce
