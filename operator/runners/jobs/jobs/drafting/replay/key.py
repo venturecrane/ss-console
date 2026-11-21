@@ -16,6 +16,9 @@ nothing)::
                       "set", "sha256", "requests"}],
      "special": [{"n", "kind", "head"}], ...}
 
+with ``set`` in words ("One") and the per-request answers under ``responses``
+(``from_responses``).
+
 Every key but ``served_sets`` is optional, and a malformed entry is dropped
 and counted in ``dropped`` rather than failing the replay: the key is an
 instrument, and a replay that refuses to run on a half-written key tells SMD
@@ -42,6 +45,7 @@ TYPE_ALIASES = {
     "si": "special_interrogatories",
     "srog": "special_interrogatories",
     "srogs": "special_interrogatories",
+    "fi": "form_interrogatories",
     "frog": "form_interrogatories",
     "frogs": "form_interrogatories",
     "rfp": "requests_for_production",
@@ -93,6 +97,10 @@ class Key:
     dropped: list[str] = field(default_factory=list)
 
 
+#: A set number as the keys spell it in words ("set": "One").
+_WORDS = {w: i for i, w in enumerate("one two three four five six seven eight nine ten".split(), 1)}
+
+
 def _int(v: Any) -> int | None:
     if isinstance(v, bool):
         return None
@@ -100,6 +108,8 @@ def _int(v: Any) -> int | None:
         return v
     if isinstance(v, str) and v.strip().isdigit():
         return int(v.strip())
+    if isinstance(v, str):
+        return _WORDS.get(v.strip().lower())
     return None
 
 
@@ -156,9 +166,44 @@ def _form(raw: Any, dropped: list[str]) -> tuple[list[str] | None, dict[str, str
     return nums, kinds, names
 
 
+def _entries(raw: Any) -> list[tuple[Any, dict[str, Any]]]:
+    """``{number: {...}}`` or ``[{"n": number, ...}]``, as (number, entry) pairs."""
+    if isinstance(raw, dict):
+        return [(k, v) for k, v in raw.items() if isinstance(v, dict)]
+    if isinstance(raw, list):
+        return [(_first(v, "n", "number"), v) for v in raw if isinstance(v, dict)]
+    return []
+
+
+def from_responses(doc: dict[str, Any]) -> dict[str, Any]:
+    """The workspace's ``responses`` shape, as the top-level keys ``parse`` reads::
+
+        "responses": {"FI": {"checked_numbers": [...], "per_number": {"6.4": {"kind"}}},
+                      "SI" | "RFP": {"per_request": {"1": {"kind", "request_first80"}}}}
+
+    A top-level ``form``, ``special`` or ``production`` the key already has wins."""
+    out = dict(doc)
+    lists = {t: name for name, t in ITEM_LISTS.items()}
+    for code, block in (doc.get("responses") or {}).items() if isinstance(doc.get("responses"), dict) else []:
+        kind = set_type(code)
+        if not isinstance(block, dict):
+            continue
+        if kind == "form_interrogatories" and "form" not in doc:
+            per = _entries(block.get("per_number"))
+            out["form"] = {"checked": block.get("checked_numbers", block.get("checked")),
+                           "kinds": {str(n): e.get("kind") for n, e in per if n is not None and e.get("kind")}}  # fmt: skip
+        elif kind in lists and lists[kind] not in doc:
+            out[lists[kind]] = [
+                {"n": n, "kind": e.get("kind"), "head": _first(e, "request_first80", "request_head", "head")}
+                for n, e in _entries(block.get("per_request"))
+            ]
+    return out
+
+
 def parse(doc: Any) -> Key:
     if not isinstance(doc, dict):
         raise ValueError("the answer key is not a JSON object")
+    doc = from_responses(doc)
     dropped: list[str] = []
     checked, kinds, names = _form(doc.get("form"), dropped)
     served = _sets(doc.get("served_sets"), dropped)

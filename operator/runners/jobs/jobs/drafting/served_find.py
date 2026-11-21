@@ -33,8 +33,11 @@ What code decides, and what the one model call per set returns:
    N the call's count. A form set carries no request text: its ``source`` is
    the file, its checked numbers the form reader's.
 4. A served set answered by a later response paper of ours (same type, number
-   and asking party) is dropped; a prior Operator draft of a set still owed is
-   a revision (``served_prior_draft``).
+   and asking party) that shows it was SERVED (``served_papers.was_served``) is
+   dropped; a draft never answers, and a draft of a set still owed (the
+   Operator's, or any "DRAFT ... Responses to <kind>, Set <n>") is a revision
+   (``served_prior_draft``). A form set the read says our client propounded is
+   dropped; one whose read does not name our client as responding stops.
 
 Every stop is a FAILED job before any large spend (``served.FIND_STOPS``),
 resumable once SMD writes ``served.json`` with the CLI; the firm hears only its
@@ -55,6 +58,7 @@ from . import parties, sets
 from . import served as served_mod
 from .outcome import DraftingFailed
 from .served import OTHER, SET_TYPES, ServedSet, found_drafted_by
+from . import served_papers as papers
 from .served_slice import RESPONDING as _RESPONDING, TITLE as _TITLE, TITLES as _TITLES, slice_requests as _slice
 
 REPORT = "found-report.json"
@@ -124,6 +128,7 @@ class Doc:
     copies: list[str] = field(default_factory=list)
     ext: str = ""
     kind: str = ""
+    path: str = ""
 
     @property
     def first(self) -> str:
@@ -174,7 +179,9 @@ def _load(path: Path, default: Any) -> Any:
 def docs(data: Path) -> list[Doc]:
     """Every extracted document but email bodies, byte copies folded into one."""
     listing = {str(r.get("id")): r for r in _load(Path(data) / "manifest.json", []) if isinstance(r, dict)}
-    shas = {str(r.get("id")): r.get("sha256") for r in _load(Path(data) / "corpus.json", []) if isinstance(r, dict)}
+    corpus = [r for r in _load(Path(data) / "corpus.json", []) if isinstance(r, dict)]
+    shas = {str(r.get("id")): r.get("sha256") for r in corpus}
+    paths = {str(r.get("id")): str(r.get("path") or "") for r in corpus}
     p = Path(data) / "extracted.jsonl"
     rows = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()] if p.is_file() else []
     out: list[Doc] = []
@@ -187,7 +194,8 @@ def docs(data: Path) -> list[Doc]:
         lst = listing.get(rid) or {}
         d = Doc(rid, str(r.get("name") or ""), str(r.get("folder") or ""), _pages(text),
                 str(lst.get("created") or lst.get("modified") or "")[:10] or None, shas.get(rid),
-                ext=str(r.get("ext") or Path(str(r.get("name") or "")).suffix).lower(), kind=str(r.get("kind") or ""))  # fmt: skip
+                ext=str(r.get("ext") or Path(str(r.get("name") or "")).suffix).lower(), kind=str(r.get("kind") or ""),
+                path=paths.get(rid, ""))  # fmt: skip
         if d.sha and d.sha in by_sha:
             by_sha[d.sha].copies.append(f"{d.folder}/{d.name}")
             continue
@@ -345,14 +353,17 @@ def _check_parties(d: Doc, v: dict[str, Any], clients: list[str]) -> str:
 
 def _form_parties(d: Doc, v: dict[str, Any], clients: list[str], other_side: list[str]) -> tuple[str, str, str]:
     """A form set's (asking, answering, where each came from): the form's own
-    text when the value is on it, else the matter's record, never a stop."""
+    text when the value is on it, else the matter's record. The read's
+    responding party must be our client (else ``served_ambiguous``: never a
+    default); a set our client propounded is dropped before this (``read_set``)."""
+    if not ours(v["responding_party"], clients):
+        raise Stop("served_ambiguous", f"{d.name!r}: the read cannot establish our client as the responding party "
+                   f"({v['responding_party'][:80]!r})")  # fmt: skip
     asking = v["propounding_party"] if on_page(v["propounding_party"], d.text) else ""
-    answering = (
-        v["responding_party"] if on_page(v["responding_party"], d.text) and ours(v["responding_party"], clients) else ""
-    )
+    answering = v["responding_party"] if on_page(v["responding_party"], d.text) else ""
     src = "page" if asking and answering else "record"
     asking = asking or (other_side[0] if other_side else v["propounding_party"])
-    answering = answering or (clients[0] if clients else v["responding_party"])
+    answering = answering or v["responding_party"]
     if not other_side and not on_page(v["propounding_party"], d.text):
         src = "read (not on the form's text nor in the record; SMD confirms)"
     return asking, answering, src
@@ -379,14 +390,19 @@ class Reader:
         return got
 
 
-def read_set(d: Doc, kind: str, reader: Reader, clients: list[str], other_side: list[str]) -> tuple[ServedSet, dict]:
-    """One served candidate, read and checked: the set, and its report extras."""
+def read_set(
+    d: Doc, kind: str, reader: Reader, clients: list[str], other_side: list[str]
+) -> tuple[ServedSet | None, dict]:
+    """One served candidate, read and checked: the set (None: our client
+    propounded it, so it is not served on us), and its report extras."""
     v = reader.read(d)
     why = _check_common(d, kind, v)
     if why:
         raise Stop("served_ambiguous", f"{d.name!r}: {why}")
     drafted = found_drafted_by(kind)
     if kind == "form_interrogatories":
+        if ours(v["propounding_party"], clients):
+            return None, {"values": v}
         asking, answering, src = _form_parties(d, v, clients, other_side)
         s = ServedSet(kind, v["set_number"], asking, answering, v["request_count"], "", drafted, source=d.id)
         return s, {"values": v, "party_source": src, "request_count": "the form reader's"}
@@ -413,8 +429,9 @@ def request_kinds(request: str) -> list[str]:
 
 
 def prior_drafts(data: Path, title: str) -> dict[tuple[str, int], str]:
-    """(set type, set number) -> the name of an Operator draft of it already on
-    the matter: "<title> - Responses to <kind>, Set <n> - ..." (``finish._names``)."""
+    """(set type, set number) -> the name of a draft of it already on the matter:
+    the Operator's ("<title> - Responses to <kind>, Set <n> - ...", ``finish._names``)
+    or any file named "DRAFT ... Responses to <kind>, Set <n>"."""
     kinds = {label.lower(): k for k, (label, _r) in SET_TYPES.items()}
     rx = re.compile(rf"^{re.escape(title)} - Responses to (?P<kind>.+?), Set (?P<n>\w+) - ")
     out: dict[tuple[str, int], str] = {}
@@ -426,6 +443,10 @@ def prior_drafts(data: Path, title: str) -> dict[tuple[str, int], str]:
         n = int(w) if w.isdigit() else _WORDS.get(w.lower())
         if n:
             out[(kinds[m.group("kind").lower()], n)] = str(r["name"])
+    for r in _load(Path(data) / "manifest.json", []):
+        got = papers.draft_of(str(r.get("name") or "")) if isinstance(r, dict) else None
+        if got:
+            out.setdefault(got, str(r["name"]))
     return out
 
 
@@ -442,6 +463,10 @@ def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> N
     responding, asking, nums = _value(_RESPONDING, head), _value(_ASKING, head), set_numbers(head)
     if responding and not ours(responding, clients):
         f.note(d, "response", False, "the other side's response to our client's discovery; ignored", set_type=kind)
+        return
+    if not papers.was_served(d.name, d.text):
+        why = "a draft by its name" if papers.draft_name(d.name) else "no proof of service or dated signature"
+        f.note(d, "response", False, f"{why}: not served, so it answers nothing", set_type=kind)
         return
     if not (asking and nums):
         f.note(d, "response", False, "a response paper whose set number or asking party code cannot read")
@@ -498,10 +523,10 @@ def fold_copies(f: Found, served: list[tuple[Doc, str]]) -> list[tuple[Doc, str]
     slices number alike (else the paper's whole text matches). A candidate code
     cannot key stays its own, and two different papers under one label still
     stop ``served_ambiguous`` at the read."""
+    keys = {id(d): _fold_key(d, kind, served) for d, kind in served}
     groups: list[list[tuple[Doc, str]]] = []
     for d, kind in served:
-        key = _set_key(d, kind)
-        home = next((g for g in groups if _same_set(key, g[0])), None)
+        home = next((g for g in groups if _same_set(keys[id(d)], keys[id(g[0][0])])), None)
         if home is None:
             groups.append([(d, kind)])
         else:
@@ -518,8 +543,18 @@ def fold_copies(f: Found, served: list[tuple[Doc, str]]) -> list[tuple[Doc, str]
     return out
 
 
-def _same_set(key: tuple[str, int, str, str], other: tuple[Doc, str]) -> bool:
-    ok = _set_key(*other)
+def _fold_key(d: Doc, kind: str, served: list[tuple[Doc, str]]) -> tuple[str, int, str, str]:
+    """A form beside another form keys by the $0 pixel read (checked numbers and
+    revision, ``served_papers.form_signature``): its text cannot tell an emailed
+    copy from a different form set. Every other candidate keys by ``_set_key``."""
+    if kind == "form_interrogatories" and sum(k == kind for _d, k in served) > 1:
+        sig = papers.form_signature(d.path)
+        if sig:
+            return kind, 0, "", sig
+    return _set_key(d, kind)
+
+
+def _same_set(key: tuple[str, int, str, str], ok: tuple[str, int, str, str]) -> bool:
     if ok[:2] != key[:2] or not key[3] or ok[3] != key[3]:
         return False
     return parties.same(ok[2], key[2]) if ok[2] and key[2] else ok[2] == key[2]
@@ -561,6 +596,9 @@ def _read_all(f: Found, got: Sorted, reader: Reader, clients: list[str], other_s
     seen: dict[tuple[str, int, str], str] = {}
     for d, kind in got.served:
         s, extra = read_set(d, kind, reader, clients, other_side)
+        if s is None:
+            f.note(d, "served", False, "propounded by our client (the read): not served on us", set_type=kind)
+            continue
         key = (s.set_type, s.set_number, norm(s.propounding_party))
         if key in seen:
             raise Stop(

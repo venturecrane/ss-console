@@ -347,6 +347,41 @@ def test_the_workspace_key_shape_loads_with_its_aliases(tmp_path: Path, monkeypa
     assert any(r.get("request_head_equal") for r in rows)
 
 
+def test_the_workspace_responses_shape_and_set_words_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """K1: set numbers in words, upper-case type codes, and the answers under ``responses``."""
+    from jobs.drafting.replay import key as K
+
+    _install(monkeypatch, _served(), ["1.1", "6.4", "8.1"])
+    key = tmp_path / "keys" / "invented-002.json"
+    key.parent.mkdir()
+    doc = {
+        "matter": "invented-002",
+        "served_sets": [
+            {"type": "SI", "set": "One", "sha256": "ab" * 32, "requests": 2},
+            {"type": "FI", "set": "One", "sha256": FORM_SHA, "requests": 4},
+        ],
+        "responses": {
+            "FI": {"checked_numbers": ["1.1", "6.4", "8.1"], "per_number": {"6.4": {"kind": "answered_from_file"}}},
+            "SI": {"per_request": {"1": {"kind": "objection_plus_answer", "request_first80": SPECIAL[0]}}},
+            "RFP": {"per_request": [{"n": 1, "kind": "none", "request_first80": "All writings."}]},
+        },
+    }
+    key.write_text(json.dumps(doc))
+    k = K.load(key)
+    assert [(s.type, s.set_number, s.request_count) for s in k.served_sets] == [
+        ("special_interrogatories", 1, 2),
+        ("form_interrogatories", 1, 4),
+    ]
+    assert k.checked == ["1.1", "6.4", "8.1"] and k.kinds == {"6.4": "answered_from_file"}
+    assert [(i.n, i.kind, i.request_head) for i in k.items["special"]] == [(1, "objection_plus_answer", SPECIAL[0])]
+    assert [i.n for i in k.items["production"]] == [1]
+    assert R.main([str(_matter(tmp_path)), "--key", str(key), "--stage", "all", *_inputs(tmp_path)]) == 0, _mismatches(
+        key
+    )
+    with pytest.raises(K.EmptyKey, match="set_number or set"):
+        K.parse({**doc, "served_sets": [{"type": "SI", "set": "Eleventy"}]})
+
+
 def test_a_key_with_no_served_set_fails_loudly_naming_the_missing_field(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

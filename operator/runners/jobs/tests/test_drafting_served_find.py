@@ -64,11 +64,16 @@ def form() -> list[str]:
     return [FORM_PAGE.format(n=i) for i in range(1, 9)]
 
 
+#: What a served response paper of ours shows: its proof of service (``served_papers.was_served``).
+SERVED_ON = "PROOF OF SERVICE\nServed by email on October 30, 2026.\n"
+
+
 def response(kind_title: str, responding: str = "Plaintiff GAMMA EXAMPLE") -> list[str]:
     return [
         CAPTION + f"PLAINTIFF GAMMA EXAMPLE'S RESPONSES TO {kind_title}, SET ONE\n"
         f"PROPOUNDING PARTY: Defendant {DEF}\nRESPONDING PARTY: {responding}\nSET NO.: ONE\n",
         "RESPONSE TO SPECIAL INTERROGATORY NO. 1: Gamma Example.\n",
+        SERVED_ON,
     ]
 
 
@@ -84,7 +89,7 @@ def matter(tmp_path: Path, docs: list[dict], facts: dict | None = None) -> tuple
         ext.append({"id": d["id"], "name": d["name"], "folder": d.get("folder", "/Discovery"),
                     "kind": d.get("kind", "file"), "ext": d.get("ext", ".pdf"), "text_path": str(tp),
                     "pages": len(d.get("pages", [1])), "transcribe": []})  # fmt: skip
-        corpus.append({"id": d["id"], "sha256": d.get("sha", d["id"])})
+        corpus.append({"id": d["id"], "sha256": d.get("sha", d["id"]), "path": d.get("path", "")})
         listing.append({"id": d["id"], "name": d["name"], "created": d.get("created", "2026-10-02T09:00:00")})
     (data / "extracted.jsonl").write_text("".join(json.dumps(r) + "\n" for r in ext), encoding="utf-8")
     (data / "corpus.json").write_text(json.dumps(corpus), encoding="utf-8")
@@ -407,6 +412,7 @@ def test_our_word_response_paper_with_its_caption_table_last_is_a_response_not_a
     """L3: Word text puts the caption table (and its title) AFTER the body paragraphs."""
     body = (f"PROPOUNDING PARTY: | Defendant {DEF}\nRESPONDING PARTY: | Plaintiff GAMMA EXAMPLE\nSET NO.: | ONE\n"
             "PRELIMINARY STATEMENT\nRESPONSE TO SPECIAL INTERROGATORY NO. 1:\nGamma Example.\n"
+            "Dated: October 30, 2026\nBy: /s/ Alpha Example\nAttorneys for Plaintiff\n"
             "ALPHA EXAMPLE (SBN 000001) | \nGAMMA EXAMPLE, Plaintiff, v. DELTA EXAMPLE CORPORATION | Case No. 30-0001\n"
             "PLAINTIFF GAMMA EXAMPLE'S RESPONSES TO SPECIAL INTERROGATORIES, SET ONE")  # fmt: skip
     word = {"id": "w1", "name": "Resp SROGs.docx", "ext": ".docx", "text": body, "created": "2026-10-30T09:00:00"}
@@ -445,3 +451,85 @@ def test_the_running_footer_on_every_page_is_not_inside_a_request_that_crosses_a
     got = served.numbered(s.request_text)
     assert got[2] == "State example fact 2 in full." and got[3] == "State example fact 3 in full."
     assert "TO PLAINTIFF" not in s.request_text
+
+
+# ---- the second $0 replay's shapes (2026-11-20; invented values) -----------------------------
+
+
+def _two_forms(tmp_path: Path) -> list[dict]:
+    paths = []
+    for name in ("emailed.pdf", "filed.pdf"):
+        p = tmp_path / name
+        p.write_bytes(b"invented form bytes " + name.encode())
+        paths.append(str(p))
+    return [{"id": "fa", "name": "Form Rogs.pdf", "pages": form(), "sha": "emailed", "kind": "attachment",
+             "folder": "/Correspondence", "path": paths[0]},
+            {"id": "ff", "name": "Form Rogs Set One.pdf", "pages": form(), "sha": "filed", "folder": "/DISCOVERY/DEF",
+             "path": paths[1]}]  # fmt: skip
+
+
+def test_an_emailed_copy_of_a_served_form_folds_by_its_pixel_read_before_any_model_read(tmp_path, monkeypatch):
+    """F1: two forms whose $0 pixel read agrees (checked numbers and revision) are one set."""
+    from jobs.drafting.forms import read_stage
+
+    read = {"checked": ["1.1", "6.4", "8.1"], "form_revision": "Rev. January 1, 2024"}
+    monkeypatch.setattr(read_stage, "pixel_read", lambda path: dict(read))
+    data, jd = matter(tmp_path, _two_forms(tmp_path))
+    fake = Fake({"DISC-001": THREE["DISC-001"]})
+    run(data, jd, fake)
+    assert len(fake.seen) == 1
+    assert json.loads((jd / served.FILE).read_text())["sets"][0]["source"] == "ff"
+    rows = {r["id"]: r for r in json.loads((jd / served_find.REPORT).read_text())["candidates"]}
+    assert "a copy of" in rows["fa"]["why"]
+    # Two forms whose boxes differ are two papers: both read, and one label stops served_ambiguous.
+    marks = iter([read, {**read, "checked": ["1.1", "9.1"]}])
+    monkeypatch.setattr(read_stage, "pixel_read", lambda path: next(marks))
+    data2, jd2 = matter(tmp_path / "b", _two_forms(tmp_path))
+    assert stop_of(lambda: run(data2, jd2, Fake({"DISC-001": THREE["DISC-001"]}))) == "served_ambiguous"
+
+
+def test_a_form_set_our_client_propounded_is_dropped_never_served_on_us(tmp_path):
+    """F2: the asking party is not in the form's text; the read names our client."""
+    docs = [{"id": "f1", "name": "Pltf Form Rogs.pdf", "pages": form(), "folder": "/Discovery/Plaintiff"},
+            {"id": "s1", "name": "s.pdf", "pages": srog(2)}]  # fmt: skip
+    data, jd = matter(tmp_path, docs)
+    ours_form = {**THREE["DISC-001"], "propounding_party": "Gamma Example", "responding_party": "Delta Example Corp"}
+    run(data, jd, Fake({"DISC-001": ours_form, "SPECIAL": values("special_interrogatories", 2)}))
+    assert [s.set_type for s in served.read(jd, [CLIENT])] == ["special_interrogatories"]
+    row = next(r for r in json.loads((jd / served_find.REPORT).read_text())["candidates"] if r["id"] == "f1")
+    assert not row["kept"] and "propounded by our client" in row["why"]
+
+
+def test_a_form_whose_read_cannot_establish_our_client_answering_stops_never_defaults(tmp_path):
+    """F2: a responding party that is not our client is never replaced by the record's."""
+    data, jd = matter(tmp_path, [{"id": "f1", "name": "f.pdf", "pages": form()}])
+    other = {**THREE["DISC-001"], "propounding_party": "Omega Example LLC", "responding_party": "Delta Example Corp"}
+    assert stop_of(lambda: run(data, jd, Fake({"DISC-001": other}))) == "served_ambiguous"
+    assert not (jd / served.FILE).exists()
+
+
+def _word_response(rid: str, name: str, title: str, *, served_mark: str = "") -> dict:
+    body = (f"PROPOUNDING PARTY: Defendant {DEF}\nRESPONDING PARTY: Plaintiff GAMMA EXAMPLE\nSET NO.: ONE\n"
+            f"RESPONSE NO. 1:\nGamma Example.\n{served_mark}PLAINTIFF GAMMA EXAMPLE'S RESPONSES TO {title}, SET ONE")  # fmt: skip
+    return {"id": rid, "name": name, "ext": ".docx", "text": body, "created": "2026-10-30T09:00:00"}
+
+
+def test_an_unserved_response_paper_answers_nothing(tmp_path):
+    """F3: a firm's Word response with no proof of service and no dated signature answers no set."""
+    docs = [*three_docs(), _word_response("w1", "Resp SROGs v2.docx", "SPECIAL INTERROGATORIES")]
+    data, jd = matter(tmp_path, docs)
+    run(data, jd, Fake(THREE))
+    assert len(served.read(jd, [CLIENT])) == 3
+    row = next(r for r in json.loads((jd / served_find.REPORT).read_text())["candidates"] if r["id"] == "w1")
+    assert not row["kept"] and "not served" in row["why"]
+
+
+def test_a_draft_awaiting_attorney_review_never_answers_and_makes_the_job_a_revision(tmp_path):
+    """F3: "DRAFT for attorney review - ..." is SMD's own draft: the set is still owed, as a revision."""
+    name = "DRAFT for attorney review - Responses to Special Interrogatories, Set One - 100001.docx"
+    stamped = "Dated: October 30, 2026\nBy: /s/ Alpha Example\n"  # a dated block does not make a draft served
+    docs = [*three_docs(), _word_response("w1", name, "SPECIAL INTERROGATORIES", served_mark=stamped)]
+    data, jd = matter(tmp_path, docs)
+    assert stop_of(lambda: run(data, jd, Fake(THREE))) == "served_prior_draft"
+    report = json.loads((jd / served_find.REPORT).read_text())
+    assert name in report["reason"] and not (jd / served.FILE).exists()
