@@ -14,6 +14,33 @@ same Operator email thread as the request that started the job (a reply to it,
 or to the Operator's answer in it). A change asked in a new email, or sent to
 someone at SMD directly, is a fresh draft request.
 
+**Before filing a hand-drafted discovery document, read it as the firm's own
+attorney would.** A fresh reader, briefed only as a senior practitioner at the
+firm on the client's side of the case, gets the served requests, the draft, any
+index and exhibit list, and the firm's recorded rules. For each response it
+answers one question: would that attorney serve this as written? It flags
+anything that harms the client or that ordinary practice on the client's side
+would not do. That includes producing correspondence with insurers, adjusters
+or opposing counsel, settlement demands, work product, admissions, producing
+too much or objecting too little, and wording the firm's rules forbid. Apply
+every finding that does not conflict with the firm's rules, and list the rest,
+with the reason, in the attorney notes. Applying a firm rule literally is not
+enough. On 2026-11-20 a hand draft produced the claim correspondence and two
+settlement demands, and then put the insurer's letters in the incident exhibit
+because they were "about the incident". The attorney caught both. In a blind test
+the same evening, a reader briefed this way, with neither of the later rules,
+flagged both defects among its top findings, and on the corrected version as a
+control it flagged neither. The same check runs on the Operator's own drafts
+as an audit finding class in each firm's `audit-discovery-response` prompt.
+
+**Removing a file SMD filed in error.** Smokeball's delete is soft: the file
+leaves the matter listing, but its id stays readable (`isDeleted`), a Delete
+history row names who did it, and its bytes still download. The connector has
+no restore call, so undoing it means the firm restores it in Smokeball or SMD
+re-uploads it. When the attorney asks for a file SMD filed to be removed, or
+the file is plainly wrong (a superseded exhibit, a file filed twice), delete it
+in the same filing step and read the deletion back. Don't leave it for the firm.
+
 **Before:**
 
 - Every document is on the matter and was read back by id when it was filed
