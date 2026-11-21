@@ -13,6 +13,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -43,7 +44,7 @@ describe('limits tests under a hook environment', () => {
       git('add', 'sentinel.txt')
       const gitDir = join(throwaway, '.git')
       const indexFile = join(gitDir, 'index')
-      const before = readFileSync(indexFile).toString('base64')
+      const before = createHash('sha256').update(readFileSync(indexFile)).digest('hex')
 
       const run = spawnSync(
         join(REPO_ROOT, 'node_modules', '.bin', 'vitest'),
@@ -59,7 +60,7 @@ describe('limits tests under a hook environment', () => {
       expect(run.stdout + run.stderr).toMatch(/Test Files/)
 
       expect(git('ls-files').trim().split('\n')).toEqual(['sentinel.txt'])
-      expect(readFileSync(indexFile).toString('base64')).toBe(before)
+      expect(createHash('sha256').update(readFileSync(indexFile)).digest('hex')).toBe(before)
     } finally {
       rmSync(throwaway, { recursive: true, force: true })
     }
