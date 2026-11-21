@@ -36,6 +36,8 @@ THE SUBMIT CHECKS, in order, none of which spends anything:
    a draft of its class DELIVERED on the matter revises that draft in place
    (the queue file carries ``revise``: the filed files by id, from the
    delivery proof); a thread the mailbox cannot read refuses, never a guess;
+   a discovery response revises EVERY document its request filed, one unit
+   per file id (``drafting_revise_units``, 2026-11-21);
 8. the cycle's allowance has a draft left (a revision counts no draft);
 9. no unfinished draft of the same class on the matter (re-checked in the
    ledger's write transaction, with the request-email duplicate).
@@ -57,6 +59,7 @@ from .audit_ledger import _iso_utc
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .drafting_intake import operator_library_number, resolve_request_graph_id
+from .drafting_route import RouteRefused, route
 from .drafting_threads import ThreadUnknown, graph_thread_of
 from .drafting_ledger import (
     ALLOWANCE_KEY,
@@ -184,17 +187,6 @@ def _queued_facts(db: Any, job_id: str) -> dict[str, str]:
         "queued_state": str(queued.get("state") or ""),
         "queued_mode": "revise" if row and row[0] else "draft",
     }
-
-
-class RouteRefused(str):
-    """A ``_route`` refusal: its sentence, and the closed code it carries."""
-
-    code: str
-
-    def __new__(cls, reason: str, code: str) -> RouteRefused:
-        out = super().__new__(cls, reason)
-        out.code = code
-        return out
 
 
 class DraftingVerbs:
@@ -345,55 +337,9 @@ class DraftingVerbs:
     def _route(
         self, envelope: dict[str, Any], revise_of: str, peer_uid: int | None
     ) -> dict[str, Any] | RouteRefused | None:
-        """REVISE OR DRAFT, decided here from the job store, never by the model.
-
-        A request is a revision when a brief of its class was DELIVERED on its
-        matter and the request email is in that delivery's email thread (the
-        same Graph conversation as the email that asked for the brief). Root
-        may name the delivered job (``revise_of``: the ops workspace's
-        rehearsal). Returns the runner's ``revise`` block, None for a fresh
-        draft, or a refusal sentence. A thread that could not be read refuses:
-        queuing a fresh draft on a guess is the $56 re-read of 2026-11-04."""
-        delivered = self._db.delivered_on_matter(envelope["matter"]["id"], envelope["document_class"])
-        if revise_of:
-            if peer_uid != 0:
-                return RouteRefused("revise_of is accepted from root only; nothing was queued", "revise_of_root_only")
-            prior = next((r for r in delivered if r["id"] == revise_of), None)
-            if prior is None:
-                return RouteRefused(
-                    f"job {revise_of} is not a delivered draft of this class on this matter; nothing was queued",
-                    "revise_of_unknown",
-                )
-        else:
-            thread_of = self._thread_lookup() if delivered else None
-            if thread_of is None:
-                return None
-            try:
-                here = thread_of(envelope["request_ref"])
-                prior = next((r for r in delivered if here and thread_of(r["request_ref"]) == here), None)
-            except ThreadUnknown:
-                return RouteRefused(
-                    "this email could not be matched to the email thread of the draft already filed on the matter "
-                    "(the mailbox did not answer), so it is not known whether it asks to revise that draft; "
-                    "nothing was queued",
-                    "mailbox_unanswered",
-                )
-            if prior is None:
-                return None
-        files = self._db.proven_files(prior["id"])
-        if not files or not prior.get("folder_id"):
-            return RouteRefused(
-                f"the draft filed as job {prior['id']} cannot be identified on the matter by file id, so it cannot be "
-                "revised in place; nothing was queued",
-                "prior_unidentified",
-            )
-        if sum(1 for f in files if f.get("role") == "draft") != 1:
-            # The revise runner edits ONE filed draft (revise/run.py, versions.ORDER).
-            # A delivery of several drafts (a discovery set: form, special, production)
-            # would be revised in its first document only, so it is not routed there
-            # until the runner revises every document; it takes the path it took before.
-            return None
-        return {"prior_job_id": prior["id"], "folder_id": prior["folder_id"], "files": files}
+        """REVISE OR DRAFT (``drafting_route``): the runner's ``revise`` block,
+        None for a fresh draft, or a refusal sentence carrying its code."""
+        return route(self._db, self._thread_lookup, envelope, revise_of, peer_uid)
 
     def _owe_addition(self, row: dict[str, Any], request_ref: str, state: str) -> bool:
         """An addition to a draft whose job had ended: work SMD owes, recorded
@@ -667,6 +613,8 @@ __all__ = [
     "REFUSAL_OUR_CODES",
     "VERBS",
     "DraftingVerbs",
+    "RouteRefused",
+    "ThreadUnknown",
     "allowance_of",
     "drafting_dispatch",
     "drafting_skill_settings",
