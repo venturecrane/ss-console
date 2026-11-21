@@ -62,3 +62,15 @@ def test_a_missing_file_stops_form_incomplete(tmp_path: Path, monkeypatch: pytes
     _spy(monkeypatch)
     with pytest.raises(DraftingFailed, match="^form_incomplete: "):
         read_stage.read_found(data, tmp_path, None, "m", by_operator=True, log=print)
+
+
+def test_one_revision_printed_with_two_spaces_on_one_page_is_still_one_revision() -> None:
+    """L5 (2026-11-20 replay): the dedupe ran before whitespace was collapsed, so every real form
+    read as two revisions and stopped form_unconfirmed."""
+    pages = [
+        "DISC-001 [Rev. January 1, 2024]",
+        "DISC-001 [Rev. January  1, 2024]",
+        "DISC-001 [ Rev. January 1,\n2024 ]",
+    ]
+    assert read_stage.revision_of(pages) == "Rev. January 1, 2024"
+    assert read_stage.revision_of([*pages, "DISC-001 [Rev. July 1, 2025]"]) is None

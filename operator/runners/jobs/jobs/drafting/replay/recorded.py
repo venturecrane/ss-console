@@ -35,9 +35,14 @@ from ...llm import Doorway
 class NeedsModelCall(BaseException):
     """A model call the replay has no recording for."""
 
-    def __init__(self, stage: str, sha: str) -> None:
-        super().__init__(f"needs a model call ({stage or 'unnamed stage'}, request {sha[:12]})")
-        self.stage, self.sha = stage, sha
+    def __init__(self, stage: str, sha: str, more: list[str] | None = None) -> None:
+        shas = [sha, *(more or [])]
+        if len(shas) == 1:
+            why = f"needs a model call ({stage or 'unnamed stage'}, request {sha[:12]})"
+        else:
+            why = f"needs {len(shas)} model calls ({stage or 'unnamed stage'}, requests {', '.join(shas)})"
+        super().__init__(why)
+        self.stage, self.sha, self.shas = stage, sha, shas
 
 
 def request_sha(params: dict[str, Any]) -> str:

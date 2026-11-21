@@ -48,7 +48,10 @@ def norm(text: str) -> str:
 
 
 def head(text: str) -> str:
-    return norm(text)[:HEAD]
+    """The first ``HEAD`` characters, trimmed AFTER the cut (a cut landing on a
+    space must not make two equal heads differ) and case-folded (a key copied
+    from a paper's capitals against the sliced text)."""
+    return norm(text)[:HEAD].strip().casefold()
 
 
 def served_sets(served: Any) -> list[dict[str, Any]]:
@@ -178,6 +181,8 @@ def cost(projection: Any) -> Section:
     for line in projection.get("lines") or []:
         if isinstance(line, dict):
             sec.rows.append({"item": line.get("item"), "dollars": line.get("dollars"), "minutes": line.get("minutes")})
+            if "stored_pages" in line:
+                sec.notes.append(f"{line['stored_pages']} scanned page(s) already in the seat's page store (not paid)")
     sec.rows.append({"item": "TOTAL", "dollars": projection.get("dollars"), "minutes": projection.get("minutes")})
     return sec.finish()
 

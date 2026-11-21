@@ -16,7 +16,10 @@ What code decides, and what the one model call per set returns:
    Judicial Council form (``DISC-001`` and "Page N of 8"), which types the file
    form interrogatories before any title (the form's body names requests for
    admission). Byte copies (the same sha256 in a second folder) are one
-   candidate. A no-text file whose NAME reads as discovery is listed only.
+   candidate, and so are copies with other bytes (an emailed copy) that code
+   reads as one set: type, set number, asking party, and requests alike
+   (``fold_copies``; the discovery folder's copy is kept). A no-text file
+   whose NAME reads as discovery is listed only.
 2. A candidate whose title reads RESPONSE(S) TO / ANSWERS TO is a response
    paper: ours (our client responding) answers a served set; the other side's
    is its answer to OUR discovery and is ignored. A set our client propounded
@@ -30,8 +33,11 @@ What code decides, and what the one model call per set returns:
    N the call's count. A form set carries no request text: its ``source`` is
    the file, its checked numbers the form reader's.
 4. A served set answered by a later response paper of ours (same type, number
-   and asking party) is dropped; a prior Operator draft of a set still owed is
-   a revision (``served_prior_draft``).
+   and asking party) that shows it was SERVED (``served_papers.was_served``) is
+   dropped; a draft never answers, and a draft of a set still owed (the
+   Operator's, or any "DRAFT ... Responses to <kind>, Set <n>") is a revision
+   (``served_prior_draft``). A form set the read says our client propounded is
+   dropped; one whose read does not name our client as responding stops.
 
 Every stop is a FAILED job before any large spend (``served.FIND_STOPS``),
 resumable once SMD writes ``served.json`` with the CLI; the firm hears only its
@@ -52,8 +58,12 @@ from . import parties, sets
 from . import served as served_mod
 from .outcome import DraftingFailed
 from .served import OTHER, SET_TYPES, ServedSet, found_drafted_by
+from . import served_papers as papers
+from .served_slice import RESPONDING as _RESPONDING, TITLE as _TITLE, TITLES as _TITLES, slice_requests as _slice
 
 REPORT = "found-report.json"
+#: A Word file's extracted text: paragraphs, then tables (``matter/word.record_docx_text``).
+WORD_EXTS = (".docx", ".doc")
 #: The ledger's stage name for the finder's calls (the budget sums by it).
 STAGE = "served-find"
 #: At most this many served candidates are read; more goes to SMD (``served_many``):
@@ -77,17 +87,11 @@ SYSTEM = (
 
 _PAGE = re.compile(r"(?m)^\[p\.(\d+)\]$")
 _ASKING = re.compile(r"(?im)^[ \t]*(?:PROPOUNDING|REQUESTING|DEMANDING)[ \t]+PART(?:Y|IES)[ \t]*:[ \t]*(.*)$")
-_RESPONDING = re.compile(r"(?im)^[ \t]*RESPONDING[ \t]+PART(?:Y|IES)[ \t]*:[ \t]*(.*)$")
-_SET_LINE = re.compile(r"(?im)^[ \t]*SET[ \t]*(?:NO\.?|NUMBER)?[ \t]*:?[ \t]*([A-Za-z]+|\d+)\b")
+#: A SET line: "SET ONE", "SET NO.: 2", or "SET NO.:" with its value on the next
+#: non-blank line (measured 2026-11-20: every real text set prints it below).
+_SET_LINE = re.compile(r"(?im)^[ \t]*SET\b(?:[ \t]*(NO\b\.?|NUMBER\b))?[ \t]*(:)?[ \t|]*(.*)$")
+_SET_VALUE = re.compile(r"^[ \t|]*([A-Za-z]+|\d+)\b")
 _FORM = (re.compile(r"DISC-001"), re.compile(r"(?i)\bPage\s+\d+\s+of\s+8\b"))
-#: The closed title list, upper case as a caption prints it (never body prose).
-_TITLES = {
-    "form_interrogatories": r"FORM\s+INTERROGATOR(?:Y|IES)",
-    "special_interrogatories": r"SPECIAL(?:LY\s+PREPARED)?\s+INTERROGATOR(?:Y|IES)",
-    "requests_for_production": r"(?:REQUESTS?|DEMANDS?)\s+FOR\s+(?:THE\s+)?(?:PRODUCTION|INSPECTION)",
-    "requests_for_admission": r"REQUESTS?\s+FOR\s+ADMISSIONS?",
-}
-_TITLE = {k: re.compile(v) for k, v in _TITLES.items()}
 #: A response paper's title. "RESPONSE TO REQUEST FOR PRODUCTION NO. 3:" is a
 #: served set's blank response line, not a title (``(?!\s+NO\.)``).
 _RESPONSE = {
@@ -101,15 +105,6 @@ _NAME_VOCAB = re.compile(
     r"demands?\s+for\s+(?:production|inspection)|rf[ap]s?|rpds?|discovery)\b"
 )
 _DISCOVERY_FOLDER = re.compile(r"(?i)\b(?:discovery|def|deposition)")
-_LABELLED = re.compile(
-    r"(?im)^[\W_]*(?:SPECIAL(?:LY\s+PREPARED)?\s+)?(?:INTERROGATORY|REQUEST\s+FOR\s+(?:PRODUCTION(?:\s+OF\s+DOCUMENTS)?"
-    r"|ADMISSION)|DEMAND\s+FOR\s+(?:PRODUCTION|INSPECTION))\s+NO\.?\s*(\d+)\s*[:.)]?"
-)
-_BARE = re.compile(r"(?m)^[ \t]*(\d{1,3})[ \t]*[.)][ \t]+(?=\S)")
-_END = re.compile(r"(?m)^[ \t]*(?:DATED|Dated)\b|^[ \t]*PROOF\s+OF\s+SERVICE\b")
-#: A blank response line some served sets print after each request.
-_BLANK_RESPONSE = re.compile(r"(?im)^[\W_]*RESPONSE(?:\s+TO\s+[^\n:]{0,80})?\s*:\s*$\n?")
-_MARGIN = re.compile(r"(?m)^[ \t]*\d{1,2}[ \t]*$\n?")
 _WORDS = {w.lower(): i for i, w in enumerate("One Two Three Four Five Six Seven Eight Nine Ten".split(), 1)}
 _FORM_REQUEST = re.compile(r"(?i)\bform\s+interrogator(?:y|ies)\b|\bf\.?\s?rogs?\b")
 
@@ -131,6 +126,9 @@ class Doc:
     listed: str | None
     sha: str | None
     copies: list[str] = field(default_factory=list)
+    ext: str = ""
+    kind: str = ""
+    path: str = ""
 
     @property
     def first(self) -> str:
@@ -181,7 +179,9 @@ def _load(path: Path, default: Any) -> Any:
 def docs(data: Path) -> list[Doc]:
     """Every extracted document but email bodies, byte copies folded into one."""
     listing = {str(r.get("id")): r for r in _load(Path(data) / "manifest.json", []) if isinstance(r, dict)}
-    shas = {str(r.get("id")): r.get("sha256") for r in _load(Path(data) / "corpus.json", []) if isinstance(r, dict)}
+    corpus = [r for r in _load(Path(data) / "corpus.json", []) if isinstance(r, dict)]
+    shas = {str(r.get("id")): r.get("sha256") for r in corpus}
+    paths = {str(r.get("id")): str(r.get("path") or "") for r in corpus}
     p = Path(data) / "extracted.jsonl"
     rows = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()] if p.is_file() else []
     out: list[Doc] = []
@@ -193,7 +193,9 @@ def docs(data: Path) -> list[Doc]:
         text = Path(tp).read_text(encoding="utf-8", errors="replace") if tp and Path(tp).is_file() else ""
         lst = listing.get(rid) or {}
         d = Doc(rid, str(r.get("name") or ""), str(r.get("folder") or ""), _pages(text),
-                str(lst.get("created") or lst.get("modified") or "")[:10] or None, shas.get(rid))  # fmt: skip
+                str(lst.get("created") or lst.get("modified") or "")[:10] or None, shas.get(rid),
+                ext=str(r.get("ext") or Path(str(r.get("name") or "")).suffix).lower(), kind=str(r.get("kind") or ""),
+                path=paths.get(rid, ""))  # fmt: skip
         if d.sha and d.sha in by_sha:
             by_sha[d.sha].copies.append(f"{d.folder}/{d.name}")
             continue
@@ -221,9 +223,9 @@ def _value(rx: re.Pattern[str], text: str) -> str:
     m = rx.search(text)
     if not m:
         return ""
-    if m.group(1).strip():
-        return m.group(1).strip()
-    rest = [ln.strip() for ln in text[m.end() :].splitlines() if ln.strip()]
+    if m.group(1).strip(" \t|"):
+        return m.group(1).strip(" \t|")
+    rest = [ln.strip(" \t|") for ln in text[m.end() :].splitlines() if ln.strip(" \t|")]
     return rest[0] if rest else ""
 
 
@@ -231,7 +233,11 @@ def set_numbers(text: str) -> list[int]:
     """The numbers the page's SET lines carry ("SET ONE", "SET NO.: 2")."""
     out = []
     for m in _SET_LINE.finditer(text):
-        w = m.group(1).lower()
+        rest = m.group(3).strip(" \t|")
+        if not rest and (m.group(1) or m.group(2)):  # the value is on the next non-blank line
+            rest = next((ln.strip(" \t|") for ln in text[m.end() :].splitlines() if ln.strip(" \t|")), "")
+        v = _SET_VALUE.match(rest)
+        w = v.group(1).lower() if v else ""
         n = int(w) if w.isdigit() else _WORDS.get(w)
         out += [n] if n else []
     return out
@@ -256,7 +262,11 @@ def classify(d: Doc) -> tuple[str, str | None]:
     head = d.first
     responding = _RESPONDING.search(head)
     lined = bool(_ASKING.search(head) and responding)
-    title_area = head[: responding.end()] if responding else ""  # the caption and its party block
+    # The caption and its party block. A Word file's text puts its tables (the
+    # caption, and the title in it) AFTER the body paragraphs, so a Word paper's
+    # title is read anywhere on its first page (measured 2026-11-20: 12 of 12
+    # of our own .docx response papers were typed as served sets without this).
+    title_area = head if d.ext in WORD_EXTS else head[: responding.end()] if responding else ""
     if lined and response_type(title_area):
         return "response", response_type(title_area)
     if is_form(d):
@@ -294,47 +304,9 @@ def date_on_page(iso: str, text: str) -> bool:
 # ---- the requests, sliced and numbered by code ----------------------------------------------
 
 
-def _clean(text: str) -> str:
-    return _MARGIN.sub("", _BLANK_RESPONSE.sub("", text))
-
-
-def _bare_start(body: str, kind: str) -> int:
-    """Where the bare-numbered run begins: past the last section heading (a
-    short title line) that a "1." line follows; else the start of the body."""
-    best = 0
-    for m in _TITLE[kind].finditer(body):
-        line_end = body.find("\n", m.end())
-        line = body[body.rfind("\n", 0, m.start()) + 1 : line_end if line_end >= 0 else len(body)]
-        first = _BARE.search(body, m.end())
-        if len(line.strip()) <= 80 and "SET" not in line.upper().split() and first and first.group(1) == "1":
-            best = line_end if line_end >= 0 else len(body)
-    return best
-
-
 def slice_requests(d: Doc, kind: str) -> tuple[str, str]:
-    """(the requests as ``served.numbering`` reads them, ``labelled`` | ``bare`` | "").
-
-    Labelled ("<label> NO. n") text is kept as served; a bare "n." run is
-    labelled with the set's own request label, each request's words as served.
-    A blank "RESPONSE:" line after a request is stripped either way."""
-    text = d.text
-    head = _RESPONDING.search(text)
-    body = _clean(text[head.end() if head else 0 :])
-    end = _END.search(body)
-    body = body[: end.start()] if end else body
-    lab = list(_LABELLED.finditer(body))
-    if lab:
-        return body[lab[0].start() :].strip(), "labelled"
-    start = _bare_start(body, kind)
-    marks = list(_BARE.finditer(body, start))
-    if not marks:
-        return "", ""
-    label = SET_TYPES[kind][1]
-    items = [
-        f"{label} NO. {m.group(1)}: " + " ".join(body[m.end() : (marks[i + 1].start() if i + 1 < len(marks) else len(body))].split())
-        for i, m in enumerate(marks)
-    ]  # fmt: skip
-    return "\n\n".join(items), "bare"
+    """``served_slice.slice_requests`` over one document's pages."""
+    return _slice(d.pages, kind)
 
 
 # ---- the one call per served set, and code's checks of what it returned ---------------------
@@ -381,14 +353,17 @@ def _check_parties(d: Doc, v: dict[str, Any], clients: list[str]) -> str:
 
 def _form_parties(d: Doc, v: dict[str, Any], clients: list[str], other_side: list[str]) -> tuple[str, str, str]:
     """A form set's (asking, answering, where each came from): the form's own
-    text when the value is on it, else the matter's record, never a stop."""
+    text when the value is on it, else the matter's record. The read's
+    responding party must be our client (else ``served_ambiguous``: never a
+    default); a set our client propounded is dropped before this (``read_set``)."""
+    if not ours(v["responding_party"], clients):
+        raise Stop("served_ambiguous", f"{d.name!r}: the read cannot establish our client as the responding party "
+                   f"({v['responding_party'][:80]!r})")  # fmt: skip
     asking = v["propounding_party"] if on_page(v["propounding_party"], d.text) else ""
-    answering = (
-        v["responding_party"] if on_page(v["responding_party"], d.text) and ours(v["responding_party"], clients) else ""
-    )
+    answering = v["responding_party"] if on_page(v["responding_party"], d.text) else ""
     src = "page" if asking and answering else "record"
     asking = asking or (other_side[0] if other_side else v["propounding_party"])
-    answering = answering or (clients[0] if clients else v["responding_party"])
+    answering = answering or v["responding_party"]
     if not other_side and not on_page(v["propounding_party"], d.text):
         src = "read (not on the form's text nor in the record; SMD confirms)"
     return asking, answering, src
@@ -415,14 +390,19 @@ class Reader:
         return got
 
 
-def read_set(d: Doc, kind: str, reader: Reader, clients: list[str], other_side: list[str]) -> tuple[ServedSet, dict]:
-    """One served candidate, read and checked: the set, and its report extras."""
+def read_set(
+    d: Doc, kind: str, reader: Reader, clients: list[str], other_side: list[str]
+) -> tuple[ServedSet | None, dict]:
+    """One served candidate, read and checked: the set (None: our client
+    propounded it, so it is not served on us), and its report extras."""
     v = reader.read(d)
     why = _check_common(d, kind, v)
     if why:
         raise Stop("served_ambiguous", f"{d.name!r}: {why}")
     drafted = found_drafted_by(kind)
     if kind == "form_interrogatories":
+        if ours(v["propounding_party"], clients):
+            return None, {"values": v}
         asking, answering, src = _form_parties(d, v, clients, other_side)
         s = ServedSet(kind, v["set_number"], asking, answering, v["request_count"], "", drafted, source=d.id)
         return s, {"values": v, "party_source": src, "request_count": "the form reader's"}
@@ -449,8 +429,9 @@ def request_kinds(request: str) -> list[str]:
 
 
 def prior_drafts(data: Path, title: str) -> dict[tuple[str, int], str]:
-    """(set type, set number) -> the name of an Operator draft of it already on
-    the matter: "<title> - Responses to <kind>, Set <n> - ..." (``finish._names``)."""
+    """(set type, set number) -> the name of a draft of it already on the matter:
+    the Operator's ("<title> - Responses to <kind>, Set <n> - ...", ``finish._names``)
+    or any file named "DRAFT ... Responses to <kind>, Set <n>"."""
     kinds = {label.lower(): k for k, (label, _r) in SET_TYPES.items()}
     rx = re.compile(rf"^{re.escape(title)} - Responses to (?P<kind>.+?), Set (?P<n>\w+) - ")
     out: dict[tuple[str, int], str] = {}
@@ -462,6 +443,10 @@ def prior_drafts(data: Path, title: str) -> dict[tuple[str, int], str]:
         n = int(w) if w.isdigit() else _WORDS.get(w.lower())
         if n:
             out[(kinds[m.group("kind").lower()], n)] = str(r["name"])
+    for r in _load(Path(data) / "manifest.json", []):
+        got = papers.draft_of(str(r.get("name") or "")) if isinstance(r, dict) else None
+        if got:
+            out.setdefault(got, str(r["name"]))
     return out
 
 
@@ -478,6 +463,10 @@ def _response(f: Found, d: Doc, kind: str, clients: list[str], out: Sorted) -> N
     responding, asking, nums = _value(_RESPONDING, head), _value(_ASKING, head), set_numbers(head)
     if responding and not ours(responding, clients):
         f.note(d, "response", False, "the other side's response to our client's discovery; ignored", set_type=kind)
+        return
+    if not papers.was_served(d.name, d.text):
+        why = "a draft by its name" if papers.draft_name(d.name) else "no proof of service or dated signature"
+        f.note(d, "response", False, f"{why}: not served, so it answers nothing", set_type=kind)
         return
     if not (asking and nums):
         f.note(d, "response", False, "a response paper whose set number or asking party code cannot read")
@@ -502,7 +491,71 @@ def sort_docs(f: Found, all_docs: list[Doc], clients: list[str]) -> Sorted:
             out.others.append(d)
         elif what == "scan":
             out.scans.append(d)
+    out.served = fold_copies(f, out.served)
     return out
+
+
+def _set_key(d: Doc, kind: str) -> tuple[str, int, str, str]:
+    """(type, set number, asking party, a signature of its requests), by code.
+    The signature is the numbering with the first and last request's opening
+    words when code slices requests and reads the SET line and the asking
+    party; else the paper's whole text."""
+    nums, asking = set_numbers(d.first), _value(_ASKING, d.first)
+    found = served_mod.numbered(slice_requests(d, kind)[0]) if nums and asking else {}
+    if found:
+        ends = [norm(found[n])[:80] for n in (min(found), max(found))]
+        return kind, nums[0], asking, ",".join(map(str, sorted(found))) + "|" + "|".join(ends)
+    # No SET line: never folded (two form sets differ only in their boxes, which are not text).
+    return kind, nums[0] if nums else 0, asking, norm(d.text) if nums else ""
+
+
+def _home_rank(d: Doc) -> int:
+    """A copy in the matter's discovery folder first, an email attachment last."""
+    return 2 if d.kind == "attachment" else 0 if _DISCOVERY_FOLDER.search(d.folder) else 1
+
+
+def fold_copies(f: Found, served: list[tuple[Doc, str]]) -> list[tuple[Doc, str]]:
+    """Copies of one set with different bytes (an emailed copy beside the
+    filed one, measured 2026-11-20) are one candidate, by code's own reading of
+    type, set number and asking party, before any read, when the requests code
+    slices number alike (else the paper's whole text matches). A candidate code
+    cannot key stays its own, and two different papers under one label still
+    stop ``served_ambiguous`` at the read."""
+    keys = {id(d): _fold_key(d, kind, served) for d, kind in served}
+    groups: list[list[tuple[Doc, str]]] = []
+    for d, kind in served:
+        home = next((g for g in groups if _same_set(keys[id(d)], keys[id(g[0][0])])), None)
+        if home is None:
+            groups.append([(d, kind)])
+        else:
+            home.append((d, kind))
+    out: list[tuple[Doc, str]] = []
+    for g in groups:
+        keep = min(g, key=lambda x: _home_rank(x[0]))
+        for d, kind in g:
+            if d is not keep[0]:
+                keep[0].copies.append(f"{d.folder}/{d.name}")
+                f.note(d, "served", False, f"a copy of {keep[0].name!r} (same type, set and asking party); not read",
+                       set_type=kind)  # fmt: skip
+        out.append(keep)
+    return out
+
+
+def _fold_key(d: Doc, kind: str, served: list[tuple[Doc, str]]) -> tuple[str, int, str, str]:
+    """A form beside another form keys by the $0 pixel read (checked numbers and
+    revision, ``served_papers.form_signature``): its text cannot tell an emailed
+    copy from a different form set. Every other candidate keys by ``_set_key``."""
+    if kind == "form_interrogatories" and sum(k == kind for _d, k in served) > 1:
+        sig = papers.form_signature(d.path)
+        if sig:
+            return kind, 0, "", sig
+    return _set_key(d, kind)
+
+
+def _same_set(key: tuple[str, int, str, str], ok: tuple[str, int, str, str]) -> bool:
+    if ok[:2] != key[:2] or not key[3] or ok[3] != key[3]:
+        return False
+    return parties.same(ok[2], key[2]) if ok[2] and key[2] else ok[2] == key[2]
 
 
 def _narrow(f: Found, got: Sorted, kinds: list[str]) -> None:
@@ -541,6 +594,9 @@ def _read_all(f: Found, got: Sorted, reader: Reader, clients: list[str], other_s
     seen: dict[tuple[str, int, str], str] = {}
     for d, kind in got.served:
         s, extra = read_set(d, kind, reader, clients, other_side)
+        if s is None:
+            f.note(d, "served", False, "propounded by our client (the read): not served on us", set_type=kind)
+            continue
         key = (s.set_type, s.set_number, norm(s.propounding_party))
         if key in seen:
             raise Stop(
@@ -601,12 +657,44 @@ def find(
     return f
 
 
-def _walk(f: Found, data: Path, request: str, reader: Reader, clients: list[str], other: list[str], title: str) -> None:
+def candidates(f: Found, data: Path, request: str, clients: list[str]) -> Sorted:
+    """The code half up to the first read: sorted, narrowed, and every
+    before-spend stop raised. ``got.served`` is exactly what will be read."""
     kinds = request_kinds(request)
     got = sort_docs(f, docs(data), clients)
     _narrow(f, got, kinds)
     _before_spend(f, got, kinds)
+    if papers.asks_amended(request):
+        _amended(got)
+    return got
+
+
+def _amended(got: Sorted, served: list[ServedSet] | None = None) -> None:
+    """An amended, further or supplemental request: a set with a served response
+    of ours is not dropped; the job stops ``served_amended`` (SMD drafts it). Before
+    any read by code's own keys, and again after the reads by the read values."""
+    keyed = [(s.set_type, s.set_number, s.propounding_party, s.label) for s in served or []]
+    keyed += [(*_set_key(d, k)[:3], repr(d.name)) for d, k in ([] if served is not None else got.served)]
+    for kind, n, asking, label in keyed:
+        if any((r[1], r[2]) == (kind, n) and parties.same(r[3], asking) for r in got.responses):
+            raise Stop("served_amended", f"the request asks for amended or further responses and {label} "
+                       "has a served response of ours")  # fmt: skip
+
+
+def planned_reads(data: Path, request: str, clients: list[str]) -> list[str]:
+    """The excerpt of every read the finder would make, in order; empty when
+    code stops before any read (the replay lists every call it needs at once)."""
+    try:
+        return [d.excerpt() for d, _k in candidates(Found(), data, request, list(clients)).served]
+    except Stop:
+        return []
+
+
+def _walk(f: Found, data: Path, request: str, reader: Reader, clients: list[str], other: list[str], title: str) -> None:
+    got = candidates(f, data, request, clients)
     _read_all(f, got, reader, clients, other)
+    if papers.asks_amended(request):
+        _amended(got, f.keep)
     _answered(f, got)
     if not f.keep:
         raise Stop("served_none", "every served set in the matter file is answered by a later response of ours")

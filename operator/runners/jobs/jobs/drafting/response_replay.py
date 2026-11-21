@@ -24,7 +24,8 @@ module and function each one calls):
 * ``cost``: the cost projection, dollars and minutes with each line item.
   Runs scope first; needs ``--firm`` (models, budget) and a rate card.
 * ``form-read``: the pixel checkbox read of each form set in the key (found by
-  its sha256 in the pull's raw_manifest.jsonl), against ``form.checked``.
+  its sha256 in the pull's corpus.json, else raw_manifest.jsonl), against
+  ``form.checked``.
 * ``--body <file>``: a produced body's per-number kind (from a JSON body; a
   text or .docx body's kinds are reported unread), the key's names in
   each form response, and its layout (one subpart per line, one provider per
@@ -33,7 +34,10 @@ module and function each one calls):
 NO MODEL IS CALLED, and ``--no-model`` (accepted, the only mode) says so: a
 model call is answered by a recording beside the key (``replay/recorded.py``);
 with none, the stage reports "needs a model call" with the request's sha and
-the stages after it stop there. Everything the stage writes goes to ``--work``
+the stages after it stop there. ``find`` runs its code half first and lists
+EVERY read it would make without a recording (all their shas in
+``needed_calls``), so one pass collects them all. A key with no served set
+exits 2 at once, naming the field its entries lacked. Everything the stage writes goes to ``--work``
 (default ``<key stem>.replay/`` beside the key), never into the saved matter.
 The table is printed and written as JSON to ``<key stem>.replay.json`` beside
 the key.
@@ -228,7 +232,11 @@ def _pricing(path: Path | None) -> Any:
 def main(argv: list[str] | None = None) -> int:
     a = _args(argv)
     matter = S.Matter.at(a.matter)
-    key = key_mod.load(a.key)
+    try:
+        key = key_mod.load(a.key)
+    except key_mod.EmptyKey as exc:
+        print(f"exit 2: {a.key}: {exc}", file=sys.stderr)
+        return 2
     work = a.work or a.key.with_name(f"{a.key.stem}.replay")
     work.mkdir(parents=True, exist_ok=True)
     client = recorded.RecordedClient(recorded.load_recordings(a.key))

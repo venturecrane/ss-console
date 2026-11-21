@@ -563,7 +563,8 @@ PLANNED_CLASSES = ("discovery_response",)
 #: The finder's stops (``served_find.py``), each before any large spend: no
 #: candidate; only scans; two sets code cannot tell apart, a value it cannot
 #: confirm, or a response paper it cannot pair; requests that do not number 1 to
-#: the count; more than the finder reads; a prior draft of a set (a revision).
+#: the count; more than the finder reads; a prior draft of a set (a revision);
+#: amended or further responses asked to a set already answered.
 FIND_STOPS = (
     "served_none",
     "served_scan",
@@ -571,6 +572,7 @@ FIND_STOPS = (
     "served_unnumbered",
     "served_many",
     "served_prior_draft",
+    "served_amended",
 )
 #: The plan's stops: SMD resolves each (a hand file and a resume, or a hand draft).
 PLAN_STOPS = ("served_unknown", "served_other_set", "served_invalid", *FIND_STOPS)
