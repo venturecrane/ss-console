@@ -31,3 +31,12 @@ closed:
       The firm-wide litigation status run was stopped by the Captain in favour
       of a narrower ask; it then ended on an out-of-memory failure. Decided
       work: no rerun of this attempt is owed.
+  - seat: ashton-price
+    job: 01M7XN10E31KDFZH2ZFQ3NFMM8
+    closed: '2026-11-20'
+    closed_by: workspace session ops-ashton-price for the Captain
+    reason: >-
+      A drafting rule the attorney stated by email, owed by hand. Recorded by
+      SMD in the drafting prompts (engagements PR 351) and answered by an SMD
+      note in his thread. Merge this entry only after that PR is merged and
+      the note reads back sent.
