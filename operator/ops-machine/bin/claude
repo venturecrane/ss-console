@@ -40,7 +40,8 @@
 #     on. Same environment, same window, no person typing.
 # With no token present the shim does exactly what it did before: the stored
 # /login, exec'd. Test seams: OPS_CLAUDE_BIN (the real binary), OPS_CLAUDE_SHIM_DRY=1
-# (print the launch, names only, instead of running it).
+# (print the launch, names only, instead of running it), OPS_CLAUDE_LIST_ACCOUNTS=1
+# (print the Machine's account order, names only, for the watcher).
 set -o pipefail   # not -u: empty arrays are normal here (bash < 4.4 calls them unbound)
 real="${OPS_CLAUDE_BIN:-/usr/local/bin/claude}"
 # Resolve a symlink first: ~/bin/<name> may point here (ops-home-bin-sync), and
@@ -52,18 +53,27 @@ envfile=()
 
 # Every account token variable in the environment, by name (never a value).
 token_vars() { compgen -v CLAUDE_OAUTH_TOKEN_ 2>/dev/null | grep -E '^CLAUDE_OAUTH_TOKEN_[A-Z]$'; }
-if [ -z "$(token_vars)" ] && [ -f "$HOME/.claude-oauth" ]; then
-  # shellcheck disable=SC1091
-  . "$HOME/.claude-oauth"
-fi
-order="${OPS_CLAUDE_ACCOUNT_ORDER:-$(cat "$HOME/.claude-account-order" 2>/dev/null || true)}"
-accounts=() tokens=0
-for a in ${order:-C B A}; do
-  case "$a" in
-    [A-Z]) v="CLAUDE_OAUTH_TOKEN_$a"; [ -n "${!v:-}" ] && { accounts+=("$a"); tokens=$((tokens + 1)); } ;;
-    login) accounts+=(login) ;;
-  esac
-done
+# The accounts, read again before every (re)start of a session, so a token
+# added to a running Machine (bin/ops-workspace accounts <slug>, 2026-11-21)
+# reaches sessions already open, not only new ones. ~/.claude-oauth, written
+# there, wins over a token the environment was started with.
+load_accounts() {
+  if [ -f "$HOME/.claude-oauth" ]; then
+    # shellcheck disable=SC1091
+    . "$HOME/.claude-oauth"
+  fi
+  order="${OPS_CLAUDE_ACCOUNT_ORDER:-$(cat "$HOME/.claude-account-order" 2>/dev/null || true)}"
+  accounts=() tokens=0
+  for a in ${order:-C B A}; do
+    case "$a" in
+      [A-Z]) v="CLAUDE_OAUTH_TOKEN_$a"; [ -n "${!v:-}" ] && { accounts+=("$a"); tokens=$((tokens + 1)); } ;;
+      login) accounts+=(login) ;;
+    esac
+  done
+}
+load_accounts
+# The watcher asks this shim which accounts the Machine has now (names only).
+if [ -n "${OPS_CLAUDE_LIST_ACCOUNTS:-}" ]; then echo "${accounts[*]}"; exit 0; fi
 
 # No token: today's behaviour, unchanged.
 if [ "$tokens" -eq 0 ]; then
@@ -155,6 +165,7 @@ P="$HOME/state/claude-panes"; mkdir -p "$P" "$HOME/logs"
 pf="$P/pane-${TMUX_PANE#%}"
 trap 'rm -f "$pf" "$pf".*' EXIT
 while :; do
+  load_accounts
   acct=$(pick); acct="${acct:-login}"
   printf 'pid=%s\npane=%s\naccount=%s\nsid=%s\naccounts=%s\nstarted=%s\n' \
     "$$" "$TMUX_PANE" "$acct" "$sid" "${accounts[*]}" "$(date +%s)" > "$pf"

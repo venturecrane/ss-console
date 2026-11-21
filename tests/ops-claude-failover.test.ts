@@ -272,6 +272,48 @@ exit 0
   })
 })
 
+describe('an account added to a running Machine', () => {
+  it('a live tmux session restarts onto it, read from ~/.claude-oauth at the restart', () => {
+    const home = makeHome()
+    const log = join(home, 'launches')
+    writeFileSync(join(home, '.claude-oauth'), "export CLAUDE_OAUTH_TOKEN_B='test-token-b'\n")
+    // First run: B hits its limit and, meanwhile, C's token is written to the
+    // Machine (what ops-workspace accounts does). The restart must land on C.
+    writeFileSync(
+      join(home, 'fakebin', 'real-claude'),
+      `#!/bin/bash
+echo "token=$CLAUDE_CODE_OAUTH_TOKEN" >> "${log}"
+if [ ! -f "$HOME/once" ]; then
+  touch "$HOME/once"
+  python3 "${ACCOUNTS}" mark B "You've hit your weekly limit · resets Mon 12:00am" >/dev/null
+  printf "export CLAUDE_OAUTH_TOKEN_B='test-token-b'\\nexport CLAUDE_OAUTH_TOKEN_C='test-token-c'\\n" > "$HOME/.claude-oauth"
+  : > "$HOME/state/claude-panes/pane-7.restart"
+  exit 143
+fi
+exit 0
+`
+    )
+    chmodSync(join(home, 'fakebin', 'real-claude'), 0o755)
+    run(
+      'bash',
+      [SHIM, '--name', 'ops-x-1', 'do the task'],
+      baseEnv(home, { TMUX_PANE: '%7', OPS_CLAUDE_BIN: join(home, 'fakebin', 'real-claude') })
+    )
+    const lines = readFileSync(log, 'utf8').trim().split('\n')
+    expect(lines).toEqual(['token=test-token-b', 'token=test-token-c'])
+  })
+
+  it('the shim lists the Machine accounts by name for the watcher', () => {
+    const home = makeHome()
+    writeFileSync(
+      join(home, '.claude-oauth'),
+      "export CLAUDE_OAUTH_TOKEN_A='a'\nexport CLAUDE_OAUTH_TOKEN_C='c'\n"
+    )
+    const out = run('bash', [SHIM], baseEnv(home, { OPS_CLAUDE_LIST_ACCOUNTS: '1' })).trim()
+    expect(out).toBe('C A')
+  })
+})
+
 describe('ops-tool-env: what every tool command sources', () => {
   it('keeps the workspace secrets and removes every Claude account token', () => {
     const home = makeHome()
@@ -314,6 +356,21 @@ describe('ops-claude-failover: the watcher', () => {
     const second = watch(home)
     expect(second).toContain('would: restart pane %7 on A')
     expect(stateOf(home).B.exhausted_until).toBe(Date.UTC(2026, 10, 9, 7, 0) / 1000)
+  })
+
+  it('rescues a session opened before an account was added: moves it to the new one', () => {
+    const home = makeHome()
+    register(home, 'B') // registered with the old list, "B A"
+    accounts(home, 'mark', 'A', "You've hit your weekly limit · resets Wed 12:00am")
+    writeFileSync(
+      join(home, '.claude-oauth'),
+      "export CLAUDE_OAUTH_TOKEN_A='a'\nexport CLAUDE_OAUTH_TOKEN_B='b'\nexport CLAUDE_OAUTH_TOKEN_C='c'\n"
+    )
+    writeFileSync(join(home, 'screen.txt'), LIMIT_SCREEN)
+    watch(home)
+    const out = watch(home)
+    expect(out).toContain('would: restart pane %7 on C')
+    expect(out).not.toContain('would page')
   })
 
   it('leaves a working session alone even when it prints the words', () => {
