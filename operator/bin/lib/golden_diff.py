@@ -244,9 +244,23 @@ def _reviewed(path: str) -> dict[str, list[str]]:
     if top.returncode != 0:
         raise _unknown(f"{p.parent} is not in a git checkout")
     root = Path(top.stdout.strip()).resolve()
-    shown = _git(root, "show", f"{_base(str(root))}:{p.resolve().relative_to(root).as_posix()}")
-    base_allowed = parse_allowed(json.loads(shown.stdout), f"merge-base {ALLOWED}") if shown.returncode == 0 else {}
-    return this_change(allowed, base_allowed)
+    return this_change(allowed, _base_allowed(root, _base(str(root)), p.resolve().relative_to(root).as_posix()))
+
+
+def _base_allowed(root: Path, base: str, rel: str) -> dict[str, list[str]]:
+    """The list at ``rel`` in ``base``: ``{}`` only when the base tree has no
+    such path. A path the base has but cannot be read (a missing or corrupt
+    object, a partial clone) raises: read as absent, every leftover entry
+    would count as this change's."""
+    listed = _git(root, "ls-tree", "--name-only", base, "--", rel)
+    if listed.returncode != 0:
+        raise _unknown(f"git ls-tree {base} -- {rel} failed: {listed.stderr.strip()}")
+    if not listed.stdout.strip():
+        return {}
+    shown = _git(root, "show", f"{base}:{rel}")
+    if shown.returncode != 0:
+        raise _unknown(f"the merge-base has {rel} but git show cannot read it: {shown.stderr.strip()}")
+    return parse_allowed(json.loads(shown.stdout), f"merge-base {rel}")
 
 
 def reviewed(golden_dir: Path) -> dict[str, list[str]]:
@@ -265,29 +279,12 @@ def forget_base() -> None:
     _base.cache_clear()
 
 
-def compare_dirs(want_dir: Path, got_dir: Path, skip: tuple[str, ...] = ()) -> dict[str, list[str]]:
-    """Golden dir against a regenerated one (top-level files): per file, the
-    differences that ``want_dir/allowed-changes.json`` (or, for a ledger lane
-    dir, the set's one level up) does not allow. A file present on one side
-    only is reported as ``<file>``. ``skip`` names input fixtures that are not
-    regenerated."""
-    allowed = load_allowed(want_dir)
-    if not allowed and (Path(want_dir).parent / ALLOWED).is_file():
-        lane = Path(want_dir).name
-        allowed = {
-            k.split("/", 1)[1]: v for k, v in load_allowed(Path(want_dir).parent).items() if k.startswith(f"{lane}/")
-        }
-    found = tree_diffs(goldens(want_dir, "*", skip), goldens(got_dir, "*", skip))
-    return unallowed(found, allowed)
-
-
 __all__ = [
     "ALLOWED",
     "FILE",
     "AllowedListError",
     "BASE_ENV",
     "BaseUnknownError",
-    "compare_dirs",
     "diffs",
     "forget_base",
     "goldens",

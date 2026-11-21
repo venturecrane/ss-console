@@ -11,7 +11,6 @@ import pytest
 
 from bin.lib.golden_diff import (
     AllowedListError,
-    compare_dirs,
     diffs,
     goldens,
     inherited,
@@ -105,23 +104,13 @@ def test_a_rewritten_golden_is_reported_and_an_allowed_one_is_not(tmp_path):
     _write(want, "lane__delivered", {"wake": "Outcome: delivered."})
     _write(got, "lane__delivered", {"wake": "Outcome: held."})
     _write(want, "aged", {"steps": [1]})
-    assert compare_dirs(want, got, skip=("aged.json",)) == {"lane__delivered": ["wake"]}
-    (want / "allowed-changes.json").write_text(json.dumps({"_why": "x", "lane__delivered": ["wake"]}))
-    assert compare_dirs(want, got, skip=("aged.json",)) == {}
+    found = tree_diffs(goldens(want, "*", ("aged.json",)), goldens(got, "*", ("aged.json",)))
+    assert unallowed(found, {}) == {"lane__delivered": ["wake"]}
+    assert unallowed(found, {"lane__delivered": ["wake"]}) == {}
 
 
 def test_a_missing_or_extra_golden_is_reported(tmp_path):
     want, got = tmp_path / "want", tmp_path / "got"
     _write(want, "a", {})
     _write(got, "b", {})
-    assert compare_dirs(want, got) == {"a": ["<file>"], "b": ["<file>"]}
-
-
-def test_a_ledger_lane_reads_its_set_allowed_list_one_level_up(tmp_path):
-    root = tmp_path / "ledgers"
-    want, got = root / "demand", tmp_path / "out" / "demand"
-    _write(want, "month", {"n": 1})
-    _write(got, "month", {"n": 2})
-    assert compare_dirs(want, got) == {"month": ["n"]}
-    (root / "allowed-changes.json").write_text(json.dumps({"_why": "x", "demand/month": ["n"]}))
-    assert compare_dirs(want, got) == {}
+    assert tree_diffs(goldens(want, "*"), goldens(got, "*")) == {"a": ["<file>"], "b": ["<file>"]}

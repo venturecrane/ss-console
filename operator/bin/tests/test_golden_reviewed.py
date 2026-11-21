@@ -126,6 +126,27 @@ def test_no_base_fails_loudly_and_never_takes_every_entry_as_new(tmp_path, monke
     forget_base()
 
 
+def test_a_base_list_that_cannot_be_read_fails_loudly(tmp_path, monkeypatch):
+    """The base has the list but its object is gone (a partial clone, a corrupt
+    store). FALSIFIER: read as "no list at the base", every leftover entry
+    counts as this change's and ``0.state`` would be excused; it must raise."""
+    monkeypatch.delenv(BASE_ENV, raising=False)
+    forget_base()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    base = _commit(repo, {"cell": ["0.state"]}, "base")
+    _git(repo, "update-ref", "refs/remotes/origin/main", base)
+    blob = _git(repo, "rev-parse", f"{base}:{SET}/allowed-changes.json")
+    _git(repo, "checkout", "-q", "-b", "pr")
+    _commit(repo, {"cell": ["0.state", "1.wake"]}, "change")
+    (repo / ".git" / "objects" / blob[:2] / blob[2:]).unlink()
+    forget_base()
+    with pytest.raises(BaseUnknownError, match="cannot read it"):
+        reviewed(repo / SET)
+    forget_base()
+
+
 def test_an_empty_list_needs_no_base(tmp_path, monkeypatch):
     """Nothing to excuse: no git, no base, no error (a tree with no commits)."""
     monkeypatch.delenv(BASE_ENV, raising=False)
