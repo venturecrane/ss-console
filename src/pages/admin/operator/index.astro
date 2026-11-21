@@ -17,6 +17,7 @@ import {
 } from '../../../lib/admin/fleet-status'
 import { fetchFleetHistory, seatGroups } from '../../../lib/admin/merge-to-seat'
 import { summarizeLeadTime } from '../../../lib/admin/lead-time-summary'
+import { readHoldHistory } from '../../../lib/admin/hold-history'
 import MergeToSeatCard from '../../../components/admin/MergeToSeatCard.astro'
 import { env } from 'cloudflare:workers'
 
@@ -130,8 +131,15 @@ const totalOperators = roster.length
 // Merge to seat: every release since one week before the oldest week shown.
 const mergeToSeatNow = Date.now()
 const mergeToSeatGroups = seatGroups()
-const mergeToSeatRead = await fetchFleetHistory(env.DB, mergeToSeatNow)
-const mergeToSeat = summarizeLeadTime(mergeToSeatRead.history, mergeToSeatGroups, mergeToSeatNow)
+const mergeToSeatHolds = await readHoldHistory(env.DB)
+const mergeToSeatRead = await fetchFleetHistory(
+  env.DB,
+  mergeToSeatNow,
+  mergeToSeatHolds.since !== null
+)
+const mergeToSeat = summarizeLeadTime(mergeToSeatRead.history, mergeToSeatGroups, mergeToSeatNow, {
+  holdHistorySince: mergeToSeatHolds.since,
+})
 ---
 
 <AdminLayout
@@ -297,6 +305,7 @@ const mergeToSeat = summarizeLeadTime(mergeToSeatRead.history, mergeToSeatGroups
     <MergeToSeatCard
       summary={mergeToSeat}
       groups={mergeToSeatGroups}
+      holdHistory={mergeToSeatHolds}
       error={mergeToSeatRead.error}
     />
   </div>

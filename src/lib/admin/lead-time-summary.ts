@@ -10,10 +10,12 @@
  *
  * A week is the ISO week (Monday, UTC) in which the change merged. Its median
  * and slow case (p90, nearest rank) are over the pipeline minutes of arrivals
- * whose split was RECORDED; an arrival whose held and busy minutes the fleet
- * did not record counts as "not recorded" and never enters them. Held and busy
- * count every merge known to have met a hold or a busy seat (a recorded split,
- * or a merge waiting on one now); clear counts recorded arrivals with neither.
+ * whose split was RECORDED (hold history covered the window); an earlier one
+ * counts as "not recorded" and never enters them. Held counts every merge known
+ * to have met a hold (a recorded split, or a merge waiting on one now); clear
+ * counts recorded arrivals with no hold and no recorded busy wait. Busy waits
+ * are not recorded yet, so a week's busy count is null rather than a zero it
+ * cannot vouch for, and pipeline includes any wait on a client job.
  * A week with nothing measured has no median, never a zero.
  */
 
@@ -28,7 +30,7 @@ import {
   type Merge,
   type WaitingOn,
 } from './lead-time'
-import { HOLD_HISTORY_RECORDED_SINCE } from './lead-time-split'
+import type { Split } from './lead-time-split'
 import {
   ARTIFACT_KINDS,
   WEEKS_SHOWN,
@@ -50,10 +52,17 @@ export interface WeekStats {
   weekStart: string
   merges: number
   arrived: number
-  /** Arrived, but held and busy minutes were not recorded: no split, not in the median. */
+  /** Arrived before hold history was recorded: total only, not in the median. */
   unrecorded: number
   held: number
-  busy: number
+  /** Null when busy waits were not recorded for some merge of the week. */
+  busy: number | null
+  /**
+   * Merges whose rows prove the seat made them wait (an attempt ended
+   * `waiting_idle`) while busy seconds were not recorded: never clear, minutes unknown.
+   */
+  waited: number
+  /** Recorded arrivals with no hold, no busy wait and no proven wait on the seat. */
   clear: number
   medianPipeline: number | null
   p90Pipeline: number | null
@@ -82,7 +91,7 @@ export interface LeadTimeSummary {
 }
 
 export interface LeadTimeOptions {
-  /** Overrides HOLD_HISTORY_RECORDED_SINCE (ISO UTC, or null). */
+  /** When hold history began (ISO UTC; `readHoldHistory`), or null/absent when it is not recorded. */
   holdHistorySince?: string | null
 }
 
@@ -103,29 +112,53 @@ export function p90(values: number[]): number | null {
   return sorted[Math.ceil(0.9 * sorted.length) - 1]
 }
 
-type Class = 'held' | 'busy' | 'clear' | 'unrecorded' | 'waiting' | 'none'
+type Class = 'held' | 'busy' | 'waited' | 'clear' | 'unrecorded' | 'waiting' | 'none'
 
-/** How an arrival counts in the week. */
+/** What a recorded split proves: any hold (by milliseconds), a recorded busy wait, a proven wait on the seat. */
+function proven(split: Split): { held: boolean; busy: boolean; waited: boolean } {
+  if (!split.recorded) return { held: false, busy: false, waited: false }
+  return {
+    held: split.heldMs > 0,
+    busy: (split.busyMinutes ?? 0) > 0,
+    waited: split.busyMinutes === null && split.waitedOnSeat,
+  }
+}
+
+/**
+ * How an arrival counts in the week. Held is decided on held milliseconds, so a
+ * hold under 30 seconds (0 minutes shown) is still held. An unknown busy wait
+ * never makes a merge "busy", but a window whose rows show the seat made it
+ * wait is "waited", never clear.
+ */
 function classify(a: Arrival): Class {
   if (a.status === 'no_seats') return 'none'
+  const { held, busy, waited } = proven(a.split)
   if (a.status === 'in_progress') {
     const reason = a.waitingOn.reason
-    if (reason === 'hold' || (a.split.recorded && a.split.heldMinutes > 0)) return 'held'
-    if (reason === 'busy' || reason === 'idle_wait') return 'busy'
-    return a.split.recorded && a.split.busyMinutes > 0 ? 'busy' : 'waiting'
+    if (reason === 'hold' || held) return 'held'
+    if (reason === 'busy' || busy) return 'busy'
+    return reason === 'idle_wait' || waited ? 'waited' : 'waiting'
   }
   if (!a.split.recorded) return 'unrecorded'
-  if (a.split.heldMinutes > 0) return 'held'
-  return a.split.busyMinutes > 0 ? 'busy' : 'clear'
+  if (held) return 'held'
+  if (busy) return 'busy'
+  return waited ? 'waited' : 'clear'
 }
 
 function weekStats(weekStart: number, arrivals: Arrival[]): WeekStats {
   const pipeline: number[] = []
   const clear: number[] = []
-  const counts = { held: 0, busy: 0, unrecorded: 0, arrived: 0 }
+  const counts = { held: 0, busy: 0, waited: 0, unrecorded: 0, arrived: 0 }
+  // Busy is a count only when some split was recorded and every recorded one carries busy minutes.
+  let sawRecorded = false
+  let busyKnown = true
   for (const a of arrivals) {
     const c = classify(a)
-    if (c === 'held' || c === 'busy' || c === 'unrecorded') counts[c]++
+    if (c === 'held' || c === 'busy' || c === 'waited' || c === 'unrecorded') counts[c]++
+    if (a.status !== 'no_seats' && a.split.recorded) {
+      sawRecorded = true
+      if (a.split.busyMinutes === null) busyKnown = false
+    }
     if (a.status !== 'arrived') continue
     counts.arrived++
     if (!a.split.recorded) continue
@@ -136,6 +169,7 @@ function weekStats(weekStart: number, arrivals: Arrival[]): WeekStats {
     weekStart: new Date(weekStart).toISOString().slice(0, 10),
     merges: arrivals.length,
     ...counts,
+    busy: sawRecorded && busyKnown ? counts.busy : null,
     clear: clear.length,
     medianPipeline: median(pipeline),
     p90Pipeline: p90(pipeline),
@@ -162,8 +196,7 @@ export function mergeArrivals(
   nowMs: number,
   options: LeadTimeOptions = {}
 ): MergeArrival[] {
-  const since =
-    options.holdHistorySince === undefined ? HOLD_HISTORY_RECORDED_SINCE : options.holdHistorySince
+  const since = options.holdHistorySince ?? null
   const out: MergeArrival[] = []
   // All kinds at once: a bundle or skills merge takes its clock from the same commit's image row.
   const merges = mergesOf(history.releases)
@@ -224,7 +257,7 @@ export function summarizeLeadTime(
 const WAIT_TEXT: Record<WaitingOn['reason'], (seat: string) => string> = {
   hold: (seat) => `waiting on a hold (${seat})`,
   busy: (seat) => `waiting on a busy seat (${seat})`,
-  idle_wait: (seat) => `waiting for ${seat} to be free (a client job or another deploy)`,
+  idle_wait: (seat) => `waiting for the seat to be free (${seat}: a client job or another deploy)`,
   twin: (seat) => `waiting on the release twin (${seat})`,
   nothing: () => 'in the pipeline',
 }
@@ -235,9 +268,16 @@ export function describeArrival(a: MergeArrival | null): { text: string; marked:
   const arrival = a.headline
   if (arrival.status === 'no_seats') return { text: 'no client seat takes it', marked: false }
   const split = arrival.split
-  const parts = split.recorded
-    ? `${split.pipelineMinutes} pipeline, ${split.heldMinutes} held, ${split.busyMinutes} busy`
-    : 'held and busy minutes not recorded'
+  const held = !split.recorded
+    ? ''
+    : split.heldMinutes === 0 && split.heldMs > 0
+      ? 'under 1 min held'
+      : `${split.heldMinutes} held`
+  const parts = !split.recorded
+    ? 'hold time not recorded'
+    : split.busyMinutes === null
+      ? `${split.pipelineMinutes} pipeline, including any wait on a client job; ${held}`
+      : `${split.pipelineMinutes} pipeline, ${held}, ${split.busyMinutes} busy`
   if (arrival.status === 'in_progress') {
     const wait = WAIT_TEXT[arrival.waitingOn.reason](arrival.waitingOn.seat)
     return { text: `${wait}, ${split.totalMinutes} min so far (${parts})`, marked: false }

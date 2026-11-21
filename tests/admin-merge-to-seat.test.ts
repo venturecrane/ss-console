@@ -129,13 +129,22 @@ describe('fetchFleetHistory', () => {
       fleet_releases: releases,
       fleet_rollouts: [],
       fleet_holds: [{ customer_slug: 'client-a', held_at: '2026-11-04T00:10:00Z' }],
+      fleet_hold_events: [
+        {
+          customer_slug: 'client-b',
+          held_at: '2026-11-04T00:10:00Z',
+          lifted_at: '2026-11-04T00:20:00Z',
+        },
+      ],
     }
     const table = (sql: string) =>
       sql.startsWith('SELECT o.')
         ? 'fleet_rollouts'
-        : sql.includes('fleet_holds')
-          ? 'fleet_holds'
-          : 'fleet_releases'
+        : sql.includes('fleet_hold_events')
+          ? 'fleet_hold_events'
+          : sql.includes('fleet_holds')
+            ? 'fleet_holds'
+            : 'fleet_releases'
     const stmt = (sql: string) => {
       const all = async () => {
         if (table(sql) === fail) throw new Error('D1_ERROR: no such table')
@@ -155,15 +164,27 @@ describe('fetchFleetHistory', () => {
   // Wednesday 2026-11-18; its week starts Monday 2026-11-16.
   const NOW = Date.UTC(2026, 10, 18, 12, 0, 0)
 
-  it('reads every release since one week before the oldest week shown, and the holds in place', async () => {
+  it('reads every release since one week before the oldest week shown, and only the holds in place when hold history is not recorded', async () => {
     const { db, binds } = fakeDb(null)
-    const { history, error } = await fetchFleetHistory(db, NOW)
+    const { history, error } = await fetchFleetHistory(db, NOW, false)
     expect(error).toBeNull()
     expect(historyStartMs(NOW)).toBe(Date.UTC(2026, 8, 21))
     expect(binds['fleet_releases'][0]).toBe('2026-09-21T00:00:00Z')
     expect(binds['fleet_rollouts'][0]).toBe('2026-09-21T00:00:00Z')
+    expect(binds['fleet_hold_events']).toBeUndefined()
     expect(history.releases).toHaveLength(1)
     expect(history.holds).toEqual([{ seat: 'client-a', heldAtMs: AT, liftedAtMs: null }])
+  })
+
+  it('reads the hold intervals open or lifted inside the window when hold history is recorded', async () => {
+    const { db, binds } = fakeDb(null)
+    const { history, error } = await fetchFleetHistory(db, NOW, true)
+    expect(error).toBeNull()
+    expect(binds['fleet_hold_events'][0]).toBe('2026-09-21T00:00:00Z')
+    expect(binds['fleet_holds']).toBeUndefined()
+    expect(history.holds).toEqual([
+      { seat: 'client-b', heldAtMs: AT, liftedAtMs: AT + 10 * 60_000 },
+    ])
   })
 
   it('a read past its safety cap is an error, never a partial week shown as whole', async () => {
@@ -171,14 +192,14 @@ describe('fetchFleetHistory', () => {
       null,
       Array.from({ length: 5001 }, () => RELEASE)
     )
-    const { history, error } = await fetchFleetHistory(db, NOW)
+    const { history, error } = await fetchFleetHistory(db, NOW, false)
     expect(error).toContain('fleet_releases has more than 5000 rows')
     expect(history.releases).toEqual([])
   })
 
   it('a failed query is an error naming the table, with nothing measured', async () => {
     const { db } = fakeDb('fleet_holds')
-    const { history, error } = await fetchFleetHistory(db, NOW)
+    const { history, error } = await fetchFleetHistory(db, NOW, false)
     expect(error).toContain('fleet_holds query failed')
     expect(history).toEqual({ releases: [], rollouts: [], holds: [] })
   })

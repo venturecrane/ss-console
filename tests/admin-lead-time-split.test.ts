@@ -8,10 +8,11 @@
 import { describe, it, expect } from 'vitest'
 import { overThreshold } from '../src/lib/admin/lead-time'
 import { clipUnion, splitFor } from '../src/lib/admin/lead-time-split'
-import { describeArrival } from '../src/lib/admin/lead-time-summary'
+import { describeArrival, summarizeLeadTime } from '../src/lib/admin/lead-time-summary'
 import type { RolloutRow } from '../src/lib/admin/merge-to-seat'
 import {
   Fleet,
+  GROUPS,
   RECORDED,
   arrived,
   at,
@@ -99,13 +100,24 @@ describe('busy', () => {
     expect(arrived(headlineOf(f.arrivals(100, RECORDED), 1)).split).toEqual(split(25, 25, 0, 0))
   })
 
-  it('an attempt with no recorded busy seconds makes the split not recorded', () => {
+  it('an attempt with no recorded busy seconds leaves busy not recorded and its wait inside pipeline; holds still count', () => {
     const f = new Fleet()
     const r = f.image(1, 0)
     f.waited(r, 'twin-a', 'done', [4, 6], 0)
+    f.hold('client-a', 8, 10)
+    // The seat waited for a client job inside this attempt; no writer records it yet.
     f.roll(r, 'client-a', 'done', 10, 25)
-    const a = arrived(headlineOf(f.arrivals(100, RECORDED), 1))
-    expect(a.split).toEqual({ recorded: false, totalMinutes: 25, missing: 'busy time' })
+    const [m] = f.arrivals(100, RECORDED)
+    expect(arrived(m.headline).split).toMatchObject({
+      recorded: true,
+      totalMinutes: 25,
+      pipelineMinutes: 23,
+      heldMinutes: 2,
+      busyMinutes: null,
+    })
+    expect(describeArrival(m).text).toBe(
+      '25 min (23 pipeline, including any wait on a client job; 2 held)'
+    )
   })
 
   it('a seat busy at the first visit and done at a later one: busy is the wait, not a count of rows', () => {
@@ -185,7 +197,9 @@ describe('rounding', () => {
           holdHistorySinceMs: 0,
         })
         if (!s.recorded) throw new Error('expected a recorded split')
-        expect(s.pipelineMinutes + s.heldMinutes + s.busyMinutes).toBe(s.totalMinutes)
+        // Every attempt here carries busy seconds, so busy is a number.
+        expect(s.busyMinutes).not.toBeNull()
+        expect(s.pipelineMinutes + s.heldMinutes + (s.busyMinutes ?? NaN)).toBe(s.totalMinutes)
         expect(s.pipelineMinutes).toBeGreaterThanOrEqual(0)
       }
     }
@@ -206,5 +220,96 @@ describe('rounding', () => {
       [2, 20],
       [30, 40],
     ])
+  })
+})
+
+describe('hold events with busy not recorded', () => {
+  it('a hold placed and lifted inside an arrival window shows its held minutes and is not marked when the rest is under 45', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    // The tick wrote no row while client-a was held; the hold events recorded it.
+    f.hold('client-a', 8, 100)
+    f.roll('img-1', 'client-a', 'done', 100, 110)
+    const [m] = f.arrivals(200, RECORDED)
+    const a = arrived(m.headline)
+    expect(a.split).toMatchObject({
+      recorded: true,
+      totalMinutes: 110,
+      pipelineMinutes: 18,
+      heldMinutes: 92,
+      busyMinutes: null,
+    })
+    expect(overThreshold(a)).toBe(false)
+    expect(describeArrival(m)).toEqual({
+      text: '110 min (18 pipeline, including any wait on a client job; 92 held)',
+      marked: false,
+    })
+  })
+
+  it('pipeline over 45 with busy not recorded is marked, since it may include a client job wait', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    f.roll('img-1', 'client-a', 'done', 40, 50)
+    const [m] = f.arrivals(200, RECORDED)
+    expect(arrived(m.headline).split).toMatchObject({ pipelineMinutes: 50, busyMinutes: null })
+    expect(describeArrival(m).marked).toBe(true)
+  })
+
+  it('a seat whose latest attempt is waiting_idle says it is waiting for the seat to be free', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    f.roll('img-1', 'client-a', 'waiting_idle', 8, 18)
+    const [m] = f.arrivals(40, RECORDED)
+    expect(describeArrival(m).text).toMatch(
+      /^waiting for the seat to be free \(client-a: a client job or another deploy\), 40 min so far/
+    )
+  })
+})
+
+describe('classification on what the rows prove', () => {
+  const week = (f: Fleet, now: number) =>
+    summarizeLeadTime(f.history(), GROUPS, at(now), { holdHistorySince: RECORDED }).kinds.find(
+      (k) => k.kind === 'image'
+    )!.headlineWeeks[0]
+
+  it('a 20-second hold is held, not clear, and shows under 1 minute held', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    f.hold('client-a', 8, 8 + 20 / 60)
+    f.roll('img-1', 'client-a', 'done', 10, 15)
+    const [m] = f.arrivals(100, RECORDED)
+    expect(arrived(m.headline).split).toMatchObject({ heldMinutes: 0, heldMs: 20_000 })
+    expect(describeArrival(m).text).toBe(
+      '15 min (15 pipeline, including any wait on a client job; under 1 min held)'
+    )
+    expect(week(f, 100)).toMatchObject({ held: 1, clear: 0, clearMedian: null })
+  })
+
+  it('an arrival whose window holds a waiting_idle attempt is "waited", never clear, while busy is not recorded', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    f.roll('img-1', 'client-a', 'waiting_idle', 8, 18)
+    f.roll('img-1', 'client-a', 'done', 30, 35)
+    expect(arrived(headlineOf(f.arrivals(100, RECORDED), 1)).split).toMatchObject({
+      waitedOnSeat: true,
+      busyMinutes: null,
+    })
+    expect(week(f, 100)).toMatchObject({ waited: 1, clear: 0, busy: null, clearMedian: null })
+  })
+
+  it('a waiting_idle attempt on the twin after its first done does not make the client "waited"', () => {
+    const f = new Fleet()
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    f.roll('img-1', 'twin-a', 'waiting_idle', 7, 9)
+    f.roll('img-1', 'client-a', 'done', 10, 15)
+    expect(week(f, 100)).toMatchObject({ waited: 0, clear: 1 })
+  })
+
+  it('with busy seconds recorded the busy classification applies and "waited" is empty', () => {
+    const f = new Fleet(true)
+    f.roll(f.image(1, 0), 'twin-a', 'done', 4, 6)
+    f.waited('img-1', 'client-a', 'waiting_idle', [8, 18], 600)
+    f.roll('img-1', 'client-a', 'done', 30, 35)
+    expect(week(f, 100)).toMatchObject({ waited: 0, busy: 1, clear: 0 })
   })
 })
