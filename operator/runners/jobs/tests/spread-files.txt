@@ -1,0 +1,11 @@
+# The runner suite's two matrix files. CI runs the suite `--dist=loadfile`, so a
+# file is the unit a worker takes; these held 680 s and 460 s of the suite's
+# 2,174 s (2026-11-21, `--durations=0`, four workers), and whichever worker drew
+# test_lifecycle_matrix.py set the run's wall clock alone.
+#
+# Read by conftest.py, which schedules each of their tests on its own (every
+# cell builds its own tmp_path and monkeypatch and shares no module-scoped
+# fixture), and by operator/bin/runner-half.py, which puts the N-th of them in
+# half (N mod 2) + 1, counting from 0, so the two never land in the same CI half.
+test_host_matrix_goldens.py
+test_lifecycle_matrix.py

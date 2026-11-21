@@ -113,10 +113,26 @@ hermes_sha="$(sed -n 's/^ARG HERMES_UPSTREAM_SHA=\([0-9a-f]\{40\}\)$/\1/p' "${DO
 work="$(mktemp -d)"
 trap 'rm -f "${overrides}"; rm -rf "${work}"' EXIT
 mkdir -p "${work}/hermes" "${work}/overlay"
-curl -fsSL --retry 5 --retry-delay 10 -o "${work}/hermes/pyproject.toml" \
-  "https://raw.githubusercontent.com/NousResearch/hermes-agent/${hermes_sha}/pyproject.toml"
-curl -fsSL --retry 5 --retry-delay 10 -o "${work}/hermes/uv.lock" \
-  "https://raw.githubusercontent.com/NousResearch/hermes-agent/${hermes_sha}/uv.lock"
+# A Hermes checkout already at the pinned sha (HERMES_AGENT_SRC, which the
+# `overlay` CI job sets) is read in place: raw.githubusercontent.com answers
+# CI's shared runners with 429s, and those two fetches were this step's only
+# flake (runs 40355964831, 40568088391, 40594953055). The checkout is used only
+# when its HEAD IS the pin, so a stale or moved checkout cannot stand in for it;
+# anything else falls back to the fetch.
+src_sha=""
+if [ -n "${HERMES_AGENT_SRC:-}" ] && [ -d "${HERMES_AGENT_SRC}/.git" ]; then
+  src_sha="$(git -C "${HERMES_AGENT_SRC}" rev-parse HEAD 2>/dev/null || true)"
+fi
+if [ "${src_sha}" = "${hermes_sha}" ] && [ -f "${HERMES_AGENT_SRC}/pyproject.toml" ] && [ -f "${HERMES_AGENT_SRC}/uv.lock" ]; then
+  echo "compile.sh: Hermes pyproject.toml and uv.lock from ${HERMES_AGENT_SRC} (HEAD ${hermes_sha})"
+  git -C "${HERMES_AGENT_SRC}" show "${hermes_sha}:pyproject.toml" > "${work}/hermes/pyproject.toml"
+  git -C "${HERMES_AGENT_SRC}" show "${hermes_sha}:uv.lock" > "${work}/hermes/uv.lock"
+else
+  curl -fsSL --retry 5 --retry-delay 10 -o "${work}/hermes/pyproject.toml" \
+    "https://raw.githubusercontent.com/NousResearch/hermes-agent/${hermes_sha}/pyproject.toml"
+  curl -fsSL --retry 5 --retry-delay 10 -o "${work}/hermes/uv.lock" \
+    "https://raw.githubusercontent.com/NousResearch/hermes-agent/${hermes_sha}/uv.lock"
+fi
 # The overlay's pyproject from this tree (ADR 0095), copied so the "# via"
 # annotation keeps reading overlay/pyproject.toml whoever runs this.
 cp "${OVERLAY_PYPROJECT}" "${work}/overlay/pyproject.toml"

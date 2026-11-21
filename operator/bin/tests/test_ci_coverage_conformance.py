@@ -207,7 +207,7 @@ def test_workflow_has_no_trigger_path_filter() -> None:
 
 def test_every_suite_step_is_gated_on_the_detect_step() -> None:
     jobs = _load_workflow()["jobs"]
-    for job_name in ("substrate", "runner"):
+    for job_name in ("substrate", "runner-half"):
         assert job_name in jobs, f"operator-substrate.yml has no `{job_name}` job"
         _assert_gated_on_the_detect_step(jobs[job_name]["steps"])
 
@@ -313,36 +313,145 @@ def test_connector_tests_are_covered_by_the_conformance_step_trigger() -> None:
     assert any(_matches(p, "operator/connectors/smokeball/server.py") for p in _trigger_paths(wf))
 
 
+_half_spec = importlib.util.spec_from_file_location("runner_half", OPERATOR_DIR / "bin" / "runner-half.py")
+assert _half_spec is not None and _half_spec.loader is not None
+_runner_half = importlib.util.module_from_spec(_half_spec)
+_half_spec.loader.exec_module(_runner_half)
+
+
 def test_runner_tests_are_covered_by_their_own_step_and_trigger() -> None:
     """runners/ is pytest-exempt above (ss#2613). Since 2026-11-04 the jobs
-    runner suite is its own job, `runner`, so its 13:36 serial run no longer
-    stretches the `substrate` wall clock. Pin the trigger path, the job's
-    gating shape, the seat-identical install, the parallel run, and that the
-    suite left `substrate` (two copies would run it twice)."""
+    runner suite is its own job, so its run no longer stretches the `substrate`
+    wall clock; since 2026-11-21 it runs as two halves (`runner-half`, a
+    two-cell matrix). Pin the trigger path, the halves' gating shape, the
+    seat-identical install, the parallel run over the half's files, and that
+    the suite left `substrate` (two copies would run it twice)."""
     wf = _load_workflow()
     assert any(_matches(p, "operator/runners/jobs/jobs/medchron/driver.py") for p in _trigger_paths(wf))
-    job = wf["jobs"].get("runner")
-    assert job, "operator-substrate.yml has no `runner` job"
+    job = wf["jobs"].get("runner-half")
+    assert job, "operator-substrate.yml has no `runner-half` job"
+    assert job["strategy"]["matrix"]["half"] == [1, 2], "two halves, numbered as bin/runner-half.py numbers them"
+    assert job["strategy"].get("fail-fast") is False, "a failing half must not cancel the other"
+    assert _runner_half.HALVES == 2
     steps = job["steps"]
     names = [s.get("name") for s in steps]
     assert names[:2] == ["Checkout", DETECT_STEP_NAME], names[:2]
     assert steps[1].get("id") == "changes"
     assert names[-1] == SKIP_STEP_NAME and steps[-1].get("if") == "steps.changes.outputs.relevant != 'true'"
     ungated = [s.get("name") for s in steps[2:-1] if (s.get("if") or "").strip() != GUARD]
-    assert not ungated, f"runner job steps must carry `if: {GUARD}`: {ungated}"
+    assert not ungated, f"runner-half steps must carry `if: {GUARD}`: {ungated}"
+    pytest_step = next(s for s in steps if "-m pytest" in (s.get("run") or ""))
+    assert str((pytest_step.get("env") or {}).get("HALF")) == "${{ matrix.half }}"
     runs = "\n".join(s.get("run") or "" for s in steps)
     for needle in (
         "./runners/jobs",
-        "runners/jobs/tests",
+        'python3 bin/runner-half.py "$HALF"',
+        '"${files[@]}"',
         "--require-hashes -r requirements/jobs.txt",
         "-c runners/jobs/pyproject.toml",
-        "--numprocesses=",
+        "--numprocesses=4 --dist=loadfile",
+        "bin/goldens/wire-census.py",
     ):
-        assert needle in runs, f"the runner job's run text is missing {needle!r}"
+        assert needle in runs, f"the runner-half job's run text is missing {needle!r}"
+    # The runner conftest subclasses xdist's LoadFileScheduling (a private
+    # _split_scope), so both suites install one pinned version.
+    substrate_text = "\n".join(s.get("run") or "" for s in wf["jobs"]["substrate"]["steps"])
+    pins = {m for t in (runs, substrate_text) for m in re.findall(r"pytest-xdist==(\S+)", t)}
+    assert len(pins) == 1, f"pytest-xdist must be pinned, to one version, in both suites: {pins}"
+    assert "pytest-xdist==" in runs and "pytest-xdist==" in substrate_text
     substrate_runs = "\n".join(s.get("run") or "" for s in wf["jobs"]["substrate"]["steps"])
     assert "runners/jobs/tests" not in substrate_runs, (
-        "the jobs runner suite moved to the `runner` job; `substrate` must not run it too"
+        "the jobs runner suite moved to the `runner-half` jobs; `substrate` must not run it too"
     )
+
+
+def _runner_pytest_python_files() -> list[str]:
+    """`python_files` as pytest itself resolves it for the runner's config
+    (`-c runners/jobs/pyproject.toml`, as CI passes it), defaults included."""
+    from _pytest.config import Config
+
+    cfg = Config.fromdictargs(
+        {}, ["-c", str(OPERATOR_DIR / "runners" / "jobs" / "pyproject.toml"), "-p", "no:cacheprovider"]
+    )
+    return list(cfg.getini("python_files"))
+
+
+def _pytest_collects(name: str, patterns: list[str]) -> bool:
+    from _pytest.pathlib import fnmatch_ex
+
+    return any(fnmatch_ex(pat, name) for pat in patterns)
+
+
+def test_the_runner_halves_cover_every_runner_test_file_exactly_once() -> None:
+    """Falsifier: a file in neither half would run nowhere and merge green; a
+    file in both would run twice. The halves are read from the script the
+    workflow calls; the whole is every file pytest's OWN `python_files` setting
+    collects (not the script's patterns restated), so a `foo_test.py` that the
+    script missed would show here."""
+    patterns = _runner_pytest_python_files()
+    assert _runner_half.python_files() == patterns, "runner-half.py reads a different python_files than pytest"
+    every = sorted(
+        p.relative_to(OPERATOR_DIR).as_posix()
+        for p in (OPERATOR_DIR / "runners" / "jobs" / "tests").rglob("*.py")
+        if not IGNORED_PARTS.intersection(p.parts) and _pytest_collects(p.name, patterns)
+    )
+    halves = [_runner_half.files_in(h) for h in range(1, _runner_half.HALVES + 1)]
+    assert all(halves), "a half with no files would run nothing"
+    flat = [f for h in halves for f in h]
+    assert len(flat) == len(set(flat)), "a test file is in both halves"
+    assert sorted(flat) == every, sorted(set(every) ^ set(flat))
+
+
+def test_a_foo_test_py_file_is_assigned_a_half(tmp_path: Path) -> None:
+    """pytest collects `*_test.py` by default; the split must too."""
+    tests = tmp_path / "runners" / "jobs" / "tests"
+    tests.mkdir(parents=True)
+    for name in ("x_test.py", "test_y.py", "helper.py"):
+        (tests / name).write_text("", encoding="utf-8")
+    got = _runner_half.runner_test_files(tests, root=tmp_path)
+    assert got == ["runners/jobs/tests/test_y.py", "runners/jobs/tests/x_test.py"], got
+    assert _runner_half.half_of("runners/jobs/tests/x_test.py", []) in (1, 2)
+
+
+def test_the_matrix_files_spread_by_the_runner_conftest_exist() -> None:
+    """runners/jobs/tests/spread-files.txt names the matrix files the runner
+    conftest spreads one cell per worker; a renamed file would silently fall
+    back to one worker, and the two in one half would undo the split."""
+    files = _runner_half.spread_files()
+    assert len(files) == 2, files
+    for f in files:
+        assert (OPERATOR_DIR / f).is_file(), f
+    assert sorted(_runner_half.half_of(f) for f in files) == [1, 2], "the matrix files must sit in different halves"
+
+
+def _summary_step() -> dict:
+    job = _load_workflow()["jobs"]["runner"]
+    assert job.get("needs") == ["runner-half"], "the `runner` check must wait on both halves"
+    assert job.get("if") == "always()", "the `runner` check must run when a half failed, was skipped or was cancelled"
+    assert "name" not in job, "the job's check name must stay `runner`, the required check"
+    assert "strategy" not in job
+    (step,) = job["steps"]
+    assert (step.get("env") or {}).get("HALVES") == "${{ needs.runner-half.result }}"
+    assert "if" not in step
+    return step
+
+
+def test_the_required_runner_check_is_green_only_when_both_halves_succeeded(tmp_path: Path) -> None:
+    """The summary's own script, run with each result GitHub can hand it for a
+    matrix need: only `success` passes. Falsifier: a skipped or cancelled half
+    that read as green would let a PR whose runner suite never ran merge."""
+    import subprocess
+
+    run = _summary_step()["run"]
+    script = tmp_path / "summary.sh"
+    script.write_text(run, encoding="utf-8")
+    results = {}
+    for result in ("success", "failure", "cancelled", "skipped", ""):
+        env = {"PATH": "/usr/bin:/bin", "HALVES": result}
+        got = subprocess.run(["bash", "-e", str(script)], env=env, capture_output=True, text=True, check=False)  # noqa: S603 - a fixed bash over the workflow's own step
+        results[result] = got.returncode
+    assert results["success"] == 0, results
+    assert all(code != 0 for r, code in results.items() if r != "success"), results
 
 
 def test_every_detect_step_reads_the_queue_base_on_merge_group() -> None:
@@ -354,7 +463,7 @@ def test_every_detect_step_reads_the_queue_base_on_merge_group() -> None:
     `github.event.before`, which a push carries: `push: main` must keep
     failing closed, the gate before the image build."""
     jobs = _load_workflow()["jobs"]
-    for job_name in ("substrate", "runner", "overlay", "overlay-e2e"):
+    for job_name in ("substrate", "runner-half", "overlay", "overlay-e2e"):
         assert job_name in jobs, f"operator-substrate.yml has no `{job_name}` job"
         detect = [s for s in jobs[job_name]["steps"] if s.get("id") == "changes"]
         assert len(detect) == 1, f"{job_name}: expected exactly one `changes` step"
@@ -366,6 +475,33 @@ def test_every_detect_step_reads_the_queue_base_on_merge_group() -> None:
             f"{job_name}: the detect step must read merge_group.head_sha"
         )
         assert "github.event.before" not in run, f"{job_name}: push must carry no base (fails closed)"
+
+
+GOLDENS_BASE_SHA = "${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}"
+GOLDENS_BASE_LINE = 'GOLDENS_BASE="$(git merge-base "${BASE_SHA:-HEAD}" HEAD)"'
+
+
+def test_the_golden_readers_take_the_goldens_jobs_base() -> None:
+    """The golden readers (golden_diff.reviewed) tell a change's own allowed
+    entries from inherited ones by GOLDENS_BASE. Falsifier: a pytest step that
+    leaves it unset reads `git merge-base origin/main HEAD`, which in a merge
+    group with a PR ahead is main, not the queue parent the `goldens` job uses,
+    so the PR ahead's entry excuses this PR's unreviewed change. A push to main
+    has neither sha, falls back to HEAD and honours no entry."""
+    jobs = _load_workflow()["jobs"]
+    for job_name in ("substrate", "runner-half"):
+        steps = [
+            s
+            for s in jobs[job_name]["steps"]
+            if "-m pytest" in (s.get("run") or "") and s.get("working-directory") == "operator"
+        ]
+        assert steps, f"{job_name}: no pytest step from operator/"
+        for step in steps:
+            where = f"{job_name}/{step.get('name')}"
+            assert (step.get("env") or {}).get("BASE_SHA") == GOLDENS_BASE_SHA, where
+            run = step["run"]
+            assert GOLDENS_BASE_LINE in run and "export GOLDENS_BASE" in run, where
+            assert run.index("export GOLDENS_BASE") < run.index("-m pytest"), f"{where}: export it before pytest runs"
 
 
 def test_overlay_job_runs_the_seat_runtime_suite() -> None:

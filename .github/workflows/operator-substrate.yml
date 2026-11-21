@@ -105,8 +105,10 @@ jobs:
         # `format --check .` locally first, then move this pin and the note in
         # ruff.toml together. openpyxl is pinned to the connector venv's version
         # (3.1.5): statute-watch builds its workbook there, and its tests build
-        # and scan one.
-        run: python3 -m pip install --quiet pytest pyyaml cryptography openpyxl==3.1.5 ruff==0.15.17 pyright==1.1.406
+        # and scan one. pytest-xdist runs the pytest step four at a time; it is
+        # pinned in both suites because runners/jobs/tests/conftest.py
+        # subclasses its LoadFileScheduling (a private _split_scope).
+        run: python3 -m pip install --quiet pytest pytest-xdist==3.8.0 pyyaml cryptography openpyxl==3.1.5 ruff==0.15.17 pyright==1.1.406
 
       # The safe half of packaging (operator/pyproject.toml header): the tree is
       # installed as packages so imports resolve the way they will once the
@@ -155,6 +157,46 @@ jobs:
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
         run: python3 bin/noqa-reasons.py
+
+      # uv builds the requirements check's venvs and the connector venvs.
+      # Set up early: the requirements install check just below uses it, and
+      # it runs before the long test steps so a pin set that cannot install
+      # fails the job in its first minutes, not after them.
+      - name: Set up uv (connector venvs)
+        if: steps.changes.outputs.relevant == 'true'
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+
+      # Every hash-locked requirements file installs, the way the image
+      # installs it: the seat interpreter, --no-config, --require-hashes. That
+      # is 3.13 (Debian 13's python3) for every venv but the Hermes one, and
+      # 3.14 for the two files installed into the Hermes venv, which runs on
+      # /opt/python3.14 since the Hermes v0.22.5 promotion (#3564).
+      # Until 2026-09-25 no CI job installed these files at all; the venvs
+      # below resolved each pyproject's ranges instead. So a pin set that could
+      # never install was green: four Dependabot PRs moved pydantic-core past
+      # the exact version pydantic==2.13.5 requires (#2760, which broke every
+      # seat build until #2787, then #2812, #2897, #2932), and the failure
+      # surfaced only at a reprovision. Fails closed: a file that does not
+      # resolve fails the job. hermes-overlay.txt and hermes-security.txt are
+      # --no-deps because their closure is the Hermes venv's (the image runs
+      # hermes_pip_check.py, a `uv pip check`, there).
+      - name: Every hash-locked requirements file installs
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: operator/requirements
+        run: |
+          set -euo pipefail
+          uv venv --python 3.13 /tmp/reqcheck
+          uv venv --python 3.14 /tmp/reqcheck314
+          checked=0
+          for f in *.txt; do
+            deps=()
+            py=/tmp/reqcheck/bin/python
+            case "$f" in hermes-overlay.txt|hermes-security.txt) deps=(--no-deps); py=/tmp/reqcheck314/bin/python ;; esac
+            echo "== ${f} =="
+            uv pip install --python "$py" --dry-run --no-config --require-hashes ${deps[@]+"${deps[@]}"} -r "$f"
+            checked=$((checked + 1))
+          done
+          [ "$checked" -gt 0 ] || { echo "::error::no requirements files found"; exit 1; }
 
       # pyright, ratcheted: contracts/operator-pyright-baseline.json records
       # errors per file; any file that grows fails, and improvement asks for a
@@ -230,7 +272,23 @@ jobs:
         # per-connector venv conformance step further down.
         # bin/tests/test_ci_coverage_conformance.py asserts this invocation
         # covers every test_*.py under operator/ (connectors excepted).
-        run: python3 -m pytest adapter/tests adapter/evidence/tests safety_substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q -rs
+        # Four at a time (--numprocesses, spelled with `=` so the conformance
+        # test's argument parse reads no stray "4" as a directory); the pass
+        # and skip counts equal the serial run's.
+        # GOLDENS_BASE: the base the golden readers (golden_diff.reviewed) tell
+        # this change's allowed entries from inherited ones by. It is the
+        # `goldens` job's base, computed the same way: in a merge group the
+        # queue parent, not origin/main, or an entry of a PR ahead in the group
+        # would excuse this PR's unreviewed change. A push to main has neither
+        # sha, falls back to HEAD, and honours no entry (strict).
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          set -euo pipefail
+          GOLDENS_BASE="$(git merge-base "${BASE_SHA:-HEAD}" HEAD)"
+          export GOLDENS_BASE
+          echo "golden readers' base: $GOLDENS_BASE"
+          python3 -m pytest adapter/tests adapter/evidence/tests safety_substrate/tests bin/tests rehearsal/tests workspace_broker/tests templates/tests templates/drafting/tests tests skills -q -rs --numprocesses=4
 
       # (The SEC-32 "fetch the overlay at its pin and hash the runtime twins" step
       # that stood here until 2026-10-22 is gone with the pin: the overlay is
@@ -245,42 +303,6 @@ jobs:
       # tests the real shipped artifact (the venv + `<name>-mcp` console-script),
       # not a source-tree import. Per-connector venv = the same isolation the
       # image gets.
-      - name: Set up uv (connector venvs)
-        if: steps.changes.outputs.relevant == 'true'
-        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-
-      # Every hash-locked requirements file installs, the way the image
-      # installs it: the seat interpreter, --no-config, --require-hashes. That
-      # is 3.13 (Debian 13's python3) for every venv but the Hermes one, and
-      # 3.14 for the two files installed into the Hermes venv, which runs on
-      # /opt/python3.14 since the Hermes v0.22.5 promotion (#3564).
-      # Until 2026-09-25 no CI job installed these files at all; the venvs
-      # below resolved each pyproject's ranges instead. So a pin set that could
-      # never install was green: four Dependabot PRs moved pydantic-core past
-      # the exact version pydantic==2.13.5 requires (#2760, which broke every
-      # seat build until #2787, then #2812, #2897, #2932), and the failure
-      # surfaced only at a reprovision. Fails closed: a file that does not
-      # resolve fails the job. hermes-overlay.txt and hermes-security.txt are
-      # --no-deps because their closure is the Hermes venv's (the image runs
-      # hermes_pip_check.py, a `uv pip check`, there).
-      - name: Every hash-locked requirements file installs
-        if: steps.changes.outputs.relevant == 'true'
-        working-directory: operator/requirements
-        run: |
-          set -euo pipefail
-          uv venv --python 3.13 /tmp/reqcheck
-          uv venv --python 3.14 /tmp/reqcheck314
-          checked=0
-          for f in *.txt; do
-            deps=()
-            py=/tmp/reqcheck/bin/python
-            case "$f" in hermes-overlay.txt|hermes-security.txt) deps=(--no-deps); py=/tmp/reqcheck314/bin/python ;; esac
-            echo "== ${f} =="
-            uv pip install --python "$py" --dry-run --no-config --require-hashes ${deps[@]+"${deps[@]}"} -r "$f"
-            checked=$((checked + 1))
-          done
-          [ "$checked" -gt 0 ] || { echo "::error::no requirements files found"; exit 1; }
-
       - name: Author-built connector conformance
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator/connectors
@@ -326,11 +348,24 @@ jobs:
   # exactly as the seat image installs it (its hash-locked file, then sdk,
   # contract, connector, runner --no-deps), and its tests run against that
   # artifact. Not the bare env: the runner's seat access imports the
-  # connector's client. Same gating shape as `overlay`;
-  # bin/tests/test_ci_coverage_conformance.py pins it.
-  runner:
+  # connector's client. Same gating shape as `overlay`.
+  #
+  # Two halves since 2026-11-21: the suite had grown to 7,273 tests and 13-19
+  # min of the PR's wall clock. Each half runs the files bin/runner-half.py
+  # assigns it (by path, deterministic; the conformance test proves the halves
+  # cover every file exactly once). `runner`, below, is the REQUIRED check:
+  # it reads both halves' results and is green only when both succeeded.
+  # bin/tests/test_ci_coverage_conformance.py pins the shape.
+  runner-half:
+    name: runner half ${{ matrix.half }} of 2
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      # A failing half must not cancel the other: its own failures are worth
+      # reading in the same run. `runner` fails either way.
+      fail-fast: false
+      matrix:
+        half: [1, 2]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -344,27 +379,44 @@ jobs:
           --base "${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}"
           --head "${{ github.event.merge_group.head_sha || github.event.pull_request.head.sha || github.sha }}"
 
+      # uv's cache, keyed on the runner's hash-locked requirements: the venv
+      # is rebuilt in each half on every run, from the same pins.
       - name: Set up uv
         if: steps.changes.outputs.relevant == 'true'
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: operator/requirements/jobs.txt
 
       - name: jobs runner tests (own venv)
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
+        # GOLDENS_BASE: as in `substrate`'s pytest step (the `goldens` job's base).
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HALF: ${{ matrix.half }}
         run: |
           set -euo pipefail
+          GOLDENS_BASE="$(git merge-base "${BASE_SHA:-HEAD}" HEAD)"
+          export GOLDENS_BASE
+          echo "golden readers' base: $GOLDENS_BASE"
           uv venv --python 3.13 /tmp/jobsv
           uv pip install --python /tmp/jobsv/bin/python --no-config --require-hashes -r requirements/jobs.txt
           uv pip install --python /tmp/jobsv/bin/python --no-deps ./connectors/_sdk ./connectors/_contract ./connectors/smokeball ./runners/jobs
-          uv pip install --python /tmp/jobsv/bin/python pytest pytest-xdist
-          # Four workers, one test file per worker at a time (loadfile). The
-          # suite is tmp_path-isolated, so parallel files share nothing; this
-          # step was 13:36 of the substrate job's 21 min serial on 2026-11-04,
-          # and a four-worker probe passed 3544/3544, the serial count, in 356 s vs 735 s.
-          /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml runners/jobs/tests -q -rs --numprocesses=4 --dist=loadfile
+          uv pip install --python /tmp/jobsv/bin/python pytest pytest-xdist==3.8.0
+          mapfile -t files < <(python3 bin/runner-half.py "$HALF")
+          [ "${#files[@]}" -gt 0 ] || { echo "::error::half $HALF has no test files"; exit 1; }
+          echo "half $HALF: ${#files[@]} test files"
+          # Four workers, one test file per worker at a time (loadfile), except
+          # the two matrix files, whose cells spread one per worker
+          # (runners/jobs/tests/conftest.py, SPREAD_FILES). The suite is
+          # tmp_path-isolated, so parallel files share nothing.
+          /tmp/jobsv/bin/python -m pytest -c runners/jobs/pyproject.toml "${files[@]}" -q -rs --numprocesses=4 --dist=loadfile
 
       # Every broker verb the runner's source names is frozen in the wire
       # snapshot (runners/jobs/tests/goldens/wire.json, test_wire_snapshot.py).
+      # A second of work, so both halves run it rather than one carrying a
+      # different step list.
       - name: Runner-to-broker wire census
         if: steps.changes.outputs.relevant == 'true'
         working-directory: operator
@@ -379,6 +431,28 @@ jobs:
           the jobs runner suite did not need to run. This job still reports so
           the required check is satisfied."
 
+  # The REQUIRED check `runner`: green only when BOTH halves succeeded. It runs
+  # always(), so a half that failed, was skipped, or was cancelled reports here
+  # as a failure instead of leaving the check missing or green; on pull_request,
+  # merge_group and push alike (no event filter). A half that found no
+  # substrate path changed still succeeds (its skip step), so an unrelated PR
+  # is green here too.
+  runner:
+    needs: [runner-half]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both runner halves succeeded
+        env:
+          HALVES: ${{ needs.runner-half.result }}
+        run: |
+          echo "runner halves: ${HALVES:-<none>}"
+          if [ "${HALVES:-}" != "success" ]; then
+            echo "::error::a runner half did not succeed (${HALVES:-no result}); see the runner-half jobs"
+            exit 1
+          fi
+
   # The goldens hold the OLD code's behaviour (wave 2, Phase A). EVERY golden
   # set (the host matrix, the wire, the ledgers, the lane endings, the paid
   # calls, the firm loaders, the text rules, the seat-config caller table) is
@@ -389,7 +463,7 @@ jobs:
   # fails, as does a stale, inherited or wildcard entry, so a PR cannot change
   # the code and rewrite its golden to match.
   # operator/bin/goldens/golden-integrity.py says how. Same gating shape as
-  # `runner`.
+  # `runner-half`.
   goldens:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -415,19 +489,18 @@ jobs:
         working-directory: operator
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.event.merge_group.base_sha }}
-          EVENT_NAME: ${{ github.event_name }}
         # Every golden set (bin/goldens/integrity_families.py), the caller
         # capture included: the script builds the base runner's venv (3.13)
-        # and the capture's (3.14, the substrate job's packages). On the push
-        # to main, --require-empty fails while any allowed list still names a
-        # path, so a merged change's entries are cleared in a follow-up.
+        # and the capture's (3.14, the substrate job's packages). The push to
+        # main runs the same checks against the commit before it; a merged
+        # change's allowed entries may stay on main (they excuse nothing for a
+        # later change, which deletes them: "removal claims it", the script's
+        # rule 3), so no follow-up PR clears them.
         run: |
           set -euo pipefail
           base="$(git merge-base "${BASE_SHA:-HEAD~1}" HEAD)"
           echo "merge base: $base"
-          extra=()
-          if [ "$EVENT_NAME" = "push" ]; then extra=(--require-empty); fi
-          python3 bin/goldens/golden-integrity.py --base "$base" ${extra[@]+"${extra[@]}"}
+          python3 bin/goldens/golden-integrity.py --base "$base"
 
       - name: No substrate paths changed
         if: steps.changes.outputs.relevant != 'true'

@@ -3,8 +3,9 @@
 Every golden set with an allowed list is regenerated from the merge-base by
 some family (a set it skipped could be rewritten unchecked), and the verdict
 rules fail where they must: a dropped case, a newly not-applicable cell, a
-changed normaliser, an unnamed difference, a stale or inherited entry, and a
-non-empty list on the push to main.
+changed normaliser, an unnamed difference, a stale entry, and an inherited
+entry left in place to excuse a difference; a deleted base entry claims the
+difference at its path.
 """
 
 from __future__ import annotations
@@ -98,19 +99,113 @@ def test_a_merged_changes_leftover_entries_block_no_peer_pr():
     assert "excuse" in gi.judge("hm", {"cell": ["0.wire.1"]}, {"cell": ["0.wire.1"]}, behaviour, lost)[0]
 
 
-def test_the_push_to_main_fails_while_an_allowed_list_names_a_path(tmp_path, monkeypatch):
-    """FALSIFIER for "cleared once merged": a merged entry left in place fails the push run."""
+#: A base entry the PR's list keeps (a leftover that explains nothing): removal
+#: claims only from a list that still names something.
+KEPT = {"keep": ["9.kept.0"]}
+
+
+def test_removal_claims_a_difference_at_the_path_it_deleted():
+    """FALSIFIER for "removal claims it": the merge-base listed 0.wire.1 and this
+    change deleted it, so the difference there is named by the deletion (the
+    old rule failed it as unnamed), and it is reported as claimed by removal."""
     gi = _integrity()
-    for f in FAMILIES:
-        p = tmp_path / f.allowed
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({"_why": "x"}))
-    (tmp_path / INSTRUMENT_ALLOWED).parent.mkdir(parents=True, exist_ok=True)
-    (tmp_path / INSTRUMENT_ALLOWED).write_text(json.dumps({"<cases>": []}))
-    monkeypatch.setattr(gi, "OPERATOR", tmp_path)
-    assert gi.require_empty() == []
-    (tmp_path / FAMILIES[0].allowed).write_text(json.dumps({"medchron__delivered": ["0.wire.1"]}))
-    assert len(gi.require_empty()) == 1
+    behaviour = {"cell": ["0.wire.1"]}
+    base = {"cell": ["0.wire.1"], **KEPT}
+    assert gi.judge("hm", KEPT, base, behaviour, {}) == []
+    assert gi.judge("hm", {"cell": [], **KEPT}, base, behaviour, {}) == []
+    assert gi.claimed(KEPT, base, behaviour, {}) == ["cell/0.wire.1"]
+    assert gi.claimed_notices("hm", KEPT, base, behaviour, {}) == ["claimed by removal: hm/cell/0.wire.1"]
+
+
+def test_a_deleted_or_emptied_list_claims_nothing():
+    """FALSIFIER: removal claims only entries taken out of a list that still
+    names other paths. A PR that deletes the list file (read as {}) or empties
+    it, then rewrites a golden at one of the base's paths, has named nothing:
+    wiping the list is not a review of any one path."""
+    gi = _integrity()
+    base = {"cell": ["0.wire.1", "0.log.0"]}
+    behaviour = {"cell": ["0.wire.1"]}
+    for emptied in ({}, {"cell": []}, {"cell": [], "other": []}):
+        assert gi.judge("hm", emptied, base, behaviour, {}) == ["hm/cell: behaviour: 0.wire.1"], emptied
+        assert gi.claimed(emptied, base, behaviour, {}) == [], emptied
+    # The same removal from a list that keeps another entry does claim it.
+    kept = {"cell": ["0.log.0"]}
+    assert gi.judge("hm", kept, base, behaviour, {}) == []
+    assert gi.claimed(kept, base, behaviour, {}) == ["cell/0.wire.1"]
+
+
+def test_a_claim_is_a_github_warning_on_the_pr(capsys):
+    """Each claim prints as a workflow annotation, so it shows on the PR."""
+    gi = _integrity()
+    gi.announce(["claimed by removal: hm/cell/0.wire.1", "seat_callers: introduced by this PR"])
+    out = capsys.readouterr().out.splitlines()
+    assert "::warning::golden integrity: claimed by removal: hm/cell/0.wire.1" in out
+    assert "golden integrity: NOTICE claimed by removal: hm/cell/0.wire.1" in out
+    assert "golden integrity: NOTICE seat_callers: introduced by this PR" in out
+    assert not any(ln.startswith("::warning::") and "introduced" in ln for ln in out)
+
+
+def test_removal_claims_a_lost_value_too():
+    gi = _integrity()
+    base = {"cell": ["0.log.0"], **KEPT}
+    assert gi.judge("hm", KEPT, base, {}, {"cell": ["0.log.0"]}) == []
+    assert gi.claimed(KEPT, base, {}, {"cell": ["0.log.0"]}) == ["cell/0.log.0"]
+
+
+def test_removal_claims_only_the_path_and_set_it_deleted():
+    """A deleted entry names its own (set, path) and nothing else: a difference
+    at another path, or at the same path in another set, is still unnamed."""
+    gi = _integrity()
+    base = {"cell": ["0.wire.1"], **KEPT}
+    got = gi.judge("hm", KEPT, base, {"cell": ["0.wire.1", "0.wire.2"], "other": ["0.wire.1"]}, {})
+    assert got == ["hm/cell: behaviour: 0.wire.2", "hm/other: behaviour: 0.wire.1"]
+    assert gi.claimed(KEPT, base, {"other": ["0.wire.1"]}, {}) == []
+
+
+def test_a_deleted_entry_that_explains_nothing_passes_and_claims_nothing():
+    gi = _integrity()
+    assert gi.judge("hm", KEPT, {"cell": ["0.wire.1"], **KEPT}, {}, {}) == []
+    assert gi.claimed(KEPT, {"cell": ["0.wire.1"], **KEPT}, {}, {}) == []
+
+
+def test_an_inherited_entry_left_in_place_that_explains_a_difference_fails_and_says_delete_it():
+    """FALSIFIER: the base's entry, kept, does not excuse this change's
+    difference; the message tells the author the deletion names the change
+    (the old message did not), and nothing is claimed by removal."""
+    gi = _integrity()
+    base = {"cell": ["0.wire.1"]}
+    got = gi.judge("hm", {"cell": ["0.wire.1"]}, base, {"cell": ["0.wire.1"]}, {})
+    assert len(got) == 1
+    assert "inherited" in got[0] and "excuse" in got[0]
+    assert "Delete each from the list; the deletion names your change" in got[0]
+    assert gi.claimed({"cell": ["0.wire.1"]}, base, {"cell": ["0.wire.1"]}, {}) == []
+
+
+def test_the_unchanged_branches_of_the_rule():
+    """Own entry names its difference; an unnamed difference fails; an own
+    entry that explains nothing is stale; an inherited leftover blocks nothing.
+    Unchanged by "removal claims it", so these pass on the old rule too."""
+    gi = _integrity()
+    behaviour = {"cell": ["0.wire.1"]}
+    assert gi.judge("hm", {"cell": ["0.wire.1"]}, {}, behaviour, {}) == []
+    assert gi.judge("hm", {}, {}, behaviour, {}) == ["hm/cell: behaviour: 0.wire.1"]
+    assert "stale" in gi.judge("hm", {"cell": ["0.wire.1", "0.log.0"]}, {}, behaviour, {})[0]
+    leftover = {"other": ["0.log.0"]}
+    assert gi.judge("hm", {"cell": ["0.wire.1"], **leftover}, leftover, behaviour, {}) == []
+
+
+def test_the_push_to_main_no_longer_requires_empty_lists():
+    """Leftovers may sit on main (rule 4): the option that failed the push run
+    while any list named a path is gone (a workflow still passing it would make
+    the script exit 2, an argparse error, not pass)."""
+    gi = _integrity()
+    assert not hasattr(gi, "require_empty")
+    try:
+        gi.parse(["--base", "x", "--require-empty"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("--require-empty is still accepted")
 
 
 def test_a_set_is_introduced_only_when_the_base_has_none_of_its_goldens(tmp_path):
