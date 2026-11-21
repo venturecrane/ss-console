@@ -18,7 +18,7 @@ from pathlib import Path
 
 from bin.lib import work_health as wh
 from bin.lib import work_health_proof as proof
-from workspace_broker import delivery_proof
+from workspace_broker import audit_ledger, delivery_proof
 from workspace_broker.audit_ledger import LedgerWriter
 from workspace_broker.server import Broker
 
@@ -49,18 +49,45 @@ def _proven(broker: Broker) -> None:
     delivery_proof.record_verb(broker, "delivery_proof_record", request, 1, 0)
 
 
-def test_an_owed_set_is_listed_until_smd_records_it_however_old(tmp_path):
+#: The ledger's clock, held still: the broker stamps ``ts`` to the millisecond
+#: (``audit_ledger._iso_utc``), so two rows written back to back on the real
+#: clock shared a stamp about one run in four and the test's outcome was chance.
+T0 = datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc)
+
+
+def _at(monkeypatch, when: datetime) -> None:
+    stamp = when.strftime("%Y-%m-%dT%H:%M:%S.") + f"{when.microsecond // 1000:03d}Z"
+    monkeypatch.setattr(audit_ledger, "_iso_utc", lambda: stamp)
+
+
+def test_an_owed_set_is_listed_until_smd_records_it_however_old(tmp_path, monkeypatch):
     """MUTATION: drop the served_owed branch and the line says NOT proven delivered,
     or falls off after the ended-job window while the set is still owed."""
     broker = _seat(tmp_path)
+    _at(monkeypatch, T0)
     delivery_proof.append_alert(broker, lane="drafting", job_id=JOB, code="served_owed", attempt=1, detail=OWED)
-    later = datetime.now(timezone.utc) + timedelta(hours=CFG.ended_job_hours + 48)
+    later = T0 + timedelta(hours=CFG.ended_job_hours + 48)
     (it,) = proof.delivery_proof_items(SEAT, _rows(tmp_path), CFG, later)
     assert it.kind == "job_hand_step" and it.key.endswith(f"proof:{JOB}:served_owed")
     assert "Responses to Form Interrogatories, Set One" in it.what and "NOT proven delivered" not in it.what
     assert f"deliver_by_smd {JOB}" in it.todo
+    _at(monkeypatch, later)
     _proven(broker)  # SMD recorded it: deliver_by_smd --set writes the job's proof again
     assert proof.delivery_proof_items(SEAT, _rows(tmp_path), CFG, later + timedelta(minutes=1)) == []
+
+
+def test_an_owed_page_written_in_the_same_millisecond_as_its_proof_stays_listed(tmp_path, monkeypatch):
+    """The lane writes a delivered job's proof, THEN pages the sets still owed
+    (``drafting_lane`` settle/record then ``tell_owed``; ``served_deliver.apply_set``
+    the same). Both can land in one millisecond, and the page is the newer row.
+    A proof stamped the same instant is not a later record of the set.
+    MUTATION: close the owed line on a proof at ``>=`` its page and this fails."""
+    broker = _seat(tmp_path)
+    _at(monkeypatch, T0)
+    _proven(broker)
+    delivery_proof.append_alert(broker, lane="drafting", job_id=JOB, code="served_owed", attempt=1, detail=OWED)
+    (it,) = proof.delivery_proof_items(SEAT, _rows(tmp_path), CFG, T0 + timedelta(minutes=1))
+    assert it.key.endswith(f"proof:{JOB}:served_owed")
 
 
 def test_a_later_failure_of_the_same_job_never_replaces_the_owed_line(tmp_path):
