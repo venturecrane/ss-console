@@ -416,45 +416,25 @@ def test_an_incomplete_file_triple_is_refused(seat, change, match):
     assert _row(broker, jid)["state"] == "failed"
 
 
-def test_after_it_the_revise_routing_finds_the_hand_delivered_draft(seat):
-    """The winning line. Before: the broker's own routing finds no delivered
-    draft of the class on the matter, so the change request would be a fresh
-    draft. After: it revises the hand-filed files in place, by id."""
-    broker, _client, lane, _db, queue = seat
+def test_after_it_a_two_draft_hand_delivery_is_not_revised_in_one_document(seat):
+    """A hand delivery of two drafts is recorded as delivered, but the revise
+    runner edits ONE filed draft (revise/run.py, versions.ORDER), so the broker
+    does not route a change request to it: it would revise the first document
+    only. It keeps the path it had until the runner revises every document."""
+    broker, _client, lane, _db, _queue = seat
     jid = _ended(seat, "stopped")
     change = validate_envelope(_envelope(REPLY, "Please change the answer to number four."))
     assert broker.drafting._route(change, "", GATEWAY_PID) is None
 
     dbs.apply(lane, dbs.plan(lane, jid, _rec(), quiet=True))
 
-    route = broker.drafting._route(change, "", GATEWAY_PID)
-    assert route == {
-        "prior_job_id": jid,
-        "folder_id": "folder-0101",
-        "files": [
-            {
-                "role": "draft",
-                "file_id": "file-set-one",
-                "name": "Responses to Interrogatories Set One.docx",
-                "size": 41000,
-                "sha256": "a" * 64,
-            },
-            {
-                "role": "draft",
-                "file_id": "file-set-two",
-                "name": "Responses to Requests for Production Set One.docx",
-                "size": 38000,
-                "sha256": "b" * 64,
-            },
-        ],
-    }
+    assert broker.drafting._route(change, "", GATEWAY_PID) is None
     out = broker.handle(
         {"action": "drafting_job_submit", "envelope": _envelope(REPLY, "Please change the answer to number four.")},
         peer_pid=GATEWAY_PID,
         peer_uid=AGENT_UID,
     )
-    assert out["accepted"] and out["mode"] == "revise" and out["revise_of"] == jid
-    assert json.loads((queue / f"{out['job_id']}.json").read_text())["revise"] == route
+    assert out["accepted"] and out["mode"] == "draft"
 
 
 def test_dry_run_prints_the_digest_and_the_live_run_must_repeat_it(seat, monkeypatch, capsys, tmp_path):

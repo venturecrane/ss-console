@@ -57,6 +57,7 @@ from .audit_ledger import _iso_utc
 from .broker_context import BrokerContext
 from .cycle_window import AnchorInvalid
 from .drafting_intake import operator_library_number, resolve_request_graph_id
+from .drafting_threads import ThreadUnknown, graph_thread_of
 from .drafting_ledger import (
     ALLOWANCE_KEY,
     AUDIT_TYPE,
@@ -194,9 +195,6 @@ class RouteRefused(str):
         out = super().__new__(cls, reason)
         out.code = code
         return out
-
-
-from .drafting_threads import ThreadUnknown, graph_thread_of  # noqa: E402 - re-exported
 
 
 class DraftingVerbs:
