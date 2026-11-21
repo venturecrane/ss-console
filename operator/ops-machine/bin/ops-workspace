@@ -68,13 +68,14 @@ mint_and_stage() {
   expires=$(date -u -v+365d +%F 2>/dev/null || date -u -d '+365 days' +%F)
   seat_tok=$(fly tokens create deploy -a "$seat" --expiry 8760h --name "workspace $app" 2>/dev/null | tail -1)
   [ "${seat_tok:0:6}" = "FlyV1 " ] || { echo "could not mint a deploy token for $seat"; exit 1; }
-  # The Captain's two Claude account tokens (`claude setup-token`, one per
-  # account, kept in /ss prod as CLAUDE_OAUTH_TOKEN_A / _B): Claude runs on the
+  # The Captain's Claude account tokens (`claude setup-token`, one per
+  # account, kept in /ss prod as CLAUDE_OAUTH_TOKEN_<letter>): Claude runs on the
   # first one not at its usage limit (bin/claude, bin/ops-claude-failover).
   # Missing ones are skipped and the workspace stays on the stored /login.
   local extra=() a hc
-  for a in A B; do
-    local tv="CLAUDE_OAUTH_TOKEN_$a"
+  local tv
+  for tv in $(compgen -v CLAUDE_OAUTH_TOKEN_ | grep -E '^CLAUDE_OAUTH_TOKEN_[A-Z]$'); do
+    a="${tv#CLAUDE_OAUTH_TOKEN_}"
     # Strip the line break a terminal copy can leave in it: fly secrets import
     # reads one NAME=VALUE per line, and Claude refuses a header with a break.
     local tval="${!tv:-}"; tval="${tval//[$'\r\n\t ']/}"

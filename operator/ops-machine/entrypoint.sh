@@ -61,15 +61,16 @@ if [ -n "${OPS_WORKSPACE:-}" ]; then
   [ -f "$HOME_DIR/.crontab" ] || install -o ops -g ops -m 0600 /opt/ops/crontab-workspace "$HOME_DIR/.crontab"
 fi
 
-# The Captain's two Claude account tokens (CLAUDE_OAUTH_TOKEN_A / _B, Fly
+# The Captain's Claude account tokens (CLAUDE_OAUTH_TOKEN_<letter>, Fly
 # secrets on a workspace, staged by bin/ops-workspace) go to ~/.claude-oauth,
 # which only the claude shim reads. Never into ~/.ops-secrets: the tools source
 # that. Absent tokens remove the file, so the shim falls back to the stored
 # /login. smd-ops gets them from /ss through crane and ss-env instead.
-if [ -n "${CLAUDE_OAUTH_TOKEN_A:-}${CLAUDE_OAUTH_TOKEN_B:-}" ]; then
+oauth_vars=$(compgen -v CLAUDE_OAUTH_TOKEN_ | grep -E '^CLAUDE_OAUTH_TOKEN_[A-Z]$' || true)
+if [ -n "$oauth_vars" ]; then
   umask 077
   {
-    for v in CLAUDE_OAUTH_TOKEN_A CLAUDE_OAUTH_TOKEN_B; do
+    for v in $oauth_vars; do
       # an if, not &&: an unset last token must not end the group non-zero under set -e
       if [ -n "${!v:-}" ]; then printf 'export %s=%q\n' "$v" "${!v}"; fi
     done

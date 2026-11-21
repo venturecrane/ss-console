@@ -16,14 +16,15 @@
 # The updater installs into the ops user's npm prefix (~/.npm-global), and that
 # copy, first on PATH, ran a session past this shim on 2026-10-19.
 #
-# TWO ACCOUNTS (2026-11-08). The Captain has two Claude subscriptions, A and B.
+# SEVERAL ACCOUNTS (2026-11-08; a third, C, 2026-11-21). The Captain has
+# several Claude subscriptions, each named by one capital letter (A, B, C ...).
 # On 2026-11-08 the A&P workspace's account hit its weekly limit and every window
 # sat at Claude's limit prompt until the reset. When the long-lived tokens
-# `claude setup-token` makes for them are present (CLAUDE_OAUTH_TOKEN_A / _B in
+# `claude setup-token` makes for them are present (CLAUDE_OAUTH_TOKEN_<letter> in
 # the environment, or in ~/.claude-oauth on a workspace, written by the
 # entrypoint from its Fly secrets), this shim runs Claude on the first account in
 # the Machine's order (OPS_CLAUDE_ACCOUNT_ORDER or ~/.claude-account-order,
-# default "B A") that ops-claude-accounts does not have marked exhausted, as
+# default "C B A") that ops-claude-accounts does not have marked exhausted, as
 # CLAUDE_CODE_OAUTH_TOKEN. "login" in the order means the stored /login.
 #   * A token session has no Remote Control and no claude.ai connectors (the
 #     setup-token "can only make model requests", Claude Code docs, 2026-11-08),
@@ -49,15 +50,17 @@ dry="${OPS_CLAUDE_SHIM_DRY:-}"
 envfile=()
 [ -f "$HOME/.ops-secrets" ] && envfile=(CLAUDE_ENV_FILE="$HOME/.ops-secrets")
 
-if [ -z "${CLAUDE_OAUTH_TOKEN_A:-}${CLAUDE_OAUTH_TOKEN_B:-}" ] && [ -f "$HOME/.claude-oauth" ]; then
+# Every account token variable in the environment, by name (never a value).
+token_vars() { compgen -v CLAUDE_OAUTH_TOKEN_ 2>/dev/null | grep -E '^CLAUDE_OAUTH_TOKEN_[A-Z]$'; }
+if [ -z "$(token_vars)" ] && [ -f "$HOME/.claude-oauth" ]; then
   # shellcheck disable=SC1091
   . "$HOME/.claude-oauth"
 fi
 order="${OPS_CLAUDE_ACCOUNT_ORDER:-$(cat "$HOME/.claude-account-order" 2>/dev/null || true)}"
 accounts=() tokens=0
-for a in ${order:-B A}; do
+for a in ${order:-C B A}; do
   case "$a" in
-    A|B) v="CLAUDE_OAUTH_TOKEN_$a"; [ -n "${!v:-}" ] && { accounts+=("$a"); tokens=$((tokens + 1)); } ;;
+    [A-Z]) v="CLAUDE_OAUTH_TOKEN_$a"; [ -n "${!v:-}" ] && { accounts+=("$a"); tokens=$((tokens + 1)); } ;;
     login) accounts+=(login) ;;
   esac
 done
@@ -120,20 +123,21 @@ launch() {   # launch <exec|run> <account> <args...>
     echo "account=$acct mode=$how env_file=$here/ops-tool-env token_var=$([ "$acct" = login ] && echo none || echo CLAUDE_CODE_OAUTH_TOKEN) args=${run[*]}"
     return 0
   fi
-  local tok=''
+  local tok='' unset_tokens=() t
+  for t in $(token_vars); do unset_tokens+=(-u "$t"); done
   # A token copied out of a terminal can carry the line the terminal wrapped it
   # at; Claude refuses an Authorization header with a line break in it.
   [ "$acct" != login ] && { v="CLAUDE_OAUTH_TOKEN_$acct"; tok="${!v}"; tok="${tok//[$'\r\n\t ']/}"; }
   if [ "$how" = exec ]; then
     unset CLAUDE_CODE_OAUTH_TOKEN
     [ -n "$tok" ] && export CLAUDE_CODE_OAUTH_TOKEN="$tok"
-    exec env -u ANTHROPIC_API_KEY -u CLAUDE_OAUTH_TOKEN_A -u CLAUDE_OAUTH_TOKEN_B \
+    exec env -u ANTHROPIC_API_KEY "${unset_tokens[@]}" \
       DISABLE_AUTOUPDATER=1 CLAUDE_ENV_FILE="$here/ops-tool-env" "$real" "${run[@]}"
   fi
   (
     unset CLAUDE_CODE_OAUTH_TOKEN
     [ -n "$tok" ] && export CLAUDE_CODE_OAUTH_TOKEN="$tok"
-    exec env -u ANTHROPIC_API_KEY -u CLAUDE_OAUTH_TOKEN_A -u CLAUDE_OAUTH_TOKEN_B \
+    exec env -u ANTHROPIC_API_KEY "${unset_tokens[@]}" \
       DISABLE_AUTOUPDATER=1 CLAUDE_ENV_FILE="$here/ops-tool-env" "$real" "${run[@]}"
   )
 }
