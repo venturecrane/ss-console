@@ -142,10 +142,8 @@ def test_a_read_that_never_records_marks_the_matter_unread_and_holds(tmp_path):
     assert "answer now" in json.dumps(last["messages"][-1]).lower()
 
 
-def test_one_matters_failure_does_not_stop_the_others(tmp_path, monkeypatch):
+def test_one_matters_failure_does_not_stop_the_others(tmp_path):
     from litigation_testkit import M2
-
-    monkeypatch.setattr("jobs.llm.time.sleep", lambda s: None)
 
     calls = {"n": 0}
 
@@ -159,6 +157,10 @@ def test_one_matters_failure_does_not_stop_the_others(tmp_path, monkeypatch):
     docs2 = [("m2" + fid[1:], n, b, d) for fid, n, b, d in matter_docs()]
     seat = LitSeat({M1: matter_docs(), M2: docs2})
     r, _ = _run(tmp_path, FlakyFirst(), seat=seat)
+    # The failing matter's call retries through its network budget. The wait is
+    # the doorway's own field (bound when the class was defined), so patching
+    # jobs.llm.time.sleep never reached it and this test slept 300 s for real.
+    r.doorway.sleep = lambda _s: None
     v = r.run()
     assert v.verdict == "held" and "matter could not be read (1)" in v.reason
     assert (r.data / "m" / M2 / "read3.json").is_file() and (r.data / "m" / M1 / "unread.json").is_file()

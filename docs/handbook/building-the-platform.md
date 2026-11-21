@@ -343,7 +343,9 @@ ruleset: the `Verify` job (`Typecheck, Lint, Format, Test`), `Security Summary`
 (`security.yml`), `substrate`, `runner`, `overlay` and `overlay-e2e` (all jobs
 of `operator-substrate.yml`; `overlay` joined the required list the day the
 overlay fold merged, ADR 0095, and `runner`, the jobs runner's suite, became
-its own parallel job on 2026-11-04), and `Runtime ACs carry
+its own parallel job on 2026-11-04; since 2026-11-21 that suite runs as two
+`runner-half` jobs, and `runner` is the job that reads both and is green only
+when both succeeded), and `Runtime ACs carry
 a verification ID` (`runtime-ac-proof.yml`, which refuses an acceptance
 criterion tagged `(runtime)` unless it is met with a `crane_verify` ID in the
 PR's Evidence column, deferred with an owner and an enforce_by date, or n/a;

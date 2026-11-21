@@ -6,11 +6,36 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
 from jobs_testkit import FIRM_CONFIG, PRICING, job_yaml
+
+#: The matrix files whose cells run one per worker instead of one file per
+#: worker (spread-files.txt says why). Every other file keeps loadfile.
+SPREAD_FILES = frozenset(
+    ln.strip()
+    for ln in (Path(__file__).parent / "spread-files.txt").read_text(encoding="utf-8").splitlines()
+    if ln.strip() and not ln.startswith("#")
+)
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_xdist_make_scheduler(config: pytest.Config, log: Any) -> Any:
+    """loadfile, except that each test in SPREAD_FILES is its own scope."""
+    if config.getoption("dist", None) != "loadfile":
+        return None
+    from xdist.scheduler import LoadFileScheduling
+
+    class _SpreadMatrixCells(LoadFileScheduling):
+        def _split_scope(self, nodeid: str) -> str:
+            if nodeid.split("::", 1)[0].rsplit("/", 1)[-1] in SPREAD_FILES:
+                return nodeid
+            return super()._split_scope(nodeid)
+
+    return _SpreadMatrixCells(config, log)
 
 
 @pytest.fixture(autouse=True)

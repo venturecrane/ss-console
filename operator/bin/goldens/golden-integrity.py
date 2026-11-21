@@ -28,20 +28,25 @@ Four checks, each a failure on its own:
    cells it declares not applicable, its normalisers) are compared the same
    way; a dropped case, a newly not-applicable cell or a changed normaliser
    must be named in ``allowed-instrument-changes.json``.
-3. **Allowed lists stay honest (H3).** An entry that explains no difference is
-   stale; an entry the base already carried is inherited (it was reviewed for
-   the change that merged it). An inherited entry that still explains a
-   difference fails (it would excuse a new change unreviewed); one that
-   explains nothing is a merged change's leftover and blocks no PR, so a peer
-   is never held by another change's uncleared list. A wildcard is refused.
-4. **Cleared once merged.** ``--require-empty`` (the push to main) fails while
-   any allowed list still names a path, so a merged change's entries are
-   cleared in a follow-up rather than left to excuse a later one.
+3. **Allowed lists stay honest (H3).** A difference is named by this
+   change's own entries (the ones the merge-base did not carry), or by an
+   entry the merge-base carried that this change DELETED: the deletion is in
+   the PR's diff, so it names the change as an added entry would ("removal
+   claims it", printed as a NOTICE). An inherited entry left in place names
+   nothing: one that explains a difference fails, telling the author to delete
+   it; one that explains nothing is a merged change's leftover and blocks no
+   PR. An own entry that explains nothing is stale and fails. A wildcard is
+   refused.
+4. **Leftovers may sit on main.** The push to main runs the same checks
+   against the commit before it, so a merged change's entries are its own
+   there and pass; no follow-up PR clears them. Left on main they excuse
+   nothing (rule 3), and the golden readers honour only a change's own entries
+   too (``golden_diff.reviewed``).
 
 Run from ``operator/`` (``uv`` on PATH; CI: the ``goldens`` job of
 ``.github/workflows/operator-substrate.yml``):
 
-    python3 bin/goldens/golden-integrity.py --base <merge-base sha> [--require-empty] [--only <family>...]
+    python3 bin/goldens/golden-integrity.py --base <merge-base sha> [--only <family>...]
 
 Exit 0 when every check passes; 1 otherwise, listing what failed.
 """
@@ -247,27 +252,71 @@ def allowed_of(tree: Path, rel: str) -> dict[str, list[str]]:
     return gd.parse_allowed(json.loads(path.read_text(encoding="utf-8")), rel) if path.is_file() else {}
 
 
+#: How a notice names a difference a deleted base entry claimed.
+CLAIM = "claimed by removal: "
+
+
+def removed(allowed: dict[str, list[str]], base_allowed: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Entries the merge-base carried that this change deleted from the list.
+
+    Only from a list that still names something: a list file deleted (read as
+    ``{}``) or emptied removes nothing that can claim a difference, because
+    wiping a list reviews no one path."""
+    out: dict[str, list[str]] = {}
+    if not any(allowed.values()):
+        return out
+    for name, paths in base_allowed.items():
+        left = [p for p in paths if p not in set(allowed.get(name, []))]
+        if left:
+            out[name] = left
+    return out
+
+
+def claimed(allowed: dict[str, list[str]], base_allowed: dict[str, list[str]], *found: dict[str, list[str]]) -> list[str]:  # fmt: skip
+    """``<name>/<path>`` for every difference a deleted base entry claims (the removal rule in ``judge``)."""
+    gone = removed(allowed, base_allowed)
+    seen = {(name, p) for f in found for name, paths in f.items() for p in paths}
+    return [f"{name}/{p}" for name, paths in sorted(gone.items()) for p in paths if (name, p) in seen]
+
+
+def claimed_notices(label: str, allowed: dict[str, list[str]], base_allowed: dict[str, list[str]], *found: dict[str, list[str]]) -> list[str]:  # fmt: skip
+    return [f"{CLAIM}{label}/{x}" for x in claimed(allowed, base_allowed, *found)]
+
+
 def judge(label: str, allowed: dict[str, list[str]], base_allowed: dict[str, list[str]], *found: dict[str, list[str]]) -> list[str]:  # fmt: skip
-    """Every failure for one allowed list: an unnamed difference, a stale or an inherited entry."""
+    """Every failure for one allowed list: an unnamed difference, a stale entry, or an inherited one reused.
+
+    A difference at a path counts as NAMED by this change when the path is one
+    of this change's own entries (``this_change``) or when the merge-base's
+    list carried it and this change DELETED it: the deletion is in the PR's
+    diff, so it names the change as an added entry would ("removal claims it";
+    ``claimed`` lists those for a NOTICE). An inherited entry LEFT IN PLACE
+    never names a difference: it was reviewed for the change that merged it,
+    and a new change that reuses it fails, told to delete it. An inherited
+    entry that explains nothing is a merged change's leftover and blocks no PR;
+    a leftover may sit on main, and the next change to touch its path deletes it.
+    """
+    own = gd.this_change(allowed, base_allowed)
+    inherited = gd.inherited(allowed, base_allowed)
+    gone = removed(allowed, base_allowed)
+    named = {n: own.get(n, []) + gone.get(n, []) for n in set(own) | set(gone)}
     problems = []
     for kind, f in zip(("behaviour", "lost"), found):
-        for name, paths in gd.unallowed(f, allowed).items():
-            problems.append(f"{label}/{name}: {kind}: {', '.join(paths[:20])}{' ...' if len(paths) > 20 else ''}")
-    # An entry the merge-base already carried that explains nothing here is a
-    # leftover of a change already merged: it blocks no PR (it would block every
-    # peer's PR until someone cleared it); the push to main's --require-empty run
-    # is what asks for it to be cleared. An inherited entry that DOES explain a
-    # difference here is being reused to excuse a new change, and still fails.
-    inherited = gd.inherited(allowed, base_allowed)
-    stale = gd.stale(allowed, *found)
+        for name, paths in gd.unallowed(f, named).items():
+            reused = set(inherited.get(name, []))
+            plain = [p for p in paths if p not in reused]
+            if plain:
+                problems.append(f"{label}/{name}: {kind}: {', '.join(plain[:20])}{' ...' if len(plain) > 20 else ''}")
+            kept = [p for p in paths if p in reused]
+            if kept:
+                problems.append(
+                    f"{label}/{name}: inherited allowed entries excuse a {kind} difference here (the merge-base already "
+                    f"carried them, for the change that merged them): {kept}. Delete each from the list; the deletion "
+                    "names your change."
+                )
+    stale = gd.stale(own, *found)
     for name, paths in stale.items():
-        own = [p for p in paths if p not in set(inherited.get(name, []))]
-        if own:
-            problems.append(f"{label}/{name}: stale allowed entries (they explain no difference; remove them): {own}")
-    for name, paths in inherited.items():
-        reused = [p for p in paths if p not in set(stale.get(name, []))]
-        if reused:
-            problems.append(f"{label}/{name}: inherited allowed entries excuse a difference here (the merge-base already carried them; a new change needs its own entry): {reused}")  # fmt: skip
+        problems.append(f"{label}/{name}: stale allowed entries (they explain no difference; remove them): {paths}")
     return problems
 
 
@@ -285,22 +334,16 @@ def view_of(f: Family) -> Any:
     return None
 
 
-def check_family(f: Family, base: Path, work: Path, out: Path) -> list[str]:
+def check_family(f: Family, base: Path, work: Path, out: Path) -> tuple[list[str], list[str]]:
+    """(problems, notices) for one present set."""
     committed = gd.goldens(OPERATOR / f.root, f.pattern)
     regenerated = gd.goldens(got_root(f, work, out), f.pattern, f.inputs)
     kept = {k: v for k, v in committed.items() if v.name not in f.inputs}
     behaviour = gd.tree_diffs(kept, regenerated, view=view_of(f))
     lost = gd.tree_diffs(gd.goldens(base / f.root, f.pattern), committed, only_losses=True, view=view_of(f))
-    return judge(f.name, allowed_of(OPERATOR, f.allowed), allowed_of(base, f.allowed), behaviour, lost)
-
-
-def require_empty() -> list[str]:
-    out = []
-    for rel in sorted({f.allowed for f in FAMILIES} | {INSTRUMENT_ALLOWED}):
-        named = {k: v for k, v in allowed_of(OPERATOR, rel).items() if v}
-        if named:
-            out.append(f"{rel}: still names {named}; clear it now the change has merged")
-    return out
+    allowed, base_allowed = allowed_of(OPERATOR, f.allowed), allowed_of(base, f.allowed)
+    found = (behaviour, lost)
+    return judge(f.name, allowed, base_allowed, *found), claimed_notices(f.name, allowed, base_allowed, *found)
 
 
 def parse(argv: list[str] | None) -> argparse.Namespace:
@@ -310,7 +353,6 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--capture-python", help="a python for the seat-config caller capture (default: build one)")
     ap.add_argument("--overlay-python", help="a 3.14 python with the overlay's dependencies (default: build one)")
     ap.add_argument("--only", nargs="*", default=None, help="only these families (default: all)")
-    ap.add_argument("--require-empty", action="store_true", help="fail while any allowed list names a path")
     return ap.parse_args(argv)
 
 
@@ -362,16 +404,28 @@ def check(a: argparse.Namespace, tmp: Path) -> tuple[list[str], list[str]]:
     out = tmp / "out"
     regenerate(work, py, cap, out, {f.name for f in present})
     regenerate_overlay(work, ov, {f.name for f in present})
-    problems = [p for f in present for p in check_family(f, base, work, out)]
-    notices = []
+    problems, notices = [], []
+    for f in present:
+        got, said = check_family(f, base, work, out)
+        problems += got
+        notices += said
     for f in new:
         problems += own_tests(f, py, cap, ov) + judge(f.name, allowed_of(OPERATOR, f.allowed), {}, {}, {})
         notices.append(f"{f.name}: introduced by this PR (the merge-base has none); its own tests ran on the PR's tree")
     found = manifest_losses(manifest(base, py), manifest(OPERATOR, py))
-    problems += judge("instrument", allowed_of(OPERATOR, INSTRUMENT_ALLOWED), allowed_of(base, INSTRUMENT_ALLOWED), {}, found)  # fmt: skip
-    if a.require_empty:
-        problems += require_empty()
+    allowed, base_allowed = allowed_of(OPERATOR, INSTRUMENT_ALLOWED), allowed_of(base, INSTRUMENT_ALLOWED)
+    problems += judge("instrument", allowed, base_allowed, {}, found)
+    notices += claimed_notices("instrument", allowed, base_allowed, {}, found)
     return problems, notices
+
+
+def announce(notices: list[str]) -> None:
+    """Every notice as a log line; a removal claim also as a workflow warning,
+    so it shows on the PR beside the deletion that made it."""
+    for n in notices:
+        if n.startswith(CLAIM):
+            print(f"::warning::golden integrity: {n}")
+        print(f"golden integrity: NOTICE {n}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -381,8 +435,7 @@ def main(argv: list[str] | None = None) -> int:
             problems, notices = check(a, Path(tmp))
         except gd.AllowedListError as exc:
             problems, notices = [str(exc)], []
-    for n in notices:
-        print(f"golden integrity: NOTICE {n}")
+    announce(notices)
     if not problems:
         print("golden integrity: every golden equals the merge-base tree's behaviour, keeps what the base pinned, "
               "and every allowed entry explains a difference")  # fmt: skip

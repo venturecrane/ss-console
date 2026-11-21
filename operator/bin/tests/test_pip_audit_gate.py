@@ -246,7 +246,9 @@ def test_the_hermes_lock_fetch_retries_a_rate_limited_response(tmp_path: Path, m
 
 def test_compile_sh_retries_both_hermes_fetches() -> None:
     src = (Path(__file__).resolve().parents[2] / "requirements" / "compile.sh").read_text()
-    fetches = [ln for ln in src.splitlines() if ln.startswith("curl ") and "/hermes/" in ln]
+    # The fetch is the fallback when no Hermes checkout at the pin is at hand
+    # (HERMES_AGENT_SRC, read in place only when its HEAD is the pin).
+    fetches = [ln for ln in src.splitlines() if ln.lstrip().startswith("curl ") and "/hermes/" in ln]
     assert len(fetches) == 2 and all("--retry" in ln for ln in fetches), fetches
 
 
