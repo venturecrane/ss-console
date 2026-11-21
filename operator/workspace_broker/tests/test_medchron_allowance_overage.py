@@ -137,7 +137,7 @@ def test_an_approved_overage_is_root_only(verbs):
     assert not (queue / f".resume-{j}.json").exists()
 
 
-# ---- SMD's dollar approval of a whole-job price hold (2026-11-20) -------------
+# ---- SMD's dollar approval of a cost hold (2026-11-20) ------------------------
 # A job priced past the job cap or the cycle budget holds before its first paid
 # stage. ``jobs.medchron.allowance approve --usd`` resumes it with that figure as
 # its ceiling; the guard above now takes that approval too. Invented values.
@@ -169,7 +169,7 @@ def test_a_dollar_approval_resumes_a_price_hold_and_audits_it_in_cents(verbs, re
 @pytest.mark.parametrize(
     ("reason", "extra", "match"),
     [
-        # Dollars approve a price hold only: never an audit hold, never pages.
+        # Dollars approve a cost hold only: never an audit hold, never pages.
         (AUDIT_HOLD, USD_APPROVAL, "not held on"),
         (ALLOWANCE_HOLD, USD_APPROVAL, "not held on"),
         (CAP_HOLD, {**USD_APPROVAL, "allowance_approved_usd": 0}, "positive"),
@@ -195,17 +195,19 @@ def test_a_dollar_approval_is_root_only(verbs):
     assert not (queue / f".resume-{j}.json").exists()
 
 
-def test_an_approved_price_counts_against_the_cycle_for_every_other_job(verbs):
-    """Two jobs at once: an approved job not yet resumed has committed its
-    approval, so another job's cycle check counts it (``cents_committed`` in the
-    period state, which ``jobs.medchron.job.stamp_period`` adds to
-    ``month_cents_used``). Its own resume excludes it. FALSIFIER (main): the
-    period state counts only cents already recorded."""
-    v, _db, _queue = verbs
+def test_a_dollar_approval_lifts_a_cap_stop_reached_mid_run(verbs):
+    """A cap is a runaway brake SMD lifts for one job, not a dead end: a stop
+    where spend reached the cap during a stage takes a dollar ceiling too."""
+    v, _db, queue = verbs
+    j = _held_job(v, "per_job_cap_usd: the run's spend reached the job's cost cap during map; the run stopped")
+    assert _resume(v, j, **USD_APPROVAL)["queued"] is True
+    assert json.loads((queue / f".resume-{j}.json").read_text())["allowance_approved_usd"] == 200.0
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("nan")])
+def test_a_non_finite_dollar_approval_is_refused(verbs, bad):
+    v, _db, queue = verbs
     j = _held_job(v, CAP_HOLD)
-    _resume(v, j, **USD_APPROVAL)
-    other = v._db.allowance(1000, exclude_job_id="01ZZZZZZZZZZZZZZZZZZZZZZZZ")
-    assert other["cents_committed"] == 20000
-    assert other["cents_used"] == 0  # billing's figure is unchanged
-    own = v._db.allowance(1000, exclude_job_id=j)
-    assert own["cents_committed"] == 0
+    with pytest.raises(ValueError, match="finite"):
+        _resume(v, j, **{**USD_APPROVAL, "allowance_approved_usd": bad})
+    assert not (queue / f".resume-{j}.json").exists()

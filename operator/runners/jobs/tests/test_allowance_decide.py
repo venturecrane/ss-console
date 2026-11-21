@@ -89,15 +89,32 @@ def test_the_allowance_hold_pages_smd_with_the_figures_and_both_commands(tmp_pat
 
 
 def test_a_non_allowance_hold_pages_exactly_as_it_did(tmp_path):
+    """CHANGED ON PURPOSE (2026-11-20): a cap stop reached during a stage was a
+    dead end (approve and decline refused it). A cap is a runaway brake SMD
+    lifts for one job: the stop now pages the commands and the job's spend,
+    and takes a dollar ceiling above that spend. It still takes no pages."""
     reason = "per_job_cap_usd: the run's spend reached the job's cost cap during vision; the run stopped"
     d, broker, _state = _held(tmp_path, pd._unit(outcome="held", reason=reason, stage="vision"))
     (a,) = _alerts(broker)
-    assert a["code"] == "limit_held" and a["detail"] == reason
+    assert a["code"] == "limit_held" and "spent_cents 100" in a["detail"]
+    assert a["detail"].startswith(f"Approve: python -m jobs.medchron.allowance approve {JOB} --by NAME --usd N | ")
     assert "allowance_hold" not in d._daemon_state(JOB)
-    with pytest.raises(allowance.Refused, match="not held on the page allowance"):
+    with pytest.raises(allowance.Refused, match="--pages does not apply"):
         allowance.plan_approve(d, JOB, by="Scott", pages=10)
-    with pytest.raises(allowance.Refused, match="not held on the page allowance"):
-        allowance.plan_decline(d, JOB, by="Scott")
+    assert allowance.plan_approve(d, JOB, by="Scott", pages=None, usd=50.0)["resume"]["allowance_approved_usd"] == 50.0
+
+
+def test_a_hold_that_is_no_limit_still_refuses_both_decisions(tmp_path):
+    """Holds that are not cost or page-allowance holds keep their handling."""
+    reason = "audit coverage: a live claim is not finally SUPPORTED; last output: GATE FAIL"
+    d, _broker, _state = _held(tmp_path, pd._unit(outcome="held", reason=reason, stage="audit"))
+    for call in (
+        lambda: allowance.plan_approve(d, JOB, by="Scott", pages=10),
+        lambda: allowance.plan_approve(d, JOB, by="Scott", pages=None, usd=50.0),
+        lambda: allowance.plan_decline(d, JOB, by="Scott"),
+    ):
+        with pytest.raises(allowance.Refused, match="not held on the page allowance"):
+            call()
 
 
 # ---- approve -----------------------------------------------------------------

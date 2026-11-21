@@ -99,9 +99,9 @@ class Outcome:
     # job's ledger record so a later update recognises a re-pulled cited file
     # after this job's dir is wiped. None on every outcome but a delivery.
     cited_sources: dict[str, str] | None = None
-    # 2026-11-20: a hold at the first paid check on the unit's whole price
-    # (``job_price``) carries that price, in cents, for SMD's alert and run
-    # state. Never in ``reason``; None on every other outcome.
+    # 2026-11-20: a cost hold at a projection check carries the figure it
+    # tested, in cents (``job_price``), for SMD's alert and run state. Never in
+    # ``reason``; None on a stop where spend reached a line, and elsewhere.
     price_cents: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -272,8 +272,8 @@ class Driver:
         cap = firm_cap if self.job.cap_usd is None else min(self.job.cap_usd, firm_cap)
         if self.job.cap_usd is not None and self.job.cap_usd > firm_cap:
             self.log("[cap] the envelope asked for a higher cap than the firm's; the firm's cap stands")
-        # SMD's dollar approval of a price hold is this job's cap and widens its
-        # cycle line (``job_price.approved_limits``); the price is not asked again.
+        # SMD's newest dollar approval of a cost hold is this job's cap, and the
+        # cycle line does not apply to it (``job_price.approved_limits``).
         self._approved_usd = allowance_mod.approved_usd(self.job.path.parent)
         cap, self._monthly_usd = job_price.approved_limits(cap, self.cfg.monthly_budget_usd, self._approved_usd)
         self.slug_dir = self.job.data_root / self.job.slug
@@ -349,7 +349,7 @@ class Driver:
             self._page_checked.add(ctx.unit.unit)
             job_price.check_first_paid(self, ctx.unit.unit, stage.name, extracted, projected=projected, spent=spent)
             return
-        self.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage=stage.name)
+        job_price.check_projected(self.limits, projected=projected, spent=spent, stage=stage.name)
 
     def _before_request(self, stage: str) -> None:
         """The live-mode doorway hook: the cap and the month's budget re-read
@@ -365,7 +365,9 @@ class Driver:
         bounded to one batch. Vision batches one item per page, so its rate is
         per item; the other batchable stages are priced from their characters."""
         projected = items * self.limits.usd_per_scanned_page if stage == "vision" else self.budget.projection(chars)
-        self.limits.check_before_paid(projected_usd=projected, spent_usd=self.budget.refresh(), stage=stage, batch=True)
+        job_price.check_projected(
+            self.limits, projected=projected, spent=self.budget.refresh(), stage=stage, batch=True
+        )
 
     # ---- one unit ---------------------------------------------------------
     def run_unit(self, unit: job_mod.Unit, slug_done: set[str]) -> Outcome:
@@ -549,7 +551,7 @@ class Driver:
         st.end("held", hold.reason)
         out = Outcome(unit.unit, "held", hold.reason, stage.name, self.budget.spent(), pages, notes)
         out.allowance = hold.allowance
-        out.price_cents = hold.price_cents
+        out.price_cents = job_price.hold_cents(self, hold, unit.unit, extracted)
         return out
 
     def _open_seat(self):

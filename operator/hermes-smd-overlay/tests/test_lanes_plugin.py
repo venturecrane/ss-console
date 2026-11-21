@@ -284,15 +284,12 @@ def test_status_and_allowance_are_thin(broker):
 
 
 def test_the_allowance_tool_gives_the_model_no_cost_figure(broker):
-    """The broker's allowance reply carries SMD's cents (``cents_used``, and
-    since 2026-11-20 ``cents_committed``, an approved price not yet resumed)
-    for the runner's cycle check; the model's tool keeps the five page keys
-    only. FALSIFIER: pass the broker's reply through and the model reads
-    SMD's cost."""
+    """The broker's allowance reply carries SMD's cents (``cents_used``) for
+    the runner's cycle check; the model's tool keeps the five page keys only.
+    FALSIFIER: pass the broker's reply through and the model reads SMD's cost."""
     broker.answers["medchron_allowance"] = {
         **broker.answers["medchron_allowance"],
         "cents_used": 50_000,
-        "cents_committed": 20_000,
     }
     out = json.loads(_tools()["medchron_allowance"]["handler"]({}))
     assert set(out) == {"month", "allowance", "used", "remaining", "authored"}

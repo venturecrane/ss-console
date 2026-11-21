@@ -49,7 +49,6 @@ from typing import Any
 from .audit_ledger import _iso_utc, _ulid
 from .cycle_window import Window, cycle_window, resolve_anchor, resolve_effective_from
 from . import medchron_credits
-from .medchron_approval import committed_cents
 from .lane_ledger import ReplyOnce, StateRecord
 from .medchron_update import ADDED_COLUMNS, client_keys, update_block
 from .medchron_coverage import parse_covered, parse_why, union_coverage, validate_covered
@@ -561,7 +560,6 @@ class MedchronLedger(StateRecord, ReplyOnce, medchron_credits.CreditLedger):
             **credit_keys,
             "documents_used": deb["documents"],
             "cents_used": deb["cents"],
-            "cents_committed": committed_cents(getattr(self, "queue_dir", None), exclude_job_id),
             "cycle_start": window.start,
             "cycle_end": window.end,
             "cycle_anchored": window.anchored,

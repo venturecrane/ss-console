@@ -182,8 +182,20 @@ def test_a_bad_ending_answered_by_a_later_delivery_on_the_matter_drops_off():
 
 
 def test_a_bad_ending_older_than_the_window_drops_off():
-    rows = [_job("MEDCHRON", "SUBMITTED", NOW - timedelta(days=5)), _job("MEDCHRON", "HELD", NOW - timedelta(days=4))]
+    rows = [_job("MEDCHRON", "SUBMITTED", NOW - timedelta(days=5)), _job("MEDCHRON", "FAILED", NOW - timedelta(days=4))]
     assert wh.job_items(SEAT, rows, CFG, NOW) == []
+    held = [_job("DRAFTING", "SUBMITTED", NOW - timedelta(days=5)), _job("DRAFTING", "HELD", NOW - timedelta(days=4))]
+    assert wh.job_items(SEAT, held, CFG, NOW) == []
+
+
+def test_a_held_chronology_stays_listed_until_it_ends():
+    """CHANGED (2026-11-20): a held chronology can be approved or declined
+    until its 7-day wipe records it failed, so it stays on the list past
+    ``ended_job_hours``. FALSIFIER (before): it dropped off at 72 hours."""
+    rows = [_job("MEDCHRON", "SUBMITTED", NOW - timedelta(days=5)), _job("MEDCHRON", "HELD", NOW - timedelta(days=4))]
+    assert _kinds(wh.job_items(SEAT, rows, CFG, NOW)) == ["job_held"]
+    rows.append(_job("MEDCHRON", "FAILED", NOW - timedelta(days=4) + timedelta(hours=1)))
+    assert wh.job_items(SEAT, rows, CFG, NOW) == []  # ended (wiped: recorded failed) past the window
 
 
 def test_a_medchron_update_held_for_smd_finishing_is_visible_as_held_and_unproven():

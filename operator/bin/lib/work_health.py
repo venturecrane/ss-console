@@ -526,7 +526,11 @@ def job_items(
                 )
             )
         elif state in ENDED_BAD:
-            if now - ts > timedelta(hours=cfg.ended_job_hours) or _superseded(job, jobs):
+            # A held chronology job can still be approved or declined until the
+            # runner wipes it (7 days, ``jobs/retention.py``) and records it
+            # failed: it stays listed until then, not for ``ended_job_hours``.
+            open_hold = state == "HELD" and job.lane == "medchron"
+            if (now - ts > timedelta(hours=cfg.ended_job_hours) and not open_hold) or _superseded(job, jobs):
                 continue
             if reason in _CLOSED_REASONS:
                 # Ended on purpose by a person ("superseded": a relaunch replaced

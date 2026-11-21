@@ -48,12 +48,12 @@ Peer gating, per verb:
                            approved overage (``allowance_approved_pages`` +
                            ``allowance_approved_by``, from ``jobs.medchron.allowance
                            approve``), audited on the resume row; and a job
-                           HELD on its whole price at the first paid check
-                           (``per_job_cap_usd`` / ``monthly_budget_usd``, "this
-                           run's projected cost") when the request carries SMD's
-                           dollar ceiling (``allowance_approved_usd`` +
-                           ``allowance_approved_by``, ``approve --usd``), audited
-                           in cents on the resume row; and an update
+                           HELD on a cost line (``per_job_cap_usd`` /
+                           ``monthly_budget_usd``, at any check or mid-run) when
+                           the request carries SMD's dollar ceiling
+                           (``allowance_approved_usd`` + ``allowance_approved_by``,
+                           ``approve --usd``), audited in cents on the resume
+                           row; and an update
                            HELD by its independent review (``update_held: the
                            independent review ...``), after SMD records the
                            correction with ``jobs.medchron.update_decide``. Every

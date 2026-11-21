@@ -2,7 +2,6 @@
   "medchron_allowance | gateway | empty": {
     "allowance": null,
     "authored": false,
-    "cents_committed": 0,
     "cents_used": 0,
     "cycle_anchored": false,
     "cycle_end": "2026-12-01T00:00:00.000Z",
@@ -22,7 +21,6 @@
   "medchron_allowance | gateway | known job": {
     "allowance": null,
     "authored": false,
-    "cents_committed": 0,
     "cents_used": 0,
     "cycle_anchored": false,
     "cycle_end": "2026-12-01T00:00:00.000Z",
@@ -42,7 +40,6 @@
   "medchron_allowance | root | empty": {
     "allowance": null,
     "authored": false,
-    "cents_committed": 0,
     "cents_used": 0,
     "cycle_anchored": false,
     "cycle_end": "2026-12-01T00:00:00.000Z",
@@ -62,7 +59,6 @@
   "medchron_allowance | root | known job": {
     "allowance": null,
     "authored": false,
-    "cents_committed": 0,
     "cents_used": 0,
     "cycle_anchored": false,
     "cycle_end": "2026-12-01T00:00:00.000Z",

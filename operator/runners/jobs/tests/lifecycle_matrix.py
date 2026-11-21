@@ -121,7 +121,7 @@ FIXED_EVENTS = (
 #: The whole-job price events: the job is first held on its price, then SMD acts.
 PRICE_EVENTS = ("price_approve", "price_approve_ceiling", "price_decline")
 #: The price hold's sentence (``limits.check_before_paid``; no dollar figure) and
-#: the price SMD's page carries, in cents. Invented: 2,900 pages at 0.139.
+#: the price SMD's page carries, in cents. Invented.
 PRICE_HOLD = (
     "per_job_cap_usd: this run's projected cost would exceed the job's cost cap before vision; "
     "the package was not started"
@@ -778,36 +778,24 @@ def _way_out(life: Life, jid: str, row: dict[str, Any], told: str, messages: int
 
 def _limit_way_out(life: Life, jid: str) -> list[str]:
     """A limit hold's decision, asked of the real command (a plan writes
-    nothing): ``approve --usd`` at the printed figure where the job holds on
-    its price, ``approve`` where it holds on the page allowance. A cap or
-    budget stop during a stage carries no price and is not approvable."""
+    nothing): ``approve --usd`` at the alert's figure (or one cent above the
+    job's spend where it prints none) on a cost hold, ``approve`` on a page
+    allowance hold. Every cost hold is approvable: a cap is a brake SMD lifts."""
+    from jobs import verdict as verdict_mod
     from jobs.medchron import allowance
 
-    ph = _state(life, jid).get("price_hold")
+    fig = allowance.cost_figures(verdict_mod.read(life.lane.job_dir(jid), ""))
+    usd = fig["approve_usd"] or (int(fig["spent_cents"] or 0) + 1) / 100
     try:
-        if isinstance(ph, dict):
-            allowance.plan_approve(life.lane, jid, by="SMD Example", pages=None, usd=float(ph.get("approve_usd") or 0))
-            return ["allowance approve --usd"]
+        allowance.plan_approve(life.lane, jid, by="SMD Example", pages=None, usd=usd)
+        return ["allowance approve --usd"]
+    except allowance.Refused:
+        pass
+    try:
         allowance.plan_approve(life.lane, jid, by="SMD Example", pages=None)
     except allowance.Refused:
-        return _limit_stop_way_out(life, jid)
-    return ["allowance approve"]
-
-
-def _limit_stop_way_out(life: Life, jid: str) -> list[str]:
-    """A cap or budget stop with no price (one reached during a stage): no
-    decide command takes it. What SMD can do is end the row by hand with the
-    root record verb (failed) and then resume it, after raising the setting the
-    reason names. Asked of the real broker, last, because it writes the row."""
-    from jobs.resume import MARKER_PREFIX
-
-    try:
-        life.client().record(jid, "failed", {"reason": "per_job_cap_usd: ended by SMD to raise the cap"})
-        life.client()._request({"action": "medchron_job_resume", "job_id": jid, "reason": "probe", "redo": []})
-    except Exception:  # noqa: BLE001 - a refusal is the answer
         return []
-    (life.lane.queue / f"{MARKER_PREFIX}{jid}.json").unlink(missing_ok=True)
-    return ["SMD records it failed by hand, raises the setting, and resumes it"]
+    return ["allowance approve"]
 
 
 def _wiped_ending(life: Life, jid: str) -> str | None:

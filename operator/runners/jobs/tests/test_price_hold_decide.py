@@ -96,18 +96,8 @@ def test_decline_on_a_price_hold_ends_the_job_failed(tmp_path):
     assert _alerts(broker)[-1]["code"] == "limit_held"
 
 
-def test_a_mid_run_cap_stop_is_not_a_price_hold(tmp_path):
-    """The per-call stop (spend reached the cap during a stage) pages exactly
-    as it did: its detail is the reason alone, with no price (passes on main;
-    it fails an implementation that prices every limit hold)."""
-    reason = "per_job_cap_usd: the run's spend reached the job's cost cap during vision; the run stopped"
-    d, broker, _ = _held(tmp_path, pd._unit(outcome="held", reason=reason, stage="vision"))
-    (a,) = _alerts(broker)
-    assert a["detail"] == reason
-
-
 def test_the_page_prints_the_ceiling_to_pass_and_a_lower_approval_is_refused(tmp_path):
-    """The job had spent 90.00 when it held on a 403.10 price: the page prints
+    """The job had spent 90.00 when it held on an invented 403.10 figure: the page prints
     spent_cents and the whole-dollar ceiling to pass (494); an approval at or
     below what is already spent is refused with the minimum named."""
     unit = pd._unit(outcome="held", reason=CAP_PRICE_HOLD, stage="vision", dollars=90.0, price_cents=40310)
@@ -121,3 +111,55 @@ def test_the_page_prints_the_ceiling_to_pass_and_a_lower_approval_is_refused(tmp
         allowance.plan_approve(d, JOB, by="Scott", pages=None, usd=90.01)["resume"]["allowance_approved_usd"] == 90.01
     )
     assert broker.resumes == []
+
+
+def test_decline_on_a_cap_stop_mid_run_fails_the_job_and_keeps_its_pages(tmp_path):
+    reason = "per_job_cap_usd: the run's spend reached the job's cost cap during map; the run stopped"
+    d, broker, _ = _held(tmp_path, pd._unit(outcome="held", reason=reason, stage="map", dollars=90.0, price_cents=500))
+    allowance.apply_decline(d, allowance.plan_decline(d, JOB, by="Scott"))
+    job, state, fields = broker.records[-1]
+    assert (job, state) == (JOB, "failed") and fields["reason"].startswith("per_job_cap_usd: declined by SMD")
+    assert fields["pages"] == 3  # it spent and read: its pages are debited
+
+
+def test_a_page_allowance_decline_records_its_pages_as_before(tmp_path):
+    """C: a held allowance unit is dropped, any other unit's pages kept; every
+    outcome now carries a ``price_cents`` key (None), which must not drop it."""
+    from test_allowance_decide import FIG, HOLD
+
+    d, broker, _ = _held(
+        tmp_path,
+        pd._unit(unit="beta", outcome="held", reason=HOLD, stage="vision", allowance=FIG, pages=4210, price_cents=None),
+        pd._unit(
+            unit="alpha", outcome="held", reason="audit coverage: a gap", stage="audit", pages=40, price_cents=None
+        ),
+    )
+    assert broker.records[-1][2]["reason"] == HOLD
+    allowance.apply_decline(d, allowance.plan_decline(d, JOB, by="Scott"))
+    assert broker.records[-1][2]["pages"] == 40
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("nan")])
+def test_a_non_finite_ceiling_is_refused(tmp_path, bad):
+    d, _broker, _ = _price_held(tmp_path)
+    with pytest.raises(allowance.Refused, match="finite"):
+        allowance.plan_approve(d, JOB, by="Scott", pages=None, usd=bad)
+
+
+def test_a_page_allowance_hold_refuses_dollars(tmp_path):
+    from test_allowance_decide import FIG, HOLD
+
+    d, _broker, _ = _held(tmp_path, pd._unit(outcome="held", reason=HOLD, stage="vision", allowance=FIG))
+    with pytest.raises(allowance.Refused, match="--usd does not apply"):
+        allowance.plan_approve(d, JOB, by="Scott", pages=None, usd=50.0)
+
+
+def test_both_commands_survive_the_cut_for_the_longest_ids():
+    """D: the alert is cut at 300 characters; the commands come first."""
+    job, matter = "Z" * 26, "M" * 60
+    for fig in (
+        {"spent_cents": 9_999_999, "price_cents": 99_999_999, "approve_usd": 1_099_999},
+        {"spent_cents": 9_999_999, "price_cents": None, "approve_usd": None},
+    ):
+        cut = allowance.cost_alert_detail(job, matter, "monthly_budget_usd", fig)[:300]
+        assert f"approve {job} --by NAME --usd " in cut and f"decline {job} --by NAME" in cut

@@ -2121,7 +2121,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "parked/claim": {
@@ -2389,7 +2389,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "parked/price_decline": {
@@ -2793,7 +2793,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "requeued_waiting/claim": {
@@ -3061,7 +3061,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "requeued_waiting/price_decline": {
@@ -3465,7 +3465,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "running/claim": {
@@ -6113,7 +6113,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "running/price_decline": {
@@ -6517,7 +6517,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "submitted/claim": {
@@ -6785,7 +6785,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "submitted/price_decline": {
