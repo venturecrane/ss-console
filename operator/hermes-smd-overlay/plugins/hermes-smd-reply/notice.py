@@ -131,6 +131,14 @@ _REASON_HINTS: dict[str, str] = {
         "and the one reply is still yours. Draft the reply again with exactly the "
         "text below as the whole body: no greeting, no sign-off, no other sentence."
     ),
+    # A turn's required sentences (relay step 5a), not a job's whole reply: the
+    # sentences go as paragraphs, in any order, beside the rest of the answer.
+    "fixed_wording_paragraphs": (
+        "This reply must carry the required sentence or sentences quoted below. Nothing "
+        "was sent and the one reply is still yours. Draft the reply again with each "
+        "required sentence word for word, exactly once, as its own paragraph, in any "
+        "order. Other paragraphs that answer the email may go before, between or after them."
+    ),
     "mechanics_named": (
         "The reply described how the work is done. Nothing was sent and the one "
         "reply is still yours. Draft it again without the phrase below, in the "
@@ -153,6 +161,10 @@ MECHANICS_STOP = (
     "how the work is done. Do not draft it again; SMD has been told."
 )
 _STOP_GUIDANCE = "Do not draft this reply again."
+#: How the relay's step-5a refusal begins (``shared.turn_says.REFUSAL_LEAD``,
+#: pinned equal by test): such a hold is told the paragraph rule, never the
+#: broker's whole-body one, which would contradict its own detail.
+SAY_REFUSAL_LEAD = "fixed_wording: nothing was sent and the one reply is still yours. The reply "
 #: The broker's quoted wording: a held job's two or three sentences, or a
 #: delivered job's whole reply (a drafted document's marker and caption lines).
 _MAX_EXACT_DETAIL_LEN = 6000
@@ -208,7 +220,9 @@ def render(notice: HoldNotice) -> str:
     exact = reason in _EXACT_REDRAFT_REASONS
     if exact:
         stopped = notice.detail in (FIXED_WORDING_STOP, MECHANICS_STOP)
-        guidance = _STOP_GUIDANCE if stopped else _REASON_HINTS[reason]
+        paragraphs = reason == "fixed_wording" and notice.detail.startswith(SAY_REFUSAL_LEAD)
+        hint = _REASON_HINTS["fixed_wording_paragraphs" if paragraphs else reason]
+        guidance = _STOP_GUIDANCE if stopped else hint
     elif notice.attempt >= 2:
         guidance = _SECOND_HOLD_GUIDANCE.format(n=notice.attempt)
     elif reason.startswith(_CONTENT_REASON_PREFIXES):

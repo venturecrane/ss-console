@@ -2,7 +2,7 @@
 
 A SAY IS A REQUIRED BLOCK (2026-11-19, the review's design). Every sentence a
 tool or a hook noted for this email must appear in the reply verbatim (after
-:func:`norm`), as its own lines, each exactly once, in the order noted. Other
+:func:`norm`), as its own lines, each exactly once, in any order. Other
 paragraphs may sit before, between and after: a second question in the same
 email is answered there. On a turn with a say, those other paragraphs must not
 describe how the work is done (:data:`MECHANICS_PHRASES`).
@@ -332,7 +332,10 @@ def block_problem(blocks: tuple[str, ...] | list[str], text: str, mechanics: boo
 
     Each block's lines must appear as a contiguous run of the text's lines (a
     blank line or a single break between them is the same), each block exactly
-    once and after the one before it. In the lines no block covers, a phrase
+    once, in ANY order (2026-11-20: a firm reply carrying both of its turn's
+    sentences, in the other order to the tool calls, was held three times and
+    never sent). Only the blocks actually missing, altered or repeated are
+    named. In the lines no block covers, a phrase
     from :data:`MECHANICS_PHRASES` is refused, but only when a real fixed
     sentence is in the reply and ``mechanics`` (the relay passes False for a
     reply to SMD's own address). A ``FORBID`` entry refuses a paragraph that
@@ -342,16 +345,21 @@ def block_problem(blocks: tuple[str, ...] | list[str], text: str, mechanics: boo
     blocks = [b for b in blocks if not b.startswith(FORBID)]
     mechanics = mechanics and bool(blocks)
     covered: set[int] = set()
-    at = 0
+    missing: list[str] = []
     for block in blocks:
         want = _lines(block)
         if not want:
             continue
         starts = [i for i in range(len(body) - len(want) + 1) if body[i : i + len(want)] == want]
-        if len(starts) != 1 or starts[0] < at:
-            return f'must contain this sentence exactly, once, as its own paragraph: "{block}"'
-        at = starts[0] + len(want)
-        covered.update(range(starts[0], at))
+        if len(starts) != 1:
+            missing.append(block)
+            continue
+        covered.update(range(starts[0], starts[0] + len(want)))
+    if len(missing) == 1:
+        return f'must contain this sentence exactly, once, as its own paragraph: "{missing[0]}"'
+    if missing:
+        quoted = " ".join(f'"{b}"' for b in missing)
+        return f"must contain each of these sentences exactly, once, as its own paragraph: {quoted}"
     for i, line in enumerate(body):
         found = _MECHANICS.search(line) if mechanics and i not in covered else None
         if found:
@@ -377,12 +385,27 @@ def send_problem(blocks: tuple[str, ...], text: str, html: str, reply_to: object
     return ""
 
 
-def refusal(problem: str) -> str:
-    """What the model reads: the exact sentence, or the phrase to take out."""
+#: How every refusal below begins; the hold notice reads it to tell a
+#: required-paragraph hold from the broker's whole-body one
+#: (``plugins/hermes-smd-reply/notice.SAY_REFUSAL_LEAD``, pinned equal by test).
+REFUSAL_LEAD = "fixed_wording: nothing was sent and the one reply is still yours. The reply "
+
+
+def refusal(problem: str, blocks: tuple[str, ...] | list[str] = ()) -> str:
+    """What the model reads: the sentence missing or altered, or the phrase to
+    take out. On a turn with more than one required sentence it then lists every
+    one, so a redraft cannot drop a sentence it was never shown."""
+    real = [b for b in blocks if not b.startswith(FORBID)]
+    every = ""
+    if len(real) > 1:
+        quoted = " ".join(f'"{b}"' for b in real)
+        every = (
+            f" All {len(real)} of these sentences must be in the reply, each exactly once as "
+            f"its own paragraph, in any order: {quoted}."
+        )
     return (
-        "fixed_wording: nothing was sent and the one reply is still yours. The reply "
-        f"{problem}. Answer anything else the email asked in other paragraphs; never "
-        "describe how the work is done."
+        f"{REFUSAL_LEAD}{problem}.{every} Answer anything else the email asked in other "
+        "paragraphs; never describe how the work is done."
     )
 
 
@@ -400,6 +423,7 @@ __all__ = [
     "note",
     "publish",
     "published",
+    "REFUSAL_LEAD",
     "refusal",
     "send_problem",
     "MECHANICS_REDRAFT",

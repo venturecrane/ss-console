@@ -385,8 +385,8 @@ def body_and_facts(
 # help guide's hand-off. Until this check the skill text asked the model to
 # relay it "exactly", and nothing compared: a drafting acknowledgment could
 # leave with "shortly" added, or with the job's mechanics. Now every sentence the
-# turn noted must appear in the reply exactly, each as its own paragraph, once
-# and in order; other paragraphs may answer the rest of the email, and on such a
+# turn noted must appear in the reply exactly, each as its own paragraph, once,
+# in any order; other paragraphs may answer the rest of the email, and on such a
 # turn may not describe how the work is done (``shared.turn_says``). Otherwise
 # the reply is held with the sentence quoted back, the broker's fixed-wording
 # retry, so the redraft goes in one step. ``say: "none"`` alone means this email
@@ -494,7 +494,7 @@ def say_held(say: Any, origin: Any, send_text: str, send_html: str, reply_to: An
         SAY_HOLD_REASON,
         origin,
         rule="turn_say_cap" if capped else "turn_say",
-        _detail=SAY_STOP_DETAIL if capped else turn_says.refusal(problem),
+        _detail=SAY_STOP_DETAIL if capped else turn_says.refusal(problem, blocks),
     )
     return True
 
