@@ -33,6 +33,7 @@ from . import (
     decisions,
     icd_tables,
     job as job_mod,
+    job_price,
     projection,
     rehearsal,
     unit_proof,
@@ -98,6 +99,10 @@ class Outcome:
     # job's ledger record so a later update recognises a re-pulled cited file
     # after this job's dir is wiped. None on every outcome but a delivery.
     cited_sources: dict[str, str] | None = None
+    # 2026-11-20: a hold at the first paid check on the unit's whole price
+    # (``job_price``) carries that price, in cents, for SMD's alert and run
+    # state. Never in ``reason``; None on every other outcome.
+    price_cents: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -267,6 +272,10 @@ class Driver:
         cap = firm_cap if self.job.cap_usd is None else min(self.job.cap_usd, firm_cap)
         if self.job.cap_usd is not None and self.job.cap_usd > firm_cap:
             self.log("[cap] the envelope asked for a higher cap than the firm's; the firm's cap stands")
+        # SMD's dollar approval of a price hold is this job's cap and widens its
+        # cycle line (``job_price.approved_limits``); the price is not asked again.
+        self._approved_usd = allowance_mod.approved_usd(self.job.path.parent)
+        cap, self._monthly_usd = job_price.approved_limits(cap, self.cfg.monthly_budget_usd, self._approved_usd)
         self.slug_dir = self.job.data_root / self.job.slug
         self.budget = paid.budget(
             self.pricing,
@@ -306,7 +315,7 @@ class Driver:
             )
         return paid.Caps(
             cap_usd=cap,
-            monthly_budget_usd=self.cfg.monthly_budget_usd,
+            monthly_budget_usd=self._monthly_usd,
             usd_per_scanned_page=self.cfg.usd_per_scanned_page,
             usd_per_audit_claim=self.cfg.usd_per_audit_claim,
             month_cents_used=job.month_cents_used,
@@ -338,19 +347,7 @@ class Driver:
         projected = self._projection(stage, ctx, extracted) or 0.0
         if ctx.unit.unit not in self._page_checked:
             self._page_checked.add(ctx.unit.unit)
-            try:
-                self.limits.check_before_first_paid(
-                    pages=update_charged.question_pages(self.slug_dir, ctx.unit.unit, extracted, self.job.update),
-                    projected_usd=projected,
-                    spent_usd=spent,
-                    stage=stage.name,
-                    approved_pages=self._approved_pages,
-                )
-            except limits_mod.LimitHold as hold:
-                if hold.allowance is not None:
-                    usd = projection.read_usd(extracted, self.limits.usd_per_scanned_page, self.budget)
-                    hold.allowance["projected_cents"] = int(round(usd * 100))
-                raise
+            job_price.check_first_paid(self, ctx.unit.unit, stage.name, extracted, projected=projected, spent=spent)
             return
         self.limits.check_before_paid(projected_usd=projected, spent_usd=spent, stage=stage.name)
 
@@ -552,6 +549,7 @@ class Driver:
         st.end("held", hold.reason)
         out = Outcome(unit.unit, "held", hold.reason, stage.name, self.budget.spent(), pages, notes)
         out.allowance = hold.allowance
+        out.price_cents = hold.price_cents
         return out
 
     def _open_seat(self):

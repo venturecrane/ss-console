@@ -1,6 +1,6 @@
 """SMD decides a chronology that would overrun the firm's cycle page allowance.
 
-    python -m jobs.medchron.allowance approve <job_id> --by "<name>" [--pages N] [--dry-run]
+    python -m jobs.medchron.allowance approve <job_id> --by "<name>" [--pages N | --usd N] [--dry-run]
     python -m jobs.medchron.allowance decline <job_id> --by "<name>" [--dry-run]
     python -m jobs.medchron.allowance credit --pages N --by "<name>" --why "<reason>" [--job <job_id>] [--dry-run]
 
@@ -40,8 +40,17 @@ decision needs, and these two commands are the decision:
   (pages, who, the job): the record billing reads. Keep ``--why`` free of
   patient names; it is stored on the seat, never shown on the console.
 
-What approve and decline refuse: a job not held on the page allowance; a job the daemon is
-running or has queued; a decision already recorded for this hold.
+* **approve --usd** (2026-11-20) decides a job held on its WHOLE price at the
+  first paid check (``job_price``: ``per_job_cap_usd`` or ``monthly_budget_usd``,
+  the hold's outcome carrying ``price_cents``): the approved dollars become the
+  job's cap and widen its cycle line, and are its hard ceiling (spend reaching
+  them stops the job held, the existing cap stop). ``decline`` ends it failed,
+  as for a page-allowance hold. A cap or budget stop DURING a stage carries no
+  price and is not decided here.
+
+What approve and decline refuse: a job not held on the page allowance or on its
+price; a job the daemon is running or has queued; a decision already recorded
+for this hold; dollars on a page hold, or pages on a price hold.
 """
 
 from __future__ import annotations
@@ -54,15 +63,21 @@ from pathlib import Path
 from typing import Any
 
 from .. import run_record
-from ..limits import ALLOWANCE_SETTING
+from ..limits import ALLOWANCE_SETTING, BUDGET_SETTING, CAP_SETTING
 from ..resume import MARKER_PREFIX
 
 APPROVAL_FILE = "allowance-approval.json"
 #: The two commands, as the alert prints them for one job.
 APPROVE_CMD = "python -m jobs.medchron.allowance approve {job} --by NAME"
 DECLINE_CMD = "python -m jobs.medchron.allowance decline {job} --by NAME"
+#: The two settings a whole-job price hold names (``job_price``).
+PRICE_SETTINGS = (CAP_SETTING, BUDGET_SETTING)
 DECLINED_REASON = (
     f"{ALLOWANCE_SETTING}: declined by SMD; the package exceeds the cycle's allowance and was not "
+    "finished; the requester has not been told"
+)
+PRICE_DECLINED_REASON = (
+    "{setting}: declined by SMD; the package's price exceeds the firm's cost limit and it was not "
     "finished; the requester has not been told"
 )
 
@@ -92,10 +107,34 @@ def approved_pages(job_dir: Path) -> int:
     return total
 
 
-def write_approval(job_dir: Path, *, pages: int, by: str, attempt: int, at: str | None = None) -> Path:
+def approved_usd(job_dir: Path) -> float | None:
+    """SMD's dollar ceiling for this job (the largest approved), or None: no
+    approval, and the cap and cycle line stay as the firm set them."""
+    usd = [
+        float(r["usd"])
+        for r in _approvals(job_dir)
+        if isinstance(r.get("usd"), (int, float)) and not isinstance(r.get("usd"), bool) and r["usd"] > 0
+    ]
+    return max(usd) if usd else None
+
+
+def write_approval(
+    job_dir: Path,
+    *,
+    by: str,
+    attempt: int,
+    pages: int | None = None,
+    usd: float | None = None,
+    at: str | None = None,
+) -> Path:
     rows = _approvals(job_dir)
     stamp = at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    rows.append({"pages": int(pages), "by": by, "at": stamp, "attempt": int(attempt)})
+    row: dict[str, Any] = {"by": by, "at": stamp, "attempt": int(attempt)}
+    if pages is not None:
+        row["pages"] = int(pages)
+    if usd is not None:
+        row["usd"] = float(usd)
+    rows.append(row)
     p = Path(job_dir) / APPROVAL_FILE
     p.write_text(json.dumps({"approvals": rows}, sort_keys=True), encoding="utf-8")
     return p
@@ -129,11 +168,50 @@ def alert_detail(job_id: str, matter: str, fig: dict[str, int]) -> str:
     )
 
 
+def price_figures(outcomes: list[Any]) -> dict[str, int] | None:
+    """From the held unit's outcome: ``price_cents`` (the unit's price),
+    ``spent_cents`` (what the JOB has spent, the outcome's ``dollars``) and
+    ``approve_usd``, the whole dollars SMD approves as the job's ceiling:
+    ceil(spent + price), so approving exactly the printed figure always lets
+    the job run to its price. No arithmetic is left to SMD."""
+    for o in outcomes:
+        c = o.get("price_cents") if isinstance(o, dict) and o.get("outcome") == "held" else None
+        if isinstance(c, int) and not isinstance(c, bool) and c >= 0:
+            d = o.get("dollars")
+            spent = int(round(float(d) * 100)) if isinstance(d, (int, float)) and not isinstance(d, bool) else 0
+            spent = max(0, spent)
+            return {"price_cents": c, "spent_cents": spent, "approve_usd": -(-(spent + c) // 100)}
+    return None
+
+
+def price_alert_detail(job_id: str, matter: str, setting: str, fig: dict[str, int]) -> str:
+    """SMD's page for a whole-job price hold: the setting, the price and the
+    job's spend as integer cents, and the two commands, the approve command
+    carrying the figure to pass; no dollar text."""
+    return (
+        f"price hold ({setting}): matter {matter}; price_cents {fig['price_cents']:,}, "
+        f"spent_cents {fig['spent_cents']:,}. Approve: {APPROVE_CMD.format(job=job_id)} "
+        f"--usd {fig['approve_usd']} | Decline: {DECLINE_CMD.format(job=job_id)}"
+    )
+
+
+def _price_setting(reason: str) -> str | None:
+    return next((s for s in PRICE_SETTINGS if reason.startswith(f"{s}:")), None)
+
+
 def on_hold(d: Any, job_id: str, outcomes: list[Any], reason: str) -> str | None:
-    """For ``watch.settle``: the alert detail for a page-allowance hold, with
-    its figures kept in the daemon state for ``approve``'s default. None for
-    any other hold, which pages exactly as it did."""
-    if getattr(d, "LANE", "") != "medchron" or not reason.startswith(ALLOWANCE_SETTING):
+    """For ``watch.settle``: the alert detail for a page-allowance hold or a
+    whole-job price hold, with its figures kept in the daemon state for
+    ``approve``. None for any other hold (a cap stop during a stage carries no
+    price), which pages exactly as it did."""
+    if getattr(d, "LANE", "") != "medchron":
+        return None
+    setting, fig = _price_setting(reason), price_figures(outcomes)
+    if setting is not None and fig is not None:
+        attempt = int(d._daemon_state(job_id).get("attempts") or 1)
+        d._write_state(job_id, price_hold={**fig, "setting": setting, "attempt": attempt})
+        return price_alert_detail(job_id, _matter_number(d, job_id), setting, fig)[:300]
+    if not reason.startswith(ALLOWANCE_SETTING):
         return None
     fig = _figures(outcomes)
     if fig is None:
@@ -144,6 +222,14 @@ def on_hold(d: Any, job_id: str, outcomes: list[Any], reason: str) -> str | None
 
 
 # ---- the decisions --------------------------------------------------------------
+def _price_hold(st: dict[str, Any], reason: str) -> dict[str, Any] | None:
+    """The daemon's record of a whole-job price hold on THIS attempt, or None."""
+    ph = st.get("price_hold")
+    if not isinstance(ph, dict) or _price_setting(reason) != ph.get("setting"):
+        return None
+    return ph if int(ph.get("attempt") or 0) == int(st.get("attempts") or 1) else None
+
+
 def _check_held(d: Any, job_id: str, by: str) -> tuple[dict[str, Any], dict[str, Any]]:
     if not by.strip():
         raise Refused("--by is required: who decided")
@@ -151,9 +237,12 @@ def _check_held(d: Any, job_id: str, by: str) -> tuple[dict[str, Any], dict[str,
     if row is None:
         raise Refused(f"there is no chronology job {job_id}")
     reason = str(row.get("reason") or "")
-    if row.get("state") != "held" or not reason.startswith(ALLOWANCE_SETTING):
-        raise Refused(f"job {job_id} is {row.get('state')} ({reason[:80]}), not held on the page allowance")
     st = d._daemon_state(job_id)
+    held = row.get("state") == "held"
+    if not held or not (reason.startswith(ALLOWANCE_SETTING) or _price_hold(st, reason) is not None):
+        raise Refused(
+            f"job {job_id} is {row.get('state')} ({reason[:80]}), not held on the page allowance or on its price"
+        )
     if st.get("state") != "held":
         raise Refused(f"the daemon does not hold job {job_id} (it reads {st.get('state')}); nothing was written")
     if (d.queue / f"{job_id}.json").exists() or (d.queue / f"{MARKER_PREFIX}{job_id}.json").exists():
@@ -165,8 +254,12 @@ def _check_held(d: Any, job_id: str, by: str) -> tuple[dict[str, Any], dict[str,
     return row, st
 
 
-def plan_approve(d: Any, job_id: str, *, by: str, pages: int | None) -> dict[str, Any]:
-    _row, st = _check_held(d, job_id, by)
+def plan_approve(d: Any, job_id: str, *, by: str, pages: int | None, usd: float | None = None) -> dict[str, Any]:
+    row, st = _check_held(d, job_id, by)
+    if _price_hold(st, str(row.get("reason") or "")) is not None:
+        return _plan_approve_usd(job_id, st, by=by, pages=pages, usd=usd, hold=st["price_hold"])
+    if usd is not None:
+        raise Refused(f"job {job_id} is held on the page allowance, not on its price; --usd does not apply")
     raw = st.get("allowance_hold")
     hold: dict[str, Any] = raw if isinstance(raw, dict) else {}
     n = pages if pages is not None else hold.get("over")
@@ -187,6 +280,37 @@ def plan_approve(d: Any, job_id: str, *, by: str, pages: int | None) -> dict[str
     }
 
 
+def _plan_approve_usd(
+    job_id: str, st: dict[str, Any], *, by: str, pages: int | None, usd: float | None, hold: dict[str, Any]
+) -> dict[str, Any]:
+    if pages is not None:
+        raise Refused(f"job {job_id} is held on its price, not on the page allowance; --pages does not apply")
+    if usd is None or isinstance(usd, bool) or not isinstance(usd, (int, float)) or not usd > 0:
+        raise Refused("a price hold is approved in dollars: name the job's ceiling with --usd N (N > 0)")
+    # The ceiling is the job's TOTAL spend: one at or below what it already
+    # spent would stop it on its first call. The alert prints the figure to pass.
+    floor_cents = int(hold.get("spent_cents") or 0) + 1
+    if int(round(float(usd) * 100)) < floor_cents:
+        raise Refused(
+            f"--usd is the job's total-spend ceiling and must be at least {floor_cents / 100:.2f} "
+            f"(spent_cents {floor_cents - 1:,} plus one cent); the alert's figure is {hold.get('approve_usd')}"
+        )
+    attempt = int(st.get("attempts") or 1)
+    ceiling = float(usd)
+    return {
+        "job_id": job_id,
+        "decision": {"decision": "approved", "usd": ceiling, "by": by.strip(), "attempt": attempt},
+        "resume": {
+            "action": "medchron_job_resume",
+            "job_id": job_id,
+            "reason": f"price approved by SMD: ceiling_cents {int(round(ceiling * 100)):,} ({by.strip()})",
+            "redo": [],
+            "allowance_approved_usd": ceiling,
+            "allowance_approved_by": by.strip(),
+        },
+    }
+
+
 def apply_approve(d: Any, p: dict[str, Any]) -> None:
     """The approval file first, then the broker's resume: a marker the daemon
     could claim before the file existed would only hold again. A refused
@@ -198,7 +322,7 @@ def apply_approve(d: Any, p: dict[str, Any]) -> None:
     path = jd / APPROVAL_FILE
     before = path.read_text(encoding="utf-8") if path.is_file() else None
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    write_approval(jd, pages=dec["pages"], by=dec["by"], attempt=dec["attempt"], at=at)
+    write_approval(jd, pages=dec.get("pages"), usd=dec.get("usd"), by=dec["by"], attempt=dec["attempt"], at=at)
     d._chown_child(path)
     try:
         d.broker._request(p["resume"])
@@ -223,18 +347,21 @@ def plan_decline(d: Any, job_id: str, *, by: str) -> dict[str, Any]:
         (
             int(o.get("pages") or 0)
             for o in outcomes
-            if isinstance(o, dict) and not (o.get("outcome") == "held" and isinstance(o.get("allowance"), dict))
+            if isinstance(o, dict)
+            and not (o.get("outcome") == "held" and (isinstance(o.get("allowance"), dict) or "price_cents" in o))
         ),
         default=0,
     )
     attempt = int(st.get("attempts") or 1)
+    price = _price_hold(st, str(row.get("reason") or ""))
     return {
         "job_id": job_id,
         "matter": _matter_number(d, job_id),
+        "hold": "price" if price is not None else "allowance",
         "record": (
             "failed",
             {
-                "reason": DECLINED_REASON,
+                "reason": DECLINED_REASON if price is None else PRICE_DECLINED_REASON.format(setting=price["setting"]),
                 "pages": kept if outcomes else int(row.get("pages") or 0),
                 **run_record.fields_for(d, "stop", by="smd", code="allowance_declined"),
             },
@@ -256,7 +383,8 @@ def apply_decline(d: Any, p: dict[str, Any]) -> None:
         allowance_decision={**p["decision"], "at": at},
     )
     detail = (
-        f"allowance hold DECLINED by {p['decision']['by']}: matter {p['matter']}; the job ended failed. "
+        f"{p.get('hold', 'allowance')} hold DECLINED by {p['decision']['by']}: matter {p['matter']}; "
+        "the job ended failed. "
         "The requester has NOT been told: no authored wording exists for a declined chronology, so telling "
         "her is SMD's."
     )
@@ -315,6 +443,7 @@ def main(argv: list[str] | None = None) -> int:
     a_ap.add_argument(
         "--pages", type=int, default=None, help="pages approved past the allowance (default: the overrun)"
     )
+    a_ap.add_argument("--usd", type=float, default=None, help="a price hold's approved dollar ceiling for this job")
     a_ap.add_argument("--dry-run", action="store_true")
     d_ap = sub.add_parser("decline", help="end the held job; the requester is not told")
     d_ap.add_argument("job_id")
@@ -334,7 +463,7 @@ def main(argv: list[str] | None = None) -> int:
         return _main_credit(d, a)
     try:
         if a.cmd == "approve":
-            p = plan_approve(d, a.job_id, by=a.by, pages=a.pages)
+            p = plan_approve(d, a.job_id, by=a.by, pages=a.pages, usd=a.usd)
         else:
             p = plan_decline(d, a.job_id, by=a.by)
         print(json.dumps({"dry_run": a.dry_run, **p}, indent=1, default=str))
@@ -345,7 +474,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
     if a.cmd == "approve":
-        print(f"approved {p['decision']['pages']:,} pages on {a.job_id}; the daemon re-queues it on its next tick")
+        dec = p["decision"]
+        what = f"{dec['pages']:,} pages" if "pages" in dec else f"ceiling_cents {int(round(dec['usd'] * 100)):,}"
+        print(f"approved {what} on {a.job_id}; the daemon re-queues it on its next tick")
     else:
         print(f"declined {a.job_id}; the job ended failed and the requester has not been told")
     return 0

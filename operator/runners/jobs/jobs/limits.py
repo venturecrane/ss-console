@@ -47,6 +47,9 @@ class LimitHold(Exception):
         # An allowance hold's figures (pages, remaining, over) for SMD's alert
         # and the approve command's default. Never part of ``reason``.
         self.allowance = allowance
+        # The medchron driver's whole-job price at its first paid check, in
+        # cents, for SMD's alert (``medchron/job_price``). Never part of ``reason``.
+        self.price_cents: int | None = None
         super().__init__(reason)
 
 

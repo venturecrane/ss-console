@@ -7,6 +7,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 100,
         "cycle_anchored": false,
         "cycle_end": "2026-11-01T00:00:00.000Z",
@@ -30,6 +31,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 0,
         "cycle_anchored": false,
         "cycle_end": "2026-11-01T00:00:00.000Z",
@@ -53,6 +55,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 100,
         "cycle_anchored": false,
         "cycle_end": "2026-12-01T00:00:00.000Z",
@@ -76,6 +79,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 100,
         "cycle_anchored": false,
         "cycle_end": "2026-12-01T00:00:00.000Z",
@@ -99,6 +103,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 100,
         "cycle_anchored": false,
         "cycle_end": "2026-12-01T00:00:00.000Z",
@@ -122,6 +127,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 100,
         "cycle_anchored": false,
         "cycle_end": "2026-12-01T00:00:00.000Z",
@@ -145,6 +151,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 0,
         "cycle_anchored": false,
         "cycle_end": "2027-01-01T00:00:00.000Z",
@@ -168,6 +175,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 0,
         "cycle_anchored": false,
         "cycle_end": "2027-01-01T00:00:00.000Z",
@@ -191,6 +199,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 0,
         "cycle_anchored": false,
         "cycle_end": "2027-01-01T00:00:00.000Z",
@@ -214,6 +223,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 0,
         "cycle_anchored": false,
         "cycle_end": "2027-01-01T00:00:00.000Z",
@@ -237,6 +247,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 100,
         "cycle_anchored": false,
         "cycle_end": "2026-12-01T00:00:00.000Z",
@@ -260,6 +271,7 @@
       "reply": {
         "allowance": null,
         "authored": false,
+        "cents_committed": 0,
         "cents_used": 100,
         "cycle_anchored": false,
         "cycle_end": "2026-12-01T00:00:00.000Z",

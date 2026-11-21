@@ -135,3 +135,77 @@ def test_an_approved_overage_is_root_only(verbs):
     with pytest.raises(PermissionError):
         _resume(v, j, peer_uid=AGENT_UID, **APPROVAL)
     assert not (queue / f".resume-{j}.json").exists()
+
+
+# ---- SMD's dollar approval of a whole-job price hold (2026-11-20) -------------
+# A job priced past the job cap or the cycle budget holds before its first paid
+# stage. ``jobs.medchron.allowance approve --usd`` resumes it with that figure as
+# its ceiling; the guard above now takes that approval too. Invented values.
+BUDGET_HOLD = (
+    "monthly_budget_usd: this run's projected cost added to the month's spend to date would exceed the "
+    "monthly cost budget; the package was not started before vision"
+)
+USD_APPROVAL = {"allowance_approved_usd": 200.0, "allowance_approved_by": "Scott"}
+
+
+@pytest.mark.parametrize("reason", [CAP_HOLD, BUDGET_HOLD])
+def test_a_dollar_approval_resumes_a_price_hold_and_audits_it_in_cents(verbs, reason):
+    v, db, queue = verbs
+    j = _held_job(v, reason)
+    assert _resume(v, j, **USD_APPROVAL)["queued"] is True
+    marker = json.loads((queue / f".resume-{j}.json").read_text())
+    assert marker["allowance_approved_usd"] == 200.0 and marker["allowance_approved_by"] == "Scott"
+    conn = sqlite3.connect(db)
+    try:
+        atype, meta = conn.execute("SELECT action_type, metadata FROM audit_log ORDER BY rowid DESC LIMIT 1").fetchone()
+    finally:
+        conn.close()
+    assert atype == "MEDCHRON_JOB_RUNNING"
+    # The billable record: integer cents, the audit ledger's money unit; no dollar text.
+    assert json.loads(meta)["allowance_overage_approved"] == {"cents": 20000, "by": "Scott"}
+    assert "$" not in meta and "USD" not in meta
+
+
+@pytest.mark.parametrize(
+    ("reason", "extra", "match"),
+    [
+        # Dollars approve a price hold only: never an audit hold, never pages.
+        (AUDIT_HOLD, USD_APPROVAL, "not held on"),
+        (ALLOWANCE_HOLD, USD_APPROVAL, "not held on"),
+        (CAP_HOLD, {**USD_APPROVAL, "allowance_approved_usd": 0}, "positive"),
+        (CAP_HOLD, {**USD_APPROVAL, "allowance_approved_usd": -1.0}, "positive"),
+        (CAP_HOLD, {**USD_APPROVAL, "allowance_approved_usd": True}, "positive"),
+        (CAP_HOLD, {**USD_APPROVAL, "allowance_approved_usd": "200"}, "positive"),
+        (CAP_HOLD, {"allowance_approved_usd": 200.0}, "who approved"),
+    ],
+)
+def test_a_dollar_approval_is_refused_off_a_price_hold_or_malformed(verbs, reason, extra, match):
+    v, _db, queue = verbs
+    j = _held_job(v, reason)
+    with pytest.raises(ValueError, match=match):
+        _resume(v, j, **extra)
+    assert not (queue / f".resume-{j}.json").exists()
+
+
+def test_a_dollar_approval_is_root_only(verbs):
+    v, _db, queue = verbs
+    j = _held_job(v, CAP_HOLD)
+    with pytest.raises(PermissionError):
+        _resume(v, j, peer_uid=AGENT_UID, **USD_APPROVAL)
+    assert not (queue / f".resume-{j}.json").exists()
+
+
+def test_an_approved_price_counts_against_the_cycle_for_every_other_job(verbs):
+    """Two jobs at once: an approved job not yet resumed has committed its
+    approval, so another job's cycle check counts it (``cents_committed`` in the
+    period state, which ``jobs.medchron.job.stamp_period`` adds to
+    ``month_cents_used``). Its own resume excludes it. FALSIFIER (main): the
+    period state counts only cents already recorded."""
+    v, _db, _queue = verbs
+    j = _held_job(v, CAP_HOLD)
+    _resume(v, j, **USD_APPROVAL)
+    other = v._db.allowance(1000, exclude_job_id="01ZZZZZZZZZZZZZZZZZZZZZZZZ")
+    assert other["cents_committed"] == 20000
+    assert other["cents_used"] == 0  # billing's figure is unchanged
+    own = v._db.allowance(1000, exclude_job_id=j)
+    assert own["cents_committed"] == 0

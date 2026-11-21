@@ -47,7 +47,7 @@ from typing import Any, Callable
 from .. import budget, llm, paid
 from ..deadline import is_transient
 from ..limits import LimitHold
-from ..medchron import job as job_mod
+from ..medchron import allowance, job_price, job as job_mod
 from ..medchron.audit.page_text import exhibit_paths
 from ..medchron.page_mode import Modes
 from ..medchron.update import body as B, entry_confirm as EC, entry_read as ER, index_gaps as IG
@@ -324,9 +324,12 @@ def check_limits(sr: StageRun, projected_usd: float) -> None:
         return
     job, cfg = sr.job, sr.cfg
     cap = cfg.per_job_cap_usd if job.cap_usd is None else min(job.cap_usd, cfg.per_job_cap_usd)
+    # SMD's dollar approval of a price hold binds here as in the driver.
+    approved = allowance.approved_usd(job.path.parent)
+    cap, monthly = job_price.approved_limits(cap, cfg.monthly_budget_usd, approved)
     limits = paid.Caps(
         cap_usd=cap,
-        monthly_budget_usd=cfg.monthly_budget_usd,
+        monthly_budget_usd=monthly,
         usd_per_scanned_page=cfg.usd_per_scanned_page,
         usd_per_audit_claim=cfg.usd_per_audit_claim,
         month_cents_used=job.month_cents_used,

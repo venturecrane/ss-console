@@ -1,5 +1,5 @@
 {
-  "_why": "Dotted paths (list indexes as numbers) that may differ from a broker ledger golden, keyed <lane>/<golden> (e.g. demand/transitions); aged.json is an input, held to the merge-base's copy. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a ledger's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. This change: records and medchron had no reply-once mark; a reply could go out twice. Both ledgers now mix in ReplyOnce and gain the nullable reply_sent_at and reply_key columns by an additive, idempotent migration, so every medchron and records schema, row and table dump gains those two columns, and reply_once.json records the mark's truth table where it said not_applicable. And (2026-11-19): every drafting submit refusal carries a closed code beside its reason (drafting_verbs.REFUSAL_CODES), so the overlay words the firm's answer from the code; the verbs golden gains drafting_job_submit's code on each refused cell. And (owner's ruling, 2026-11-19): an our-side refusal is recorded by the broker as work SMD owes in the same step (workspace_broker/smd_owed.py), and the refusal says whether it was (smd_told); each refused cell gains it. A malformed envelope is the model's to correct (correct_call): once per request email, and always when it carries no request email id, so every envelope_invalid cell here (none has an id) carries correct_call, not smd_told.",
+  "_why": "Dotted paths (list indexes as numbers) that may differ from a broker ledger golden, keyed <lane>/<golden> (e.g. demand/transitions); aged.json is an input, held to the merge-base's copy. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a ledger's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. This change: records and medchron had no reply-once mark; a reply could go out twice. Both ledgers now mix in ReplyOnce and gain the nullable reply_sent_at and reply_key columns by an additive, idempotent migration, so every medchron and records schema, row and table dump gains those two columns, and reply_once.json records the mark's truth table where it said not_applicable. And (2026-11-19): every drafting submit refusal carries a closed code beside its reason (drafting_verbs.REFUSAL_CODES), so the overlay words the firm's answer from the code; the verbs golden gains drafting_job_submit's code on each refused cell. And (owner's ruling, 2026-11-19): an our-side refusal is recorded by the broker as work SMD owes in the same step (workspace_broker/smd_owed.py), and the refusal says whether it was (smd_told); each refused cell gains it. A malformed envelope is the model's to correct (correct_call): once per request email, and always when it carries no request email id, so every envelope_invalid cell here (none has an id) carries correct_call, not smd_told. And (2026-11-20): the medchron cycle state gains cents_committed, the cents SMD approved (jobs.medchron.allowance approve --usd) for a job held on its whole price that has not resumed yet, so another job's cycle check counts that money (workspace_broker/medchron_approval.py); cents_used, billing's figure, is unchanged. Every medchron allowance read gains the key, 0 in every golden case.",
   "medchron/reply_once": [],
   "medchron/schema": [],
   "medchron/transitions": [],
@@ -7,5 +7,25 @@
   "records/schema": [],
   "records/transitions": [],
   "records/verbs": [],
-  "drafting/verbs": []
+  "drafting/verbs": [],
+  "medchron/month": [
+    "reads.0.reply.cents_committed",
+    "reads.1.reply.cents_committed",
+    "reads.2.reply.cents_committed",
+    "reads.3.reply.cents_committed",
+    "reads.4.reply.cents_committed",
+    "reads.5.reply.cents_committed",
+    "reads.6.reply.cents_committed",
+    "reads.7.reply.cents_committed",
+    "reads.8.reply.cents_committed",
+    "reads.9.reply.cents_committed",
+    "reads.10.reply.cents_committed",
+    "reads.11.reply.cents_committed"
+  ],
+  "medchron/verbs": [
+    "medchron_allowance | gateway | empty.cents_committed",
+    "medchron_allowance | gateway | known job.cents_committed",
+    "medchron_allowance | root | empty.cents_committed",
+    "medchron_allowance | root | known job.cents_committed"
+  ]
 }

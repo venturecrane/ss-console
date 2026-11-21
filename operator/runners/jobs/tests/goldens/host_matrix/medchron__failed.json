@@ -275,6 +275,7 @@
         "reply": {
           "allowance": null,
           "authored": false,
+          "cents_committed": 0,
           "cents_used": 0,
           "cycle_anchored": false,
           "cycle_end": "<TS>",

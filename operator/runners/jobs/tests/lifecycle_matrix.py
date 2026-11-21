@@ -108,7 +108,28 @@ FIXED_EVENTS = (
     "broker_away_past_bound",
     "paused_past_wipe_window",
     "no_wake_secret",
+    # 2026-11-20, the whole job's price at the first paid check: the job holds
+    # on the cycle line before anything is spent (the second of two jobs), and a
+    # job held on its price is approved with a dollar ceiling (runs to delivery,
+    # or stops held at the ceiling) or declined (failed) by SMD's own commands
+    # (``jobs.medchron.allowance approve --usd`` / ``decline``).
+    "cycle_hold",
+    "price_approve",
+    "price_approve_ceiling",
+    "price_decline",
 )
+#: The whole-job price events: the job is first held on its price, then SMD acts.
+PRICE_EVENTS = ("price_approve", "price_approve_ceiling", "price_decline")
+#: The price hold's sentence (``limits.check_before_paid``; no dollar figure) and
+#: the price SMD's page carries, in cents. Invented: 2,900 pages at 0.139.
+PRICE_HOLD = (
+    "per_job_cap_usd: this run's projected cost would exceed the job's cost cap before vision; "
+    "the package was not started"
+)
+PRICE_CENTS = 40310
+#: The approved ceiling, in dollars, and the per-call stop when spend reaches it.
+APPROVED_USD = 200.0
+CEILING_STOP = "per_job_cap_usd: the run's spend reached the job's cost cap during map; the run stopped"
 #: The events whose ending must also leave the job dir wiped on schedule.
 WIPE_EVENTS = ("broker_errors_ending", "broker_away_past_bound", "paused_past_wipe_window", "no_wake_secret")
 
@@ -416,6 +437,12 @@ def _child_event(event: str, life: Life) -> Callable[[Path], tuple[int, str]] | 
 
     return {
         "cap_hold": ended("held", "map", "per_job_cap_usd: the run's projected spend passed the job's cap"),
+        # The driver's first paid check holds it on its whole price, which
+        # rides beside the reason as it does on the seat (``Outcome.price_cents``).
+        "cycle_hold": _priced_hold(
+            "monthly_budget_usd: this run's projected cost added to the month's spend to date would exceed "
+            "the monthly cost budget; the package was not started before vision"
+        ),
         "deploy_stop": stopped(life, -15),
         "machine_stop": stopped(life, resume_mod.CHECKPOINT_EXIT),
         "upload_readback_mismatch": delivered({**PROOF, "readback": "mismatch"}),
@@ -443,6 +470,9 @@ def apply_event(life: Life, state: str, jid: str, event: str) -> None:
     if event in WIPE_EVENTS:
         _bound_event(life, state, jid, event)
         return
+    if event in PRICE_EVENTS:
+        _price_event(life, state, jid, event)
+        return
     if event == "broker_errors_once":
         _error_ending(life, jid, times=1)
     act = _act(life, jid, event)
@@ -468,6 +498,46 @@ def apply_event(life: Life, state: str, jid: str, event: str) -> None:
     life.lane.stopping = lambda: False
     if state == "parked" and event != "expiry":
         _sticky(life, "OK")
+    life.settle()
+
+
+def _priced_hold(reason: str = PRICE_HOLD) -> Callable[[Path], tuple[int, str]]:
+    """The child held before its first paid stage on its whole-job price, $0
+    spent, the price riding beside the reason (``Outcome.price_cents``)."""
+
+    def make(jd: Path) -> tuple[int, str]:
+        _verdict(jd, "held", stage="vision", reason=reason, dollars=0.0, price_cents=PRICE_CENTS)
+        return 3, ""
+
+    return make
+
+
+def _price_event(life: Life, state: str, jid: str, event: str) -> None:
+    """The job runs into its price hold (if it runs at all from ``state``),
+    then SMD decides it with the real commands, run as root on the seat would
+    (``jobs.medchron.allowance``, the lane as its daemon object). A refusal is
+    an act SMD hears at once."""
+    from jobs.medchron import allowance
+
+    life.children.append(_priced_hold())
+    if state == "parked":
+        _sticky(life, "OK")
+    life.tick()
+    life.lane.stopping = lambda: False
+    life.settle()
+    try:
+        if event == "price_decline":
+            allowance.apply_decline(life.lane, allowance.plan_decline(life.lane, jid, by="SMD Example"))
+            life.acts.append(("allowance decline", "accepted"))
+        else:
+            # What runs after the approval: to delivery, or to the ceiling.
+            after = delivered() if event == "price_approve" else ended("held", "map", CEILING_STOP)
+            p = allowance.plan_approve(life.lane, jid, by="SMD Example", pages=None, usd=APPROVED_USD)
+            life.children.insert(0, after)
+            allowance.apply_approve(life.lane, p)
+            life.acts.append(("allowance approve", "accepted"))
+    except allowance.Refused:
+        life.acts.append(("allowance decline" if event == "price_decline" else "allowance approve", "refused"))
     life.settle()
 
 
@@ -701,8 +771,43 @@ def _way_out(life: Life, jid: str, row: dict[str, Any], told: str, messages: int
         if db.active_duplicate({**_envelope("2026-PI-102", "m-1"), "update": {"mode": "append"}}) is None:
             out.append("medchron_job_submit (update)")
     if state == "held":
-        out += DECIDE_FOR.get(holds.classify("medchron", reason)[1] or "", ())
+        code = holds.classify("medchron", reason)[1] or ""
+        out += _limit_way_out(life, jid) if code == "limit_held" else DECIDE_FOR.get(code, ())
     return sorted(set(out))
+
+
+def _limit_way_out(life: Life, jid: str) -> list[str]:
+    """A limit hold's decision, asked of the real command (a plan writes
+    nothing): ``approve --usd`` at the printed figure where the job holds on
+    its price, ``approve`` where it holds on the page allowance. A cap or
+    budget stop during a stage carries no price and is not approvable."""
+    from jobs.medchron import allowance
+
+    ph = _state(life, jid).get("price_hold")
+    try:
+        if isinstance(ph, dict):
+            allowance.plan_approve(life.lane, jid, by="SMD Example", pages=None, usd=float(ph.get("approve_usd") or 0))
+            return ["allowance approve --usd"]
+        allowance.plan_approve(life.lane, jid, by="SMD Example", pages=None)
+    except allowance.Refused:
+        return _limit_stop_way_out(life, jid)
+    return ["allowance approve"]
+
+
+def _limit_stop_way_out(life: Life, jid: str) -> list[str]:
+    """A cap or budget stop with no price (one reached during a stage): no
+    decide command takes it. What SMD can do is end the row by hand with the
+    root record verb (failed) and then resume it, after raising the setting the
+    reason names. Asked of the real broker, last, because it writes the row."""
+    from jobs.resume import MARKER_PREFIX
+
+    try:
+        life.client().record(jid, "failed", {"reason": "per_job_cap_usd: ended by SMD to raise the cap"})
+        life.client()._request({"action": "medchron_job_resume", "job_id": jid, "reason": "probe", "redo": []})
+    except Exception:  # noqa: BLE001 - a refusal is the answer
+        return []
+    (life.lane.queue / f"{MARKER_PREFIX}{jid}.json").unlink(missing_ok=True)
+    return ["SMD records it failed by hand, raises the setting, and resumes it"]
 
 
 def _wiped_ending(life: Life, jid: str) -> str | None:
@@ -717,7 +822,13 @@ def _wiped_ending(life: Life, jid: str) -> str | None:
 
 #: Who performs each act the matrix drives, so a refused act is owned by the
 #: one who asked (the verb answers them in the same call).
-ACTOR = {"medchron_job_resume": "smd", "medchron_job_submit": "firm", "deliver_by_smd": "smd"}
+ACTOR = {
+    "medchron_job_resume": "smd",
+    "medchron_job_submit": "firm",
+    "deliver_by_smd": "smd",
+    "allowance approve": "smd",
+    "allowance decline": "smd",
+}
 
 
 #: The ``*_decide`` tool that answers each hold's page code (``proof/holds.py``),
@@ -726,7 +837,6 @@ DECIDE_FOR: dict[str, tuple[str, ...]] = {
     "gate_held": ("audit_decide", "coverage_decide"),
     "identity_held": ("identity_decide",),
     "update_held": ("update_decide",),
-    "limit_held": ("allowance approve",),
     "upload_held": ("deliver_by_smd",),
     "stage_refused": ("redo_doc",),
 }
@@ -898,6 +1008,24 @@ def problems(cell: str, got: dict[str, Any]) -> list[str]:
             out.append("(i) the same person was queued twice while a job was active")
     if event == "second_client_same_matter" and got.get("second") is None:
         out.append("(i) another client on the matter was refused")
+    # (j) the whole job's price (2026-11-20). From a state that runs the job,
+    # a price hold or a cycle hold ends held on that setting with nothing sent;
+    # SMD's dollar approval runs it to its one delivery, or stops it held at the
+    # ceiling; SMD's decline ends it failed. The firm hears nothing but a delivery.
+    runs = cell.partition("/")[0] in ("submitted", "running")
+    want = {
+        "cycle_hold": ("held", "monthly_budget_usd", 0),
+        "price_approve": ("delivered", None, 1),
+        "price_approve_ceiling": ("held", "per_job_cap_usd", 0),
+        "price_decline": ("failed", None, 0),
+    }.get(event)
+    if runs and want is not None:
+        ending, code, told = want
+        if got["ending"] != ending or (code is not None and got["code"] != code) or got["firm_messages"] != told:
+            out.append(
+                f"(j) {event} ended {got['ending']} ({got['code']}, {got['firm_messages']} message(s)); "
+                f"want {ending} ({code or 'any code'}, {told})"
+            )
     # (e) the row that put the job in its state carries a run block
     if got["state"] not in ("submitted", "gone") and not isinstance(got["run"], dict):
         out.append("(e) the row that ended the job carries no run block")

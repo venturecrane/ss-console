@@ -200,7 +200,10 @@ def stamp_period(doc: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     doc["allowance_pages"] = int(state.get("allowance") or 0)
     doc["allowance_remaining_pages"] = int(state.get("remaining") or 0)
     doc["month_pages_used"] = int(state.get("pages_used") or 0)
-    doc["month_cents_used"] = int(state.get("cents_used") or 0)
+    # Billing's cents plus what SMD approved for jobs not yet resumed (the
+    # broker's ``cents_committed``), so two jobs at once cannot both fit a line
+    # that only one fits (2026-11-20).
+    doc["month_cents_used"] = int(state.get("cents_used") or 0) + int(state.get("cents_committed") or 0)
     if state.get("cycle_anchored"):
         doc["allowance_cycle_label"] = str(state.get("month") or "")
         doc.pop("allowance_month", None)

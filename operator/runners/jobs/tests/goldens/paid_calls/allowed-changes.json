@@ -1,5 +1,5 @@
 {
-  "_why": "Dotted paths (JSONL goldens: <line>.<key>) that may differ from the captured paid-call goldens, per case. Captured on origin/main 4413e23e9 before wave 2 moves the seven lanes' paid-session setup into one kit. Every list is empty: any difference in a request, a receipt, a limit decision or a cents figure fails. An intended change adds its path here, in the PR that makes it.",
+  "_why": "Dotted paths (JSONL goldens: <line>.<key>) that may differ from the captured paid-call goldens, per case. Captured on origin/main 4413e23e9 before wave 2 moves the seven lanes' paid-session setup into one kit. Every list is empty: any difference in a request, a receipt, a limit decision or a cents figure fails. An intended change adds its path here, in the PR that makes it. And (2026-11-20): the medchron first paid check projects the unit's WHOLE price (pages at 0.065 a page for a full chronology, 0.139 for an update; jobs/medchron/job_price.py) instead of vision's own projection, so its projected_usd changes (9 pages: 0.585; an update's 2 pages: 0.278) and the recorded limit lines re-sort around it.",
   "casefile": [],
   "cost-grid": [],
   "demand": [],
@@ -8,8 +8,27 @@
   "limits-grid": [],
   "litigation": [],
   "litigation_cap": [],
-  "medchron": [],
-  "medchron_update": [],
+  "medchron": [
+    "5.args.projected_usd",
+    "15.args.projected_usd",
+    "15.args.spent_usd",
+    "15.args.stage",
+    "16.args.projected_usd",
+    "16.args.spent_usd",
+    "16.args.stage"
+  ],
+  "medchron_update": [
+    "8.args.projected_usd",
+    "15.args.projected_usd",
+    "15.args.spent_usd",
+    "15.args.stage",
+    "16.args.projected_usd",
+    "16.args.spent_usd",
+    "16.args.stage",
+    "17.args.projected_usd",
+    "17.args.spent_usd",
+    "17.args.stage"
+  ],
   "model-facts": [],
   "model-facts-disagreements": [],
   "negotiation": [],

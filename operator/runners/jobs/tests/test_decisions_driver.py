@@ -940,7 +940,9 @@ def test_a_large_matter_is_not_held_by_any_per_matter_page_line(
     Falsifier: put a per-matter page gate back into the firm schema and this
     run holds at vision instead of proceeding.
     """
-    firm = _firm(tmp_path)
+    # The cost lines are set to fit the whole-job price (12,000 pages at the
+    # full rate, 780.00; ``jobs.medchron.job_price``): dollars bind, pages do not.
+    firm = _firm(tmp_path, per_job_cap_usd=1000.0, monthly_budget_usd=2000.0)
     _seed_extracted(data_root, pages=12_000)
     assert _limit_run(job_dir, firm, pricing_path).outcome != "held"
 
@@ -1037,7 +1039,10 @@ def _spender(n: int = 20):
 
 def _in_stage(tmp_path: Path, data_root: Path, pricing_path: Path, firm: Path, name: str, **job_fields):
     jd = _job(tmp_path, data_root, name, **job_fields)
-    _seed_extracted(data_root, pages=4)
+    # Three pages price 0.195 at the full rate (``jobs.medchron.job_price``),
+    # under both lines below, so the first paid check passes and the stop
+    # measured is the one inside the stage.
+    _seed_extracted(data_root, pages=3)
     client = _Meter()
     d = _driver(jd, firm, pricing_path, start="vision", client=client)
     d._runner_override = {"vision": _spender()}

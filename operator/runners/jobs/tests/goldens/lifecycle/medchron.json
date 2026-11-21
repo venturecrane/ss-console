@@ -154,6 +154,28 @@
       "way_out": ["done"],
       "wiped": false
     },
+    "delivered/cycle_hold": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": [],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
     "delivered/expiry": {
       "code": null,
       "ended_while_away": false,
@@ -263,6 +285,72 @@
       "told_while_away": 1,
       "way_out": ["done"],
       "wiped": true
+    },
+    "delivered/price_approve": {
+      "code": "allowance approve",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["reply_unproven"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "delivered/price_approve_ceiling": {
+      "code": "allowance approve",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["reply_unproven"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "delivered/price_decline": {
+      "code": "allowance decline",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "smd",
+      "paged": ["reply_unproven"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
     },
     "delivered/queue_behind_same_lane": {
       "code": null,
@@ -678,6 +766,30 @@
       "way_out": ["done"],
       "wiped": false
     },
+    "failed/cycle_hold": {
+      "code": "extract",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
+    },
     "failed/deploy_stop": {
       "code": "extract",
       "ended_while_away": false,
@@ -841,6 +953,78 @@
       "told_while_away": 0,
       "way_out": ["medchron_job_submit"],
       "wiped": true
+    },
+    "failed/price_approve": {
+      "code": "allowance approve",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
+    },
+    "failed/price_approve_ceiling": {
+      "code": "allowance approve",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
+    },
+    "failed/price_decline": {
+      "code": "allowance decline",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["job_stopped"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "extract",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "extract",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "failed/queue_behind_same_lane": {
       "code": "extract",
@@ -1290,6 +1474,30 @@
       "way_out": ["done"],
       "wiped": false
     },
+    "held/cycle_hold": {
+      "code": "audit",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
     "held/deploy_stop": {
       "code": "audit",
       "ended_while_away": false,
@@ -1447,6 +1655,78 @@
       "told_while_away": 0,
       "way_out": ["medchron_job_submit"],
       "wiped": true
+    },
+    "held/price_approve": {
+      "code": "allowance approve",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
+    "held/price_approve_ceiling": {
+      "code": "allowance approve",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
+    },
+    "held/price_decline": {
+      "code": "allowance decline",
+      "ended_while_away": false,
+      "ending": "refused",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["gate_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "audit",
+        "event": "stop",
+        "kind": "check",
+        "stage": "audit",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["audit_decide", "coverage_decide", "medchron_job_resume"],
+      "wiped": false
     },
     "held/queue_behind_same_lane": {
       "code": "audit",
@@ -1841,7 +2121,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["allowance approve"],
+      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
       "wiped": false
     },
     "parked/claim": {
@@ -1886,6 +2166,30 @@
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
+      "wiped": false
+    },
+    "parked/cycle_hold": {
+      "code": "monthly_budget_usd",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "monthly_budget_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "vision",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "parked/deploy_stop": {
@@ -2041,6 +2345,74 @@
       "told_while_away": 0,
       "way_out": ["SMD tells the firm (paged wake_lost)"],
       "wiped": true
+    },
+    "parked/price_approve": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "parked/price_approve_ceiling": {
+      "code": "per_job_cap_usd",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "per_job_cap_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "wiped": false
+    },
+    "parked/price_decline": {
+      "code": "allowance_declined",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "smd",
+        "code": "allowance_declined",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "parked/queue_behind_same_lane": {
       "code": null,
@@ -2421,7 +2793,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["allowance approve"],
+      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
       "wiped": false
     },
     "requeued_waiting/claim": {
@@ -2466,6 +2838,30 @@
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
+      "wiped": false
+    },
+    "requeued_waiting/cycle_hold": {
+      "code": "monthly_budget_usd",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "monthly_budget_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "vision",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "requeued_waiting/deploy_stop": {
@@ -2621,6 +3017,74 @@
       "told_while_away": 0,
       "way_out": ["SMD tells the firm (paged wake_lost)"],
       "wiped": true
+    },
+    "requeued_waiting/price_approve": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "requeued_waiting/price_approve_ceiling": {
+      "code": "per_job_cap_usd",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "per_job_cap_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "wiped": false
+    },
+    "requeued_waiting/price_decline": {
+      "code": "allowance_declined",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "smd",
+        "code": "allowance_declined",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "requeued_waiting/queue_behind_same_lane": {
       "code": null,
@@ -3001,7 +3465,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["allowance approve"],
+      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
       "wiped": false
     },
     "running/claim": {
@@ -3046,6 +3510,30 @@
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
+      "wiped": false
+    },
+    "running/cycle_hold": {
+      "code": "monthly_budget_usd",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "monthly_budget_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "vision",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "running/deploy_stop": {
@@ -5582,6 +6070,74 @@
       "way_out": ["SMD tells the firm (paged wake_lost)"],
       "wiped": true
     },
+    "running/price_approve": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "running/price_approve_ceiling": {
+      "code": "per_job_cap_usd",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "per_job_cap_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "wiped": false
+    },
+    "running/price_decline": {
+      "code": "allowance_declined",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "smd",
+        "code": "allowance_declined",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
+    },
     "running/queue_behind_same_lane": {
       "code": null,
       "ended_while_away": false,
@@ -5961,7 +6517,7 @@
       "second": null,
       "state": "held",
       "told_while_away": 0,
-      "way_out": ["allowance approve"],
+      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
       "wiped": false
     },
     "submitted/claim": {
@@ -6006,6 +6562,30 @@
       "state": "delivered",
       "told_while_away": 0,
       "way_out": ["done"],
+      "wiped": false
+    },
+    "submitted/cycle_hold": {
+      "code": "monthly_budget_usd",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "monthly_budget_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "vision",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["allowance approve --usd"],
       "wiped": false
     },
     "submitted/deploy_stop": {
@@ -6161,6 +6741,74 @@
       "told_while_away": 0,
       "way_out": ["SMD tells the firm (paged wake_lost)"],
       "wiped": true
+    },
+    "submitted/price_approve": {
+      "code": null,
+      "ended_while_away": false,
+      "ending": "delivered",
+      "filed_sets": 1,
+      "firm_messages": 1,
+      "firm_owed": 1,
+      "owner": "firm",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "event": "end",
+        "release": "unknown",
+        "v": 1
+      },
+      "second": null,
+      "state": "delivered",
+      "told_while_away": 0,
+      "way_out": ["done"],
+      "wiped": false
+    },
+    "submitted/price_approve_ceiling": {
+      "code": "per_job_cap_usd",
+      "ended_while_away": false,
+      "ending": "held",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "code",
+        "code": "per_job_cap_usd",
+        "event": "stop",
+        "kind": "plumbing",
+        "stage": "map",
+        "v": 1
+      },
+      "second": null,
+      "state": "held",
+      "told_while_away": 0,
+      "way_out": ["SMD records it failed by hand, raises the setting, and resumes it"],
+      "wiped": false
+    },
+    "submitted/price_decline": {
+      "code": "allowance_declined",
+      "ended_while_away": false,
+      "ending": "failed",
+      "filed_sets": 0,
+      "firm_messages": 0,
+      "firm_owed": 0,
+      "owner": "smd",
+      "paged": ["limit_held"],
+      "record_late": false,
+      "run": {
+        "by": "smd",
+        "code": "allowance_declined",
+        "event": "stop",
+        "v": 1
+      },
+      "second": null,
+      "state": "failed",
+      "told_while_away": 0,
+      "way_out": ["medchron_job_resume", "medchron_job_submit"],
+      "wiped": false
     },
     "submitted/queue_behind_same_lane": {
       "code": null,
@@ -6389,7 +7037,7 @@
       "wiped": false
     }
   },
-  "count": 279,
+  "count": 307,
   "not_applicable": {
     "delivered/cap_hold": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",
     "delivered/deploy_stop": "a delivered row never moves again: _ALLOWED_NEXT['delivered'] is empty (workspace_broker/medchron_ledger.py) and nothing re-queues it, so no child runs to stop or mismatch",

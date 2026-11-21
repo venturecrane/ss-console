@@ -15674,6 +15674,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -15910,6 +15911,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -16146,6 +16148,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -16351,6 +16354,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -16572,6 +16576,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -16816,6 +16821,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -17106,6 +17112,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -17311,6 +17318,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -17574,6 +17582,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -17845,6 +17854,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -18164,6 +18174,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -18532,6 +18543,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -18753,6 +18765,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -19024,6 +19037,7 @@
           {
             "allowance": "null",
             "authored": "bool",
+            "cents_committed": "int",
             "cents_used": "int",
             "cycle_anchored": "bool",
             "cycle_end": "str",
@@ -26790,6 +26804,7 @@
         {
           "allowance": "null",
           "authored": "bool",
+          "cents_committed": "int",
           "cents_used": "int",
           "cycle_anchored": "bool",
           "cycle_end": "str",
