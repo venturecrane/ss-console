@@ -533,3 +533,55 @@ def test_a_draft_awaiting_attorney_review_never_answers_and_makes_the_job_a_revi
     assert stop_of(lambda: run(data, jd, Fake(THREE))) == "served_prior_draft"
     report = json.loads((jd / served_find.REPORT).read_text())
     assert name in report["reason"] and not (jd / served.FILE).exists()
+
+
+# ---- the third $0 replay's shapes (2026-11-20; invented values) ------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "DRAFT - Pltf Responses to Special Interrogatories Set One.docx",  # D1: no comma before Set
+        "DRAFT for attorney review - Responses to Defendant's Special Interrogatories Set 1 - 100001.docx",
+    ],
+)
+def test_a_draft_named_without_the_comma_before_set_is_still_a_revision(tmp_path, name):
+    docs = [*three_docs(), _word_response("w1", name, "SPECIAL INTERROGATORIES")]
+    data, jd = matter(tmp_path, docs)
+    assert stop_of(lambda: run(data, jd, Fake(THREE))) == "served_prior_draft"
+
+
+def test_a_draft_of_a_demand_for_production_reads_its_kind_through_the_title_vocabulary(tmp_path):
+    """D2: "Responses to Demand for Production" is requests for production (served_slice.TITLES)."""
+    from jobs.drafting import served_papers
+
+    assert served_papers.draft_of("DRAFT Responses to Demand for Production Set Two.docx") == (
+        "requests_for_production",
+        2,
+    )
+    name = "DRAFT - Responses to Demand for Production and Inspection, Set One.docx"
+    data, jd = matter(tmp_path, [*three_docs(), _word_response("w1", name, "DEMAND FOR PRODUCTION")])
+    assert stop_of(lambda: run(data, jd, Fake(THREE))) == "served_prior_draft"
+
+
+def _served_response_docs() -> list[dict]:
+    return [*three_docs(), {"id": "r1", "name": "Resp SROGs.pdf", "pages": response("SPECIAL INTERROGATORIES"),
+                            "created": "2026-10-30T09:00:00"}]  # fmt: skip
+
+
+def test_a_request_for_amended_responses_to_an_answered_set_stops_served_amended_before_any_read(tmp_path):
+    """Q1: the attorney asks for amended responses; the set its served response answers is not dropped."""
+    data, jd = matter(tmp_path, _served_response_docs())
+    fake = Fake(THREE)
+    request = "Please prepare amended responses to the special interrogatories on matter 100001."
+    assert stop_of(lambda: run(data, jd, fake, request=request)) == "served_amended"
+    assert fake.seen == [] and not (jd / served.FILE).exists()
+    data2, jd2 = matter(tmp_path / "b", _served_response_docs())
+    further = "We owe further responses to the discovery on matter 100001."
+    assert stop_of(lambda: run(data2, jd2, Fake(THREE), request=further)) == "served_amended"
+
+
+def test_a_plain_request_still_drops_a_set_with_a_served_response(tmp_path):
+    data, jd = matter(tmp_path, _served_response_docs())
+    run(data, jd, Fake(THREE))
+    assert [s.set_type for s in served.read(jd, [CLIENT])] == ["requests_for_production", "form_interrogatories"]

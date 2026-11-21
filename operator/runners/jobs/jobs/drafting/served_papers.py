@@ -20,7 +20,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
-from .served import SET_TYPES
+from .served_slice import TITLES
 
 _MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
 _DATE = rf"(?:(?:{_MONTHS})\.?\s+\d{{1,2}},?\s+\d{{4}}|\d{{1,2}}/\d{{1,2}}/\d{{2,4}})"
@@ -31,7 +31,15 @@ _DATED = re.compile(rf"(?i)\b(?:dated|served)\b[^\n]{{0,40}}?{_DATE}")
 #: A signature block after the date: "/s/", "By:", or "Attorneys for".
 _SIGNED = re.compile(r"(?i)/s/|^[ \t|]*By:|\bAttorneys?\s+for\b", re.M)
 _DRAFT_NAME = re.compile(r"(?i)^\s*DRAFT\b|for\s+attorney\s+review")
-_DRAFT_OF = re.compile(r"(?i)\bDRAFT\b.*?\bResponses?\s+to\s+(?P<kind>.+?),\s+Set\s+(?P<n>\w+)")
+#: "DRAFT ... Responses to <kind>, Set One", with or without the comma (measured
+#: 2026-11-20: 0 of 15 real draft names carried it), the number in digits or words.
+_DRAFT_OF = re.compile(r"(?i)\bDRAFT\b.*?\bResponses?\s+to\s+(?P<kind>.+?),?\s+Set\s+(?:No\.?\s*)?(?P<n>\w+)")
+_TITLE_WORDS = {k: re.compile(v) for k, v in TITLES.items()}
+#: The attorney asks for amended, further or supplemental responses (code, no model).
+_AMENDED = re.compile(
+    r"(?i)\b(?:amended|further|supplemental|supplementary)\b[^.\n]{0,40}?\b(?:responses?|answers?)\b"
+    r"|\b(?:amend|supplement)\s+(?:the\s+|our\s+|their\s+|its\s+)?(?:responses?|answers?)\b"
+)
 _WORDS = {w: i for i, w in enumerate("one two three four five six seven eight nine ten".split(), 1)}
 
 
@@ -51,11 +59,18 @@ def was_served(name: str, text: str) -> bool:
     return bool(dated and _SIGNED.search(text, dated.end()))
 
 
+def asks_amended(request: str) -> bool:
+    """The request asks for amended, further or supplemental responses."""
+    return bool(_AMENDED.search(request or ""))
+
+
 def _kind(words: str) -> str | None:
-    """The set type a "Responses to <...>" phrase names ("Defendant's Special
-    Interrogatories" reads as special interrogatories)."""
-    low = " ".join(words.lower().split())
-    return next((k for k, (label, _r) in SET_TYPES.items() if low.endswith(label.lower())), None)
+    """The set type a "Responses to <...>" phrase names, by the same title
+    vocabulary the slicer reads a caption with (``served_slice.TITLES``):
+    "Defendant's Special Interrogatories", "Demand for Production" and the rest."""
+    up = " ".join(words.upper().split())
+    hits = [(m.end(), k) for k, rx in _TITLE_WORDS.items() for m in rx.finditer(up)]
+    return max(hits)[1] if hits else None
 
 
 def set_number(word: str) -> int | None:

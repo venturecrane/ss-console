@@ -86,13 +86,15 @@ REASON_CODES = (
     # smd-needs.json and found-report.json: no served set in the file; only no-text discovery files in a
     # discovery folder; two sets code cannot tell apart, a read value not on the page, or a response it
     # cannot pair; requests that do not number 1 to the count; more than the finder reads or its cap;
-    # a prior Operator draft of a set still owed (a revision).
+    # a prior Operator draft of a set still owed (a revision); a request for amended, further or
+    # supplemental responses to a set already answered.
     "served_none",
     "served_scan",
     "served_ambiguous",
     "served_unnumbered",
     "served_many",
     "served_prior_draft",
+    "served_amended",
     # A served form interrogatory set (forms/), each before anything is paid, failed and resumable,
     # SMD paged with smd-needs.json, the firm told nothing new: the served form lacks one of its
     # eight pages; its boxes are not confirmed (the reads disagree, an addition, an unknown revision);

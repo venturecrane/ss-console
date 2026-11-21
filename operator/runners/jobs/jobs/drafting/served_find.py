@@ -511,9 +511,7 @@ def _set_key(d: Doc, kind: str) -> tuple[str, int, str, str]:
 
 def _home_rank(d: Doc) -> int:
     """A copy in the matter's discovery folder first, an email attachment last."""
-    if d.kind == "attachment":
-        return 2
-    return 0 if _DISCOVERY_FOLDER.search(d.folder) else 1
+    return 2 if d.kind == "attachment" else 0 if _DISCOVERY_FOLDER.search(d.folder) else 1
 
 
 def fold_copies(f: Found, served: list[tuple[Doc, str]]) -> list[tuple[Doc, str]]:
@@ -666,7 +664,21 @@ def candidates(f: Found, data: Path, request: str, clients: list[str]) -> Sorted
     got = sort_docs(f, docs(data), clients)
     _narrow(f, got, kinds)
     _before_spend(f, got, kinds)
+    if papers.asks_amended(request):
+        _amended(got)
     return got
+
+
+def _amended(got: Sorted, served: list[ServedSet] | None = None) -> None:
+    """An amended, further or supplemental request: a set with a served response
+    of ours is not dropped; the job stops ``served_amended`` (SMD drafts it). Before
+    any read by code's own keys, and again after the reads by the read values."""
+    keyed = [(s.set_type, s.set_number, s.propounding_party, s.label) for s in served or []]
+    keyed += [(*_set_key(d, k)[:3], repr(d.name)) for d, k in ([] if served is not None else got.served)]
+    for kind, n, asking, label in keyed:
+        if any((r[1], r[2]) == (kind, n) and parties.same(r[3], asking) for r in got.responses):
+            raise Stop("served_amended", f"the request asks for amended or further responses and {label} "
+                       "has a served response of ours")  # fmt: skip
 
 
 def planned_reads(data: Path, request: str, clients: list[str]) -> list[str]:
@@ -681,6 +693,8 @@ def planned_reads(data: Path, request: str, clients: list[str]) -> list[str]:
 def _walk(f: Found, data: Path, request: str, reader: Reader, clients: list[str], other: list[str], title: str) -> None:
     got = candidates(f, data, request, clients)
     _read_all(f, got, reader, clients, other)
+    if papers.asks_amended(request):
+        _amended(got, f.keep)
     _answered(f, got)
     if not f.keep:
         raise Stop("served_none", "every served set in the matter file is answered by a later response of ours")

@@ -170,6 +170,7 @@ DRAFTING_NEXT = {
     "served_unnumbered": "the requests do not number 1 to N: name the set with served write, then resume",
     "served_many": "too many sets for the finder: name them with served write, then resume",
     "served_prior_draft": "a prior draft is on the matter: a revision, by hand",
+    "served_amended": "amended or further responses to a set already answered: draft them by hand",
     "party_unknown": "name the parties in parties.json, then resume, or draft by hand",
     "form_incomplete": "the served form lacks a page: find the whole form, or draft the set by hand",
     "form_unconfirmed": "confirm the checked boxes (form-read.json; jobs.drafting.served write), then resume",
