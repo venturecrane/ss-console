@@ -16,7 +16,7 @@
 # client, a matter or a file name: this repo is public.
 #
 # Deliberately NOT here:
-#   document-drafter.(discovery_response|memo|depo_outline)  no delivery here
+#   document-drafter.(memo|depo_outline)  no delivery here
 #       at the census.
 #
 # A census row count is only the rows that existed at its timestamp. A lane
@@ -142,4 +142,14 @@ lanes:
       no keying missed, the one failed call retried and nothing lost
       (vfy_01M671580CGVS7QGBSVA87R5ES). Accepted on the Captain's go,
       2026-10-30.
+  document-drafter.discovery_response:
+    proven_at: '2026-11-21'
+    evidence: >-
+      Four $0 replays on the seat's real saved requests in the client ops
+      workspace against hand answer keys (ss#4146, ss#4153): requests sliced
+      93/93, checkboxes 163/163, the finder ends with the key's sets on a
+      first job; prior drafts and amended requests stop to SMD. Form
+      interrogatory sets stay SMD's (served.FORM_SETS_BY_OPERATOR False).
+      Gates probed on the seat, 0 jobs waiting (vfy_01M7XWCXSP3RSHZZ1E3VSS1XR6).
+      Measured $2-$11 a job. Opened on the Captain's go, 2026-11-20 MST.
 revoked: []
