@@ -95,7 +95,10 @@ def test_the_compose_prompt_names_the_signer_from_any_page_and_flags_a_missing_o
 
     from jobs import wording
 
-    text = wording.fill((Path(__file__).parents[1] / "jobs" / "medchron" / "prompts" / "map-system.md").read_text())
+    # The provider rule lives in the entry-grain files (``chronology.
+    # entry_detail``); the full form is the one this parity check was written for.
+    prompts_dir = Path(__file__).parents[1] / "jobs" / "medchron" / "prompts"
+    text = wording.fill((prompts_dir / "map-system.md").read_text() + (prompts_dir / "entry-grain-full.md").read_text())
     assert "Read every page of the file for it" in text and "never invent or infer a name" in text
     assert PLACEHOLDER.search("(provider not stated in the record)")
     assert "(provider not stated in the record)" in text
