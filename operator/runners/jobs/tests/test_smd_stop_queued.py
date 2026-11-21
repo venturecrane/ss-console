@@ -272,7 +272,9 @@ def test_smd_resume_of_a_job_smd_stopped_runs(tmp_path):
     assert lane.tick() == "delivered"
     client.rows[jid]["state"] = "failed"
     lane._write_state(jid, state=smd_stop.STATE, finished_at=5.0)
-    (lane.queue / f"{resume_mod.MARKER_PREFIX}{jid}.json").write_text(json.dumps({"job_id": jid, "reason": "Captain resumed"}))
+    (lane.queue / f"{resume_mod.MARKER_PREFIX}{jid}.json").write_text(
+        json.dumps({"job_id": jid, "reason": "Captain resumed"})
+    )
     assert resume_mod.take_requests(lane) == [jid]
     assert lane._daemon_state(jid)["state"] == "failed"
     assert lane.claim_next() == jid
