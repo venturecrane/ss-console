@@ -475,8 +475,15 @@ wait
     await until(() => existsSync(`${dir}/pid`) && readFileSync(`${dir}/pid`, 'utf8').length > 0)
     const brokerPid = Number(readFileSync(`${dir}/pid`, 'utf8'))
     process.kill(-child.pid!, 'SIGTERM') // tini -g
-    await sleep(300)
-    const survived = alive(brokerPid)
+    // Poll for the death instead of probing once after a fixed 300 ms: a
+    // killed child is a zombie until whoever inherits it reaps it, and kill(0)
+    // still answers for a zombie, so the falsifier raced on a loaded runner
+    // (the same race #3357 closed in the broker test above). A child that
+    // survives must stay running for the whole window, longer than before.
+    const survived = await until(() => !running(brokerPid), 2000).then(
+      () => false,
+      () => true
+    )
     for (const pid of [brokerPid, -child.pid!]) {
       try {
         process.kill(pid, 'SIGKILL')

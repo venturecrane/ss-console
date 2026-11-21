@@ -5,4 +5,53 @@
 # in the merge queue; until 2026-11-04 this hook ran all of it, about three
 # minutes per push, six sessions, dozens of pushes a day, proving nothing CI
 # did not. Never bypass this hook: a push that fails here names the file.
+#
+# Every test here reads the WORKING TREE, not the pushed commit, so an
+# uncommitted edit is tested too, and can fail a push its commit would pass.
+#
+# A push that only deletes remote refs sends no content: git gives each ref a
+# line `<local ref> <local sha> <remote ref> <remote sha>`, and a delete's local
+# sha is all zeros. Only that case skips the gates. A tag push still runs them,
+# because a tag can point at commits the remote does not have.
+pushes=0
+deletes=0
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+  pushes=$((pushes + 1))
+  case "$local_sha" in
+    *[!0]*) ;;
+    *) deletes=$((deletes + 1)) ;;
+  esac
+done
+if [ "$pushes" -gt 0 ] && [ "$pushes" -eq "$deletes" ]; then
+  exit 0
+fi
+
+# A tree with no installed packages cannot run either gate (`npx` fetches a
+# vitest that cannot load the repo's config and dies on a stack trace), so it
+# is refused with one line that says why, not a pass and not a trace.
+if [ ! -x node_modules/.bin/vitest ]; then
+  echo "pre-push: refused, no node_modules in this tree, so the secret gates cannot run. Install or link node_modules and push again."
+  exit 1
+fi
 npx vitest run tests/medchron-scrub.test.ts tests/customer-yaml-secret-detector.test.ts
+
+# The size and sprawl limits, about four seconds. Over 30 days to 2026-11-18,
+# 10 of 24 failed CI rounds read were one of these tests, each found ten
+# minutes into CI; here the author hears in seconds. CI still runs them first
+# in Verify, so they add an early warning, not a gate CI lacks, and they have
+# their own escape that leaves the secret gates above running:
+# `SMD_SKIP_LIMITS=1 git push`. They read the branch as it is: a limit that
+# breaks only once main is merged in shows in CI, not here. A branch cut
+# before one of them existed runs the ones it has.
+if [ "${SMD_SKIP_LIMITS:-}" = "1" ]; then
+  echo "pre-push: size and sprawl limits SKIPPED (SMD_SKIP_LIMITS=1); CI runs them first in Verify"
+  exit 0
+fi
+limits=""
+for t in tests/operator-module-size.test.ts tests/sprawl-ratchet.test.ts tests/text-pin-ratchet.test.ts; do
+  [ -f "$t" ] && limits="$limits $t"
+done
+if [ -n "$limits" ]; then
+  # shellcheck disable=SC2086 # the list is split on purpose
+  npx vitest run $limits
+fi
