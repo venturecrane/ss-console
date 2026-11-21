@@ -128,6 +128,49 @@ def test_a_thread_the_mailbox_cannot_read_queues_nothing(tmp_path) -> None:
     assert out["accepted"] is False and "could not be matched" in out["reason"]
 
 
+def test_verbs_built_before_the_mailbox_still_route_a_revision(tmp_path, monkeypatch) -> None:
+    """The broker builds DraftingVerbs (server.py) BEFORE it sets ``msgraph``.
+    A lookup captured at build time was None for the broker's whole life: no
+    request on the A&P seat was routed as a revision from 11-05 to 11-21.
+    FALSIFIER: capture ``graph_thread_of(broker.msgraph)`` in ``build`` again
+    and this reply queues a fresh draft."""
+    from workspace_broker import msgraph_lookup
+
+    broker, db, queue, writer = _seat(tmp_path, None)
+    broker.customer_path = tmp_path / "customer.yaml"
+    broker.msgraph = None  # the server's order: verbs first, mailbox after
+    broker.drafting = DraftingVerbs.build(broker, audit_db_path=db, queue_dir=str(queue))
+    broker.msgraph = object()  # the mailbox connects after the verbs exist
+    monkeypatch.setattr(msgraph_lookup, "find_received", lambda _ops, ref: {"conversation_id": THREADS[ref]})
+    prior = _deliver(broker, writer)
+    out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=REPLY, request_text="Apply the rules."))
+    assert out["accepted"] and out["mode"] == "revise" and out["revise_of"] == prior
+
+
+def test_a_delivery_of_several_drafts_is_not_revised_in_its_first_document_only(tmp_path) -> None:
+    """The revise runner edits one filed draft. FALSIFIER: drop the one-draft
+    guard and a three-document discovery delivery is 'revised' in one file."""
+    broker, _db, queue, writer = _seat(tmp_path, THREADS.__getitem__)
+    out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=FIRST))
+    jid = out["job_id"]
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="running", fields={})
+    files = [{"name": f"Response {i}.docx", "size": 1000 + i, "role": "draft"} for i in range(3)]
+    fields = {"cents": 300, "folder_id": "folder-0001", "delivery": {"files": files, "cents": 300}}
+    call(broker, "drafting_job_record", pid=1, uid=0, job_id=jid, state="delivered", fields=fields)
+    proven = [{"file_id": f"d-{i}", "size": 1000 + i, "sha256": str(i) * 64} for i in range(3)]
+    meta = {"lane": "drafting", "job_id": jid, "files": proven}
+    writer.append(
+        {
+            "action_type": "DELIVERY_PROVEN",
+            "actor": "workspace-broker",
+            "actor_role": "broker",
+            "metadata": json.dumps(meta),
+        }
+    )
+    out = call(broker, "drafting_job_submit", envelope=_envelope(request_ref=REPLY))
+    assert out["accepted"] and out["mode"] == "draft" and "revise" not in _queued(queue, out["job_id"])
+
+
 def test_a_seat_with_no_mailbox_thread_drafts_as_before(tmp_path) -> None:
     broker, _db, _queue, writer = _seat(tmp_path, None)
     _deliver(broker, writer)

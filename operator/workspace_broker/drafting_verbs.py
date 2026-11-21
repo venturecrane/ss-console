@@ -196,28 +196,7 @@ class RouteRefused(str):
         return out
 
 
-class ThreadUnknown(RuntimeError):
-    """The mailbox could not say which conversation a request email is in."""
-
-
-def graph_thread_of(msgraph: Any) -> Callable[[str], str] | None:
-    """The conversation id of an email by its internetMessageId, read from the
-    seat's own mailbox (``msgraph_lookup.find_received``), or None on a seat
-    with no Graph mailbox (no thread to compare by). Raises ``ThreadUnknown``
-    when it could not look: "could not tell" must never read as "not a reply"."""
-    if msgraph is None:
-        return None
-
-    def thread_of(internet_message_id: str) -> str:
-        from . import msgraph_lookup
-
-        try:
-            found = msgraph_lookup.find_received(msgraph, internet_message_id)
-        except Exception as exc:  # noqa: BLE001 - any failure to look is "unknown", never "none"
-            raise ThreadUnknown(str(exc)[:200]) from None
-        return str((found or {}).get("conversation_id") or "")
-
-    return thread_of
+from .drafting_threads import ThreadUnknown, graph_thread_of  # noqa: E402 - re-exported
 
 
 class DraftingVerbs:
@@ -228,12 +207,19 @@ class DraftingVerbs:
         customer_yaml: str,
         audit_append: Any,
         thread_of: Callable[[str], str] | None = None,
+        thread_source: Callable[[], Callable[[str], str] | None] | None = None,
     ) -> None:
         self.ledger = ledger
         self.customer_yaml = customer_yaml
         self._audit_append = audit_append
         #: Revise-mode routing (2026-11-04): an email's conversation id.
         self.thread_of = thread_of
+        #: The same lookup, resolved when a request is routed, not when the
+        #: broker is built. The broker builds these verbs BEFORE it connects
+        #: its mailbox (server.py), so a lookup captured at build time was None
+        #: for the broker's whole life: from 11-05 to 11-21 no request on the
+        #: A&P seat was ever routed as a revision.
+        self._thread_source = thread_source
         #: How long ``drafting_job_add_to_request`` waits for the runner's daemon.
         self.add_wait_seconds = drafting_additions.WAIT_SECONDS
 
@@ -255,8 +241,14 @@ class DraftingVerbs:
             ledger,
             customer_yaml=str(broker.customer_path),
             audit_append=audit_append,
-            thread_of=graph_thread_of(getattr(broker, "msgraph", None)),
+            thread_source=lambda: graph_thread_of(getattr(broker, "msgraph", None)),
         )
+
+    def _thread_lookup(self) -> Callable[[str], str] | None:
+        """The conversation-id lookup as the broker stands NOW (None: no mailbox)."""
+        if self.thread_of is not None:
+            return self.thread_of
+        return self._thread_source() if self._thread_source is not None else None
 
     @property
     def _db(self) -> DraftingLedger:
@@ -375,11 +367,12 @@ class DraftingVerbs:
                     "revise_of_unknown",
                 )
         else:
-            if not delivered or self.thread_of is None:
+            thread_of = self._thread_lookup() if delivered else None
+            if thread_of is None:
                 return None
             try:
-                here = self.thread_of(envelope["request_ref"])
-                prior = next((r for r in delivered if here and self.thread_of(r["request_ref"]) == here), None)
+                here = thread_of(envelope["request_ref"])
+                prior = next((r for r in delivered if here and thread_of(r["request_ref"]) == here), None)
             except ThreadUnknown:
                 return RouteRefused(
                     "this email could not be matched to the email thread of the draft already filed on the matter "
@@ -396,6 +389,12 @@ class DraftingVerbs:
                 "revised in place; nothing was queued",
                 "prior_unidentified",
             )
+        if sum(1 for f in files if f.get("role") == "draft") != 1:
+            # The revise runner edits ONE filed draft (revise/run.py, versions.ORDER).
+            # A delivery of several drafts (a discovery set: form, special, production)
+            # would be revised in its first document only, so it is not routed there
+            # until the runner revises every document; it takes the path it took before.
+            return None
         return {"prior_job_id": prior["id"], "folder_id": prior["folder_id"], "files": files}
 
     def _owe_addition(self, row: dict[str, Any], request_ref: str, state: str) -> bool:
