@@ -564,7 +564,7 @@ PLANNED_CLASSES = ("discovery_response",)
 #: candidate; only scans; two sets code cannot tell apart, a value it cannot
 #: confirm, or a response paper it cannot pair; requests that do not number 1 to
 #: the count; more than the finder reads; a prior draft of a set (a revision);
-#: amended or further responses asked to a set already answered.
+#: amended, further or supplemental responses asked for (always SMD's).
 FIND_STOPS = (
     "served_none",
     "served_scan",

@@ -663,22 +663,12 @@ def candidates(f: Found, data: Path, request: str, clients: list[str]) -> Sorted
     kinds = request_kinds(request)
     got = sort_docs(f, docs(data), clients)
     _narrow(f, got, kinds)
-    _before_spend(f, got, kinds)
     if papers.asks_amended(request):
-        _amended(got)
+        # Amended, further or supplemental responses are SMD's, whether or not a
+        # served response is on file (else the lane drafts first-time responses).
+        raise Stop("served_amended", "the request asks for amended, further or supplemental responses")
+    _before_spend(f, got, kinds)
     return got
-
-
-def _amended(got: Sorted, served: list[ServedSet] | None = None) -> None:
-    """An amended, further or supplemental request: a set with a served response
-    of ours is not dropped; the job stops ``served_amended`` (SMD drafts it). Before
-    any read by code's own keys, and again after the reads by the read values."""
-    keyed = [(s.set_type, s.set_number, s.propounding_party, s.label) for s in served or []]
-    keyed += [(*_set_key(d, k)[:3], repr(d.name)) for d, k in ([] if served is not None else got.served)]
-    for kind, n, asking, label in keyed:
-        if any((r[1], r[2]) == (kind, n) and parties.same(r[3], asking) for r in got.responses):
-            raise Stop("served_amended", f"the request asks for amended or further responses and {label} "
-                       "has a served response of ours")  # fmt: skip
 
 
 def planned_reads(data: Path, request: str, clients: list[str]) -> list[str]:
@@ -693,8 +683,6 @@ def planned_reads(data: Path, request: str, clients: list[str]) -> list[str]:
 def _walk(f: Found, data: Path, request: str, reader: Reader, clients: list[str], other: list[str], title: str) -> None:
     got = candidates(f, data, request, clients)
     _read_all(f, got, reader, clients, other)
-    if papers.asks_amended(request):
-        _amended(got, f.keep)
     _answered(f, got)
     if not f.keep:
         raise Stop("served_none", "every served set in the matter file is answered by a later response of ours")
