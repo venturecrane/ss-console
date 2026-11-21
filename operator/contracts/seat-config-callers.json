@@ -19,6 +19,8 @@
     "operator/hermes-smd-overlay/shared/jobs_client.py",
     "operator/hermes-smd-overlay/shared/msgraph_broker.py",
     "operator/hermes-smd-overlay/shared/prerendered_dispatch.py",
+    "operator/hermes-smd-overlay/shared/readback_send.py",
+    "operator/hermes-smd-overlay/shared/smd_owed.py",
     "operator/hermes-smd-overlay/shared/workspace_broker.py",
     "operator/runners/jobs/jobs/broker_client.py",
     "operator/safety_substrate/invariants/invariant_7.py",
@@ -34,7 +36,8 @@
     "operator/skills/records-order-chase/pre_run.py",
     "operator/skills/statute-watch/pre_run.py",
     "operator/templates/pre_run_gate.py",
-    "operator/workspace_broker/ops_close.py"
+    "operator/workspace_broker/ops_close.py",
+    "operator/workspace_broker/sender_block.py"
    ],
    "files_without_sites": [],
    "rows": [
@@ -318,7 +321,7 @@
       "refused/ascii": "raise ConnectionRefusedError connects=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py:1913 broker_socket.request(\n        socket_path, payload, timeout=_TIMEOUT_SECONDS, lone_surrogates=\"raise\"\n    )"
+      "operator/hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py:1842 broker_socket.request(\n        socket_path, payload, timeout=_TIMEOUT_SECONDS, lone_surrogates=\"raise\"\n    )"
      ],
      "file": "operator/hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py",
      "kind": "function",
@@ -788,7 +791,7 @@
       "refused/ascii": "raise JobsBrokerError connects=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/jobs_client.py:189 broker_socket.send_frame(self._socket_path, encoded, timeout=self._timeout)"
+      "operator/hermes-smd-overlay/shared/jobs_client.py:203 broker_socket.send_frame(self._socket_path, encoded, timeout=self._timeout)"
      ],
      "file": "operator/hermes-smd-overlay/shared/jobs_client.py",
      "kind": "function",
@@ -922,7 +925,7 @@
       "refused/ascii": "raise ConnectionRefusedError connects=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/prerendered_dispatch.py:284 broker_socket.request(socket_path, payload, timeout=_APPEND_TIMEOUT_SECONDS)"
+      "operator/hermes-smd-overlay/shared/prerendered_dispatch.py:306 broker_socket.request(socket_path, payload, timeout=_APPEND_TIMEOUT_SECONDS)"
      ],
      "file": "operator/hermes-smd-overlay/shared/prerendered_dispatch.py",
      "kind": "function",
@@ -937,6 +940,140 @@
      ],
      "status": "executable",
      "symbol": "_broker_request",
+     "tree": "overlay",
+     "wire": {
+      "empty-reply/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "fault-after-send/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "non-json/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "not-ok/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "ok/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "ok/non-ascii": [
+       {
+        "bytes": "{\"verb\": \"note\", \"text\": \"café naïve 日本 ±\"}\n",
+        "len": 51
+       }
+      ]
+     }
+    },
+    {
+     "behaviour": {
+      "empty-reply/ascii": "raise JSONDecodeError connects=1",
+      "fault-after-send/ascii": "raise JSONDecodeError connects=1",
+      "no-socket/ascii": "raise FileNotFoundError connects=1",
+      "non-json/ascii": "raise JSONDecodeError connects=1",
+      "not-ok/ascii": "return value:dict 7a6b2b49e18f1b62 connects=1",
+      "ok/ascii": "return value:dict 5fba6d5555d91301 connects=1",
+      "ok/non-ascii": "return value:dict 5fba6d5555d91301 connects=1",
+      "refused/ascii": "raise ConnectionRefusedError connects=1"
+     },
+     "calls": [
+      "operator/hermes-smd-overlay/shared/readback_send.py:37 broker_socket.request(socket_path, payload, timeout=_TIMEOUT_SECONDS)"
+     ],
+     "file": "operator/hermes-smd-overlay/shared/readback_send.py",
+     "kind": "function",
+     "modes": [
+      "raises-ConnectionRefusedError-on-refused",
+      "raises-FileNotFoundError-on-no-socket",
+      "raises-JSONDecodeError-on-empty-reply",
+      "raises-JSONDecodeError-on-fault-after-send",
+      "raises-JSONDecodeError-on-non-json",
+      "returns-value-on-not-ok",
+      "wire-utf8"
+     ],
+     "status": "executable",
+     "symbol": "_request",
+     "tree": "overlay",
+     "wire": {
+      "empty-reply/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "fault-after-send/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "non-json/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "not-ok/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "ok/ascii": [
+       {
+        "bytes": "{\"verb\": \"ping\", \"n\": 1}\n",
+        "len": 25
+       }
+      ],
+      "ok/non-ascii": [
+       {
+        "bytes": "{\"verb\": \"note\", \"text\": \"café naïve 日本 ±\"}\n",
+        "len": 51
+       }
+      ]
+     }
+    },
+    {
+     "behaviour": {
+      "empty-reply/ascii": "raise JSONDecodeError connects=1",
+      "fault-after-send/ascii": "raise JSONDecodeError connects=1",
+      "no-socket/ascii": "raise FileNotFoundError connects=1",
+      "non-json/ascii": "raise JSONDecodeError connects=1",
+      "not-ok/ascii": "return value:dict 7a6b2b49e18f1b62 connects=1",
+      "ok/ascii": "return value:dict 5fba6d5555d91301 connects=1",
+      "ok/non-ascii": "return value:dict 5fba6d5555d91301 connects=1",
+      "refused/ascii": "raise ConnectionRefusedError connects=1"
+     },
+     "calls": [
+      "operator/hermes-smd-overlay/shared/smd_owed.py:38 broker_socket.request(socket_path, payload, timeout=_TIMEOUT_SECONDS)"
+     ],
+     "file": "operator/hermes-smd-overlay/shared/smd_owed.py",
+     "kind": "function",
+     "modes": [
+      "raises-ConnectionRefusedError-on-refused",
+      "raises-FileNotFoundError-on-no-socket",
+      "raises-JSONDecodeError-on-empty-reply",
+      "raises-JSONDecodeError-on-fault-after-send",
+      "raises-JSONDecodeError-on-non-json",
+      "returns-value-on-not-ok",
+      "wire-utf8"
+     ],
+     "status": "executable",
+     "symbol": "_request",
      "tree": "overlay",
      "wire": {
       "empty-reply/ascii": [
@@ -1758,7 +1895,7 @@
       "refused/ascii": "return false fcbcf165908dd18a connects=1"
      },
      "calls": [
-      "operator/skills/post-intake-daily-list/pre_run.py:434 sock.connect(socket_path)"
+      "operator/skills/post-intake-daily-list/pre_run.py:446 sock.connect(socket_path)"
      ],
      "file": "operator/skills/post-intake-daily-list/pre_run.py",
      "kind": "function",
@@ -2026,7 +2163,7 @@
       "refused/ascii": "raise ConnectionRefusedError connects=1"
      },
      "calls": [
-      "operator/workspace_broker/ops_close.py:61 broker_socket.request(socket_path, request, timeout=timeout, separators=(\",\", \":\"))"
+      "operator/workspace_broker/ops_close.py:62 broker_socket.request(socket_path, request, timeout=timeout, separators=(\",\", \":\"))"
      ],
      "file": "operator/workspace_broker/ops_close.py",
      "kind": "function",
@@ -2080,6 +2217,37 @@
        }
       ]
      }
+    },
+    {
+     "behaviour": {
+      "empty-reply/ascii": "exit 2",
+      "fault-after-send/ascii": "exit 2",
+      "no-socket/ascii": "exit 2",
+      "non-json/ascii": "exit 2",
+      "not-ok/ascii": "exit 2",
+      "ok/ascii": "exit 2",
+      "ok/non-ascii": "exit 2",
+      "refused/ascii": "exit 2"
+     },
+     "calls": [
+      "operator/workspace_broker/sender_block.py:200 broker_socket.request(args.socket, request, timeout=300.0, separators=(\",\", \":\"))"
+     ],
+     "file": "operator/workspace_broker/sender_block.py",
+     "kind": "function",
+     "modes": [
+      "exits-2-on-empty-reply",
+      "exits-2-on-fault-after-send",
+      "exits-2-on-no-socket",
+      "exits-2-on-non-json",
+      "exits-2-on-not-ok",
+      "exits-2-on-refused",
+      "no-unix-connect",
+      "wire-empty"
+     ],
+     "status": "executable",
+     "symbol": "main",
+     "tree": "broker",
+     "wire": {}
     }
    ]
   },
@@ -3598,7 +3766,7 @@
       "yaml-syntax-error": "return empty:dict fd0eecc3dff2f4d8 reads=1"
      },
      "calls": [
-      "operator/bin/work-health.py:96 seat_config.load(CUSTOMERS / slug / \"customer.yaml\", encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/bin/work-health.py:100 seat_config.load(CUSTOMERS / slug / \"customer.yaml\", encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/bin/work-health.py",
      "kind": "function",
@@ -4030,7 +4198,7 @@
       "yaml-syntax-error": "return value:PostIntakeConfig 5b24ddc87574c78f reads=1"
      },
      "calls": [
-      "operator/connectors/smokeball/smokeball_connector/post_intake_config.py:59 seat_config.parse(raw)"
+      "operator/connectors/smokeball/smokeball_connector/post_intake_config.py:81 seat_config.parse(raw)"
      ],
      "file": "operator/connectors/smokeball/smokeball_connector/post_intake_config.py",
      "kind": "function",
@@ -4080,7 +4248,7 @@
       "yaml-syntax-error": "return false fcbcf165908dd18a reads=1"
      },
      "calls": [
-      "operator/connectors/smokeball/smokeball_connector/post_journal.py:132 seat_config.parse(fh)"
+      "operator/connectors/smokeball/smokeball_connector/post_journal.py:141 seat_config.parse(fh)"
      ],
      "file": "operator/connectors/smokeball/smokeball_connector/post_journal.py",
      "kind": "function",
@@ -5115,7 +5283,7 @@
       "yaml-syntax-error": "return empty:dict fd0eecc3dff2f4d8 reads=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py:992 seat_config.load(_YAML_PATH, encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py:993 seat_config.load(_YAML_PATH, encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/hermes-smd-overlay/plugins/hermes-smd-reply/__init__.py",
      "kind": "function",
@@ -5281,7 +5449,7 @@
       "yaml-syntax-error": "return value:Switch c3a91a0ed2cdf020 reads=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/logic_in_code.py:163 yaml.safe_load(raw)"
+      "operator/hermes-smd-overlay/shared/logic_in_code.py:172 yaml.safe_load(raw)"
      ],
      "file": "operator/hermes-smd-overlay/shared/logic_in_code.py",
      "kind": "function",
@@ -5848,7 +6016,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/runners/jobs/jobs/records_lane.py:169 seat_config.parse(fh)"
+      "operator/runners/jobs/jobs/records_lane.py:165 seat_config.parse(fh)"
      ],
      "file": "operator/runners/jobs/jobs/records_lane.py",
      "kind": "function",
@@ -6371,7 +6539,7 @@
       "yaml-syntax-error": "raise ParserError reads=1"
      },
      "calls": [
-      "operator/templates/lane-memory-caps-probe.py:89 yaml.safe_load(fh)"
+      "operator/templates/lane-memory-caps-probe.py:90 yaml.safe_load(fh)"
      ],
      "file": "operator/templates/lane-memory-caps-probe.py",
      "kind": "function",
@@ -6834,7 +7002,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/drafting_verbs.py:111 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/drafting_verbs.py:112 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/drafting_verbs.py",
      "kind": "function",
@@ -7061,7 +7229,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/medchron_ledger.py:370 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/medchron_ledger.py:375 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/medchron_ledger.py",
      "kind": "function",
@@ -7113,7 +7281,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/medchron_ledger.py:395 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/medchron_ledger.py:400 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/medchron_ledger.py",
      "kind": "function",
@@ -7164,7 +7332,7 @@
       "yaml-syntax-error": "return none 74234e98afe7498f reads=1"
      },
      "calls": [
-      "operator/workspace_broker/medchron_ledger.py:427 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
+      "operator/workspace_broker/medchron_ledger.py:432 seat_config.load(Path(path), encoding=\"utf-8\", on_missing=\"raise\")"
      ],
      "file": "operator/workspace_broker/medchron_ledger.py",
      "kind": "function",
@@ -8231,7 +8399,7 @@
       "whitespace": "return value:HeartbeatEmitter 0737ea95319900a2"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/heartbeat.py:2729 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
+      "operator/hermes-smd-overlay/shared/heartbeat.py:2678 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
      ],
      "file": "operator/hermes-smd-overlay/shared/heartbeat.py",
      "kind": "function",
@@ -8267,7 +8435,7 @@
       "whitespace": "return value:CostBreaker be34f05016b59f04 reads=1"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/job_worker_runtime.py:510 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
+      "operator/hermes-smd-overlay/shared/job_worker_runtime.py:511 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
      ],
      "file": "operator/hermes-smd-overlay/shared/job_worker_runtime.py",
      "kind": "function",
@@ -8304,7 +8472,7 @@
       "whitespace": "return none 74234e98afe7498f"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/job_worker_runtime.py:369 seat_config.slug(on_missing=\"none\", alternate=\"after\")"
+      "operator/hermes-smd-overlay/shared/job_worker_runtime.py:370 seat_config.slug(on_missing=\"none\", alternate=\"after\")"
      ],
      "file": "operator/hermes-smd-overlay/shared/job_worker_runtime.py",
      "kind": "function",
@@ -8336,7 +8504,7 @@
       "whitespace": "return none 74234e98afe7498f"
      },
      "calls": [
-      "operator/hermes-smd-overlay/shared/rule_dispatch.py:595 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
+      "operator/hermes-smd-overlay/shared/rule_dispatch.py:606 seat_config.slug(on_missing=\"none\", alternate=\"first\")"
      ],
      "file": "operator/hermes-smd-overlay/shared/rule_dispatch.py",
      "kind": "function",
@@ -8571,7 +8739,7 @@
       "name": "CUSTOMER_SLUG"
      },
      "calls": [
-      "operator/runners/jobs/jobs/daemon.py:655 _require(\"CUSTOMER_SLUG\")"
+      "operator/runners/jobs/jobs/daemon.py:667 _require(\"CUSTOMER_SLUG\")"
      ],
      "file": "operator/runners/jobs/jobs/daemon.py",
      "kind": "function",
@@ -8970,7 +9138,7 @@
       "whitespace": "return false fcbcf165908dd18a connects=1"
      },
      "calls": [
-      "operator/skills/post-intake-daily-list/pre_run.py:427 os.environ.get(\"CUSTOMER_SLUG\", \"\")"
+      "operator/skills/post-intake-daily-list/pre_run.py:439 os.environ.get(\"CUSTOMER_SLUG\", \"\")"
      ],
      "file": "operator/skills/post-intake-daily-list/pre_run.py",
      "kind": "function",
@@ -9241,21 +9409,21 @@
  "summary": {
   "broker-socket": {
    "by_status": {
-    "executable": 31
+    "executable": 34
    },
    "by_tree": {
     "bin": 1,
-    "broker": 1,
+    "broker": 2,
     "connector": 1,
-    "overlay": 13,
+    "overlay": 15,
     "runner": 1,
     "safety_substrate": 1,
     "skill": 12,
     "templates": 1
    },
    "fail_open": 0,
-   "files": 30,
-   "sites": 31
+   "files": 33,
+   "sites": 34
   },
   "customer-yaml": {
    "by_status": {

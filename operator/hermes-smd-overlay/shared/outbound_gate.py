@@ -36,6 +36,10 @@ A gate that cannot evaluate BLOCKS. Silence is never "allow."
 """
 
 import logging
+import re
+import threading
+import time
+from collections import OrderedDict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
@@ -187,12 +191,146 @@ def _citation_reason(labels: Iterable[str]) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# The firm's own rule sentences (2026-11-19)
+# ---------------------------------------------------------------------------
+#
+# An attorney states a drafting rule that names a code section or a case ("object
+# under <section> and <case>"). The broker stores his sentence and renders it in
+# the read-back, and the citation scan then refused that read-back, so the
+# Operator cut the citation out of HIS rule and told him the email system refuses
+# citations. The scan exists to stop fabricated authority; a sentence the firm
+# itself wrote, rendered by code from the broker's row, is not fabricated.
+#
+# So the EXACT rendered sentence is removed from the text before the citation
+# scan, and only that scan: Tier-1 markers and every other check still read the
+# whole body. A paraphrase that carries the citation is not the sentence, is not
+# removed, and is refused exactly as before.
+
+#: How long a rendered sentence stays exempt, and how many sessions are held. A
+#: sentence is noted when the read-back or the confirmation reply is rendered,
+#: and the reply that carries it goes within the turn; two hours covers a held
+#: reply released later. Per session ONLY (review 2026-11-19): a process-wide
+#: default exempted any session's sentences in any other session's reply.
+FIRM_SENTENCE_TTL_SECONDS = 2 * 60 * 60
+#: A sentence shorter than this exempts nothing: it could not be a rule.
+_FIRM_SENTENCE_MIN_CHARS = 12
+_FIRM_BY_SESSION: "OrderedDict[str, dict[str, float]]" = OrderedDict()
+_FIRM_SESSIONS_MAX = 64
+_FIRM_LOCK = threading.Lock()
+
+
+def _fold_space(text: str) -> str:
+    return re.sub(r"\s+", " ", text.replace("\u00a0", " ")).strip()
+
+
+def note_firm_sentences(
+    sentences: Iterable[str], session_id: str | None = None, now: float | None = None
+) -> None:
+    """Record, for THIS session, rule sentences the firm itself wrote: the
+    establishment plugin passes only a sentence code found verbatim in the
+    person's own email (never the model's words alone). Never raises."""
+    if not isinstance(session_id, str) or not session_id:
+        return
+    stamp = time.time() if now is None else now
+    try:
+        with _FIRM_LOCK:
+            mine = _FIRM_BY_SESSION.pop(session_id, {})
+            _FIRM_BY_SESSION[session_id] = mine
+            while len(_FIRM_BY_SESSION) > _FIRM_SESSIONS_MAX:
+                _FIRM_BY_SESSION.popitem(last=False)
+            for sentence in sentences or ():
+                folded = _fold_space(sentence) if isinstance(sentence, str) else ""
+                if len(folded) >= _FIRM_SENTENCE_MIN_CHARS:
+                    mine[folded] = stamp
+    except Exception:  # noqa: BLE001 - an unrecorded sentence costs a refusal, never a send
+        logger.warning("outbound_gate: could not note firm sentences", exc_info=True)
+
+
+def gate_kwargs(session_id: str | None) -> dict[str, tuple[str, ...]]:
+    """``{"firm_sentences": ...}`` for a session that noted some, else ``{}``:
+    the relay's gate call is then exactly what it was before them."""
+    firm = firm_sentences_for(session_id)
+    return {"firm_sentences": firm} if firm else {}
+
+
+def firm_sentences_for(session_id: str | None, now: float | None = None) -> tuple[str, ...]:
+    """The rule sentences THIS session noted; ``()`` for a session that noted
+    none, which is the gate exactly as it was before them."""
+    if not isinstance(session_id, str) or not session_id:
+        return ()
+    stamp = time.time() if now is None else now
+    with _FIRM_LOCK:
+        mine = _FIRM_BY_SESSION.get(session_id)
+        if mine is None:
+            return ()
+        for sentence, at in list(mine.items()):
+            if stamp - at > FIRM_SENTENCE_TTL_SECONDS:
+                mine.pop(sentence, None)
+        return tuple(mine)
+
+
+def _reset_firm_sentences_for_tests() -> None:
+    with _FIRM_LOCK:
+        _FIRM_BY_SESSION.clear()
+
+
+def without_firm_sentences(body: str, firm_sentences: Iterable[str]) -> str:
+    """``body`` with every exact occurrence of a firm sentence removed.
+
+    Whitespace is folded on both sides first (a mail body re-wraps lines), and
+    nothing else is: case, punctuation and every word must match, so a
+    paraphrase stays in the text."""
+    folded = _fold_space(body)
+    for sentence in sorted(
+        {_fold_space(s) for s in firm_sentences if isinstance(s, str)}, key=len, reverse=True
+    ):
+        if len(sentence) >= _FIRM_SENTENCE_MIN_CHARS:
+            folded = folded.replace(sentence, " ")
+    return folded
+
+
+def _tier2(body: str, allowed_case_names: Iterable[str] | None) -> GateDecision | None:
+    """The Tier-2 citation scan's refusal, or ``None`` when ``body`` is clear.
+    Fails closed: a raising filter refuses."""
+    try:
+        if citation_filter.contains_citation(body, allowed_case_names=allowed_case_names):
+            hits = citation_filter.scan(body, allowed_case_names=allowed_case_names)
+            labels = tuple(dict.fromkeys(h.pattern for h in hits))
+            return GateDecision(
+                allowed=False,
+                reason=_citation_reason(labels),
+                audit_action=AUDIT_BLOCK,
+                tier="tier2_citation",
+                citation_hits=labels,
+                evaluated_law_tier=True,
+            )
+    except Exception:  # noqa: BLE001 — filter raise must fail closed
+        logger.exception("outbound_gate: citation filter raised; BLOCKING (fail-closed)")
+        return GateDecision(
+            allowed=False,
+            reason="Refused: citation filter failed; failing closed (ADR 0028)",
+            audit_action=AUDIT_BLOCK,
+            tier="tier2_citation",
+            evaluated_law_tier=True,
+        )
+    return None
+
+
+def _citation_text(body: str, firm_sentences: Iterable[str] | None) -> str:
+    """The text the citation scan reads: ``body`` without the firm's own rule
+    sentences (``None``: none)."""
+    sentences = tuple(firm_sentences or ())
+    return without_firm_sentences(body, sentences) if sentences else body
+
+
 def evaluate(
     body: str,
     cohort: str | None,
     vertical: str | None,
     allowed_case_names: Iterable[str] | None = None,
     allowed_money: Iterable[str] | None = None,
+    firm_sentences: Iterable[str] | None = None,
 ) -> GateDecision:
     """Decide whether a draft ``body`` may be produced.
 
@@ -215,6 +353,11 @@ def evaluate(
             Tier-1 ``specific-dollar-amount`` marker, and only when EVERY figure
             in the body is verified. Empty/None = no exemption, which is exactly
             today's behavior.
+        firm_sentences: Broker-rendered rule sentences of the firm's own
+            (2026-11-19). Their exact occurrences are removed before the
+            Tier-2 citation scan ONLY. ``None`` or ``()`` means none, which
+            is exactly the behavior before it; callers pass their own
+            session's (:func:`firm_sentences_for`).
 
             WHY THIS EXISTS. The marker is the regex ``\\$\\s?\\d`` — any dollar
             sign followed by a digit — while ``demand-letter-drafter``'s own
@@ -324,27 +467,9 @@ def evaluate(
     # ----- Tier-2: law-vertical citation scan -----
     run_law_tier = _is_law_or_indeterminate(vertical)
     if run_law_tier:
-        try:
-            if citation_filter.contains_citation(body, allowed_case_names=allowed_case_names):
-                hits = citation_filter.scan(body, allowed_case_names=allowed_case_names)
-                labels = tuple(dict.fromkeys(h.pattern for h in hits))
-                return GateDecision(
-                    allowed=False,
-                    reason=_citation_reason(labels),
-                    audit_action=AUDIT_BLOCK,
-                    tier="tier2_citation",
-                    citation_hits=labels,
-                    evaluated_law_tier=True,
-                )
-        except Exception:  # noqa: BLE001 — filter raise must fail closed
-            logger.exception("outbound_gate: citation filter raised; BLOCKING (fail-closed)")
-            return GateDecision(
-                allowed=False,
-                reason="Refused: citation filter failed; failing closed (ADR 0028)",
-                audit_action=AUDIT_BLOCK,
-                tier="tier2_citation",
-                evaluated_law_tier=True,
-            )
+        refused = _tier2(_citation_text(body, firm_sentences), allowed_case_names)
+        if refused is not None:
+            return refused
 
     return GateDecision(
         allowed=True,
@@ -357,6 +482,10 @@ def evaluate(
 __all__ = [
     "AUDIT_ALLOW",
     "AUDIT_BLOCK",
+    "FIRM_SENTENCE_TTL_SECONDS",
     "GateDecision",
     "evaluate",
+    "firm_sentences_for",
+    "note_firm_sentences",
+    "without_firm_sentences",
 ]

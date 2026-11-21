@@ -998,6 +998,7 @@ export interface LogicInCode {
   library_edit_notice?: LogicInCodeMode
   status_from_events?: LogicInCodeMode
   layout_into_library?: LogicInCodeMode
+  rules_by_hand?: LogicInCodeMode
 }
 
 /**

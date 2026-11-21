@@ -23,8 +23,8 @@ from typing import Any
 
 from shared import wording_rules, wording_rules_store
 
-_IN_EFFECT_SUBJECT = "Your rule is in effect [rule {proposal_id}]"
-_PARTLY_SUBJECT = "Your rule is partly in effect [rule {proposal_id}]"
+_IN_EFFECT_SUBJECT = "Your rule is in effect"
+_PARTLY_SUBJECT = "Your rule is partly in effect"
 
 _WORDING_BODY = """{applied_by} applied the rule you asked for:
 
@@ -80,6 +80,7 @@ def letter(
         _WORDING_BODY,
         readback,
         tag,
+        firm=(readback,),
         applied_by=by,
         kinds=_singular_list(truth["read"]),
         whose=_whose(truth["attorney"]),

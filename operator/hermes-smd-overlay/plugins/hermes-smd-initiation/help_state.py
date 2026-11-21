@@ -134,10 +134,15 @@ POINTER_LINE = (
 KIND_POINTER = "pointer_offered"
 KIND_STRUGGLE = "struggle_offer"
 KIND_HELPED = "help_given"
+#: 2026-11-19: a question about working with the Operator the guide does not
+#: answer. Deliberately TIPLESS, like the review's ``nothing_in_scope``: SMD
+#: answers the person by note (the hand-off pages SMD), and a recurring one
+#: reaches the review as a proposal for a new guide section, never a tip.
+KIND_NOT_IN_GUIDE = "not_in_guide"
 #: The kinds of trouble the model may note against the turn's own sender
-#: (increment 3, the self-improving guide). Each is a tip's ``when`` in
-#: ``operator-help/references/tips.yaml`` (pinned by test), so a recurring one
-#: maps to an SMD-authored tip. ``repeat_ask`` and ``held_identity_check`` are
+#: (increment 3, the self-improving guide). Each but ``not_in_guide`` is a
+#: tip's ``when`` in ``operator-help/references/tips.yaml`` (pinned by test), so
+#: a recurring one maps to an SMD-authored tip. ``repeat_ask`` and ``held_identity_check`` are
 #: NOT here: those are measured, never noted (``help_review``).
 NOTE_STRUGGLE_KINDS: tuple[str, ...] = (
     "vague_request",
@@ -145,6 +150,7 @@ NOTE_STRUGGLE_KINDS: tuple[str, ...] = (
     "wants_specific_document",
     "wants_changes",
     "not_trained_yet",
+    KIND_NOT_IN_GUIDE,
 )
 #: The only kinds the note tool accepts.
 KINDS: tuple[str, ...] = (KIND_POINTER, KIND_STRUGGLE, KIND_HELPED, *NOTE_STRUGGLE_KINDS)
@@ -384,8 +390,12 @@ def sender_signals(
     path: Path | None = None,
     requests_path: str | None = None,
     now: float | None = None,
+    record_pointer: bool = True,
 ) -> dict[str, Any]:
     """The sender-scope signals for one resolved person. Never raises.
+
+    ``record_pointer`` False reports a due pointer WITHOUT recording it: the
+    initiation plugin records it once a reply carrying the line is SENT.
 
     ``message_id`` is the turn's own anchored vendor message id: its index row
     is excluded from every count and supplies the current thread. When a
@@ -406,9 +416,8 @@ def sender_signals(
     own = [r for r in rows if r.get("vendor_message_id") == message_id]
     prior = [r for r in rows if r.get("vendor_message_id") != message_id]
     indexed = bool(own)
-    thread = own[0].get("thread_ref") if own else None
-    if not (isinstance(thread, str) and thread):
-        thread = None
+    found = own[0].get("thread_ref") if own else None
+    thread = found if isinstance(found, str) and found else None
     prior_in_thread = sum(1 for r in prior if thread is not None and r.get("thread_ref") == thread)
 
     first_time = requests_read and not prior
@@ -435,7 +444,7 @@ def sender_signals(
                 stopped_now = state["helped"] or len(prior) >= STOP_AFTER_REQUESTS
                 eligible = requests_read and indexed and not stopped_now
                 pointer_due = eligible and first_time and not state["pointer_offered"]
-                if pointer_due:
+                if pointer_due and record_pointer:
                     _write(conn, KIND_POINTER, skey, tkey, ts)
                 conn.execute("COMMIT")
             except BaseException:
@@ -475,6 +484,7 @@ __all__ = [
     "KINDS_RECORDED_BY_SIGNALS",
     "NOTE_STRUGGLE_KINDS",
     "KIND_HELPED",
+    "KIND_NOT_IN_GUIDE",
     "KIND_POINTER",
     "KIND_STRUGGLE",
     "LOOKBACK_DAYS",

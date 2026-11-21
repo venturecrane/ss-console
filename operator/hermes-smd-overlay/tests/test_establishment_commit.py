@@ -34,6 +34,7 @@ import pytest
 
 from shared.inbound import SESSION_INBOUND_ORIGIN, SESSION_TAINT
 from tests.conftest import load_plugin
+from tests.rule_turns import bound_turn, relay_register
 
 ADMIN = "chris@firm.com"
 PERSON = "sarah@firm.com"
@@ -103,6 +104,12 @@ def plugin(monkeypatch, tmp_path):
             return {"ok": True, "pending": list(state["pending"])}
         if payload.get("action") == mod.TOOL_SUBMIT:
             return state["submit"]
+        if payload.get("action") == "establish_readback_for":
+            # The yes replies to the read-back of RULE (the broker matched its
+            # In-Reply-To): since 2026-11-20 a tag quoted below a reply binds
+            # nothing, so these tests answer the read-back the way a mail
+            # client does.
+            return {"ok": True, "bound": True, "proposal_ids": [RULE], "listed": False}
         return {"ok": True, "run_id": "run-1"}
 
     monkeypatch.setattr(mod, "_broker_request", fake_broker_request)
@@ -120,16 +127,45 @@ def plugin(monkeypatch, tmp_path):
         register.clear()
     SESSION_INBOUND_ORIGIN._origins.clear()
     SESSION_TAINT._tainted.clear()
+    relay_register(monkeypatch)
     yield mod, state
     SESSION_TAINT._tainted.clear()
+
+
+def _hook_with_the_commit_gated(mod, *, session, sender, message=YES_EMAIL):
+    """The confirmation hook on a seat where a gate stops the code commit.
+
+    REWORKED for confirm-by-reply. Since R2.1 a person's own confirmed rule is committed
+    by the hook itself. The model-commit path these tests exercise is now the
+    FALLBACK, reached when a gate (the possession challenge on an
+    AgentMail-custody seat) stops the hook's commit: the row is stashed and the
+    model commits it, exactly as before. So the gate is closed for the hook and
+    open again for the model's submit, which is the order it happens in."""
+    saved = (mod._possession_gate, mod._person_possession_gate)
+
+    def closed(*_a, **_k):
+        return {"action": "block", "message": "possession pending"}
+
+    mod._possession_gate = mod._person_possession_gate = closed
+    bound_turn(session, sender, "AAMkYesReply=")
+    try:
+        mod.on_pre_llm_call(session_id=session, sender_id=sender, user_message=message)
+    finally:
+        mod._possession_gate, mod._person_possession_gate = saved
+    assert RULE in mod._CONFIRMED_STASH.get(session, set())
+
+
+def _arrived(sender, session="sess-1"):
+    """The yes arrived as an email; its id is what the broker matches from."""
+    bound_turn(session, sender, "AAMkYesReply=")
 
 
 def _confirm(mod, state, *, sender=ADMIN, scope="firm_adjust", session="sess-1"):
     """Put the session in the state the pilot was in: one rule, just confirmed."""
     subject = {"person": sender} if scope == "person" else None
     state["pending"] = [_row(scope=scope, instructed_by=sender, subject=subject)]
-    mod.on_pre_llm_call(session_id=session, sender_id=sender, user_message=YES_EMAIL)
-    assert mod._CONFIRMED_STASH.get(session) == RULE
+    _hook_with_the_commit_gated(mod, session=session, sender=sender)
+    assert not [r for r in state["requests"] if r.get("action") == mod.TOOL_SUBMIT]
     state["pending"] = []
 
 
@@ -452,8 +488,7 @@ def test_the_rules_own_sentence_is_quoted_not_asserted(plugin):
     state["pending"] = [
         _row() | {"text": "From now on, client letters are formal.", "readback": READBACK}
     ]
-    mod.on_pre_llm_call(session_id="sess-1", sender_id=ADMIN, user_message=YES_EMAIL)
-    assert mod._CONFIRMED_STASH.get("sess-1") == RULE
+    _hook_with_the_commit_gated(mod, session="sess-1", sender=ADMIN)
     state["pending"] = []
     body = (
         f'You confirmed [rule {RULE}]: "From now on, client letters are '
@@ -476,3 +511,150 @@ def test_the_gate_reads_the_subject_line_too(plugin):
         },
     )
     assert verdict is not None and verdict["action"] == "block"
+
+
+# ---------------------------------------------------------------------------
+# The code commit (R2.1/R2.3)
+# ---------------------------------------------------------------------------
+
+
+def test_the_hook_commits_the_rule_and_its_say_passes_the_gate(plugin):
+    mod, state = plugin
+    state["pending"] = [_row()]
+    _arrived(ADMIN)
+    context = mod.on_pre_llm_call(session_id="sess-1", sender_id=ADMIN, user_message=YES_EMAIL)[
+        "context"
+    ]
+    submits = [r for r in state["requests"] if r.get("action") == mod.TOOL_SUBMIT]
+    assert [r["proposal_id"] for r in submits] == [RULE]
+    say = mod._CONFIRMED_SAY["sess-1"]
+    assert say == "Got it. That is recorded."
+    assert say in context and RULE not in context
+    assert "may not appear" not in context
+    state["pending"] = []
+    assert _send(mod, say) is None
+    # A reply that goes past the say and calls the rule live is still held.
+    assert _send(mod, f"{say} The rule is in effect now.")["action"] == "block"
+
+
+def _owed(monkeypatch, told: bool = True) -> list[dict]:
+    """The broker's smd_owed_record, answering ``told``; returns what it was sent."""
+    from shared import smd_owed
+
+    sent: list[dict] = []
+
+    def broker(payload):
+        sent.append(payload)
+        return {"ok": True, "smd_told": told}
+
+    monkeypatch.setattr(smd_owed, "_request", broker)
+    # The confirmation arrived by email: its id keys the record.
+    bound_turn("sess-1", ADMIN, "<CAyes1@mail.firm.example>")
+    return sent
+
+
+def test_a_refused_code_commit_says_it_was_not_recorded(plugin, monkeypatch):
+    """The sentence is said only once the broker recorded the rule as work SMD
+    owes (owner's ruling, 2026-11-19), in the Operator's voice, naming no one.
+    FALSIFIER: say it without the record and nobody learns it is owed."""
+    mod, state = plugin
+    sent = _owed(monkeypatch)
+    state["pending"] = [_row()]
+    state["submit"] = {"ok": False, "message": REFUSAL}
+    context = mod.on_pre_llm_call(session_id="sess-1", sender_id=ADMIN, user_message=YES_EMAIL)[
+        "context"
+    ]
+    # One fixed sentence, never the seat's refusal text.
+    say = mod._CONFIRMED_SAY["sess-1"]
+    assert say == (
+        f'One more, "{TEXT.rstrip(".")}", is not recorded yet. '
+        "I'm looking into it and will reply in this thread."
+    )
+    assert say in context and REFUSAL not in context and "smd" not in say.lower()
+    assert [p["kind"] for p in sent] == ["rule_not_recorded"]
+
+
+def test_a_refused_commit_that_could_not_be_recorded_sends_nothing(plugin, monkeypatch):
+    mod, state = plugin
+    _owed(monkeypatch, told=False)
+    state["pending"] = [_row()]
+    state["submit"] = {"ok": False, "message": REFUSAL}
+    context = mod.on_pre_llm_call(session_id="sess-1", sender_id=ADMIN, user_message=YES_EMAIL)[
+        "context"
+    ]
+    assert mod._CONFIRMED_SAY["sess-1"] == "none"
+    assert "Say nothing about the rule" in context
+
+
+def test_one_failed_record_still_confirms_the_rules_that_committed(plugin, monkeypatch):
+    """Review 2026-11-19: one failed owed-record turned the whole reply into
+    "none", so the committed rules went unconfirmed. FALSIFIER: blank the say on
+    any failed record."""
+    mod, state = plugin
+    _owed(monkeypatch, told=False)
+    other = {**_row(), "proposal_id": "9a9a9a9a", "text": "In memos, no headings."}
+    state["pending"] = [_row(), other]
+    answers = iter([{"ok": True, "run_id": "run-1"}, {"ok": False, "message": REFUSAL}])
+    real = mod._broker_request
+
+    def broker(payload):
+        if payload.get("action") == mod.TOOL_SUBMIT:
+            return next(answers)
+        return real(payload)
+
+    mod._broker_request = broker
+    try:
+        mod.on_pre_llm_call(
+            session_id="sess-1", sender_id=ADMIN, user_message=f"yes [rule {RULE}] [rule 9a9a9a9a]"
+        )
+    finally:
+        mod._broker_request = real
+    assert mod._CONFIRMED_SAY["sess-1"] == "Got it. That is recorded."
+
+
+def test_a_partial_commit_is_one_block_covering_each_rule(plugin, monkeypatch):
+    mod, state = plugin
+    _owed(monkeypatch)
+    other = {**_row(), "proposal_id": "9a9a9a9a", "text": "In memos, no headings."}
+    state["pending"] = [_row(), other]
+    answers = iter([{"ok": True, "run_id": "run-1"}, {"ok": False, "message": REFUSAL}])
+    real = mod._broker_request
+
+    def broker(payload):
+        if payload.get("action") == mod.TOOL_SUBMIT:
+            return next(answers)
+        return real(payload)
+
+    mod._broker_request = broker
+    try:
+        mod.on_pre_llm_call(
+            session_id="sess-1", sender_id=ADMIN, user_message=f"yes [rule {RULE}] [rule 9a9a9a9a]"
+        )
+    finally:
+        mod._broker_request = real
+    say = mod._CONFIRMED_SAY["sess-1"]
+    assert say.startswith(
+        'Got it. That is recorded.\n\nOne more, "In memos, no headings", is not recorded yet.'
+    )
+
+
+def test_a_gated_commit_gives_the_model_a_turn_handle_not_the_id(plugin):
+    mod, state = plugin
+    state["pending"] = [_row()]
+    _arrived(ADMIN)
+    saved = mod._possession_gate
+    mod._possession_gate = lambda *_a, **_k: {"action": "block", "message": "possession pending"}
+    try:
+        context = mod.on_pre_llm_call(session_id="sess-1", sender_id=ADMIN, user_message=YES_EMAIL)[
+            "context"
+        ]
+    finally:
+        mod._possession_gate = saved
+    assert "rule-1-of-this-turn" in context and RULE not in context
+    assert mod.own_rules.real_id("sess-1", "rule-1-of-this-turn") == RULE
+    verdict = mod.on_pre_tool_call(
+        tool_name=mod.TOOL_SUBMIT,
+        session_id="sess-1",
+        args={"scope": "firm_adjust", "proposal_id": "rule-1-of-this-turn"},
+    )
+    assert verdict is None

@@ -438,6 +438,9 @@ describe('shape', () => {
       ],
       [{ class: 'limit', code: 'over_page_cap' }, /limit stopped/, /past the limit/],
       [{ class: 'failed', code: 'reply_sent:trace_incomplete' }, /reply went out/, /Do not send/],
+      // Owed work (2026-11-19): nothing else emails a person about it.
+      [{ class: 'failed', code: 'proof:smd_owed' }, /needs SMD/, /until it is closed/],
+      [{ class: 'failed', code: 'proof:served_owed' }, /still owes sets/, /until it is closed/],
     ]
     for (const [r, happened, step] of cases) {
       const row = { ...r, request_at: null } as never

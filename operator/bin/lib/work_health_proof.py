@@ -10,11 +10,12 @@ Pure: rows and a clock in, items out.
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta
 from typing import NamedTuple, Optional
 
-from bin.lib.work_health import Config, Item, hhmm, item, meta, reason_token, stamped
+from bin.lib.work_health import Config, Item, hhmm, item, meta, parse_ts, reason_token, stamped
 
 
 _PROOF_WORDS = {
@@ -192,6 +193,8 @@ class _ProofLedger(NamedTuple):
     unrecorded: dict[str, tuple[datetime, dict]]
     #: The newest ending record (delivered, held or failed) per job.
     ended: dict[str, datetime]
+    #: ``served_owed`` pages, kept apart so a later failure of the same job never replaces them.
+    owed: dict[str, tuple[datetime, dict]] = {}
 
 
 #: The code of a chronology ending the broker did not take (``jobs/medchron/unrecorded.py``).
@@ -205,6 +208,7 @@ def _proof_ledger(rows: list[dict]) -> _ProofLedger:
     replied: dict[str, datetime] = dict(released_reply_jobs(rows))
     failures: dict[str, tuple[datetime, dict]] = {}
     unrecorded: dict[str, tuple[datetime, dict]] = {}
+    owed: dict[str, tuple[datetime, dict]] = {}
     ended_bad: dict[str, datetime] = {}
     ended: dict[str, datetime] = {}
     for ts, row in stamped(rows):
@@ -218,13 +222,14 @@ def _proof_ledger(rows: list[dict]) -> _ProofLedger:
         if row.get("action_type") == "DELIVERY_PROVEN":
             proven[job_id] = ts
         elif row.get("action_type") == "DELIVERY_PROOF_FAILED":
-            (unrecorded if reason_token(md.get("code")) == UNRECORDED else failures)[job_id] = (ts, md)
+            code = reason_token(md.get("code"))
+            (unrecorded if code == UNRECORDED else owed if code == OWED else failures)[job_id] = (ts, md)
         elif str(row.get("action_type") or "").endswith(("_JOB_FAILED", "_JOB_HELD", "_JOB_DELIVERED")):
             ended[job_id] = ts
             if not str(row["action_type"]).endswith("_JOB_DELIVERED"):
                 ended_bad[job_id] = ts
     rejected = {r.job: r.at for r in review_rejections(rows)}
-    return _ProofLedger(proven, replied, failures, ended_bad, rejected, unrecorded, ended)
+    return _ProofLedger(proven, replied, failures, ended_bad, rejected, unrecorded, ended, owed)
 
 
 def _unrecorded_items(seat: str, cfg: Config, now: datetime, led: _ProofLedger, closed: Optional[set]) -> list[Item]:
@@ -265,6 +270,100 @@ def _unrecorded_items(seat: str, cfg: Config, now: datetime, led: _ProofLedger, 
     return out
 
 
+#: A response job delivered with sets SMD still owes (``jobs/drafting/served.py``).
+OWED = "served_owed"
+
+
+def _owed_item(seat: str, job_id: str, ts: datetime, md: dict, led: _ProofLedger) -> Optional[Item]:
+    """The sets SMD owes on a delivered response job, until a record of them
+    lands: ``deliver_by_smd --set`` writes a new delivery proof, and pages
+    again for any set still owed."""
+    if job_id in led.proven and led.proven[job_id] > ts:
+        return None
+    said = str(md.get("detail") or "").rstrip(".")
+    return item(
+        seat,
+        "job_hand_step",
+        f"proof:{job_id}:{OWED}",
+        ts,
+        f"The drafting job delivered its drafts at {hhmm(ts)} (ref {job_id[-8:]}), and the firm was told SMD is "
+        f"preparing the rest: {said}.",
+        "Draft each set, file it on the matter, and record it with "
+        f"python -m jobs.drafting.deliver_by_smd {job_id} <record.json> --set '<set>'.",
+        job=job_id,
+    )
+
+
+def _served_sets(job: dict) -> list[dict]:
+    try:
+        delivery = json.loads(job.get("delivery_json") or "{}") or {}
+    except (TypeError, ValueError):
+        return []
+    return [r for r in delivery.get("served_sets") or [] if isinstance(r, dict) and str(r.get("set") or "").strip()]
+
+
+def _told(job: dict, row: dict, rows: list[dict]) -> bool:
+    """The attorney heard that an SMD-filed set is filed: staff said so
+    (``deliver_by_smd --set ... --told``), or a reply went out in his request's
+    thread after the set was recorded."""
+    if row.get("told") is True:
+        return True
+    ref, after = str(job.get("message_ref") or ""), parse_ts(row.get("recorded_at"))
+    if not ref or after is None:
+        return False
+    for ts, r in stamped(rows):
+        if r.get("action_type") == "REPLY_SENT" and ts > after and str(meta(r).get("in_reply_to") or "") == ref:
+            return True
+    return False
+
+
+def served_owed_items(
+    seat: str, jobs: list[dict], rows: list[dict], now: datetime, closed: Optional[set[tuple[str, str]]] = None
+) -> list[Item]:
+    """Each served set SMD owes on a delivered response job, from the job's own
+    ledger row (``delivery_json.served_sets``), with no lookback: a set still
+    being prepared by us, then a set SMD filed whose attorney has not been told.
+    One line per set, until it is filed and told."""
+    out: list[Item] = []
+    for job in jobs:
+        job_id = str(job.get("id") or "")
+        if not job_id or job.get("state") != "delivered" or (closed and (seat, job_id) in closed):
+            continue
+        matter = str(job.get("matter_number") or "")[:40]
+        on = parse_ts(job.get("updated_at")) or now
+        for r in _served_sets(job):
+            label = str(r["set"])
+            if r.get("status") != "filed":
+                out.append(
+                    item(
+                        seat,
+                        "job_hand_step",
+                        f"proof:{job_id}:{OWED}:{label}",
+                        on,
+                        f"SMD owes {label} on matter {matter} (ref {job_id[-8:]}); the attorney was told it is being "
+                        "prepared by us.",
+                        "Draft it, file it on the matter, and record it with "
+                        f"python -m jobs.drafting.deliver_by_smd {job_id} <record.json> --set '{label}'.",
+                        job=job_id,
+                    )
+                )
+            elif r.get("drafted_by") == "smd" and not _told(job, r, rows):  # an Operator set's reply told him
+                doc = str(r.get("document") or "the filed document")
+                out.append(
+                    item(
+                        seat,
+                        "job_hand_step",
+                        f"proof:{job_id}:{OWED}:{label}:told",
+                        parse_ts(r.get("recorded_at")) or on,
+                        f"{label} on matter {matter} is filed (ref {job_id[-8:]}), and the attorney has not been told.",
+                        f'Tell the attorney: {label}: filed as "{doc}". Send it as an SMD note in his request\'s '
+                        f"thread, then mark it: python -m jobs.drafting.deliver_by_smd {job_id} --set '{label}' --told.",
+                        job=job_id,
+                    )
+                )
+    return out
+
+
 def _proof_closed(job_id: str, ts: datetime, md: dict, led: _ProofLedger) -> bool:
     """Whether a proof failure is answered or already said by another line."""
     if job_id in led.proven and led.proven[job_id] >= ts:
@@ -286,7 +385,12 @@ def _proof_closed(job_id: str, ts: datetime, md: dict, led: _ProofLedger) -> boo
 
 
 def delivery_proof_items(
-    seat: str, rows: list[dict], cfg: Config, now: datetime, closed: Optional[set[tuple[str, str]]] = None
+    seat: str,
+    rows: list[dict],
+    cfg: Config,
+    now: datetime,
+    closed: Optional[set[tuple[str, str]]] = None,
+    owed_jobs: Optional[list[dict]] = None,
 ) -> list[Item]:
     """A DELIVERY_PROOF_FAILED row (the seat refused to call a job delivered,
     or its requester reply never reached Sent Items) is open work until a
@@ -298,8 +402,20 @@ def delivery_proof_items(
     (``work-health-closed.yaml``) is not listed here either (triage, 2026-11-06)."""
     led = _proof_ledger(rows)
     out: list[Item] = _unrecorded_items(seat, cfg, now, led, closed)
+    # Served sets SMD owes: from the delivered ledger rows when the caller reads
+    # them (no lookback, ``owed_jobs``), else from the served_owed pages.
+    if owed_jobs is not None:
+        out += served_owed_items(seat, owed_jobs, rows, now, closed)
+    else:
+        for job_id, (ts, md) in led.owed.items():
+            owed = None if closed and (seat, job_id) in closed else _owed_item(seat, job_id, ts, md, led)
+            out += [owed] if owed is not None else []
     for job_id, (ts, md) in led.failures.items():
-        if now - ts > timedelta(hours=cfg.ended_job_hours) or (closed and (seat, job_id) in closed):
+        if closed and (seat, job_id) in closed:
+            continue
+        if reason_token(md.get("code")) == "smd_owed":
+            continue  # work SMD owes a person, listed by work_health_sources.smd_owed_items
+        if now - ts > timedelta(hours=cfg.ended_job_hours):
             continue
         if _proof_closed(job_id, ts, md, led):
             continue

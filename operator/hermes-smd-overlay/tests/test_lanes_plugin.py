@@ -40,6 +40,14 @@ class _FakeBroker:
                     "uncovered_document_ids": ["c"],
                 },
             },
+            "medchron_update_files": {
+                "ok": True,
+                "coverage_record": True,
+                "coverage_complete": True,
+                "new_document_ids": ["d-4", "d-3"],
+                "count": 2,
+                "previously_uncovered": ["d-3"],
+            },
             "medchron_allowance": {
                 "ok": True,
                 "month": "2026-08",
@@ -147,6 +155,8 @@ def test_the_three_tools_register_function_shaped_and_require_the_socket():
         "medchron_job_submit",
         "medchron_job_status",
         "medchron_allowance",
+        # An update's new documents, computed by the broker (2026-11-19).
+        "medchron_update_files",
         # The demand job's three ride the same plugin (demand.py).
         "demand_job_submit",
         "demand_job_status",
@@ -384,10 +394,82 @@ def test_credit_columns_are_byte_pinned_to_the_broker():
 # -- action classes ------------------------------------------------------------
 
 
+def test_submit_carries_the_two_documents_a_birth_date_was_read_from(broker):
+    _tools()["medchron_job_submit"]["handler"](
+        {
+            "matter_id": "m-1",
+            "matter_number": "2026-PI-102",
+            "units": [{"client_name": "Alpha Example", "surname": "Example", "dob": "01/02/1980"}],
+            "incident_date": "2026-01-15",
+            "incident_source": "administrator_request",
+            "dob_sources": ["doc-11", "doc-12"],
+        }
+    )
+    assert broker.requests[-1]["envelope"]["dob_sources"] == ["doc-11", "doc-12"]
+
+
+def test_update_files_sends_the_listing_and_relays_the_broker_computed_set(broker):
+    out = json.loads(
+        _tools()["medchron_update_files"]["handler"](
+            {
+                "matter_id": "m-1",
+                "client_name": "Alpha Example",
+                "listing_ids": ["d-4", " ", "d-1", "d-3"],
+            }
+        )
+    )
+    assert broker.requests[-1] == {
+        "action": "medchron_update_files",
+        "matter_id": "m-1",
+        "client_name": "Alpha Example",
+        "listing_ids": ["d-4", "d-1", "d-3"],
+    }
+    assert out == {
+        "coverage_record": True,
+        "coverage_complete": True,
+        "coverage_note": None,
+        "new_document_ids": ["d-4", "d-3"],
+        "count": 2,
+        "previously_uncovered": ["d-3"],
+    }
+
+
+def test_a_refused_submit_relays_which_client_matched_and_which_did_not(broker):
+    """A two-client request with one client in flight: the model sees which
+    client matched which job and which client to submit alone."""
+    cover = [
+        {"client_name": "Alpha Example", "job_id": "01J", "job_state": "running"},
+        {"client_name": "Beta Sample", "job_id": None, "job_state": None},
+    ]
+    broker.answers["medchron_job_submit"] = {
+        "ok": True,
+        "accepted": False,
+        "reason": "a chronology on this matter is already in flight",
+        "clients": cover,
+        "uncovered_clients": ["Beta Sample"],
+    }
+    out = json.loads(
+        _tools()["medchron_job_submit"]["handler"](
+            {
+                "matter_id": "m-1",
+                "matter_number": "2026-PI-102",
+                "units": [
+                    {"client_name": "Alpha Example", "surname": "Example", "dob": "01/02/1980"}
+                ],
+                "incident_date": "2026-01-15",
+                "incident_source": "administrator_request",
+            }
+        )
+    )
+    assert out["accepted"] is False and out["clients"] == cover
+    assert out["uncovered_clients"] == ["Beta Sample"] and "job_id" not in out
+
+
 def test_the_tools_are_classified():
     assert classify_tool("medchron_job_submit").action_class is ActionClass.INTERNAL_WRITE
     assert classify_tool("medchron_job_status").action_class is ActionClass.READ
     assert classify_tool("medchron_allowance").action_class is ActionClass.READ
+    assert classify_tool("medchron_update_files").action_class is ActionClass.READ
     assert not classify_tool("medchron_job_submit").unmapped
 
 

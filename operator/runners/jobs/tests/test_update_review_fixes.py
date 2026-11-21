@@ -181,7 +181,7 @@ def test_the_swap_reads_only_the_entry_that_carries_the_code() -> None:
         seen.append(text)
         return code, None, "x"
 
-    icd.claims(["2016-02-10 | Example Clinic | 250 | x.pdf"], [carrying, other], [], resolve)
+    icd.claims(["2016-02-10 | Example Clinic | 250 | x.pdf"], [carrying, other], [], resolve, lambda _e, _p: None)
     assert seen == [carrying]
 
 

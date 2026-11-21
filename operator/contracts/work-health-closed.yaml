@@ -31,3 +31,51 @@ closed:
       The firm-wide litigation status run was stopped by the Captain in favour
       of a narrower ask; it then ended on an out-of-memory failure. Decided
       work: no rerun of this attempt is owed.
+  - seat: ashton-price
+    job: 01M7XCHTRCECRVECC4NFRK9DHV
+    closed: '2026-11-20'
+    closed_by: SMD request session, on the Captain's go
+    reason: >-
+      A rule the attorney stated by email, recorded by hand in the firm's
+      drafting instructions (engagements #349, published 9f5817b1) and
+      confirmed to him in the thread by an SMD note.
+  - seat: ashton-price
+    job: 01M7XK7ZFQ8PR567TDRB7GXRVQ
+    closed: '2026-11-20'
+    closed_by: SMD request session, on the Captain's go
+    reason: >-
+      Rules the attorney stated by email, recorded by hand in the firm's
+      drafting instructions (engagements #350, published 06cb5eb1) and
+      confirmed to him in the thread by an SMD note.
+  - seat: ashton-price
+    job: 01M7XN10E31KDFZH2ZFQ3NFMM8
+    closed: '2026-11-20'
+    closed_by: SMD request session, on the Captain's go
+    reason: >-
+      A rule the attorney stated by email, recorded by hand in the firm's
+      drafting instructions (engagements #351, published a839f92e) and confirmed to him in the thread by an
+      SMD note.
+  - seat: ashton-price
+    job: 01M7XPEWV3AQN8306P0T0MNZAQ
+    closed: '2026-11-20'
+    closed_by: SMD request session, on the Captain's go
+    reason: >-
+      A rule the attorney stated by email, recorded by hand in the firm's
+      drafting instructions (engagements #352, published 3e15b06c) and confirmed to him in the thread by an
+      SMD note.
+  - seat: ashton-price
+    job: 01M7XPEXHTHP76JGY2R89GKEZN
+    closed: '2026-11-20'
+    closed_by: SMD request session, on the Captain's go
+    reason: >-
+      A rule the attorney stated by email, recorded by hand in the firm's
+      drafting instructions (engagements #352, published 3e15b06c) and confirmed to him in the thread by an
+      SMD note.
+  - seat: ashton-price
+    job: 01M7XPNP1M005Z43PYKT0KBC9B
+    closed: '2026-11-20'
+    closed_by: SMD request session, on the Captain's go
+    reason: >-
+      A rule the attorney stated by email, recorded by hand in the firm's
+      drafting instructions (engagements #352, published 3e15b06c) and confirmed to him in the thread by an
+      SMD note.

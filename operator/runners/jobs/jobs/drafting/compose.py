@@ -24,7 +24,7 @@ from typing import Any
 from ..demand import draft as d
 from ..demand.gapaudit import output_max
 from ..demand.summarize import sha
-from . import quote_tail
+from . import quote_tail, response_scope
 
 AUDIT_MAX_TOKENS = 32_000
 #: A served set's requests are read this many at a time (``Drafter._chunked``).
@@ -58,8 +58,10 @@ def tally(body: str) -> dict[str, int]:
 #: under a heading code writes (``repair_budget``, 2026-11-05):
 #: on 2026-10-13 a proof run carried three findings its own audit had flagged
 #: into the documents, and forwarded them to the attorney as "open items".
-#: Responses are not here yet: no proof run has measured the rule on them.
-STRICT_CLASSES = ("discovery_set",)
+#: Responses joined 2026-11-19 (release 3): a served response is a served paper
+#: like a set, and its numbering is also checked in code before filing
+#: (``review.response_findings``).
+STRICT_CLASSES = ("discovery_set", "discovery_response")
 
 
 def blocking_findings(result: dict[str, Any], cls: str | None = None, audit_md: str | None = None) -> int:
@@ -358,6 +360,9 @@ class Drafter:
     def compose(self, digest: str) -> str:
         if (self.data / "draft-v1.md").is_file():
             return self._read("draft-v1.md")
+        # A discovery-response unit composes from its own capped pack (response_scope.py).
+        pack = response_scope.unit_pack(self.data)
+        digest = digest if pack is None else pack
         user = (
             self.context
             + "\n\n---\n\nTHE RECORD DIGEST (every fact you use must trace to a citation here):\n\n"

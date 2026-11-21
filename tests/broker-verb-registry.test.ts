@@ -122,6 +122,17 @@ const EXPECTED_VERBS = [
   'establish_notify_release',
   'establish_pending',
   'establish_propose',
+  // Confirm-by-reply: which own rules a sent read-back carried, and which
+  // read-back an inbound reply answers (readback_bindings.py).
+  'establish_block_seed',
+  'establish_install_check',
+  'establish_install_watch',
+  'establish_readback_for',
+  'establish_readback_handoff',
+  'establish_readback_owed',
+  'establish_readback_sent',
+  'establish_reopen_lapsed',
+  'establish_restated',
   'establish_stage_document',
   'establish_status',
   'establish_submit',
@@ -190,6 +201,9 @@ const EXPECTED_VERBS = [
   // 2026-10-29: keeps the units of a job submitted before the broker kept
   // them, read from the job dir on the seat. Root only, no agent tool.
   'medchron_units_backfill',
+  // 2026-11-19: an update's new documents, the listing minus the coverage
+  // record, computed in code. Read-only; gateway, agent or root.
+  'medchron_update_files',
   // The relay's working draft, deleted once its reply is out (msgraph_drafts.py).
   'msgraph_discard_draft',
   'msgraph_reply',
@@ -227,6 +241,8 @@ const EXPECTED_VERBS = [
   // Letter 416 #10, the weekly records chase: the records orders the Operator
   // placed (committed acts), read-only, no facility or client. Agent uid and root.
   'records_orders_placed',
+  // Root only: SMD ends a stated rule with no letter (rules-by-hand stopgap).
+  'rule_close_by_smd',
   // ADR 0089 staff send-as on the staff member's emailed approval.
   'send_as_decide',
   // The approve buttons (amendment 5a). Not gateway-only: the seat's web gate is
@@ -238,6 +254,9 @@ const EXPECTED_VERBS = [
   // an administrator's code request. Gateway-only; each writes its own row.
   'sender_enrollment_issue',
   'sender_enrollment_redeem',
+  // Work SMD owes a firm person, recorded in the step it arose (smd_owed.py).
+  'smd_owed_open',
+  'smd_owed_record',
   // Every write to a firm's Smokeball, recorded before it is sent (the
   // connector's write_record.py refuses a write whose row did not land).
   'smokeball_write_append',

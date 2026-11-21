@@ -34,6 +34,23 @@ from .establishment_validation import (
 from .rule_reach import firm_subject
 
 
+def person_readback(proposal_id: str, text: str, kind: str = "rule") -> str:
+    """The read-back a PERSON is shown: a rule is its sentence, and nothing else.
+
+    2026-11-19. The tag ``[rule XXXXXXXX]`` was the handle a reply bound by, and
+    a person shown it read it as noise at best: on the real day the Operator
+    quoted four of them at an attorney in six minutes. A rule is now confirmed by
+    the email replied to (``readback_bindings.py``), so the person's read-back
+    carries the sentence alone. The administrators' request email keeps its tag,
+    and it renders its own (overlay ``shared/rule_dispatch.notify_admins``). An
+    act and an operations request keep theirs here: they are still answered by
+    tag, one at a time.
+    """
+    if kind not in ("tool_call", OPS_REQUEST_KIND):
+        return text
+    return readback_for(proposal_id, text, kind)
+
+
 class RuleProposals(ProposalLifecycle):
     """propose / decline / lapse_notified / pending_rules (ss-console#2529, #2546)."""
 
@@ -101,7 +118,7 @@ class RuleProposals(ProposalLifecycle):
                 "subject": existing["subject"],
                 "for_admin": existing["for_admin"],
                 "expires_at": existing["expires_at"],
-                "readback": readback_for(existing["proposal_id"], existing["text"]),
+                "readback": person_readback(existing["proposal_id"], existing["text"]),
             }
         row = pending.create(
             scope=scope,
@@ -144,7 +161,7 @@ class RuleProposals(ProposalLifecycle):
             "subject": subject,
             "for_admin": for_admin,
             "expires_at": row["expires_at"],
-            "readback": readback_for(row["proposal_id"], text),
+            "readback": person_readback(row["proposal_id"], text),
         }
 
     # ------------------------------------------------------------------
@@ -220,6 +237,9 @@ class RuleProposals(ProposalLifecycle):
             "instructed_by": row["instructed_by"],
             "declined_by": declined_by,
             "text": row["text"],
+            # The administrator's decline keeps the tag: its row waits on an
+            # administrator, and its answer is by tag (the seat re-renders the
+            # requester's letter without one, shared/rule_dispatch).
             "readback": readback_for(proposal_id, row["text"], row["kind"]),
         }
 
@@ -401,7 +421,7 @@ class RuleProposals(ProposalLifecycle):
             "kind": row["kind"],
             "subject": row["subject"],
             "text": row["text"],
-            "readback": readback_for(row["proposal_id"], row["text"], row["kind"]),
+            "readback": person_readback(row["proposal_id"], row["text"], row["kind"]),
             "payload": row["payload"],
             # The tool an act row names, at the top level, because that is where
             # the seat reads it (hermes-smd-establishment._act_confirmation_note:

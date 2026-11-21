@@ -1,7 +1,9 @@
 {
-  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges.",
+  "_why": "Paths (dotted, list indexes as numbers) that may differ from the decision corpus, per golden (synthetic/<decision>.<family> or existing/<test file stem>). A split of _relay_draft or _evaluate_tool_call that changes no decision names nothing here; a reviewed behaviour change names each path it moves, and the list is cleared once it merges. This change (2026-11-20): a step-5a fixed_wording hold (say_other_words and every pair with it) is now told the paragraph rule, each required sentence exactly once as its own paragraph, in any order, beside other paragraphs, instead of the broker's whole-body hint, so the rendered notice the transform hook returns changes (its length and digest). No decision, hold reason, row or detail moves.",
   "existing/test_champion_audience": [],
   "existing/test_champion_wall": [],
   "synthetic/relay.guard": [],
-  "existing/test_reply_binding": []
+  "existing/test_reply_binding": [],
+  "synthetic/relay.pair": [],
+  "synthetic/relay.raise": []
 }

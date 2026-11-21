@@ -118,7 +118,8 @@ def test_the_requester_and_request_come_from_the_email(drafting) -> None:
             {**MATTER, "requested_by": "someone@else.example", "request_ref": "<x@y>"}
         )
     )
-    assert out["accepted"] is True and out["job_id"] == JOB
+    assert out["accepted"] is True
+    assert out["say"] == mod.acknowledgment("mediation_brief", "900201")
     env = client.envelopes[0]
     # Exactly the broker's envelope keys (ss-console drafting_ledger.validate_envelope).
     assert set(env) == {
@@ -207,7 +208,10 @@ def test_a_rehearsal_files_elsewhere(drafting) -> None:
     }
 
 
-def test_a_broker_refusal_is_relayed_with_the_existing_job(drafting, monkeypatch) -> None:
+def test_a_broker_refusal_with_no_code_is_smds_and_says_it_could_not(drafting, monkeypatch) -> None:
+    """A broker that answers no closed code (an older one) is never relayed in
+    its own prose, and never acknowledged: no job exists. The reply is SMD's
+    could-not sentence, and the job id is not in the result."""
     mod, _client = drafting
 
     class _Refuses:
@@ -217,7 +221,11 @@ def test_a_broker_refusal_is_relayed_with_the_existing_job(drafting, monkeypatch
     monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Refuses())
     _email()
     out = json.loads(mod.drafting_job_submit(MATTER))
-    assert out == {"accepted": False, "reason": "already underway", "job_id": JOB}
+    assert out["code"] == "not_accepted" and out["say"] == "none"
+    assert out["forbid"] == {
+        "matter": "900201",
+        "words": ["brief", "mediation brief"],
+    } and JOB not in json.dumps(out)
 
 
 def test_a_revision_the_broker_routed_is_named_as_one(drafting, monkeypatch) -> None:
@@ -241,8 +249,11 @@ def test_a_revision_the_broker_routed_is_named_as_one(drafting, monkeypatch) -> 
     monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Revises())
     _email(text="Please take the record cites out of the filed brief.")
     out = json.loads(mod.drafting_job_submit(MATTER))
-    assert out["mode"] == "revise" and out["revise_of"] == "01J0000000000000000000000Y"
-    assert "new versions of the same files" in out["message"]
+    assert out["say"] == (
+        "Received. We'll make those changes to the mediation brief for matter 900201 and reply in "
+        "this thread when the new version is filed."
+    )
+    assert "message" not in out and "revise_of" not in out
 
 
 def test_the_tools_are_classified() -> None:
@@ -326,3 +337,222 @@ def test_the_allowance_projects_counts_and_classes_never_cents(drafting, monkeyp
         "authored": True,
         "enabled_classes": ["memo"],
     }
+
+
+# -- the acknowledgment and the refusals are code's words (2026-11-19) -----------
+
+#: Words that hand the firm the mechanics of how a request is handled.
+MECHANICS = ("job", "queue", "machine", "lane", "system", JOB.lower())
+
+ACK_4417 = (
+    "Received. The discovery responses for matter 4417 are with us, and you'll get a reply in "
+    "this thread when the draft is filed in the matter."
+)
+
+
+class _Answers:
+    """A broker that answers one fixed response to a submit."""
+
+    def __init__(self, resp: dict) -> None:
+        self.resp = resp
+
+    def drafting_submit(self, envelope):
+        return {"ok": True, "matter_number": envelope["matter"]["number"], **self.resp}
+
+
+def _submit(mod, monkeypatch, resp: dict, **args) -> tuple[str, dict]:
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Answers(resp))
+    _email(text="Draft responses to the discovery on matter 4417.")
+    raw = mod.drafting_job_submit(
+        {**MATTER, "matter_number": "4417", "document_class": "discovery_response", **args}
+    )
+    return raw, json.loads(raw)
+
+
+def test_an_accepted_draft_is_answered_with_the_fixed_acknowledgment(drafting, monkeypatch) -> None:
+    """FALSIFIER: put the old ``message`` back and the model is handed "Drafting
+    job <id> is queued on this Machine" to relay."""
+    mod, _ = drafting
+    raw, out = _submit(
+        mod, monkeypatch, {"accepted": True, "job_id": JOB, "state": "submitted", "mode": "draft"}
+    )
+    assert out == {"accepted": True, "document_class": "discovery_response", "say": ACK_4417}
+    lowered = raw.lower()
+    assert not any(word in lowered for word in MECHANICS), raw
+
+
+def test_the_acknowledgment_names_the_matter_the_broker_validated(drafting, monkeypatch) -> None:
+    mod, _ = drafting
+
+    class _Echoes:
+        def drafting_submit(self, envelope):
+            return {"ok": True, "accepted": True, "matter_number": "4417-A"}
+
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Echoes())
+    _email()
+    out = json.loads(mod.drafting_job_submit({**MATTER, "matter_number": "4417"}))
+    assert "for matter 4417-A " in out["say"]
+
+
+@pytest.mark.parametrize(
+    ("code", "klass", "expected"),
+    [
+        (
+            "allowance_spent",
+            "discovery_response",
+            "Received. Your firm's drafts for this billing cycle are all used, so we have not "
+            "started the discovery responses for matter 4417.",
+        ),
+        (
+            "class_not_enabled",
+            "discovery_response",
+            "Received. Drafting discovery responses isn't switched on for your firm, so we have "
+            "not started the discovery responses for matter 4417.",
+        ),
+        (
+            "class_not_enabled",
+            "memo",
+            "Received. Drafting a memo isn't switched on for your firm, so we have not started "
+            "the memo for matter 4417.",
+        ),
+        (
+            "not_admin",
+            "discovery_response",
+            "Received. Drafts are requested by one of the firm's named administrators, so we have "
+            "not started the discovery responses for matter 4417.",
+        ),
+        (
+            "underway",
+            "discovery_response",
+            "Received. The discovery responses for matter 4417 are already being drafted from an "
+            "earlier email, so this one did not start a second draft. We'll reply in that thread "
+            "when it's filed.",
+        ),
+    ],
+)
+def test_a_firm_cause_is_one_plain_sentence(drafting, monkeypatch, code, klass, expected) -> None:
+    mod, _ = drafting
+    raw, out = _submit(
+        mod,
+        monkeypatch,
+        {"accepted": False, "code": code, "reason": "nothing was queued"},
+        document_class=klass,
+    )
+    assert out == {"accepted": False, "code": code, "say": expected}
+    assert not any(word in out["say"].lower() for word in MECHANICS)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "mailbox_unanswered",
+        "filing_target",
+        "admins_unreadable",
+        "cycle_unreadable",
+        "lane_not_enabled",
+    ],
+)
+def test_an_smd_side_refusal_the_broker_recorded_is_the_normal_acknowledgment(
+    drafting, monkeypatch, code
+) -> None:
+    """Owner's ruling (2026-11-19): our failure is not the attorney's problem.
+    With the broker's record of the owed work (smd_told), he gets the normal
+    acknowledgment and nothing about SMD; without it, no reply at all.
+    FALSIFIER: answer the acknowledgment without smd_told and the attorney is
+    told it is with us while nothing tells SMD."""
+    mod, _ = drafting
+    _raw, told = _submit(
+        mod, monkeypatch, {"accepted": False, "code": code, "reason": "prose", "smd_told": True}
+    )
+    assert told == {"accepted": False, "code": code, "say": ACK_4417}
+    assert "smd" not in told["say"].lower()
+    _raw, untold = _submit(mod, monkeypatch, {"accepted": False, "code": code, "reason": "prose"})
+    assert untold == {
+        "accepted": False,
+        "code": code,
+        "say": "none",
+        "instruction": mod.NONE_INSTRUCTION,
+        "forbid": {"matter": "4417", "words": ["discovery responses", "responses"]},
+    }
+
+
+def test_a_broker_that_did_not_answer_sends_nothing(drafting, monkeypatch) -> None:
+    from shared.jobs_client import JobsBrokerError
+
+    mod, _ = drafting
+
+    class _Down:
+        def drafting_submit(self, envelope):
+            raise JobsBrokerError("socket closed")
+
+    monkeypatch.setattr(mod, "JobsBrokerClient", lambda: _Down())
+    _email()
+    out = json.loads(mod.drafting_job_submit(MATTER))
+    # Nothing could be recorded, so nothing is said; the request is listed unanswered.
+    assert out["code"] == "broker_unanswered" and out["say"] == "none"
+
+
+def test_the_same_email_on_the_same_matter_is_the_same_acknowledgment(
+    drafting, monkeypatch
+) -> None:
+    mod, _ = drafting
+    raw, out = _submit(
+        mod,
+        monkeypatch,
+        {
+            "accepted": False,
+            "code": "already_queued",
+            "job_id": JOB,
+            "queued_matter_number": "4417",
+        },
+    )
+    assert out["say"] == ACK_4417 and JOB not in raw
+
+
+def test_a_second_matter_in_one_email_is_told_to_send_its_own(drafting, monkeypatch) -> None:
+    """ "Draft mediation briefs for 1001 and 1002": the second submit meets the
+    first's job under the email's key. FALSIFIER: acknowledge it and the firm is
+    told 1002 is with us while nothing was queued for it."""
+    mod, _ = drafting
+    raw, out = _submit(
+        mod,
+        monkeypatch,
+        {
+            "accepted": False,
+            "code": "already_queued",
+            "job_id": JOB,
+            "queued_matter_number": "1001",
+        },
+        matter_number="1002",
+        document_class="mediation_brief",
+    )
+    assert out == {
+        "accepted": False,
+        "code": "second_matter",
+        "say": "Received. One email starts one draft of each kind, and this one already started the "
+        "mediation brief for matter 1001. Please send the request for matter 1002 in its own email.",
+    }
+    assert JOB not in raw
+
+
+def test_every_broker_firm_code_has_a_sentence() -> None:
+    from tests.conftest import load_plugin
+
+    mod = load_plugin("hermes-smd-lanes").drafting
+    assert {"not_admin", "class_not_enabled", "allowance_spent", "underway"} <= set(mod.FIRM_SAY)
+    for sentence in mod.FIRM_SAY.values():
+        assert "\u2014" not in sentence
+
+
+def test_a_reply_carrying_a_drafting_job_id_is_refused_by_the_outbound_checklist(drafting) -> None:
+    """The status tool still hands the model job ids (add-to-request takes one).
+    They never reach the firm: the reply relay's output checklist refuses a
+    ULID-shaped id on both reply surfaces (``internal_id``), and the tool says so.
+    FALSIFIER: drop the ULID pattern from ``internal_id`` and this goes out."""
+    from shared import output_checklist as oc
+
+    mod, _ = drafting
+    assert "never write it in a reply" in mod.TOOLS["drafting_job_status"][0]
+    body = f"Received. Drafting job {JOB} is underway."
+    for surface in (oc.STAFF_SEND, oc.EXTERNAL_REPLY):
+        assert [v.rule for v in oc.refusing(oc.check(body, surface))] == ["internal_id"]

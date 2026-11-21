@@ -1189,3 +1189,93 @@ def test_a_seat_is_hidden_only_when_its_own_yaml_says_it_is_not_a_client():
         "pilot-smokeball",
         "ap-staging",
     }
+
+
+# ---------------------------------------------------------------------------
+# a reply that said it could not be done: SMD owes the answer (2026-11-19)
+# ---------------------------------------------------------------------------
+
+OTHER_VID = "AAMkOTHERREQUEST"
+
+
+def _declined(code: str = "cannot_complete") -> list[dict]:
+    """A request, the fixed could-not reply to it, then later replies: a second
+    reply in the same thread and the seat's next answer to someone else."""
+    at = NOW - timedelta(hours=3)
+    return [
+        _inbound(at),
+        _row("REPLY_SENT", at + timedelta(minutes=1), in_reply_to=VID, could_not=code),
+        _row("REPLY_SENT", at + timedelta(minutes=30), in_reply_to=VID),
+        _inbound(at + timedelta(minutes=40), vid=OTHER_VID),
+        _row("REPLY_SENT", at + timedelta(minutes=41), in_reply_to=OTHER_VID),
+        _row("DRAFTING_JOB_DELIVERED", at + timedelta(minutes=50), job_id="J9"),
+    ]
+
+
+def test_a_could_not_reply_stays_listed_after_later_replies():
+    """FALSIFIER: clear it on a later REPLY_SENT (the shortfall line's
+    ``answered_after``) and the acknowledgment-shaped reply, or the next answer
+    to anyone, would drop the request SMD owes."""
+    items = src.could_not_items(SEAT, _declined(), CFG, NOW)
+    assert _kinds(items) == ["could_not"]
+    assert wh.card_id(VID) in items[0].what and "cannot_complete" in items[0].what
+    # The request itself is answered, so it is not also a no-reply line.
+    assert wh.request_items(SEAT, _declined(), CFG, NOW) == []
+
+
+def test_a_could_not_request_is_emailed_new_once_then_carried():
+    items = src.could_not_items(SEAT, _declined(), CFG, NOW)
+    new, still, state = mail.split_new(items, None, NOW - timedelta(hours=4), NOW)
+    assert [i.kind for i in new] == ["could_not"] and still == []
+    later = NOW + timedelta(hours=1)
+    again = src.could_not_items(SEAT, _declined(), CFG, later)
+    new2, still2, _ = mail.split_new(again, mail.dump_state(state), NOW, later)
+    assert new2 == [] and [i.kind for i in still2] == ["could_not"]
+
+
+def test_a_could_not_request_smd_closed_drops_off():
+    closed = {(SEAT, wh.card_id(VID))}
+    assert src.could_not_items(SEAT, _declined(), CFG, NOW, closed) == []
+
+
+def test_a_could_not_reply_to_smds_own_address_is_not_listed():
+    """SMD writing in (a probe, a desk test) is not a firm person owed an
+    answer: the heartbeat skips such replies, and so does this line now."""
+    at = NOW - timedelta(hours=3)
+    rows = [
+        _inbound(at),
+        _row(
+            "REPLY_SENT",
+            at + timedelta(minutes=1),
+            in_reply_to=VID,
+            could_not="cannot_complete",
+            recipient="team@smd.services",
+        ),
+    ]
+    assert src.could_not_items(SEAT, rows, CFG, NOW) == []
+    rows[1] = _row(
+        "REPLY_SENT",
+        at + timedelta(minutes=1),
+        in_reply_to=VID,
+        could_not="cannot_complete",
+        recipient="pat@firm.example",
+    )
+    assert _kinds(src.could_not_items(SEAT, rows, CFG, NOW)) == ["could_not"]
+
+
+def test_a_reply_that_did_answer_is_not_listed():
+    rows = [_inbound(NOW - timedelta(hours=1)), _row("REPLY_SENT", NOW - timedelta(minutes=59), in_reply_to=VID)]
+    assert src.could_not_items(SEAT, rows, CFG, NOW) == []
+
+
+def test_the_could_not_shortfall_is_not_listed_twice():
+    """The heartbeat's ``reply_could_not:`` shortfall is the same reply; the
+    request line above says it, with the person and the card."""
+    row = {
+        "ts": (NOW - timedelta(hours=1)).isoformat(),
+        "class": "failed",
+        "tool": "reply_relay",
+        "code": "reply_could_not:cannot_complete",
+    }
+    items, _ = src.shortfall_items(SEAT, [row], CFG, NOW, [])
+    assert items == []

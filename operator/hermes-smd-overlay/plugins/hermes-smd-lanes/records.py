@@ -134,8 +134,11 @@ TOOLS: dict[str, tuple[str, dict[str, Any], Any]] = {
         "matter number exactly as the email writes it (matter_number) when it gives one, and "
         "nothing when it does not; never a Smokeball id, and look nothing up. Who asked, the "
         "email's id and its words are taken from the email itself, never from you. "
-        'It answers with "say": relay that sentence exactly as the whole reply; when "say" is '
-        '"none", send no reply at all. Any other answer is a reason to relay as it comes back.',
+        'It answers with "say": your reply must contain this sentence exactly, as its own '
+        "paragraph; answer anything else the email asked in other paragraphs; never describe how "
+        'the work is done. When "say" is "none", say nothing about that request; answer the rest of '
+        "the email. Any other answer is a reason "
+        "to relay as it comes back.",
         _schema(
             {
                 "matter_number": {

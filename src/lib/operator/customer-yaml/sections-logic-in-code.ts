@@ -22,6 +22,7 @@ export const LOGIC_IN_CODE_SWITCHES = [
   'library_edit_notice',
   'status_from_events',
   'layout_into_library',
+  'rules_by_hand',
 ] as const
 
 export const LOGIC_IN_CODE_MODES = ['observe', 'enforce'] as const

@@ -7,8 +7,10 @@
     "delivery_json": "{\"files\": [{\"bytes\": 10, \"confirmed\": true, \"name\": \"A.docx\", \"sha256\": \"ab\"}]}",
     "documents": 4,
     "envelope_digest": "sha256:67bcd133a59623fec8838b8fa63158724ca28f5744dcee4e38a84f10508dfd51",
+    "expected_finish": null,
     "folder_id": "folder-9",
     "id": "01KTJ0BX000000000000000001",
+    "kind": "run",
     "matter_id": "m-1",
     "matter_number": "2026-PI-101",
     "pages": 30,
@@ -17,6 +19,7 @@
     "reply_sent_at": "2026-10-20T17:00:08.000Z",
     "request_ref": "<req-1@firm.example>",
     "requester": "admin@firm.example",
+    "stage": null,
     "state": "delivered",
     "updated_at": "2026-10-20T17:00:03.000Z",
     "work_digest": "sha256:89e0bb588885ba43b4248bb4d838577f3fc4567a52cd3b0ec390e851928e4d04"

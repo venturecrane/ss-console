@@ -305,6 +305,11 @@ ASK_UNCLEAR_REFUSAL = "unclear_refusal"
 #: An affirmative when the only thing outstanding carries no tag and is not
 #: answerable on this channel (a send withheld for a Telegram approval).
 ASK_UNNAMEABLE = "unnameable"
+#: An affirmative that binds to no read-back (no reply header the broker could
+#: match, or not a plain yes) while the person has their OWN rules open: code
+#: renders them as a numbered list and asks "Reply 1, 2 or all"
+#: (:func:`pick_list`). Replaces asking for a tag, which the person never sees.
+ASK_PICK = "pick_list"
 
 
 @dataclass(frozen=True)
@@ -320,6 +325,11 @@ class Verdict:
     proposal_id: str | None = None
     reason: str | None = None
     candidates: tuple[str, ...] = field(default_factory=tuple)
+    #: Every proposal this reply confirmed (2026-11-19). One reply may confirm
+    #: several of the sender's OWN rules: all of a read-back it answers, or the
+    #: numbers it picked from a list. ``proposal_id`` stays the first of them, so
+    #: an administrator's "apply that" and an act read exactly as before.
+    proposal_ids: tuple[str, ...] = field(default_factory=tuple)
 
 
 def email_body(user_message: Any) -> str:
@@ -922,14 +932,26 @@ def resolve(
     sender: Any,
     is_admin: bool,
     extra_open: int = 0,
+    binding: _reply.ReadbackBinding | None = None,
+    who: Any = None,
 ) -> Verdict:
     """Decide what this reply did, over the items this sender has outstanding.
 
     ``pending`` is the broker's ``establish_pending`` list for this sender (its
     ``for_admin`` rows included when the sender is an admin), rules and acts
-    alike. Every branch that is not a clean single match returns ASK, because the
-    cost of asking is one reply and the cost of guessing is a rule the firm never
+    alike. Every branch that is not a clean match returns ASK, because the cost
+    of asking is one reply and the cost of guessing is a rule the firm never
     agreed to, or a call it never asked for.
+
+    ``binding`` (2026-11-19) is the read-back this reply answers, as the broker
+    matched its ``In-Reply-To``. A plain yes to it confirms EVERY rule of the
+    sender's own it carried that is still open, and nothing else; a pick ("1
+    and 3") confirms those numbers of the list it answers. Without a binding, an
+    affirmative over the sender's own open rules asks with a numbered list
+    (:data:`ASK_PICK`) instead of asking for a tag nobody is shown any more.
+    Rules waiting on an administrator and acts keep the tag path exactly.
+    ``who`` is :class:`shared.reply_shape.People` (the names a reply may carry);
+    ``None`` reads the sender's name from the envelope alone.
 
     ``extra_open`` counts outstanding things that carry NO tag and so can never
     be named: today that is a withheld send waiting on a Telegram yes. They
@@ -958,18 +980,19 @@ def resolve(
             return Verdict(kind=ASK, reason=ASK_UNNAMEABLE)
         return Verdict(kind=NONE)
     address = str(sender or "").strip().lower()
-    tags = find_tags(message)
     reading = read_own_text(message)
+    # The sender's OWN rules are decided by the reply module alone, from their
+    # own text and the read-back the reply answers (2026-11-20); they never
+    # reach the tag path below, so a tag quoted under a reply confirms none.
+    decided, rows, tags, mixed = _reply.own_verdict(message, rows, address, binding, who)
+    if decided is not None:
+        return decided
 
     if not tags:
-        if reading.affirmative and not reading.negated:
+        if rows and reading.affirmative and not reading.negated:
             # They agreed with something, and there is something to agree with,
             # but nothing says which. Asking is cheap; picking is not.
-            return Verdict(
-                kind=ASK,
-                reason=ASK_NEEDS_TAG,
-                candidates=tuple(str(r["proposal_id"]) for r in rows),
-            )
+            return Verdict(kind=ASK, reason=ASK_NEEDS_TAG, candidates=_reply._ids(rows))
         return Verdict(kind=NONE)
 
     by_id = {str(r["proposal_id"]): r for r in rows}
@@ -977,7 +1000,7 @@ def resolve(
     if not named:
         return Verdict(kind=ASK, reason=ASK_UNKNOWN_TAG, candidates=tags)
 
-    named_ids = tuple(str(r["proposal_id"]) for r in named)
+    named_ids = _reply._ids(named)
     if reading.negated:
         # A QUALIFIED answer is not a decline, and must not be reported as one.
         # "Yes but make it letters only" contains both an agreement and a
@@ -989,20 +1012,16 @@ def resolve(
     if not reading.affirmative:
         return Verdict(kind=ASK, reason=ASK_NEEDS_AFFIRMATIVE, candidates=named_ids)
 
+    if mixed:
+        # One of their own rules is tagged beside an act or a request: before,
+        # that was two things named, and it still asks which.
+        return Verdict(kind=ASK, reason=ASK_AMBIGUOUS, candidates=named_ids)
     eligible = [r for r in named if _sender_may_confirm(r, address, is_admin, reading.apply_others)]
     if len(eligible) == 1:
-        return Verdict(
-            kind=CONFIRMED,
-            proposal_id=str(eligible[0]["proposal_id"]),
-            candidates=named_ids,
-        )
+        return _reply._confirmed(_reply._ids(eligible), named_ids)
     if not eligible:
         return Verdict(kind=ASK, reason=ASK_NOT_THEIRS, candidates=named_ids)
-    return Verdict(
-        kind=ASK,
-        reason=ASK_AMBIGUOUS,
-        candidates=tuple(str(r["proposal_id"]) for r in eligible),
-    )
+    return Verdict(kind=ASK, reason=ASK_AMBIGUOUS, candidates=_reply._ids(eligible))
 
 
 __all__ = [
@@ -1013,6 +1032,7 @@ __all__ = [
     "ASK_NEEDS_AFFIRMATIVE",
     "ASK_NEEDS_TAG",
     "ASK_NOT_THEIRS",
+    "ASK_PICK",
     "ASK_QUALIFIED",
     "ASK_UNKNOWN_TAG",
     "ASK_UNNAMEABLE",
@@ -1050,3 +1070,5 @@ __all__ = [
     "strip_quoted",
     "tag_word",
 ]
+
+from shared import rule_confirm_reply as _reply  # noqa: E402 - the half that reads this module back

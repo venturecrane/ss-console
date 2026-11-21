@@ -41,7 +41,8 @@ from . import caption_stage, citefix, compose, converge, format_check, gate, nes
 from . import base_lay, library_pick, pleading, prerender, render
 from . import review as review_mod, sets
 from . import grounding, notes as notes_mod, parties as parties_mod, settle as settle_mod, wording
-from . import repair_budget, repair_guard
+from . import repair_budget, repair_guard, served as served_mod
+from .forms import lane_hook as form_hook
 from .outcome import WALL_SENTENCE, DraftingFailed, DraftingHold, fills_located, markers, markers_located
 
 MAX_REPAIRS = 2
@@ -97,6 +98,9 @@ class Finish:
         def _context(self) -> list[str]: ...
         def _corpus_text(self) -> str: ...
         def _caption(self) -> None: ...
+        def _plan(self) -> list[dict[str, Any]]: ...
+        def _freeze_plan(self, plan: list[dict[str, Any]]) -> None: ...
+        def served_review(self) -> dict[str, dict[str, Any]] | None: ...
 
     # ---- units ----------------------------------------------------------------------
     def units(self) -> list[Unit]:
@@ -104,16 +108,23 @@ class Finish:
             return self._units  # type: ignore[has-type]
         plan = self._state().get("units")
         if plan is None:
-            found = sets.variants(self.job.request_text) if self.cls == "discovery_set" else []
-            plan = parties_mod.plan_units(found, self._served_on() if found else [])
-            self._put("units", plan)
+            plan = self._plan()  # served_plan.py: the sets, the parties, the served sets
+            self._freeze_plan(plan)
+        served = served_mod.frozen(self.data, self.job.job_dir) if served_mod.has_plan(plan) else []
         out = []
         titles = [parties_mod.unit_title(p) for p in plan]
         for p, title in zip(plan, titles):
             d = self.data / p["key"] if p["key"] else self.data
             d.mkdir(parents=True, exist_ok=True)
             others = [x for x in titles if x and x != title]
-            instr = sets.Unit(p["variant"], p["label"], p.get("party")).instruction(others) if p["key"] else None
+            if not p["key"]:
+                instr = None
+            elif isinstance(p.get("served"), int):
+                # Every other served set, SMD's included, is answered separately.
+                rest = [s.label for i, s in enumerate(served) if i != p["served"]]
+                instr = served_mod.instruction(served[p["served"]], rest)
+            else:
+                instr = sets.Unit(p["variant"], p["label"], p.get("party")).instruction(others)
             out.append(Unit(p["key"], title or self._title, p["variant"], instr, d, p.get("party")))
         self._units = out
         return out
@@ -207,6 +218,8 @@ class Finish:
         return firm_wording.attach(d, self.data)
 
     def _draft(self, u: Unit, digest: str) -> str:
+        if form_hook.takes(self, u):
+            return form_hook.draft(self, u)  # a served form set: answered in code (forms/lane_hook.py)
         out = u.data / FINAL
         if out.is_file():
             return out.read_text(encoding="utf-8")
@@ -494,6 +507,7 @@ class Finish:
         units = [(u.label, u.data) for u in self.units()] if any(u.key for u in self.units()) else None
         render_notes = [self._block_note(), *render_notes]
         md = notes_mod.attorney_notes(self.data, self._title, self._located_markers(), render_notes, end_tables, units)
+        md = form_hook.with_cite_tables(self, md)  # each form set's cite table, by code
         # SMD's hand-written sections of the notes this replaces, carried by
         # code: never sent to the model above, kept byte for byte (2026-11-05).
         prior = self.data / "notes-final.md"
@@ -554,6 +568,7 @@ class Finish:
             self.corpus(),
             pleading.spec_for(self.firm.data["format"]) is not None,
             notes_md=notes_md,
+            served=self.served_review(),
         )
         served = (
             review_mod.discovery_papers(self.corpus()) if self.cls in render.DISCOVERY else "(not a discovery document)"

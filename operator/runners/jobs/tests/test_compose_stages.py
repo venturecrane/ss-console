@@ -243,7 +243,7 @@ def test_compose_retries_a_refusal_then_names_the_pages_unread_and_exits_0(
     log: list[str] = []
     sr = _sr(job_dir, firm_headings, data_root, client, log=log)
     _unit_files(sr, {"clinic note": "[p.1] text"})
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     assert len(client.calls) == 4
     d = sr.slug_dir / "runs" / "alpha"
@@ -264,7 +264,7 @@ def test_compose_splits_an_emptied_chunk_once(
     sr = _sr(job_dir, firm_headings, data_root, client)
     body = "".join(f"[p.{k}] " + "record text " * 40 + "\n" for k in range(1, 13))  # one window
     _unit_files(sr, {"clinic note": body})
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     assert (d / "map-01-1.md").is_file() and (d / "map-01-2.md").is_file() and not (d / "map-01.md").exists()
@@ -293,7 +293,7 @@ def test_compose_keeps_a_short_but_complete_half_after_the_split(
     body = "".join(f"[p.{k}] " + "inspection text " * 40 + "\n" for k in range(1, 30))
     _unit_files(sr, {"inspection report": body, "mri report": body})
     cut_before_windows(sr)  # two files in one whole chunk
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     assert (d / "map-01-1.md").read_text() == short, "the short half is kept as the file's account"

@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "runners" / "jobs"))
 
 from jobs import request_additions as ra
-from workspace_broker import delivered_matter, drafting_additions, verbs
+from workspace_broker import delivered_matter, drafting_additions, smd_owed, verbs
 from workspace_broker.audit_ledger import LedgerWriter
 from workspace_broker.drafting_ledger import DraftingLedger
 from workspace_broker.drafting_verbs import DraftingVerbs
@@ -313,3 +313,62 @@ def test_a_revision_carries_nothing_when_nothing_was_left_out(seat) -> None:
     row = broker.drafting.ledger.read(_job(broker))
     env = {"request_text": "Please add them."}
     assert drafting_additions.with_carried_words(env, row) == env
+
+
+def _fail(broker, job_id) -> None:
+    call(broker, "drafting_job_record", uid=0, job_id=job_id, state="running", fields={})
+    call(broker, "drafting_job_record", uid=0, job_id=job_id, state="failed", fields={"reason": "audit_unfinished: x"})
+
+
+def _owed(db: str) -> list[dict]:
+    return smd_owed.open_items(db)["owed"]
+
+
+def test_an_addition_to_a_failed_job_is_owed_to_smd_in_the_same_step(seat) -> None:
+    """Owner's ruling, 2026-11-20: the addition cannot reach a failed draft, so
+    the broker records it as work SMD owes before answering, naming the job.
+    FALSIFIER: answer smd_told without the row and the attorney is promised a
+    change nobody is told to make."""
+    broker, db, queue = seat
+    job_id = _job(broker)
+    _fail(broker, job_id)
+    answer = _add(broker, job_id)
+    assert answer["result"] == "job_ended" and answer["state"] == "failed" and answer["smd_told"] is True
+    assert not list(queue.glob(".add*"))
+    (row,) = _owed(db)
+    assert row["kind"] == smd_owed.KIND_ADDITION and row["request_ref"] == LATER
+    assert (row["document_class"], row["matter_number"]) == ("discovery_set", "900201")
+    assert f"job {job_id} had ended failed" in row["detail"]
+    # The same email again is the same item.
+    assert _add(broker, job_id)["smd_told"] is True and len(_owed(db)) == 1
+
+
+def test_an_addition_smd_could_not_be_told_of_answers_smd_told_false(seat, monkeypatch) -> None:
+    broker, _db, _queue = seat
+    job_id = _job(broker)
+    _fail(broker, job_id)
+    monkeypatch.setattr(smd_owed, "record", lambda *a, **k: False)
+    assert _add(broker, job_id)["smd_told"] is False
+
+
+def test_delivering_the_failed_job_by_hand_closes_the_addition(seat) -> None:
+    """The triage's action line: make the change, file it, record it with
+    deliver_by_smd. FALSIFIER: keep listing it after the delivery and staff
+    are told to draft it twice."""
+    broker, db, _queue = seat
+    job_id = _job(broker)
+    _fail(broker, job_id)
+    _add(broker, job_id)
+    assert len(_owed(db)) == 1
+    call(broker, "drafting_job_record", uid=0, job_id=job_id, state="running", fields={})
+    call(broker, "drafting_job_record", uid=0, job_id=job_id, state="delivered", fields={"folder_id": "f"})
+    assert _owed(db) == []
+
+
+def test_a_held_job_still_owes_nothing(seat) -> None:
+    broker, db, _queue = seat
+    job_id = _job(broker)
+    call(broker, "drafting_job_record", uid=0, job_id=job_id, state="running", fields={})
+    call(broker, "drafting_job_record", uid=0, job_id=job_id, state="held", fields={"reason": "request_incomplete: x"})
+    answer = _add(broker, job_id)
+    assert answer["state"] == "held" and "smd_told" not in answer and _owed(db) == []

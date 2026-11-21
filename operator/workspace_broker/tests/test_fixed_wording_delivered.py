@@ -313,6 +313,40 @@ def test_a_drafted_document_lists_its_markers_and_caption_findings_as_recorded()
     assert 'Case number: the court paper says "23CV1"; the practice-management record says "23CV10".' in text
 
 
+def test_a_response_job_lists_every_served_set_as_filed_or_being_prepared_by_us() -> None:
+    srog, rfp = "Responses to Special Interrogatories, Set One", "Responses to Requests for Production, Set One"
+    delivery = {
+        "files": [{"role": "draft", "name": "A.docx"}, {"role": "draft", "name": "B.docx"}],
+        "served_sets": [
+            {"set": srog, "drafted_by": "operator", "status": "filed", "document": "A.docx"},
+            {
+                "set": "Responses to Form Interrogatories, Set One",
+                "drafted_by": "smd",
+                "status": "being prepared by us",
+            },
+            {"set": rfp, "drafted_by": "operator", "status": "filed", "document": "B.docx"},
+        ],
+    }
+    row = {
+        "state": "delivered",
+        "matter_number": "900201",
+        "matter_id": MATTER,
+        "file_to_matter_id": MATTER,
+        "document_class": "discovery_response",
+        "delivery_json": json.dumps(delivery),
+    }
+    (text,) = fixed_wording.render("drafting_job", row)
+    assert (
+        "The responses to each set of discovery served on this matter:\n"
+        f'{srog}: filed as "A.docx".\n'
+        "Responses to Form Interrogatories, Set One: being prepared by us.\n"
+        f'{rfp}: filed as "B.docx".'
+    ) in text
+    assert "—" not in text and "smd" not in text and "drafted_by" not in text
+    plain = {**row, "delivery_json": json.dumps({"files": delivery["files"]})}
+    assert "served on this matter" not in fixed_wording.render("drafting_job", plain)[0]
+
+
 def test_a_notice_and_a_note_are_their_recorded_words_and_the_sign_off() -> None:
     notice = {"state": "delivered", "notice": True, "text": "New offer on matter 200123: $25,000."}
     assert fixed_wording.render("negotiation_job", notice) == ["New offer on matter 200123: $25,000.\n\nThanks,"]

@@ -203,7 +203,7 @@ def test_words_the_index_cut_are_refused_rather_than_half_applied(seat) -> None:
         ({"result": "applied"}, "We added what you wrote"),
         ({"result": "compose_started"}, "is not in this draft"),
         ({"result": "job_ended", "state": "held"}, "on hold"),
-        ({"result": "job_ended", "state": "failed"}, "stopped on our side"),
+        ({"result": "job_ended", "state": "failed", "smd_told": True}, "We'll make those changes"),
         ({"result": "not_requester"}, "from the person who asked"),
         ({"result": "other_thread"}, "another email thread"),
         ({"result": "not_confirmed"}, "not added"),
@@ -232,6 +232,71 @@ def test_a_failed_job_raises_the_shortfall_shape(seat) -> None:
     assert out["status"] == "refused" and out["reason"] == "drafting_job_failed"
 
 
+def test_an_addition_to_a_failed_job_owed_to_smd_gets_the_revise_acknowledgment(seat) -> None:
+    """Owner's ruling, 2026-11-20: our failure is not the attorney's problem. The
+    broker recorded the addition as owed (smd_told), so the reply is the revise
+    sentence, with no word of a failure, a side or SMD."""
+    mod, client = seat
+    client.answer.update({"result": "job_ended", "state": "failed", "smd_told": True})
+    _indexed()
+    _email()
+    out = _ask(mod)
+    assert out["say"] == mod.acknowledgment("discovery_set", "900201", revising=True)
+    assert "forbid" not in out and "instruction" not in out
+
+
+@pytest.mark.parametrize("told", [{"smd_told": False}, {}])
+def test_an_addition_to_a_failed_job_smd_was_not_told_of_says_nothing(seat, told) -> None:
+    """FALSIFIER: answer the acknowledgment here and the attorney is promised a
+    change nobody will make (no owed item was recorded, or an older broker)."""
+    mod, client = seat
+    client.answer.update({"result": "job_ended", "state": "failed", **told})
+    _indexed()
+    _email()
+    out = _ask(mod)
+    assert out["say"] == mod.SAY_NONE and out["instruction"] == mod.NONE_INSTRUCTION
+    assert out["forbid"] == {"matter": "900201", "words": ["discovery", "propounded discovery"]}
+
+
+_OURS = ("our side", "on our end", "smd", "stopped", "failed", "broke")
+
+
+def test_no_fixed_sentence_the_lane_says_to_the_firm_names_our_side(seat) -> None:
+    """Every sentence the drafting lane can put in a reply, scanned: none tells
+    the firm that something broke on our side or that SMD was told."""
+    mod, _client = seat
+    said: list[str] = [mod._NOT_ADDED, mod.MATTER_NUMBER_SAY, mod.SECOND_MATTER_SAY]
+    for klass in mod.DOCUMENT_CLASSES:
+        said += [
+            mod.acknowledgment(klass, "900201"),
+            mod.acknowledgment(klass, "900201", revising=True),
+        ]
+        said += [
+            mod.duplicate_say(klass, "900201", m, st)
+            for m in ("draft", "revise")
+            for st in ("delivered", "held", "running")
+        ]
+        said += [mod.refusal_say(code, klass, "900201") for code in mod.FIRM_SAY]
+        for result in (
+            "applied",
+            "compose_started",
+            "job_ended",
+            "not_requester",
+            "other_thread",
+            "x",
+        ):
+            for state in ("held", "failed", "running", ""):
+                resp = {
+                    "document_class": klass,
+                    "matter_number": "900201",
+                    "state": state,
+                    "smd_told": True,
+                }
+                said.append(mod._say(result, resp))
+    for sentence in said:
+        assert not any(w in sentence.lower() for w in _OURS), sentence
+
+
 def test_a_delivered_job_goes_to_submit_with_nothing_to_say(seat) -> None:
     mod, client = seat
     client.answer.update({"result": "job_ended", "state": "delivered"})
@@ -248,7 +313,7 @@ def test_a_submit_that_collides_with_a_running_draft_carries_the_words_there(sea
     _indexed()
     _email()
     out = json.loads(mod.drafting_job_submit(MATTER, session_id=SESSION))
-    assert out["accepted"] is False and out["job_id"] == JOB and out["applied"] is True
+    assert out["accepted"] is False and out["applied"] is True and "job_id" not in out
     assert client.calls[0]["words"] == WORDS and "We added" in out["say"]
 
 

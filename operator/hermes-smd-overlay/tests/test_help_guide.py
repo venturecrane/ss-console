@@ -303,3 +303,73 @@ def test_the_shipped_help_text_passes_the_send_checker_even_unquoted(hg):
         bare = text.replace('"', "").replace("“", "").replace("”", "")
         rules = {v.rule for v in oc.check(bare, oc.STAFF_SEND)}
         assert "caps_emphasis" not in rules, bare[:200]
+
+
+def test_the_guide_answers_how_to_ask_for_a_draft_from_its_own_section(hg):
+    """2026-11-19: "Can I ask for two documents in one email?" is answered from
+    the guide's own section on a seat that drafts."""
+    body = hg.read_guide((_REAL_HELP.parent,), drafts=True)
+    section = body.split(hg.DRAFT_SECTION, 1)[1].split("###", 1)[0]
+    assert "one document per email" in section
+    assert "Several related sets of the same kind of" in section
+    assert "reply in that draft's own email thread" in section
+    assert "state it as a rule in one line" in section
+    assert "matter number in the subject or the first" in body
+    assert "\u2014" not in body
+
+
+_DRAFTER_HELP = (
+    'what: "Drafts documents."\nexample: "On matter [number], draft the memo."\nadmin_only: false'
+)
+
+
+def _drafting_seat(tmp_path, *, offered: bool):
+    """A seat whose help requests carry the drafting skill (offered to this
+    sender or not), with the shipped guide."""
+    from tests.test_seat_facts import _skill_md as skill_md
+
+    roots = _help_roots(tmp_path)
+    skill_md(
+        roots[1], "document-drafter", _DRAFTER_HELP.replace("false", "false" if offered else "true")
+    )
+    real = (_REAL_HELP / "references" / "guide.md").read_text(encoding="utf-8")
+    _write_help_skill(roots[1], guide=real)
+    raw = _bound_raw()
+    raw["personas"][0]["skills"].append(
+        {"name": "document-drafter", "enabled": True, "initiation": {"manual": True}}
+    )
+    return raw, roots
+
+
+def test_a_seat_that_offers_drafting_gets_the_draft_section(sf, hg, tmp_path):
+    raw, roots = _drafting_seat(tmp_path, offered=True)
+    help_ = _help(sf, tmp_path, raw=raw, roots=roots)["help"]
+    assert any(r["skill"] == "document-drafter" and r["sender_may_ask"] for r in help_["requests"])
+    assert hg.DRAFT_SECTION in help_["guide"]
+
+
+def test_a_seat_that_does_not_offer_drafting_never_sees_the_draft_section(sf, hg, tmp_path):
+    """Gated in code (2026-11-19). FALSIFIER: serve the whole body and a seat
+    with no drafting, or a sender who may not ask for one, is told how to ask
+    for drafts. Both shapes: the skill not on the seat, and on it but admin-only
+    for a staff sender."""
+    roots = _help_roots(tmp_path)
+    _write_help_skill(
+        roots[1], guide=(_REAL_HELP / "references" / "guide.md").read_text(encoding="utf-8")
+    )
+    help_ = _help(sf, tmp_path, roots=roots)["help"]
+    assert hg.DRAFT_SECTION not in help_["guide"] and "### When to train it" in help_["guide"]
+    raw, roots = _drafting_seat(tmp_path / "admin-only", offered=False)
+    help_ = _help(sf, tmp_path / "admin-only", raw=raw, roots=roots)["help"]
+    assert hg.DRAFT_SECTION not in help_["guide"]
+    assert "### When to train it" in help_["guide"] and "A few things that help" in help_["guide"]
+
+
+def test_a_question_the_guide_does_not_answer_is_noted_and_handed_off(hg):
+    """The hand-off is in the Operator's own voice and names no one it was
+    passed to (owner's ruling, 2026-11-19); SMD learns of it from the broker's
+    record, never from the reply's wording."""
+    rule = [r for r in hg.ANSWER_RULES if "not_in_guide" in r]
+    assert rule and "your reply must contain its say exactly, as its own paragraph" in rule[0]
+    assert hg.NOT_IN_GUIDE_SAY == "Let me research that and get back to you in this thread."
+    assert "smd" not in hg.NOT_IN_GUIDE_SAY.lower()

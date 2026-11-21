@@ -57,7 +57,26 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         },
     ),
     _reuse("decide_selection", requires=("update_base",)),
-    _reuse("download", exit_map={**_download.EXITS, _download.EXIT_ALL_EXCLUDED: _CURRENT}),
+    # Which client's bills the update may read, decided from the listing, the
+    # folders and the matter's known clients as soon as the request's files
+    # are known, so a joint matter whose other clients are unknown holds at
+    # $0 (2026-11-20: it held only after every paid stage). It reads only what
+    # ``list_matter`` and ``decide_selection`` wrote.
+    Stage(
+        "update_billing_docs",
+        "",
+        _slug_unit,
+        requires=("decide_selection",),
+        runner=_bupd.run_docs,
+        exit_map={
+            _bupd.EXIT_UNKNOWN: (HELD, "update_held: billing refresh not run: other clients on this matter are unknown")
+        },
+    ),
+    _reuse(
+        "download",
+        requires=("update_billing_docs",),
+        exit_map={**_download.EXITS, _download.EXIT_ALL_EXCLUDED: _CURRENT},
+    ),
     BY_NAME["extract"],
     BY_NAME["index_msg"],
     BY_NAME["decide_fold"],
@@ -185,22 +204,14 @@ UPDATE_STAGES: tuple[Stage, ...] = (
     ),
     # A request that names a billing record refreshes the billing worksheet
     # (``stages/billing_update``, 2026-11-17); with none named, each is a no-op.
-    Stage(
-        "update_billing_docs",
-        "",
-        _slug_unit,
-        requires=("update_proofs",),
-        runner=_bupd.run_docs,
-        exit_map={
-            _bupd.EXIT_UNKNOWN: (HELD, "update_held: billing refresh not run: other clients on this matter are unknown")
-        },
-    ),
+    # Which client's bills it may read was decided before any paid stage
+    # (``update_billing_docs`` above).
     Stage(
         "update_billing_extract",
         "",
         _slug_unit,
         paid=True,
-        requires=("update_billing_docs",),
+        requires=("update_proofs", "update_billing_docs"),
         runner=_bupd.run_extract,
         rehearse=_bupd.projection_lines,
         exit_map={1: (FAILED, "billing_extract: a pipeline defect (an unread page is a named gap, never this exit)")},

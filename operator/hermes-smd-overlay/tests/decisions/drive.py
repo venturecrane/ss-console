@@ -173,6 +173,23 @@ def run_relay(case: C.Case, raise_at: tuple[int, ...] = ()) -> recorder.Scope:
         if knobs.get("champion"):
             enrolled = {"schema": 1, "enrolled": [{"address": SENDER, "label": "champion"}]}
             (tmp / "enrolled.json").write_text(json.dumps(enrolled), encoding="utf-8")
+        # Step 5a's register, fresh per case: no case but a say knob has a
+        # whole-reply sentence this turn ("match": the draft's own text).
+        # (A tree from before step 5a has no register: the knob does nothing there.)
+        turn_says = getattr(mod.relay_checks, "TurnSays", None)
+        if turn_says is not None:
+            mp.setattr(mod.relay_checks, "_TURN_SAYS", turn_says())
+            mp.setattr(mod.relay_checks, "_SAY_HOLDS", mod.held_notice.HoldCounter())
+            if knobs.get("say"):
+                said = (
+                    DRAFT["text"]
+                    if knobs["say"] in ("match", "none_and_match")
+                    else "Received. The memo is with us."
+                )
+                mod.relay_checks._TURN_SAYS.note("s1", "msg-in-1", said)
+                if knobs["say"] == "none_and_match":
+                    # A "none" beside a real say: the real say decides (review 2026-11-19).
+                    mod.relay_checks._TURN_SAYS.note("s1", "msg-in-1", "none")
         recorder.reset_registers()
         session = knobs.get("session_id", "s1")
         if knobs.get("origin", "turn") == "turn":

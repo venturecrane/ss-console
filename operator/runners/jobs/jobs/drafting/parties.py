@@ -26,9 +26,12 @@ its own party even inside the District's value.
 * A "to X only" line (the attorney's words, or SMD's hand line on a
   re-submitted job: the envelope's only free text is ``request_text``) narrows
   the plan to exactly those names, even one.
-* "all / each / both defendants" with no names uses the caption's parties only
-  when every value splits cleanly into whole parties (``entities``: no
-  qualifier such as "City of X" or "State of CA" after a name); else it stops.
+* "all / each / both defendants", or "to the defense" when the request names
+  no party (never "the defense's expert", "defense counsel" or "on the defense
+  of immunity"), uses the caption's parties only when every value splits
+  cleanly into whole parties (``entities``: no qualifier such as "City of X"
+  or "State of CA" after a name); else it stops. "To the defense" when our
+  client is a defendant on the caption is our own side: it stops too.
 * Two names in the request that are one caption span, a scope name that is no
   candidate, or a request naming none of several defendants: stop
   (``party_unknown``, SMD alerted). Never a guess.
@@ -66,6 +69,16 @@ _STOP = frozenset("the of a an and inc llc l c corp corporation co company ltd l
 _EVERY = re.compile(
     r"(?i)\b(?:both|all|each|every)\s+(?:of\s+the\s+)?(?:named\s+)?(?:defendants?|responding\s+parties|parties)\b"
     r"|\b(?:to|on|upon)\s+(?:the\s+)?defendants\b"
+)
+#: "Send to the defense" (2026-11-19: a request in these words ran 32 minutes,
+#: paid, then failed party_unknown). Every defendant only in a sending phrase
+#: ("to / on / upon the defense") and only when the request names no party
+#: (``resolve``); never "on the defense of immunity", "the defense's expert",
+#: "the defense counsel", "the defense firm", "the defense has refused".
+_DEFENSE = re.compile(
+    r"(?i)\b(?:to|on|upon)\s+the\s+defen[cs]e\b"
+    r"(?!\s*['’]s?\b|\s+(?:counsel|attorneys?|experts?|lawyers?|firm|team|of|in|has|have|is|was|will|would|"
+    r"case|side|table|theory|position|argument)\b)"
 )
 #: A line limiting the parties ("to the School District only", "only to the City").
 _ONLY = re.compile(
@@ -384,19 +397,47 @@ def entities(value: str) -> list[str]:
 # ---- the matter's other side, and the plan ---------------------------------------------------
 
 
+def client_side(cap: dict[str, Any], facts: dict[str, Any]) -> str:
+    """Which side of the court's caption our client is on ("plaintiffs",
+    "defendants"), or "" when the caption does not say."""
+    fields = cap.get("fields") or {}
+    if not (fields.get("plaintiffs") or fields.get("defendants")):
+        return ""
+    rows = [p for p in cap.get("parties") or [] if isinstance(p, dict) and p.get("name")]
+    record: dict[str, Any] = (
+        {"parties": rows} if rows else {"plaintiffs": list(facts.get("client_names") or []), "defendants": []}
+    )
+    return str(caption_mod.client_side(fields, record) or "")
+
+
 def other_values(cap: dict[str, Any], facts: dict[str, Any]) -> list[str]:
     """The other side's party values as the court's caption prints them (the
     side that is not the client's); the matter record's names when the caption
     names no one there."""
     fields = cap.get("fields") or {}
     rows = [p for p in cap.get("parties") or [] if isinstance(p, dict) and p.get("name")]
-    record: dict[str, Any] = (
-        {"parties": rows} if rows else {"plaintiffs": list(facts.get("client_names") or []), "defendants": []}
-    )
-    side = caption_mod.client_side(fields, record) if (fields.get("plaintiffs") or fields.get("defendants")) else ""
-    other = {"plaintiffs": "defendants", "defendants": "plaintiffs"}.get(side, "")
+    other = {"plaintiffs": "defendants", "defendants": "plaintiffs"}.get(client_side(cap, facts), "")
     got = [str(v["value"]) for v in fields.get(other) or [] if isinstance(v, dict)] if other else []
     return got or [str(p["name"]) for p in rows if p.get("side") == "other"]
+
+
+#: One party under two names, in so many words ("Smith aka Smyth", "Smith dba Smith Plumbing").
+_ALIAS = re.compile(
+    r"(?i)\s+(?:a\.?k\.?a\.?|f\.?k\.?a\.?|d\.?b\.?a\.?|also\s+known\s+as|formerly\s+known\s+as|doing\s+business\s+as)\s+"
+)
+
+
+def _aliases(name: str) -> frozenset[str]:
+    """A caption party's names, normalized: itself, or each side of an aka / dba."""
+    return frozenset(" ".join(_words(part)) for part in _ALIAS.split(name) if _words(part))
+
+
+def _one_party(a: str, b: str) -> bool:
+    """Two caption entries that are one party: the same name exactly (after
+    normalizing case, punctuation and suffix words), or names an aka / dba
+    joins. Never one name inside another (2026-11-19: "<A> <B> <X> <Surname>"
+    and "<X> <Surname>" are two defendants, and were read as one)."""
+    return bool(_aliases(a) & _aliases(b))
 
 
 def _whole(values: list[str]) -> list[str]:
@@ -404,10 +445,22 @@ def _whole(values: list[str]) -> list[str]:
     out: list[str] = []
     for v in values:
         try:
-            out += [e for e in entities(v) if not any(same(e, o) for o in out)]
+            out += [e for e in entities(v) if not any(_one_party(e, o) for o in out)]
         except Undecided as exc:
             raise PartyUnknown(f"the request serves every defendant, but the caption cannot be split: {exc}") from None
     return out
+
+
+def _caption_count(values: list[str]) -> int:
+    """How many distinct parties the caption's other side names (DOES excluded,
+    an aka / dba pair once): the count an every-defendant plan must reach."""
+    seen: list[frozenset[str]] = []
+    for v in values:
+        for e in entities(v):
+            names = _aliases(e)
+            if names and not any(names & s for s in seen):
+                seen.append(names)
+    return len(seen)
 
 
 def _scope(request: str, cands: list[Candidate]) -> list[Candidate] | None:
@@ -433,8 +486,10 @@ class Resolved:
     known: list[str]  # every party the request and caption name (what ``bind`` swaps away)
 
 
-def resolve(request: str, values: list[str]) -> Resolved:
-    """Who the request serves (module docstring, the rules in order)."""
+def resolve(request: str, values: list[str], ours_defend: bool = False) -> Resolved:
+    """Who the request serves (module docstring, the rules in order).
+    ``ours_defend``: our client is a defendant on the caption, so "the
+    defense" is our own side and stops for SMD."""
     request = request_body(request)
     cands = candidates(values)
     found = named_in(request, cands)
@@ -450,12 +505,22 @@ def resolve(request: str, values: list[str]) -> Resolved:
         several = len(whole) >= 2
     except Undecided:
         whole, several = [], True
-    if _EVERY.search(request or ""):
+    defense = not named and bool(_DEFENSE.search(request or ""))
+    if defense and ours_defend:
+        raise PartyUnknown('the request is "to the defense", but our client is a defendant on this caption')
+    if defense or _EVERY.search(request or ""):
         if named and not several:
             return Resolved([], named)
         every = _whole(values)
         if len(every) < 2 and re.search(r"(?i)\b(?:both|all|each|every)\b", request or ""):
             raise PartyUnknown(f"the request serves every defendant, but the caption names {len(every)}")
+        distinct = _caption_count(values)
+        if len(every) < distinct:
+            # The backstop: an every-defendant plan never drafts to fewer parties
+            # than the caption names, and never to none of several.
+            raise PartyUnknown(
+                f"the request serves every defendant: the caption names {distinct}, the plan found {len(every)}"
+            )
         return Resolved(every if len(every) >= 2 else [], every)
     if named:
         return Resolved(named if several else [], named)
@@ -485,9 +550,10 @@ def _read(path: Path) -> dict[str, Any]:
 
 
 def _job(data: Path, job_dir: Path, request: str) -> Resolved:
-    values = other_values(_read(data / "caption.json"), _read(data / "facts.json"))
+    cap, facts = _read(data / "caption.json"), _read(data / "facts.json")
+    values = other_values(cap, facts)
     got = override(job_dir, values)
-    res = resolve(request, values) if got is None else Resolved(got, got)
+    res = resolve(request, values, client_side(cap, facts) == "defendants") if got is None else Resolved(got, got)
     return res
 
 
@@ -502,16 +568,18 @@ def unit_title(p: dict[str, Any]) -> str:
     return f"{p['label']} to {p['party']}" if p.get("party") else p["label"]
 
 
-def plan_units(found: list[Any], who: list[str]) -> list[dict[str, Any]]:
+def plan_units(found: list[Any], who: list[str], keyed: bool = False) -> list[dict[str, Any]]:
     """The frozen unit plan: one per (party, set) when parties were planned,
-    else one per set; a single set with no party is the root unit ``""``."""
+    else one per set; a single set with no party is the root unit ``""``,
+    unless ``keyed`` (the firm's default sets: the request does not name the
+    set, so the unit carries its own instruction)."""
     if who:
         pairs = [(p, u) for p in who for u in found]
         return [
             {"key": f"set-{i}", "variant": u.key, "label": u.label, "party": p} for i, (p, u) in enumerate(pairs, 1)
         ]
     plan = [{"key": f"set-{i}", "variant": u.key, "label": u.label} for i, u in enumerate(found, 1)]
-    if len(plan) < 2:
+    if len(plan) < 2 and not (keyed and plan):
         plan = [{"key": "", "variant": plan[0]["variant"] if plan else None, "label": ""}]
     return plan
 

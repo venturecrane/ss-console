@@ -59,6 +59,10 @@
    ],
    [
     "post_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_tool_call",
     "hermes-smd-peer-memory"
    ],
    [
@@ -284,6 +288,10 @@
     "toolset": "lanes"
    },
    "medchron_job_submit": {
+    "plugin": "hermes-smd-lanes",
+    "toolset": "lanes"
+   },
+   "medchron_update_files": {
     "plugin": "hermes-smd-lanes",
     "toolset": "lanes"
    },
@@ -485,6 +493,10 @@
    ],
    [
     "post_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_tool_call",
     "hermes-smd-peer-memory"
    ],
    [
@@ -713,6 +725,10 @@
     "plugin": "hermes-smd-lanes",
     "toolset": "lanes"
    },
+   "medchron_update_files": {
+    "plugin": "hermes-smd-lanes",
+    "toolset": "lanes"
+   },
    "negotiation_job_status": {
     "plugin": "hermes-smd-lanes",
     "toolset": "lanes"
@@ -908,6 +924,10 @@
    [
     "post_tool_call",
     "hermes-smd-hook-probe"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-initiation"
    ],
    [
     "post_tool_call",
@@ -1659,6 +1679,10 @@
    ],
    [
     "post_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_tool_call",
     "hermes-smd-peer-memory"
    ],
    [
@@ -2069,6 +2093,10 @@
    ],
    [
     "post_tool_call",
+    "hermes-smd-initiation"
+   ],
+   [
+    "post_tool_call",
     "hermes-smd-peer-memory"
    ],
    [
@@ -2428,6 +2456,10 @@
    [
     "post_tool_call",
     "hermes-smd-hook-probe"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-initiation"
    ],
    [
     "post_tool_call",
@@ -2798,6 +2830,10 @@
    [
     "post_tool_call",
     "hermes-smd-hook-probe"
+   ],
+   [
+    "post_tool_call",
+    "hermes-smd-initiation"
    ],
    [
     "post_tool_call",

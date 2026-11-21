@@ -362,7 +362,7 @@ class NegotiationLedger(StateRecord, RecentJobs, SpendMeter):
         _check_fields(state, fields)
         return {**fields, "notices": _notices(fields["notices"])} if "notices" in fields else fields
 
-    def _early(self, job_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+    def _early(self, job_id: str, state: str, fields: dict[str, Any]) -> dict[str, Any] | None:
         """A lost wake for an id that names no job (a notice's)."""
         if set(fields) == {"wake"} and self.read_job(job_id) is None:
             return self._record_wake(job_id, fields["wake"])

@@ -281,29 +281,17 @@ def run(sr: StageRun) -> int:
     if route:
         blocks = [b for b in mf.CLUSTER_SPLIT.split(src.strip()) if b.strip()]
         picked = [blocks[r["id"] - 1] for r in route]
-        merged_model = merge_model.merge_blocks(sr, d, picked, hd)
-        if merged_model is None:
-            # The model could not merge one of the routed clusters and its
-            # falsifier refused the lossy answer - correctly. Salvage every
-            # routed cluster in code instead of discarding the matter.
-            #
-            # 2026-09-23: this used to `return 1`, so ONE unmergeable cluster
-            # threw away the whole stage. On a real matter that meant 191
-            # clusters, 129 of them already merged in code, producing no
-            # document at all - twice, losing a different cluster each time,
-            # which is what shows it is a per-cluster failure rate on dense
-            # material rather than one bad section. The deduplication is worth
-            # having; it is not worth the chronology.
-            sr.log(f"model merge failed; salvaging {len(route)} routed cluster(s) in code")
-            for r in route:
-                model[r["id"]] = salvage_entry(clusters[r["id"] - 1], hd)
-        else:
-            (d / "merged_model.md").write_text(merged_model, encoding="utf-8")
-            # the model wrote the routed clusters in their cluster order, and its
-            # own falsifier proved one entry per cluster, so the k-th entry is the
-            # k-th routed id.
-            for r, e in zip(route, mf.parse_entries(merged_model)):
-                model[r["id"]] = e["body"].rstrip() + "\n"
+        got = merge_model.merge_blocks(sr, d, picked, hd)
+        # A cluster the model did not merge (its batch was falsified, or it is
+        # too long to send) is salvaged in code; every other keeps the model's
+        # entry. 2026-09-23: one unmergeable cluster used to fail the stage;
+        # 2026-11-19: it still discarded every other batch's accepted result.
+        salvaged = [r for r, e in zip(route, got) if e is None]
+        if salvaged:
+            sr.log(f"salvaging {len(salvaged)} of {len(route)} routed cluster(s) in code")
+        for r, e in zip(route, got):
+            model[r["id"]] = e if e is not None else salvage_entry(clusters[r["id"] - 1], hd)
+        (d / "merged_model.md").write_text("\n\n".join(e.rstrip() for e in got if e is not None), encoding="utf-8")
     parts = [code.get(i) or model.get(i) or "" for i in range(1, n + 1)]
     (d / "merged.md").write_text("\n\n".join(p.rstrip() for p in parts), encoding="utf-8")
     rc, rep = mf.check(src, (d / "merged.md").read_text(encoding="utf-8"), hd)

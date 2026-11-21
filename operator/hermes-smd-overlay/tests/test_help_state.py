@@ -651,10 +651,69 @@ def test_every_kind_the_review_can_act_on_is_an_authored_tip_when(hr, hs):
     struggle the guide can never answer, and the pin goes red."""
 
     whens = {t["when"] for t in yaml.safe_load(_TIPS_YAML.read_text())["tips"]}
-    assert set(hs.NOTE_STRUGGLE_KINDS) <= whens
+    # not_in_guide is deliberately tipless too: SMD answers the person, and a
+    # recurring one reaches SMD as a proposal for a new guide section.
+    assert set(hs.NOTE_STRUGGLE_KINDS) - {hs.KIND_NOT_IN_GUIDE} <= whens
+    assert hs.KIND_NOT_IN_GUIDE not in whens
     assert {hr.KIND_REPEAT_ASK, hr.KIND_HELD_IDENTITY} <= whens
     # nothing_in_scope is deliberately tipless: it is how a proposal reaches SMD.
     assert hr.KIND_NOTHING_IN_SCOPE not in whens
+
+
+# ---- a question the guide does not answer is handed to SMD (2026-11-19) -------
+
+
+def test_a_question_not_in_the_guide_is_handed_to_smd_with_the_fixed_sentence(
+    plugin, paths, roster, hs, monkeypatch
+):
+    """The note answers with the hand-off only once the broker recorded the
+    question as work SMD owes (owner's ruling, 2026-11-19); the hourly triage
+    lists that record until SMD closes it, and no later reply or note clears it
+    (``bin/tests/test_work_health_owed.py``). Not recorded: ``none``, nothing
+    sent, the request listed unanswered. FALSIFIER: hand over the sentence
+    without the record, and the person is promised an answer nobody owes."""
+    from shared import smd_owed
+
+    sent: list[dict] = []
+    told = {"smd_told": True}
+
+    def broker(payload):
+        sent.append(payload)
+        return {"ok": True, **told}
+
+    monkeypatch.setattr(smd_owed, "_request", broker)
+    _index("m-1")
+    _turn("s-1", "m-1")
+    raw = plugin._help_note_handler({"kind": "not_in_guide"}, session_id="s-1")
+    out = json.loads(raw)
+    assert out == {"recorded": True, "say": plugin.help_guide.NOT_IN_GUIDE_SAY}
+    assert sent[0]["action"] == "smd_owed_record" and sent[0]["kind"] == "help_question"
+    assert sent[0]["request_ref"]
+    told["smd_told"] = False
+    again = json.loads(plugin._help_note_handler({"kind": "not_in_guide"}, session_id="s-1"))
+    assert again["say"] == "none"
+    told["smd_told"] = True
+    emit = load_plugin("hermes-smd-audit").emit
+    assert emit._outcome_from_result(raw) == ("ok", None)
+    # A later help note in the session is an ordinary note, and pages nothing.
+    later = plugin._help_note_handler({"kind": "help_given"}, session_id="s-1")
+    assert json.loads(later) == {"recorded": True}
+    conn = sqlite3.connect(paths["state"])
+    try:
+        kinds = [r[0] for r in conn.execute("SELECT kind FROM help_events")]
+    finally:
+        conn.close()
+    assert kinds == ["not_in_guide", "not_in_guide", "help_given"]
+
+
+def test_the_review_handles_the_tipless_kind(hr, hs, paths):
+    """A recurring not_in_guide has no tip to promote: it is a proposal."""
+    for who in (_SENDER, _SENDER, _OTHER):
+        _note_kind(hs, hs.KIND_NOT_IN_GUIDE, who, paths)
+    rev = _review(hr, paths)
+    kind = rev["kinds"]["not_in_guide"]
+    assert kind["tips"] == [] and kind["actionable"] is True
+    assert "not_in_guide" in rev["proposals"] and "not_in_guide" not in rev["promotable"]
 
 
 def test_the_note_tool_accepts_a_struggle_kind_and_records_an_event(plugin, paths, roster, hs):

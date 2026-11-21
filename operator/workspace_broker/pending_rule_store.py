@@ -44,6 +44,7 @@ from .establishment_validation import (  # noqa: F401 — `import *` skips _name
     _require_text,
 )
 
+from . import rule_lapse_record
 from .participant_fence import MESSAGE_KINDS, FenceRefused, parse_anchor
 
 logger = logging.getLogger(__name__)
@@ -121,10 +122,12 @@ class PendingRuleStore:
         finally:
             conn.close()
 
-    def sweep(self, now: float | None = None) -> int:
+    def sweep(self, now: float | None = None, ledger: Any = None) -> int:
         """Mark expired proposals LAPSED, then delete long-terminal rows.
 
-        Returns rows deleted. Called on every establishment verb, so the table
+        Returns rows deleted. With ``ledger``, each rule this pass lapsed
+        silently (below) gets its ``RULE_LAPSED`` record after the commit
+        (``rule_lapse_record``). Called on every establishment verb, so the table
         stays bounded without a timer.
 
         THE CHANGE ss-console#2546 MAKES, and why it is the whole point of the
@@ -145,11 +148,32 @@ class PendingRuleStore:
         cutoff = now - TERMINAL_RETENTION_SECONDS
         conn = self._connect()
         try:
+            # A PERSON'S OWN RULE LAPSES SILENTLY (2026-11-19). A rule nobody
+            # else had to approve (kind 'rule', for_admin 0: the person stated
+            # it and never confirmed its read-back) gets lapse_notified_at in
+            # the same write as lapsed_at: ended, and nobody is owed a note.
+            # The lapse letter says no administrator answered, which was false
+            # for them. A rule waiting on an administrator, an act and an ops
+            # row keep today's letter; the row is still a lapse the seat reads.
+            # The select and the UPDATE are ONE write transaction: two sweeps
+            # at once otherwise both select the same row and both write its
+            # RULE_LAPSED record (review 2026-11-19).
+            conn.execute("BEGIN IMMEDIATE")
+            silent = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT * FROM pending_rules WHERE kind='rule' AND for_admin=0 "
+                    "AND consumed_at IS NULL AND declined_at IS NULL AND lapsed_at IS NULL "
+                    "AND expires_at < ?",
+                    (now,),
+                ).fetchall()
+            ]
             conn.execute(
-                "UPDATE pending_rules SET lapsed_at=? WHERE "
+                "UPDATE pending_rules SET lapsed_at=?, lapse_notified_at=CASE "
+                "WHEN kind='rule' AND for_admin=0 THEN ? ELSE lapse_notified_at END WHERE "
                 "consumed_at IS NULL AND declined_at IS NULL AND lapsed_at IS NULL "
                 "AND expires_at < ?",
-                (now, now),
+                (now, now, now),
             )
             cursor = conn.execute(
                 "DELETE FROM pending_rules WHERE "
@@ -159,9 +183,12 @@ class PendingRuleStore:
                 (cutoff, cutoff, cutoff),
             )
             conn.commit()
-            return cursor.rowcount or 0
+            deleted = cursor.rowcount or 0
         finally:
             conn.close()
+        if silent:
+            rule_lapse_record.record(ledger, silent)
+        return deleted
 
     def create(
         self,
@@ -646,6 +673,33 @@ class PendingRuleStore:
                 "UPDATE pending_rules SET lapsed_at=COALESCE(lapsed_at, ?), lapse_notified_at=?, "
                 "smd_closed_at=?, resolved_by=?, outcome_reason=? "
                 "WHERE proposal_id=? AND kind='ops_request' AND consumed_at IS NULL "
+                "AND declined_at IS NULL AND lapse_notified_at IS NULL "
+                "AND notify_claimed_at IS NULL AND smd_closed_at IS NULL",
+                (now, now, now, closed_by, reason, proposal_id),
+            )
+            conn.commit()
+            return bool(cursor.rowcount)
+        finally:
+            conn.close()
+
+    def close_rule_by_smd(
+        self,
+        proposal_id: str,
+        closed_by: str,
+        reason: str | None,
+        now: float | None = None,
+    ) -> bool:
+        """End one RULE row quietly on root's word (2026-11-20, the rules-by-hand
+        stopgap). :meth:`close_ops_by_smd`'s columns and race safety, for
+        ``kind='rule'``: never committed, never declined, nobody yet told, no
+        notify claim. True iff THIS call ended it."""
+        now = time.time() if now is None else now
+        conn = self._connect()
+        try:
+            cursor = conn.execute(
+                "UPDATE pending_rules SET lapsed_at=COALESCE(lapsed_at, ?), lapse_notified_at=?, "
+                "smd_closed_at=?, resolved_by=?, outcome_reason=? "
+                "WHERE proposal_id=? AND kind='rule' AND consumed_at IS NULL "
                 "AND declined_at IS NULL AND lapse_notified_at IS NULL "
                 "AND notify_claimed_at IS NULL AND smd_closed_at IS NULL",
                 (now, now, now, closed_by, reason, proposal_id),

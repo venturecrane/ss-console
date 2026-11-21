@@ -118,7 +118,8 @@ def test_propose_returns_the_readback_the_seat_must_send(tmp_path):
     result = _propose(broker)
     assert result["ok"] is True
     assert len(result["proposal_id"]) == 8
-    assert result["readback"] == f"[rule {result['proposal_id']}] {RULE}"
+    # The person is shown the sentence alone; no tag, no id (R2.2).
+    assert result["readback"] == RULE
     assert result["scope"] == "firm_adjust"
     assert result["subject"] == {"output_class": "outbound", "property": "voice"}
     assert result["expires_at"] > time.time()

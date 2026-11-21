@@ -21,7 +21,7 @@ import sys
 from types import ModuleType
 from typing import Any
 
-from shared import inbound, matter_file_reply, reply_could_not, request_index
+from shared import inbound, matter_file_reply, reply_could_not, reply_sent, request_index
 
 from . import notice, relay
 
@@ -91,6 +91,10 @@ def sent(
         # Request cards: the opening of the first reply, seat-local only (the
         # audit row above carries digests, never words). Never raises.
         request_index.record_reply_opening(origin.message_id, wire[0], sent_message_id=sent_id)
+        # What keys off a SENT reply runs now (shared/reply_sent.py): the
+        # read-back binding (a person's reply to this message confirms the rules
+        # it carried) and the help line's offered mark. Never raises.
+        reply_sent.notify(origin, sent_id, wire[0])
         # (h) The reply is out: its working drafts (this one, and any held ones
         # it superseded in this turn) leave the Drafts folder. Never raises.
         _plugin._discard_drafts(_plugin._WORKING_DRAFTS.take(session_id, reply_key))
@@ -149,6 +153,9 @@ def audit_sent(
             prepared, origin, session_id=session_id, matter_ref=cited_matter_ref
         )
     request_index.record_reply_opening(origin.message_id, wire[0], sent_message_id=sent_id)
+    # The reply is out: what keys off a SENT reply runs now (shared/reply_sent.py):
+    # the read-back binding and the help line's offered mark.
+    reply_sent.notify(origin, sent_id, wire[0])
 
 
 def sent_metadata(

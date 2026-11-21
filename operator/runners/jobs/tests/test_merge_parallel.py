@@ -1,5 +1,6 @@
 """The model half of the merge runs its batches several at once and still
-joins them in batch order, however the replies arrive."""
+answers in cluster order, however the replies arrive; a failed batch leaves
+only its own clusters unmerged."""
 
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ def _sr(job_dir: Path, firm_config_path: Path, data_root: Path, log: list[str]) 
 
 def _blocks(n: int) -> list[str]:
     # each block alone fills a batch, so n blocks are n batches
-    return [f"##### CLUSTER {i}\n" + "x" * mm.BATCH_CHARS + "\n" for i in range(1, n + 1)]
+    return [f"##### CLUSTER {i}\n" + "x" * (mm.BATCH_CHARS - 100) + "\n" for i in range(1, n + 1)]
 
 
 def _wire(monkeypatch: pytest.MonkeyPatch, run) -> None:
@@ -52,24 +53,23 @@ def test_batches_run_at_once_and_join_in_batch_order(
         time.sleep(0.02 * (7 - int(label)))  # the first batch answers last
         with lock:
             live -= 1
-        return [f"merged {label}"]
+        return [f"merged {label}"]  # one cluster per batch
 
     _wire(monkeypatch, run)
     log: list[str] = []
     out = mm.merge_blocks(_sr(job_dir, firm_config_path, data_root, log), tmp_path, _blocks(6), hd=None)  # type: ignore[arg-type]
-    assert out == "\n\n".join(f"merged {i}" for i in range(1, 7))
+    assert out == [f"merged {i}" for i in range(1, 7)]
     assert peak > 1, "the batches ran one after another"
     assert peak <= mm.MERGE_WORKERS
 
 
-def test_one_failed_batch_fails_the_merge_and_names_it(
+def test_one_failed_batch_leaves_only_its_own_cluster_unmerged(
     monkeypatch: pytest.MonkeyPatch, job_dir: Path, firm_config_path: Path, data_root: Path, tmp_path: Path
 ) -> None:
     def run(sr, d, model, system, text, label, hd, depth=0):
-        return None if label == "2" else [f"merged {label}"]
+        return [None] if label == "2" else [f"merged {label}"]
 
     _wire(monkeypatch, run)
     log: list[str] = []
     out = mm.merge_blocks(_sr(job_dir, firm_config_path, data_root, log), tmp_path, _blocks(3), hd=None)  # type: ignore[arg-type]
-    assert out is None
-    assert any("merge batch 2 FAILED" in line for line in log)
+    assert out == ["merged 1", None, "merged 3"]

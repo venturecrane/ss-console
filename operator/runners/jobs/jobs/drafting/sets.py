@@ -92,6 +92,59 @@ def variants(request: str) -> list[Unit]:
     return [u for _pos, u in sorted(hits, key=lambda h: h[0])]
 
 
+#: Any word naming a kind of discovery set, the three ``VARIANTS`` drafts or
+#: another (form interrogatories, an inspection demand): a request carrying one
+#: has named its set, and the firm's default sets never stand in for it.
+_ANY_SET = re.compile(
+    r"(?i)\binterrogator(?:y|ies)\b|\b[fs]rogs?\b|\bsprogs?\b|\brequests?\s+for\s+(?:the\s+)?(?:production|admissions?)\b"
+    r"|\brequests?\s+to\s+produce\b|\bdemands?\s+for\s+(?:production|inspection)\b|\brf[ap]d?s?\b|\brpds?\b"
+    r"|\bdocument\s+requests?\b"
+)
+#: "RFAs and the usual": the request asks for the firm's default sets as well.
+_USUAL = re.compile(
+    r"(?i)\b(?:the\s+usual(?:\s+sets)?|(?:our|the)\s+(?:usual|standard)\s+(?:sets|discovery)|standard\s+sets)\b"
+)
+#: ``drafting-firm.yaml``'s section naming the sets a request that names none
+#: means: ``discovery_defaults: {sets: [<variant key>, ...]}``. The firm's
+#: input, never a constant here; absent, such a request drafts the one set it
+#: describes, as it always did (``served_plan._plan``).
+DEFAULTS_KEY = "discovery_defaults"
+
+
+def names_any_set(request: str) -> bool:
+    """The request names a kind of set, one ``variants`` reads or another."""
+    return bool(variants(request)) or bool(_ANY_SET.search(request or ""))
+
+
+def wants_defaults(request: str) -> bool:
+    """The request asks for the firm's usual sets ("the usual", "our standard sets")."""
+    return bool(_USUAL.search(request or ""))
+
+
+def validate_defaults(body: object) -> list[str]:
+    """``discovery_defaults``'s closed shape: ``{sets: [variant keys, no repeats]}``."""
+    keys = [k for k, _label, _pat in VARIANTS]
+    if not isinstance(body, dict) or set(body) != {"sets"}:
+        return [f"{DEFAULTS_KEY}: expected exactly {{sets: [one or more of {keys}]}}"]
+    got = body["sets"]
+    if not isinstance(got, list) or not got or not all(isinstance(x, str) for x in got):
+        return [f"{DEFAULTS_KEY}.sets: expected a list of one or more of {keys}"]
+    out = [f"{DEFAULTS_KEY}.sets: {x!r} is not one of {keys}" for x in got if x not in keys]
+    if len(set(got)) != len(got):
+        out.append(f"{DEFAULTS_KEY}.sets: a set is named twice")
+    return out
+
+
+def default_variants(firm_data: dict | None) -> list[Unit] | None:
+    """The firm's default sets, in its order; None when it authored none (or
+    authored them malformed: the schema refuses that before a job runs)."""
+    body = (firm_data or {}).get(DEFAULTS_KEY)
+    if body is None or validate_defaults(body):
+        return None
+    labels = {k: label for k, label, _pat in VARIANTS}
+    return [Unit(k, labels[k]) for k in body["sets"]]
+
+
 def kinds_in(doc: str) -> list[str]:
     """The variants whose request labels a document carries."""
     return [k for k, pat in LABELS.items() if pat.search(doc)]

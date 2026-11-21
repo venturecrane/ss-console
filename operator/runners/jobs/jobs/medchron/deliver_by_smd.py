@@ -47,27 +47,26 @@ wake, and writes nothing.
 
 No dollar figure is written anywhere a person reads: `cents` is the ledger's
 cost column (the console row), never text.
+
+The lane-neutral half (the job checks, the proof row, the write order, the CLI
+flow) is ``jobs/hand_delivery.py``, shared with the drafting lane's
+``jobs/drafting/deliver_by_smd.py``; this file keeps the chronology's record.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from pathlib import Path
 from typing import Any
 
-from .. import run_record
+from .. import hand_delivery, run_record
+from ..hand_delivery import Refused
 
 #: The lane's own wording (medchron/lane.py `_compose_wake`); the DELIVER skill reads
 #: this line as "the reply says the chronology was updated".
 UPDATE_LINE = "Request: update into the delivered chronology."
 REPLY_KIND = "medchron_job"
 RECORDABLE_FROM = frozenset({"failed", "held"})
-
-
-class Refused(RuntimeError):
-    """This delivery cannot be recorded; the message says why."""
 
 
 def _int(rec: dict[str, Any], key: str) -> int:
@@ -87,22 +86,7 @@ def parse_record(rec: Any) -> dict[str, Any]:
     files = rec.get("files")
     if not isinstance(files, list) or not files:
         raise Refused("record.files must list the delivered files as read back from the matter")
-    clean: list[dict[str, Any]] = []
-    for f in files:
-        if not isinstance(f, dict) or not str(f.get("file_id") or "").strip():
-            raise Refused("every record.files entry needs the file_id read back from the matter")
-        size = f.get("bytes")
-        if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
-            raise Refused("every record.files entry needs its read-back size in bytes")
-        clean.append(
-            {
-                "file_id": str(f["file_id"]),
-                "name": str(f.get("name") or ""),
-                "bytes": size,
-                "sha256": str(f.get("sha256") or ""),
-                "confirmed": True,
-            }
-        )
+    clean = [{**hand_delivery.checked_file(f), "confirmed": True} for f in files]
     covered = rec.get("covered")
     if not isinstance(covered, dict) or not isinstance(covered.get("covered"), list):
         raise Refused("record.covered is required ({covered, uncovered, pulled}): the next update reads it")
@@ -131,55 +115,22 @@ def parse_record(rec: Any) -> dict[str, Any]:
 def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str, Any]:
     """Every check, and what would be written. Raises Refused."""
     fields = parse_record(rec)
-    row = d.broker.status(job_id)
-    if row is None:
-        raise Refused(f"there is no chronology job {job_id}")
-    st = d._daemon_state(job_id)
-    # `running` is accepted only as this tool's own half-finished write (the
-    # ledger moved, the delivered record did not land): the daemon's state for
-    # the job still says it ended. A job the daemon is running says otherwise.
-    resumable = row.get("state") == "running" and st.get("state") in RECORDABLE_FROM
-    if row.get("state") not in RECORDABLE_FROM and not resumable:
-        raise Refused(f"job {job_id} is {row.get('state')}; only a failed or held job is recorded as delivered by SMD")
-    if (d.queue / f"{job_id}.json").exists():
-        raise Refused(f"job {job_id} is still queued; the daemon would run it. Nothing was written.")
-    jd = d.job_dir(job_id)
-    try:
-        env = json.loads((jd / "envelope.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise Refused(f"job {job_id} has no readable envelope in its job dir ({exc}); nothing was written") from exc
-    if not env.get("requested_by") or not env.get("request_ref"):
-        raise Refused(f"job {job_id}'s envelope names no requester or request email; there is no thread to answer")
-    wake = st.get("wake") or {}
-    # A CONSUMED wake for a failed job is replaced: DELIVER sends nothing on
-    # `failed` (both 2026-10-13 jobs carry one). A consumed hold wake had its
-    # one reply under its own key. A wake still pending is the daemon's to send
-    # and is never overwritten, whatever its outcome; a delivered state or a
-    # consumed delivered wake means the delivery was already announced.
-    if st.get("state") == "delivered" or wake.get("pending") or "Outcome: delivered." in str(wake.get("task") or ""):
-        raise Refused(f"job {job_id} is already delivered or has a wake still to go; one delivery wake per job")
-    replies = d.broker._request({"action": "delivery_reply_status", "kind": REPLY_KIND, "job_id": job_id})
-    if any(str(r.get("key") or "").endswith(":delivered") for r in replies.get("replies") or []):
-        raise Refused(f"job {job_id} already has its delivered reply; a second would be a second send")
+    row, _st, _env = hand_delivery.check_job(
+        d,
+        job_id,
+        noun="chronology",
+        recordable=RECORDABLE_FROM,
+        resumable_daemon=RECORDABLE_FROM,
+        refused_why="only a failed or held job is recorded as delivered by SMD",
+        requester_keys=("requested_by", "request_ref"),
+        reply_kind=REPLY_KIND,
+    )
     task = d._compose_wake(job_id, "delivered", fields)
     if update and UPDATE_LINE not in task:
         lines = task.split("\n")
         # After the counts, where the daemon puts it for an update envelope.
         lines.insert(3, UPDATE_LINE)
         task = "\n".join(lines)
-    proof = {
-        "action": "delivery_proof_record",
-        "lane": d.LANE,
-        "job_id": job_id,
-        "attempt": 1,
-        "review": "passed",
-        "review_cents": 0,
-        "review_model": "",
-        "files": [
-            {"file_id": f["file_id"], "size": f["bytes"], "sha256": f["sha256"]} for f in fields["delivery"]["files"]
-        ],
-        "rows": 0,
-    }
     return {
         "job_id": job_id,
         "from_state": row.get("state"),
@@ -189,7 +140,7 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str,
             ("running", {}),
             ("delivered", {**fields, "run": run_record.block("hand_delivery", by="smd", with_release=True)}),
         ],
-        "proof": proof,
+        "proof": hand_delivery.proof_request(d, job_id, fields["delivery"]["files"], review="passed", attempt=1),
         "state": {
             "state": "delivered",
             "delivered_by": "smd",
@@ -199,12 +150,7 @@ def plan(d: Any, job_id: str, rec: dict[str, Any], *, update: bool) -> dict[str,
     }
 
 
-def apply(d: Any, p: dict[str, Any]) -> None:
-    job_id = p["job_id"]
-    for state, fields in p["records"]:
-        d.broker.record(job_id, state, fields)
-    d.broker._request(p["proof"])
-    d._write_state(job_id, finished_at=d.clock(), **p["state"])
+apply = hand_delivery.apply
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -217,18 +163,15 @@ def main(argv: list[str] | None = None) -> int:
     from . import lane as lane_mod
 
     d = lane_mod.build()
-    try:
-        rec = json.loads(Path(a.record).read_text(encoding="utf-8"))
-        p = plan(d, a.job_id, rec, update=a.update)
-    except (Refused, OSError, ValueError) as exc:
-        print(f"REFUSED: {exc}", file=sys.stderr)
-        return 2
-    print(json.dumps({"dry_run": a.dry_run, **p}, indent=1, default=str))
-    if a.dry_run:
-        return 0
-    apply(d, p)
-    print(f"recorded {a.job_id} delivered; the daemon dispatches its DELIVER wake on its next tick")
-    return 0
+    return hand_delivery.run_cli(
+        d,
+        lambda lane: plan(lane, a.job_id, hand_delivery.read_record(a.record), update=a.update),
+        dry_run=a.dry_run,
+        done=f"recorded {a.job_id} delivered; the daemon dispatches its DELIVER wake on its next tick",
+    )
+
+
+__all__ = ["REPLY_KIND", "UPDATE_LINE", "Refused", "apply", "main", "parse_record", "plan"]
 
 
 if __name__ == "__main__":

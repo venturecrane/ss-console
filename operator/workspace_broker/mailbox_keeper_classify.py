@@ -12,12 +12,12 @@ floors bound what the model's value can do (doctrine Law 18):
   archived on a model's word.
 * "Already answered" is decided by code from the thread (``waiting_on_owner``),
   and is a fact the model is given, never a value it returns.
-* A receipt needs its ``amount`` string to appear verbatim in the thread text
-  and to parse (cents and currency, here). The date is the message's date and
+* A receipt needs its ``amount`` string to appear verbatim in the messages'
+  own words (``thread_words``: no From or Date line) and to parse (cents and currency, here). The date is the message's date and
   the vendor the From display name, both from headers. Otherwise it is a
   decision.
-* A figure (any run of digits) in ``what`` or ``recommend`` that the thread does
-  not contain sends the thread to "could not read". One in the draft drops the
+* A figure (any run of digits) in ``what`` or ``recommend`` that the messages'
+  own words do not contain sends the thread to "could not read". One in the draft drops the
   draft; the decision stands.
 * Anything that fails the schema is "could not read", listed by sender and
   subject, and left in the inbox.
@@ -98,6 +98,10 @@ class Candidate:
     watched: bool
     owner_wrote: bool
     text: str
+    #: The messages' own words (``thread_words``): what figures and amounts
+    #: are checked against. Never ``text``, whose From and Date lines carry
+    #: the clock and the sender's address.
+    words: str
 
 
 @dataclass(frozen=True)
@@ -141,6 +145,16 @@ def thread_text(messages: list[mk.Message], zone: str) -> str:
         blocks.append(f"From: {who} | Date: {_stamp(m.internal_ms, zone)}\n{strip_quoted(m.text)}")
     text = "\n\n---\n\n".join(blocks)
     return text if len(text) <= THREAD_CHARS else "[earlier messages cut]\n" + text[-THREAD_CHARS:]
+
+
+def thread_words(messages: list[mk.Message]) -> str:
+    """The messages' own words only, quoted history stripped, the newest
+    ``THREAD_CHARS`` kept: no From or Date line. A figure the model returns is
+    real only if a sender wrote it; the time stamp ``thread_text`` adds is not
+    a sender's word (a "40" passed the figure check whenever a message's
+    minute was :40)."""
+    text = "\n\n".join(strip_quoted(m.text) for m in messages)
+    return text[-THREAD_CHARS:]
 
 
 def _watched(m: mk.Message, settings: mk.Settings) -> bool:
@@ -191,6 +205,7 @@ def candidate(thread: dict[str, Any], settings: mk.Settings) -> Candidate | None
         watched=any(_watched(m, settings) for m in messages),
         owner_wrote=any(m.sender in settings.owners for m in messages),
         text=thread_text(messages, settings.timezone),
+        words=thread_words(messages),
     )
 
 
@@ -311,12 +326,14 @@ def outcome(c: Candidate, value: dict[str, Any] | str) -> Outcome:
     # recommend. A notice or receipt is listed by sender and subject (and a
     # receipt by its verified amount), so its own words are never shown.
     shown = value["kind"] == "decision" or bool(clamp)
-    if shown and (unsupported_figure(value["what"], c.text) or unsupported_figure(value.get("recommend", ""), c.text)):
+    if shown and (
+        unsupported_figure(value["what"], c.words) or unsupported_figure(value.get("recommend", ""), c.words)
+    ):
         return Outcome(**base, kind="unread", reason="unsupported_figure")
     if value["kind"] != "decision" and clamp:
         return Outcome(**base, kind="decision", what=value["what"], recommend=_KEPT, floor=clamp)
     if value["kind"] == "receipt":
-        parsed = parse_amount(value["amount"]) if value["amount"] in c.text else None
+        parsed = parse_amount(value["amount"]) if value["amount"] in c.words else None
         if parsed is None:
             recommend = "Check this charge; its amount could not be confirmed in the email."
             return Outcome(**base, kind="decision", what=value["what"], recommend=recommend, floor="receipt_unverified")
@@ -327,7 +344,7 @@ def outcome(c: Candidate, value: dict[str, Any] | str) -> Outcome:
         return Outcome(**base, kind="notice", what=value["what"])
     draft = value.get("draft", "")
     floor = ""
-    if draft and unsupported_figure(draft, c.text):
+    if draft and unsupported_figure(draft, c.words):
         draft, floor = "", "draft_unsupported_figure"
     return Outcome(**base, kind="decision", what=value["what"], recommend=value["recommend"], draft=draft, floor=floor)
 
@@ -346,6 +363,7 @@ __all__ = [
     "parse_amount",
     "strip_quoted",
     "thread_text",
+    "thread_words",
     "unsupported_figure",
     "validate",
 ]

@@ -75,6 +75,7 @@ BROKER_EFFECTS: dict[str, str] = {
     "medchron_allowance": "medchron_allowance",
     "medchron_job_status": "medchron_job_status",
     "medchron_job_submit": "medchron_job_submit",
+    "medchron_update_files": "medchron_update_files",
     "negotiation_job_status": "negotiation_job_status",
     "note_job_status": "note_job_status",
     "smd_send_message": "agentmail_send",

@@ -55,6 +55,13 @@ The schema (the engagements author writes to exactly this)::
                  files a document may cite (citations.py)
     opening_demand: {<class>: {marker, chart, column, sentence}}   OPTIONAL, the
                  demand code computes from the damages chart (opening_demand.py)
+    discovery_defaults: {sets: [special_interrogatories | requests_for_production |
+                 requests_for_admission, ...]}   OPTIONAL, the sets a propounded
+                 discovery request that names no kind of set drafts (sets.py);
+                 or asks for "the usual"; absent, it drafts as it always did
+    response_scope: {patterns: {<category>: [regex, ...]}}   OPTIONAL, how a
+                 response job sorts the file's folders and names into categories
+                 (response_scope.py); absent, its generic default list
 
 ``delivery`` is the one optional section: the matter numbers a job may file to
 when they are not the matter it read (the firm's Operator library matter, for
@@ -73,6 +80,8 @@ from .. import seat_layout
 from ..firm_config import FirmConfigError, FirmFile
 
 from . import attorneys as attorneys_mod, citations, evidence_config, opening_demand, page_limits
+from . import response_scope, sets as sets_mod
+from .forms import policy as form_policy
 from .verify import config as verify_config
 
 ENV_DIR = "JOBS_DRAFTING_INPUTS"
@@ -290,8 +299,19 @@ def _shape(data: Any) -> list[str]:
         for s in data
         if s not in SCHEMA
         and s not in OPTIONAL
-        and s not in (attorneys_mod.KEY, evidence_config.KEY, verify_config.KEY, citations.KEY, opening_demand.KEY)
+        and s
+        not in (
+            attorneys_mod.KEY,
+            evidence_config.KEY,
+            verify_config.KEY,
+            citations.KEY,
+            opening_demand.KEY,
+            form_policy.KEY,
+        )
+        and s not in (sets_mod.DEFAULTS_KEY, response_scope.KEY)
     ]
+    if sets_mod.DEFAULTS_KEY in data:
+        out += sets_mod.validate_defaults(data[sets_mod.DEFAULTS_KEY])
     if opening_demand.KEY in data:
         out += opening_demand.validate(data[opening_demand.KEY], CLASSES)
     if citations.KEY in data:
@@ -423,7 +443,7 @@ def referenced_paths(data: dict[str, Any]) -> list[tuple[str, str]]:
         refs += [(f"classes.{cls}.exemplars[{i}]", v) for i, v in enumerate(entry["exemplars"])]
     bases = data["format"].get("firm_bases") or {}
     refs += [(f"format.firm_bases.{c}", b["path"]) for c, b in bases.items()]
-    return refs + evidence_config.referenced_paths(data)
+    return refs + evidence_config.referenced_paths(data) + form_policy.referenced_paths(data)
 
 
 def _format(fmt: dict[str, Any]) -> list[str]:
@@ -519,7 +539,12 @@ def _store_pins(data: dict[str, Any]) -> list[str]:
 
 def validate(data: Any) -> list[str]:
     """Every problem as ``section.key: message``; empty means valid."""
-    return _shape(data) or _semantics(data) or _store_pins(data)
+    return (_shape(data) + form_policy.validate_in(data)) or _scope_shape(data) or _semantics(data) or _store_pins(data)
+
+
+def _scope_shape(data: dict[str, Any]) -> list[str]:
+    """The optional ``response_scope`` section (response_scope.py)."""
+    return response_scope.validate(data[response_scope.KEY]) if response_scope.KEY in data else []
 
 
 @dataclass(frozen=True)

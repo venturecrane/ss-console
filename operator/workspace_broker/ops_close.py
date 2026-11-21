@@ -42,6 +42,7 @@ from . import broker_socket
 # The entrypoint's BROKER_SOCKET.
 DEFAULT_SOCKET = seat_layout.BROKER_SOCKET
 VERB = "ops_close_by_smd"
+SOCKET_ENV = "SMD_WORKSPACE_BROKER_SOCKET"
 
 
 def build_request(proposal_id: str, *, closed_by: str, source_ref: str, reason: str, dry_run: bool) -> dict[str, Any]:
@@ -76,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         "--reason", required=True, help="why it closes with no letter (kept on the row, never in the ledger)"
     )
     ap.add_argument("--dry-run", action="store_true", help="validate and print what would change; write nothing")
-    ap.add_argument("--socket", default=os.environ.get("SMD_WORKSPACE_BROKER_SOCKET", DEFAULT_SOCKET))
+    ap.add_argument("--socket", default=os.environ.get(SOCKET_ENV, DEFAULT_SOCKET))
     a = ap.parse_args(argv)
     request = build_request(
         a.proposal_id.strip().lower(),

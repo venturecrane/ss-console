@@ -139,7 +139,7 @@ def test_a_chunk_refused_everywhere_is_retried_on_judgment_then_split_and_its_pa
     sr = _sr(job_dir, _firm(tmp_path), data_root, client)
     _unit_files(sr, {"clinic note": CLINIC, "sane exam": SANE})
     cut_before_windows(sr)  # both files in one chunk (a unit cut before the writer's windows)
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     models = [c["model"] for c in client.calls]
@@ -172,7 +172,7 @@ def test_a_refusal_the_judgment_tier_reads_is_composed_with_nothing_unread(
     client = Scripted(reply)
     sr = _sr(job_dir, _firm(tmp_path), data_root, client)
     _unit_files(sr, {"clinic note": CLINIC})
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     assert "Cervical strain" in (d / "map-01.md").read_text()
@@ -197,7 +197,7 @@ def test_a_half_that_stays_empty_is_sent_by_file_and_only_the_silent_file_is_nam
     client = Scripted(reply)
     sr = _sr(job_dir, _firm(tmp_path), data_root, client)
     _unit_files(sr, {"clinic note": clinic, "fax covers": body, "fax covers two": body})
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     unread = json.loads((d / "unread_pages.json").read_text())
@@ -225,7 +225,7 @@ def test_a_piece_that_errors_every_time_is_never_called_produced_on_a_rerun(
     sr = _sr(job_dir, _firm(tmp_path), data_root, client)
     _unit_files(sr, {"clinic note": clinic, "broken": "[p.1] BROKEN\n" * 30})
     cut_before_windows(sr)
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     sr.doorway.retry_budget_s, sr.doorway.sleep = 0.0, lambda *_: None  # the doorway's network retries, in no time
     assert compose_stage.run(sr) == compose_stage.INFRA_EXIT == 75  # infrastructure, never a defect's 1
     d = sr.slug_dir / "runs" / "alpha"
@@ -502,7 +502,7 @@ def test_a_compose_half_that_truncates_is_repaired_and_assembles(
         },
     )
     cut_before_windows(sr)
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     assert (d / "map-01-1.md").is_file() and (d / "map-01-2.md").is_file()
@@ -602,7 +602,7 @@ def test_a_refused_single_file_is_halved_by_page_and_only_the_refused_page_is_un
     sr = _sr(job_dir, _firm(tmp_path), data_root, client)
     body = "".join(f"[p.{k}] {'ASSAULT-EXAM' if k == 3 else 'office visit'}\n" for k in range(1, 7))
     _unit_files(sr, {"records": body})
-    monkeypatch.setattr(compose_stage.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(compose_stage.compose_pool.time, "sleep", lambda *_: None)
     assert compose_stage.run(sr) == 0
     d = sr.slug_dir / "runs" / "alpha"
     unread = json.loads((d / "unread_pages.json").read_text())

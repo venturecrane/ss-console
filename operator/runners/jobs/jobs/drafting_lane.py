@@ -57,6 +57,7 @@ from . import (
 )
 from .broker_client import BrokerClient, BrokerError
 from .drafting import firm_rules, layout_into_library, repair_budget
+from .drafting.forms import saved as form_saved
 from .firm_inputs import pin_env
 from .matter import store as page_store_mod
 from .library_edit import handoff as library_edit_handoff
@@ -81,20 +82,24 @@ DEMAND_BUSY_RETRY_SECONDS = 30.0
 #: one JSON line per filed release, under the run dir (never wiped with a job):
 #: the count ``evidence.review_first`` is read against, stamped into job.json.
 RELEASES = "drafting-ledger-releases.jsonl"
+#: A released form interrogatory set's line names its class (``drafting/forms/lane_hook.FORM_SET``).
+FORM_RELEASES = "form_interrogatories"
 
 
-def releases(run_dir: Path) -> list[str]:
-    """The job ids of every released ledger brief that filed, once each."""
+def releases(run_dir: Path, cls: str = "") -> list[str]:
+    """The job ids of every released held job of ``cls`` that filed, once each:
+    ``""`` a ledger brief (a line with no class), else the set type it names."""
     p = Path(run_dir) / RELEASES
     if not p.is_file():
         return []
     out: list[str] = []
     for ln in p.read_text(encoding="utf-8").splitlines():
         try:
-            jid = str(json.loads(ln).get("job_id") or "")
-        except ValueError:
+            row = json.loads(ln)
+            jid, kind = str(row.get("job_id") or ""), str(row.get("class") or "")
+        except (ValueError, AttributeError):
             continue
-        if jid and jid not in out:
+        if jid and kind == cls and jid not in out:
             out.append(jid)
     return out
 
@@ -171,7 +176,13 @@ class DraftingLane(Daemon):
             "allowance_remaining": remaining,
             "ledger_releases": len(releases(self.run_dir)),
         }
+        forms = len(releases(self.run_dir, FORM_RELEASES))
+        if forms:  # absent counts as none released (``drafting/job.py``); a seat with none writes what it always did
+            doc["form_releases"] = forms
         (jd / "data").mkdir(exist_ok=True)
+        prior = (env.get("revise") or {}).get("prior_job_id") if isinstance(env.get("revise"), dict) else None
+        if prior:
+            form_saved.hand_to(self.run_dir, str(prior), jd / "data")  # a form set's saved values (forms/saved.py)
         (jd / "job.json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
         self._chown_child(jd)
         return jd
@@ -306,13 +317,19 @@ class DraftingLane(Daemon):
             logger.error("drafting job %s left a caption correction not fully put back", job_id)
         if v.get("reason"):
             fields["reason"] = str(v["reason"])[:500]
-        if state == "delivered" and v.get("smd_released") and job_id not in releases(self.run_dir):
-            # A held ledger brief SMD released has filed: it counts toward review_first.
+        kind = str(v.get("smd_released_class") or "")
+        if state == "delivered" and v.get("smd_released") and job_id not in releases(self.run_dir, kind):
+            # A held job SMD released has filed: it counts toward its class's review_first.
+            row = {"job_id": job_id, "at": self.clock(), **({"class": kind} if kind else {})}
             with (Path(self.run_dir) / RELEASES).open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps({"job_id": job_id, "at": self.clock()}) + "\n")
+                fh.write(json.dumps(row) + "\n")
         if state == "delivered":
+            form_saved.keep(self.run_dir, job_id, self.job_dir(job_id) / "data")  # what a change revises
             fields["folder_id"] = str(v.get("folder_id") or "")
             fields["delivery"] = {"files": list(v.get("files") or []), "cents": cents}
+            if v.get("served_sets"):
+                # A response job's served sets, filed or being prepared by us (drafting/served.py).
+                fields["delivery"]["served_sets"] = list(v["served_sets"])
             edit = library_edit_handoff.delivery_note(self.job_dir(job_id) / "data")
             if edit is not None:
                 fields["delivery"]["library_edit"] = edit
@@ -327,6 +344,10 @@ class DraftingLane(Daemon):
             # A held or failed job pages SMD; the firm is told nothing
             # (job_notes, Captain 2026-11-06).
             job_notes.tell(self, job_id, why=f"the job ended {state}")
+        elif v.get("served_sets"):
+            # A response job's sets SMD still owes: paged, and listed by work
+            # health until SMD records each (drafting/deliver_by_smd.py --set).
+            job_notes.tell_owed(self, job_id, v["served_sets"])
         task = self._compose_wake(job_id, state, {**fields, "files": v.get("files") or []}, stage=v.get("stage"))
         self._write_state(job_id, wake={"pending": True, "attempts": 0, "task": task})
         return state

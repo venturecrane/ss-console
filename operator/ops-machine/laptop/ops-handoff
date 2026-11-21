@@ -21,8 +21,26 @@
 # ops-handoff <client> --results: print the outcomes the workspace wrote back
 # (~/outbox, newest last), so a laptop session sees what happened without the
 # Captain copying it across. Outcomes only; documents never leave ~/work.
+# Below the outcomes it prints the newest progress line of each task still
+# running (each task is told to write them, see PROGRESS_PREFIX).
 set -uo pipefail
 usage='usage: ops-handoff <client> "<task>" | ops-handoff <client> --results | ops-handoff <client> --say <session> "<message>"'
+# Every task this starts asks its session for progress lines with this prefix,
+# and --results reads them back by the same prefix: one constant for both.
+PROGRESS_PREFIX='PROGRESS:'
+# An argument that looks like a flag is never a task. On 2026-11-19
+# `ops-handoff <client> --help` started a real workspace task whose text was
+# "--help". So --help/-h print the usage and start nothing, and any other flag
+# this script does not know is refused before anything is touched.
+case "${1:-}" in
+  --help|-h) echo "$usage"; exit 0 ;;
+  -*) { echo "unknown flag $1; nothing was started"; echo "$usage"; } >&2; exit 2 ;;
+esac
+case "${2:-}" in
+  --help|-h) echo "$usage"; exit 0 ;;
+  --say|--results) ;;
+  -*) { echo "unknown flag $2; nothing was started"; echo "$usage"; } >&2; exit 2 ;;
+esac
 say_to='' say_text=''
 if [ "${2:-}" = "--say" ]; then
   [ $# -eq 4 ] && [ -n "$4" ] && [[ "$3" =~ ^ops-[a-z0-9-]+$ ]] || { echo "$usage"; exit 2; }
@@ -36,37 +54,84 @@ app=$(jq -r --arg a "$client" '.workspaces | to_entries[] | select(.key==$a or (
 [ -n "$app" ] || { echo "no workspace called $client"; exit 1; }
 if [ "$task" = "--results" ]; then
   OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" >/dev/null || exit 1
-  fly ssh console -a "$app" -u ops --pty=false \
-    -C "sh -c 'ls -tr ~/outbox/*.md 2>/dev/null | while read f; do echo \"== \$(basename \$f)\"; cat \"\$f\"; echo; done'" </dev/null 2>/dev/null
+  # Outcomes first (each task's ~/outbox/*.md, oldest first), then, for each
+  # task still going, its newest progress line: a task's progress file is
+  # newer than its outcome file, or it has no outcome file yet. Progress goes to
+  # its own .progress file, never the .md, because ops-reap-tasks reads an
+  # outbox .md as "this task has reported" and may close its window.
+  printf '%s\n' \
+    "P='$PROGRESS_PREFIX'" \
+    'for f in $(ls -tr ~/outbox/*.md 2>/dev/null); do echo "== $(basename "$f")"; cat "$f"; echo; done' \
+    'for p in $(ls -tr ~/outbox/*.progress 2>/dev/null); do' \
+    '  o="${p%.progress}.md"' \
+    '  [ -f "$o" ] && [ ! "$p" -nt "$o" ] && continue' \
+    '  l=$(grep -F "$P" "$p" | tail -1)' \
+    '  [ -n "$l" ] && echo "== still running $(basename "${p%.progress}"): $l"' \
+    'done' |
+    fly ssh console -a "$app" -u ops --pty=false -C "sh -s" 2>/dev/null
   exit 0
 fi
 if [ "$task" = "--say" ]; then
-  # ops-handoff <client> --say <session> "<message>": type a message into a
+  # ops-handoff <client> --say <session> "<message>": hand a message to a
   # running workspace session, as if the Captain had typed it there. This is the
   # laptop-to-workspace channel. SendMessage over Remote Control never reached a
   # workspace session (2026-10-27: ops-ashton-price-61703 was live with
   # --remote-control and absent from the laptop's ListAgents, so two sends
   # bounced and the Captain was handed the job of relaying). The session is
-  # found by the --name ops-start gave it, the text is typed literally (newlines
-  # flattened, since Enter submits), and delivery is read back from the pane by
-  # a tag, so "sent" means it is on that session's screen. Only the tag count
-  # comes back here; the pane can show client text and none of it leaves.
+  # found by the --name ops-start gave it. Only a one-word answer comes back
+  # here; the pane can show client text and none of it leaves.
   OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" >/dev/null || exit 1
-  tag="[from the laptop, msg $(date -u +%H%M%S)-$$]"
-  msg=$(printf '%s %s' "$tag" "$say_text" | tr '\r\n' '  ' | base64 | tr -d '\n')
+  # The message itself is written to ~/inbox/say-<id>.md on the workspace, and
+  # what is typed into the session is one short line that carries the id and
+  # tells it to read that file. Until 2026-11-20 the whole message was typed,
+  # with the id at its head, and delivery was proven by finding the id on the
+  # screen. Claude Code shows a long paste collapsed ("[Pasted text #1 ...]"),
+  # so the id never appeared, and a long message that the session had already
+  # acted on was reported "lost, send it again" twice; the resend was a second
+  # run of five live steps, stopped only by the downstream tool. A short line
+  # is never collapsed, so its id can be read back whatever the message's
+  # length, and the message keeps its own line breaks in the file. The file
+  # sits beside the task files (only pending*.md is ever claimed from ~/inbox)
+  # and ops-sweep removes it with the other old inbox notes. The message moves
+  # base64-encoded on the script's stdin, never in a command line.
+  #
+  # Read-back matches the short id alone, with all whitespace stripped from the
+  # captured screen, because Claude Code word-wraps the echoed prompt itself and
+  # capture-pane -J joins only tmux's own wraps (2026-11-19). The screen is
+  # looked at up to OPS_HANDOFF_SAY_TRIES times, OPS_HANDOFF_SAY_PAUSE seconds
+  # apart. Three answers, three exit codes, and "not delivered" only on proof:
+  # 0 the id was read back (delivered); 1 no such session, or the message file
+  # or the typing failed (not delivered: nothing reached the session); 3
+  # anything else, including an id not seen because a busy session scrolled it
+  # away (delivery unknown: look at the session before sending again).
+  id="$(date -u +%H%M%S)-$$"
+  tries="${OPS_HANDOFF_SAY_TRIES:-3}" pause="${OPS_HANDOFF_SAY_PAUSE:-2}"
+  [[ "$tries" =~ ^[1-9][0-9]?$ ]] || tries=3
+  [[ "$pause" =~ ^[0-9]+$ ]] || pause=2
+  msg=$(printf '%s\n' "$say_text" | base64 | tr -d '\n')
   got=$(printf '%s\n' \
-    "s='$say_to'; m=\$(printf %s '$msg' | base64 -d); tag='$tag'; w=" \
+    "s='$say_to'; id='$id'; f=\"\$HOME/inbox/say-$id.md\"; w=" \
     'for p in $(tmux list-panes -s -t main -F "#{window_index}:#{pane_pid}" 2>/dev/null); do' \
     '  ps -o args= -p "${p#*:}" --ppid "${p#*:}" 2>/dev/null | grep -q -- "--name $s " && w=${p%%:*}' \
     'done' \
     '[ -n "$w" ] || { echo none; exit 0; }' \
-    'tmux send-keys -t "main:$w" -l "$m" && sleep 1 && tmux send-keys -t "main:$w" Enter && sleep 2' \
-    'tmux capture-pane -p -J -t "main:$w" -S -400 | grep -cF "$tag"' |
+    "mkdir -p \"\$HOME/inbox\" && printf %s '$msg' | base64 -d > \"\$f\" && [ -s \"\$f\" ] || { echo nofile; exit 0; }" \
+    'line="[from the laptop, msg $id] Read ~/inbox/say-$id.md and act on it as if typed here."' \
+    'tmux send-keys -t "main:$w" -l "$line" || { echo notsent; exit 0; }' \
+    'sleep 1; tmux send-keys -t "main:$w" Enter || { echo noenter; exit 0; }' \
+    "n=; for _ in \$(seq 1 $tries); do sleep $pause" \
+    '  n=$({ tmux capture-pane -p -J -t "main:$w" -S -2000 2>/dev/null | tr -d "[:space:]"; echo; } | grep -cF "$id")' \
+    '  [ "${n:-0}" -gt 0 ] 2>/dev/null && break' \
+    'done' \
+    'echo "$n"' |
     fly ssh console -a "$app" -u ops --pty=false -C "sh -s" 2>/dev/null | tr -d '\r' | tail -1)
+  where="say-$id.md in the ~/inbox of $app"
   case "$got" in
-    none) echo "no running workspace session named $say_to on $app; nothing was sent" >&2; exit 1 ;;
-    ''|0) echo "typed into $say_to but could not read the message back on its screen; treat it as not delivered" >&2; exit 1 ;;
-    *) echo "delivered to $say_to (read back on its screen). Its outcome lands in its outbox: ops-handoff $client --results"; exit 0 ;;
+    none) echo "not delivered: no running workspace session named $say_to on $app; nothing was sent" >&2; exit 1 ;;
+    nofile) echo "not delivered: message $id could not be written to $where; nothing was typed into $say_to, send it again" >&2; exit 1 ;;
+    notsent) echo "not delivered: message $id is in $where but typing into $say_to failed; it does not know of it, send it again" >&2; exit 1 ;;
+    [1-9]*) echo "delivered to $say_to (message $id read back on its screen; the text is in $where). Its outcome lands in its outbox: ops-handoff $client --results"; exit 0 ;;
+    *) echo "delivery unknown: told $say_to to read message $id ($where), but it was not read back on its screen (a busy session can scroll it away, or no screen came back). It may well have arrived: check its screen or ops-handoff $client --results before sending again" >&2; exit 3 ;;
   esac
 fi
 OPS_WAKE_ONLY=1 "$(dirname "$0")/ops" "$client" || exit 1
@@ -81,6 +146,8 @@ session="$app-$id"
 {
   printf '## Handed over %s from %s\n\n' "$(date -u +%FT%TZ)" "$(hostname -s)"
   printf '%s\n\n' "$task"
+  printf '%s\n' "## Progress (standing instruction from ops-handoff)" "" \
+    "At each stage of this task, append one line to the file beside your outbox file with the same name ending in .progress instead of .md (your outbox file is named in the prompt you were started with). Each line starts with $PROGRESS_PREFIX and gives the stage name, items done of total where they can be counted, and a finish estimate labelled as an estimate, for example: $PROGRESS_PREFIX reading files, 12 of 40 done, estimate 25 minutes to finish. Counts and stage names only, never record text, names or amounts from client files. The laptop reads the newest line with --results while the task runs."
 } | fly ssh console -a "$app" -u ops --pty=false -C "sh -c 'mkdir -p ~/inbox && cat > ~/inbox/$file'" >/dev/null 2>&1
 n=$(fly ssh console -a "$app" -u ops -C "sh -c 'wc -c < ~/inbox/$file'" </dev/null 2>/dev/null | tail -1 | tr -d ' \r')
 [ "${n:-0}" -gt 0 ] || { echo "handoff did not arrive on $app"; exit 1; }
