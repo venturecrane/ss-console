@@ -581,6 +581,33 @@ def test_a_request_for_amended_responses_to_an_answered_set_stops_served_amended
     assert stop_of(lambda: run(data2, jd2, Fake(THREE), request=further)) == "served_amended"
 
 
+@pytest.mark.parametrize(
+    "request_text, amended",
+    [
+        ("Draft responses to their amended RFPs, responses are due on the 12th.", False),
+        ("They served supplemental interrogatories; please draft responses.", False),
+        ("Please prepare amended responses to the special interrogatories.", True),
+        ("We need further responses to the form interrogatories on matter 100001.", True),
+        ("Draft supplemental answers to the interrogatories.", True),
+        ("Please amend our responses to the requests for production.", True),
+    ],
+)
+def test_amended_matches_only_when_it_qualifies_our_responses(request_text, amended):
+    """A1: the other side's amended or supplemental SETS are not a request for amended responses."""
+    from jobs.drafting import served_papers
+
+    assert served_papers.asks_amended(request_text) is amended
+
+
+def test_an_amended_request_with_no_served_response_on_file_still_stops_before_any_read(tmp_path):
+    """A2: amended responses are SMD's even when no served response of ours is in the file."""
+    data, jd = matter(tmp_path, three_docs())
+    fake = Fake(THREE)
+    request = "Please prepare amended responses to the special interrogatories on matter 100001."
+    assert stop_of(lambda: run(data, jd, fake, request=request)) == "served_amended"
+    assert fake.seen == [] and not (jd / served.FILE).exists()
+
+
 def test_a_plain_request_still_drops_a_set_with_a_served_response(tmp_path):
     data, jd = matter(tmp_path, _served_response_docs())
     run(data, jd, Fake(THREE))

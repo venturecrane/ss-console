@@ -35,10 +35,14 @@ _DRAFT_NAME = re.compile(r"(?i)^\s*DRAFT\b|for\s+attorney\s+review")
 #: 2026-11-20: 0 of 15 real draft names carried it), the number in digits or words.
 _DRAFT_OF = re.compile(r"(?i)\bDRAFT\b.*?\bResponses?\s+to\s+(?P<kind>.+?),?\s+Set\s+(?:No\.?\s*)?(?P<n>\w+)")
 _TITLE_WORDS = {k: re.compile(v) for k, v in TITLES.items()}
-#: The attorney asks for amended, further or supplemental responses (code, no model).
+#: The attorney asks for amended, further or supplemental responses of OURS (code,
+#: no model): the word qualifies the responses themselves ("amended responses",
+#: "further responses to ...", "supplemental answers", "amend our responses"). The
+#: other side's amended or supplemental SETS ("their amended RFPs") never match.
 _AMENDED = re.compile(
-    r"(?i)\b(?:amended|further|supplemental|supplementary)\b[^.\n]{0,40}?\b(?:responses?|answers?)\b"
-    r"|\b(?:amend|supplement)\s+(?:the\s+|our\s+|their\s+|its\s+)?(?:responses?|answers?)\b"
+    r"(?i)\b(?:amended|further|supplemental|supplementary)\s+(?:(?:verified|written|discovery)\s+)?"
+    r"(?:responses?|answers?)\b"
+    r"|\b(?:amend|supplement)\s+(?:our\s+|the\s+|its\s+|plaintiff'?s\s+|defendant'?s\s+)?(?:responses?|answers?)\b"
 )
 _WORDS = {w: i for i, w in enumerate("one two three four five six seven eight nine ten".split(), 1)}
 

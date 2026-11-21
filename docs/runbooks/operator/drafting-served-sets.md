@@ -52,7 +52,7 @@ hears nothing more. Read `found-report.json` in the job directory first.
 | `served_unnumbered`  | The requests do not number 1 to the count                                                                                    | Put the requests in a text file numbered as served, `write`, resume                             |
 | `served_many`        | More than 12 served sets, or the stage would pass its 0.50 USD cap                                                           | Name the sets with `write`, resume                                                              |
 | `served_prior_draft` | An Operator draft of a set still owed is already on the matter                                                               | It is a revision: draft the change by hand                                                      |
-| `served_amended`     | The request asks for amended, further or supplemental responses to a set that already has a served response of ours          | Draft the amended responses by hand                                                             |
+| `served_amended`     | The request asks for amended, further or supplemental responses (whether or not a served response is on file)                | Draft the amended responses by hand                                                             |
 | `served_other_set`   | A served set of a kind outside the list                                                                                      | Record it as type `other`, drafted by `smd`, with `write`; resume                               |
 
 ## A served form interrogatory set

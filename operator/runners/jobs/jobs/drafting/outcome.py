@@ -87,7 +87,7 @@ REASON_CODES = (
     # discovery folder; two sets code cannot tell apart, a read value not on the page, or a response it
     # cannot pair; requests that do not number 1 to the count; more than the finder reads or its cap;
     # a prior Operator draft of a set still owed (a revision); a request for amended, further or
-    # supplemental responses to a set already answered.
+    # supplemental responses (always SMD's).
     "served_none",
     "served_scan",
     "served_ambiguous",
