@@ -106,6 +106,7 @@
         "exclude_name_patterns": ["(?i)retainer"]
       }
     },
+    "entry_detail": "full",
     "itemize_all_pre_incident": false,
     "monthly_budget_usd": 500.0,
     "path": {
