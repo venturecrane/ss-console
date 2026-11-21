@@ -41,6 +41,10 @@ gb=$(jq -r --arg s "$slug" '.workspaces[$s].volume_gb // 50' "$reg")
 # next update (2026-11-09, A&P went 8 GB -> 4 GB with four sessions running).
 # Fly caps a shared CPU at 2 GB, so 8 GB needs shared-cpu-4x: size and memory
 # are authored together.
+# A shared CPU is held to 1/16 of a core once its burst balance is spent, so a
+# workspace under hours of sustained work ran at about 8 percent of its cores
+# (A&P, 2026-11-20: 78 percent steal). Sustained work needs a performance size;
+# ops-idle-stop keeps that from billing while nobody is working.
 mem=$(jq -r --arg s "$slug" '.workspaces[$s].memory_mb // 4096' "$reg")
 vm=$(jq -r --arg s "$slug" '.workspaces[$s].vm_size // "shared-cpu-2x"' "$reg")
 [ -n "$app" ] && [ -n "$seat" ] || { echo "$slug is not in $reg; add it there first (a reviewed change)"; exit 2; }
