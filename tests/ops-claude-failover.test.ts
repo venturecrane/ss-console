@@ -142,6 +142,38 @@ describe('the claude shim', () => {
     expect(out).not.toContain('test-token')
   })
 
+  it('with a third account C present, prefers C, then B, then A', () => {
+    const home = makeHome()
+    const three = { ...TOKENS, CLAUDE_OAUTH_TOKEN_C: 'test-token-c' }
+    expect(shim(home, ['-p', 'hi'], three)).toMatch(/^account=C /)
+    accounts(home, 'mark', 'C', "You've hit your weekly limit · resets Mon 12:00am")
+    expect(shim(home, ['-p', 'hi'], three)).toMatch(/^account=B /)
+    accounts(home, 'mark', 'B', "You've hit your weekly limit · resets Mon 12:00am")
+    const out = shim(home, ['-p', 'hi'], three)
+    expect(out).toMatch(/^account=A /)
+    expect(out).not.toContain('test-token')
+  })
+
+  it('hands Claude no account token variable but the one it runs on, whatever its letter', () => {
+    const home = makeHome()
+    const seen = join(home, 'seen')
+    writeFileSync(
+      join(home, 'fakebin', 'real-claude'),
+      `#!/bin/bash\n{ printf 'tok=%s ' "$CLAUDE_CODE_OAUTH_TOKEN"; env | cut -d= -f1 | grep -c '^CLAUDE_OAUTH_TOKEN_'; true; } > "${seen}"\n`
+    )
+    chmodSync(join(home, 'fakebin', 'real-claude'), 0o755)
+    run(
+      'bash',
+      [SHIM, '-p', 'hi'],
+      baseEnv(home, {
+        OPS_CLAUDE_BIN: join(home, 'fakebin', 'real-claude'),
+        ...TOKENS,
+        CLAUDE_OAUTH_TOKEN_C: 'test-token-c',
+      })
+    )
+    expect(readFileSync(seen, 'utf8').trim()).toBe('tok=test-token-c 0')
+  })
+
   it('reads the tokens from ~/.claude-oauth on a workspace', () => {
     const home = makeHome()
     writeFileSync(join(home, '.claude-oauth'), "export CLAUDE_OAUTH_TOKEN_A='test-token-a'\n")
@@ -251,6 +283,8 @@ describe('ops-tool-env: what every tool command sources', () => {
         CLAUDE_CODE_OAUTH_TOKEN: 'x',
         CLAUDE_OAUTH_TOKEN_A: 'x',
         CLAUDE_OAUTH_TOKEN_B: 'x',
+        CLAUDE_OAUTH_TOKEN_C: 'x',
+        CLAUDE_OAUTH_TOKEN_Q: 'x',
       })
     )
     expect(out).toContain('ANTHROPIC_API_KEY')

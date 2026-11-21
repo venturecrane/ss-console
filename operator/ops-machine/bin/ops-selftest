@@ -21,13 +21,16 @@ done
 [ -z "$stale" ] && ok "no ~/bin copy shadows an image script" \
   || bad "~/bin shadows the image's$stale (reboot runs ops-home-bin-sync)"
 
-# Two Claude accounts (2026-11-08): which one the shim would run on now, that the
+# The Claude accounts (2026-11-08; C added 2026-11-21): which one the shim would run on now, that the
 # watcher which moves a limit-stuck session to the other one is scheduled, and
 # that no account token can reach a tool. Names only; the dry launch prints the
 # variable name it would set, never a value.
 launch=$(TMUX_PANE='' OPS_CLAUDE_SHIM_DRY=1 /opt/ops/bin/claude 2>&1)
 acct=$(printf '%s' "$launch" | sed -n 's/^account=\([A-Za-z]*\).*/\1/p')
-[ -n "$acct" ] && ok "claude account resolves: $acct ($(/opt/ops/bin/ops-claude-accounts status A B | tr '\n' ' '))" \
+letters=$( { compgen -v CLAUDE_OAUTH_TOKEN_ | sed -n 's/^CLAUDE_OAUTH_TOKEN_\([A-Z]\)$/\1/p'
+  [ -f "$HOME/.claude-oauth" ] && sed -n 's/^export CLAUDE_OAUTH_TOKEN_\([A-Z]\)=.*/\1/p' "$HOME/.claude-oauth"; } | sort -u | tr '\n' ' ')
+# shellcheck disable=SC2086
+[ -n "$acct" ] && ok "claude account resolves: $acct ($(/opt/ops/bin/ops-claude-accounts status $letters | tr '\n' ' '))" \
   || bad "the claude shim resolves no account: $launch"
 crontab -l 2>/dev/null | grep -q '/opt/ops/bin/ops-claude-failover' && ok "limit watcher scheduled (cron, every minute)" \
   || bad "limit watcher not in the ops crontab (the entrypoint adds it at boot)"
@@ -35,7 +38,7 @@ if [ "$acct" != login ]; then
   printf '%s' "$launch" | grep -q 'env_file=/opt/ops/bin/ops-tool-env' && ok "tools get ops-tool-env (tokens unset)" \
     || bad "token session would not hand tools ops-tool-env"
 fi
-leak=$(CLAUDE_CODE_OAUTH_TOKEN=probe CLAUDE_OAUTH_TOKEN_A=probe CLAUDE_OAUTH_TOKEN_B=probe \
+leak=$(CLAUDE_CODE_OAUTH_TOKEN=probe CLAUDE_OAUTH_TOKEN_A=probe CLAUDE_OAUTH_TOKEN_B=probe CLAUDE_OAUTH_TOKEN_C=probe CLAUDE_OAUTH_TOKEN_Z=probe \
   bash -c '. /opt/ops/bin/ops-tool-env; env | cut -d= -f1 | grep -c "^CLAUDE.*OAUTH_TOKEN"')
 [ "${leak:-1}" = 0 ] && ok "no Claude account token reaches a tool's environment" || bad "a Claude account token survives ops-tool-env ($leak)"
 if [ -f "$HOME/.ops-secrets" ]; then

@@ -9,4 +9,7 @@
 # tokens away, so no tool, and nothing a tool runs, ever holds them.
 # shellcheck disable=SC1091
 [ -f "$HOME/.ops-secrets" ] && . "$HOME/.ops-secrets"
-unset CLAUDE_CODE_OAUTH_TOKEN CLAUDE_OAUTH_TOKEN_A CLAUDE_OAUTH_TOKEN_B
+unset CLAUDE_CODE_OAUTH_TOKEN CLAUDE_OAUTH_TOKEN_A CLAUDE_OAUTH_TOKEN_B CLAUDE_OAUTH_TOKEN_C
+# Every account's token, whatever its letter (A, B, C ...).
+for __v in $(compgen -v CLAUDE_OAUTH_TOKEN_ 2>/dev/null); do unset "$__v"; done
+unset __v
