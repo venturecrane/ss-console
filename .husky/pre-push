@@ -26,6 +26,14 @@ if [ "$pushes" -gt 0 ] && [ "$pushes" -eq "$deletes" ]; then
   exit 0
 fi
 
+# Git exports these to every hook and they win over a child's cwd, so any test
+# below that runs git in a temp fixture would write THIS repo instead. On
+# 2026-11-21 one did: a fixture's `git add -A` replaced the pushing worktree's
+# whole index with one file and every push failed. The hook runs from the
+# worktree root, so git finds the repo from cwd without them.
+# tests/hook-env-isolation.test.ts guards the test side.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_COMMON_DIR
+
 # A tree with no installed packages cannot run either gate (`npx` fetches a
 # vitest that cannot load the repo's config and dies on a stack trace), so it
 # is refused with one line that says why, not a pass and not a trace.
