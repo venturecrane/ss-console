@@ -318,6 +318,22 @@ def test_the_cli_on_a_failed_job_withdraws_its_pending_resume(tmp_path, capsys):
     assert smd_stop.read(jd) is None
 
 
+@pytest.mark.parametrize("state", ["stopped_by_smd", "running"])
+def test_a_stop_withdraws_a_pending_resume_in_every_state(tmp_path, capsys, state):
+    """A resume now sets a stopped job back to failed, so a resume marker left
+    behind by a stop would run the job the stop meant to end: a resume asked
+    for a stopped job and then a stop again, or a resume written while the job
+    ran and then a stop (bug review of the resume fix, 2026-11-21)."""
+    _job(tmp_path, state=state)
+    q = tmp_path / "run" / "drafting-queue"
+    q.mkdir(parents=True)
+    resume = q / f"{resume_mod.MARKER_PREFIX}01JOB.json"
+    resume.write_text(json.dumps({"job_id": "01JOB", "reason": "run it"}))
+    _cli(tmp_path, "--wait", "0")
+    assert not resume.exists()
+    assert "withdrew the pending resume request" in capsys.readouterr().out
+
+
 def test_the_cli_refuses_an_unknown_job_and_a_path(tmp_path):
     (tmp_path / "run").mkdir()
     assert _cli(tmp_path) == 1

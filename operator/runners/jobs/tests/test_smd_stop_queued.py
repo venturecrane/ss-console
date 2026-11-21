@@ -264,6 +264,23 @@ def test_smd_resume_of_a_failed_job_still_runs(tmp_path):
     assert lane.claim_next() == jid
 
 
+def test_smd_resume_of_a_job_smd_stopped_runs(tmp_path):
+    """A job SMD stopped carries ``stopped_by_smd`` in its daemon state. The
+    resume must leave that state, or ``stale_envelope`` sets the re-queued
+    envelope aside and the job never runs (A&P 2026-11-21)."""
+    lane, client, jid, _key = _drafting(tmp_path)
+    assert lane.tick() == "delivered"
+    client.rows[jid]["state"] = "failed"
+    lane._write_state(jid, state=smd_stop.STATE, finished_at=5.0)
+    (lane.queue / f"{resume_mod.MARKER_PREFIX}{jid}.json").write_text(
+        json.dumps({"job_id": jid, "reason": "Captain resumed"})
+    )
+    assert resume_mod.take_requests(lane) == [jid]
+    assert lane._daemon_state(jid)["state"] == "failed"
+    assert lane.claim_next() == jid
+    assert not (lane.queue / smd_stop.ENDED_DIR / f"{jid}.json").exists()
+
+
 def test_a_resume_of_a_stopped_job_is_refused_by_the_ledger_rule_once_it_has_ended_again(tmp_path):
     """A failed row whose job dir has ended (finished_at set) is not a resume."""
     lane, client, jid, _key = _drafting(tmp_path)

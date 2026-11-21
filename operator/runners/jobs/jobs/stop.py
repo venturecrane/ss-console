@@ -103,14 +103,18 @@ def _stop_claimed(args: argparse.Namespace, queue: Path, jd: Path, running: bool
     (already stopped, failed, delivered); None when the lane must record it."""
     before = _state(jd)
     _say("before", args.lane, jd, before)
+    # A stop withdraws any resume still waiting, in every state: a resume
+    # clears the stop and sets the job back to ``failed``, so a marker left
+    # behind would run a job SMD has just told to stay stopped (a resume asked
+    # and then a stop, or a resume written while the job ran and then a stop).
+    resume = queue / f"{resume_mod.MARKER_PREFIX}{args.job_id}.json"
+    if resume.is_file():
+        resume.unlink()
+        print(f"withdrew the pending resume request {resume.name}")
     if before.get("state") == smd_stop.STATE:
         print(f"already stopped by {before.get('stopped_by')}: {before.get('stopped_why')}")
         return 0
     if before.get("state") == "failed":
-        resume = queue / f"{resume_mod.MARKER_PREFIX}{args.job_id}.json"
-        if resume.is_file():
-            resume.unlink()
-            print(f"withdrew the pending resume request {resume.name}")
         print("the job already ended failed; it never runs again unless SMD resumes it")
         return 0
     if before.get("state") in TERMINAL:
