@@ -4,21 +4,41 @@
 # uses. The volume and everything on it stay; `ops <client>` starts it again.
 #
 # Busy means ANY of, checked every run:
-#   * a tmux client is attached (the Captain is connected);
+#   * an attached tmux client had keyboard input within IDLE_MINUTES
+#     (#{client_activity}). A client merely attached is not busy: until
+#     2026-11-20 any attached client was, and a terminal left open on the
+#     Captain's laptop (last keystroke 688 minutes earlier) kept the A&P Machine
+#     billing around the clock from 2026-10-22, 2,458 runs ending "busy: tmux
+#     client attached";
+#   * a tmux window printed output within IDLE_MINUTES (#{window_activity}, the
+#     clock ops-reap-tasks reads). This is what keeps the Machine up under a
+#     Claude session that is working with no child process (thinking, reading,
+#     running subagents in-process): its screen keeps changing. A Claude waiting
+#     at its prompt prints nothing, and is idle;
+#   * tmux is running but cannot be queried (any error other than "no server"):
+#     cannot evaluate is busy, never idle. No tmux server at all means no
+#     terminal and no window, so those two rules have nothing to say and the
+#     rules below decide, as they always did;
 #   * ANY process runs as ops that is not on the short idle list below (shells,
 #     sleep, tmux, cron, this script and its helpers, and Claude Code with its
-#     MCP servers waiting at a prompt). An allowlist of IDLE, never a list of
-#     busy: the first version listed busy programs and stopped the Machine
-#     mid-migration (2026-10-17 20:40Z), because a 546,000-file sha256sum ran
-#     for 55 minutes after its tar finished and sha256sum was not on the list.
-#     Anything not known to be idle is work;
+#     MCP servers). An allowlist of IDLE, never a list of busy: the first
+#     version listed busy programs and stopped the Machine mid-migration
+#     (2026-10-17 20:40Z), because a 546,000-file sha256sum ran for 55 minutes
+#     after its tar finished and sha256sum was not on the list. Anything not
+#     known to be idle is work. Claude itself is on the idle list because a
+#     working Claude is caught by its window output, above;
 #   * a lock in ~/locks/ whose pid is alive (ops-job holds one for any command);
 #   * the Machine has been up less than IDLE_MINUTES.
 # Idle for IDLE_MINUTES straight (state/last-busy older than that) -> write
-# state/stop-requested, which the entrypoint turns into a clean exit.
+# state/stop-requested, which the entrypoint turns into a clean exit. Every run
+# logs one line naming its reason ("busy: terminal input 12m ago", "busy: window
+# main:7 output 3m ago", "idle 40m of 60").
 #
-# A detached Claude session with nothing running is idle on purpose: the
-# conversation survives (claude --resume), the Machine does not keep billing.
+# A detached or untouched Claude session with nothing running is idle on
+# purpose: the conversation survives (claude --resume), the Machine does not
+# keep billing.
+#
+# Test seam: OPS_IDLE_UPTIME_FILE stands in for /proc/uptime.
 set -uo pipefail
 IDLE_MINUTES="${IDLE_MINUTES:-60}"
 S="$HOME/state"; mkdir -p "$S"
@@ -29,8 +49,51 @@ now=$(date +%s)
 # until memory ran out (2026-10-29). See ops-reap-tasks.
 /opt/ops/bin/ops-reap-tasks || true
 
-reason=""
-if tmux list-clients 2>/dev/null | grep -q .; then reason="tmux client attached"; fi
+reason=""; note=""; out=""
+
+# tmux_query <args...>: run a tmux listing into $out. Returns 0 on success,
+# 1 when no tmux server runs, 2 on any other failure ($out then says why).
+tmux_query() {
+  local rc
+  out=$(tmux "$@" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  if grep -qiE 'no server running|error connecting to' <<<"$out"; then return 1; fi
+  out="rc $rc: $(tr '\n' ' ' <<<"${out:0:60}")"; return 2
+}
+
+# newest: from "<label> <epoch>" lines, print "<label> <minutes since>" for the
+# most recent numeric epoch; nothing when no line carries one.
+newest() {
+  awk -v now="$now" '$2 ~ /^[0-9]+$/ && $2 + 0 > best + 0 {best = $2; lab = $1}
+    END {if (best) print lab, int((now - best) / 60)}'
+}
+
+tmux_query list-clients -F '#{client_tty} #{client_activity}'; crc=$?
+if [ "$crc" -eq 2 ]; then
+  reason="tmux cannot be queried (${out})"
+elif [ "$crc" -eq 0 ] && [ -n "$out" ]; then
+  read -r _ age <<<"$(newest <<<"$out")"
+  if [ -z "${age:-}" ]; then
+    reason="tmux client activity unreadable"
+  elif [ "$age" -lt "$IDLE_MINUTES" ]; then
+    reason="terminal input ${age}m ago"
+  else
+    note=" (terminal attached, last input ${age}m ago)"
+  fi
+fi
+if [ -z "$reason" ] && [ "$crc" -ne 1 ]; then
+  tmux_query list-windows -a -F '#{session_name}:#{window_index} #{window_activity}'; wrc=$?
+  if [ "$wrc" -eq 2 ]; then
+    reason="tmux cannot be queried (${out})"
+  elif [ "$wrc" -eq 0 ] && [ -n "$out" ]; then
+    read -r win age <<<"$(newest <<<"$out")"
+    if [ -z "${age:-}" ]; then
+      reason="tmux window activity unreadable"
+    elif [ "$age" -lt "$IDLE_MINUTES" ]; then
+      reason="window $win output ${age}m ago"
+    fi
+  fi
+fi
 if [ -z "$reason" ]; then
   me=$$
   job=$(ps -u "$(id -u)" -o pid=,ppid=,comm=,args= | awk -v me="$me" '
@@ -48,7 +111,7 @@ if [ -z "$reason" ]; then
     rm -f "$l"
   done
 fi
-up=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
+up=$(cut -d. -f1 "${OPS_IDLE_UPTIME_FILE:-/proc/uptime}" 2>/dev/null || echo 0)
 [ -z "$reason" ] && [ "$up" -lt $((IDLE_MINUTES * 60)) ] && reason="up ${up}s"
 
 if [ -n "$reason" ]; then
@@ -59,8 +122,8 @@ fi
 last=$(cat "$S/last-busy" 2>/dev/null || echo "$now")
 idle=$(( (now - last) / 60 ))
 if [ "$idle" -ge "$IDLE_MINUTES" ]; then
-  echo "$(date -u +%FT%TZ) idle ${idle}m; requesting stop"
+  echo "$(date -u +%FT%TZ) idle ${idle}m; requesting stop${note}"
   : > "$S/stop-requested"
 else
-  echo "$(date -u +%FT%TZ) idle ${idle}m of ${IDLE_MINUTES}"
+  echo "$(date -u +%FT%TZ) idle ${idle}m of ${IDLE_MINUTES}${note}"
 fi
