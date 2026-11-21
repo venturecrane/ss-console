@@ -111,11 +111,17 @@ def take_requests(d: Any) -> list[str]:
             if run_record.on(d):
                 _record_refused(d, job_id, req)
             continue
-        # SMD chose to run a job it once stopped: the old stop is spent.
+        # SMD chose to run a job it once stopped: the old stop is spent. Its
+        # state goes back to the ledger's own word for it, ``failed``, which a
+        # resume revives; left at ``stopped_by_smd``, ``smd_stop.stale_envelope``
+        # sets the re-queued envelope aside and the job never runs (A&P update
+        # 01M7WYTT, 2026-11-21: resume accepted, envelope moved to ended).
         smd_stop.clear(d.job_dir(job_id))
         (d.queue / f"{job_id}.json").write_text(env.read_text(encoding="utf-8"), encoding="utf-8")
+        unstopped = {"state": "failed"} if st.get("state") == smd_stop.STATE else {}
         d._write_state(
             job_id,
+            **unstopped,
             finished_at=None,
             wake=None,
             resumes=int(st.get("resumes") or 0) + 1,
