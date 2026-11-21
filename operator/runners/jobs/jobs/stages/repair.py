@@ -36,11 +36,10 @@ import re
 from pathlib import Path
 
 from .. import llm
-from ..medchron import prompts
 from ..limits import LimitHold
 from .base import StageRun, append_jsonl, read_json
 from .chunking import MIN_YIELD, split_chunk
-from .compose import UNREAD, INFRA_EXIT, narrower, outputs_for, read_usage, record_unread, well_formed
+from .compose import UNREAD, INFRA_EXIT, narrower, outputs_for, read_usage, record_unread, well_formed, writer_system
 
 
 def _run_part(
@@ -256,7 +255,7 @@ def run(sr: StageRun) -> int:
         return 0
     sr.log(f"truncated chunks: {[t.label for t in targets]}")
     max_tokens = int(sr.cfg.get("levers", "compose_max_tokens", 128000))
-    rep = _Repair(sr, d, llm.model_for(sr.cfg, "composition"), prompts.load("map-system", sr.cfg), max_tokens)
+    rep = _Repair(sr, d, llm.model_for(sr.cfg, "composition"), writer_system(sr), max_tokens)
     outcomes = [_repair_chunk(rep, t) for t in targets]
     # An unrepaired chunk blocks assembly (which refuses over it), so say so
     # here with the exit code rather than a line only a person reads.

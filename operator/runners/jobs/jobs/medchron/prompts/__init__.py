@@ -32,7 +32,23 @@ def depth_rule() -> str:
     return raw("depth-rule").strip()
 
 
-def load(name: str, cfg: FirmConfig) -> str:
+def entry_grain(detail: str) -> dict[str, str]:
+    """The writer's rule for how many entries a record makes and whom the
+    provider line names, for one ``chronology.entry_detail`` value. ``full``
+    reproduces the prompt as it stood before the setting existed, byte for
+    byte; ``standard`` is one entry per facility per date, the density the
+    firm asked for (2026-08-19) and the vendor chronologies it holds show."""
+    out: dict[str, str] = {}
+    for line in raw(f"entry-grain-{detail}").splitlines():
+        key, sep, value = line.partition(": ")
+        if sep:
+            out["{{" + key + "}}"] = value
+    return out
+
+
+def load(name: str, cfg: FirmConfig, *, entry_detail: str | None = None) -> str:
     menu = " / ".join(str(h) for h in (cfg.get("format", "subsections") or []))
     text = raw(name).replace(DEPTH_TOKEN, depth_rule())
+    for token, value in entry_grain(entry_detail or cfg.entry_detail).items():
+        text = text.replace(token, value)
     return wording.fill(text.replace("{{HEADING_MENU}}", menu))

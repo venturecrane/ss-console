@@ -7,6 +7,6 @@
   "demand/numbered": [],
   "drafting/kit": [],
   "litigation/kit": [],
-  "medchron/probes_synthetic_firm": [],
+  "medchron/probes_synthetic_firm": ["load.entry_detail"],
   "records/kit": []
 }

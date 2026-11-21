@@ -123,6 +123,11 @@ SCHEMA: dict[str, dict[str, tuple[str, bool]]] = {
         # post-incident, in date order. `include` and `summarize_only` both run
         # the triage + summary path (neither is read by any stage today).
         "pre_incident_history": ("str", True),
+        # standard | full. How many entries a record makes: `standard` is one
+        # entry per facility per date of service (the firm's chosen form,
+        # 2026-11-21); `full` is one per signing clinician per date, the form
+        # every chronology before then was written in. Absent means full.
+        "entry_detail": ("str", False),
     },
     "budget": {
         "per_job_cap_usd": ("float", True),
@@ -164,6 +169,7 @@ DOS_CHECK_MODES = {"report", "hold"}
 NO_FORCED_TOOL_MODELS = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-", "claude-mythos-5-")
 PRE_INCIDENT_ITEMIZE_ALL = "itemize_all"
 PRE_INCIDENT_POLICIES = {"include", "summarize_only", PRE_INCIDENT_ITEMIZE_ALL}
+ENTRY_DETAILS = {"standard", "full"}
 
 
 @dataclass(frozen=True)
@@ -201,6 +207,12 @@ class FirmConfig:
     @property
     def usd_per_audit_claim(self) -> float:
         return float(self.get("budget", "usd_per_audit_claim"))
+
+    @property
+    def entry_detail(self) -> str:
+        """`chronology.entry_detail`, absent meaning `full` (the form written
+        before the setting existed)."""
+        return str(self.get("chronology", "entry_detail") or "full")
 
     @property
     def itemize_all_pre_incident(self) -> bool:
@@ -320,6 +332,8 @@ def _semantic_checks(data: dict[str, Any]) -> list[str]:
     chron = data.get("chronology") or {}
     if chron.get("pre_incident_history") not in (None, *PRE_INCIDENT_POLICIES):
         out.append(f"chronology.pre_incident_history: expected one of {sorted(PRE_INCIDENT_POLICIES)}")
+    if chron.get("entry_detail") not in (None, *ENTRY_DETAILS):
+        out.append(f"chronology.entry_detail: expected one of {sorted(ENTRY_DETAILS)}")
     out.extend(_model_tier_checks(data))
     for section, key in (("providers", "aliases"), ("coverage", "exclusions")):
         for i, entry in enumerate((data.get(section) or {}).get(key) or []):
