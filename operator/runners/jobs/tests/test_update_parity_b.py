@@ -89,12 +89,41 @@ def test_a_refiled_extract_of_a_new_document_is_not_an_exhibit_and_is_recorded(t
     ]
 
 
+def test_an_extract_page_names_its_cover_and_a_page_the_repeat_check_reads_is_read(tmp_path: Path) -> None:
+    """Each page of a words-found extract names the page of the whole that
+    covers it in the page record; a page the repeat check found DIFFERENT is
+    read, so the extract is decided page by page and only that page is added."""
+    from jobs.medchron import pages_record as PR
+    from jobs.medchron.update import repeat_check as RC
+    from jobs.stages import update_select as US
+
+    sr = _seed(tmp_path, {"ext": _extract_pages(), "whole": _whole_pages()})
+    assert US.run(sr) == 0, sr.logged  # type: ignore[arg-type]
+    rows = {r["page"]: r for r in PR.read(tmp_path / "runs" / "alpha") if r["doc"] == "ext"}
+    assert {p: (r["class"], r["evidence"]["cover"]) for p, r in rows.items()} == {
+        n: ("refiled_extract", {"doc": "whole", "page": n + 4, "exact": False}) for n in range(1, 6)
+    }
+    sha = rows[2]["sha256"]
+    ud = tmp_path / "runs" / "alpha" / "update"
+    (ud / RC.NAME).write_text(json.dumps({"forced": [[sha, 2]]}))
+    assert US.run(sr) == 0, sr.logged  # type: ignore[arg-type]
+    sel = json.loads((ud / "selection.json").read_text())
+    by_id = {r["id"]: r for r in sel["exhibits"]}
+    assert by_id["ext"]["read"] == [2] and sel["subsets"] == []
+    rows = {r["page"]: r for r in PR.read(tmp_path / "runs" / "alpha") if r["doc"] == "ext"}
+    assert rows[2]["status"] == "read" and all(rows[p]["status"] == "excluded" for p in (1, 3, 4, 5))
+    assert rows[1]["evidence"]["cover"]["page"] == 5  # decided page by page, each with its cover
+
+
 def test_an_extract_with_a_page_stating_its_own_value_is_read() -> None:
     from jobs.medchron.update import subsets as SUB
 
     whole = dict(enumerate(_whole_pages(), 1))
     ext = dict(enumerate(_extract_pages(), 1))
     assert set(SUB.refiled_subsets([("ext", ext), ("whole", whole)])) == {"ext"}
+    # Each page of the extract names the page of the whole that covers it
+    # (the repeat check compares exactly those two pages).
+    assert SUB.refiled_subsets([("ext", ext), ("whole", whole)])["ext"].at == tuple((n, n + 4) for n in range(1, 6))
     # Ten pages, nine of them the whole one's, one a visit of its own with a value it alone states.
     nine = {n: _visit(n - 1) for n in range(1, 10)}
     own = {**nine, 10: _visit(0).replace("03/01/2026", "05/20/2026").replace("Pain rated 2", "Pain rated 9")}

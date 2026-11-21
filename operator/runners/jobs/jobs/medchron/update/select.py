@@ -435,15 +435,17 @@ def _undated_neighbours(
     held: _Held,
     tally: Counter[str] | None,
     covers: dict[int, Cover] | None = None,
+    force: set[int] | None = None,
 ) -> None:
     """A read page that states no date, beside a page ``update/contained``
-    held, is held when the same document's pages near that window hold it."""
+    held, is held when the same document's pages near that window hold it.
+    A page in `force` (the repeat check read it) is never held here."""
     changed = True
     while changed:
         changed = False
         for p, (d, _) in sorted(out.items()):
             t = (pages.get(p) or "").strip()
-            if d != READ or p in held or CT.facts(0, t).dates:
+            if d != READ or p in held or p in (force or ()) or CT.facts(0, t).dates:
                 continue
             for q in (p - 1, p + 1):
                 if q not in held:
@@ -474,8 +476,12 @@ def classify_new(
     held_out: _Held | None = None,
     covers_out: dict[int, Cover] | None = None,
     doc_id: str | None = None,
+    force: set[int] | None = None,
 ) -> dict[int, tuple[str, str]]:
     """Per page of one new document: (text | excluded | unread, reason).
+    `force`: pages the repeat check found are NOT copies of the page a
+    repeat rule matched (``update/repeat_check``): each is read as if no
+    repeat rule had matched it, and no neighbour rule sets it aside.
     `unread` is a page the transcription could not read: it is never skipped
     silently, the stage holds on it. `earlier`, when given, holds the pages of
     the new documents before this one; this document's pages join it.
@@ -489,16 +495,22 @@ def classify_new(
         earlier.next_document(doc_id)
     out: dict[int, tuple[str, str]] = {}
     held: _Held = {}
+    force = force or set()
     for i in range(1, npages + 1):
         t = (pages.get(i) or "").strip()
-        if image and i in image:
+        if image and i in image and i not in force:
             out[i] = (EXCLUDED, image[i])
             continue
         out[i] = _decide(t, seen, earlier, held, i, tally, covers_out)
+        if i in force and out[i] in ((EXCLUDED, ALREADY), (EXCLUDED, OVERLAP)):
+            out[i] = (READ, "new document")
+            held.pop(i, None)
+            if covers_out is not None:
+                covers_out.pop(i, None)
         if earlier is not None and out[i][0] != UNREAD and len(t) >= MIN_CHARS:
             earlier.add(t, i)
     if held:
-        _undated_neighbours(out, pages, seen, earlier, held, tally, covers_out)
+        _undated_neighbours(out, pages, seen, earlier, held, tally, covers_out, force)
     if held_out is not None:
         held_out.update(held)
     return out

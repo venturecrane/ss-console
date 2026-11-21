@@ -106,6 +106,8 @@ class _Model:
             return _msg([type("B", (), {"type": "tool_use", "input": verdict})()], "tool_use")
         if "Prior Medical History section" in self._system(kw):
             return _text(PMH_NEW)
+        if "REPEAT CHECK FOR A MEDICAL CHRONOLOGY UPDATE" in self._system(kw):
+            return _text('{"verdict": "SAME"}')
         raise AssertionError("unexpected model call shape")
 
     def stream(self, **kw):

@@ -162,9 +162,15 @@ def selection_rows(
             continue
         n = PG.delivered_exhibit(sub.parent)
         where: dict[str, Any] = {"exhibit": n} if n is not None else {"doc": sub.parent}
-        for p in range(1, int(sub.pages) + 1):
+        # An extract found by its pictures is pixel-equal page for page; one
+        # found by its words names, page by page, the parent's page that
+        # covers it (``subsets.Subset.at``), or no page when none does.
+        exact, at = rid in ident.extracts, dict(sub.at)
+        # Every page of the file: a words-found extract counts only its text
+        # pages in ``sub.pages``, and its covers are keyed by page number.
+        for p in range(1, max(int(sub.pages), npages(rid)) + 1):
             h = (ident.pages.get(rid) or {}).get(p)
-            cov = PR.picture_cover(h) if h is not None else {**where, "page": None, "exact": False}
+            cov = PR.picture_cover(h) if h is not None else {**where, "page": at.get(p), "exact": exact}
             kind = PR.picture_kind(h) if h is not None else PR.FILE
             out[(rid, p)] = PR.row(rid, sha.get(rid, ""), p, PR.EXCLUDED, "refiled_extract", kind, BY_SELECT, cov)
     for reason, ids in skipped.items():

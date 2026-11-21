@@ -87,6 +87,7 @@ def settle(
     pairs: dict[int, int],
     mine_out: dict[int, int] | None = None,
     theirs_out: dict[int, int] | None = None,
+    keep: tuple[set[int], set[int]] = (set(), set()),
 ) -> dict[int, int]:
     """Settles, in place, each pair of twins both still read: the twin that
     adds nothing is excluded, and a larger picture twin that adds nothing is
@@ -95,11 +96,13 @@ def settle(
     the smaller document (pages, decisions), `theirs` the larger, `pairs` its
     picture pairs {my page: their page}. `mine_out` / `theirs_out`, when
     given, receive each page excluded here with the twin page it repeats
-    ({page: the other document's page}): no exclusion without its cover."""
+    ({page: the other document's page}): no exclusion without its cover.
+    `keep`: (my pages, their pages) the repeat check read
+    (``update/repeat_check``): a twin pair holding one is left as it is."""
     (mp, md), (tp, td) = mine, theirs
     swapped: dict[int, int] = {}
     for q, p in aligned(pairs, len(md), len(td)).items():
-        if md.get(q, ("",))[0] != READ or td.get(p, ("",))[0] != READ:
+        if md.get(q, ("",))[0] != READ or td.get(p, ("",))[0] != READ or q in keep[0] or p in keep[1]:
             continue
         if _within(mp.get(q, ""), tp.get(p, "")):
             md[q] = (EXCLUDED, OVERLAP)

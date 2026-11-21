@@ -42,6 +42,11 @@ class Subset:
     parent: str
     pages: int
     matched: int
+    #: ((page, the parent's page that covers it), ...): each page of the
+    #: extract a page of the whole one carries (``refiled_subsets``), so a
+    #: set-aside page names the page that covers it (``update/repeat_check``).
+    #: Empty for an extract found by its pictures (every page pixel-equal).
+    at: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,30 +67,36 @@ def _page(text: str) -> _P:
     )
 
 
-def _is_page_of(me: _P, theirs: list[_P]) -> bool:
+def _page_of(me: _P, theirs: list[tuple[int, _P]]) -> int | None:
+    """The page of `theirs` that `me` is a page of, or None."""
     if not me.shingles:
-        return False
-    return any(
-        len(me.shingles & o.shingles) >= SUBSET_FRAC * len(me.shingles)
-        and me.dates <= o.dates
-        and me.words <= o.words
-        and me.values <= o.values
-        for o in theirs
+        return None
+    return next(
+        (
+            n
+            for n, o in theirs
+            if len(me.shingles & o.shingles) >= SUBSET_FRAC * len(me.shingles)
+            and me.dates <= o.dates
+            and me.words <= o.words
+            and me.values <= o.values
+        ),
+        None,
     )
 
 
-def _matched(mine: list[_P], theirs: list[_P]) -> int | None:
-    """How many of `mine` are pages of `theirs` when that makes `mine` an
+def _matched(mine: list[tuple[int, _P]], theirs: list[tuple[int, _P]]) -> dict[int, int] | None:
+    """{my page: the page of `theirs` it is} when that makes `mine` an
     extract of `theirs`; None when it does not."""
-    hits = [_is_page_of(p, theirs) for p in mine]
-    if not mine or sum(hits) < SUBSET_FRAC * len(mine):
+    hits = {n: _page_of(p, theirs) for n, p in mine}
+    found = {n: q for n, q in hits.items() if q is not None}
+    if not mine or len(found) < SUBSET_FRAC * len(mine):
         return None
-    dates = frozenset().union(*(o.dates for o in theirs))
-    values = frozenset().union(*(o.values for o in theirs))
-    rest = [p for p, h in zip(mine, hits, strict=True) if not h]
+    dates = frozenset().union(*(o.dates for _, o in theirs))
+    values = frozenset().union(*(o.values for _, o in theirs))
+    rest = [p for n, p in mine if n not in found]
     if any(not (p.dates <= dates and p.values <= values) for p in rest):
         return None  # a page outside the whole states a date or value of its own: the document is read
-    return sum(hits)
+    return found
 
 
 def refiled_subsets(docs: list[tuple[str, dict[int, str]]], firm: set[str] | None = None) -> dict[str, Subset]:
@@ -96,7 +107,7 @@ def refiled_subsets(docs: list[tuple[str, dict[int, str]]], firm: set[str] | Non
     A document with a page the transcription could not read is never an
     extract: what that page says is unknown, so it is read (and holds)."""
     keep_firm = (firm or set()) | {d for d, pg in docs if any((t or "").strip() in FAILED_MARKS for t in pg.values())}
-    texts = {d: [_page(t) for _, t in sorted(pg.items()) if len((t or "").strip()) >= MIN_CHARS] for d, pg in docs}
+    texts = {d: [(n, _page(t)) for n, t in sorted(pg.items()) if len((t or "").strip()) >= MIN_CHARS] for d, pg in docs}
     rank = {d: len(texts[d]) for d, _ in docs}
     found: dict[str, Subset] = {}
     for d, _ in docs:
@@ -104,16 +115,22 @@ def refiled_subsets(docs: list[tuple[str, dict[int, str]]], firm: set[str] | Non
             continue
         bigger = sorted((o for o, _ in docs if rank[o] > rank[d]), key=lambda o: -rank[o])  # stable: pull order
         for o in bigger:
-            n = _matched(texts[d], texts[o])
-            if n is not None:
-                found[d] = Subset(d, o, len(texts[d]), n)
+            got = _matched(texts[d], texts[o])
+            if got is not None:
+                found[d] = Subset(d, o, len(texts[d]), len(got), tuple(sorted(got.items())))
                 break
-    return {d: Subset(d, _root(found, s.parent), s.pages, s.matched) for d, s in found.items()}
+    return {d: rooted(found, s) for d, s in found.items()}
 
 
-def _root(found: dict[str, Subset], parent: str) -> str:
-    seen: set[str] = set()
+def rooted(found: dict[str, Subset], s: Subset) -> Subset:
+    """`s` cited to the outermost document of its chain (an extract of an
+    extract), each page's cover carried along the chain; a page whose cover
+    a link does not carry (a link found by pictures carries none) has none."""
+    parent, at, seen = s.parent, dict(s.at), {s.doc}
     while parent in found and parent not in seen:  # rank strictly rises along a chain; `seen` is a backstop
         seen.add(parent)
-        parent = found[parent].parent
-    return parent
+        link = found[parent]
+        nxt = dict(link.at)
+        at = {p: nxt[q] for p, q in at.items() if q in nxt}
+        parent = link.parent
+    return Subset(s.doc, parent, s.pages, s.matched, tuple(sorted(at.items())))

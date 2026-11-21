@@ -79,6 +79,7 @@ from ..medchron.update import (
     medlegal as ML,
     pageid as PI,
     pageid_io as PG,
+    repeat_check as RC,
     select as S,
     subsets as SUB,
     twins as TW,
@@ -287,14 +288,18 @@ def _classify(
     ident: PG.Loaded,
     text_of: Callable[[str, int], str],
     firm: dict[str, str],
+    forced: dict[str, set[int]] | None = None,
 ) -> dict[str, _Read]:
     """{id: _Read} for every candidate, its pages decided in READING order
     (``pageid.reading_order``: the most pages first). A page two new
     documents share is read in the larger and is a repeat in the smaller,
     and a smaller document every page of which repeats one read before it is
     re-filed whole there (``select.new_home``). `firm`: {id: the firm's
-    numbered file name}; such a file is never re-filed whole."""
+    numbered file name}; such a file is never re-filed whole. `forced`:
+    {id: pages the repeat check read} (``update/repeat_check``): no repeat
+    rule sets such a page aside; a pixel-equal page is never one."""
     out = sr.slug_dir / "out" / sr.unit.unit
+    forced = forced or {}
     pdfs = {str(r["id"]): out / f".pending-{r['id']}.pdf" for r in rows}
     sizes = [
         (str(r["id"]), _write_pdf(Path(r["path"]), str(r.get("ext") or "").lower(), pdfs[str(r["id"])])) for r in rows
@@ -302,13 +307,15 @@ def _classify(
     by_id, npages, order = {str(r["id"]): r for r in rows}, dict(sizes), PI.reading_order(sizes)
     earlier, got = S.Earlier(), {}
     for rid in order:
-        image = PG.reasons(ident.pages.get(rid) or {}, _texts(sr, rid), text_of)
-        got[rid] = _read_one(sr, by_id[rid], pdfs[rid], npages[rid], seen, earlier, firm.get(rid), image)
+        found = ident.pages.get(rid) or {}
+        force = {p for p in forced.get(rid, set()) if not (p in found and found[p].exact)}
+        image = {p: why for p, why in PG.reasons(found, _texts(sr, rid), text_of).items() if p not in force}
+        got[rid] = _read_one(sr, by_id[rid], pdfs[rid], npages[rid], seen, earlier, firm.get(rid), image, force)
         for pg in image if not got[rid].medlegal else ():  # a page excluded by its picture: that page covers it
             h = ident.pages[rid][pg]
             src = S.DELIVERED_SRC if PG.delivered_exhibit(h.other) is not None else S.EARLIER_SRC
             got[rid].covers[pg] = S.Cover(src, h.other, h.page, S.BY_PICTURE)
-    _settle_twins(got, ident)
+    _settle_twins(got, ident, forced)
     by_doc: dict[str, set[str]] = {}
     for rid in (d for d in order if not got[d].medlegal):
         c = got[rid]
@@ -319,10 +326,12 @@ def _classify(
     return got
 
 
-def _settle_twins(got: dict[str, _Read], ident: PG.Loaded) -> None:
+def _settle_twins(got: dict[str, _Read], ident: PG.Loaded, forced: dict[str, set[int]] | None = None) -> None:
     """Of a page two new documents both still read, picture-paired (or at
     its neighbours' offset), the reading that adds nothing is not read
-    (``update/twins``)."""
+    (``update/twins``). A twin pair holding a page the repeat check read
+    (`forced`) is left read on both sides."""
+    forced = forced or {}
     for rid, c in got.items():
         by_other: dict[str, dict[int, int]] = {}
         for pg, h in (ident.pages.get(rid) or {}).items():
@@ -331,7 +340,8 @@ def _settle_twins(got: dict[str, _Read], ident: PG.Loaded) -> None:
         for other, pairs in by_other.items():
             o = got[other]
             mine, theirs = {}, {}  # each page a twin excluded, and the page it repeats
-            for p, q in TW.settle((c.pages, c.decisions), (o.pages, o.decisions), pairs, mine, theirs).items():
+            keep = (forced.get(rid, set()), forced.get(other, set()))
+            for p, q in TW.settle((c.pages, c.decisions), (o.pages, o.decisions), pairs, mine, theirs, keep).items():
                 o.readings[p] = (rid, q)
             c.covers.update({q: S.Cover(S.EARLIER_SRC, other, p, S.BY_TWIN) for q, p in mine.items()})
             o.covers.update({p: S.Cover(S.EARLIER_SRC, rid, q, S.BY_TWIN) for p, q in theirs.items()})
@@ -346,14 +356,16 @@ def _read_one(
     earlier: S.Earlier,
     firm: str | None,
     image: dict[int, str] | None,
+    force: set[int] | None = None,
 ) -> _Read:
     """One candidate's pages decided against the delivery and the new pages
-    read before it (`earlier`; this document's pages join it)."""
+    read before it (`earlier`; this document's pages join it). `force`: its
+    pages the repeat check read (``select.classify_new``)."""
     pages = _texts(sr, str(r["id"]))
     if ML.is_medlegal([vendor_name(r), firm or ""], pages.get(1) or ""):
         return _Read(pdf, pages, {i: (S.EXCLUDED, ML.REASON) for i in range(1, npages + 1)}, True, None)
     covers: dict[int, S.Cover] = {}
-    decided = S.classify_new(pages, npages, seen, earlier, image, covers_out=covers, doc_id=str(r["id"]))
+    decided = S.classify_new(pages, npages, seen, earlier, image, covers_out=covers, doc_id=str(r["id"]), force=force)
     return _Read(pdf, pages, decided, False, None, covers=covers)
 
 
@@ -432,18 +444,19 @@ def run(sr: StageRun) -> int:
     # delivered list never named was never read, so its words exclude nothing.
     seen = _seen(sr, read_by_delivery)
     ident = PG.load(ud)
-    extracts = PG.merge_extracts(
-        SUB.refiled_subsets(
-            [(str(r["id"]), _texts(sr, str(r["id"]))) for r in rows if str(r["id"]) not in ident.extracts],
-            {str(r["id"]) for r in rows if (r.get("sha256") or "") in firm},
-        ),
-        ident.extracts,
+    # The pages the repeat check read (``update/repeat_check``), by document;
+    # a words-found extract holding one is decided page by page instead.
+    forced = RC.forced_by_document(ud, rows)
+    by_words = SUB.refiled_subsets(
+        [(str(r["id"]), _texts(sr, str(r["id"]))) for r in rows if str(r["id"]) not in ident.extracts],
+        {str(r["id"]) for r in rows if (r.get("sha256") or "") in firm},
     )
+    extracts = PG.merge_extracts({d: s for d, s in by_words.items() if d not in forced}, ident.extracts)
     text_of = _text_of(sr, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
     by_ex = S.shingles_by_exhibit({int(e["exhibit"]): sr.slug_dir / "delivered" / e["name"] for e in read_by_delivery})
     ordered = [x for x in rows if str(x["id"]) not in extracts]
     firm_of = {str(r["id"]): firm[r["sha256"]]["name"] for r in ordered if (r.get("sha256") or "") in firm}
-    read = _classify(sr, ordered, seen, ident, text_of, firm_of)
+    read = _classify(sr, ordered, seen, ident, text_of, firm_of, forced)
     recs, units, k, whole = [], [], 0, {}
     for r in ordered:  # exhibit numbers follow pull order
         rid, f = str(r["id"]), firm.get(r.get("sha256") or "")
@@ -479,6 +492,11 @@ def run(sr: StageRun) -> int:
     subs = _subset_records(rows, recs, extracts, {int(e["exhibit"]): e["name"] for e in read_by_delivery})
     _write(sr, ud, recs, units, skipped, subs, _readings(sr, read))
     pages = sum(len(r["read"]) for r in recs)
+    if not pages and RC.open_count(sr.slug_dir, sr.unit.unit):
+        # Every page was set aside, some as repeats the check has not yet
+        # settled: the check decides whether the update is current.
+        sr.log("nothing left to read by the rules; the repeat check settles the repeats first")
+        return 0
     if not pages:
         # An answer, not a hold (2026-10-25): delivered already current, nothing filed (``update/outcome``).
         sr.log("nothing new to read: no page of the new documents is left to read; the delivered chronology is current")

@@ -26,6 +26,7 @@ from ..stages import (
     update_final_set as _ufinal,
     update_finish as _ufinish,
     update_pages as _upages,
+    update_repeat_check as _urepeat,
     update_select as _uselect,
     update_review as _ureview,
     update_upload as _uupload,
@@ -99,10 +100,27 @@ UPDATE_STAGES: tuple[Stage, ...] = (
         "",
         _slug_unit,
         requires=("identity",),
+        # A rerun of the selection reopens the check (its verdicts are saved,
+        # so the check pays nothing for a pair it already answered).
+        invalidates=("update_repeat_check",),
         runner=_uselect.run,
         exit_map={2: _HELD_UPDATE, _UO.EXIT: _CURRENT},
     ),
-    _reuse("map", requires=("update_select",)),
+    # Every page a repeat rule set aside that is not pixel-equal to its
+    # covering page is shown beside it to one reader; a page not called the
+    # SAME is read, and the selection runs again reading it, before anything
+    # consumes the read list (``stages/update_repeat_check``).
+    Stage(
+        "update_repeat_check",
+        "",
+        _slug_unit,
+        paid=True,
+        requires=("update_select",),
+        runner=_urepeat.run,
+        rehearse=_urepeat.rehearse,
+        exit_map={2: _HELD_UPDATE, _UO.EXIT: _CURRENT},
+    ),
+    _reuse("map", requires=("update_repeat_check",)),
     BY_NAME["repair_truncated"],
     BY_NAME["assemble"],
     BY_NAME["merge"],

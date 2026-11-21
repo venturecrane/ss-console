@@ -61,6 +61,19 @@ def update_review_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Prici
     return update_review.projected_usd(slug_dir, unit, cfg, pricing)
 
 
+def repeat_check_usd(slug_dir: Path, unit: str, cfg: Any, pricing: budget.Pricing) -> float:
+    """The repeat check's projection (``stages/update_repeat_check``): the
+    pairs not yet answered, two page pictures and the prompt each."""
+    from ..stages import update_repeat_check
+
+    return update_repeat_check.projected_usd(slug_dir, unit, cfg, pricing)
+
+
+#: The paid stages priced from this matter's own artifacts by one function of
+#: (slug dir, unit, firm config, rate card), for ``driver._projection``.
+BY_STAGE = {"update_review": update_review_usd, "update_repeat_check": repeat_check_usd}
+
+
 def expected_finish(drv: Any, st: Any, extracted: Path) -> None:
     """The run's expected finish, written once after extract (``eta.stamp``);
     a dry run or a rehearsal writes none."""

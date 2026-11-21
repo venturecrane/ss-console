@@ -26,7 +26,7 @@ from pathlib import Path
 
 from . import pageid as PI
 from .select import ALREADY, FAILED_MARKS, MIN_CHARS, OVERLAP, _dates, without_furniture
-from .subsets import Subset
+from .subsets import Subset, rooted
 from .values import clinical_values
 
 NAME = "page_identity.json"
@@ -156,11 +156,8 @@ def merge_extracts(by_text: dict[str, Subset], by_image: dict[str, Subset]) -> d
     merged = {**by_text, **by_image}
     out: dict[str, Subset] = {}
     for d, s in merged.items():
-        parent, seen = s.parent, {d}
-        while parent in merged and parent not in seen:
-            seen.add(parent)
-            parent = merged[parent].parent
-        if parent in merged:
+        got = rooted(merged, s)
+        if got.parent in merged:
             continue  # the two rules disagree on which is the whole: it stays an exhibit and is read
-        out[d] = Subset(d, parent, s.pages, s.matched)
+        out[d] = got
     return out

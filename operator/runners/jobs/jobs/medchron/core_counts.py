@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from . import graded_proof as GP
-from .update import cite_read as CR
+from .update import cite_read as CR, repeat_check as RC
 
 #: The reviewer's class numbers (``prompts/update-review-system.md``): check 2 is
 #: omitted content, check 4 a duplicate entry or exhibit.
@@ -84,6 +84,9 @@ def _unit(ud: Path) -> dict[str, int]:
     rec = _read(ud / "review_repair.json")
     if rec:
         out.update(_review(rec))
+    # The repeat check (``stages/update_repeat_check``): pairs checked, SAME,
+    # DIFFERENT, read on a failure, read with no covering page, calls.
+    out.update(RC.counts(ud))
     return out
 
 

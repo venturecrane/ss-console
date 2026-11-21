@@ -9,7 +9,7 @@
   "litigation": [],
   "litigation_cap": [],
   "medchron": [],
-  "medchron_update": [],
+  "medchron_update": ["<root>"],
   "model-facts": [],
   "model-facts-disagreements": [],
   "negotiation": [],
