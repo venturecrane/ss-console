@@ -34,7 +34,7 @@
     "hermes-smd-overlay/plugins/hermes-smd-escalation/casework_reply.py::reply_verdicts": 108,
     "hermes-smd-overlay/plugins/hermes-smd-escalation/digest_reply.py::handle": 108,
     "hermes-smd-overlay/plugins/hermes-smd-escalation/reply_items.py::escalation_reply_ack": 86,
-    "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::_confirmation_note": 82,
+    "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::_confirmation_note": 83,
     "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::_operations_request": 81,
     "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::_ops_reply_note": 85,
     "hermes-smd-overlay/plugins/hermes-smd-establishment/__init__.py::on_pre_tool_call": 81,
@@ -97,7 +97,6 @@
     "templates/drafting/drafting_gate_check.py::gate_sprog_lint": 88,
     "workspace_broker/escalation_ledger.py::validate_append": 97,
     "workspace_broker/establishment_acts.py::ActProposals.act_propose": 83,
-    "workspace_broker/establishment_rules.py::RuleProposals.propose": 80,
     "workspace_broker/establishment_store.py::EstablishmentStore._submit_install": 94,
     "workspace_broker/establishment_store.py::EstablishmentStore._submit_person": 85
   },

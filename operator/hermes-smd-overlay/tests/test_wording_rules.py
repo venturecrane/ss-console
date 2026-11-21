@@ -503,3 +503,56 @@ def test_lane_reads_follows_the_seats_switch(tmp_path, monkeypatch):
     assert wording_rules.lane_reads("work_product", ["memo"]) == ("memo",)
     _seat(tmp_path, monkeypatch, on=False)
     assert wording_rules.lane_reads("work_product", ["memo"]) == ()
+
+
+# ---- 2026-11-21, the A&P seat: a rule about discovery responses reached no draft ----
+@pytest.mark.parametrize(
+    "words",
+    [
+        "In our responses to the requests for production, object to the definitions first.",
+        "In RFP responses, object to the definitions first.",
+        "When responding to requests for production, object to the definitions first.",
+        "In answers to interrogatories, restate each question.",
+        "Our responses to opposing counsel's special interrogatories restate each question.",
+    ],
+)
+def test_words_about_discovery_responses_name_the_response_kind(words):
+    """FALSIFIER: the old pattern, which read "requests for production" as a set
+    of requests and named no response, so the reach was cut to nothing."""
+    assert "discovery_response" in rule_reach.kinds_named(words)
+
+
+def test_a_set_of_requests_is_still_not_a_response():
+    assert rule_reach.kinds_named("Our requests for production go out numbered.") == (
+        "discovery_set",
+    )
+
+
+def test_a_discovery_response_rule_is_recorded_for_the_kind_the_lane_reads(tmp_path, monkeypatch):
+    """The words name only requests for production; the model proposes the
+    response kind. Off and on, the recorded reach keeps it, the applier writes it
+    to wording.json, and the store the drafting lane reads selects it for a
+    discovery response."""
+    words = "In our responses to the requests for production, object to the definitions first."
+    subject = _subject(doc_kinds=["discovery_response"])
+    assert rule_reach.narrowed(subject, words, None) == {"doc_kinds": ["discovery_response"]}
+    assert rule_reach.check(subject, words, None).refusal == ""
+    _, spec_dir = _install(
+        tmp_path, monkeypatch, [_adj(text=words, doc_kinds=["discovery_response"])]
+    )
+    rules = wording_rules_store.read(spec_dir).rules
+    assert [
+        r["rule_id"] for r in wording_rules_store.applicable(rules, "discovery_response", None)
+    ] == [RULE]
+
+
+def test_the_ap_seats_switch_puts_wording_rules_into_its_drafts():
+    """The A&P seat's own customer.yaml: the lanes read wording.json only with
+    ``wording_rules`` enforced. FALSIFIER: remove the line and this fails."""
+    from pathlib import Path
+
+    from shared import logic_in_code
+
+    for slug in ("ashton-price", "ap-staging"):
+        path = Path(__file__).resolve().parents[2] / "customers" / slug / "customer.yaml"
+        assert logic_in_code.load_switch(logic_in_code.WORDING_RULES, str(path)).enforcing, slug

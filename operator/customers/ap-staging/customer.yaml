@@ -858,3 +858,5 @@ matter_file_delivery:
   review_first: 10
 logic_in_code:
   library_setup: enforce
+  # Mirrors ashton-price (2026-11-21): the lanes read confirmed wording rules.
+  wording_rules: enforce

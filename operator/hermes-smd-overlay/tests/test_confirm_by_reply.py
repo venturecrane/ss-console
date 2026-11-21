@@ -100,7 +100,13 @@ def seat(monkeypatch, tmp_path):
         if action == "establish_readback_for":
             binding = state["binding"]
             if binding is None:
-                return {"ok": True, "bound": False, "header": False, "proposal_ids": []}
+                return {
+                    "ok": True,
+                    "bound": False,
+                    "header": False,
+                    "proposal_ids": [],
+                    "recent_committed": state.get("recent", []),
+                }
             return {"ok": True, "bound": True, "header": True, **binding}
         if action == "establish_readback_owed":
             return {"ok": True, "owed": payload["proposal_ids"]}
@@ -110,6 +116,8 @@ def seat(monkeypatch, tmp_path):
             state.setdefault("restated", []).append(payload)
             return {"ok": True, "closed": True}
         if action == "establish_propose":
+            if state.get("already"):
+                return {"ok": True, "already_recorded": True, "duplicate_of": A, "proposal_id": A}
             return {
                 "ok": True,
                 "duplicate_of": None,
@@ -465,3 +473,96 @@ def test_the_turn_read_back_never_carries_last_turns_rules(seat):
     mod._OWN_TURN["sess-p"] = {"ffffffff": "A stale rule sentence from before."}
     mod.on_pre_llm_call(session_id="sess-p", sender_id=ATTORNEY, user_message="Hello")
     assert "sess-p" not in mod._OWN_TURN
+
+
+# ---- 2026-11-21, the A&P seat: a late yes, a sibling thread, a re-proposal ----
+
+
+def _view(proposal_id):
+    return {"proposal_id": proposal_id, "text": TEXT[proposal_id], "subject": dict(ROW_SUBJECT)}
+
+
+def test_a_yes_to_a_read_back_a_sibling_yes_recorded_says_already_recorded(seat):
+    """Nothing is open (a yes in another thread committed both rules); this yes
+    replies to a read-back of the same two. FALSIFIER: remove the
+    ``already_recorded.note`` call and the turn says nothing true about them
+    (the live reply was "no rules outstanding", then a re-proposal)."""
+    mod, state = seat
+    state["pending"] = []
+    state["binding"] = {"proposal_ids": [A, B], "listed": False, "committed": [_view(A), _view(B)]}
+    context = _reply(mod, "Yes.")
+    say = f"Got it. These are already recorded:\n\n- {TEXT[A]}\n- {TEXT[B]}"
+    assert mod._CONFIRMED_SAY["sess-1"] == say and say in context
+    assert "never say a rule was not recorded" in context
+    assert "waiting for your yes" not in context and A not in context
+    assert not [
+        r
+        for r in state["requests"]
+        if r["action"] in ("establish_submit", "establish_reopen_lapsed")
+    ]
+    # One read of the reply's headers for the whole turn.
+    assert len([r for r in state["requests"] if r["action"] == "establish_readback_for"]) == 1
+
+
+def test_a_plain_yes_binding_nothing_soon_after_a_commit_says_already_recorded(seat):
+    mod, state = seat
+    state["pending"] = []
+    state["recent"] = [_view(B)]
+    context = _reply(mod, "Yes.")
+    assert f"Got it. That is already recorded: {TEXT[B]}" in context
+
+
+def test_a_yes_with_its_own_question_after_a_commit_is_not_answered_for_it(seat):
+    mod, state = seat
+    state["pending"] = []
+    state["recent"] = [_view(B)]
+    context = _reply(mod, "Yes, and when is the Jones hearing?") or ""
+    assert "already recorded" not in context
+
+
+def test_a_bound_yes_with_rules_still_open_confirms_them_as_before(seat):
+    mod, state = seat
+    state["pending"] = [_own(B)]
+    state["binding"] = {"proposal_ids": [A, B], "listed": False, "committed": [_view(A)]}
+    _reply(mod, "Yes.")
+    assert _committed(state) == [B]
+
+
+def test_a_sentence_already_committed_is_never_read_back_again(seat):
+    """FALSIFIER: drop ``propose_answer`` and the model gets a read-back asking
+    for a yes to a rule already in force."""
+    mod, state = seat
+    state["already"] = True
+    mod.on_pre_llm_call(session_id="sess-p", sender_id=ATTORNEY, user_message=TEXT[A])
+    out = _propose(mod, TEXT[A])
+    assert out == {
+        "ok": True,
+        "already_recorded": True,
+        "instruction": mod.already_recorded.PROPOSE_INSTRUCTION,
+    }
+    assert "sess-p" not in mod._READBACK_OWED
+    assert not [r for r in state["requests"] if r["action"] == "establish_readback_owed"]
+
+
+def _gate(mod, body, session="sess-1"):
+    return mod.on_pre_tool_call(
+        tool_name="email_send", session_id=session, args={"to": [ATTORNEY], "body": body}
+    )
+
+
+def test_a_committed_rules_reply_is_held_with_the_truth_not_a_failed_commit(seat):
+    """The in-effect gate on a rule code committed this turn: a negation earlier
+    in the sentence hedges the claim, and a real overclaim is held with a message
+    saying the rule IS recorded. FALSIFIER: the old message ("the commit did not
+    succeed"), and the 24-character window that read "cannot ... in effect" as a
+    claim."""
+    mod, state = seat
+    state["pending"] = [_own(B)]
+    state["binding"] = {"proposal_ids": [B], "listed": False}
+    _reply(mod, "Yes.")
+    say = mod._CONFIRMED_SAY["sess-1"]
+    assert _gate(mod, f"{say}\n\nI cannot say for certain yet that the rule is in effect.") is None
+    held = _gate(mod, f"{say}\n\nThe rule is in effect now.")
+    assert held["action"] == "block"
+    assert "It IS recorded" in held["message"] and "did not succeed" not in held["message"]
+    assert "waiting on their yes" in held["message"] and B not in held["message"]

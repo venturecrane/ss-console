@@ -1908,5 +1908,10 @@ matter_file_delivery:
 # and makes the library file from the one the administrator chooses
 # (operator/runners/jobs/jobs/library_setup/). The seat re-reads customer.yaml on
 # every boot, so this merges only after the image carrying that code is on the seat.
+# wording_rules (2026-11-21): the drafting and demand lanes put the firm's confirmed
+# wording rules for the document kind they make (classes/work_product/wording.json)
+# into what they send the model. Off, a rule an attorney confirmed for his discovery
+# responses reached no draft. Seat-wide: every lane kind, not discovery responses alone.
 logic_in_code:
   library_setup: enforce
+  wording_rules: enforce

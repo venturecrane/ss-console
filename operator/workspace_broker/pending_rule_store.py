@@ -480,6 +480,27 @@ class PendingRuleStore:
             conn.close()
         return self._hydrate(row) if row is not None else None
 
+    def find_committed_duplicate(self, *, instructed_by: str, scope: str, text: str) -> dict[str, Any] | None:
+        """A RULE this same person stated word for word and already COMMITTED.
+
+        Why (2026-11-21, the A&P seat): a yes in one thread recorded two rules;
+        a yes in a sibling thread then found nothing open, and the Operator
+        proposed the same sentences again as new rules, asking for a yes to a
+        rule already in force. :meth:`find_open_duplicate` saw only open rows.
+        A committed row is kept for ``TERMINAL_RETENTION_SECONDS``, which bounds
+        how far back this looks."""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM pending_rules WHERE instructed_by = ? AND scope = ? AND text_sha256 = ? "
+                "AND kind = 'rule' AND consumed_at IS NOT NULL AND declined_at IS NULL "
+                "ORDER BY consumed_at DESC LIMIT 1",
+                (instructed_by, scope, _hash_text(text)),
+            ).fetchone()
+        finally:
+            conn.close()
+        return self._hydrate(row) if row is not None else None
+
     def decline(self, proposal_id: str, declined_by: str) -> bool:
         """Refuse one proposal on an administrator's word. True iff THIS call
         declined it.

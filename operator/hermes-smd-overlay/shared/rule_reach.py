@@ -42,16 +42,27 @@ logger = logging.getLogger(__name__)
 #: The class whose rules carry a document reach.
 RULE_CLASS = wording_rules_store.RULE_CLASS
 
+#: What a discovery RESPONSE is called: the response named directly, or a
+#: response, answer or "responding" to a kind of discovery request.
+_SERVED = (
+    r"(?:discovery|interrogatory|interrogatories|rogs?|rfps?|rfas?|requests?(?: for (?:production|admissions?))?"
+    r"|(?:form |special )interrogatories|document requests?)"
+)
+_RESPONSE_WORDS = (
+    r"\bdiscovery responses?\b"
+    r"|\b(?:rfp|rfa|rog|interrogatory|production|admissions?) (?:responses?|answers?)\b"
+    r"|\b(?:responses?|answers?|respond(?:ing)?) to (?:the |our |their |his |her |any |all |each |every |"
+    rf"these |those |opposing counsel s |defense |defendant s |plaintiff s )*{_SERVED}\b"
+)
+
 #: Each kind's names, matched against the requester's words lowered with quotes
 #: and apostrophes dropped (:func:`shared.layout_rules.normalize`).
 _KIND_NAMES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("mediation_brief", re.compile(r"\b(?:mediation |persuasive )?briefs?\b")),
-    (
-        "discovery_response",
-        re.compile(
-            r"\bdiscovery responses?\b|\bresponses to (?:discovery|interrogatories|requests)\b"
-        ),
-    ),
+    # 2026-11-21 (the A&P seat): "responses to the requests for production" and
+    # "RFP responses" named only discovery_set, the reach was cut to nothing, and
+    # the confirmed rule went where no drafting lane reads it.
+    ("discovery_response", re.compile(_RESPONSE_WORDS)),
     (
         "discovery_set",
         re.compile(
