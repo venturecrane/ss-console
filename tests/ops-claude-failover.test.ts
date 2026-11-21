@@ -282,7 +282,7 @@ describe('an account added to a running Machine', () => {
     writeFileSync(
       join(home, 'fakebin', 'real-claude'),
       `#!/bin/bash
-echo "token=$CLAUDE_CODE_OAUTH_TOKEN" >> "${log}"
+echo "token=$CLAUDE_CODE_OAUTH_TOKEN $(grep -x 'reloads=1' "$HOME/state/claude-panes/pane-7")" >> "${log}"
 if [ ! -f "$HOME/once" ]; then
   touch "$HOME/once"
   python3 "${ACCOUNTS}" mark B "You've hit your weekly limit · resets Mon 12:00am" >/dev/null
@@ -300,7 +300,7 @@ exit 0
       baseEnv(home, { TMUX_PANE: '%7', OPS_CLAUDE_BIN: join(home, 'fakebin', 'real-claude') })
     )
     const lines = readFileSync(log, 'utf8').trim().split('\n')
-    expect(lines).toEqual(['token=test-token-b', 'token=test-token-c'])
+    expect(lines).toEqual(['token=test-token-b reloads=1', 'token=test-token-c reloads=1'])
   })
 
   it('the shim lists the Machine accounts by name for the watcher', () => {
@@ -335,13 +335,14 @@ describe('ops-tool-env: what every tool command sources', () => {
 })
 
 describe('ops-claude-failover: the watcher', () => {
-  function register(home: string, account: string): void {
+  function register(home: string, account: string, reloads = true): void {
     const sleeper = spawn('sleep', ['60'])
     kids.push(sleeper)
     mkdirSync(join(home, 'state', 'claude-panes'), { recursive: true })
     writeFileSync(
       join(home, 'state', 'claude-panes', 'pane-7'),
-      `pid=${sleeper.pid}\npane=%7\naccount=${account}\nsid=abc\naccounts=B A\nstarted=${NOW}\n`
+      `pid=${sleeper.pid}\npane=%7\naccount=${account}\nsid=abc\naccounts=B A\nstarted=${NOW}\n` +
+        (reloads ? 'reloads=1\n' : '')
     )
   }
   const watch = (home: string) => run('bash', [WATCHER], baseEnv(home, { OPS_FAILOVER_DRY: '1' }))
@@ -371,6 +372,22 @@ describe('ops-claude-failover: the watcher', () => {
     const out = watch(home)
     expect(out).toContain('would: restart pane %7 on C')
     expect(out).not.toContain('would page')
+  })
+
+  it('does not restart a window whose old shim cannot reach the new account; says how to move it', () => {
+    const home = makeHome()
+    register(home, 'B', false) // a pre-2026-11-21 shim: no reloads=1
+    accounts(home, 'mark', 'A', "You've hit your weekly limit · resets Wed 12:00am")
+    writeFileSync(
+      join(home, '.claude-oauth'),
+      "export CLAUDE_OAUTH_TOKEN_A='a'\nexport CLAUDE_OAUTH_TOKEN_B='b'\nexport CLAUDE_OAUTH_TOKEN_C='c'\n"
+    )
+    writeFileSync(join(home, 'screen.txt'), LIMIT_SCREEN)
+    watch(home)
+    const out = watch(home)
+    expect(out).not.toContain('would: restart')
+    expect(out).toContain('claude --resume abc')
+    expect(watch(home)).not.toContain('claude --resume abc') // said once, not every minute
   })
 
   it('leaves a working session alone even when it prints the words', () => {

@@ -113,6 +113,7 @@ for f in "$P"/pane-*; do
   # session that was opened before it (2026-11-21). The shim reloads the same
   # list when it restarts the session. Cron may lack the tokens the session's
   # environment had (smd-ops), so an empty answer keeps the registered list.
+  registered="$accounts"
   now_accounts=$(OPS_CLAUDE_LIST_ACCOUNTS=1 "$here/claude" 2>/dev/null)
   case " $now_accounts " in *" "[A-Z]" "*) accounts="$now_accounts" ;; esac
   # shellcheck disable=SC2086
@@ -126,6 +127,18 @@ for f in "$P"/pane-*; do
     fi
     continue
   fi
+  # A shim from before 2026-11-21 relaunches from the list it started with, so a
+  # restart toward an account outside that list lands back on a spent one (five
+  # A&P windows, 2026-11-21 23:11Z, "moved to C", came back on A). Do not restart
+  # it; say how to move it: exit Claude to the window's shell and resume there.
+  case " $registered $(grep -qx 'reloads=1' "$f" && echo "$next") " in
+    *" $next "*) ;;
+    *) if [ "$(cat "$f.oldshim" 2>/dev/null)" != "$next" ]; then
+         log "pane $pane: its shim knows only [$registered], not $next; exit Claude in that window and run: claude --resume $(sed -n 's/^sid=//p' "$f")"
+         echo "$next" > "$f.oldshim"
+       fi
+       continue ;;
+  esac
   last=$(cat "$f.restarted" 2>/dev/null || echo 0)
   if [ $((now - last)) -lt 300 ]; then log "pane $pane: restarted $((now - last))s ago; waiting"; continue; fi
   child=$(pgrep -P "$pid" 2>/dev/null | head -1)

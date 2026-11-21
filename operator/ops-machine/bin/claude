@@ -167,7 +167,9 @@ trap 'rm -f "$pf" "$pf".*' EXIT
 while :; do
   load_accounts
   acct=$(pick); acct="${acct:-login}"
-  printf 'pid=%s\npane=%s\naccount=%s\nsid=%s\naccounts=%s\nstarted=%s\n' \
+  # reloads=1: this shim reads the account list again before a restart, so the
+  # watcher may restart it toward an account added after it started.
+  printf 'pid=%s\npane=%s\naccount=%s\nsid=%s\naccounts=%s\nstarted=%s\nreloads=1\n' \
     "$$" "$TMUX_PANE" "$acct" "$sid" "${accounts[*]}" "$(date +%s)" > "$pf"
   launch run "$acct" "${args[@]}"
   rc=$?
