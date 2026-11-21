@@ -23,11 +23,42 @@ ONE SEAT. Because the seat reads its pointer only at boot, a bundle release is a
 restart: busy gate (the image rollout's BusyGate: a running job is never
 restarted) -> write the pointer -> ``fly machine restart`` -> read back a fresh
 heartbeat reporting the version (and, on an image that carries it, a passing
-self-test from the new boot). Anything else restores the previous pointer (or
-removes it when there was none), restarts again behind the busy gate so the
-seat runs what it ran, and records the seat rolled_back (a verdict) or
-tooling_error (no verdict). So the pointer is left at the new version only on
-done, and a retry always starts from what the seat really ran.
+self-test from the new boot). The rollout row reads ``deploying`` from the
+pointer write and ``smoking`` from the read-back, as the image step's do, so
+restart-hold (workers/fleet-alerts) holds the boot's pages. Anything else
+restores the previous pointer (or removes it when there was none) and restarts
+the seat so it runs what it ran: behind the busy gate when its Machine is
+started, without it when the Machine is stopped, not at all when the Machine
+cannot be read, is still in transition after RESTART_SETTLE_S (a restart is in
+flight), or is gone. It records rolled_back (a verdict, or no restart ran, so
+the seat may still run the rejected bundle and must not be retried into done)
+or tooling_error (no verdict, and the rollback restart ran). A seat the
+rollback leaves down (gone, or stopped with a rollback restart that did not
+reach it) is recorded rolled_back with a detail beginning SEAT DOWN. The
+deploying/smoking writes are best effort: a status row never decides an
+outcome. The seat's lease (2 h) is renewed after the read-back and again
+before the rollback restart, because the urgent one-seat path's worst case
+(two 30-minute idle waits) runs past it.
+
+A RESTART THAT GAVE NO ANSWER (2026-11-19). flyctl's exit code decides only
+"rc=0, carry on". A non-zero exit or no answer at all is not "it did not
+restart": on the A&P seat flyctl returned rc=1 after 70 s while the Machine was
+still draining (it stopped at 3 min 45 s, then started), the old code put the
+previous pointer back, and the seat booted on the old bundle, every tick. So the
+Machine is read before the request (its id, state and newest event; a failed
+read sends nothing: "restart not sent", pointer restored) and read back after it
+(:meth:`BundleRollout._restart_and_settle`). A state other than the one before,
+or a newer event, means the restart is under way, and the pointer stays while it
+finishes. A Machine unchanged with no new event RESTART_NO_SHOW_S after flyctl
+returned gets its pointer back as "restart did not happen". failed or destroyed
+is SEAT DOWN at once (pointer restored, rolled_back, which pages); so is a
+Machine that, at or after the deadline, has read stopped on every read for
+RESTART_STOPPED_GRACE_S. The deadline is the later of the request plus
+RESTART_SETTLE_S and flyctl's return plus RESTART_NO_SHOW_S. Any
+other state at the deadline (stopping, replacing, starting), or a Machine that
+cannot be read, goes to the heartbeat read-back: cannot evaluate never reads as
+did not happen, and a still-booting seat is never rolled back under its boot.
+No second restart is issued while one may be in flight.
 
 ALREADY RUNNING IT (ADR 0103). A seat whose pointer names a bundle of another
 layout than its image mounts adopts the newest bundle of its own layout at boot
@@ -48,6 +79,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
@@ -55,8 +87,8 @@ from typing import Any, Callable
 
 from . import ids, ordering, smoke
 from .busy import BusyGate
-from .d1 import FleetStore
-from .fly import Fly
+from .d1 import FleetStore, seat_lease_name
+from .fly import Fly, deploy_excerpt
 from .r2 import R2, bundle_manifest_key, bundle_pointer_key, bundle_tarball_key
 from .rings import Ring
 from .rollout import SeatOutcome
@@ -71,6 +103,39 @@ CAPABILITIES = "operator/hermes-smd-overlay/shared/capabilities.py"
 # boot alone.
 BUNDLE_READBACK_WINDOW_S = 15 * 60
 ROLLBACK_READBACK_WINDOW_S = 10 * 60
+# Reading a restart back when `fly machine restart` gave no answer (module doc).
+RESTART_POLL_S = 10
+# A Machine still `started`, with no event newer than before the request, this
+# long after flyctl returned never began the restart.
+RESTART_NO_SHOW_S = 120
+# The longest a real restart may take: the 300 s kill_timeout a draining seat may
+# use (operator/templates/fly.toml.template) plus 180 s for the boot.
+RESTART_SETTLE_S = 480
+# A restart passes through `stopped` for seconds (15 s on 2026-11-19, from stopped
+# to started); one held this long, past the deadline, is not starting: four times
+# that, and six reads.
+RESTART_STOPPED_GRACE_S = 60
+GONE_STATES = frozenset({"failed", "destroyed"})
+# Outcomes in which no restart reached the Machine, and how the record names each.
+UNSENT = {"not_sent": "restart not sent", "not_happened": "restart did not happen"}
+LEFT_TO_READBACK = ", so it was left to the heartbeat read-back"
+
+
+@dataclass(frozen=True)
+class Restart:
+    """How a restart ended: restarted | not_sent | not_happened | unknown | down. ``words`` is empty on rc=0."""
+
+    outcome: str
+    words: str
+
+
+@dataclass(frozen=True)
+class RolledBack:
+    """What a rollback did: its words, whether it left the seat down, and whether a restart ran."""
+
+    words: str
+    down: bool
+    restarted: bool
 
 
 # -- which seats -------------------------------------------------------------------
@@ -190,9 +255,36 @@ class BundleRollout:
         sleep: Callable[[float], None],
         clock: Callable[[], float],
         max_idle_wait: float = 1800.0,
+        holder: str | None = None,
     ) -> None:
         self.store, self.r2, self.fly, self.gate = store, r2, fly, gate
         self.log, self.sleep, self.clock, self.max_idle_wait = log, sleep, clock, max_idle_wait
+        # The holder of each seat's lease (waves.SeatLease, taken by the caller with
+        # this same holder). None: nothing to renew (a test, or a dry run).
+        self.holder = holder
+
+    def _mark(self, rid: str, state: str) -> None:
+        """Best effort: the deploying/smoking row only holds boot-shaped pages; it never decides an outcome."""
+        try:
+            self.store.update_rollout(rid, state)
+        except ToolingError as exc:
+            self.log(f"could not record rollout state {state} ({exc}); carrying on")
+
+    def _renew(self, seat: str) -> None:
+        """Renew the seat's lease (2 h TTL, d1.LEASE_TTL): the urgent path's worst case runs past it.
+
+        Best effort, as the status rows are: a lost or unrenewable lease is
+        logged, and the step finishes what it began on the seat.
+        """
+        if self.holder is None:
+            return
+        try:
+            kept = self.store.renew_lease(self.holder, seat_lease_name(seat))
+        except ToolingError as exc:
+            self.log(f"{seat}: could not renew the seat lease ({exc}); carrying on")
+            return
+        if not kept:
+            self.log(f"{seat}: the seat lease is no longer ours; finishing what this step began on the seat")
 
     def load_manifest(self, name: str, version: str) -> tuple[dict[str, Any], str, str]:
         return load_manifest(self.r2, name, version)
@@ -205,7 +297,7 @@ class BundleRollout:
                 {"rollout_id": rid, "release_id": release["release_id"], "customer_slug": seat, "ring": ring}
             )
         try:
-            out = self._run(seat, manifest, key, sha, dry_run)
+            out = self._run(seat, rid, manifest, key, sha, dry_run)
         except ToolingError as exc:
             out = SeatOutcome(seat, "tooling_error", str(exc))
         self.log(f"{seat}: {out.state.upper()} {out.detail}")
@@ -213,7 +305,7 @@ class BundleRollout:
             self.store.update_rollout(rid, out.state, detail=out.detail[:2000])
         return out
 
-    def _run(self, seat: str, manifest: dict[str, Any], key: str, sha: str, dry_run: bool) -> SeatOutcome:
+    def _run(self, seat: str, rid: str, manifest: dict[str, Any], key: str, sha: str, dry_run: bool) -> SeatOutcome:
         name, version = manifest["name"], manifest["version"]
         pointer = bundle_pointer_key(seat, name)
         previous = self.r2.get_json(pointer)
@@ -242,25 +334,137 @@ class BundleRollout:
             self.gate.clear(seat)
             return SeatOutcome(seat, "waiting_idle", "still busy after the idle wait: " + "; ".join(verdict.reasons))
         since = ids.utc_now()
+        # restart-hold (workers/fleet-alerts) holds a booting seat's pages only
+        # while the row is deploying or smoking, as the image step's rows are.
+        self._mark(rid, "deploying")
         self.r2.put_json(pointer, {"version": version, "manifest_key": key, "manifest_sha256": sha})
         try:
-            restarted = self.fly.restart(ids.app_name(seat))
-            if not restarted.ok:
-                self._repoint(pointer, previous)
-                return SeatOutcome(
-                    seat, "tooling_error",
-                    f"fly machine restart failed (rc={restarted.rc}); the pointer is restored and the seat "
-                    "was not restarted",
-                )  # fmt: skip
+            restart = self._restart_and_settle(seat)
+            if restart.outcome in UNSENT:
+                said = self._restore(pointer, previous)
+                return SeatOutcome(seat, "tooling_error", f"{UNSENT[restart.outcome]}: {restart.words}; {said}")
+            if restart.outcome == "down":
+                said = self._restore(pointer, previous)
+                return SeatOutcome(seat, "rolled_back", f"SEAT DOWN: {restart.words}; {said}; not restarted again")
+            self._mark(rid, "smoking")
             check = self._verify(seat, name, version, row, since, selftest)
+            self._renew(seat)
         finally:
             self.gate.clear(seat)
+        note = f"; {restart.words}" if restart.words else ""
         if check.cls == "pass":
-            return SeatOutcome(seat, "done", check.detail)
-        state = "rolled_back" if check.cls in ("fail", "timeout") else "tooling_error"
-        return SeatOutcome(
-            seat, state, f"{check.cls}: {check.detail}; {self._roll_back(seat, name, pointer, previous)}"
-        )
+            return SeatOutcome(seat, "done", check.detail + note)
+        back = self._roll_back(seat, rid, name, pointer, previous)
+        # No restart means the seat still runs the rejected bundle: a tooling_error
+        # would let the next tick find it reporting the version and record done
+        # with no self-test, opening the twin gate. So it halts instead.
+        halts = back.down or not back.restarted or check.cls in ("fail", "timeout")
+        lead = "SEAT DOWN: " if back.down else ""
+        state = "rolled_back" if halts else "tooling_error"
+        return SeatOutcome(seat, state, f"{lead}{check.cls}: {check.detail}{note}; {back.words}")
+
+    # -- the restart, read back -------------------------------------------------------
+    def _read_machine(self, app: str) -> dict[str, Any] | None:
+        """The Machine, or None when Fly gave no clean answer (cannot evaluate, never "nothing happened")."""
+        try:
+            return self.fly.machine(app)
+        except ToolingError:
+            return None
+
+    @staticmethod
+    def _newest(machine: dict[str, Any]) -> int:
+        return max((int(e.get("timestamp") or 0) for e in machine.get("events") or []), default=0)
+
+    @staticmethod
+    def _held(since: float | None, state: str | None, now: float) -> float | None:
+        """When the Machine was first seen in the run of `stopped` reads ending now, or None."""
+        if state != "stopped":
+            return None
+        return now if since is None else since
+
+    def _restart_and_settle(self, seat: str) -> Restart:
+        """``fly machine restart``, and when it gives no answer, what the Machine says happened.
+
+        The Machine is read first, for its id and for what it looked like before;
+        a failed read sends nothing (not_sent). Then the one command is issued and
+        only read back: never a second restart.
+        """
+        app = ids.app_name(seat)
+        try:
+            before = self.fly.machine(app)
+        except ToolingError as exc:
+            return Restart("not_sent", f"could not read the Machine to restart it: {str(exc)[-300:]}")
+        asked = self.clock()
+        try:
+            res = self.fly.restart(app, before["id"])
+        except ToolingError as exc:
+            said = f"fly machine restart gave no answer: {str(exc)[-300:]}"
+        else:
+            if res.ok:
+                return Restart("restarted", "")
+            said = f"fly {deploy_excerpt(res)}"
+        self.log(f"{seat}: {said}; reading the Machine back")
+        return self._settle(app, asked, before, said)
+
+    def _settle(self, app: str, asked: float, before: dict[str, Any], said: str) -> Restart:
+        """Poll the Machine until it says what the restart did (module doc, A RESTART THAT GAVE NO ANSWER).
+
+        The deadline counts from whichever is later, the request plus
+        RESTART_SETTLE_S or flyctl's return plus RESTART_NO_SHOW_S, so a flyctl
+        that took longer than the allowance still gets a read of the boot.
+        """
+        returned = self.clock()
+        deadline = max(asked + RESTART_SETTLE_S, returned + RESTART_NO_SHOW_S)
+        baseline, was = self._newest(before), before["state"]
+        moved = clean = False
+        stopped_since: float | None = None
+        while True:
+            m = self._read_machine(app)
+            now = self.clock()
+            state = m["state"] if m else None
+            stopped_since = self._held(stopped_since, state, now)
+            if m is not None:
+                clean = True
+                moved = moved or state != was or self._newest(m) > baseline
+                if state == "started" and moved:
+                    return Restart("restarted", f"{said}; the Machine restarted anyway, started "
+                                                f"{now - asked:.0f} s after the request")  # fmt: skip
+                if state in GONE_STATES:
+                    return self._down(state, now - asked, said)
+            if not moved and now - returned >= RESTART_NO_SHOW_S:
+                if clean:
+                    return Restart("not_happened", f"Machine stayed {was} for {RESTART_NO_SHOW_S} s with no "
+                                                   f"new event ({said})")  # fmt: skip
+                return Restart("unknown", f"{said}; the Machine could not be read back{LEFT_TO_READBACK}")
+            if moved and now >= deadline:
+                if stopped_since is not None and now - stopped_since >= RESTART_STOPPED_GRACE_S:
+                    return self._down("stopped", now - asked, said)
+                if state != "stopped":
+                    return Restart("unknown", f"{said}; the Machine was {state or 'unreadable'} "
+                                              f"{now - asked:.0f} s after the request{LEFT_TO_READBACK}")  # fmt: skip
+            self.sleep(RESTART_POLL_S)
+
+    @staticmethod
+    def _down(state: str, elapsed: float, said: str) -> Restart:
+        return Restart("down", f"Machine state={state} {elapsed:.0f} s after the restart request ({said})")
+
+    def _at_rest(self, app: str) -> dict[str, Any] | None:
+        """The Machine once it is started, gone, or `stopped` for the grace period; bounded by RESTART_SETTLE_S.
+
+        Returns the last read (still in transition at the bound, or None when it
+        could not be read), so the rollback never restarts on top of a restart.
+        """
+        deadline = self.clock() + RESTART_SETTLE_S
+        stopped_since: float | None = None
+        while True:
+            m = self._read_machine(app)
+            now = self.clock()
+            state = m["state"] if m else None
+            stopped_since = self._held(stopped_since, state, now)
+            held = stopped_since is not None and now - stopped_since >= RESTART_STOPPED_GRACE_S
+            if state == "started" or state in GONE_STATES or held or now >= deadline:
+                return m
+            self.sleep(RESTART_POLL_S)
 
     def _point_without_restart(self, seat: str, name: str, version: str, pointer: str,
                                previous: dict[str, Any] | None, key: str, sha: str) -> SeatOutcome:  # fmt: skip
@@ -280,9 +484,7 @@ class BundleRollout:
             return SeatOutcome(
                 seat, "done", f"already ran {name} {version}; pointer written, no restart; {check.detail}"
             )
-        self._repoint(pointer, previous)
-        back = (previous or {}).get("version")
-        said = f"pointer restored to {back}" if back else "pointer removed (there was none)"
+        said = self._restore(pointer, previous)
         state = "rolled_back" if check.cls in ("fail", "timeout") else "tooling_error"
         return SeatOutcome(seat, state, f"{check.cls}: {check.detail}; {said}; the seat was not restarted")
 
@@ -303,31 +505,62 @@ class BundleRollout:
             return Check("tooling_error", f"{got.detail}; self-test: no verdict ({test.detail})")
         return Check(test.cls, f"{got.detail}; {test.detail}")
 
-    def _repoint(self, pointer: str, previous: dict[str, Any] | None) -> None:
+    def _restore(self, pointer: str, previous: dict[str, Any] | None) -> str:
+        """Put the previous pointer back (or remove it when there was none), and say which."""
         if previous:
             self.r2.put_json(pointer, previous)
         else:
             self.r2.delete(pointer)
-
-    def _roll_back(self, seat: str, name: str, pointer: str, previous: dict[str, Any] | None) -> str:
-        """Restore the pointer, then restart behind the busy gate so the seat runs what it ran."""
-        self._repoint(pointer, previous)
         back = (previous or {}).get("version")
-        said = f"pointer restored to {back}" if back else "pointer removed (there was none)"
-        verdict = self.gate.wait_idle(seat, self.max_idle_wait, self.log)
-        if verdict.busy:
-            self.gate.clear(seat)
-            return f"{said}; restart deferred, the seat is busy ({'; '.join(verdict.reasons)}): its next boot takes it"
+        return f"pointer restored to {back}" if back else "pointer removed (there was none)"
+
+    def _roll_back(self, seat: str, rid: str, name: str, pointer: str, previous: dict[str, Any] | None) -> RolledBack:
+        """Restore the pointer, then restart so the seat runs what it ran.
+
+        The Machine is read first and waited on until it is at rest
+        (:meth:`_at_rest`), so a restart still in flight is never restarted on
+        top of. Started: behind the busy gate. Stopped: restarted without the gate
+        (its probe would raise, and those words would hide these). Gone: SEAT
+        DOWN. Unreadable, or still in transition at the bound: no restart.
+        """
+        said = self._restore(pointer, previous)
+        machine = self._at_rest(ids.app_name(seat))
+        if machine is None:
+            return RolledBack(f"{said}; the Machine could not be read, so no rollback restart: its next boot takes it",
+                              False, False)  # fmt: skip
+        state = machine["state"]
+        if state in GONE_STATES:
+            return RolledBack(f"{said}; the Machine is {state}, so no rollback restart", True, False)
+        if state not in ("started", "stopped"):
+            return RolledBack(f"{said}; the Machine is still {state} after {RESTART_SETTLE_S} s, so no rollback "
+                              "restart on top of the one in flight: its next boot takes it", False, False)  # fmt: skip
+        gated = state == "started"
+        if gated:
+            verdict = self.gate.wait_idle(seat, self.max_idle_wait, self.log)
+            if verdict.busy:
+                self.gate.clear(seat)
+                why = "; ".join(verdict.reasons)
+                return RolledBack(f"{said}; restart deferred, the seat is busy ({why}): its next boot takes it",
+                                  False, False)  # fmt: skip
+        self._renew(seat)
+        self._mark(rid, "smoking")
         since = ids.utc_now()
         try:
-            res = self.fly.restart(ids.app_name(seat))
+            restart = self._restart_and_settle(seat)
         finally:
-            self.gate.clear(seat)
-        if not res.ok:
-            return f"{said}; the rollback restart failed (rc={res.rc}): its next boot takes it"
-        want = back or "image"
+            if gated:
+                self.gate.clear(seat)
+        if restart.outcome in UNSENT:
+            # A stopped Machine that the restart did not reach stays stopped: the seat is down.
+            stays = "; the Machine stays stopped" if state == "stopped" else ": its next boot takes it"
+            return RolledBack(f"{said}; the rollback {UNSENT[restart.outcome]} ({restart.words}){stays}",
+                              state == "stopped", False)  # fmt: skip
+        if restart.outcome == "down":
+            return RolledBack(f"{said}; the rollback restart left it down: {restart.words}", True, True)
+        want = (previous or {}).get("version") or "image"
         again = smoke.read_back(
             self.store, seat, lambda r: judge_bundle_row(r, since, name, want),
             ROLLBACK_READBACK_WINDOW_S, self.sleep, self.clock,
         )  # fmt: skip
-        return f"{said}; restarted; read-back of {name} {want}: {again.cls}"
+        how = f"restarted ({restart.words})" if restart.words else "restarted"
+        return RolledBack(f"{said}; {how}; read-back of {name} {want}: {again.cls}", False, True)

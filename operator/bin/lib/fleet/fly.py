@@ -333,13 +333,47 @@ class Fly:
             raise ToolingError(f"{app} has no Machine to run a command on")
         return ids_[0]
 
-    def restart(self, app: str) -> Result:
+    def machine(self, app: str) -> dict[str, Any]:
+        """The app's one Machine as Fly lists it: ``{id, state, events}``.
+
+        ``events`` are ``{type, status, timestamp, source}`` with ``timestamp`` in
+        epoch milliseconds, as ``fly machines list --json`` prints them. Read
+        through the retried :meth:`machines`, so asking again changes nothing.
+        Used by the bundle step to read a restart back when ``fly machine
+        restart`` gave no answer (bundles.py). An unparseable listing is a
+        ToolingError, never a guess at the state.
+        """
+        machines = self.machines(app)
+        if not machines:
+            raise ToolingError(f"{app} has no Machine to read")
+        m = machines[0]
+        events: list[dict[str, Any]] = []
+        for e in m.get("events") or []:
+            if not isinstance(e, dict):
+                continue
+            try:
+                stamp = int(e.get("timestamp") or 0)
+            except (TypeError, ValueError) as exc:
+                raise ToolingError(f"{app}: a Machine event carries no readable timestamp") from exc
+            events.append({"type": str(e.get("type") or ""), "status": str(e.get("status") or ""),
+                           "timestamp": stamp, "source": str(e.get("source") or "")})  # fmt: skip
+        mid, state = str(m.get("id") or ""), str(m.get("state") or "")
+        if not mid or not state:
+            # A listing with no state is not "the state changed": the caller reads it as no answer.
+            raise ToolingError(f"{app}: the Machine listing names no {'id' if not mid else 'state'}")
+        return {"id": mid, "state": state, "events": events}
+
+    def restart(self, app: str, machine_id: str | None = None) -> Result:
         """Restart the app's one Machine in place (same image, same config): ``fly machine restart``.
 
         Returns the raw Result: the caller decides what a failure means. Used by
-        the bundle step (bundles.py), whose pointer a seat reads only at boot.
+        the bundle step (bundles.py), whose pointer a seat reads only at boot. A
+        non-zero exit is not "it did not restart": flyctl gives up while a slow
+        stop is still draining (2026-11-19), so the caller reads :meth:`machine`.
+        ``machine_id`` is the Machine the caller already read, so a failed lookup
+        is known to have sent no restart; without it the id is looked up here.
         """
-        return self._fly("machine", "restart", self.machine_id(app), "-a", app, timeout=600)
+        return self._fly("machine", "restart", machine_id or self.machine_id(app), "-a", app, timeout=600)
 
     # -- build -------------------------------------------------------------------------
     def build_push(self, config_path: str, label: str, ss_sha: str, floor: tuple[str, int]) -> Result:

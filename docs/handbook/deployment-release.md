@@ -879,9 +879,44 @@ the controller waits for the seat to be idle (the image rollout's busy gate),
 writes `vaults/<slug>/bundles/jobs-pointer.json`, restarts the Machine
 (`fly machine restart`), and waits up to 15 minutes for a heartbeat reporting
 `bundles.jobs` at the version, then, on an image that carries it, the boot
-self-test passing. Anything else puts the previous pointer back (or removes it),
-restarts the seat again behind the busy gate, and records it `rolled_back`
-(which halts the release) or `tooling_error` (retried).
+self-test passing. While it does, the seat's rollout row reads `deploying` and
+then `smoking`, as an image rollout's does, so the pages a booting seat trips
+are held. Anything else puts the previous pointer back (or removes it) and
+restarts the seat so it runs what it ran: behind the busy gate when the Machine
+is running, without the gate when it is stopped. It issues no restart when the
+Machine cannot be read, when it is gone (failed or destroyed), or when it is
+still stopping or starting eight minutes on, because a restart is then still in
+flight. The seat is recorded `rolled_back`, which halts the release and pages,
+when the heartbeat said no, when the rollback left the seat down (the detail
+then begins "SEAT DOWN"; that includes a stopped Machine the rollback restart
+did not reach), or when no rollback restart ran, since the seat may still be
+running the rejected bundle. It is recorded `tooling_error` (retried) only when
+there was no verdict and the rollback restart ran. A failed write of the
+`deploying` or `smoking` row is logged and never changes the outcome. The
+seat's two-hour lease is renewed after the read-back and again before the
+rollback restart, because a one-seat urgent release that waits out two
+30-minute idle waits can run past it.
+
+A restart command that fails is not taken to mean the seat did not restart. A
+draining seat may take up to five minutes to stop, and `fly machine restart`
+can give up before then: on 2026-11-19 it failed after 70 seconds on the A&P
+seat, which then stopped and started on its own, and the old pointer put back
+on that failure meant the seat booted on the old bundle at every tick. So the
+controller reads the Machine before the request, and if that read fails it
+sends no restart, puts the previous pointer back, and records `tooling_error`
+with "restart not sent". When the command fails or gives no answer, it reads
+the Machine every 10 seconds and issues no second restart. A Machine that is
+restarting keeps the new pointer and goes on to the heartbeat read-back. One
+unchanged two minutes after the command returned gets its previous pointer back,
+recorded `tooling_error` with "restart did not happen". One that is failed or
+destroyed gets its previous pointer back at once and is recorded `rolled_back`
+with a detail beginning "SEAT DOWN", which halts the release and pages; so does
+one that has stayed stopped for a full minute by the deadline, which is eight
+minutes after the request (the five-minute stop allowance plus three for the
+boot) or two minutes after the command returned, whichever is later. A Machine
+that is still stopping or starting at the deadline, or that cannot be read, is
+left to the heartbeat read-back, so a seat still booting is never rolled back
+under its boot (`operator/bin/lib/fleet/bundles.py`).
 
 The tick's bundle step is off unless the repository variable
 `BUNDLE_RELEASE_ENABLED` is `true`; off, it logs "bundle releases not enabled"

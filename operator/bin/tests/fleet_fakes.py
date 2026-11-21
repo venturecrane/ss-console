@@ -258,6 +258,12 @@ class FakeFly:
             return []
         return [{"state": self.machine_state, "config": {"image": self.machine_image(app), "guest": self.guest_value}}]
 
+    def machine(self, app: str) -> dict[str, Any]:
+        """Fly.machine's shape. No event ever appears, so a failed restart reads back as one that did not happen."""
+        if app in self.no_machine:
+            raise ToolingError(f"{app} has no Machine to read")
+        return {"id": "m-1", "state": self.machine_state, "events": []}
+
     def guest(self, app: str) -> dict[str, Any]:
         return dict(self.guest_value)
 
@@ -282,7 +288,7 @@ class FakeFly:
             self.deploys.append((app, image, fh.read()))
         return self.deploy_results.pop(0) if self.deploy_results else Result(0, "deployed", "")
 
-    def restart(self, app: str) -> Result:
+    def restart(self, app: str, machine_id: str | None = None) -> Result:
         self.restarts.append(app)
         res = self.restart_results.pop(0) if self.restart_results else Result(0, "restarted", "")
         if res.ok and self.on_restart is not None:

@@ -228,11 +228,15 @@ def test_a_busy_seat_is_never_restarted_and_its_pointer_never_written() -> None:
 
 
 def test_a_restart_that_fails_restores_the_pointer() -> None:
+    """The Machine reads back still started with no new event: the restart did not happen.
+    A slow restart that did happen is test_fleet_bundle_restart.py."""
     w = World(["lane-a"])
     w.publish(V1)
     w.fly.restart_results = [Result(1, "", "machine not found")]
     out = w.run("lane-a", V1)
     assert out.state == "tooling_error" and w.pointer("lane-a") is None
+    assert out.detail.startswith("restart did not happen: Machine stayed started for 120 s with no new event")
+    assert w.fly.restarts == ["hermes-lane-a"], "no second restart"
 
 
 def test_a_seat_that_already_reports_the_version_gets_its_pointer_without_a_restart() -> None:
