@@ -350,7 +350,7 @@ def bundle_seat_runner(
     """``do_seat_for(release)``: one seat's bundle rollout (bundles.BundleRollout), manifests read once."""
     roll = bundles.BundleRollout(
         ctx.store, ctx.r2, ctx.fly, BusyGate(ctx.fly, holder, ctx.sleep, ctx.clock), ctx.log, ctx.sleep, ctx.clock,
-        max_idle_wait,
+        max_idle_wait, holder,
     )  # fmt: skip
     manifests: dict[str, tuple[dict[str, Any], str, str]] = {}
 
