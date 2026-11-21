@@ -98,15 +98,28 @@ def pdf(index: int, pages: list[Page]) -> bytes:
     return data
 
 
+#: The size of the locked PDF the reader goldens pin (each seat ``fetch`` row's
+#: ``expected`` and ``served``, and the size of the store row naming it).
+#: AES-256 draws a fresh random salt and file key on every write, and about one
+#: write in fifty comes out 1 to 7 bytes shorter (measured: 1,960 of 2,000 at
+#: 1425, the rest 1418 to 1424). A short draw failed the reader goldens on
+#: main on 2026-11-21 (lanes/casefile, litigation and negotiation), so
+#: ``locked`` draws again until the file is this size.
+LOCKED_SIZE = 1425
+
+
 def locked(index: int) -> bytes:
     import pymupdf
 
-    doc = pymupdf.open()
-    doc.new_page().insert_text((72, 72), "NOTICE OF MOTION", fontsize=11)
-    doc.xref_set_key(-1, "ID", f"[<{index:032X}><{index:032X}>]")
-    data = doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="not-on-file", owner_pw="owner-only")
-    doc.close()
-    return data
+    for _ in range(64):
+        doc = pymupdf.open()
+        doc.new_page().insert_text((72, 72), "NOTICE OF MOTION", fontsize=11)
+        doc.xref_set_key(-1, "ID", f"[<{index:032X}><{index:032X}>]")
+        data = doc.tobytes(encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw="not-on-file", owner_pw="owner-only")
+        doc.close()
+        if len(data) == LOCKED_SIZE:
+            return data
+    raise AssertionError(f"64 AES-256 writes, none {LOCKED_SIZE} bytes: pymupdf changed how it writes a locked PDF")
 
 
 def jpg(index: int) -> bytes:
