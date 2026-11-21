@@ -97,8 +97,11 @@ function isTestFile(relPath: string): boolean {
 
 /** Absolute paths of the tracked files under `dir` ending in `suffix` that exist on disk. */
 function trackedFiles(dir: string, suffix: string, repoRoot = REPO_ROOT): string[] {
+  // A scratch tree's census must read the scratch repo, not the hook's GIT_DIR.
+  const env = repoRoot === REPO_ROOT ? process.env : SCRATCH_GIT_ENV
   const raw = execFileSync('git', ['ls-files', '-z', '--', relative(repoRoot, dir)], {
     cwd: repoRoot,
+    env,
     encoding: 'utf8',
     maxBuffer: 1 << 28,
   })
@@ -262,10 +265,29 @@ function growthProblem(path: string, was: number, lines: number, repoRoot: strin
 
 const REGENERATE = process.env.UPDATE_OPERATOR_MODULE_SIZE_BASELINE === '1'
 
+/**
+ * Git in a scratch tree, with GIT_* stripped and hooks off. Under `git push`
+ * the pre-push hook exports GIT_DIR and GIT_INDEX_FILE for the repo being
+ * pushed, and they win over `cwd`: until 2026-11-21 `track` below ran
+ * `git add -A` into the REAL index, replacing all ~6,800 entries with the one
+ * fixture file `bootstrap/long.sh`, so the census tests that ran next read an
+ * empty tree and every push failed. tests/hook-env-isolation.test.ts runs this
+ * file under a throwaway GIT_DIR and fails if its index changes.
+ */
+const SCRATCH_GIT_ENV = Object.fromEntries(
+  Object.entries({ ...process.env, HUSKY: '0' }).filter(([k]) => !k.startsWith('GIT_'))
+)
+function scratchGit(root: string, ...args: string[]): void {
+  execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], {
+    cwd: root,
+    env: SCRATCH_GIT_ENV,
+  })
+}
+
 /** Make a scratch tree a git repo with every file in it tracked. */
 function track(root: string): void {
-  execFileSync('git', ['init', '-q'], { cwd: root })
-  execFileSync('git', ['add', '-A'], { cwd: root })
+  scratchGit(root, 'init', '-q')
+  scratchGit(root, 'add', '-A')
 }
 
 // ---------------------------------------------------------------------------
@@ -480,7 +502,7 @@ describe('only tracked files are measured', () => {
       expect(measureTree(join(root, 'operator'), root)).toEqual({})
 
       writeFileSync(join(shared, 'new_big.py'), body(CEILING + 1))
-      execFileSync('git', ['add', 'operator/hermes-smd-overlay/shared/new_big.py'], { cwd: root })
+      scratchGit(root, 'add', 'operator/hermes-smd-overlay/shared/new_big.py')
       const measured = measureTree(join(root, 'operator'), root)
       expect(measured).toEqual({ 'operator/hermes-smd-overlay/shared/new_big.py': CEILING + 1 })
       expect(pythonRatchetProblems(measured, {}, root)).toHaveLength(1)
