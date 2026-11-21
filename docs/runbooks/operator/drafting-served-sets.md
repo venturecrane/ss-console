@@ -18,7 +18,9 @@ already in the job directory, the finder does nothing.
   Council form (`DISC-001` and "Page N of 8"), which is always form
   interrogatories. Byte copies in a second folder count once (the report
   lists the copies). A set our client propounded is not served on us and is
-  dropped. A file with no text whose name reads as discovery is only listed.
+  dropped. A file with no text whose name reads as discovery is only listed;
+  a file SMD wrote (named "DRAFT ...", or in an Operator delivery folder) is
+  never counted as one.
 - **Recognises response papers** by their title ("RESPONSES TO ..."). One of
   ours with a later listed date answers its served set (same kind, set number
   and asking party), and that set is dropped. The other side's responses to
@@ -31,9 +33,19 @@ already in the job directory, the finder does nothing.
   numbering 1 to the count (labelled "REQUEST FOR PRODUCTION NO. 3:" or a bare
   "3." under the section heading; blank "RESPONSE:" lines are removed). A form
   set carries no request text: its `source` names the file, and its parties
-  come from the form's text or the matter record (the report says which).
+  come from the form's text or the matter record (the report says which). A
+  served form's text layer is usually the printed blank form, its fill-ins and
+  checks drawn, so the read may return no set number, count or parties. Then
+  the count is the free pixel read's checked boxes, the set number is the file
+  name's ("Set Two"), or 1 for the matter's only form set when no form response
+  or draft is on file (the one draft's number when one is), and our client is
+  the answering party when the record names exactly one. Anything else stops
+  `served_ambiguous`.
 - **Narrows to the request**: "responses to the special interrogatories"
-  plans only those; otherwise every unanswered set.
+  plans only those; otherwise every unanswered set. Only a sentence that asks
+  for responses to be drafted narrows; a kind named in passing, or in a
+  sentence about numbered requests ("Requests 5 and 8 of the Response to
+  Request for Production"), does not.
 - **Who drafts**: special interrogatories and requests for production, the
   Operator; form interrogatories, requests for admission and anything else,
   SMD (reported to the attorney as "being prepared by us").
