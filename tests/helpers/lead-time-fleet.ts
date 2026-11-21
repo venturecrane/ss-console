@@ -11,7 +11,6 @@
  * fleet change will; a test that uses them says so.
  */
 
-import { expect } from 'vitest'
 import type { Arrival } from '../../src/lib/admin/lead-time'
 import type { Split } from '../../src/lib/admin/lead-time-split'
 import { mergeArrivals, type MergeArrival } from '../../src/lib/admin/lead-time-summary'
@@ -147,12 +146,10 @@ export function waiting(a: Arrival) {
   return a
 }
 
-/** The minutes of a recorded split (its held milliseconds and wait flag are asserted where they matter). */
-export const split = (total: number, pipeline: number, held: number, busy: number | null) =>
-  expect.objectContaining({
-    recorded: true,
-    totalMinutes: total,
-    pipelineMinutes: pipeline,
-    heldMinutes: held,
-    busyMinutes: busy,
-  }) as Split
+export const split = (total: number, pipeline: number, held: number, busy: number): Split => ({
+  recorded: true,
+  totalMinutes: total,
+  pipelineMinutes: pipeline,
+  heldMinutes: held,
+  busyMinutes: busy,
+})

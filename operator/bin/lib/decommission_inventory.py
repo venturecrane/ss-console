@@ -104,8 +104,6 @@ def seat_webhook_host(slug: str) -> str:
 #: is reachable or may be granted access. Emptied for the slug, in this order.
 #: ``customer_configs`` is last because it is the FK parent of
 #: ``machine_credentials`` and ``client_obligations`` (both ON DELETE CASCADE).
-#: Deleting ``fleet_holds`` closes the seat's open interval in the retained
-#: ``fleet_hold_events`` (migration 0153's trigger).
 SEAT_PROJECTION_TABLES: tuple[str, ...] = (
     "operator_runtime_summary",
     "fleet_status",
@@ -135,7 +133,6 @@ RETAINED_SEAT_TABLES: dict[str, tuple[str, str]] = {
     "cost_anomaly_alerts": ("customer_slug", "cost history (billing evidence)"),
     "cost_telemetry": ("customer_slug", "cost history (billing evidence)"),
     "customer_config_history": ("customer_slug", "config history"),
-    "fleet_hold_events": ("customer_slug", "release history"),
     "fleet_rollouts": ("customer_slug", "release history"),
     "hosted_agent_intake": ("customer_slug", _HISTORY),
     "operator_agreement_documents": ("instance_slug", "signed agreements (contract record)"),

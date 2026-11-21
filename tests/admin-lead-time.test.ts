@@ -39,7 +39,7 @@ describe('arrival', () => {
       missing: 'hold history',
     })
     expect(describeArrival(m)).toEqual({
-      text: '15 min (hold time not recorded)',
+      text: '15 min (held and busy minutes not recorded)',
       marked: false,
     })
   })
@@ -130,7 +130,9 @@ describe('kinds and empty states', () => {
     expect(recent.map((m) => m.shortSha)).toEqual([sha(5).slice(0, 8), sha(4).slice(0, 8)])
     expect(describeArrival(recent[0].byKind.image)).toEqual({ text: 'no release', marked: false })
     expect(recent[0].clockFrom).toBe('published')
-    expect(describeArrival(recent[0].byKind.bundle).text).toBe('6 min (hold time not recorded)')
+    expect(describeArrival(recent[0].byKind.bundle).text).toBe(
+      '6 min (held and busy minutes not recorded)'
+    )
   })
 
   it('a bundle is not waited for on a seat that never took one; its clock is the same commit image clock', () => {
@@ -167,8 +169,8 @@ describe('kinds and empty states', () => {
 describe('the recent real pattern: 61 image releases over three days', () => {
   // 40 meet a held client seat, 2 a busy one, 16 are clear near 15 minutes, 3 still wait on the twin.
   // Written as the tick writes it: no row for the held seat while held.
-  function realPattern(busyRecorded: boolean, holdsRecorded: boolean): Fleet {
-    const f = new Fleet(busyRecorded)
+  function realPattern(recorded: boolean): Fleet {
+    const f = new Fleet(recorded)
     const m = (k: number) => k * 70
     for (let k = 0; k < 16; k++) {
       f.deliver(f.image(k + 1, m(k)), m(k) + 8, m(k) + 10, m(k) + 13 + (k % 5))
@@ -176,7 +178,7 @@ describe('the recent real pattern: 61 image releases over three days', () => {
     for (let k = 16; k < 18; k++) {
       const r = f.image(k + 1, m(k))
       f.roll(r, 'twin-a', 'done', m(k) + 5, m(k) + 8)
-      f.waited(r, 'client-a', 'waiting_idle', [m(k) + 8, m(k) + 18], busyRecorded ? 600 : undefined)
+      f.waited(r, 'client-a', 'waiting_idle', [m(k) + 8, m(k) + 18], recorded ? 600 : undefined)
       f.roll(r, 'client-a', 'done', m(k) + 30, m(k) + 35)
     }
     // client-a held from merge 18's twin done until after merge 57: 39 releases overtaken.
@@ -185,7 +187,7 @@ describe('the recent real pattern: 61 image releases over three days', () => {
       last = f.image(k + 1, m(k))
       f.roll(last, 'twin-a', 'done', m(k) + 5, m(k) + 8)
     }
-    if (holdsRecorded) f.hold('client-a', m(18) + 8, m(57) + 25)
+    if (recorded) f.hold('client-a', m(18) + 8, m(57) + 25)
     f.roll(last, 'client-a', 'done', m(57) + 25, m(57) + 30)
     for (let k = 58; k < 61; k++) f.image(k + 1, m(k))
     for (let k = 0; k < 61; k++) f.roll(`img-${k + 1}`, 'client-b', 'done', m(k) + 15, m(k) + 20)
@@ -202,36 +204,20 @@ describe('the recent real pattern: 61 image releases over three days', () => {
   }
 
   it('once holds and busy seconds are recorded: 40 held, 2 busy, 16 clear, clear-case median near 15', () => {
-    const { week, untwinned } = totals(realPattern(true, true), RECORDED)
+    const { week, untwinned } = totals(realPattern(true), RECORDED)
     expect(week).toMatchObject({ merges: 61, held: 40, busy: 2, clear: 16, unrecorded: 0 })
     expect(week.clearMedian).toBe(15)
     expect(untwinned).toMatchObject({ merges: 61, clear: 61, medianPipeline: 20 })
   })
 
-  it('with hold events recorded and busy not yet: 40 held, 2 waited on the seat, 16 clear, clear-case median near 15', () => {
-    // The two merges whose rows show a waiting_idle attempt are never clear: their minutes are unknown.
-    const { week } = totals(realPattern(false, true), RECORDED)
-    expect(week).toMatchObject({
-      merges: 61,
-      arrived: 58,
-      held: 40,
-      busy: null,
-      waited: 2,
-      clear: 16,
-    })
-    expect(week.unrecorded).toBe(0)
-    expect(week.clearMedian).toBe(15)
-    expect(week.medianPipeline).not.toBeNull()
-  })
-
-  it('before hold history is recorded: every arrival is not recorded, so no median is claimed', () => {
-    const { week } = totals(realPattern(false, false), null)
+  it('today: every arrival is not recorded, so no median is claimed', () => {
+    const { week } = totals(realPattern(false), null)
     expect(week).toMatchObject({
       merges: 61,
       arrived: 58,
       unrecorded: 58,
       held: 0,
-      busy: null,
+      busy: 0,
       clear: 0,
       medianPipeline: null,
       p90Pipeline: null,

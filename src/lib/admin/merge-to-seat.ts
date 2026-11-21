@@ -11,18 +11,17 @@
  *   fleet_releases  one row per image, bundle or skills release
  *   fleet_rollouts  one row per attempt (`start_rollout` inserts it,
  *                   `update_rollout` sets its end state and `finished_at`)
- *   fleet_hold_events  every hold placed and lifted (migration 0153's triggers
- *                   on fleet_holds), read when hold-history.ts finds the
- *                   history whole; otherwise fleet_holds, the holds in place
- *                   NOW (`fleet unhold` deletes the row, and the tick never
- *                   rolls a held seat, so a lifted hold leaves no trace there)
+ *   fleet_holds     the holds in place NOW. `fleet unhold` deletes the row, and
+ *                   the tick never rolls a held seat (tick.py `_front`), so a
+ *                   hold placed and lifted leaves no trace in any table
  * A read that hits its safety cap is an error the page states, never a partial
  * week shown as whole.
  *
- * TWO INPUTS THE FLEET DOES NOT RECORD YET. The parsers read them when a
+ * THREE INPUTS THE FLEET DOES NOT RECORD YET. The parsers read them when a
  * column carries them and read null otherwise; the SQL names only columns that
- * exist today, so the change that records them adds the column to a
+ * exist today, so the follow-on that records them adds the column to the
  * migration, the writer and the SELECT below, and nothing else:
+ *   HoldInterval.liftedAtMs        `lifted_at` on a hold-events row; null = in place
  *   RolloutRow.busySeconds         `busy_seconds`: seconds this attempt waited on a
  *                                  client job (never on another run's lease)
  *   ReleaseRow.reachedMainAtMs     `reached_main_at`: when the merge reached main
@@ -176,33 +175,6 @@ export function parseHold(raw: unknown): HoldInterval | null {
   return seat && heldAtMs !== null ? { seat, heldAtMs, liftedAtMs: parseUtc(r['lifted_at']) } : null
 }
 
-/**
- * One `fleet_hold_events` row read strictly: the interval, or why the row
- * cannot be trusted. Unlike `parseHold`, a row is never dropped and an
- * unreadable `lifted_at` is never read as "still in place": either would state
- * exact held time from bad data.
- */
-export function checkHoldEvent(raw: unknown): HoldInterval | string {
-  const r = record(raw)
-  if (!r) return 'a hold history row is not a row'
-  const seat = text(r['customer_slug'])
-  const heldAtMs = parseUtc(r['held_at'])
-  const lifted = r['lifted_at']
-  const liftedAtMs = lifted === null || lifted === undefined ? null : parseUtc(lifted)
-  if (!seat) return 'a hold history row has no seat'
-  if (heldAtMs === null) return `a hold history row for ${seat} has an unreadable held_at`
-  if (lifted !== null && lifted !== undefined && liftedAtMs === null) {
-    return `a hold history row for ${seat} has an unreadable lifted_at`
-  }
-  return { seat, heldAtMs, liftedAtMs }
-}
-
-function strictHoldEvent(raw: unknown): HoldInterval {
-  const checked = checkHoldEvent(raw)
-  if (typeof checked === 'string') throw new Error(`fleet_hold_events: ${checked}`)
-  return checked
-}
-
 /** Monday 00:00 UTC of the ISO week holding `ms`. */
 export function weekStartMs(ms: number): number {
   const d = new Date(ms)
@@ -228,11 +200,7 @@ const ROLLOUTS_SQL =
   'SELECT o.release_id, o.customer_slug, o.state, o.started_at, o.finished_at ' +
   `FROM fleet_rollouts o WHERE o.release_id IN (${RELEASES_IN_WINDOW}) LIMIT ?`
 
-const HOLDS_NOW_SQL = 'SELECT customer_slug, held_at FROM fleet_holds LIMIT ?'
-
-const HOLD_EVENTS_SQL =
-  'SELECT customer_slug, held_at, lifted_at FROM fleet_hold_events ' +
-  'WHERE lifted_at IS NULL OR lifted_at >= ? LIMIT ?'
+const HOLDS_SQL = 'SELECT customer_slug, held_at FROM fleet_holds LIMIT ?'
 
 async function read<T>(
   name: string,
@@ -259,36 +227,20 @@ async function read<T>(
   return out
 }
 
-/**
- * Every release recorded in the window, their rollouts, and the holds: every
- * hold interval open or lifted inside the window from `fleet_hold_events` when
- * `holdEventsRecorded` (hold-history.ts said the history is whole), else only
- * the holds in place now from `fleet_holds`. A history row that cannot be read
- * fails the whole read with its reason, never a dropped or guessed interval
- * (hold-history.ts already reads such a row as "hold time not recorded"; this
- * is the backstop for a row written between the two reads).
- */
+/** Every release recorded in the window, their rollouts, and the holds in place now. */
 export async function fetchFleetHistory(
   db: D1Database,
-  nowMs: number,
-  holdEventsRecorded: boolean
+  nowMs: number
 ): Promise<{ history: FleetHistory; error: string | null }> {
   const since = new Date(historyStartMs(nowMs)).toISOString().replace(/\.\d{3}Z$/, 'Z')
   const over = ROW_CAP + 1
-  const holds = holdEventsRecorded
-    ? read(
-        'fleet_hold_events',
-        () => db.prepare(HOLD_EVENTS_SQL).bind(since, over).all(),
-        strictHoldEvent
-      )
-    : read('fleet_holds', () => db.prepare(HOLDS_NOW_SQL).bind(over).all(), parseHold)
   try {
-    const [releases, rollouts, holdRows] = await Promise.all([
+    const [releases, rollouts, holds] = await Promise.all([
       read('fleet_releases', () => db.prepare(RELEASES_SQL).bind(since, over).all(), parseRelease),
       read('fleet_rollouts', () => db.prepare(ROLLOUTS_SQL).bind(since, over).all(), parseRollout),
-      holds,
+      read('fleet_holds', () => db.prepare(HOLDS_SQL).bind(over).all(), parseHold),
     ])
-    return { history: { releases, rollouts, holds: holdRows }, error: null }
+    return { history: { releases, rollouts, holds }, error: null }
   } catch (e) {
     return {
       history: { releases: [], rollouts: [], holds: [] },

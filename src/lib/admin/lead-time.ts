@@ -46,7 +46,7 @@
  * image clock when it has one, else its own `created_at` ("from published").
  */
 
-import { splitFor, type Split, type Track } from './lead-time-split'
+import { HOLD_HISTORY_RECORDED_SINCE, splitFor, type Split, type Track } from './lead-time-split'
 import {
   parseUtc,
   type ArtifactKind,
@@ -56,11 +56,7 @@ import {
   type RolloutRow,
 } from './merge-to-seat'
 
-/**
- * The review threshold: an arrival whose recorded pipeline minutes exceed this is
- * marked for review. Held time is excluded; while busy seconds are not recorded,
- * pipeline includes any wait on a client job, so a marked change may include one.
- */
+/** The review threshold: an arrival whose recorded pipeline minutes (held and busy excluded) exceed this is marked for review. */
 export const REVIEW_THRESHOLD_PIPELINE_MINUTES = 45
 
 const CI_MERGE_NOTE = /^merge ([0-9a-f]{8}) \(CI\)$/
@@ -172,12 +168,12 @@ function rowsBySeat(history: FleetHistory, kind: ArtifactKind): Map<string, Roll
   return bySeat
 }
 
-/** The per-kind seat context. `holdHistorySince`: when hold history began (ISO UTC), or null when it is not recorded. */
+/** The per-kind seat context. `holdHistorySince` defaults to HOLD_HISTORY_RECORDED_SINCE. */
 export function seatContext(
   history: FleetHistory,
   kind: ArtifactKind,
   twins: Record<string, string>,
-  holdHistorySince: string | null
+  holdHistorySince: string | null = HOLD_HISTORY_RECORDED_SINCE
 ): SeatContext {
   return {
     bySeat: rowsBySeat(history, kind),
