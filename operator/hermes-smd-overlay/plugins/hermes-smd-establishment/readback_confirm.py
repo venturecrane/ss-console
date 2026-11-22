@@ -296,12 +296,20 @@ def fetch_binding(
         if ids
         else None
     )
+
+    def _rules(key: str) -> tuple[dict[str, Any], ...]:
+        return tuple(r for r in answer.get(key) or () if isinstance(r, dict) and r.get("text"))
+
     rounds = answer.get("rounds") if isinstance(answer.get("rounds"), dict) else {}
     extras = {
         "verified": _ids("verified_ids"),
         "block": tuple(str(s) for s in answer.get("block") or () if isinstance(s, str)),
         "rounds": {str(k): int(v) for k, v in rounds.items() if isinstance(v, int)},
         "handed_off": _ids("handed_off"),
+        # 2026-11-21 (``already_recorded``): the bound read-back's rules already
+        # committed, and, unbound, the sender's rules committed in the last hour.
+        "committed": _rules("committed"),
+        "recent": _rules("recent_committed"),
     }
     return binding, extras
 

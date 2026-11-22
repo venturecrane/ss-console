@@ -308,7 +308,13 @@ from shared.tool_registration import register_wrapped_tool
 from shared.wording_rules_store import KINDS as WORDING_KINDS
 from shared.wording_rules_store import READERS as WORDING_READERS
 
-from . import nudges, own_rules, readback_confirm  # noqa: F401 - tests reach these here
+from . import (  # noqa: F401 - tests reach these here
+    already_recorded,
+    effect_claims,
+    nudges,
+    own_rules,
+    readback_confirm,
+)
 from . import sweeper as lapse_sweeper
 from .nudges import _CLASS_CHOICE_MAP, _ESTABLISH_NUDGE  # noqa: F401 - tests read the nudge here
 
@@ -1188,17 +1194,21 @@ _SUBMIT_REFUSED_NOTE = (
     "one thing; otherwise say what happened and stop."
 )
 
+#: Says only what the seat knows (2026-11-21): that no install was OBSERVED.
+#: It used to say the commit did not succeed, which was false whenever the
+#: commit had succeeded and the install had not yet landed, and the model then
+#: told the firm nothing was recorded.
 _IN_EFFECT_UNPROVEN_MESSAGE = (
     "Refused: this message tells the person a rule is in force, and nothing on "
-    "this seat has observed rule {proposal_id} installed: no {status_tool} has "
-    "reported it, and the commit did not succeed. Of everything in a reply "
+    "this seat has observed rule {proposal_id} installed yet: no {status_tool} has "
+    "reported it installed. Of everything in a reply "
     "this is the one sentence that cannot be walked back, because once the "
     "firm believes a rule is in effect they stop asking for it and start "
     "reading every later output as proof it works.\n\n"
     "{refusal}"
-    "Send instead what actually happened: the rule was confirmed, it could not "
-    "be committed, and here is what the seat said when it refused. If you "
-    f"believe it did commit, call {TOOL_STATUS} on the run first and say it is "
+    "Send instead what actually happened. If the commit succeeded, say the rule "
+    "is recorded and will be in effect shortly; if the seat refused it, say so and "
+    f"quote what the seat said. Call {TOOL_STATUS} on the run first, and say it is "
     "in effect only once the status says installed."
 )
 
@@ -3713,7 +3723,7 @@ def _in_effect_gate(session_id: Any, tool_name: str, args: Any) -> dict[str, Any
     """
     if not isinstance(session_id, str) or not session_id:
         return None
-    proposal_id, named = own_rules.unproven(session_id)
+    proposal_id, named, committed = own_rules.unproven(session_id)
     if not proposal_id:
         return None
     try:
@@ -3736,6 +3746,8 @@ def _in_effect_gate(session_id: Any, tool_name: str, args: Any) -> dict[str, Any
         proposal_id,
     )
     message = _LAST_SUBMIT_REFUSAL.get(session_id) or ""
+    if committed:  # recorded by code, its install not yet seen: say so (2026-11-21)
+        return {"action": "block", "message": effect_claims.RECORDED_MESSAGE.format(rule=named)}
     return {
         "action": "block",
         "message": _IN_EFFECT_UNPROVEN_MESSAGE.format(
@@ -3812,30 +3824,9 @@ def _discount(blob: str, quoted: list[str]) -> str:
     return blob
 
 
-def _claims_effect(blob: str) -> bool:
-    """Does this body assert, unhedged, that a rule is already in force?
-
-    Two halves, both required. The ANCHOR keeps the scan on messages that are
-    about a rule at all: a tag, or the bare word. The CLAIM is a completed-state
-    phrase with no hedge in the short run of text before it -- the window is
-    one clause, so "will be in effect" and "could not be committed" read as what
-    they are, while a denial three sentences earlier cannot launder a later
-    assertion.
-    """
-    lowered = blob.lower()
-    if not rule_confirm.RULE_TAG.search(lowered) and not re.search(r"\brules?\b", lowered):
-        return False
-    for phrase in _EFFECT_CLAIMS:
-        start = 0
-        while True:
-            found = lowered.find(phrase, start)
-            if found < 0:
-                break
-            window = lowered[max(0, found - _HEDGE_WINDOW) : found]
-            if not any(hedge in window for hedge in _EFFECT_HEDGES):
-                return True
-            start = found + 1
-    return False
+#: Does this body assert, unhedged, that a rule is already in force? Moved to
+#: ``effect_claims`` (2026-11-21), which also reads a negation across the clause.
+_claims_effect = effect_claims.claims
 
 
 def _readback_present(readback: str, blob: str) -> bool:
@@ -4205,9 +4196,9 @@ def _confirmation_note(
     # something outstanding, so it counts when deciding whether a bare
     # affirmative is ambiguous (ss-console operator-own-matter).
     extra_open = 1 if PENDING_SEND.peek() is not None else 0
-    if not pending and not extra_open:
-        # A plain yes after their own rule lapsed: read it back again (R8).
-        return own_rules.reopen_note(session_id, sender, user_message)
+    decided, note = already_recorded.first(session_id, sender, user_message, pending, extra_open)
+    if decided:
+        return note
     verdict = own_rules._resolve_reply(
         session_id, sender, is_admin, user_message, pending, extra_open
     )

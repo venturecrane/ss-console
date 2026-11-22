@@ -51,6 +51,44 @@ def person_readback(proposal_id: str, text: str, kind: str = "rule") -> str:
     return readback_for(proposal_id, text, kind)
 
 
+def duplicate_answer(pending: Any, instructed_by: str, scope: str, text: str) -> dict[str, Any] | None:
+    """The answer to a proposal of a sentence this person already stated, or None.
+
+    OPEN (ss-console#2546): hand back the row they already have and write
+    NOTHING - no second row, no second RULE_PROPOSED, and no second email to an
+    administrator carrying a different tag, only one of which answering would
+    close. COMMITTED (2026-11-21, the A&P seat): a yes in one thread recorded the
+    rule, a yes in a sibling thread found nothing open, and the same sentence was
+    proposed again as a new rule asking for a yes to a rule already in force.
+    Nothing is proposed: ``already_recorded``.
+    """
+    existing = pending.find_open_duplicate(instructed_by=instructed_by, scope=scope, text=text)
+    if existing is not None:
+        return {
+            "ok": True,
+            "duplicate_of": existing["proposal_id"],
+            "proposal_id": existing["proposal_id"],
+            "scope": existing["scope"],
+            "subject": existing["subject"],
+            "for_admin": existing["for_admin"],
+            "expires_at": existing["expires_at"],
+            "readback": person_readback(existing["proposal_id"], existing["text"]),
+        }
+    done = pending.find_committed_duplicate(instructed_by=instructed_by, scope=scope, text=text)
+    if done is None:
+        return None
+    return {
+        "ok": True,
+        "already_recorded": True,
+        "duplicate_of": done["proposal_id"],
+        "proposal_id": done["proposal_id"],
+        "scope": done["scope"],
+        "subject": done["subject"],
+        "for_admin": done["for_admin"],
+        "text": done["text"],
+    }
+
+
 class RuleProposals(ProposalLifecycle):
     """propose / decline / lapse_notified / pending_rules (ss-console#2529, #2546)."""
 
@@ -103,23 +141,10 @@ class RuleProposals(ProposalLifecycle):
             subject = firm_subject(subject_raw)
 
         text = normalize_rule_text(request.get("text"))
-        # ss-console#2546: the same person, the same sentence, already waiting.
-        # Hand back the row they already have and write NOTHING - no second row,
-        # no second RULE_PROPOSED, and (the reason this matters now) no second
-        # email to an administrator carrying a different tag, only one of which
-        # answering would close.
-        existing = pending.find_open_duplicate(instructed_by=instructed_by, scope=scope, text=text)
-        if existing is not None:
-            return {
-                "ok": True,
-                "duplicate_of": existing["proposal_id"],
-                "proposal_id": existing["proposal_id"],
-                "scope": existing["scope"],
-                "subject": existing["subject"],
-                "for_admin": existing["for_admin"],
-                "expires_at": existing["expires_at"],
-                "readback": person_readback(existing["proposal_id"], existing["text"]),
-            }
+        # The same person, the same sentence, already waiting or already
+        # committed: hand back that row and write NOTHING (:func:`duplicate_answer`).
+        if (same := duplicate_answer(pending, instructed_by, scope, text)) is not None:
+            return same
         row = pending.create(
             scope=scope,
             subject=subject,

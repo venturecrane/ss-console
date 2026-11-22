@@ -25,6 +25,10 @@ TWO VERBS, both agent-uid, both under the establishment lock:
   ``References`` entry, which RFC 5322 makes the parent). Nothing the model
   wrote, and nothing in the message body, chooses the read-back.
 
+THE THREAD (2026-11-21). A reply to a message that carried no read-back (the
+Operator restated the rules in its own words) binds to the newest plain
+read-back earlier in the same thread, by its ``References``, sent within a day.
+
 WHAT HAPPENS WITHOUT A HEADER. A reply whose header is absent, unreadable or
 names no recorded read-back is "not bound", and the seat asks with a numbered
 list rendered by code. That list is itself recorded here, so the next reply to
@@ -89,6 +93,12 @@ CREATE TABLE IF NOT EXISTS readback_verified (
 logger = logging.getLogger(__name__)
 
 RETENTION_DAYS = 30
+#: How far back in a thread a reply may bind to a read-back it does not reply to
+#: directly (2026-11-21): one working day.
+THREAD_HOURS = 24
+#: How recently a rule must have been committed for a plain yes that binds to
+#: nothing, with nothing open, to be answered "already recorded" (2026-11-21).
+RECENT_COMMITTED_SECONDS = 3600
 #: The most proposals one read-back may carry; the list code renders is capped
 #: at the same number (``shared.rule_confirm.MAX_PICK``).
 MAX_CARRIED = 20
@@ -226,13 +236,13 @@ class ReadbackBindings:
         found = {str(r[0]) for r in rows}
         return [p for p in among if p in found]
 
-    def carried(self, sent_message_id: str, recipient: str) -> tuple[list[str], bool]:
+    def carried(self, sent_message_id: str, recipient: str, since: float = 0.0) -> tuple[list[str], bool]:
         conn = self._pending._connect()
         try:
             rows = conn.execute(
                 "SELECT proposal_id, listed FROM readback_bindings "
-                "WHERE sent_message_id = ? AND recipient = ? ORDER BY position ASC",
-                (sent_message_id, recipient),
+                "WHERE sent_message_id = ? AND recipient = ? AND created_at >= ? ORDER BY position ASC",
+                (sent_message_id, recipient, since),
             ).fetchall()
         finally:
             conn.close()
@@ -386,21 +396,84 @@ def readback_for(broker: BrokerContext, request: dict[str, Any]) -> dict[str, An
     # when not. Every answer carries the sender's learned signature block
     # (sender_block) and how many read-backs each open rule has had
     # (readback_rounds), which caps them at two.
+    # Two answers added 2026-11-21: ``committed`` (the bound read-back's rules a
+    # yes elsewhere already recorded) and ``recent_committed`` (unbound: the
+    # sender's own rules recorded in the last hour), so a late yes is told
+    # "already recorded", never "nothing is waiting".
     extra = _extras(pending, sender)
     listing = {"verified_ids": store.verified(sender, _open_own_ids(pending, sender)), **extra}
+    unanswered = {**unbound, **listing, "recent_committed": _recent_committed(pending, sender)}
     parent = parent_id(in_reply_to, references)
     if not parent:
-        return {**unbound, **listing, "lookup": "no reply header"}
+        return {**unanswered, "lookup": "no reply header"}
     ids, listed = store.carried(parent, sender)
+    lookup = "replied to"
+    if not ids:
+        ids, listed = _thread_readback(store, sender, parent, references)
+        lookup = "earlier in the thread"
     if not ids:
         logger.warning(
             "readback_bindings: a reply from %s answers %s, which carried no recorded read-back",
             sender,
             parent,
         )
-        return {**unbound, **listing, "header": True, "lookup": "replies to no recorded read-back"}
-    bound = {"verified_ids": store.verified(sender, ids), **extra}
-    return {"ok": True, "bound": True, "header": True, "proposal_ids": ids, "listed": listed, **bound}
+        return {**unanswered, "header": True, "lookup": "replies to no recorded read-back"}
+    bound = {"verified_ids": store.verified(sender, ids), **extra, "committed": _committed(pending, ids, sender)}
+    return {"ok": True, "bound": True, "header": True, "proposal_ids": ids, "listed": listed, "lookup": lookup, **bound}
+
+
+def _thread_readback(store: ReadbackBindings, sender: str, parent: str, references: Any) -> tuple[list[str], bool]:
+    """The newest plain read-back to ``sender`` earlier in this reply's own
+    thread (its ``References``), sent within :data:`THREAD_HOURS`, when the
+    message it replies to carried none (2026-11-21).
+
+    WHY. The Operator restated a person's open rules in its own words in a later
+    message of the same thread; the person answered "yes" to THAT message, which
+    no binding names, so his yes bound to nothing and he was asked again (the
+    A&P seat, four yeses in six minutes, only the last recorded). The thread's
+    earlier read-back is the sentence code rendered and he was shown; his yes in
+    that thread answers it. A numbered list is never reached this way: "1 and 3"
+    names numbers of a list he may not be looking at (2026-11-20)."""
+    since = time.time() - THREAD_HOURS * 3600
+    for ref in reversed(_references(references)):
+        if ref == parent:
+            continue
+        ids, listed = store.carried(ref, sender, since)
+        if ids:  # the newest read-back in the thread, or nothing when it was a list
+            return ([], False) if listed else (ids, False)
+    return [], False
+
+
+def _committed(pending: Any, ids: list[str], sender: str) -> list[dict[str, Any]]:
+    """Which of ``ids`` are the sender's own rules already COMMITTED, with the
+    sentence and subject the seat says back (a yes in a sibling thread recorded
+    them first)."""
+    out: list[dict[str, Any]] = []
+    for proposal_id in ids:
+        row = pending.get(proposal_id)
+        if (
+            row is not None
+            and str(row.get("kind") or "rule") == "rule"
+            and normalize_address(row.get("instructed_by")) == sender
+            and row.get("consumed_at") is not None
+            and row.get("declined_at") is None
+        ):
+            out.append({"proposal_id": proposal_id, "text": row.get("text"), "subject": row.get("subject")})
+    return out
+
+
+def _recent_committed(pending: Any, sender: str) -> list[dict[str, Any]]:
+    """The sender's own rules committed in the last :data:`RECENT_COMMITTED_SECONDS`."""
+    conn = pending._connect()
+    try:
+        rows = conn.execute(
+            "SELECT proposal_id FROM pending_rules WHERE kind='rule' AND instructed_by=? "
+            "AND consumed_at >= ? AND declined_at IS NULL ORDER BY consumed_at",
+            (sender, time.time() - RECENT_COMMITTED_SECONDS),
+        ).fetchall()
+    finally:
+        conn.close()
+    return _committed(pending, [str(r[0]) for r in rows], sender)
 
 
 def _extras(pending: Any, sender: str) -> dict[str, Any]:

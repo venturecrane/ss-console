@@ -170,6 +170,7 @@
       "create",
       "decline",
       "ensure_schema",
+      "find_committed_duplicate",
       "find_open_duplicate",
       "get",
       "mark_ask_sent",

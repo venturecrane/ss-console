@@ -396,3 +396,91 @@ def test_the_install_watch_survives_a_restart_and_reports_a_failed_install(tmp_p
     (owed,) = smd_owed.open_items(restarted.audit_db_path)["owed"]
     assert owed["kind"] == "rule_install_failed" and a in owed["detail"]
     assert _call(restarted, action="establish_install_check")["failed"] == []
+
+
+# ---- 2026-11-21, the A&P seat: four yeses in six minutes, only the last recorded ----
+PARAPHRASE = "<CAparaphrase@mail.firm.example>"
+SIBLING = "<CAsibling@mail.firm.example>"
+_THREAD = [{"name": "In-Reply-To", "value": PARAPHRASE}, {"name": "References", "value": f"{SENT} {PARAPHRASE}"}]
+
+
+def _commit(broker: Broker, proposal_id: str) -> None:
+    """Commit a rule the way a confirmed submit does: the store's own consume."""
+    assert broker.establishment._require_pending().consume(proposal_id, f"run-{proposal_id}")
+
+
+def test_a_yes_to_a_restated_message_binds_to_the_threads_read_back(tmp_path):
+    """The Operator restated the rules in its own words in a later message of
+    the thread; his yes replied to THAT message. It binds to the read-back code
+    rendered earlier in the same thread. FALSIFIER: drop the thread fallback and
+    the reply is unbound."""
+    broker = _broker(tmp_path)
+    a, b = _propose(broker, "Rule one sentence here."), _propose(broker, "Rule two sentence here.")
+    _sent(broker, [a, b])
+    broker.msgraph = _Graph(list(_THREAD))
+    out = _for(broker)
+    assert out["bound"] is True and out["proposal_ids"] == [a, b] and out["listed"] is False
+    assert out["lookup"] == "earlier in the thread"
+
+
+def test_the_thread_fallback_never_reaches_a_numbered_list(tmp_path):
+    broker = _broker(tmp_path)
+    ids = [_propose(broker, f"Rule number {n} sentence.") for n in (1, 2)]
+    _sent(broker, ids, listed=True)
+    broker.msgraph = _Graph(list(_THREAD))
+    assert _for(broker)["bound"] is False
+
+
+def test_the_thread_fallback_never_reaches_a_read_back_older_than_a_day(tmp_path, monkeypatch):
+    broker = _broker(tmp_path)
+    _sent(broker, [_propose(broker, "An old rule sentence.")])
+    monkeypatch.setattr(rb, "THREAD_HOURS", -1)
+    broker.msgraph = _Graph(list(_THREAD))
+    assert _for(broker)["bound"] is False
+
+
+def test_a_read_back_whose_rules_a_sibling_yes_recorded_reports_them_committed(tmp_path):
+    """FALSIFIER: drop ``committed`` and the seat sees a read-back with nothing
+    open, and tells him nothing is outstanding."""
+    broker = _broker(tmp_path)
+    a, b = _propose(broker, "Rule one sentence here."), _propose(broker, "Rule two sentence here.")
+    _sent(broker, [a, b])
+    _sent(broker, [a, b], sent=SIBLING)
+    _commit(broker, a)
+    _commit(broker, b)
+    broker.msgraph = _Graph([{"name": "In-Reply-To", "value": SENT}])
+    out = _for(broker)
+    assert [r["proposal_id"] for r in out["committed"]] == [a, b]
+    assert [r["text"] for r in out["committed"]] == ["Rule one sentence here.", "Rule two sentence here."]
+
+
+def test_an_unbound_reply_carries_the_senders_rules_recorded_in_the_last_hour(tmp_path, monkeypatch):
+    broker = _broker(tmp_path)
+    a = _propose(broker, "Rule one sentence here.")
+    theirs = _propose(broker, "Their rule sentence here.", by=COLLEAGUE)
+    _commit(broker, a)
+    _commit(broker, theirs)
+    broker.msgraph = _Graph([{"name": "Subject", "value": "Re: rules"}])
+    assert [r["proposal_id"] for r in _for(broker)["recent_committed"]] == [a]
+    monkeypatch.setattr(rb, "RECENT_COMMITTED_SECONDS", -1)
+    broker.msgraph = _Graph([{"name": "Subject", "value": "Re: rules"}])
+    assert _for(broker)["recent_committed"] == []
+
+
+def test_a_committed_sentence_proposed_again_creates_nothing(tmp_path):
+    """FALSIFIER: the duplicate check sees only open rows, and the same sentence
+    becomes a new rule asking for a yes to a rule already in force."""
+    broker = _broker(tmp_path)
+    a = _propose(broker, "Rule one sentence here.")
+    _commit(broker, a)
+    out = _call(
+        broker,
+        action="establish_propose",
+        scope="person",
+        subject={"person": ATTORNEY},
+        text="Rule one sentence here.",
+        instructed_by=ATTORNEY,
+        source_ref="msg-2",
+    )
+    assert out["already_recorded"] is True and out["proposal_id"] == a
+    assert _call(broker, action="establish_pending", sender=ATTORNEY)["pending"] == []

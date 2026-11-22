@@ -25,7 +25,7 @@ from shared import (
 )
 from shared.inbound import SESSION_INBOUND_ORIGIN
 
-from . import readback_confirm, reply_reading
+from . import already_recorded, readback_confirm, reply_reading
 from .turn_handles import (  # noqa: F401 - the plugin calls them here
     real_id,
     turn_handle,
@@ -237,9 +237,7 @@ def _resolve_reply(
     binding, extras = None, None
     if any(rule_confirm_reply.is_own_rule(p, sender) for p in pending):
         # Only the reply's own headers bind it (no fallback to an earlier list).
-        binding, extras = readback_confirm.fetch_binding(
-            plug._broker_request, readback_confirm.inbound_message_id(session_id), sender
-        )
+        binding, extras = already_recorded.binding(session_id, sender)
         # Unreadable, or handed to SMD after two read-backs: his rule does not move here.
         gone = None if extras is None else set(extras["handed_off"])
         pending = [
@@ -499,7 +497,11 @@ def own_readback_for(
     its reach and how to answer, with no tag and no id; the turn's read-back of
     every such rule is owed and registered (:func:`_own_turn_readback`), and the
     sent message is bound to each once the relay has sent it. Either way the
-    broker's own sentence is exempt from the citation scan as written (R2.4)."""
+    broker's own sentence is exempt from the citation scan as written (R2.4).
+    A sentence the same person already committed is answered "already recorded"
+    and read back to nobody (2026-11-21)."""
+    if (done := already_recorded.propose_answer(response)) is not None:
+        return False, "", done
     proposal_id = str(response.get("proposal_id") or "")
     own = bool(proposal_id) and not bool(response.get("for_admin"))
     text = str(args.get("text") or "")
@@ -570,9 +572,7 @@ def reopen_note(session_id: str, sender: str, user_message: Any) -> str | None:
     if rules_by_hand.on():
         return None  # the stopgap owns rules: nothing is re-opened or read back
     plug = _plugin()
-    _binding, extras = readback_confirm.fetch_binding(
-        plug._broker_request, readback_confirm.inbound_message_id(session_id), sender
-    )
+    _binding, extras = already_recorded.binding(session_id, sender)
     block = (extras or {}).get("block", ())
     if not rule_confirm_reply.pure_affirmative(
         user_message, None, reply_reading.who(user_message, block, sender)
@@ -624,10 +624,13 @@ def pending_view(response: Any, args: dict[str, Any], session_id: str) -> Any:
     return {**response, "pending": [readback_confirm.for_model(r, sender) for r in rows]}
 
 
-def unproven(session_id: str) -> tuple[str, str]:
-    """``(proposal id, how a note may name it)`` of the first rule confirmed or
-    committed this turn that the seat has not seen install, or ``("", "")``. A
-    person's own rule committed by code is named by its sentence, never its id."""
+def unproven(session_id: str) -> tuple[str, str, bool]:
+    """``(proposal id, how a note may name it, committed)`` of the first rule
+    confirmed or committed this turn that the seat has not seen install, or
+    ``("", "", False)``. A person's own rule committed by code is named by its
+    sentence, never its id, and ``committed`` says so: the gate then tells the
+    model the rule IS recorded (2026-11-21; its text used to say the commit had
+    failed, and the attorney was told nothing was recorded)."""
     plug = _plugin()
     committed = plug._COMMITTED_TURN.get(session_id) or []
     confirmed = set(plug._CONFIRMED_STASH.get(session_id) or ())
@@ -635,11 +638,11 @@ def unproven(session_id: str) -> tuple[str, str]:
     installed = plug._INSTALLED_RULES.get(session_id, set())
     pending = sorted(p for p in confirmed if p and p not in installed)
     if not pending:
-        return "", ""
+        return "", "", False
     for row in committed:
         if str(row.get("proposal_id") or "") == pending[0]:
-            return pending[0], f'"{" ".join(str(row.get("text") or "").split())}"'
-    return pending[0], pending[0]
+            return pending[0], f'"{" ".join(str(row.get("text") or "").split())}"', True
+    return pending[0], pending[0], False
 
 
 def quoted_runs(session_id: str) -> list[str]:
