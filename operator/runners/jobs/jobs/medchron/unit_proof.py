@@ -25,24 +25,19 @@ from .update import outcome as outcome_mod
 PAGED_PREFIXES = ("review_held:", "readback_mismatch:", "update_held:")
 
 
-#: How much of an unexpected exception's first line a failed row's reason keeps.
-CRASH_LINE_MAX = 160
-
-
 def crash_reason(stage: str, exc: BaseException) -> str:
     """A failed row's reason when the stage RAISED rather than returned an
     exit code (2026-11-22). Every uncaught exception reads as exit 1, and an
     exit_map's exit-1 sentence names one cause (``update_review``: "the
     grader ... gave no verdict"), so a refused request read as a grader's
-    silence. This names the exception's class and only the FIRST line of its
-    message, capped (the rest can carry record text; the trace is in the
-    stage's log)."""
+    silence. The exception's CLASS only: a message can quote record text, and
+    the row and SMD's page carry this reason. The trace is in the stage's log.
+    ``requeue.MODEL_API`` matches the class name; a transient API error whose
+    class does not say so (an overload sent mid-stream is a plain
+    ``APIStatusError``) is no longer matched by its message's wording."""
     cls = type(exc)
     name = cls.__qualname__ if cls.__module__ == "builtins" else f"{cls.__module__}.{cls.__qualname__}"
-    lines = str(exc).strip().splitlines()
-    first = lines[0].strip()[:CRASH_LINE_MAX] if lines else ""
-    said = f": {first}" if first else ""
-    return f"{stage}: the stage stopped on an unexpected {name}{said}; the trace is in log-{stage}.txt"
+    return f"{stage}: the stage stopped on an unexpected {name}; the trace is in log-{stage}.txt"
 
 
 def paged_line(lines: list[str]) -> str | None:

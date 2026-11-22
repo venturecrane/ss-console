@@ -6,8 +6,18 @@ round alone cost $41.00, and at $7.13 where the review cost about $23.8 (the
 projection priced pages and left out the delivered entries every part
 carries); a stage with no projection was checked as $0.00; any exception in
 the review read as "the grader ... gave no verdict"; and a resumed job kept
-its first attempt's expected finish. Each test below fails on the code
-before the change. Every name, date and value is invented.
+its first attempt's expected finish. Every name, date and value is invented.
+
+RUN AGAINST THE CODE BEFORE THE CHANGE (12672486097), all 15 fail, not all for
+the same kind of reason. Ten fail on what that code DOES: the priced parts
+($9.30 projected, under 0.9 of $11.75), the pages with a full context, the
+resumed round, the cache rates, the review's bound (asked about 0.0), the
+unbounded stage's mark, the logged components, the exception's name, a crash
+in a stage whose exit 1 refuses, and the resumed finish. Five fail there only
+on a name or argument it does not have, so they prove nothing about it:
+a projected stage carries no mark, the dry run, the unreadable document, the
+page-allowance hold and the requeue. The last three of those pin behavior
+this change could have broken, not a defect it found there.
 """
 
 from __future__ import annotations
@@ -21,12 +31,13 @@ import pytest
 
 import test_decisions_driver as TD
 import update_testkit as K
-from jobs import limits as limits_mod
-from jobs.medchron import config as config_mod, dag, eta, projection
+from jobs import limits as limits_mod, requeue, run_record
+from jobs.medchron import config as config_mod, dag, eta, projection, unit_proof
 from jobs.medchron.state import RunState
-from jobs.medchron.update import review_parts as RP, review_repair as RR
+from jobs.medchron.update import finisher as FN, review_parts as RP, review_repair as RR
 from jobs.paid import load_pricing
 from jobs.stages import update_review as UR, update_review_cost as UC
+from jobs.stages.update_base import headings
 
 UNIT = "alpha"
 PAGES = 400
@@ -76,8 +87,8 @@ def _round_one_tokens(slug: Path, cfg: config_mod.FirmConfig) -> int:
     """Round one's request estimate, built here from the stage's own planner,
     independently of the projection."""
     ud = slug / "runs" / UNIT / "update"
-    ents = RR.anchor_entries((slug / "runs" / UNIT / "final-chronology.md").read_text(), {3}, UC.headings(cfg))
-    base = UC.FN.delivered_of((ud / "base.md").read_text())
+    ents = RR.anchor_entries((slug / "runs" / UNIT / "final-chronology.md").read_text(), {3}, headings(cfg))
+    base = FN.delivered_of((ud / "base.md").read_text())
     parts = RP.plan(ents, {3}, lambda _x: PAGES, {})
     assert len(parts) == PAGES // RP.WINDOW_PAGES + 1, "every window and the duplicate check"
     image = lambda _x, _p: {"type": "image"}  # noqa: E731
@@ -87,22 +98,22 @@ def _round_one_tokens(slug: Path, cfg: config_mod.FirmConfig) -> int:
 def test_the_projection_covers_the_priced_parts_with_their_delivered_entries(
     tmp_path: Path, firm_config_path: Path, pricing_path: Path
 ) -> None:
-    """Fails on the old formula (pages once, doubled, 4,000 output tokens per
-    part), which leaves out the entries every part carries."""
+    """Through the entry point the old code has too (``UC.projection``, same
+    arguments), so on origin/main it fails on the DOLLARS, not on a name: the
+    old formula prices pages and leaves out the entries every part carries.
+    The fixture's delivered entries are long visits (about 2,400 characters);
+    with short ones the old formula's doubled pages would cover the parts."""
     _update(tmp_path)
     cfg, pricing = config_mod.load(str(firm_config_path)), load_pricing(pricing_path)
     rate = pricing.rate_for(UC.review_model(cfg))
-    est = _round_one_tokens(tmp_path, cfg)
-    priced_parts = est / UC.ESTIMATE_SHARE * rate.input_per_million_cents / 1e8  # round one's real input, low end
-    got = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
-    assert got is not None and got.round1.basis == UC.BY_REQUESTS
-    assert got.round1_usd >= 0.9 * priced_parts, (got.round1_usd, priced_parts)
-    assert got.usd == pytest.approx(got.round1_usd * (1 + UC.LATER_SHARE))
-    parts = PAGES // RP.WINDOW_PAGES + 1
-    old = (
-        PAGES * RP.RV.PAGE_TOKENS * 2 * rate.input_per_million_cents + parts * 4_000 * rate.output_per_million_cents
-    ) / 1e8
-    assert old < 0.9 * priced_parts, "the instrument: the formula this replaced is under the priced parts"
+    real_tokens = _round_one_tokens(tmp_path, cfg) / 0.46  # the measured low end, written out
+    priced_parts = real_tokens * rate.input_per_million_cents / 1e8
+    got = UC.projection(tmp_path, UNIT, cfg, pricing, None)
+    assert got is not None and got >= 0.9 * priced_parts, (got, priced_parts)
+    b = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
+    assert b is not None and b.round1.basis == UC.BY_REQUESTS
+    assert b.round1_usd >= 0.9 * priced_parts, "round one alone, without the later share's help"
+    assert b.usd == pytest.approx(b.round1_usd * (1 + UC.LATER_SHARE))
 
 
 def test_before_the_documents_exist_the_projection_still_prices_a_full_context_per_part(
@@ -114,9 +125,10 @@ def test_before_the_documents_exist_the_projection_still_prices_a_full_context_p
     got = UC.projection(tmp_path, UNIT, cfg, pricing, None)
     rate = pricing.rate_for(UC.review_model(cfg))
     parts = PAGES // RP.WINDOW_PAGES + 1
-    tokens = PAGES * RP.RV.PAGE_TOKENS + parts * RP.CONTEXT_MAX * UC.ENTRY_TOKENS
-    round_one = tokens / UC.ESTIMATE_SHARE * rate.input_per_million_cents / 1e8
-    assert got is not None and got >= round_one * (1 + UC.LATER_SHARE) * 0.999
+    tokens = PAGES * RP.RV.PAGE_TOKENS + parts * RP.CONTEXT_MAX * 600
+    round_one = tokens / 0.46 * rate.input_per_million_cents / 1e8
+    assert got is not None and got >= round_one, (got, round_one)
+    assert got >= round_one * (1 + UC.LATER_SHARE) * 0.999
 
 
 def _checkpoint(slug: Path, done: int, rec: dict) -> None:
@@ -134,6 +146,11 @@ def test_a_resumed_review_is_not_projected_for_the_round_it_already_paid(
     resumed update at the cap for money already spent."""
     _update(tmp_path)
     cfg, pricing = config_mod.load(str(firm_config_path)), load_pricing(pricing_path)
+    before = UC.projection(tmp_path, UNIT, cfg, pricing, None)
+    _checkpoint(tmp_path, 1, {})
+    after = UC.projection(tmp_path, UNIT, cfg, pricing, None)
+    assert before is not None and after is not None and after < before, "a paid round one is not projected again"
+    (tmp_path / "runs" / UNIT / "update" / "review_checkpoint.json").unlink()
     fresh = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
     assert fresh is not None and fresh.round1_left
     _checkpoint(tmp_path, 0, {"pending": {"round": 1, "md_sha": UC._sha("the checkpoint document")}})
@@ -167,13 +184,15 @@ def test_a_repeated_nearby_entries_block_is_priced_at_the_cache_rates(
 ) -> None:
     _one_long_entry(tmp_path)
     cfg, pricing = config_mod.load(str(firm_config_path)), load_pricing(pricing_path)
-    got = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
-    assert got is not None and got.round1.written > 0 and got.round1.read > got.round1.written
-    assert "read from the cache" in got.line() and f"{got.round1.requests} request(s)" in got.line()
+    marked = UC.projection(tmp_path, UNIT, cfg, pricing, None)
+    got = getattr(UC, "projection_of", lambda *_a: None)(tmp_path, UNIT, cfg, pricing, None)
     monkeypatch.setattr(RP, "cache_blocks", lambda _c, _r: ("system",))
+    plain = UC.projection(tmp_path, UNIT, cfg, pricing, None)
+    assert marked is not None and plain is not None and marked < plain, "reads are priced below plain input"
+    assert got is not None and got.round1.read > got.round1.written > 0
+    assert "read from the cache" in got.line() and f"{got.round1.requests} request(s)" in got.line()
     uncached = UC.projection_of(tmp_path, UNIT, cfg, pricing, None)
     assert uncached is not None and uncached.round1.read == uncached.round1.written == 0
-    assert got.usd < uncached.usd, "the instrument: reads are priced below plain input"
 
 
 # ---- D2: a paid stage with no projection is marked, never a silent $0.00 ----------
@@ -208,24 +227,31 @@ def test_the_review_before_collect_is_checked_at_a_bound_and_marked_unprojected(
     job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     d, ctx, ext, lines = _driver(job_dir, firm_config_path, pricing_path, data_root, pages=PAGES)
-    asked, notes = _asked(monkeypatch), []
+    asked = _asked(monkeypatch)
     stage = _update_stage("update_review")
     assert d._projection(stage, ctx, ext) is None, "no new exhibits named yet"
-    d._check_limits(stage, ctx, ext, notes)
-    assert asked and asked[-1] > 0.0, "never checked as $0.00"
+    d._check_limits(stage, ctx, ext)
+    assert asked and asked[-1] > 0.0, "not checked as $0.00: a bound can be computed"
     assert asked[-1] == pytest.approx(UC.bound_usd(PAGES, d.cfg, d.pricing))
-    assert any(n.startswith(f"update_review: {projection.UNPROJECTED} (checked at a bound of") for n in notes), notes
-    assert any("unprojected" in ln for ln in lines)
+    assert any(f"update_review: {projection.UNPROJECTED} (checked at a bound of" in ln for ln in lines), lines
+    assert _marks(d) == {"unprojected_update_review": 1}
+
+
+def _marks(d) -> dict[str, int]:
+    """The ``checks`` counts the lane puts on the audit row that ends the
+    attempt (``run_record.counts`` reads ``<job dir>/data``)."""
+    return run_record.counts(Path(d.job.data_root).parent).get("checks", {})
 
 
 def test_a_stage_with_no_bound_proceeds_marked_and_a_hold_on_it_says_so(
     job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     d, ctx, ext, _lines = _driver(job_dir, firm_config_path, pricing_path, data_root, pages=10)
-    notes: list[str] = []
+    asked = _asked(monkeypatch)
     stage = _update_stage("update_summary")
-    d._check_limits(stage, ctx, ext, notes)  # proceeds: no job was ever held by a missing projection
-    assert notes == [f"update_summary: {projection.UNPROJECTED} (no bound computable; checked against what is spent)"]
+    d._check_limits(stage, ctx, ext)  # proceeds: no job was ever held by a missing projection
+    assert set(asked) == {0.0}, "no bound: only what is already spent can hold it, and the mark says so"
+    assert _marks(d) == {"unprojected_update_summary": 1}
     monkeypatch.setattr(d.budget, "refresh", lambda: d.limits.cap_usd + 1.0)
     with pytest.raises(limits_mod.LimitHold) as held:
         d._check_limits(stage, ctx, ext, [])
@@ -240,7 +266,18 @@ def test_a_projected_stage_carries_no_mark(
     d, ctx, ext, _lines = _driver(job_dir, firm_config_path, pricing_path, data_root, pages=10)
     notes: list[str] = []
     d._check_limits(_update_stage("vision"), ctx, ext, notes)
-    assert notes == []
+    assert notes == [] and _marks(d) == {}
+
+
+def test_a_dry_run_marks_its_notes_and_writes_nothing(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    d, ctx, ext, _lines = _driver(job_dir, firm_config_path, pricing_path, data_root, pages=10)
+    d.dry_run = True
+    notes: list[str] = []
+    d._check_limits(_update_stage("update_summary"), ctx, ext, notes)
+    assert notes == [f"update_summary: {projection.UNPROJECTED} (no bound computable; checked against what is spent)"]
+    assert _marks(d) == {}
 
 
 def test_the_reviews_projection_is_logged_with_its_components(
@@ -248,11 +285,9 @@ def test_the_reviews_projection_is_logged_with_its_components(
 ) -> None:
     d, ctx, ext, lines = _driver(job_dir, firm_config_path, pricing_path, data_root, pages=PAGES)
     _update(d.slug_dir)
-    notes: list[str] = []
-    d._check_limits(_update_stage("update_review"), ctx, ext, notes)
-    assert notes == []
+    d._check_limits(_update_stage("update_review"), ctx, ext)
     (line,) = [ln for ln in lines if "update_review projection" in ln]
-    assert "round one" in line and "read from the cache" in line and "later rounds 0.50 of round one" in line
+    assert "round one" in line and "read from the cache" in line and "later rounds 0.65 of round one" in line
 
 
 def test_a_document_the_planner_cannot_read_leaves_the_review_unprojected_not_the_driver_dead(
@@ -302,9 +337,9 @@ def test_an_unexpected_exception_is_named_and_the_grader_sentence_kept_for_its_o
 
     outcome, reason = _run_review(d, ctx, ext, refused)
     assert outcome == "failed"
-    assert reason.startswith("update_review: the stage stopped on an unexpected RuntimeError: request refused")
-    assert "Alpha Example" not in reason, "only the first line of the message"
-    assert "the grader" not in reason
+    assert reason == (
+        "update_review: the stage stopped on an unexpected RuntimeError; the trace is in log-update_review.txt"
+    ), "the class only: no word of the message, which can quote record text"
 
     def no_verdict(sr) -> int:  # what ``update_review._loop`` returns on GradeFailed
         sr.log(f"update review: {UR.GradeFailed('no verdict')}; nothing is reverted or kept, a rerun grades again")
@@ -329,6 +364,31 @@ def test_a_crash_in_a_stage_whose_exit_one_is_a_refusal_is_a_failure(
     d._runner_override = {"update_summary": broken}
     out = d._execute_in_process(_update_stage("update_summary"), ctx, st, ext, [])
     assert out is not None and out.outcome == "failed" and "unexpected KeyError" in (out.reason or "")
+
+
+def _api_error(status: int, kind: str) -> Exception:
+    import anthropic
+    import httpx
+
+    body = {"type": "error", "error": {"type": kind, "message": "invented"}}
+    resp = httpx.Response(status, request=httpx.Request("POST", "https://example.invalid/v1/messages"))
+    return anthropic.Anthropic(api_key="invented")._make_status_error(f"Error: {body}", body=body, response=resp)
+
+
+def _requeue_cause(exc: Exception) -> str | None:
+    o = {"outcome": "failed", "reason": unit_proof.crash_reason("update_review", exc)}
+    return requeue.cause([o], "failed", o, "update_review")
+
+
+def test_the_requeue_still_reads_a_transient_class_off_the_reason() -> None:
+    """The fallback for a crash the driver did not mark ``transient``. The one
+    shape class names cannot carry: an overload sent mid-stream (HTTP 200) is
+    a plain ``APIStatusError`` whose message alone said ``overloaded_error``.
+    That job now ends failed instead of requeued by this fallback."""
+    for status, kind in ((529, "overloaded_error"), (500, "api_error"), (429, "rate_limit_error")):
+        assert _requeue_cause(_api_error(status, kind)) == "model_api", (status, kind)
+    assert _requeue_cause(_api_error(400, "invalid_request_error")) is None
+    assert _requeue_cause(_api_error(200, "overloaded_error")) is None, "known loss: only its message says so"
 
 
 # ---- D4: a resumed job's expected finish is its own -------------------------------

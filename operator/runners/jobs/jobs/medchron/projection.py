@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .. import budget
+from .. import budget, run_record
 
 
 def read_usd(extracted: Path, usd_per_scanned_page: float, meter: budget.Budget) -> float:
@@ -67,7 +67,8 @@ def expected_finish(drv: Any, st: Any, extracted: Path) -> None:
 
 
 # ---- the check before a paid stage (moved out of ``driver.py``, 2026-11-22) -------
-#: The word a stage with no projection carries on the job's notes and in a hold's reason.
+#: The word a stage with no projection carries: its count on the run record
+#: (``unprojected_<stage>``), the log, the verdict's notes and a cost hold's reason.
 UNPROJECTED = "unprojected"
 
 
@@ -121,11 +122,16 @@ def bound_usd(drv: Any, stage: Any, extracted: Path) -> float | None:
 
 def checked_usd(drv: Any, stage: Any, ctx: Any, extracted: Path, notes: list[str] | None) -> tuple[float, bool]:
     """(the dollars the limits are asked about, whether they are a projection).
-    A paid stage with no projection is never checked as a silent $0.00: it is
-    marked UNPROJECTED in the log and on the job's notes, and checked at its
-    bound where one exists, else against what is already spent. It PROCEEDS:
-    no job was ever held by a missing projection, so a hold would be a new way
-    for a job to stop, and the per-call check still stops it at the cap."""
+    A paid stage with no projection is checked at its bound where one exists;
+    where none does, the limits are asked about 0.0, so only what is already
+    spent can hold it. Either way it is marked UNPROJECTED and it PROCEEDS: no
+    job was ever held by a missing projection, so a hold would be a new way
+    for a job to stop, and the per-call check still stops it at the cap.
+
+    THE MARK SMD CAN READ is the run record's ``checks`` count
+    ``unprojected_<stage>`` (``run_record.note_counts``), which the lane puts
+    on the audit row that ends the attempt. `notes` reach only the verdict
+    file and the CLI's report: no job row and no alert carries them."""
     usd = stage_usd(drv, stage, ctx, extracted)
     if usd is not None:
         return usd, True
@@ -135,6 +141,8 @@ def checked_usd(drv: Any, stage: Any, ctx: Any, extracted: Path, notes: list[str
     drv.log(f"[limits] {line}")
     if notes is not None:
         notes.append(line)
+    if not (drv.dry_run or drv.rehearse):  # neither writes to the job's own data root
+        run_record.note_counts(drv.job.data_root, "checks", {f"{UNPROJECTED}_{stage.name}": 1})
     return bound or 0.0, False
 
 

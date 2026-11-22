@@ -47,15 +47,14 @@ from .update_review_io import CHECKPOINT, _sha, already_in, compose_sha, page_co
 #: Calibrated 2026-11-22 at $0 on four finished updates against their usage
 #: ledgers, at the seat's pricing and firm config. Projected over real, round
 #: one: 1.05 (152 requests, the count exact), 1.13 (53), 1.25 (9), 1.24 (6).
-#: Projected against real, the whole review: $74.57 / $71.74, $27.27 / $23.06,
-#: $4.19 / $3.27, $2.66 / $2.56, above real on all four.
-#: THE MARGIN IS ROUND ONE'S, NOT THE FINISH SHARE'S: the real finish was
-#: 0.28, 0.31, 0.36 and 0.65 of real round one (0.65 is the 6-request job),
-#: above 0.25 on every one; the real re-check was 0.10 to 0.23, below it.
-#: So a resume that projects the later rounds alone, round one's review paid,
-#: has less room: on the 6-request job it is under real ($0.89 / $1.13, from
-#: these ratios).
-FINISH_SHARE = 0.25
+#: The real finish over real round one: 0.28, 0.31, 0.36 and 0.65; the real
+#: re-check: 0.10 to 0.23. FINISH_SHARE covers the finish of the three larger
+#: jobs. It does not cover the 6-request job's 0.65, which is cents: its whole
+#: round one was about $1.43, so its finish is short by about $0.22, and the
+#: two shares together still cover what it spent after round one.
+#: At these shares the whole review is above real on all four (from those
+#: ratios: $82.03 / $71.74, $30.00 / $23.06, $4.61 / $3.27, $2.93 / $2.56).
+FINISH_SHARE = 0.40
 RECHECK_SHARE = 0.25
 LATER_SHARE = FINISH_SHARE + RECHECK_SHARE
 PAGE_TOKENS = RV.PAGE_TOKENS

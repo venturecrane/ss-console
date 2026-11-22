@@ -322,7 +322,7 @@ class Driver:
 
     def _check_limits(self, stage: dag.Stage, ctx: dag.Ctx, extracted: Path, notes: list[str] | None = None) -> None:
         """Before a paid stage (``projection.check_limits``): a stage with no
-        projection is marked unprojected on `notes`, never checked as $0.00."""
+        projection is marked unprojected (``projection.checked_usd``)."""
         projection.check_limits(self, stage, ctx, extracted, notes)
 
     def _before_request(self, stage: str) -> None:
