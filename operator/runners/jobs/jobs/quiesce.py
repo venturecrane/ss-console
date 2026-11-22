@@ -68,32 +68,6 @@ def active(d: Any) -> bool:
     return read(d) is not None
 
 
-def stops_start(d: Any, job_id: str, fresh_claim: bool) -> bool:
-    """Look again right before a job starts: a marker written after the claim's
-    own look (a fleet release's gate, 2026-11-22 review) wins, and the job is
-    not started. A claim made this tick goes back to the queue as if never
-    made; a resumed job stays claimed and resumes once the marker is gone."""
-    if not active(d):
-        return False
-    if fresh_claim:
-        _unclaim(d, job_id)
-    return True
-
-
-def _unclaim(d: Any, job_id: str) -> None:
-    """Return the envelope to the queue; the job dir goes too when the claim made it."""
-    jd = d.job_dir(job_id)
-    env = jd / "envelope.json"
-    if env.is_file():
-        env.replace(d.queue / f"{job_id}.json")
-    if [p.name for p in jd.iterdir()] == ["daemon.json"]:
-        (jd / "daemon.json").unlink()
-        jd.rmdir()
-    else:
-        d._write_state(job_id, claimed=False)
-    logger.warning("%s lane quiesced after claiming %s; returned it to the queue", d.LANE, job_id)
-
-
 def _once(d: Any, key: str, msg: str, *args: Any) -> None:
     seen: set[str] = d._quiesce_logged
     if key in seen:
@@ -102,4 +76,4 @@ def _once(d: Any, key: str, msg: str, *args: Any) -> None:
     logger.warning(msg, *args)
 
 
-__all__ = ["NAME", "active", "read", "stops_start"]
+__all__ = ["NAME", "active", "read"]

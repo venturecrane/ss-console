@@ -114,6 +114,8 @@ class Verdict:
     busy: bool
     reasons: list[str] = field(default_factory=list)
     facts: dict[str, Any] = field(default_factory=dict)
+    # What the probe saw that is NOT work (a stale job-child pidfile): said, never busy.
+    notes: list[str] = field(default_factory=list)
 
 
 def _lane_reasons(lane: dict[str, Any], stale_after: float) -> list[str]:
@@ -176,6 +178,18 @@ def _child_reasons(facts: dict[str, Any]) -> list[str]:
     ]
 
 
+def _stale_notes(facts: dict[str, Any]) -> list[str]:
+    """A job-child pidfile the probe did not believe (its pid dead, or the file
+    older than this boot): a daemon killed mid-job left it. Not work: a restart
+    cuts nothing off, so it never holds a release or defers a rollback."""
+    out = []
+    for child in facts.get("children") or []:
+        if child.get("stale"):
+            why = "written before this boot" if child.get("before_boot") else "its pid is not running"
+            out.append(f"{child.get('file')}: stale pidfile (pid {child.get('pid')}, {why}); not counted as work")
+    return out
+
+
 def _gateway_reasons(facts: dict[str, Any]) -> list[str]:
     reasons: list[str] = []
     for gw in facts.get("gateways") or []:
@@ -227,7 +241,7 @@ def decide(
     reasons += _gateway_reasons(facts) + _starting_reasons(facts) + _turn_reasons(facts)
     for err in facts.get("errors") or []:
         reasons.append(f"cannot evaluate: {err}")
-    return Verdict(bool(reasons), reasons, facts)
+    return Verdict(bool(reasons), reasons, facts, _stale_notes(facts))
 
 
 def decide_rollback(facts: dict[str, Any]) -> Verdict:
@@ -241,7 +255,7 @@ def decide_rollback(facts: dict[str, Any]) -> Verdict:
     image for the whole idle wait and then not roll it back at all.
     """
     reasons = _child_reasons(facts) + _gateway_reasons(facts) + _turn_reasons(facts)
-    return Verdict(bool(reasons), reasons, facts)
+    return Verdict(bool(reasons), reasons, facts, _stale_notes(facts))
 
 
 def parse_probe(stdout: str) -> dict[str, Any]:
@@ -283,8 +297,8 @@ class BusyGate:
             raise ToolingError(f"busy probe on {seat} failed (rc={res.rc}): {res.text.strip()[-300:]}")
         return judge(parse_probe(res.stdout))
 
-    def quiesce(self, seat: str, reason: str) -> None:
-        src = quiesce_source("set", self.holder, self.clock() + QUIESCE_TTL_S, reason)
+    def quiesce(self, seat: str, reason: str, ttl: float = QUIESCE_TTL_S) -> None:
+        src = quiesce_source("set", self.holder, self.clock() + ttl, reason)
         res = self.fly.run_python(ids.app_name(seat), src)
         if "SMD_QUIESCE set" not in res.stdout and "SMD_QUIESCE no-run-dir" not in res.stdout:
             if not res.ok and looks_like_transport_failure(res):
@@ -342,10 +356,10 @@ class BusyGate:
             log(f"{seat}: the rollback gate could not read the seat ({exc}); rolling back")
             return Verdict(False, [f"seat unreadable at the rollback ({exc}); the release marker stood throughout"])
 
-    def renew(self, seat: str, log: Callable[[str], None]) -> None:
+    def renew(self, seat: str, log: Callable[[str], None], ttl: float = QUIESCE_TTL_S) -> None:
         """Push the marker's expiry out again; best effort (a seat mid-boot may not answer)."""
         try:
-            self.quiesce(seat, f"fleet release by {self.holder}")
+            self.quiesce(seat, f"fleet release by {self.holder}", ttl)
         except ToolingError as exc:
             log(f"{seat}: could not renew the quiesce marker ({exc}); it stands until its expiry")
 
@@ -363,6 +377,8 @@ class BusyGate:
             return Verdict(False, [NO_MACHINE_REASON], {"machines": 0})
         quiesce()
         verdict = probe()
+        for note in verdict.notes:
+            log(f"{seat}: note: {note}")
         if not verdict.busy:
             return verdict
         log(f"{seat}: busy ({'; '.join(verdict.reasons)}); quiesced, waiting up to {max_wait:.0f}s")

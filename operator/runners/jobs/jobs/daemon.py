@@ -615,8 +615,6 @@ class Daemon(BackOff):
         else:
             current = requeue.due(self, self._in_progress())
         job_id = current[0] if current else self.claim_next()
-        if job_id is not None and quiesce.stops_start(self, job_id, fresh_claim=not current):
-            job_id = None
         self.heartbeat(running=job_id)
         if job_id is None:
             return None

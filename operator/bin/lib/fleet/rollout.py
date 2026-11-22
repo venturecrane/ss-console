@@ -67,6 +67,12 @@ STALLED = frozenset({"tooling_error", "waiting_idle"})
 # image is safe: nothing was rolled back, and the second call converges on it.
 DEPLOY_RETRY_PAUSE_S = 60.0
 
+# The quiesce expiry written right before a step that runs as one long call
+# (the ssh boot smoke and the read-back after it): longer than that step, so
+# the marker cannot lapse inside it. A laptop that dies there holds the
+# seat's queue at most this long.
+SMOKE_HOLD_S = smoke.SMOKE_TIMEOUT_S + smoke.READBACK_WINDOW_S + 300.0
+
 
 @dataclass
 class SeatOutcome:
@@ -304,6 +310,9 @@ class ImageRollout:
         return Check(check.cls, f"{check.detail} | {self._selftest_note(seat, plan, since)}")
 
     def _verify_bash(self, seat: str, plan: ImagePlan, since: datetime) -> Check:
+        # The ssh boot smoke runs up to SMOKE_TIMEOUT_S in one call, longer than
+        # the marker's 30 minutes, and nothing can renew it mid-call.
+        self.gate.renew(seat, self.log, SMOKE_HOLD_S)
         check = self.smoker.run(seat, plan.hermes_sha)
         if check.cls != "pass":
             return check
@@ -345,6 +354,7 @@ class ImageRollout:
             return Check(bash.cls, f"selftest: no verdict ({got.detail}); boot smoke fallback: {bash.detail}")
         if got.cls != "pass":
             return got
+        self.gate.renew(seat, self.log)  # the self-test window (20 min) may have used most of the marker
         image = smoke.read_back(
             self.store, seat, lambda row: smoke.judge_image_row(row, since, plan.release),
             smoke.READBACK_WINDOW_S, self.sleep, self.clock,
@@ -355,6 +365,7 @@ class ImageRollout:
         """Verify the rollback. The boot smoke, unless this mode has no ssh fallback:
         then the self-test the rollback image runs at boot, read off the heartbeat."""
         if plan.ssh_fallback or not plan.selftest_capable or self.fleet_side is None:
+            self.gate.renew(seat, self.log, SMOKE_HOLD_S)  # one long ssh call, as in _verify_bash
             return self.smoker.run(seat, None)
         side = self.fleet_side.run(seat)
         if side.cls != "pass":

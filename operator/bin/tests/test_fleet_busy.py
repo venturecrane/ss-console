@@ -882,3 +882,43 @@ def test_a_rollback_gate_that_cannot_read_the_seat_lets_the_rollback_go() -> Non
     # The forward gate still halts on the same seat: only the rollback proceeds.
     with pytest.raises(ToolingError):
         _gate(fly).wait_idle("captain-mark", 60, lambda _: None)
+
+
+def _probe_children(tmp_path: Path, btime: float) -> list[dict]:
+    """Run the shipped probe with its /proc/stat pointed at a planted one."""
+    stat = tmp_path / "proc-stat"
+    stat.write_text(f"cpu 1 2 3\nbtime {int(btime)}\n")
+    src = _run_remote_source("remote_busy_probe.py", tmp_path).replace('"/proc/stat"', json.dumps(str(stat)))
+    proc = subprocess.run(
+        [sys.executable, "-I", "-"], input=src, capture_output=True, text=True, timeout=30, check=False
+    )
+    assert proc.returncode == 0, proc.stderr
+    return busy.parse_probe(proc.stdout)["children"]
+
+
+def test_a_pidfile_from_before_this_boot_naming_a_live_pid_is_stale_not_busy(tmp_path: Path) -> None:
+    # Re-review 2026-11-22: a daemon killed mid-job leaves child.pid, and after a
+    # reboot its pid can belong to any process. FALSIFIER (fails on 1bfdc755b):
+    # the probe believed any live pid, so the forward gate held for its whole
+    # wait and a rollback was deferred.
+    run, _ = _seat(tmp_path)
+    pidfile = run / "child.pid"
+    pidfile.write_text(str(os.getpid()))  # alive, and not our job child
+    os.utime(pidfile, (1_000_000_000, 1_000_000_000))
+    kids = _probe_children(tmp_path, time.time() - 60)
+    assert kids == [{"file": "child.pid", "pid": str(os.getpid()), "alive": False, "stale": True, "before_boot": True}]
+    facts = _facts(children=kids)
+    for judge in (busy.decide, busy.decide_rollback):
+        verdict = judge(facts)
+        assert not verdict.busy, (judge, verdict)
+        assert verdict.notes and "stale pidfile" in verdict.notes[0] and "written before this boot" in verdict.notes[0]
+    fly = _OrderedFly()
+    fly.probe_facts["captain-mark"] = [facts]
+    log: list[str] = []
+    assert not _gate(fly).wait_idle("captain-mark", 60, log.append).busy
+    assert not _gate(fly).wait_rollback("captain-mark", 60, log.append).busy
+    assert any("stale pidfile" in line for line in log)
+    # Written this boot, the same live pid is a job child: busy, as before.
+    os.utime(pidfile, None)
+    fresh = _probe_children(tmp_path, time.time() - 60)
+    assert fresh[0]["alive"] is True and busy.decide(_facts(children=fresh)).busy

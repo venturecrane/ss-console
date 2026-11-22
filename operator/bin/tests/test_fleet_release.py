@@ -19,6 +19,7 @@ from __future__ import annotations
 import pytest
 
 from bin.lib.fleet import busy, ids
+from bin.lib.fleet import smoke as smoke_mod
 from bin.lib.fleet.busy import BusyGate
 from bin.lib.fleet.preflight import PreflightChecker
 from bin.lib.fleet.r2 import image_key
@@ -1006,3 +1007,46 @@ def test_a_deploy_retry_whose_gate_cannot_read_the_seat_still_restores_the_point
     assert "retry not made, the busy gate could not read the seat" in detail
     assert "bundle pointer untouched" in detail  # the branch that calls _unpoint ran
     assert len(w.fly.deploys) == 1
+
+
+def _marker_expiries_at_each_smoke(w: World) -> list[float]:
+    """At each boot smoke call: how long the newest marker written before it still had to live."""
+    import json as _json
+
+    newest: list[float] = []
+    at_smoke: list[float] = []
+    run_python, smoke_run = w.fly.run_python, w.smoke.run
+
+    def recording_run_python(app: str, source: str, timeout: float = 90) -> Result:
+        if "SMD_QUIESCE" in source and '\\"action\\": \\"set\\"' in source:
+            args = _json.loads(_json.loads(source.split("json.loads(", 1)[1].split(")\n", 1)[0]))
+            newest.append(float(args["until"]))
+        return run_python(app, source, timeout)
+
+    def recording_smoke(seat: str, expected: str | None) -> Check:
+        at_smoke.append(newest[-1] - w.clock())
+        return smoke_run(seat, expected)
+
+    w.fly.run_python = recording_run_python  # type: ignore[method-assign]
+    w.smoke.run = recording_smoke  # type: ignore[method-assign]
+    return at_smoke
+
+
+def test_the_marker_outlives_the_ssh_smoke_after_a_selftest_window(tmp_path) -> None:
+    # Re-review 2026-11-22: the 20 minute self-test window, then the ssh smoke
+    # (up to 45 minutes, one call) ran on a marker written for 30 minutes.
+    # FALSIFIER (fails on 1bfdc755b): the marker had less left than the smoke's budget.
+    w = _selftest_world(tmp_path, None, Check("fail", "x: command failed"), Check("pass", "re-smoke green"))
+    left = _marker_expiries_at_each_smoke(w)
+    w.release_all(only="ap-staging", verify="selftest", selftest_capable=True)
+    assert "boot smoke fallback" in _details(w)["ap-staging"]
+    assert len(left) == 2, left  # the fallback smoke, then the re-smoke
+    assert all(s >= smoke_mod.SMOKE_TIMEOUT_S + smoke_mod.READBACK_WINDOW_S for s in left), left
+
+
+def test_the_marker_outlives_the_bash_verify_smoke() -> None:
+    w = World()
+    left = _marker_expiries_at_each_smoke(w)
+    w.release_all(only="ap-staging")
+    assert w.store.states()["ap-staging"] == "done"
+    assert left and left[0] >= smoke_mod.SMOKE_TIMEOUT_S + smoke_mod.READBACK_WINDOW_S, left
