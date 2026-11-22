@@ -376,6 +376,10 @@ def added_history_line(sr: StageRun, keep: list[dict[str, Any]]) -> str:
     return f"Additional prior history from records filed through {m}-{d}-{y[2:]}"
 
 
+#: The summary call's output ceiling and effort (part of the date pieces' cache key).
+SUMMARY_MAX_TOKENS, SUMMARY_EFFORT = 16000, "high"
+
+
 def _why(source: str, block: str) -> str:
     """Why a summary reply is refused, "" when it is kept."""
     bad = beyond_source(source, block)
@@ -395,34 +399,35 @@ def _prior_history(sr: StageRun, ud: Path, added_pre: list[str]) -> str | None:
     """The added prior history block, or None (logged) when a reply is
     refused. One request when it fits (byte-identical to before date pieces);
     over ``SP.TOKENS_MAX``, or refused by the API for its size, date pieces
-    (``update/summary_pieces.py``). One date too large alone is a refusal:
-    the job is held with the reason, and no request it knows will fail is sent."""
+    and one merge call (``update/summary_pieces.py``). A single date is always
+    sent; only an actual size refusal of one date is a refusal of the stage
+    (the job is held with ``SP.HOLD``)."""
     model, system = llm.model_for(sr.cfg, "judgment"), prompts.load("summarize-system", sr.cfg)
+    max_tokens, effort = SUMMARY_MAX_TOKENS, SUMMARY_EFFORT
 
-    def send(source: str, custom_id: str) -> str:
+    def send(text: str, custom_id: str) -> str:
         return sr.doorway.call(
             "summarize",
             model=model,
             system=system,
-            max_tokens=16000,
-            messages=[{"role": "user", "content": source}],
-            effort="high",
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": text}],
+            effort=effort,
             timeout=240.0,
             custom_id=custom_id,
         ).text
 
-    groups = SP.by_date(added_pre)
+    def too_large(exc: Exception) -> bool:
+        return EA.ModelError(exc).too_large()
+
+    full, groups = SP.source(added_pre), SP.by_date(added_pre)
+    runs = SP.plan(groups, system, SP.TOKENS_MAX)
     try:
-        if SP.estimate(system, added_pre) <= SP.TOKENS_MAX:
+        if len(runs) == 1:
             try:
-                block = send(SP.source(added_pre), SP.CUSTOM_ID).strip()
-                why = _why(SP.source(added_pre), block)
-                if why:
-                    sr.log(f"REJECTED: the added prior history {why}")
-                    return None
-                return block
+                return _kept(sr, full, send(full, SP.CUSTOM_ID).strip())
             except Exception as exc:
-                if not EA.ModelError(exc).too_large():
+                if not too_large(exc):
                     raise
                 h = SP.halves(groups)
                 if h is None:
@@ -430,23 +435,35 @@ def _prior_history(sr: StageRun, ud: Path, added_pre: list[str]) -> str | None:
                 sr.log("added prior history: refused for its size; sent in date pieces")
                 runs = [h[0], h[1]]
         else:
-            runs = SP.plan(groups, system, SP.TOKENS_MAX)
-            sr.log(
-                f"added prior history: about {SP.estimate(system, added_pre):,} tokens, sent as {len(runs)} date pieces"
-            )
-        pieces = SP.Pieces(ud, model + "\0" + system, send, _why, lambda e: EA.ModelError(e).too_large(), sr.log).all(
-            runs
-        )
+            est = SP.estimate(system, added_pre)
+            sr.log(f"added prior history: about {est:,} tokens, sent as {len(runs)} date pieces")
+        key = "\0".join((model, system, str(max_tokens), effort, SP.PIECE_NOTE))
+        pieces = SP.Pieces(ud, key, send, _why, too_large, sr.log).all(runs)
+        for src, reply in pieces:
+            why = _why(src, reply.strip())
+            if why:
+                sr.log(f"REJECTED: a date piece of the added prior history {why}")
+                return None
+        try:
+            merged = send(SP.merge_text([r for _, r in pieces]), SP.MERGE_ID).strip()
+        except Exception as exc:
+            if not too_large(exc):
+                raise
+            raise SP.OneDateTooLarge("") from exc
     except SP.OneDateTooLarge as exc:
+        sr.log(f"added prior history: refused for its size at {exc.day or 'the merge of its date pieces'}")
         raise StageRefusal(str(exc)) from exc
-    blocks = [reply.strip() for _, reply in pieces]
-    for (src, _), b in zip(pieces, blocks):
-        why = _why(src, b)
-        if why:
-            sr.log(f"REJECTED: the added prior history {why}")
-            return None
-    sr.log(f"added prior history from {len(blocks)} date piece(s), joined in date order")
-    return SP.joined(blocks)
+    sr.log(f"added prior history merged from {len(pieces)} date piece(s)")
+    return _kept(sr, full, merged)
+
+
+def _kept(sr: StageRun, source: str, block: str) -> str | None:
+    """`block` when it passes the reject rules against `source`, else None (logged)."""
+    why = _why(source, block)
+    if why:
+        sr.log(f"REJECTED: the added prior history {why}")
+        return None
+    return block
 
 
 def run_summary(sr: StageRun) -> int:
