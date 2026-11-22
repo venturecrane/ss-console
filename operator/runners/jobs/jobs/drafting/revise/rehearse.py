@@ -13,7 +13,7 @@ is known (the hand revision of 2026-11-04), with no model call and no write:
         [--out DIR]
 
 A revision of every filed discovery response (``set_run.py``) rehearses with
-``--units DIR --request request.txt --rules wording.json`` (``set_rehearse.py``).
+``--units DIR --request request.txt --rules rules.json`` (``set_rehearse.py``).
 
 It prints, per item, ``met`` / ``not_met`` / ``read`` and why, and every
 invariant finding; it exits 0 only when every item code can check is met and
@@ -91,7 +91,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default=None, type=Path)
     # A set revision (set_rehearse.py): every filed response against its hand-revised key.
     ap.add_argument("--units", type=Path, help="one folder per filed document: base.docx and key.docx")
-    ap.add_argument("--rules", type=Path, help="the rules in force: wording.json or a job's wording-rules.json")
+    ap.add_argument(
+        "--rules", type=Path, help='the rules in force: {"rules": [...]}, as a job\'s wording-rules.json holds them'
+    )
     ap.add_argument("--recordings", type=Path, help="the model's recorded answers (default: UNITS/recordings.jsonl)")
     ap.add_argument("--model", default="recorded", help="the model id the recordings were made with")
     a = ap.parse_args(argv)

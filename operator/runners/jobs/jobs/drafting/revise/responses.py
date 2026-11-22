@@ -120,7 +120,8 @@ def read(md: str) -> Document:
         j = i - 1
         while j > floor and heads[j] is None and not blocks[j].startswith("|"):
             j -= 1
-        if j > floor and heads[j] is not None and not heads[j][0] and heads[j][2] == h[2]:
+        prev = heads[j] if j > floor else None
+        if prev is not None and not prev[0] and prev[2] == h[2]:
             resp.request = list(range(j, i))
         k = i + 1
         while k < len(blocks) and heads[k] is None and not _ends(blocks[k]):

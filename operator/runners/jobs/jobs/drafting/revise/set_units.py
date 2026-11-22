@@ -21,13 +21,36 @@ NAMED: dict[str, re.Pattern[str]] = {
     "requests_for_admission": re.compile(r"\badmissions?\b|\bRFAs?\b", re.I),
 }
 _INTERROGATORIES = re.compile(r"\binterrogator(?:y|ies)\b|\brogs\b", re.I)
+#: An aside: a set named in it is an example, never the document to change.
+_PAREN = re.compile(r"\([^()]*\)|\[[^\[\]]*\]")
+_EXAMPLE = re.compile(r"\b(?:such\s+as|e\.\s?g\.|for\s+(?:example|instance))[^.;:\n]*", re.I)
+#: A set named as where something already is ("identified in the special
+#: interrogatories") is a reference, not the document to change.
+_REFERENCE = re.compile(r"\b(?:identified|listed|disclosed|referenced|elsewhere)\b[^.;:\n]{0,40}$", re.I)
+
+
+def _without_asides(text: str) -> str:
+    prev = None
+    while prev != text:  # nested parentheses, innermost first
+        prev, text = text, _PAREN.sub(" ", text)
+    return _EXAMPLE.sub(" ", text)
+
+
+def _targets(pat: re.Pattern[str], text: str) -> bool:
+    return any(not _REFERENCE.search(text[max(0, m.start() - 60) : m.start()]) for m in pat.finditer(text))
 
 
 def named_set_types(request_text: str) -> set[str]:
-    """The set types the request names; none named is every set. "the
-    interrogatories" with neither special nor form names both."""
-    got = {kind for kind, pat in NAMED.items() if pat.search(request_text or "")}
-    if not got & {"special_interrogatories", "form_interrogatories"} and _INTERROGATORIES.search(request_text or ""):
+    """The set types the request names as the documents to change; none named
+    is every set. "the interrogatories" with neither special nor form names
+    both. A set named in an aside (parentheses, "such as", "e.g.", "for
+    example") or as where something already is, is not named: on 2026-11-21 a
+    rule about document requests said not to list documents already identified
+    elsewhere "(such as in form or special interrogatories)", and reading that
+    as the target dropped the production responses the email asked to fix."""
+    text = _without_asides(request_text or "")
+    got = {kind for kind, pat in NAMED.items() if _targets(pat, text)}
+    if not got & {"special_interrogatories", "form_interrogatories"} and _targets(_INTERROGATORIES, text):
         got |= {"special_interrogatories", "form_interrogatories"}
     return got
 
@@ -97,7 +120,8 @@ def revise_one(
 ) -> dict[str, Any]:
     """The values made in the filed file at ``out``, proven: only the responses
     they name changed, the XML unchanged beyond the paragraphs rewritten, and no
-    format finding the filed file did not already have (``fmt`` None: a
+    kind of format finding the filed file did not already have (``finding_kind``;
+    ``fmt`` None: a
     rehearsal without the firm's inputs, no format check). Raises ``Refused``."""
     doc = rs.read(base_md)
     new, did, skipped = rs.apply(doc, values)
@@ -113,12 +137,23 @@ def revise_one(
         raise Refused("revise_layout_lost", f"words outside the responses the rules name changed ({numbers})")
     if fmt is not None:
         paper = str(lay.read(filed)["paper"])
-        before = format_check.check(filed, cls, fmt, paper=paper).fails
-        new_fails = [f for f in format_check.check(out, cls, fmt, paper=paper).fails if f not in before]
+        before = {finding_kind(f) for f in format_check.check(filed, cls, fmt, paper=paper).fails}
+        new_fails = [f for f in format_check.check(out, cls, fmt, paper=paper).fails if finding_kind(f) not in before]
         if new_fails:
             raise Refused("format_check", "the revision brings in: " + "; ".join(new_fails)[:300])
     rec.update(changed=numbers, out=str(out), touched=len(ed.touched))
     return rec
+
+
+_COUNT = re.compile(r"\d+(?:\.\d+)?")
+
+
+def finding_kind(finding: str) -> str:
+    """A format finding with its counts removed. A filed file that already
+    fails the firm's format check keeps failing it after an edit with other
+    counts ("font: 182 run(s)" becomes "font: 178 run(s)"): the same kind, not
+    a new one. Only a kind the filed file did not have is brought in."""
+    return _COUNT.sub("#", finding)
 
 
 class Refused(ValueError):

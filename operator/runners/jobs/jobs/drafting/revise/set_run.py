@@ -24,8 +24,9 @@ The graph::
          phrases, the edit made IN the file and proven, the format check)
       -> manifest -> file
 
-WHICH DOCUMENTS: the set types the request names, or every one when it names
-none (``set_units.in_scope``); which responses and which phrase: the model's
+WHICH DOCUMENTS: the set types the request names as the documents to change,
+or every one when it names none; a set named only in an aside or as where
+something already is does not count (``set_units.in_scope``); which responses and which phrase: the model's
 values, checked by code (``rules.check``). Nothing staff wrote changes except
 where a rule's value lands; a rule that would contradict a response is a
 conflict, named in the job's notes (``data/revise-set-notes.md``), never applied.
@@ -352,8 +353,8 @@ class ReviseSetRun(ReviseRun):
         self._close_request()
         self._stage("revise-rules", self._rules)
         self._stage("revise-base", self._base)
-        self._stage("revise-values", self._values)
         self._stage("revise-estimate", self._estimate_set)
+        self._stage("revise-values", self._values)
         self._stage("revise-render", self._render_set)
         self._stage("manifest", self._manifest_set)
         return self._file()

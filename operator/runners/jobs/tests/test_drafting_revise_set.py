@@ -524,3 +524,97 @@ def test_a_request_naming_kinds_scopes_the_documents() -> None:
     assert su.in_scope("apply the rules to the responses", kinds) == [True, True, True]
     assert su.in_scope("only the special rogs", kinds) == [True, False, False]
     assert su.in_scope("the interrogatories, please", kinds) == [True, False, True]
+
+
+# ---- 2026-11-21 rehearsal: scope read from an aside; a count read as a new format finding -------
+ASIDE = (
+    "For the document requests, a new rule: do not list documents already identified elsewhere "
+    "(such as in form or special interrogatories)."
+)
+
+
+@pytest.mark.parametrize(
+    ("request_text", "want"),
+    [
+        # the target is named outside the aside: only that document
+        (ASIDE, [False, True, False]),
+        # no target once the asides are set apart: every filed document
+        ("Please fix: do not list documents identified elsewhere (such as in form or special rogs).", [True] * 3),
+        ("Do not repeat what was already answered, e.g. in the special interrogatories.", [True] * 3),
+        ("Do not restate facts, for example the form interrogatories; apply the rule throughout.", [True] * 3),
+        ("Do not list documents already identified in the special interrogatories.", [True] * 3),
+        ("Apply the rules (see the note on the form interrogatories [and the special rogs]).", [True] * 3),
+        # a target still counts beside an aside
+        ("Only the special rogs, please (not the production set).", [True, False, False]),
+    ],
+)
+def test_a_set_named_in_an_aside_is_not_the_document_to_change(request_text: str, want: list[bool]) -> None:
+    """FALSIFIER: match set names anywhere in the request and the production
+    responses the email asked to fix fall out of scope."""
+    assert su.in_scope(request_text, list(KINDS.values())) == want
+
+
+def test_a_rule_about_document_requests_revises_the_production_responses(world) -> None:
+    """The rehearsal's email, in invented words. FALSIFIER: read "(e.g. form
+    rogs)" as the target and the production set is never read, the one
+    document the email asked to change."""
+    seat = _three()
+    v, client, _jd = _run(world, seat, ANSWERS, request="Do not list documents identified elsewhere (e.g. form rogs).")
+    assert v.outcome == "delivered", v.reason
+    assert sorted(client.calls) == ["form", "rfp", "special"] and "file-rfp" in seat.sent
+
+
+def _split_runs(blob: bytes, starts: str) -> bytes:
+    """The paragraph starting ``starts`` as three runs, as staff edits leave a filed file."""
+    d = docx.Document(io.BytesIO(blob))
+    p = next(p for p in d.paragraphs if p.text.startswith(starts))
+    words = p.text.split(" ")
+    p.clear()
+    for part in (" ".join(words[:2]) + " ", " ".join(words[2:5]) + " ", " ".join(words[5:])):
+        p.add_run(part)
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def test_a_format_finding_the_filed_file_already_had_is_not_brought_in(world) -> None:
+    """A filed file already failing the firm's font rule fails it on fewer
+    runs after the edit. FALSIFIER: compare findings with their counts and the
+    job refuses with format_check, nothing filed."""
+    seat = _three()
+    seat.files["file-rfp"][0] = _split_runs(seat.files["file-rfp"][0], "Responding party answers item 1.")
+    v, _client, _jd = _run(world, seat, ANSWERS)
+    assert v.outcome == "delivered", v.reason
+    assert seat.sent == ["file-special", "file-rfp"]
+
+
+def test_a_format_finding_of_a_new_kind_still_refuses(tmp_path, monkeypatch) -> None:
+    """The real check, with one finding of a kind the filed file did not have
+    added to the revision's. FALSIFIER: drop the comparison, or compare only
+    the part before the colon, and the regression is filed."""
+    from drafting_testkit import make_inputs
+
+    from jobs.drafting import firm as firm_mod, format_check
+
+    filed = tmp_path / "filed.docx"
+    filed.write_bytes(_split_runs(response_doc("rfp"), "Responding party answers item 1."))
+    md, doc = su.read_base(filed, tmp_path)
+    picked = {"values": [_value("1", "wr-nodocs", "replace", 1, "No documents exist.")]}
+    values, _c, problems = rules_mod.check(picked, RULES, doc)
+    assert not problems
+    fmt = firm_mod.load(str(make_inputs(tmp_path / "inputs"))).data["format"]
+    real = format_check.check
+
+    def check(path: Path, *a: Any, **kw: Any) -> format_check.Result:
+        res = real(path, *a, **kw)
+        if path != filed:
+            res.fails.append("font: a chart run is not the firm's chart size")
+        return res
+
+    monkeypatch.setattr(format_check, "check", check)
+    with pytest.raises(su.Refused) as err:
+        su.revise_one(md, filed, values, tmp_path / "out.docx", "discovery_response", fmt)
+    assert err.value.code == "format_check" and "chart run" in err.value.why and "run(s)" not in err.value.why
+    assert su.finding_kind("font: 182 run(s) are not Example Serif 12") == su.finding_kind(
+        "font: 178 run(s) are not Example Serif 12"
+    )

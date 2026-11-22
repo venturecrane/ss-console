@@ -11,7 +11,7 @@ exactly the responses the answer key changed, and nothing outside them changed::
     python -m jobs.drafting.revise.rehearse \\
         --units DIR            # one folder per filed document: base.docx (as filed) and key.docx (hand-revised)
         --request request.txt  # the attorney's email, his words only
-        --rules wording.json   # the rules in force: {"rules": [...]} (a job's wording-rules.json, or the store's)
+        --rules rules.json     # the rules in force: {"rules": [...]} (a job's wording-rules.json, or the store's)
         [--recordings recordings.jsonl]   # the model's answers; default DIR/recordings.jsonl
         [--inputs <the drafting firm-inputs dir>]  # adds the format check
         [--model <id>] [--out DIR]
@@ -74,7 +74,7 @@ def _unit(
         rec = su.revise_one(md, base, values, out, "discovery_response", fmt)
     except su.Refused as exc:
         return {**rep, "ok": False, "why": str(exc)}
-    ok = set(key_changed) <= set(rec["changed"])
+    ok = set(key_changed) == set(rec["changed"]) and not key_outside
     rep.update(
         in_scope=True,
         changed=rec["changed"],
