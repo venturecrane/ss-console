@@ -25,7 +25,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import limits as limits_mod, paid, proof_mode
+from .. import limits as limits_mod, paid, proof_mode, request_size
 from . import (
     extract as extract_mod,
     fetch as fetch_mod,
@@ -551,6 +551,8 @@ class LitigationRun(BookStages, RunBase):
             v = self._walk()
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=self._current(), reason=f"limit: {hold.reason}")
+        except request_size.RequestTooLarge as exc:  # our machinery's: failed, resumable, SMD told, the firm not
+            v = Verdict("failed", stage=self._current(), reason=str(exc))
         except LitigationHold as h:
             v = Verdict("held", stage=self._current(), reason=str(h))
         except LitigationFailed as exc:

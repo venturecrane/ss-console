@@ -29,7 +29,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import limits as limits_mod, paid, proof_mode, stop_request
+from .. import limits as limits_mod, paid, proof_mode, request_size, stop_request
 from .. import textcache
 from ..litigation.runbase import RunBase
 from ..litigation.tools import ReadIncomplete, dump
@@ -281,6 +281,8 @@ class CasefileRun(DeliverMixin, RunBase):
             v = self._walk()
         except limits_mod.LimitHold as hold:
             v = Verdict("failed", stage=self._current(), reason=f"limit: {hold.reason}")
+        except request_size.RequestTooLarge as exc:  # our machinery's: failed, resumable, SMD told, the firm not
+            v = Verdict("failed", stage=self._current(), reason=str(exc))
         except CasefileHold as h:
             v = Verdict("held", stage=self._current(), reason=str(h), files=self._filed_so_far())
         except CasefileFailed as exc:

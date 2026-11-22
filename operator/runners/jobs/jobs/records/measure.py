@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..ledger import read_rows
+from ..ledger import read_rows, unsent
 
 NAME = "price.json"
 JOB_NAME = "measure.json"
@@ -96,7 +96,7 @@ def job_spend(ledger: Path, pricing: Any) -> tuple[float, int]:
     dollars, attempts = 0.0, 0
     for row in read_rows(ledger):
         pages = int(row.get("pages") or 0)
-        if pages > 0:
+        if pages > 0 and not unsent(row):  # a request stopped for its size read no page
             dollars += pricing.price_row(row)
             attempts += pages
     return dollars, attempts

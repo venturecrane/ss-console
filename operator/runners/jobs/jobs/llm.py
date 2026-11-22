@@ -32,10 +32,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from . import request_size
+from .batch_files import batch_files as _batch_files, next_index as _next_index, split_requests as _split_requests
 from .firm_levers import FirmLevers
 from .deadline import NETWORK_RETRY_S, STALL_S, RetryClock, bounded_call, deadline_for, retrying_call
 from .ledger import Ledger, count_pages
 from .limits import LimitHold
+from .request_size import DoorwayError, RequestTooLarge, is_size_refusal  # noqa: F401 - the doorway's errors, by their old home
 from .stop_request import before_paid_call as _before_paid_call, sleep as _stop_aware_sleep
 
 # Only rows a call site actually leaves to the table. Every other stage passes
@@ -53,13 +56,7 @@ from .stop_request import before_paid_call as _before_paid_call, sleep as _stop_
 EFFORT_DEFAULTS = {"audit": "medium", "repair": "medium", "merge": "low", "condense": "low"}
 NEVER_BATCHED = {"audit"}  # the audit is the gate; it is never a batch job
 
-BATCH_BYTE_BUDGET = 200_000_000  # API ceiling is 256 MB; leave headroom
-BATCH_COUNT_BUDGET = 10_000  # API ceiling is 100k; keep batches restartable
 _CACHE_MARK = {"type": "ephemeral"}
-
-
-class DoorwayError(RuntimeError):
-    pass
 
 
 def model_for(cfg: FirmLevers, tier: str) -> str:
@@ -194,6 +191,10 @@ def _input_chars(messages: list[dict[str, Any]]) -> int:
 def make_result(message: Any, messages: list[dict[str, Any]], batch: bool = False) -> Result:
     text = _text_of(message)
     stop = getattr(message, "stop_reason", None) or ""
+    # A reply stopped at the model's context window is cut off exactly as one
+    # stopped at max_tokens; every stage tests only for "max_tokens" (review 11-22).
+    if stop == "model_context_window_exceeded":
+        stop = "max_tokens"
     empty = stop == "end_turn" and len(text.strip()) < 0.02 * _input_chars(messages)
     return Result(
         text=text, message=message, stop_reason=stop, usage=getattr(message, "usage", None), batch=batch, empty=empty
@@ -241,46 +242,6 @@ class BatchSummary:
     batch_ids: list[str] = field(default_factory=list)
 
 
-def _split_requests(
-    reqs: list[dict[str, Any]], byte_budget: int = BATCH_BYTE_BUDGET, count_budget: int = BATCH_COUNT_BUDGET
-) -> list[list[dict[str, Any]]]:
-    batches: list[list[dict[str, Any]]] = []
-    cur: list[dict[str, Any]] = []
-    size = 0
-    for r in reqs:
-        n = len(json.dumps(r).encode("utf-8"))
-        if cur and (size + n > byte_budget or len(cur) >= count_budget):
-            batches.append(cur)
-            cur, size = [], 0
-        cur.append(r)
-        size += n
-    if cur:
-        batches.append(cur)
-    return batches
-
-
-def _batch_files(batch_dir: Path, stage: str) -> dict[str, dict[str, Any]]:
-    files: dict[str, dict[str, Any]] = {}
-    if not batch_dir.is_dir():
-        return files
-    for p in batch_dir.iterdir():
-        if p.name.startswith(f"batch-{stage}-") and p.suffix == ".json":
-            try:
-                files[p.name] = json.loads(p.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001 - a corrupt batch file is skipped so the batch index still lists the readable ones
-                continue
-    return files
-
-
-def _next_index(existing: dict[str, Any], stage: str) -> int:
-    n = 0
-    for fn in existing:
-        core = fn[len(f"batch-{stage}-") : -len(".json")].split("-")[0]
-        if core.isdigit():
-            n = max(n, int(core) + 1)
-    return n
-
-
 # ---- the doorway -------------------------------------------------------------
 @dataclass
 class Doorway:
@@ -320,6 +281,10 @@ class Doorway:
     #: One line per call that ran out of network retries: what the driver
     #: reads to call a failed stage a network failure (driver._transient).
     gave_up: list[str] = field(default_factory=list)
+    #: The exact input count for a request near its model's window, (params) ->
+    #: tokens or None; None here counts through the client (request_size.py).
+    #: Injectable so a rehearsal or a test measures without sending.
+    count_tokens: Callable[[dict[str, Any]], int | None] | None = None
 
     @classmethod
     def from_config(
@@ -396,19 +361,25 @@ class Doorway:
             thinking=thinking,
             caching=self.caching,
         )
+        # Too large for the model: never sent (request_size.py). Under the limit: unchanged.
+        params = request_size.fit(self, stage, params, custom_id=custom_id, pages=count_pages(messages))
         e = params.get("output_config", {}).get("effort")
         client = self._client(timeout)
-        limit = self.deadline(max_tokens)
+        limit = self.deadline(params["max_tokens"])
         clock = RetryClock(attempts=attempts, backoff=backoff, budget_s=self.retry_budget_s)
-        msg = retrying_call(
-            lambda: bounded_call(client, params, stream=stream, deadline_s=limit, stall_s=self.stall_s),
-            clock,
-            stage=stage,
-            log=self.log,
-            now=self.clock,
-            sleep=self.sleep,
-            gave_up=self.gave_up,
-        )
+        try:
+            msg = retrying_call(
+                lambda: bounded_call(client, params, stream=stream, deadline_s=limit, stall_s=self.stall_s),
+                clock,
+                stage=stage,
+                log=self.log,
+                now=self.clock,
+                sleep=self.sleep,
+                gave_up=self.gave_up,
+            )
+        except Exception as exc:
+            request_size.refused(self, exc, stage, params, custom_id=custom_id, pages=count_pages(messages))
+            raise
         self.ledger.record(
             stage,
             model,
@@ -521,6 +492,35 @@ class Doorway:
                 on_result(by_id[cid], None, err)
         return summary
 
+    def _fresh_item(
+        self,
+        stage: str,
+        model: str,
+        max_tokens: int,
+        shape: dict[str, Any],
+        it: Any,
+        fresh: list[dict[str, Any]],
+        seen: set[str],
+        summary: Any,
+        on_result: Any,
+    ) -> tuple[Any, int]:
+        """Build one batch item's request and add it to ``fresh``, unless it is too
+        large for the model: then it is that item's failure, never submitted.
+        Returns the request's effort and cache-marker count."""
+        p, mk = build_params_marked(
+            stage, model=model, messages=it.messages, max_tokens=max_tokens, caching=self.caching, **shape
+        )
+        effort = p.get("output_config", {}).get("effort")
+        try:
+            p = request_size.fit(self, stage, p, custom_id=it.custom_id, pages=count_pages(it.messages), batch=True)
+        except RequestTooLarge as exc:
+            seen.add(it.custom_id)
+            summary.failed[it.custom_id] = str(exc)
+            on_result(it, None, str(exc))
+            return effort, mk
+        fresh.append({"custom_id": it.custom_id, "params": p})
+        return effort, mk
+
     def _round(
         self,
         stage: str,
@@ -552,14 +552,11 @@ class Doorway:
             self.log(f"  batch: resuming {bid}")
         fresh: list[dict[str, Any]] = []
         e, markers = None, 0
+        seen: set[str] = set()
         for it in todo:
             if it.custom_id in claimed:
-                continue
-            p, mk = build_params_marked(
-                stage, model=model, messages=it.messages, max_tokens=max_tokens, caching=self.caching, **shape
-            )
-            e, markers = p.get("output_config", {}).get("effort"), mk
-            fresh.append({"custom_id": it.custom_id, "params": p})
+                continue  # already submitted (its claim file may predate the size stop): it bills either way
+            e, markers = self._fresh_item(stage, model, max_tokens, shape, it, fresh, seen, summary, on_result)
         n = _next_index(existing, stage)
         for group in _split_requests(fresh):
             path = batch_dir / f"batch-{stage}-{n}{'-retry' if retry else ''}.json"
@@ -582,7 +579,6 @@ class Doorway:
         summary.batch_ids.extend(ids)
         timed_out = self._poll(client, ids)
         need: dict[str, str] = {}
-        seen: set[str] = set()
         for bid in ids:
             if bid in timed_out:
                 continue
