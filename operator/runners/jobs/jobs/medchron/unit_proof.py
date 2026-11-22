@@ -25,6 +25,23 @@ from .update import outcome as outcome_mod
 PAGED_PREFIXES = ("review_held:", "readback_mismatch:", "update_held:")
 
 
+#: The transient members of the SDK's closed error vocabulary
+#: (``anthropic.types.shared.ErrorType``): the only words of an API error's
+#: body a reason may carry.
+TRANSIENT_API_TYPES = frozenset({"overloaded_error", "api_error", "rate_limit_error", "timeout_error"})
+
+
+def _api_type(exc: BaseException) -> str:
+    """`` (overloaded_error)`` when `exc` is an API status error whose own
+    structured body names a type in TRANSIENT_API_TYPES, else nothing."""
+    try:
+        import anthropic
+    except ImportError:  # the audit venv may lack the SDK
+        return ""
+    kind = exc.type if isinstance(exc, anthropic.APIStatusError) else None
+    return f" ({kind})" if isinstance(kind, str) and kind in TRANSIENT_API_TYPES else ""
+
+
 def crash_reason(stage: str, exc: BaseException) -> str:
     """A failed row's reason when the stage RAISED rather than returned an
     exit code (2026-11-22). Every uncaught exception reads as exit 1, and an
@@ -32,12 +49,13 @@ def crash_reason(stage: str, exc: BaseException) -> str:
     grader ... gave no verdict"), so a refused request read as a grader's
     silence. The exception's CLASS only: a message can quote record text, and
     the row and SMD's page carry this reason. The trace is in the stage's log.
-    ``requeue.MODEL_API`` matches the class name; a transient API error whose
-    class does not say so (an overload sent mid-stream is a plain
-    ``APIStatusError``) is no longer matched by its message's wording."""
+    ``requeue.MODEL_API`` matches the class name. An overload sent mid-stream
+    (HTTP 200) is a plain ``APIStatusError``, so its class does not say it is
+    transient: the API's own error type is added, from a fixed list only
+    (``_api_type``), and the job requeues as it did on the message's wording."""
     cls = type(exc)
     name = cls.__qualname__ if cls.__module__ == "builtins" else f"{cls.__module__}.{cls.__qualname__}"
-    return f"{stage}: the stage stopped on an unexpected {name}; the trace is in log-{stage}.txt"
+    return f"{stage}: the stage stopped on an unexpected {name}{_api_type(exc)}; the trace is in log-{stage}.txt"
 
 
 def paged_line(lines: list[str]) -> str | None:

@@ -8,16 +8,17 @@ carries); a stage with no projection was checked as $0.00; any exception in
 the review read as "the grader ... gave no verdict"; and a resumed job kept
 its first attempt's expected finish. Every name, date and value is invented.
 
-RUN AGAINST THE CODE BEFORE THE CHANGE (12672486097), all 15 fail, not all for
+RUN AGAINST THE CODE BEFORE THE CHANGE (12672486097), 16 of 17 fail, not all for
 the same kind of reason. Ten fail on what that code DOES: the priced parts
 ($9.30 projected, under 0.9 of $11.75), the pages with a full context, the
 resumed round, the cache rates, the review's bound (asked about 0.0), the
 unbounded stage's mark, the logged components, the exception's name, a crash
-in a stage whose exit 1 refuses, and the resumed finish. Five fail there only
+in a stage whose exit 1 refuses, and the resumed finish. Six fail there only
 on a name or argument it does not have, so they prove nothing about it:
 a projected stage carries no mark, the dry run, the unreadable document, the
-page-allowance hold and the requeue. The last three of those pin behavior
-this change could have broken, not a defect it found there.
+page-allowance hold, the API error type and the requeue. Those pin behavior
+this change could have broken, not a defect it found there. One passes there
+and must keep passing: the overload sent mid-stream, requeued.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ import pytest
 
 import test_decisions_driver as TD
 import update_testkit as K
-from jobs import limits as limits_mod, requeue, run_record
+from jobs import deadline, limits as limits_mod, requeue, run_record
 from jobs.medchron import config as config_mod, dag, eta, projection, unit_proof
 from jobs.medchron.state import RunState
 from jobs.medchron.update import finisher as FN, review_parts as RP, review_repair as RR
@@ -366,29 +367,72 @@ def test_a_crash_in_a_stage_whose_exit_one_is_a_refusal_is_a_failure(
     assert out is not None and out.outcome == "failed" and "unexpected KeyError" in (out.reason or "")
 
 
-def _api_error(status: int, kind: str) -> Exception:
+def _api_error(status: int, body: object) -> Exception:
+    """Built by the SDK itself, as its stream reader builds one from an
+    ``error`` event (the message is the body's text)."""
     import anthropic
     import httpx
 
-    body = {"type": "error", "error": {"type": kind, "message": "invented"}}
     resp = httpx.Response(status, request=httpx.Request("POST", "https://example.invalid/v1/messages"))
-    return anthropic.Anthropic(api_key="invented")._make_status_error(f"Error: {body}", body=body, response=resp)
+    return anthropic.Anthropic(api_key="invented")._make_status_error(f"{body}", body=body, response=resp)
 
 
-def _requeue_cause(exc: Exception) -> str | None:
-    o = {"outcome": "failed", "reason": unit_proof.crash_reason("update_review", exc)}
-    return requeue.cause([o], "failed", o, "update_review")
+def _body(kind: object, message: str = "invented") -> dict:
+    return {"type": "error", "error": {"type": kind, "message": message}}
+
+
+def test_an_overload_sent_mid_stream_is_requeued_through_the_driver(
+    job_dir: Path, data_root: Path, firm_config_path: Path, pricing_path: Path
+) -> None:
+    """Passes on the code before the change too (it matched the message's
+    wording): a transient overload must never fail a paid job."""
+    d, ctx, ext, _lines = _driver(job_dir, firm_config_path, pricing_path, data_root)
+    exc = _api_error(200, _body("overloaded_error", "Overloaded"))
+    assert type(exc).__name__ == "APIStatusError" and not deadline.is_transient(exc), "the class says nothing"
+
+    def overloaded(_sr) -> int:
+        raise exc
+
+    st = RunState.load_or_new(d.slug_dir / "runs" / UNIT / "state.json", slug=d.job.slug, unit=UNIT)
+    d._runner_override = {"update_review": overloaded}
+    out = d._execute_in_process(_update_stage("update_review"), ctx, st, ext, [])
+    assert out is not None and out.outcome == "failed" and out.transient is False
+    o = out.to_dict()
+    assert requeue.cause([o], "failed", {"reason": o["reason"]}, "update_review") == "model_api", o["reason"]
+
+
+def test_a_crash_reason_carries_the_api_error_type_from_a_fixed_list_and_no_other_word() -> None:
+    plain = "update_review: the stage stopped on an unexpected anthropic.APIStatusError{}; the trace is in log-update_review.txt"
+    for kind in ("overloaded_error", "api_error", "rate_limit_error", "timeout_error"):
+        got = unit_proof.crash_reason("update_review", _api_error(200, _body(kind, "Alpha Example DOB 01/01/1970")))
+        assert got == plain.format(f" ({kind})")
+    for body in (
+        _body("Alpha Example DOB 01/01/1970"),
+        _body("overloaded_error Alpha Example"),
+        _body("invalid_request_error", "overloaded_error: Alpha Example p. 9"),
+        _body({"overloaded_error": "Alpha Example"}),
+        _body(None, "overloaded_error"),
+        {"type": "overloaded_error", "patient": "Alpha Example"},
+        "overloaded_error Alpha Example p. 9",
+        None,
+    ):
+        assert unit_proof.crash_reason("update_review", _api_error(200, body)) == plain.format(""), body
+
+    class Own(RuntimeError):
+        type = "overloaded_error"
+
+    assert "overloaded_error" not in unit_proof.crash_reason("update_review", Own("x")), "an API error only"
 
 
 def test_the_requeue_still_reads_a_transient_class_off_the_reason() -> None:
-    """The fallback for a crash the driver did not mark ``transient``. The one
-    shape class names cannot carry: an overload sent mid-stream (HTTP 200) is
-    a plain ``APIStatusError`` whose message alone said ``overloaded_error``.
-    That job now ends failed instead of requeued by this fallback."""
+    def cause(status: int, kind: str) -> str | None:
+        o = {"outcome": "failed", "reason": unit_proof.crash_reason("update_review", _api_error(status, _body(kind)))}
+        return requeue.cause([o], "failed", o, "update_review")
+
     for status, kind in ((529, "overloaded_error"), (500, "api_error"), (429, "rate_limit_error")):
-        assert _requeue_cause(_api_error(status, kind)) == "model_api", (status, kind)
-    assert _requeue_cause(_api_error(400, "invalid_request_error")) is None
-    assert _requeue_cause(_api_error(200, "overloaded_error")) is None, "known loss: only its message says so"
+        assert cause(status, kind) == "model_api", (status, kind)
+    assert cause(400, "invalid_request_error") is None
+    assert cause(200, "api_error") is None, "unchanged: the matcher never named this type"
 
 
 # ---- D4: a resumed job's expected finish is its own -------------------------------
