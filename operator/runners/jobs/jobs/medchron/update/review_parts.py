@@ -34,7 +34,7 @@ every page the entries cite).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import Any, Callable
 
@@ -52,6 +52,13 @@ CONTEXT_MAX = 24
 MOSTLY_ALREADY = 0.9
 FINISH_MAX_ENTRIES = 6
 FINISH_MAX_IMAGES = 24
+#: A review request estimated above this many input tokens is split before it
+#: is sent. The model refuses a request over 1,000,000 tokens outright, and a
+#: real update's 149th part was refused at 1,187,421 (2026-11-21): a duplicate
+#: check carrying all 667 added entries of one exhibit. Measured on that
+#: update's 148 parts that ran, the estimate (``request_tokens``) is 0.46 to
+#: 0.65 of the real input, so 300,000 estimated is at most about 650,000 real.
+REQUEST_TOKENS_MAX = 300_000
 Images = Callable[[int, int], dict[str, Any] | None]
 
 
@@ -294,6 +301,36 @@ def review_content(
         label = f"cited by {', '.join(by)}" if by else "cited by no added entry"
         out += RV.page_blocks(part.exhibit, pg, f" ({label})", images, modes)
     return out
+
+
+def request_tokens(content: list[dict[str, Any]]) -> int:
+    """A review request's input tokens, estimated: its text at four
+    characters a token and each picture at the projection's page figure."""
+    text = sum(len(str(b.get("text", ""))) for b in content if b.get("type") == "text")
+    return text // RV.CHARS_PER_TOKEN + RV.PAGE_TOKENS * sum(1 for b in content if b.get("type") == "image")
+
+
+def size_halves(part: Part, content: list[dict[str, Any]]) -> list[Part] | None:
+    """A part too large to send, in two: by its pages when its pictures and
+    page text are most of the request, else by its entries (a duplicate
+    check carries every entry of one long file and no page). None when it is
+    one entry and one page: nothing smaller can be sent."""
+    reads = RV.page_reads(content)
+    pages = reads["image_pages"] * RV.PAGE_TOKENS + reads["page_chars"] // RV.CHARS_PER_TOKEN
+    by_pages = len(part.pages) > 1 and (pages * 2 >= request_tokens(content) or len(part.entries) < 2)
+    if by_pages:
+        h = len(part.pages) // 2
+        return [
+            replace(part, pages=part.pages[:h], note=part.note),
+            replace(part, pages=part.pages[h:], note=part.note),
+        ]
+    if len(part.entries) > 1:
+        h = len(part.entries) // 2
+        return [
+            replace(part, entries=part.entries[:h], note=part.note),
+            replace(part, entries=part.entries[h:], note=part.note),
+        ]
+    return None
 
 
 def repeated_contexts(
