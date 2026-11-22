@@ -65,6 +65,46 @@ def originals(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [r for r in rows if is_control(r) and not r.get("retest_of")]
 
 
+#: A reverse control an image-mode audit retired (``retirements``).
+RETIRED = "reverse-retired"
+
+
+def retirements(rows: list[dict[str, Any]], live: set[str], ts: str) -> list[dict[str, Any]]:
+    """Rows retiring every reverse control whose text verdict no longer stands
+    after an image-mode audit has read the claims again: the claim is no longer
+    live (repaired to a new key), or its latest verdict is a picture read (the
+    control's own override included). Written by an image-mode round only
+    (``Round.reread_text``), so text mode is unchanged; recorded in the ledger
+    so the round, the final gate and the update's proof 5 read the same rows.
+    A live update, 2026-11-21: a firm moved from text to picture stayed INVALID
+    on 71 reverse rows the picture pass had replaced."""
+    from . import claims as CL
+
+    still_text = CL.text_verdict_keys(rows) & live
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for r in open_reverse(rows):
+        key = str(r.get("key") or "")
+        if key in seen or not key.endswith("-rev"):
+            continue
+        seen.add(key)
+        if key[: -len("-rev")] not in still_text:
+            out.append({"key": key, "kind": RETIRED, "ts": ts})
+    return out
+
+
+def open_reverse(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Reverse controls not retired: a retirement covers only the rows of its
+    key written before it, so a later reverse control on the same key (a firm
+    back on text) still counts."""
+    last_retired = {str(r.get("key")): i for i, r in enumerate(rows) if r.get("kind") == RETIRED}
+    return [
+        r
+        for i, r in enumerate(rows)
+        if r.get("kind") == "reverse-control" and last_retired.get(str(r.get("key")), -1) < i
+    ]
+
+
 def assess(rows: list[dict[str, Any]], out: Path) -> dict[str, Any]:
     """The controls' and reverse controls' standing over every row on file."""
     return assess_rows(rows, retired.keys(out))
@@ -90,7 +130,7 @@ def assess_rows(rows: list[dict[str, Any]], gone: set[str]) -> dict[str, Any]:
                 "retest_verdict": t.get("verdict"),
             }
         )
-    rev = [r for r in rows if r.get("kind") == "reverse-control"]
+    rev = open_reverse(rows)
     rev_bad = [
         {
             "key": r.get("key"),

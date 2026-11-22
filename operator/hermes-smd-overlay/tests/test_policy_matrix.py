@@ -274,9 +274,11 @@ def test_next_years_occurrence_verifies_but_a_later_year_does_not(trust, tmp_pat
     _write_seat(tmp_path, HOUSEHOLD_SEAT, monkeypatch)
     when = _occurrence(40)
     _read_birthday(plugin, when.strftime("%m-%d"))
-    next_year = when.replace(year=when.year + 1)
+    # "This year or next" is counted from TODAY's year, not the occurrence's: from late
+    # November, 40 days out is already next year, and one year past it is refused.
+    next_year = when.replace(year=_today().year + 1)
     assert _send(plugin, f"And next year, {next_year.isoformat()}.") is None
-    far = when.replace(year=when.year + 3)
+    far = when.replace(year=_today().year + 3)
     directive = _send(plugin, f"In {far.year}: {far.isoformat()}.")
     assert directive and directive["action"] == "block"
 

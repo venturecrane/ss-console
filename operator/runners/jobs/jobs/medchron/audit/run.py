@@ -100,6 +100,10 @@ class Round:
     control_every: int = 8
     sample: int = 0
     force: bool = False
+    #: Set only by the main audit stage under image mode (``stages/audit_loop``):
+    #: a claim whose latest verdict was read from text is read again on the
+    #: picture. The update review's own image check of new sentences leaves it off.
+    reread_text: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock)
     counter: dict[str, int] = field(default_factory=lambda: {"n": 0, "text_ok": 0, "reverse_bad": 0})
 
@@ -443,7 +447,7 @@ class Round:
                 picked.extend(group if len(group) <= self.sample else rnd.sample(group, self.sample))
             self.log(f"stratified sample seed={SEED}: {len(picked)} of {len(live)}")
             live = picked
-        have = CL.done_keys(prior)
+        have = CL.done_keys(prior, "image" if self.reread_text else None)
         todo = [c for c in live if c["key"] not in have]
         self.log(f"already verified: {len(have)} | this run: {len(todo)}")
         index: PageIndex | None = None
@@ -470,7 +474,11 @@ class Round:
         finally:
             if rindex is not None:
                 rindex.close()
-        return self.report({c["key"] for c in claims})
+        live = {c["key"] for c in claims}
+        if self.reread_text:
+            for row in controls.retirements(CL.read_rows(self.paths.results), live, ts):
+                CL.append_row(self.paths.results, row)
+        return self.report(live)
 
     def run_tasks(
         self,
