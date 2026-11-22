@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-from jobs import wording
 from jobs.medchron import billed_rows as BR, config as config_mod, job as job_mod, prompts
 from jobs.medchron.dos_check import check as dos_check
 from jobs.medchron.update import collect as C
@@ -136,7 +135,7 @@ def test_the_writer_is_told_a_dated_printout_row_is_an_event_and_its_print_date_
 def test_the_writer_lists_the_service_on_every_billed_date(firm: Path) -> None:
     text = prompts.load("map-system", config_mod.load(str(firm)))
     assert "`YYYY-MM-DD | <provider> | <service as billed> | (FILE: <file name>, p. <x>)`" in text
-    assert "written into the chronology later as a billed date with no visit note" in text
+    assert "written into the chronology later as a date billed with no visit note" in text
 
 
 def test_the_update_review_and_finisher_agree_a_printout_row_is_an_event(firm: Path) -> None:
@@ -145,8 +144,6 @@ def test_the_update_review_and_finisher_agree_a_printout_row_is_an_event(firm: P
     assert "is an event on that row's own date, not a print date" in review
     assert "presents a billing line as what it is, not as a visit" in review
     assert "a dated row of a printout such as a vaccine given" in prompts.load("update-finish-system", cfg)
-    # the reviewers are told the billed-row note is the firm's own wording
-    assert wording.BILLED_NO_NOTE in prompts.load("review-system", cfg)
 
 
 # ---- the exact shape, through assemble ----------------------------------------------
@@ -177,8 +174,7 @@ def test_a_billed_date_no_entry_covers_becomes_a_dated_row_cited_to_the_bill(
     bill = json.loads((d / "exhibit_map.json").read_text())["billing statement.pdf"]
     row = (
         "05/11/2026\nExample Therapy Group | All Other Information\n\n"
-        f"Therapeutic exercise billed on 05/11/2026. (Exhibit {bill} - p. 2)\n\n"
-        f"{wording.BILLED_NO_NOTE} (Exhibit {bill} - p. 2)"
+        f"Therapeutic exercise billed on 05/11/2026. (Exhibit {bill} - p. 2)"
     )
     assert row in entries
     assert "$" not in entries and "97110" not in entries  # no amounts, no billing codes
@@ -274,7 +270,7 @@ def test_an_update_does_not_add_a_billed_row_for_a_date_the_delivered_chronology
     delivered = ["05/11/2026\nExample Therapy Group | All Other Information\n\nTherapy visit. (Exhibit 2 - p. 4)"]
     row = (
         "05/11/2026\nExample Therapy Group | All Other Information\n\n"
-        f"Therapeutic exercise billed on 05/11/2026. (Exhibit 7 - p. 2)\n\n{wording.BILLED_NO_NOTE} (Exhibit 7 - p. 2)"
+        "Therapeutic exercise billed on 05/11/2026. (Exhibit 7 - p. 2)"
     )
     kept, rep = C.collect([row], delivered, "2026-01-01", lambda p: p.lower())
     assert kept == [] and rep[C.BILLED_DELIVERED] == 1
@@ -306,23 +302,32 @@ def test_the_billed_date_check_does_not_count_a_billed_row_as_a_record_of_the_vi
     )
     row = (
         "05/11/2026\nExample Therapy Group | All Other Information\n\n"
-        f"Therapeutic exercise billed on 05/11/2026. (Exhibit 3 - p. 2)\n\n{wording.BILLED_NO_NOTE} (Exhibit 3 - p. 2)"
+        "Therapeutic exercise billed on 05/11/2026. (Exhibit 3 - p. 2)"
     )
     rep = dos_check(slug, run, "2026-01-01", None, row)
     assert rep["billed_dates"] == 1 and rep["classes"]["in_chronology"] == 0
     assert rep["classes"]["billed_no_record"] == 1 and rep["billed_no_record"][0]["date"] == "2026-05-11"
 
 
-def test_in_an_update_the_note_is_taken_out_and_the_billed_sentence_stands_alone() -> None:
-    """The update lane takes every [NTD: ...] out of an added entry; what is
-    left still says the date was billed, and is still known as a billed row."""
-    from jobs.medchron import meta_markers
-
-    row = (
-        "05/11/2026\nExample Therapy Group | All Other Information\n\n"
-        f"Therapeutic exercise billed on 05/11/2026. (Exhibit 7 - p. 2)\n\n{wording.BILLED_NO_NOTE} (Exhibit 7 - p. 2)"
+def test_one_file_makes_one_paragraph_cited_to_its_first_page_showing_the_date() -> None:
+    """A ledger, its claim form and an EOB print the same billed line: one
+    paragraph per file (the house rule), never one per page."""
+    billed = BR.parse(
+        "2026-05-11 | Example Therapy Group | Therapeutic exercise | (FILE: ledger.pdf, p. 12)\n"
+        "2026-05-11 | Example Therapy Group | Therapeutic exercise | (FILE: ledger.pdf, p. 1)\n"
+        "2026-05-11 | Example Therapy Group | Therapeutic exercise | (FILE: payer statement.pdf, p. 3)\n"
     )
-    clean, notes = meta_markers.process_notes(row)
-    assert notes == [wording.BILLED_NO_NOTE]
-    assert clean.endswith("Therapeutic exercise billed on 05/11/2026. (Exhibit 7 - p. 2)")
-    assert BR.is_billed_row(clean)
+    text = BR.carry(billed, set(), "All Other Information")[0]["text"]
+    assert text.count("Therapeutic exercise billed on 05/11/2026.") == 2
+    assert "(FILE: ledger.pdf, p. 1)" in text and "p. 12" not in text
+    assert "(FILE: payer statement.pdf, p. 3)" in text
+
+
+def test_a_bill_dated_a_day_off_its_visit_note_keeps_both_dates() -> None:
+    """A note dated 05/10 billed on 05/11: the house style keeps both dates
+    (the writer's CONFLICTS block names the disagreement), and the row says
+    only what the bill prints."""
+    billed = BR.parse("2026-05-11 | Example Therapy Group | Re-evaluation | (FILE: ledger.pdf, p. 1)")
+    rows = BR.carry(billed, {"2026-05-10"}, "All Other Information")
+    assert [r["iso"] for r in rows] == ["2026-05-11"]
+    assert rows[0]["text"].endswith("Re-evaluation billed on 05/11/2026. (FILE: ledger.pdf, p. 1)")

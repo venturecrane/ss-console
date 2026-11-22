@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from ... import wording
+from .. import billed_rows
 from . import layout
 from .model import Document, Encounter, Page, Plan, norm, us_date
 
@@ -150,7 +151,9 @@ def _billing_dates(plan: Plan) -> list[str]:
             for item in bill.get("line_items") or []:
                 d = item["date"]
                 iso = f"{d[6:10]}-{d[0:2]}-{d[3:5]}"
-                rows.add(f"{iso} | {bill['provider']} | {_cite(plan, doc.id, pg.number)}")
+                rows.add(
+                    f"{iso} | {bill['provider']} | {item.get('description') or ''} | {_cite(plan, doc.id, pg.number)}"
+                )
     return sorted(rows)
 
 
@@ -188,6 +191,29 @@ def expected_citations(plan: Plan) -> list[dict[str, Any]]:
             out.append({"date": e.date, "provider": provider_line(plan, e), "heading": p.heading,
                         "text": wording.fill(p.text), "file": doc.file_name, "file_id": doc.file_id,
                         "page": p.page, "evidence": p.evidence})  # fmt: skip
+    return out + _billed_citations(plan)
+
+
+_BILLED_PARA = re.compile(r"^(?P<text>.*?) \(FILE: (?P<file>.+), p\. (?P<page>\d+)\)$")
+
+
+def _billed_citations(plan: Plan) -> list[dict[str, Any]]:
+    """Each billed date of service no encounter is dated on, as assemble
+    carries it (``medchron/billed_rows.py``): every paragraph cites the bill
+    page whose printed line states the date."""
+    by_file = {d.file_name: d for d in plan.documents}
+    billed = billed_rows.parse("\n".join(_billing_dates(plan)))
+    rows = billed_rows.carry(billed, {e.date for e in plan.encounters}, billed_rows.heading_of(plan.headings))
+    out = []
+    for r in rows:
+        for para in r["text"].split("\n\n")[1:]:
+            m = _BILLED_PARA.match(para.strip())
+            if m is None:
+                continue
+            doc = by_file[m.group("file")]
+            out.append({"date": r["iso"], "provider": r["provider"], "heading": billed_rows.heading_of(plan.headings),
+                        "text": m.group("text"), "file": doc.file_name, "file_id": doc.file_id,
+                        "page": int(m.group("page")), "evidence": us_date(r["iso"])})  # fmt: skip
     return out
 
 
