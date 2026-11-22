@@ -196,7 +196,9 @@ def run(sr: StageRun) -> int:
     sr.log(f"audit: {workers} claim(s) checked at once")
 
     def audit_round() -> int:
-        return Round(sr.doorway, audit_model, paths, sr.log, mode=mode, workers=workers).execute()
+        return Round(
+            sr.doorway, audit_model, paths, sr.log, mode=mode, workers=workers, reread_text=mode == "image"
+        ).execute()
 
     for rnd in range(1, ROUNDS + 1):
         sr.log(f"===== ROUND {rnd}/{ROUNDS}: audit =====")
