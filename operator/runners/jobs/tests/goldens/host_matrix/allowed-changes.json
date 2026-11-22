@@ -1,8 +1,11 @@
 {
-  "_why": "Dotted paths (list indexes as numbers) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered); <file> allows the file to appear or go. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. #4011 (2026-11-13): the records and medchron ledgers gain reply_sent_at and reply_key (the reply-once mark, a defect Phase A pinned), so a records job row the broker returns carries both, null until replied. The lifecycle matrix and run record PR (2026-11-17): every chronology record carries a run block (fields.run on the wire, metadata.run on the audit row, run_pending in the state between a resume and its start); an ending the broker did not take is kept as record_pending and recorded on a later tick, while the firm's message goes as before (medchron__broker_down_mid_run); the new host ending queued_behind_same_lane is not applicable to the note, negotiation and library setup lanes. 2026-11-19 (workspace_broker/medchron_progress.py): the medchron ledger gains the nullable kind, stage and expected_finish columns and the projection gains kind and stage, so a chronology job row the broker returns carries kind and stage, and a status read carries the job's clients.",
+  "_why": "Dotted paths (list indexes as numbers) that may differ from a job host matrix cell's golden, keyed by the golden's file name without .json (e.g. medchron__delivered); <file> allows the file to appear or go. Each entry names one exact path; a wildcard is refused. Empty: no difference is allowed. A PR that changes a host's behaviour on purpose names each path it changes here; the edit is reviewed with the PR, and the integrity job (bin/goldens/golden-integrity.py) holds the committed goldens to the merge-base tree's behaviour everywhere else, fails on an entry that explains no difference or that the merge-base already carried, and on the push to main fails until a merged change's entries are cleared. #4011 (2026-11-13): the records and medchron ledgers gain reply_sent_at and reply_key (the reply-once mark, a defect Phase A pinned), so a records job row the broker returns carries both, null until replied. The lifecycle matrix and run record PR (2026-11-17): every chronology record carries a run block (fields.run on the wire, metadata.run on the audit row, run_pending in the state between a resume and its start); an ending the broker did not take is kept as record_pending and recorded on a later tick, while the firm's message goes as before (medchron__broker_down_mid_run); the new host ending queued_behind_same_lane is not applicable to the note, negotiation and library setup lanes. 2026-11-19 (workspace_broker/medchron_progress.py): the medchron ledger gains the nullable kind, stage and expected_finish columns and the projection gains kind and stage, so a chronology job row the broker returns carries kind and stage, and a status read carries the job's clients. 2026-11-22 (fleet release never kills a job): the busy probe's job-child facts gain stale and before_boot (a pidfile is believed only when its pid is alive and it was written this boot), so each busy cell's busy_probe.facts.children entry carries both.",
   "records__broker_down_mid_run": [],
   "records__broker_unreachable": [],
-  "records__busy": [],
+  "records__busy": [
+    "1.readers.busy_probe.facts.children.0.before_boot",
+    "1.readers.busy_probe.facts.children.0.stale"
+  ],
   "records__delivered": [],
   "records__failed": [],
   "records__held": [],
@@ -28,5 +31,21 @@
   "medchron__stopped_by_smd_running": [],
   "medchron__wake_lost": [],
   "medchron__wake_paused": [],
-  "medchron__settings_missing": []
+  "medchron__settings_missing": [],
+  "casefile__busy": [
+    "1.readers.busy_probe.facts.children.0.before_boot",
+    "1.readers.busy_probe.facts.children.0.stale"
+  ],
+  "drafting__busy": [
+    "1.readers.busy_probe.facts.children.0.before_boot",
+    "1.readers.busy_probe.facts.children.0.stale"
+  ],
+  "litigation__busy": [
+    "1.readers.busy_probe.facts.children.0.before_boot",
+    "1.readers.busy_probe.facts.children.0.stale"
+  ],
+  "negotiation__busy": [
+    "1.readers.busy_probe.facts.children.0.before_boot",
+    "1.readers.busy_probe.facts.children.0.stale"
+  ]
 }

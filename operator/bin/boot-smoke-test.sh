@@ -284,6 +284,15 @@ vendor_inconclusive() {
   return 0
 }
 
+# A lane-is-idle check that found a stale pidfile (seat-checks.sh lane_idle_cmd,
+# LANE_IDLE_STALE_RC) is a WARNING, as in the image: the Machine prints this mark
+# for it, because ssh carries no exit code through ssh_run's wrapper.
+IDLE_STALE_MARK="SMD_IDLE_STALE"
+idle_stale() {
+  [[ "$2" == *"${IDLE_STALE_MARK}"* ]] || return 1
+  check_warn "$1: $(printf '%s\n' "$2" | grep -m1 'stale pidfile' || echo 'a stale job-child pidfile')"
+}
+
 ssh_check() { # <step> <command as reported> <command as run on the Machine>
   local step="$1" cmd="$2" remote="$3" out
   if out="$(ssh_run "${remote}")"; then
@@ -291,6 +300,7 @@ ssh_check() { # <step> <command as reported> <command as run on the Machine>
     return
   fi
   vendor_inconclusive "${step}" "${out}" && return
+  idle_stale "${step}" "${out}" && return
   if [[ "${out}" == *"${CHECK_FAILED_MARK}"* ]]; then
     # The check ran and said no. Retry only if the Machine was cycling under it.
     # A retry may only turn a non-answer into an answer, never a "no" into a
@@ -436,7 +446,9 @@ check() { ssh_exec "$@"; }
 check_script() { ssh_exec_script "$@"; }
 # Over ssh a busy lane and a vendor probe are judged like any check: the laptop
 # smoke runs at provision and release, which are boot runs.
-check_idle() { ssh_exec "$@"; }
+check_idle() {
+  ssh_check "$1" "$2" "( $2 ); smd_rc=\$?; [ \$smd_rc -ne ${LANE_IDLE_STALE_RC} ] || echo ${IDLE_STALE_MARK}; exit \$smd_rc"
+}
 check_vendor() { ssh_exec_vendor "$@"; }
 check_vendor_strict() { ssh_exec_vendor "$@"; }
 check_note() { pass "$1 ($2)"; }
