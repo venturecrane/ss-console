@@ -455,14 +455,16 @@ def test_a_new_record_identical_to_a_firm_numbered_file_reuses_its_number_and_is
     assert "(Exhibit 2 - p. 2)" in upd and "Exhibit 3" not in upd and seat.deleted == ["c1"]
 
 
-def test_a_refiled_copy_of_a_new_record_is_not_read_twice_and_is_named_in_records_reviewed(
+def test_a_refiled_copy_of_a_new_record_is_read_uncharged_and_named_in_records_reviewed(
     scene, data_root: Path, firm_config_path: Path, pricing_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Change 1 wired, and change 7. A second new document repeats the first
-    one's pages under another fax header. Before, both were composed (the
-    check looked only at the delivered exhibits). Now its pages are excluded
-    as repeats, nothing cites it, and Records Reviewed names it with its page
-    count."""
+    one's pages under another fax header. Since 2026-11-22 only a pixel-equal
+    page is set aside, so its pages are READ, each a suspected copy of the
+    first document's page and not charged; nothing new cites it, and Records
+    Reviewed names it."""
+    from jobs.medchron import pages_record as PR
+
     job_dir, seat = scene
     _upload_pause(monkeypatch)
     copy = make_pdf(["FAX 555-0177 06/09/2026 16:40 PAGE 7 OF 30\n" + p for p in NEW_PAGES])
@@ -476,10 +478,9 @@ def test_a_refiled_copy_of_a_new_record_is_not_read_twice_and_is_named_in_record
     ud = data_root / "example-matter" / "runs" / "alpha" / "update"
     raw = json.loads((ud / "selection.json").read_text())
     sel = {r["source_name"]: r for r in raw["exhibits"]}
-    # Parity O: a copy every page of which repeats a new record is not an
-    # exhibit at all; it is cited in the record it copies (selection "subsets").
-    assert "Imaging refax.pdf" not in sel
-    (sub,) = [s for s in raw["subsets"] if s["source_name"] == "Imaging refax.pdf"]
-    assert sub["pages"] == 2 and sub["matched"] == 2 and sub["subset_of"]["id"] == "n1"
+    assert sel["Imaging refax.pdf"]["read"] == [1, 2] and raw["subsets"] == []
+    rows = [r for r in PR.read(data_root / "example-matter" / "runs" / "alpha") if r["doc"] == "n4"]
+    assert [r["evidence"]["cover"] for r in rows] == [{"doc": "n1", "page": p, "exact": False} for p in (1, 2)]
+    assert not any(map(PR.charged, rows)) and o.pages == len(NEW_PAGES)  # the first copy alone is charged
     upd = (ud / "updated-chronology.md").read_text()
-    assert f"Imaging refax.pdf (re-filed pages of Exhibit {sub['subset_of']['exhibit']})" in upd
+    assert "Imaging refax.pdf" in upd.split("## Records Reviewed", 1)[1]

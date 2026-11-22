@@ -17,6 +17,8 @@ from types import SimpleNamespace
 
 import pymupdf
 
+from jobs.medchron import pages_record as PR
+
 LINES = [
     "Example Family Clinic progress note",
     "Chief complaint: neck pain after the collision",
@@ -192,7 +194,9 @@ def test_two_genuinely_different_scanned_pages_never_match(tmp_path: Path) -> No
 def test_a_form_filled_in_on_another_day_beside_a_true_copy_is_still_read(tmp_path: Path) -> None:
     """The same form with another date and pain score looks like its twin to a
     picture; beside a re-encoded copy of the next page it even pairs in order.
-    It is transcribed, its words disagree, and it is read."""
+    It is transcribed and read. Since 2026-11-22 so is the re-encoded copy of
+    the next page: a near picture sets nothing aside, whatever its words; it
+    is read as a suspected copy and not charged."""
     form_a, form_b = _record(3, "03/02/2026", 6), _record(3, "03/09/2026", 4)
     nxt = _record(4)
     sr = _seed(tmp_path, {}, {"first": [_scan(form_a), _scan(nxt)], "second": [_scan(form_b), _scan(nxt, jpeg=40)]})
@@ -205,5 +209,6 @@ def test_a_form_filled_in_on_another_day_beside_a_true_copy_is_still_read(tmp_pa
     sel = _select(sr)
     by_id = {r["id"]: r for r in sel["exhibits"]}
     assert 1 in by_id["second"]["read"]  # another visit: read
-    assert by_id["second"]["read"] == [1]  # the re-encoded copy whose words agree is a repeat
-    assert by_id["second"]["excluded"] == {"repeats an earlier page of the new documents": 1}
+    assert by_id["second"]["read"] == [1, 2] and by_id["second"]["excluded"] == {}  # the copy is read too
+    rows = {r["page"]: r for r in PR.read(tmp_path / "runs" / "alpha") if r["doc"] == "second"}
+    assert rows[2]["evidence"][PR.SUSPECTED] and not PR.charged(rows[2])  # read as a suspected copy, not charged

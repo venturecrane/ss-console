@@ -77,9 +77,9 @@ def test_a_template_page_with_a_causation_opinion_and_signer_is_read(tmp_path: P
     assert S.classify_new({1: COVERED}, 1, seen)[1][0] == S.READ
 
 
-def test_a_reprinted_copy_differing_only_in_its_print_date_is_still_excluded(tmp_path: Path) -> None:
+def test_a_reprinted_copy_differing_only_in_its_print_date_is_a_suspected_copy(tmp_path: Path) -> None:
     seen = S.seen_shingles([_pdf(tmp_path, [PRINTED_A, PLAN_A])])
-    assert S.classify_new({1: PRINTED_B}, 1, seen)[1] == (S.EXCLUDED, S.ALREADY)
+    assert S.classify_new({1: PRINTED_B}, 1, seen)[1] == (S.READ, S.SUSPECTED)
 
 
 def test_a_new_clinical_value_on_a_covered_page_is_read(tmp_path: Path) -> None:

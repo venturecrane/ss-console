@@ -56,7 +56,7 @@ def _shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entries: list[str]) 
         cfg=SimpleNamespace(get=lambda *_a: sorted(K.HEADINGS)),
     )
     monkeypatch.setattr(UC.C, "composed", lambda _rd: entries)
-    monkeypatch.setattr(UC.C, "collect", lambda comp, _base, _inc, _canon: (list(comp), {}))
+    monkeypatch.setattr(UC.C, "collect", lambda comp, _base, _inc, _canon, _suspects=None: (list(comp), {}))
     monkeypatch.setattr(UC, "Canon", lambda _cfg: None)
     return UC._shape(
         sr, K.base_md(), sd / "runs" / "alpha", [{"exhibit": 2, "id": "n2", "title": "Exhibit 2 - Sample"}]

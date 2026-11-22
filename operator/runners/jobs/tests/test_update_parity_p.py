@@ -76,7 +76,9 @@ def _matter(tmp_path: Path, statement: str, composed: list[str]) -> SimpleNamesp
 def _shape(sr: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> tuple[list[str], dict]:
     """The real collect shaping over the real composed entries (compose's own
     split), the keep decisions passed through."""
-    monkeypatch.setattr(UC.C, "collect", lambda comp, _base, _inc, _canon: (sorted(comp, key=B.iso), {}))
+    monkeypatch.setattr(
+        UC.C, "collect", lambda comp, _base, _inc, _canon, _suspects=None: (sorted(comp, key=B.iso), {})
+    )
     monkeypatch.setattr(UC, "Canon", lambda _cfg: None)
     rd = sr.slug_dir / "runs" / "alpha"
     return UC._shape(sr, K.base_md(), rd, [{"exhibit": 2, "id": "n2", "title": "Exhibit 2 - Sample"}])  # type: ignore[arg-type]

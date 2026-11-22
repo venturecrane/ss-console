@@ -41,7 +41,7 @@ from ..medchron import icd_tables, meta_markers, pages_record as PR, prompts
 from .. import llm
 from ..medchron.audit import claims as CL, page_text as PT
 from ..medchron.update import body as B, cite_read as CR, collect as C, handwritten as H, icd, legend as LG
-from ..medchron.update import providers as P
+from ..medchron.update import providers as P, repeats as R
 from ..medchron.update import outcome as UO, proofs as PF, records_dates as RD, select as S, uncited as U
 from .base import StageRefusal, StageRun, read_json
 from .group import Canon
@@ -284,9 +284,12 @@ def _shape(sr: StageRun, base_md: str, rd: Path, provisional: list[dict]) -> tup
     y = re.match(r"\d{4}", str(sr.job.incident_date or ""))
     comp, _ = H.with_years(C.composed(rd), int(y.group()) if y else date.today().year)
     # A citation of a copy names the read page it copies (``update/cite_read``).
-    comp, cites = CR.to_read_pages(comp, PR.read(rd), {str(r["id"]): int(r["exhibit"]) for r in provisional})
+    rows, exhibit_of = PR.read(rd), {str(r["id"]): int(r["exhibit"]) for r in provisional}
+    comp, cites = CR.to_read_pages(comp, rows, exhibit_of)
+    # A restated delivered visit is known by its pages too: read as suspected copies (``update/repeats``).
+    suspects = R.suspected_copies(rows, exhibit_of)
     try:
-        entries, rep = C.collect(comp, base_ents, sr.job.incident_date, Canon(sr.cfg))
+        entries, rep = C.collect(comp, base_ents, sr.job.incident_date, Canon(sr.cfg), suspects)
     except C.CollectRefusal as exc:
         raise StageRefusal(str(exc)) from exc
     entries = [meta_markers.strip(e) for e in entries]  # the pipeline's own notes never reach the firm

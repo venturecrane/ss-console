@@ -4,9 +4,11 @@
 finding, and whether the page carries ink); ``update_select`` then writes
 every page of every pulled document (``rows``), each with the evidence its
 reason rests on (``medchron/pages_record``): the page that covers an
-excluded page (by picture, by text, or held by a run of pages), the blank
-or billing words, or the document-level rule and, for a document withheld
-as another person's, a pointer to ``update/identity_holds.json``.
+excluded page (by picture: the only rule that sets a page aside as a copy),
+the page a READ page is suspected of copying and the rule that suspected it
+(``evidence.suspected``: such a page is not charged, ``update/charged``), the
+blank or billing words, or the document-level rule and, for a document
+withheld as another person's, a pointer to ``update/identity_holds.json``.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ CLASS = {
     BYTE_IDENTICAL: "byte_identical",
     NOT_A_SOURCE: "not_a_page_source",
     unopened.REASON: "password_protected",
+    S.SUSPECTED: "suspected_copy",
     UO.IMAGE_UNREAD: "image_unread",
     FI.WITHHELD_REASON: "withheld_firm_direction",
     FI.RULE_REASONS[FI.RULE_ANOTHER_PERSON]: "withheld_other_person",
@@ -48,6 +51,22 @@ def klass(reason: str) -> str:
     if reason.startswith(prior_reading.PREFIX):
         return "read_by_earlier_delivery"
     return CLASS.get(reason) or re.sub(r"[^a-z0-9]+", "_", reason.lower()).strip("_")[:60]
+
+
+#: The rule that suspected a READ page of copying another (``evidence.suspected``).
+NEAR_PICTURE, UNREAD_KEEPER, TEXT_OVERLAP, RUN_OF_PAGES = (
+    "near_picture",
+    "picture_of_a_page_never_read",
+    "text_overlap",
+    "run_of_pages",
+)
+
+
+def suspicion(c: S.Cover) -> tuple[str, str]:
+    """(the rule that suspected the page, its evidence kind)."""
+    if c.kind == S.BY_PICTURE:
+        return (UNREAD_KEEPER if c.exact else NEAR_PICTURE), PR.PICTURE
+    return (RUN_OF_PAGES, PR.CONTAINED) if c.kind == S.BY_RUN else (TEXT_OVERLAP, PR.TEXT)
 
 
 def _kind(reason: str) -> str:
@@ -70,10 +89,11 @@ def candidate_rows(
     These rows are what the page question before the first paid step counts
     (``update/charged``), so they are an UPPER BOUND on what a model will
     read: a page is set aside here only when it is CERTAINLY never sent to a
-    model, an EXACT picture match (the vision pass never transcribes it) or a
-    page of an exact re-filed copy. A near match is transcribed and confirmed
-    by its words later, so it counts as to be read, as does every page of a
-    file that could not be drawn."""
+    model, pixel-equal to a page that was read (the vision pass never
+    transcribes it) or a page of an exact re-filed copy. Any other picture
+    match is read as a suspected copy, so it counts as to be read (its match
+    named under ``evidence.near``), as does every page of a file that could
+    not be drawn."""
     out = []
     for rid, n, inked in new:
         found = ident.pages.get(rid) or {}
@@ -97,7 +117,7 @@ def candidate_rows(
                         inked=ink,
                     )  # fmt: skip
                 )
-            elif h is not None and h.exact:
+            elif h is not None and h.aside:
                 out.append(
                     PR.row(
                         rid,
@@ -111,7 +131,7 @@ def candidate_rows(
                         inked=ink,
                     )  # fmt: skip
                 )
-            else:  # no match, or a NEAR one its words must confirm: to be read
+            else:  # no match, or one that only suspects a copy: to be read
                 ev = {"near": PR.picture_cover(h)} if h is not None else {}
                 out.append(PR.row(rid, sha.get(rid, ""), p, PR.READ, "candidate", PR.NONE, BY_PAGES, inked=ink, **ev))
     for rid, n in (unrendered or {}).items():
@@ -121,15 +141,19 @@ def candidate_rows(
 
 
 def _decided_row(rid: str, sha: str, p: int, d: str, why: str, cover: S.Cover | None, h: PG.Page | None) -> dict:
+    """One decided page's row. `cover`: the page that covers it, or, for a
+    READ page, the page it is suspected of copying."""
+    if d == S.READ and cover is not None:
+        rule, kind = suspicion(cover)
+        return PR.row(
+            rid, sha, p, PR.READ, klass(S.SUSPECTED), kind, BY_SELECT, cover.as_dict(), **{PR.SUSPECTED: rule}
+        )
     if d == S.READ:
         return PR.row(rid, sha, p, PR.READ, "new", PR.NONE, BY_SELECT)
     if d == S.UNREAD:
         return PR.row(rid, sha, p, PR.UNREAD, "transcription_failed", PR.NONE, BY_SELECT)
-    if h is not None and why == h.reason and (cover is None or cover.kind == S.BY_PICTURE):
+    if h is not None and h.aside and why == h.reason:  # a page is set aside as a copy only by its picture
         return PR.row(rid, sha, p, PR.EXCLUDED, klass(why), PR.picture_kind(h), BY_SELECT, PR.picture_cover(h))
-    if cover is not None:
-        kind = PR.CONTAINED if cover.kind == S.BY_RUN else PR.TEXT
-        return PR.row(rid, sha, p, PR.EXCLUDED, klass(why), kind, BY_SELECT, cover.as_dict())
     return PR.row(rid, sha, p, PR.EXCLUDED, klass(why), _kind(why), BY_SELECT)
 
 
@@ -156,7 +180,8 @@ def selection_rows(
         c = decided[rid]
         found = ident.pages.get(rid) or {}
         for p, (d, why) in sorted(c.decisions.items()):
-            out[(rid, p)] = _decided_row(rid, sha.get(rid, ""), p, d, why, c.covers.get(p), found.get(p))
+            cover = c.suspects.get(p) if d == S.READ else None
+            out[(rid, p)] = _decided_row(rid, sha.get(rid, ""), p, d, why, cover, found.get(p))
     for rid, sub in extracts.items():
         if any(k[0] == rid for k in out):
             continue

@@ -7,7 +7,8 @@ by name and assemble numbered them by first citation. Here:
 1. citations are mapped back to the exhibit numbers the update assigned
    (`renumber`; an unknown source refuses);
 2. an entry is KEPT unless a delivered entry has its date and provider (or
-   reads alike) AND it states no value or finding the delivered entries of
+   reads alike, or is the entry whose pages its pages are suspected copies
+   of, ``repeats.suspected_copies``) AND it states no value or finding the delivered entries of
    that date lack (`keep_decision`, ``update/repeats.py``): dropping an entry
    that adds one would lose it, and the audit cannot see a dropped value. A
    kept restatement of a delivered visit is cut to its "Additional findings";
@@ -86,13 +87,18 @@ def keep_decision(e: str, base_ents: list[str], canon: Callable[[str], str]) -> 
 
 
 def collect(
-    comp: list[str], base_ents: list[str], incident: str, canon: Callable[[str], str]
+    comp: list[str],
+    base_ents: list[str],
+    incident: str,
+    canon: Callable[[str], str],
+    suspects: R.Suspects | None = None,
 ) -> tuple[list[str], dict]:
-    """(kept entries in date order, report). Refuses an unresolved citation."""
+    """(kept entries in date order, report). Refuses an unresolved citation.
+    `suspects`: the delivered page each page read as a suspected copy may copy."""
     keep: list[str] = []
     rep: Counter[str] = Counter()
     for e in comp:
-        verdict, kept = R.keep_decision(e, base_ents, canon)
+        verdict, kept = R.keep_decision(e, base_ents, canon, suspects)
         if kept is None:
             rep[verdict] += 1
             continue

@@ -8,9 +8,11 @@ document, and which new documents are re-filed copies or extracts.
 
 Writes ``update/page_identity.json`` for ``update_select`` and
 ``vision_skip.json`` for the vision pass: a page pixel-equal to one already
-read, and every page of a re-filed copy, is never transcribed (a near match
-is transcribed and confirmed by its words in ``update_select``). A re-filed scan was once
-transcribed, composed and filed as five new exhibits (2026-10-14).
+READ, and every page of a re-filed copy, is never transcribed; every other
+page is (a near match, or a pixel-equal one whose page a past update set
+aside unread, ``update/keepers``, is read in ``update_select`` as a suspected
+copy). A re-filed scan was once transcribed, composed and filed as five new
+exhibits (2026-10-14).
 
 A file this cannot open settles nothing: its pages go to vision as before.
 
@@ -29,12 +31,13 @@ import json
 from pathlib import Path
 
 from ..medchron import pages_record as PR
-from ..medchron.update import pageid as PI, pageid_io as PG
+from ..medchron.update import keepers, pageid as PI, pageid_io as PG
 from . import identity_pages, page_rows
 from .identity_redecide import redecide
 from .base import StageRun, read_jsonl
 from .update_base import plan, update_dir
 from .update_select import REDECIDED_FILE, _candidates, delivered_read
+from .vision_seed import delivered_same_matter
 
 
 def _sigs(path: Path, log) -> list[PI.Sig] | None:
@@ -74,7 +77,8 @@ def run(sr: StageRun) -> int:
         if s is not None:
             new.append((str(r["id"]), s))
     firm = {str(r["id"]) for r in rows if (r.get("sha256") or "") in firm_sha}
-    ident = PI.identify(delivered, new, firm)
+    unread = _unread_keepers(sr, read)
+    ident = PI.identify(delivered, new, firm, unread)
     (ud / PG.NAME).write_text(json.dumps(PI.to_json(ident), indent=1), encoding="utf-8")
     skip = ident.skipped({d: len(s) for d, s in new})
     (sr.slug_dir / "vision_skip.json").write_text(json.dumps(skip, indent=1), encoding="utf-8")
@@ -96,7 +100,17 @@ def run(sr: StageRun) -> int:
     total = sum(len(v) for v in skip.values())
     sr.log(
         f"update_pages: {sum(len(s) for _, s in new)} new page(s) against {sum(len(s) for _, s in delivered)} "
-        f"delivered; {total} pixel-equal to a page read elsewhere and not transcribed; "
+        f"delivered ({sum(len(v) for v in unread.values())} delivered page(s) a past update never read are no "
+        f"keeper); {total} pixel-equal to a page read elsewhere and not transcribed; "
         f"{len(ident.extracts)} re-filed cop(ies) or extract(s)"
     )
     return 0
+
+
+def _unread_keepers(sr: StageRun, read: list[dict]) -> dict[int, set[int]]:
+    """The delivered pages a past update filed and never read (``update/keepers``)."""
+    try:
+        return keepers.from_jobs(read, delivered_same_matter(sr.job, sr.slug_dir.name), sr.unit.unit)
+    except Exception as exc:  # noqa: BLE001 - an unreadable past record settles nothing: every delivered page counts as read, as before
+        sr.log(f"update_pages: past updates' read pages not loaded ({type(exc).__name__}: {str(exc)[:160]})")
+        return {}

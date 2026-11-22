@@ -17,20 +17,28 @@ exhibit as new exhibits, and composed the same visits two and three times
   (pixel-equal duplicates of that one aside) is at least MARGIN further, and
   a NEIGHBOUR pairs the same way with the neighbouring page. A picture cannot
   tell a re-encoded copy from the same form filled in with one other number,
-  so a NEAR page IS transcribed and is a repeat only when its words confirm
-  it (``pageid_io.confirmed``: the same dates and the same clinical values).
+  so a NEAR page is READ, never set aside: the match is recorded as a
+  suspected copy (2026-11-22: a reader called 16 of 137 known-different page
+  pairs copies, and a text test set aside 25 differing pages).
 * A blank page (almost no ink) is never matched: every blank page looks alike.
 * Pages of one document are never compared with each other: a run of
   template visits inside one record is read whole (review fix 1).
 
-A new page pixel-equal to a delivered page is ALREADY read; one pixel-equal
-to a page of a new document READ EARLIER (``reading_order``: the larger
-first) is a repeat. A new document whose EVERY
-inked page is pixel-equal to a page of one other document (a delivered
-exhibit, or a LARGER new document) or of a delivered exhibit, at least
-EXTRACT_FRAC of them to that one document, is a re-filed copy or extract: not
-an exhibit, none of its pages transcribed, named in Records Reviewed and cited
-to that document.
+A new page pixel-equal to a delivered page that was READ is ALREADY read;
+one pixel-equal to a page of a new document READ EARLIER (``reading_order``:
+the larger first) is a repeat. A delivered exhibit page a past update set
+aside unread (`unread`, read from that update's selection by
+``update/keepers``) is no keeper: a new page pixel-equal to it is read, its
+match recorded as a suspected copy (``Hit.keeper_read`` False), because the
+delivered chronology never read what that page says. A page of a new
+document is always a valid keeper: within one update a page is set aside
+only as a pixel-equal copy of a valid keeper, and pixel equality is
+transitive, so its copy finds that keeper too. A new document whose EVERY
+inked page is pixel-equal to a valid keeper in one other document (a
+delivered exhibit, or a LARGER new document) or in a delivered exhibit, at
+least EXTRACT_FRAC of them to that one document, is a re-filed copy or
+extract: not an exhibit, none of its pages transcribed, named in Records
+Reviewed and cited to that document.
 
 Calibration, on the real files of that update read only (numbers in the PR):
 re-encoded copies of one scan sat 2 to 25 bits apart of 256, the next
@@ -58,6 +66,13 @@ INK_LEVEL = 128
 MIN_INK = 0.002  # fraction of dark pixels below which a page is blank
 DELIVERED = "exhibit:"
 ALREADY, REPEAT = "already", "repeat"
+#: The picture record's tiers: pixel-equal to a page that was read (the page
+#: is set aside), pixel-equal to a page never read, and a near match.
+EXACT, EXACT_UNREAD, NEAR = "exact", "exact_unread_keeper", "near"
+#: The record's rule stamp: present when every pixel-equal match was tested
+#: against its keeper's reading. A record without it was written by the rule
+#: before 2026-11-22, which set every pixel-equal page aside (``pageid_io``).
+RULE = "keepers_read"
 
 
 @dataclass(frozen=True)
@@ -154,12 +169,23 @@ class Extract:
 class Hit:
     """A new page's picture found elsewhere: ALREADY (a delivered page) or
     REPEAT (a page of an earlier new document); where ("exhibit:N" or a
-    document id), on which page, and whether the pixels are equal."""
+    document id), on which page, whether the pixels are equal, and whether
+    that page was read. Only an ``aside`` hit sets the page aside; every
+    other hit is a suspected copy, and the page is read."""
 
     reason: str
     other: str
     page: int
     exact: bool
+    keeper_read: bool = True
+
+    @property
+    def aside(self) -> bool:
+        return self.exact and self.keeper_read
+
+    @property
+    def tier(self) -> str:
+        return (EXACT if self.keeper_read else EXACT_UNREAD) if self.exact else NEAR
 
 
 @dataclass
@@ -171,15 +197,18 @@ class Identity:
     extracts: dict[str, Extract] = field(default_factory=dict)
 
     def skipped(self, npages: dict[str, int]) -> dict[str, list[int]]:
-        """{document: pages} the vision pass never transcribes: every
-        pixel-equal page, and every page of a re-filed copy. A NEAR page is
-        transcribed: its words must confirm it."""
-        out = {d: sorted(p for p, h in m.items() if h.exact) for d, m in self.pages.items()}
+        """{document: pages} the vision pass never transcribes: every page set
+        aside (``Hit.aside``), and every page of a re-filed copy. Every other
+        page is transcribed and read."""
+        out = {d: sorted(p for p, h in m.items() if h.aside) for d, m in self.pages.items()}
         out |= {d: list(range(1, npages.get(d, 0) + 1)) for d in self.extracts}
         return {d: v for d, v in out.items() if v}
 
 
-_Pairs = dict[str, dict[int, tuple[int, bool]]]
+#: {other: {my page: (its page, tier)}}, tier EXACT | EXACT_UNREAD | NEAR.
+_Pairs = dict[str, dict[int, tuple[int, str]]]
+#: {delivered exhibit: its pages a past update set aside unread}.
+Unread = dict[int, set[int]]
 
 
 def reading_order(docs: list[tuple[str, int]]) -> list[str]:
@@ -194,12 +223,16 @@ def reading_order(docs: list[tuple[str, int]]) -> list[str]:
 
 
 def identify(
-    delivered: list[tuple[int, list[Sig]]], new: list[tuple[str, list[Sig]]], firm: set[str] | None = None
+    delivered: list[tuple[int, list[Sig]]],
+    new: list[tuple[str, list[Sig]]],
+    firm: set[str] | None = None,
+    unread: Unread | None = None,
 ) -> Identity:
     """Page identity across the delivered exhibits (exhibit number, sigs) and
     the new documents (id, sigs) in pull order. A firm-numbered file
-    (`firm`) is never an extract: the firm holds it under its own number."""
-    pairs = {d: _pairs_of(d, sigs, delivered, new) for d, sigs in new}
+    (`firm`) is never an extract: the firm holds it under its own number.
+    `unread`: the delivered pages that are no keeper (``Unread``)."""
+    pairs = {d: _pairs_of(d, sigs, delivered, new, unread or {}) for d, sigs in new}
     out = Identity()
     sizes = {d: len(s) for d, s in new}
     for d, sigs in new:
@@ -214,21 +247,25 @@ def identify(
     return out
 
 
+def _tiers(m: dict[int, tuple[int, bool]], never_read: set[int]) -> dict[int, tuple[int, str]]:
+    return {p: (q, (EXACT_UNREAD if q in never_read else EXACT) if e else NEAR) for p, (q, e) in m.items()}
+
+
 def _pairs_of(
-    d: str, sigs: list[Sig], delivered: list[tuple[int, list[Sig]]], new: list[tuple[str, list[Sig]]]
+    d: str, sigs: list[Sig], delivered: list[tuple[int, list[Sig]]], new: list[tuple[str, list[Sig]]], unread: Unread
 ) -> _Pairs:
-    """{other: {my page: (its page, exact)}}; delivered exhibits keyed "exhibit:N"."""
-    got = {f"{DELIVERED}{n}": pair_pages(sigs, s) for n, s in delivered}
-    got |= {o: pair_pages(sigs, s) for o, s in new if o != d}
+    """{other: {my page: (its page, tier)}}; delivered exhibits keyed "exhibit:N"."""
+    got = {f"{DELIVERED}{n}": _tiers(pair_pages(sigs, s), unread.get(n, set())) for n, s in delivered}
+    got |= {o: _tiers(pair_pages(sigs, s), set()) for o, s in new if o != d}
     return {k: v for k, v in got.items() if v}
 
 
 def _extract(d: str, sigs: list[Sig], pairs: _Pairs, sizes: dict[str, int]) -> Extract | None:
-    """A re-filed copy or extract, by pixel equality only (a page known by a
-    near match is transcribed and confirmed by its words, so its document is
-    read)."""
+    """A re-filed copy or extract, by pixel equality to pages that were read
+    only (a page known by a near match, or pixel-equal to a page never read,
+    is read, so its document is read)."""
     inked = {i for i, s in enumerate(sigs, 1) if s.inked}
-    exact = {o: {p for p, (_, e) in m.items() if e} for o, m in pairs.items()}
+    exact = {o: {p for p, (_, t) in m.items() if t == EXACT} for o, m in pairs.items()}
     delivered: set[int] = set().union(*(m for o, m in exact.items() if o.startswith(DELIVERED)))
     best: tuple[int, str] | None = None
     for o, m in exact.items():
@@ -256,26 +293,27 @@ def _resolve(found: dict[str, Extract]) -> None:
 
 
 def _page_hits(d: str, npages: int, pairs: _Pairs, order: list[str], extracts: dict[str, Extract]) -> dict[int, Hit]:
-    """Per page, the best hit: pixel-equal before near, a delivered page
-    before a new one read earlier (``reading_order``). Never a page of this
-    document, of one read later, or of a re-filed copy (it is not read)."""
+    """Per page, the best hit: pixel-equal to a page that was read, then
+    pixel-equal to one never read, then near; a delivered page before a new
+    one read earlier (``reading_order``). Never a page of this document, of
+    one read later, or of a re-filed copy (it is not read)."""
     earlier = [o for o in order[: order.index(d)] if o not in extracts]
     sources = [o for o in pairs if o.startswith(DELIVERED)] + [o for o in earlier if o in pairs]
+    rank = {EXACT: 0, EXACT_UNREAD: 1, NEAR: 2}
     out: dict[int, Hit] = {}
     for p in range(1, npages + 1):
-        found = [(not pairs[o][p][1], i, o) for i, o in enumerate(sources) if p in pairs[o]]
+        found = [(rank[pairs[o][p][1]], i, o) for i, o in enumerate(sources) if p in pairs[o]]
         if found:
             o = min(found)[2]
-            q, exact = pairs[o][p]
-            out[p] = Hit(ALREADY if o.startswith(DELIVERED) else REPEAT, o, q, exact)
+            q, tier = pairs[o][p]
+            out[p] = Hit(ALREADY if o.startswith(DELIVERED) else REPEAT, o, q, tier != NEAR, tier != EXACT_UNREAD)
     return out
 
 
 def to_json(ident: Identity) -> dict:
     return {
         "pages": {
-            d: {str(p): [h.reason, h.other, h.page, "exact" if h.exact else "near"] for p, h in m.items()}
-            for d, m in ident.pages.items()
+            d: {str(p): [h.reason, h.other, h.page, h.tier] for p, h in m.items()} for d, m in ident.pages.items()
         },
         "extracts": {
             d: {"parent": e.parent, "exhibit": e.exhibit, "pages": e.pages, "matched": e.matched}
@@ -283,4 +321,5 @@ def to_json(ident: Identity) -> dict:
         },
         "hash_max": HASH_MAX,
         "margin": MARGIN,
+        "rule": RULE,
     }

@@ -59,7 +59,7 @@ def _matter(tmp_path: Path, pages: list[str], doc: str = "n2") -> SimpleNamespac
 def _shape(sr: SimpleNamespace, entries: list[str], monkeypatch: pytest.MonkeyPatch) -> tuple[list[str], dict]:
     """The real collect shaping (`_shape`) over composed `entries`."""
     monkeypatch.setattr(UC.C, "composed", lambda _rd: entries)
-    monkeypatch.setattr(UC.C, "collect", lambda comp, _base, _inc, _canon: (list(comp), {}))
+    monkeypatch.setattr(UC.C, "collect", lambda comp, _base, _inc, _canon, _suspects=None: (list(comp), {}))
     monkeypatch.setattr(UC, "Canon", lambda _cfg: None)
     rd = sr.slug_dir / "runs" / "alpha"
     return UC._shape(sr, K.base_md(), rd, [{"exhibit": 2, "id": "n2", "title": "Exhibit 2 - Sample"}])  # type: ignore[arg-type]
