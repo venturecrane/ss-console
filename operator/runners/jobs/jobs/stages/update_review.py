@@ -78,7 +78,7 @@ from ..medchron.update import body as B, duplicates as DU, entry_edits as EE, fi
 from ..medchron.update import frozen as FZ, illegible as IL
 from ..medchron.update import review_pages as RV, review_parts as RP, review_repair as RR
 from ..medchron.page_mode import Modes
-from . import audit_loop, update_review_settle as URS
+from . import audit_loop, entry_audit_io as EA, update_review_settle as URS
 from .base import StageRun, read_json
 from .update_base import headings, update_dir
 from .update_review_io import At, Images, _checkpoint, _resume, _sha, already_pages, page_counts
@@ -224,26 +224,14 @@ def _halves(p: RP.Part) -> list[RP.Part] | None:
 NOT_REVIEWED = FZ.NOT_REVIEWED
 
 
-def _not_reviewed(p: RP.Part) -> RR.Finding:
-    """A part whose review never finished, as an open MUST finding on its
-    first entry: held for SMD with its pages named, reviewed again next round
-    (its entries are targets), never sent to the finisher, and never a failure
-    of the whole stage (a real update died on one part's seven tries)."""
-    where = f"Exhibit {p.exhibit} pp. {p.pages[0]}-{p.pages[-1]}" if p.pages else "its text"
-    why = f"the review of entries {', '.join(e.anchor for e in p.entries)} ({where}) did not finish"
-    f = RR.Finding(
-        RR.MUST,
-        NOT_REVIEWED,
-        p.entries[0].anchor,
-        p.exhibit or None,
-        p.pages[0] if p.pages else None,
-        why,
-        "none",
-        "",
-        "",
-    )
-    f.outcome = f"{NOT_REVIEWED}: {why}"
-    return f
+def _size_split(c: Ctx, p: RP.Part, content: list, ents: list[RR.Entry], base: list[str], key: str, depth: int) -> list:
+    """A part too large to send, reviewed as its two halves at the same depth
+    (each half is strictly smaller, so this ends); one entry on one page that
+    is still too large is a NOT_REVIEWED finding, never a failed stage."""
+    halves = RP.size_halves(p, content)
+    if not halves:
+        return [RP.not_reviewed(p)]
+    return [f for i, h in enumerate(halves) for f in _review_part(c, h, ents, base, f"{key}{'ab'[i]}", depth)]
 
 
 def _review_part(c: Ctx, p: RP.Part, ents: list[RR.Entry], base: list[str], key: str, depth: int = 0) -> list:
@@ -253,8 +241,17 @@ def _review_part(c: Ctx, p: RP.Part, ents: list[RR.Entry], base: list[str], key:
     them; one that still does not parse is a NOT_REVIEWED finding."""
     leaf = depth >= SPLIT_DEPTH or _halves(p) is None
     content = RP.review_content(p, _client(c.sr), c.images, ents, base, c.already, c.modes)
+    if RP.request_tokens(content) > RP.REQUEST_TOKENS_MAX:  # too large to send: split first, at the same depth
+        c.sr.log(f"  {key}: about {RP.request_tokens(content):,} tokens, too large to send")
+        return _size_split(c, p, content, ents, base, key, depth)
     for attempt in (1, 2):
-        r = _call(c, c.system, content, f"{key}-{attempt}", RP.cache_blocks(content, c.repeats))
+        try:
+            r = _call(c, c.system, content, f"{key}-{attempt}", RP.cache_blocks(content, c.repeats))
+        except Exception as exc:  # the API refused it for its size although the estimate passed: split as above
+            if not EA.ModelError(exc).too_large():
+                raise
+            c.sr.log(f"  {key}: refused for its size")
+            return _size_split(c, p, content, ents, base, key, depth)
         if r.stop_reason != "max_tokens":
             try:
                 return RR.parse_reply(r.text, lenient=leaf)
@@ -266,7 +263,7 @@ def _review_part(c: Ctx, p: RP.Part, ents: list[RR.Entry], base: list[str], key:
                 f for i, h in enumerate(halves) for f in _review_part(c, h, ents, base, f"{key}{'ab'[i]}", depth + 1)
             ]
     c.sr.log(f"  {key}: not reviewed; held for SMD and reviewed again next round")
-    return [_not_reviewed(p)]
+    return [RP.not_reviewed(p)]
 
 
 def review_round(c: Ctx, md: str, base: list[str], targets: set[int] | None) -> tuple[list[RR.Finding], int]:

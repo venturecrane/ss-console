@@ -34,7 +34,7 @@ every page the entries cite).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import Any, Callable
 
@@ -52,6 +52,13 @@ CONTEXT_MAX = 24
 MOSTLY_ALREADY = 0.9
 FINISH_MAX_ENTRIES = 6
 FINISH_MAX_IMAGES = 24
+#: A review request estimated above this many input tokens is split before it
+#: is sent. The model refuses a request over 1,000,000 tokens outright, and a
+#: real update's 149th part was refused at 1,187,421 (2026-11-21): a duplicate
+#: check carrying all 667 added entries of one exhibit. Measured on that
+#: update's 148 parts that ran, the estimate (``request_tokens``) is 0.46 to
+#: 0.65 of the real input, so 300,000 estimated is at most about 650,000 real.
+REQUEST_TOKENS_MAX = 300_000
 Images = Callable[[int, int], dict[str, Any] | None]
 
 
@@ -62,6 +69,9 @@ class Part:
     exhibit: int = 0
     pages: list[int] = field(default_factory=list)
     note: str = ""
+    #: a duplicate check split for size: the entries of the other pieces, shown
+    #: read only by their start so a pair across a cut is still compared
+    peers: list[RR.Entry] = field(default_factory=list)
 
 
 #: exhibit -> {page: the delivered page it is a copy of, "Exhibit 1 p. 37"}
@@ -279,7 +289,8 @@ def review_content(
         )
     elif part.kind == "duplicates":
         ask = (
-            f"PART: DUPLICATE CHECK, text only. Every added entry composed from Exhibit {part.exhibit}: {names}. "
+            f"PART: DUPLICATE CHECK, text only. {'Some' if part.peers else 'Every'} added "
+            f"{'entries' if part.peers else 'entry'} composed from Exhibit {part.exhibit}: {names}. "
             "Report only entries that repeat another entry's visit or content (class duplicate); the pages are "
             "checked in the other parts."
         )
@@ -289,11 +300,80 @@ def review_content(
         ask += f"\n{part.note}"
     out.append({"type": "text", "text": f"{ask}\n\nADDED ENTRIES IN THIS PART: {names}"})
     out += [{"type": "text", "text": _entry_block(e)} for e in part.entries]
+    out += [{"type": "text", "text": _peer_block(part.peers)}] if part.peers else []
     for pg in part.pages:
         by = [e.anchor for e in part.entries if (part.exhibit, pg) in e.cites()]
         label = f"cited by {', '.join(by)}" if by else "cited by no added entry"
         out += RV.page_blocks(part.exhibit, pg, f" ({label})", images, modes)
     return out
+
+
+def not_reviewed(p: Part) -> RR.Finding:
+    """A part whose review never finished, as an open MUST finding on its
+    first entry: held for SMD with its pages named, reviewed again next round
+    (its entries are targets), never sent to the finisher, and never a failure
+    of the whole stage (a real update died on one part's seven tries)."""
+    where = f"Exhibit {p.exhibit} pp. {p.pages[0]}-{p.pages[-1]}" if p.pages else "its text"
+    why = f"the review of entries {', '.join(e.anchor for e in p.entries)} ({where}) did not finish"
+    f = RR.Finding(
+        RR.MUST,
+        FZ.NOT_REVIEWED,
+        p.entries[0].anchor,
+        p.exhibit or None,
+        p.pages[0] if p.pages else None,
+        why,
+        "none",
+        "",
+        "",
+    )
+    f.outcome = f"{FZ.NOT_REVIEWED}: {why}"
+    return f
+
+
+def request_tokens(content: list[dict[str, Any]]) -> int:
+    """A review request's input tokens, estimated: its text at four
+    characters a token and each picture at the projection's page figure."""
+    text = sum(len(str(b.get("text", ""))) for b in content if b.get("type") == "text")
+    return text // RV.CHARS_PER_TOKEN + RV.PAGE_TOKENS * sum(1 for b in content if b.get("type") == "image")
+
+
+def size_halves(part: Part, content: list[dict[str, Any]]) -> list[Part] | None:
+    """A part too large to send, in two: by its pages when its pictures and
+    page text are most of the request, else by its entries (a duplicate
+    check carries every entry of one long file and no page). None when it is
+    one entry and one page: nothing smaller can be sent."""
+    reads = RV.page_reads(content)
+    pages = reads["image_pages"] * RV.PAGE_TOKENS + reads["page_chars"] // RV.CHARS_PER_TOKEN
+    by_pages = len(part.pages) > 1 and (pages * 2 >= request_tokens(content) or len(part.entries) < 2)
+    if by_pages:
+        h = len(part.pages) // 2
+        return [_pages_half(part, part.pages[:h]), _pages_half(part, part.pages[h:])]
+    if len(part.entries) > 1:
+        h = len(part.entries) // 2
+        a, b = part.entries[:h], part.entries[h:]
+        return [replace(part, entries=a, peers=part.peers + b), replace(part, entries=b, peers=part.peers + a)]
+    return None
+
+
+def _pages_half(part: Part, pages: list[int]) -> Part:
+    """Half a window: its pages, with the entries that cite one of them (all
+    of the part's when none does, as a window no entry cites keeps its owner)."""
+    mine = [e for e in part.entries if any(x == part.exhibit and p in pages for x, p in e.cites())]
+    return replace(part, pages=pages, entries=mine or part.entries)
+
+
+#: How much of a peer entry a split duplicate check shows: its date and
+#: provider lines and the start of its text.
+PEER_CHARS = 240
+
+
+def _peer_block(peers: list[RR.Entry]) -> str:
+    lines = [f"{e.anchor}: {' '.join(e.text.split())[:PEER_CHARS]}" for e in peers]
+    return (
+        "OTHER ADDED ENTRIES OF THIS EXHIBIT, READ ONLY (reviewed in another part, shown here by their start): "
+        "report an entry of THIS part that repeats one of them as a duplicate of it, on the entry of this part.\n"
+        + "\n".join(lines)
+    )
 
 
 def repeated_contexts(
