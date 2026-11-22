@@ -235,7 +235,7 @@ def as_own_base(tree: Path) -> str:
         for args in (["init", "--quiet"], ["add", "-A"], ["commit", "--quiet", "-m", "base"]):
             subprocess.run([*git, *args], cwd=top, check=True, capture_output=True, env=clean)  # noqa: S603 - a fixed git argv in this job's scratch tree
     head = [*git, "rev-parse", "HEAD"]
-    return subprocess.run(head, cwd=top, check=True, capture_output=True, text=True, env=clean).stdout.strip()  # noqa: S603 - same
+    return subprocess.run(head, cwd=top, check=True, capture_output=True, text=True, env=clean).stdout.strip()  # noqa: S603 - a fixed git argv in this job's scratch tree
 
 
 def manifest(tree: Path, py: Path) -> dict[str, Any]:
