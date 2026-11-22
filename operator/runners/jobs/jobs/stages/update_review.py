@@ -224,35 +224,13 @@ def _halves(p: RP.Part) -> list[RP.Part] | None:
 NOT_REVIEWED = FZ.NOT_REVIEWED
 
 
-def _not_reviewed(p: RP.Part) -> RR.Finding:
-    """A part whose review never finished, as an open MUST finding on its
-    first entry: held for SMD with its pages named, reviewed again next round
-    (its entries are targets), never sent to the finisher, and never a failure
-    of the whole stage (a real update died on one part's seven tries)."""
-    where = f"Exhibit {p.exhibit} pp. {p.pages[0]}-{p.pages[-1]}" if p.pages else "its text"
-    why = f"the review of entries {', '.join(e.anchor for e in p.entries)} ({where}) did not finish"
-    f = RR.Finding(
-        RR.MUST,
-        NOT_REVIEWED,
-        p.entries[0].anchor,
-        p.exhibit or None,
-        p.pages[0] if p.pages else None,
-        why,
-        "none",
-        "",
-        "",
-    )
-    f.outcome = f"{NOT_REVIEWED}: {why}"
-    return f
-
-
 def _size_split(c: Ctx, p: RP.Part, content: list, ents: list[RR.Entry], base: list[str], key: str, depth: int) -> list:
     """A part too large to send, reviewed as its two halves at the same depth
     (each half is strictly smaller, so this ends); one entry on one page that
     is still too large is a NOT_REVIEWED finding, never a failed stage."""
     halves = RP.size_halves(p, content)
     if not halves:
-        return [_not_reviewed(p)]
+        return [RP.not_reviewed(p)]
     return [f for i, h in enumerate(halves) for f in _review_part(c, h, ents, base, f"{key}{'ab'[i]}", depth)]
 
 
@@ -285,7 +263,7 @@ def _review_part(c: Ctx, p: RP.Part, ents: list[RR.Entry], base: list[str], key:
                 f for i, h in enumerate(halves) for f in _review_part(c, h, ents, base, f"{key}{'ab'[i]}", depth + 1)
             ]
     c.sr.log(f"  {key}: not reviewed; held for SMD and reviewed again next round")
-    return [_not_reviewed(p)]
+    return [RP.not_reviewed(p)]
 
 
 def review_round(c: Ctx, md: str, base: list[str], targets: set[int] | None) -> tuple[list[RR.Finding], int]:

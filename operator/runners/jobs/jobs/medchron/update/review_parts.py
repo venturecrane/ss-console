@@ -303,6 +303,28 @@ def review_content(
     return out
 
 
+def not_reviewed(p: Part) -> RR.Finding:
+    """A part whose review never finished, as an open MUST finding on its
+    first entry: held for SMD with its pages named, reviewed again next round
+    (its entries are targets), never sent to the finisher, and never a failure
+    of the whole stage (a real update died on one part's seven tries)."""
+    where = f"Exhibit {p.exhibit} pp. {p.pages[0]}-{p.pages[-1]}" if p.pages else "its text"
+    why = f"the review of entries {', '.join(e.anchor for e in p.entries)} ({where}) did not finish"
+    f = RR.Finding(
+        RR.MUST,
+        FZ.NOT_REVIEWED,
+        p.entries[0].anchor,
+        p.exhibit or None,
+        p.pages[0] if p.pages else None,
+        why,
+        "none",
+        "",
+        "",
+    )
+    f.outcome = f"{FZ.NOT_REVIEWED}: {why}"
+    return f
+
+
 def request_tokens(content: list[dict[str, Any]]) -> int:
     """A review request's input tokens, estimated: its text at four
     characters a token and each picture at the projection's page figure."""
