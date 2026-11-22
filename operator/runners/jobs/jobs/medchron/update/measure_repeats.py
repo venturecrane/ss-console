@@ -6,12 +6,10 @@ $0: no model call, no write anywhere but stdout.
 `job_dir` is a COPY of a matter's job directory (the one holding
 ``delivered/``, ``text/`` and ``runs/<unit>/update/``). It reports, as JSON:
 
-* pages: every page decision over the new documents in reading order, how
-  many pages only the text-window rule (``update/contained``) holds, and for
-  each of those how many of its tokens, dates and clinical values the window
-  lacks (``contained.absent``) and how many of its runs of 4 consecutive
-  tokens the window never says in that order (``contained.runs_absent``):
-  0 by the rule; any other count exits 1;
+* pages: every page decision over the new documents in reading order, and
+  how many READ pages each text rule suspected of being a copy
+  (``select.SUSPECTED``; a text rule no longer sets a page aside, so there is
+  no window to check);
 * stray citations: over the job's filed new entries (``update/new_entries.md``),
   how many lines are only a citation before and after ``uncited.join_stray``,
   and every entry whose numbers, words or cited exhibits the join would
@@ -28,7 +26,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from . import body as B, contained as CT, pageid as PI, pageid_io as PG, select as S
+from . import body as B, pageid as PI, pageid_io as PG, select as S
 from .uncited import cite_only, join_stray
 from .values import numbers
 
@@ -65,38 +63,17 @@ def pages_report(job: Path, ud: Path) -> dict[str, Any]:
     rows = [r for r in _read(ud / "new_exhibits.json", []) if isinstance(r, dict) and r.get("id")]
     texts = {str(r["id"]): _texts(job, str(r["id"])) for r in rows}
     ident = PG.load(ud)
-    cache: dict[int, list[str]] = {}
-
-    def text_of(other: str, page: int) -> str:
-        n = PG.delivered_exhibit(other)
-        if n is None:
-            return (texts.get(other) or {}).get(page) or ""
-        if n not in cache:
-            cache[n] = S.pdf_pages(by_ex[n]) if n in by_ex and by_ex[n].is_file() else []
-        return cache[n][page - 1] if 0 < page <= len(cache[n]) else ""
-
     sizes = [(str(r["id"]), int(r.get("pages") or max(texts[str(r["id"])] or {0: ""}))) for r in rows]
     earlier, tally, why = S.Earlier(), Counter[str](), Counter[str]()
-    absent: dict[str, int] = {}
-    runs: dict[str, int] = {}
     for rid in PI.reading_order(sizes):
-        image = PG.reasons(ident.pages.get(rid) or {}, texts[rid], text_of)
-        held: dict[int, tuple[str, int, int, bool]] = {}
-        for d, reason in S.classify_new(texts[rid], dict(sizes)[rid], seen, earlier, image, tally, held).values():
+        image = PG.aside(ident.pages.get(rid) or {})
+        for d, reason in S.classify_new(texts[rid], dict(sizes)[rid], seen, earlier, image, tally).values():
             why[f"{d}: {reason}"] += 1
-        for page, (src, s, e, alone) in sorted(held.items()):
-            if alone:
-                pool = seen.pool if src == S.DELIVERED_SRC else earlier.pool
-                me = CT.facts(0, (texts[rid].get(page) or "").strip())
-                absent[f"{rid} p.{page}"] = CT.absent(me, pool.items[s:e])
-                runs[f"{rid} p.{page}"] = CT.runs_absent(me, pool.items[s:e])
     return {
         "documents": len(rows),
         "pages": sum(why.values()),
         "decisions": dict(why),
-        "held_by_text": dict(tally),
-        "held_by_text_tokens_absent_from_window": absent,
-        "held_by_text_runs_absent_from_window": runs,
+        "suspected_by_text": dict(tally),
     }
 
 
@@ -130,11 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     ud = _unit_dir(a.job_dir, a.unit) / "update"
     out = {"pages": pages_report(a.job_dir, ud), "stray_citations": stray_report(ud)}
     print(json.dumps(out, indent=1))
-    pg = out["pages"]
-    bad = any(pg["held_by_text_tokens_absent_from_window"].values()) or any(
-        pg["held_by_text_runs_absent_from_window"].values()
-    )
-    return 1 if bad or out["stray_citations"]["entries_whose_content_the_join_changes"] else 0
+    return 1 if out["stray_citations"]["entries_whose_content_the_join_changes"] else 0
 
 
 if __name__ == "__main__":

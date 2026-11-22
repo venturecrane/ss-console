@@ -10,15 +10,19 @@ repeats of another NEW document's page, 95 were re-filed extracts and 34 were
 pages of a withheld file nobody read. A page no model read was counted
 against the firm's allowance.
 
-THE RULE. A page is charged if and only if the update sent it to be read:
-its row in the per-page record (``runs/<unit>/pages.jsonl``,
-``medchron/pages_record``) has status ``read``. So the charge and the page
-record cannot disagree. Not charged: a copy of a delivered page, a copy of
-another new document's page (the first occurrence is read and charged once;
-its copies are not), a re-filed extract, a byte-identical or skipped file, a
-withheld file, a blank or billing page set aside by code, and a page that
-could not be read. A page read because no covering page was named IS
-charged: it was read.
+THE RULE. A page is charged if and only if the update sent it to be read
+on its own account: its row in the per-page record (``runs/<unit>/pages.jsonl``,
+``medchron/pages_record``) has status ``read`` and is not a suspected copy
+(``pages_record.charged``). So the charge and the page record cannot
+disagree. Not charged: a copy of a delivered page, a copy of another new
+document's page (the first occurrence is read and charged once; its copies
+are not), a re-filed extract, a byte-identical or skipped file, a withheld
+file, a blank or billing page set aside by code, a page that could not be
+read, and (2026-11-22, the Captain) a page READ only because a rule
+suspected it of copying a page already covered (``evidence.suspected``: a
+near picture, a text match): code
+can no longer set such a page aside, and the firm does not pay for SMD's
+caution. A page read with no suspicion IS charged: it was read.
 
 ASKED AND CHARGED. Before ``update_select`` writes the full record,
 ``update_pages`` has written every candidate page as ``read`` unless it is
@@ -28,8 +32,10 @@ or of an earlier new document's page, or a page of an exact re-filed copy;
 could not be drawn and anything undecided count as to be read. That count is
 what the page question before the first paid step is asked with
 (``asked_pages``, recorded in ``ASKED``, written whole). An exact picture
-match is never transcribed and no later step reads it, so pages read never
-exceed pages asked by construction (``read_exceeds_asked``, 0); the charge is
+match is never transcribed and no later step reads it, and a page read as a
+suspected copy is never charged (it is not counted when asked either), so
+pages charged never exceed pages asked by construction (``read_exceeds_asked``,
+0, named for its first form); the charge is
 still capped at the asked figure as a backstop, and a cap records
 ``charged_capped`` with both numbers (``capped``) in the run's notes
 (``cap_notes``); nothing stops. An asked record that is absent,
@@ -69,6 +75,15 @@ def read_pages(slug_dir: Path, unit: str) -> int | None:
     return sum(1 for r in rows if r.get("status") in READ_STATUSES)
 
 
+def chargeable_pages(slug_dir: Path, unit: str) -> int | None:
+    """Pages sent to be read less those read only as a suspected copy
+    (``pages_record.charged``), or None with no page record."""
+    rows = PR.read(slug_dir / "runs" / unit)
+    if not rows:
+        return None
+    return sum(1 for r in rows if PR.charged(r))
+
+
 def delivered_pages(slug_dir: Path, unit: str) -> int:
     """Pages of this update's pulled documents the delivered chronology already
     read (the 2026-11-06 rule's deduction)."""
@@ -103,9 +118,11 @@ CHARGED_CAPPED = "charged_capped"
 
 def asked_pages(slug_dir: Path, unit: str, pages_read: int) -> int:
     """The figure the page question is asked with, and recorded (the largest
-    asked on any attempt): ``read_pages`` (an upper bound before selection),
-    or with no page record ``old_rule_pages``."""
-    n = read_pages(slug_dir, unit)
+    asked on any attempt): ``chargeable_pages`` (an upper bound on the charge
+    before selection: a candidate page a picture already marks a suspected
+    copy is read and never charged, so a job is not held for it), or with no
+    page record ``old_rule_pages``."""
+    n = chargeable_pages(slug_dir, unit)
     asked = n if n is not None else old_rule_pages(slug_dir, unit, pages_read)
     p = slug_dir / "runs" / unit / ASKED
     before = _asked(slug_dir, unit)
@@ -145,21 +162,21 @@ def _asked(slug_dir: Path, unit: str) -> int | None:
 
 
 def charged_pages(slug_dir: Path, unit: str, pages_read: int) -> int:
-    """The pages this update charges: ``read_pages`` (with no page record,
-    ``old_rule_pages``), never more than the figure the firm was asked about
-    (``ASKED``); a run that read more is charged the asked figure and says so
-    (``capped``)."""
-    n = read_pages(slug_dir, unit)
+    """The pages this update charges: ``chargeable_pages`` (with no page
+    record, ``old_rule_pages``), never more than the figure the firm was asked
+    about (``ASKED``); a run that read more is charged the asked figure and
+    says so (``capped``)."""
+    n = chargeable_pages(slug_dir, unit)
     n = n if n is not None else old_rule_pages(slug_dir, unit, pages_read)
     asked = _asked(slug_dir, unit)
     return min(n, asked) if asked is not None else n
 
 
 def capped(slug_dir: Path, unit: str) -> dict[str, Any] | None:
-    """``{"code": CHARGED_CAPPED, "read": n, "asked": m}`` when this update read
-    more pages than it was asked about (it is then charged the asked figure;
-    nothing stops), else None."""
-    n, asked = read_pages(slug_dir, unit), _asked(slug_dir, unit)
+    """``{"code": CHARGED_CAPPED, "read": n, "asked": m}`` when this update
+    would charge more pages than it was asked about (`n`: ``chargeable_pages``;
+    it is then charged the asked figure; nothing stops), else None."""
+    n, asked = chargeable_pages(slug_dir, unit), _asked(slug_dir, unit)
     if n is None or asked is None or n <= asked:
         return None
     return {"code": CHARGED_CAPPED, "read": n, "asked": asked}
@@ -194,8 +211,9 @@ def cap_notes(slug_dir: Path, unit: str) -> list[str]:
 
 
 def figures(slug_dir: Path, unit: str) -> dict[str, int | None]:
-    """{pages_read, pages_charged, charged_old_rule, extracted}: what the rehearsal
-    prints (``charge_line``). ``pages_read`` and ``pages_charged`` are equal by construction."""
+    """{pages_read, pages_suspected_copies, pages_charged, charged_old_rule,
+    extracted}: what the rehearsal prints (``charge_line``). ``pages_charged``
+    is ``pages_read`` less ``pages_suspected_copies`` (capped at the asked figure)."""
     from ...budget import pages_read as extracted_pages
 
     extracted = extracted_pages(slug_dir / "extracted.jsonl")
@@ -203,13 +221,20 @@ def figures(slug_dir: Path, unit: str) -> dict[str, int | None]:
         "pages_asked": asked_state(slug_dir, unit)[0],
         "asked_record": asked_state(slug_dir, unit)[1],
         "pages_read": read_pages(slug_dir, unit),
+        "pages_suspected_copies": _suspected(slug_dir, unit),
         "pages_charged": charged_pages(slug_dir, unit, extracted),
         "charged_capped": 1 if capped(slug_dir, unit) else 0,
-        # The property the upper bound promises: 0. An exact picture match is never read, so read <= asked.
+        # The property the upper bound promises: 0. A page set aside is never read and a suspected
+        # copy is never charged, so the pages charged never exceed the pages asked about.
         "read_exceeds_asked": 1 if capped(slug_dir, unit) else 0,
         "charged_old_rule": old_rule_pages(slug_dir, unit, extracted),
         "extracted": extracted,
     }
+
+
+def _suspected(slug_dir: Path, unit: str) -> int | None:
+    n, c = read_pages(slug_dir, unit), chargeable_pages(slug_dir, unit)
+    return None if n is None or c is None else n - c
 
 
 def reconcile(slug_dir: Path, unit: str) -> dict[str, Any]:
@@ -232,13 +257,16 @@ def reconcile(slug_dir: Path, unit: str) -> dict[str, Any]:
 
 
 def charge_line(slug_dir: Path, unit: str, outcome_pages: int) -> str:
-    """One line: pages asked about, read, charged (the outcome's figure), the old rule's charge."""
+    """One line: pages asked about, read, read as suspected copies, charged
+    (the outcome's figure), the old rule's charge."""
     f = figures(slug_dir, unit)
     if f["pages_read"] is None:
         return f"charge: no page record; {outcome_pages} charged under the 2026-11-06 rule; {f['extracted']} extracted"
     cap = capped(slug_dir, unit)
-    same = "equal" if f["pages_read"] == outcome_pages else (f"{CHARGED_CAPPED}" if cap else "NOT EQUAL")
+    owed = f["pages_read"] - (f["pages_suspected_copies"] or 0)
+    same = "equal" if owed == outcome_pages else (f"{CHARGED_CAPPED}" if cap else "NOT EQUAL")
     return (
-        f"charge: asked {f['pages_asked']}; {f['pages_read']} page(s) sent to be read; {outcome_pages} charged "
+        f"charge: asked {f['pages_asked']}; {f['pages_read']} page(s) sent to be read, "
+        f"{f['pages_suspected_copies']} of them suspected copies (not charged); {outcome_pages} charged "
         f"({same}); {f['charged_old_rule']} under the 2026-11-06 rule; {f['extracted']} extracted"
     )

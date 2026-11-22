@@ -113,8 +113,20 @@ def write(run_dir: Path, rows: Iterable[dict[str, Any]]) -> int:
     return len(rows)
 
 
-#: The statuses of a page sent to be read (``update/charged`` charges exactly these).
+#: The statuses of a page sent to be read.
 READ_STATUSES = frozenset({READ})
+#: ``evidence.suspected``: the rule that suspected a READ page of copying a
+#: page already covered (``stages/page_rows.suspicion``). Such a page is read
+#: only because the suspicion could not be settled by code, so it is not
+#: charged (2026-11-22, the Captain).
+SUSPECTED = "suspected"
+
+
+def charged(r: dict[str, Any]) -> bool:
+    """Whether a row counts against the firm's page allowance (``update/charged``):
+    sent to be read, and not read only as a suspected copy."""
+    ev = r.get("evidence")
+    return r.get("status") in READ_STATUSES and not (isinstance(ev, dict) and ev.get(SUSPECTED))
 
 
 def own_delivered(ident: PG.Loaded, rid: str, page: int) -> bool:

@@ -2,7 +2,7 @@
 
 WHY (2026-11-18, a real update). 21 added entries cited a COPY of a page:
 the same page filed in a second new document, excluded from reading there
-as a repeat (``select.OVERLAP``, a picture twin, ``update/twins``) while its
+as a repeat (``select.OVERLAP``, a picture twin, the since-removed twins rule) while its
 twin was read in the first. 9 more cited pages a delivered exhibit already
 holds (``select.ALREADY``).
 

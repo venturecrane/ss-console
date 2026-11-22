@@ -7,9 +7,12 @@ rejected three of them: the EMR re-print carried a new "Generated on" print
 date (so the two pages' date sets differed) and its text layer flowed the
 columns in another order (so its 8-word shingles barely overlapped). Those
 pages were composed again, the copy became a new exhibit and an Exhibit List
-line, and one of them produced a duplicate entry. Every test here fails on the
-branch head before the fix (b3adda24) and passes after. Every record is
-invented."""
+line, and one of them produced a duplicate entry. Every record is invented.
+
+Since 2026-11-22 the words no longer confirm a near picture (a paid proof
+showed the word test calling differing pages the same): a re-print whose
+pages are PIXEL-EQUAL to delivered pages is the re-filed copy; one known only
+by a near picture is read, each page a suspected copy, not charged."""
 
 from __future__ import annotations
 
@@ -88,40 +91,37 @@ def _seed(tmp: Path, delivered: list[list[str]], docs: dict[str, list[list[str]]
     )
 
 
-def test_a_reprint_with_a_new_print_date_and_reflowed_columns_is_confirmed() -> None:
-    from jobs.medchron.update import pageid_io as PG
-    from jobs.medchron.update import select as S
+def test_a_reprint_known_only_by_a_near_picture_is_read_as_suspected_copies(tmp_path: Path) -> None:
+    from jobs.medchron import pages_record as PR
+    from jobs.stages import update_select as US
 
-    original = "\n".join(_page(1))
-    copy = "\n".join(_reprint(_page(1)))
-    assert len(S.shingles(copy) & S.shingles(original)) < 0.8 * len(S.shingles(copy))  # the text rule misses it
-    assert PG.confirmed(copy, original)
-
-
-def test_a_near_picture_that_states_another_date_or_value_is_never_confirmed() -> None:
-    from jobs.medchron.update import pageid_io as PG
-
-    original = "\n".join(_page(1))
-    assert not PG.confirmed("\n".join(_reprint(_page(1, date="11/10/2025"))), original)  # another visit
-    assert not PG.confirmed("\n".join(_reprint(_page(1, bp="142/90"))), original)  # another reading
+    delivered = [_page(i) for i in range(1, 4)]
+    near = {str(n): ["already", "exhibit:1", n, "near"] for n in (1, 2, 3)}
+    sr = _seed(tmp_path, delivered, {"reprint": [_reprint(p) for p in delivered]}, {"reprint": near})
+    assert US.run(sr) == 0, sr.logged  # type: ignore[arg-type]
+    sel = json.loads((tmp_path / "runs" / "alpha" / "update" / "selection.json").read_text())
+    assert [r["read"] for r in sel["exhibits"]] == [[1, 2, 3]] and sel["subsets"] == []
+    rows = [r for r in PR.read(tmp_path / "runs" / "alpha") if r["doc"] == "reprint"]
+    assert [r["evidence"]["cover"] for r in rows] == [{"exhibit": 1, "page": n, "exact": False} for n in (1, 2, 3)]
+    assert {r["evidence"][PR.SUSPECTED] for r in rows} == {"near_picture"} and not any(map(PR.charged, rows))
 
 
 def test_a_reprinted_copy_of_delivered_pages_is_cited_to_the_delivered_exhibit(tmp_path: Path) -> None:
-    """The whole re-print is a re-filed copy of Exhibit 1: no new exhibit, no
-    page composed, no exhibit PDF filed. A document beside it with one copy
-    page and one page that LOOKS like a delivered page but records another
-    visit stays an exhibit, takes the next number, and reads that visit."""
+    """The whole re-print is pixel-equal to Exhibit 1: a re-filed copy, no
+    new exhibit, no page composed, no exhibit PDF filed. A document beside it
+    with one copy page and one page that only LOOKS like a delivered page
+    (a near picture) stays an exhibit, takes the next number, and reads it."""
     from jobs.stages import update_select as US
 
     delivered = [_page(i) for i in range(1, 4)]
     reprint = [_reprint(p) for p in delivered]
     other_visit = _reprint(_page(2, date="11/24/2025", bp="136/88"))
-    near = {str(n): ["already", "exhibit:1", n, "near"] for n in (1, 2, 3)}
+    exact = {str(n): ["already", "exhibit:1", n, "exact"] for n in (1, 2, 3)}
     sr = _seed(
         tmp_path,
         delivered,
         {"reprint": reprint, "mixed": [reprint[0], other_visit]},
-        {"reprint": near, "mixed": {"1": near["1"], "2": near["2"]}},
+        {"reprint": exact, "mixed": {"1": exact["1"], "2": ["already", "exhibit:1", 2, "near"]}},
     )
     assert US.run(sr) == 0, sr.logged  # type: ignore[arg-type]
     sel = json.loads((tmp_path / "runs" / "alpha" / "update" / "selection.json").read_text())
@@ -142,11 +142,9 @@ def test_a_reprinted_copy_of_delivered_pages_is_cited_to_the_delivered_exhibit(t
 def test_a_document_with_a_page_left_to_read_or_a_bill_is_never_refiled_whole() -> None:
     from jobs.medchron.update import select as S
 
-    by_ex = {1: S.shingles("\n".join(_page(1))), 2: S.shingles("\n".join(_page(5)))}
-    pages = {1: "\n".join(_page(5)), 2: ""}
     whole = {"pages": 2, "read": [], "unread": [], "excluded": {ALREADY: 1, S.BLANK: 1}}
-    assert S.delivered_home(whole, pages, by_ex, {}) == 2  # by its words: the exhibit that holds the page
-    assert S.delivered_home(whole, pages, by_ex, {1: 1}) == 1  # by its picture first
-    assert S.delivered_home({**whole, "read": [2]}, pages, by_ex, {}) is None
-    assert S.delivered_home({**whole, "excluded": {ALREADY: 1, "a claim form": 1}}, pages, by_ex, {}) is None
-    assert S.delivered_home({**whole, "excluded": {S.BLANK: 2}}, pages, by_ex, {}) is None
+    assert S.delivered_home(whole, {1: 1}) == 1  # by its picture: no word test chooses a home
+    assert S.delivered_home(whole, {}) is None
+    assert S.delivered_home({**whole, "read": [2]}, {1: 1}) is None
+    assert S.delivered_home({**whole, "excluded": {ALREADY: 1, "a claim form": 1}}, {1: 1}) is None
+    assert S.delivered_home({**whole, "excluded": {S.BLANK: 2}}, {1: 1}) is None

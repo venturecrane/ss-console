@@ -17,8 +17,10 @@ exhibit as new exhibits, and composed the same visits two and three times
   (pixel-equal duplicates of that one aside) is at least MARGIN further, and
   a NEIGHBOUR pairs the same way with the neighbouring page. A picture cannot
   tell a re-encoded copy from the same form filled in with one other number,
-  so a NEAR page IS transcribed and is a repeat only when its words confirm
-  it (``pageid_io.confirmed``: the same dates and the same clinical values).
+  so a NEAR page is transcribed and READ, never set aside: the match is
+  recorded as a suspected copy (2026-11-22: a reader called 16 of 137
+  known-different page pairs copies, and a text test settled 25 pages that
+  differ as copies).
 * A blank page (almost no ink) is never matched: every blank page looks alike.
 * Pages of one document are never compared with each other: a run of
   template visits inside one record is read whole (review fix 1).
@@ -173,7 +175,7 @@ class Identity:
     def skipped(self, npages: dict[str, int]) -> dict[str, list[int]]:
         """{document: pages} the vision pass never transcribes: every
         pixel-equal page, and every page of a re-filed copy. A NEAR page is
-        transcribed: its words must confirm it."""
+        transcribed and read as a suspected copy."""
         out = {d: sorted(p for p, h in m.items() if h.exact) for d, m in self.pages.items()}
         out |= {d: list(range(1, npages.get(d, 0) + 1)) for d in self.extracts}
         return {d: v for d, v in out.items() if v}
@@ -225,7 +227,7 @@ def _pairs_of(
 
 def _extract(d: str, sigs: list[Sig], pairs: _Pairs, sizes: dict[str, int]) -> Extract | None:
     """A re-filed copy or extract, by pixel equality only (a page known by a
-    near match is transcribed and confirmed by its words, so its document is
+    near match is transcribed and read, so its document is
     read)."""
     inked = {i for i, s in enumerate(sigs, 1) if s.inked}
     exact = {o: {p for p, (_, e) in m.items() if e} for o, m in pairs.items()}

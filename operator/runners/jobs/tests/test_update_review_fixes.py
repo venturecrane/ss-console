@@ -41,7 +41,7 @@ def test_template_visits_that_differ_only_in_date_are_both_read() -> None:
     refiled = S.classify_new(
         {1: "FAX 555-0101 07/01/2026 PAGE 2 OF 9\n" + PT_NOTE.format(d="06/03/2026")}, 1, S.Delivered(), earlier
     )
-    assert refiled[1] == (S.EXCLUDED, S.OVERLAP)  # the same page refiled under another fax header
+    assert refiled[1] == (S.READ, S.SUSPECTED)  # the same page refiled under another fax header: read, suspected
 
 
 # ---- fixes 2 and 3: dates of service only, and the date line kept --------------

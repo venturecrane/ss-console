@@ -67,43 +67,27 @@ def _seed(tmp: Path, docs: dict[str, list[str]]) -> SimpleNamespace:
     )
 
 
-def test_a_refiled_extract_of_a_new_document_is_not_an_exhibit_and_is_recorded(tmp_path: Path) -> None:
+def test_a_text_extract_of_a_new_document_is_read_its_pages_suspected_copies(tmp_path: Path) -> None:
+    """Until 2026-11-22 a document whose words were an extract of a larger
+    one was set aside whole; a text test called differing pages the same, so
+    a document not pixel-identical page by page is read, each page recorded
+    as a suspected copy of the whole one's page and not charged."""
+    from jobs.medchron import pages_record as PR
     from jobs.stages import update_select as US
 
-    # The extract arrives FIRST in pull order: the whole one is still the exhibit.
+    # The extract arrives FIRST in pull order: the whole one is still read first.
     sr = _seed(tmp_path, {"ext": _extract_pages(), "whole": _whole_pages(), "tmpl": _template_pages()})
     assert US.run(sr) == 0, sr.logged  # type: ignore[arg-type]
     sel = json.loads((tmp_path / "runs" / "alpha" / "update" / "selection.json").read_text())
     by_id = {r["id"]: r for r in sel["exhibits"]}
-    assert set(by_id) == {"whole", "tmpl"}  # template visits on other dates are never an extract
+    assert set(by_id) == {"ext", "whole", "tmpl"} and sel["subsets"] == []
     assert by_id["whole"]["read"] == list(range(1, 13))  # every page of the whole record is read
-    assert by_id["tmpl"]["read"] == [1, 2, 3, 4, 5]
-    assert sel["subsets"] == [
-        {
-            "id": "ext",
-            "source_name": "ext records.pdf",
-            "pages": 5,
-            "matched": 5,
-            "subset_of": {"id": "whole", "exhibit": by_id["whole"]["exhibit"], "title": by_id["whole"]["title"]},
-        }
-    ]
-
-
-def test_an_extract_with_a_page_stating_its_own_value_is_read() -> None:
-    from jobs.medchron.update import subsets as SUB
-
-    whole = dict(enumerate(_whole_pages(), 1))
-    ext = dict(enumerate(_extract_pages(), 1))
-    assert set(SUB.refiled_subsets([("ext", ext), ("whole", whole)])) == {"ext"}
-    # Ten pages, nine of them the whole one's, one a visit of its own with a value it alone states.
-    nine = {n: _visit(n - 1) for n in range(1, 10)}
-    own = {**nine, 10: _visit(0).replace("03/01/2026", "05/20/2026").replace("Pain rated 2", "Pain rated 9")}
-    assert SUB.refiled_subsets([("own", own), ("whole", whole)]) == {}
-    # A whole copy of the same size stays with select.Earlier (read once, its copy excluded page by page).
-    assert SUB.refiled_subsets([("a", whole), ("b", whole)]) == {}
-    # A firm-numbered file and a document with an unread page are never extracts.
-    assert SUB.refiled_subsets([("ext", ext), ("whole", whole)], firm={"ext"}) == {}
-    assert SUB.refiled_subsets([("ext", {**ext, 6: "[page transcription failed]"}), ("whole", whole)]) == {}
+    assert by_id["ext"]["read"] == [1, 2, 3, 4, 5] and by_id["tmpl"]["read"] == [1, 2, 3, 4, 5]
+    rows = {(r["doc"], r["page"]): r for r in PR.read(tmp_path / "runs" / "alpha")}
+    ext = [rows[("ext", p)] for p in range(1, 6)]
+    assert all(r["status"] == PR.READ and r["evidence"][PR.SUSPECTED] for r in ext)
+    assert {r["evidence"]["cover"]["doc"] for r in ext} == {"whole"} and not any(PR.charged(r) for r in ext)
+    assert all(PR.charged(rows[("tmpl", p)]) for p in range(1, 6))  # template visits on other dates
 
 
 # ---- fix 22: a sentence an entry states twice is said once -------------------------

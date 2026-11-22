@@ -2,38 +2,30 @@
 ``update_select``. $0.
 
 ``update/page_identity.json`` is parsed, never cast: a missing or malformed
-file reads as "nothing settled by picture", so the text rules decide every
-page exactly as before (the record is an addition, never a precondition).
+file reads as "nothing settled by picture", so every page is read (the record
+is an addition, never a precondition).
 
-A pixel-equal page is excluded as it stands (it was never transcribed). A
-NEAR page was transcribed, and is excluded only when its words confirm the
-picture (``confirmed``): the same dates and the same clinical values as the
-page it matched (print stamps aside), and most of the same words in any
-order. A re-printed hospital record once failed both: its "Generated on"
-stamp carried a new date and its columns flowed in another order, so three
-of its delivered pages were composed again as a new exhibit (2026-10-14). A form filled in with one other
-number looks like its twin and says another thing; it is read.
+Only a pixel-equal page is set aside (``Page.aside``): it was never
+transcribed. A NEAR match is a SUSPECTED copy: the page is transcribed and
+read, and the match is recorded beside it. A near match once had to be
+confirmed by its words; the words test called pages that differ the same
+(2026-11-22, a paid proof: 25 differing pages settled as copies), so no word
+test sets a page aside now. The record's format is unchanged, so a run
+resumed across that change reads its picture record the same way.
 """
 
 from __future__ import annotations
 
 import json
-import re
-from collections import Counter
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import pageid as PI
-from .select import ALREADY, FAILED_MARKS, MIN_CHARS, OVERLAP, _dates, without_furniture
+from .select import ALREADY, OVERLAP
 from .subsets import Subset
-from .values import clinical_values
 
 NAME = "page_identity.json"
 _REASON = {PI.ALREADY: ALREADY, PI.REPEAT: OVERLAP}
-#: The share of the smaller page's words (counted as a bag) the two
-#: transcriptions must share.
-WORDS_FRAC = 0.8
 
 
 @dataclass(frozen=True)
@@ -42,6 +34,11 @@ class Page:
     other: str  # "exhibit:N" or a new document's id
     page: int
     exact: bool
+
+    @property
+    def aside(self) -> bool:
+        """Pixel-equal: set aside, never transcribed."""
+        return self.exact
 
 
 @dataclass
@@ -113,40 +110,9 @@ def load(ud: Path) -> Loaded:
     return Loaded(_pages(raw.get("pages")), _extracts(raw.get("extracts")))
 
 
-def _words(text: str) -> Counter[str]:
-    """The page's words as a bag (digits stripped): word ORDER is how a text
-    layer happens to flow, not what the page says. A record re-printed by its
-    EMR, or re-OCRed, reads its columns in another order, so its 8-word
-    shingles barely overlap its twin's while every word is the same."""
-    return Counter(re.findall(r"[a-z]{2,}", re.sub(r"\d", " ", text.lower())))
-
-
-def confirmed(mine: str, theirs: str) -> bool:
-    """A near picture match is a repeat only when both transcriptions state
-    the same dates and the same clinical values (fax, print and export
-    stamp lines aside, ``select.without_furniture``: a re-printed copy
-    carries a new print date) and share most words, in any order."""
-    a, b = (mine or "").strip(), (theirs or "").strip()
-    if len(a) < MIN_CHARS or len(b) < MIN_CHARS or a in FAILED_MARKS or b in FAILED_MARKS:
-        return False
-    a, b = without_furniture(a), without_furniture(b)
-    if _dates(a) != _dates(b) or set(clinical_values(a)) != set(clinical_values(b)):
-        return False
-    wa, wb = _words(a), _words(b)
-    small = min(sum(wa.values()), sum(wb.values()))
-    return small > 0 and sum((wa & wb).values()) >= WORDS_FRAC * small
-
-
-def reasons(found: dict[int, Page], pages: dict[int, str], text_of: Callable[[str, int], str]) -> dict[int, str]:
-    """{page: select reason} for one document: every pixel-equal page, and
-    every near page whose words confirm it (`text_of(other, page)` reads the
-    matched page's text: a delivered exhibit's text layer or a new
-    document's transcription)."""
-    out: dict[int, str] = {}
-    for p, f in found.items():
-        if f.exact or confirmed(pages.get(p) or "", text_of(f.other, f.page)):
-            out[p] = f.reason
-    return out
+def aside(found: dict[int, Page]) -> dict[int, str]:
+    """{page: select reason} for one document's pages set aside by picture."""
+    return {p: f.reason for p, f in found.items() if f.aside}
 
 
 def merge_extracts(by_text: dict[str, Subset], by_image: dict[str, Subset]) -> dict[str, Subset]:
