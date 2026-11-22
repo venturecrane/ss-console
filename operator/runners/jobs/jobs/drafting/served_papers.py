@@ -20,6 +20,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from . import sets
 from .served_slice import TITLES
 
 _MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
@@ -91,21 +92,76 @@ def draft_of(name: str) -> tuple[str, int] | None:
     return (kind, n) if kind and n else None
 
 
-def form_signature(path: str, read: Callable[[Path], Any] | None = None) -> str:
-    """The pixel read's checked numbers and form revision, as one string; ""
-    when the file is not on disk or the read fails (then nothing folds)."""
+def _pixel(path: str, read: Callable[[Path], Any] | None) -> tuple[list[str], str] | None:
+    """The $0 pixel read's (checked numbers, form revision); None when the file
+    is not on disk, the read fails, or it finds nothing checked."""
     if not path or not Path(path).is_file():
-        return ""
+        return None
     if read is None:
         from .forms import read_stage
 
         read = read_stage.pixel_read
     try:
         got = read(Path(path))
-    except Exception:  # noqa: BLE001 - a form the pixel read cannot read is simply not folded; the model read decides
-        return ""
+    except Exception:  # noqa: BLE001 - a form the pixel read cannot read has no pixel values; the caller says so
+        return None
     checked = got.get("checked") if isinstance(got, dict) else None
     rev = got.get("form_revision") if isinstance(got, dict) else None
     if not isinstance(checked, list) or not checked or not rev:
-        return ""
-    return f"pixel:{rev}:" + ",".join(sorted(str(x) for x in checked))
+        return None
+    return [str(x) for x in checked], str(rev)
+
+
+def form_signature(path: str, read: Callable[[Path], Any] | None = None) -> str:
+    """The pixel read's checked numbers and form revision, as one string; ""
+    when the file is not on disk or the read fails (then nothing folds)."""
+    got = _pixel(path, read)
+    return f"pixel:{got[1]}:" + ",".join(sorted(got[0])) if got else ""
+
+
+def form_checked(path: str, read: Callable[[Path], Any] | None = None) -> list[str]:
+    """The checked numbers the $0 pixel read finds on a served form; [] when it cannot read them."""
+    got = _pixel(path, read)
+    return got[0] if got else []
+
+
+#: A folder the Operator delivers into (``finish._names``: "<title> <date> (Operator <job id tail>)").
+_OPERATOR_FOLDER = re.compile(r"\(Operator [0-9A-Za-z]{6}\)")
+
+
+def ours_written(name: str, folder: str) -> bool:
+    """A file SMD wrote: named as a draft ("DRAFT ... Exhibit B"), or in a
+    folder the Operator delivered into. Never a served paper or a scan of one."""
+    return draft_name(name) or bool(_OPERATOR_FOLDER.search(folder or ""))
+
+
+#: A sentence that asks for responses to be drafted ("draft responses to ...",
+#: "prepare our answers", "respond to their RFPs").
+_DRAFT_ASK = re.compile(
+    r"(?i)\b(?:draft|prepare|write|do)\b[^\n]*?\b(?:responses?|answers?)\b|\brespond(?:ing)?\s+to\b"
+    r"|\b(?:responses?|answers?)\s+(?:to|for)\b"
+)
+#: A reference to numbered requests ("Requests 5 and 8", "Interrogatory No. 3"):
+#: a sentence that carries one talks about a paper, it does not name what to draft.
+_NUMBERED = re.compile(r"(?i)\b(?:requests?|interrogator(?:y|ies)|rogs?|rf[ap]s?)\s+(?:nos?\.?\s*)?#?\d")
+#: Clauses: a full stop that is not "No." or "Nos.", a semicolon, or a line break.
+_SENTENCES = re.compile(r"(?<![Nn]o)(?<![Nn]os)[.!?]+(?=\s|$)|[;\n]+")
+
+
+def draft_asks(request: str) -> str:
+    """The request's sentences that ask for responses to be drafted, joined;
+    a sentence naming numbered requests is about a paper and is left out
+    (2026-11-21: "...on Requests 5 and 8 of the Response to Request for
+    Production" named kinds in passing and narrowed the job to one set)."""
+    keep = [s for s in _SENTENCES.split(request or "") if _DRAFT_ASK.search(s) and not _NUMBERED.search(s)]
+    return " ".join(keep)
+
+
+_FORM_REQUEST = re.compile(r"(?i)\bform\s+interrogator(?:y|ies)\b|\bf\.?\s?rogs?\b")
+
+
+def draft_kinds(request: str) -> list[str]:
+    """The kinds of set the request names as what to draft (``draft_asks``), in its order; empty: every set."""
+    asks = draft_asks(request)
+    kinds = [u.key for u in sets.variants(asks)]
+    return [*kinds, *(["form_interrogatories"] if _FORM_REQUEST.search(asks) else [])]
