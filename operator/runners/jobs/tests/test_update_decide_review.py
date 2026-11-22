@@ -223,3 +223,25 @@ def test_falsifier_the_update_review_verb_alone_still_refuses_a_review_hold(tmp_
     d, _sd, _paths = _review_seat(tmp_path, job_dir, data_root)
     with pytest.raises(UD.Refused, match="not held by the update's"):
         UD.plan(d, T.JOB, corrections=[{"old": T.WRONG, "new": T.RIGHT}], by="a", source="b", reason="c")
+
+
+def test_the_dates_rule_0_named_are_carried_into_the_record(tmp_path, job_dir, data_root) -> None:
+    """The final set's rerun reads the corrected output, which no longer holds
+    the entry rule 0 removed, so its date would go unnamed and proof 10 would
+    fail the corrected update. Fails if the plan does not carry them."""
+    from jobs.medchron.update import review_repair as RR
+
+    d, sd, _paths = _review_seat(tmp_path, job_dir, data_root)
+    ud = sd / "runs" / "alpha" / "update"
+    mark = json.loads((ud / FS.REPORT).read_text())
+    mark["ops"] = [{"op": "bodiless", "entry": "x", "applied": True, "named": ["7/17/2026"]}]
+    (ud / FS.REPORT).write_text(json.dumps(mark))
+    p = _plan(d)
+    assert "7/17/2026" in p["removed"]
+    UDR.route_apply(d, p)
+    assert "7/17/2026" in RR.named_values(json.loads((ud / UD.RECORD).read_text()))
+
+
+def test_the_billing_stages_that_read_the_chronology_are_reopened_and_the_paid_extract_is_not() -> None:
+    assert {"update_dos_check", "update_billing_chart", "update_billing_docx"} <= set(UDR.REDO)
+    assert "update_billing_extract" not in UDR.REDO and "update_review" not in UDR.REDO

@@ -34,7 +34,9 @@ clean, the pre-delivery review held) picks this mode. What differs:
   ``redo-review.json`` (``resume.start_run``), which the review stage reads
   to forget its held record (``stages/review._consume_redo``), so the
   pre-delivery review runs afresh, paid, on the corrected chronology. The
-  billing stages are not reopened: they read the bills, not the chronology.
+  $0 billing stages that read the updated chronology (the dates-of-service
+  check, the chart, the worksheet) are reopened too; the paid bill extract,
+  which reads only the bills, is not.
 * Offline, on a rehearsal copy, the same stages are reopened in the copy's
   own state and its review record forgotten, so ``jobs rehearse <copy>``
   walks the final set, assemble, render, proofs and manifest at $0 and stops
@@ -56,7 +58,17 @@ from . import update_decide as UD
 REVIEW_PREFIX = "review_held"
 MODE = "pre_delivery_review"
 #: The stages that read the corrected document, in DAG order (``dag_update``).
-REDO = ("update_final_set", "update_assemble", "update_render", "update_proofs", "update_manifest", "review")
+REDO = (
+    "update_final_set",
+    "update_assemble",
+    "update_render",
+    "update_proofs",
+    "update_dos_check",
+    "update_billing_chart",
+    "update_billing_docx",
+    "update_manifest",
+    "review",
+)
 
 
 def _rd(job: Any) -> tuple[Path, Path, str]:
@@ -171,7 +183,9 @@ def plan(
         "attested": attested,
         "repeats": [],
         "confirmed": [],
-        "removed": removed,
+        # The final set's rule 0 named the date values of the entries it removed; its rerun reads the
+        # corrected output and no longer sees them, so they are carried here, where proof 10 keeps them.
+        "removed": sorted(set(removed) | FIO.named(rd / "update")),
         "decision": decision,
         "marker": marker if copy is None else None,
     }
